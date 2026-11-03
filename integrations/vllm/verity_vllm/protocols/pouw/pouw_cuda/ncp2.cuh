@@ -109,8 +109,10 @@ struct Sha512 {
   uint64_t len;
 };
 
-// The round constants are immediates (SX_K_LIST, as dither's h1sha.cuh has them): sx::compress reads them from constant
-// memory, which adds a uniform load a round to this file's kernels on sm_90 and spills registered rows' leaves on sm_120.
+// Not sx::compress, whose round constants come from constant memory: that adds a uniform load a round to this file's
+// kernels on sm_90 and spills registered rows' leaves on sm_120. Here they are immediates (SX_K_LIST, as dither's h1sha.cuh
+// has them). Maj keeps its xor form, and the schedule and the sums keep this order: ptxas schedules sx::maj's LOP3s, and
+// the other orders' instructions, differently.
 HD void sha512_compress(uint64_t h[8], const uint64_t blk[16]) {
   const uint64_t K[80] = {SX_K_LIST};
   uint64_t w[16];
@@ -119,9 +121,16 @@ HD void sha512_compress(uint64_t h[8], const uint64_t blk[16]) {
   uint64_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
 #pragma unroll
   for (int i = 0; i < 80; ++i) {
-    if (i >= 16) w[i & 15] = w[i & 15] + sha::s0(w[(i + 1) & 15]) + w[(i + 9) & 15] + sha::s1(w[(i + 14) & 15]);
-    const uint64_t t1 = hh + sha::S1(e) + sha::ch(e, f, g) + K[i] + w[i & 15];
-    const uint64_t t2 = sha::S0(a) + sha::maj(a, b, c);
+    uint64_t wi;
+    if (i < 16) {
+      wi = w[i];
+    } else {
+      uint64_t w15 = w[(i + 1) & 15], w2 = w[(i + 14) & 15];
+      uint64_t s0 = sx::s0<0>(w15), s1 = sx::s1<0>(w2);
+      wi = w[i & 15] = w[i & 15] + s0 + w[(i + 9) & 15] + s1;
+    }
+    uint64_t t1 = hh + sx::S1<0>(e) + sha::ch(e, f, g) + K[i] + wi;
+    uint64_t t2 = sx::S0<0>(a) + ((a & b) ^ (a & c) ^ (b & c));
     hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
   }
   h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
