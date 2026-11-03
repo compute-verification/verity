@@ -7,8 +7,8 @@ import Proofs.Flock.Verifier.Hash
 # Ligerito's bodies from level 0's close on (`ligeritoPZk_shape`)
 
 `ligeritoPZk` answered by `asksCut coin N` from a log of `s` bodies sends level 0's `k_0 + 4` bodies, then at log index
-`P = s + k_0 + 4` level 0's closing round, and after it only rounds outside every masked phase. Where the cut is past
-the close (`P < N`), each body the log holds from `P` on (`LogQ`) is good frames (`Good`: ones a round holds before its
+`P = s + k_0 + 4` level 0's closing round, and after it only rounds outside every masked phase. Where the cut reaches
+the close (`P ≤ N`), each body the log holds from `P` on (`LogQ`) is good frames (`Good`: ones a round holds before its
 squeeze, inside a phase, no domain frame), after the closing label at `P`, then a squeeze of `n ≠ 0` coins below
 `2 ^ 64` as the frame takes it (`Body`).
 
@@ -350,8 +350,7 @@ theorem hl_closeLabel :
     HL P (fun t l => l.size = P ∧ t.pending = ByteArray.empty) (fun _ => Inv P)
       (liftT (liftTM (label Zk.LABEL_CLOSE)) : LP PS Unit) := by
   refine hl_liftT fun t l hp => ?_
-  have hlab : label Zk.LABEL_CLOSE t = .ok ((), { t with pending := t.pending ++ header 2 0 Zk.LABEL_CLOSE.toUTF8.size ++
-      padded Zk.LABEL_CLOSE.toUTF8 }) := rfl
+  have hlab : label Zk.LABEL_CLOSE t = .ok ((), { t with pending := pLabel Zk.LABEL_CLOSE t.pending }) := rfl
   rw [liftTM_ok hlab]
   refine ⟨fun e L h => (by cases h), fun a t' L h => ?_⟩
   simp only [Prod.mk.injEq, Except.ok.injEq] at h
@@ -452,7 +451,7 @@ theorem ht_sqB (kind : UInt8) {k : ℕ} (hk : kind = 2 ∨ (kind = 1 ∧ k = 1))
       simp only [Prod.mk.injEq, Except.ok.injEq] at h
       obtain ⟨⟨-, rfl⟩, rfl⟩ := h
       refine ⟨by rw [Array.size_push]; omega, hq, [], ?_, fun _ h => nomatch h⟩
-      rw [Array.size_push, preAt, if_neg (show l.size + 1 ≠ P by omega)]
+      rw [Array.size_push, preAt, _root_.if_neg (show l.size + 1 ≠ P by omega)]
       rfl
 
 theorem hl_sampleP : HL P (Inv P) (fun _ => Inv P) (liftT (sampleP (asksCut coin N))) := by
@@ -545,7 +544,7 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
     (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (s : ℕ) (hk : 1 ≤ sch.k0) (hn0 : sch.n ≠ 0)
     (hn : sch.n + 1 < 2 ^ 64) (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 64) (htp : 2 * tPad < 2 ^ 64)
-    (hd : ∀ i, 64 * 2 ^ (sch.levels.getD i default).d < 2 ^ 64) (hN : s + sch.k0 + 4 < N) :
+    (hd : ∀ i, 64 * 2 ^ (sch.levels.getD i default).d < 2 ^ 64) (hN : s + sch.k0 + 4 ≤ N) :
     HT (s + sch.k0 + 4) (Sz s) (fun _ _ L => LogQ (s + sch.k0 + 4) L)
       (ligeritoPZk (asksCut coin N) (Hashes.ofSha512 Sha512.hash) MerkleScheme.hm96Sha512 sch T cm0 t b lay h rep
         tPad extra lanePad salt nonce) := by
@@ -625,7 +624,7 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
       apply hl_bind (hl_modify _); intro _
       -- the recursive levels and the final one
       apply hl_forIn_bind (fun _ u t l => u.1 ≤ sch.n + 1 ∧ Inv (s + sch.k0 + 4) t l)
-        (fun _ _ h => ⟨by first | (dsimp only; omega) | omega, h⟩)
+        (fun _ _ h => ⟨by dsimp only; omega, h⟩)
       · intro i _ u
         obtain ⟨sd, pc, cs, rps, fn⟩ := u
         refine hl_pre_and fun hsd => ?_
@@ -657,7 +656,7 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
             apply hl_bind (hl_powP nonce 2); intro _
             apply hl_bind hl_sampleP; intro _
             apply hl_bind (hl_modify _); intro _
-            exact hl_pure fun _ _ h => ⟨_, rfl, by first | (dsimp only; omega) | omega, h⟩
+            exact hl_pure fun _ _ h => ⟨_, rfl, by dsimp only; omega, h⟩
           · intro _
             refine hl_bind (hl_forIn_array _ _ (fun _ _ => hl_bind (hl_absorbF _) fun _ =>
               hl_pure fun _ _ h => ⟨⟨_, rfl⟩, h⟩) _) fun _ => ?_
@@ -676,7 +675,7 @@ theorem ligeritoPZk_logQ (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedule
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (tr : Transcript) (l : Array Claims.Msg)
     (hk : 1 ≤ sch.k0) (hn0 : sch.n ≠ 0) (hn : sch.n + 1 < 2 ^ 64) (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 64)
     (htp : 2 * tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (sch.levels.getD i default).d < 2 ^ 64)
-    (hN : l.size + sch.k0 + 4 < N) :
+    (hN : l.size + sch.k0 + 4 ≤ N) :
     LogQ (l.size + sch.k0 + 4)
       (((ligeritoPZk (asksCut coin N) (Hashes.ofSha512 Sha512.hash) MerkleScheme.hm96Sha512 sch T cm0 t b lay h rep
         tPad extra lanePad salt nonce).run tr).go l).2 := by
