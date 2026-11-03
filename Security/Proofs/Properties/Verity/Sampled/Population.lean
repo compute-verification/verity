@@ -246,7 +246,7 @@ theorem getD_of_nat {H : Json} {k ctx : String} {m : ℕ} (h : Flock.J.nat H k c
     rfl
   · cases hv
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 4000000 in -- `walk_step` splits each of `loadPublic`'s checks, and each arm repeats the rest
 /-- **`loadPublic`'s population is its header's `instances`**, in the header it parses from the bytes before the first
 newline. -/
 theorem loadPublic_instances {tags : Flock.Tags} {c : Flock.Circuit} {f : ByteArray} {pop : Flock.Public}
