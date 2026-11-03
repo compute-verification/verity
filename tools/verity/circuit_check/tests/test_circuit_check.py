@@ -1,11 +1,10 @@
-"""circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
-negatives (each check fires by name on a circuit built to break it).
+"""circuit-check's coverage of every registered Definition and subcircuit template, a served workload's request Program, and the
+checks' own negatives (each check fires by name on a circuit built to break it).  `circuit-check --all`, which `check` runs, is
+where every target is checked.
 
 A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
-cause; a test whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one
-is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
-The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
-same checks as `circuit-check --all`.
+cause; a test whose only failures are known is an expected failure, and `--all` fails once a known one is fixed
+(`cli.verdict`), so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
 
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
 that runs one builds circuit-check's catalog first (conftest.py), in about 8 minutes from `check`'s records and in about an
@@ -313,24 +312,7 @@ def test_a_target_with_a_record_static_parses_as_its_id_prints_it(suite):
         TG.definition("StepBody_v1{C={000000000000},T=4}")
 
 
-# --- the suite ----------------------------------------------------------------------------------------------------------------
-
-@pytest.mark.circuit_suite
-def test_definition(fid, suite, results):
-    e = CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)
-    results.append({**e, "kind": "definition", "target": fid})
-    _clean(e)
-
-
-@pytest.mark.circuit_suite
-@pytest.mark.parametrize("label", sorted(TEMPLATES))
-def test_template(label, results):
-    sub, sts = TEMPLATES[label]
-    r = CK.check_subcircuit(sub, OPTS, instance_statics=sts, memo=MEMO, pins=PINS)
-    results.append({**r, "kind": "template", "target": label})
-    assert all(low["lowered"] or low.get("reason") for low in r["lowering"])
-    _clean(r)
-
+# --- a served workload ----------------------------------------------------------------------------------------------------------
 
 def _request_program(tmp_path: Path, **kw) -> Path:
     """The vLLM tests' synthetic request Program (per token Embedding -> RMSNorm -> Gemm -> RoPE -> SiluMul -> Gemm -> RMSNorm, per
@@ -346,9 +328,8 @@ def _request_program(tmp_path: Path, **kw) -> Path:
 
 
 @pytest.mark.slow
-def test_row(tmp_path, results):
+def test_row(tmp_path):
     r = CK.check_row(_request_program(tmp_path, rope=True), OPTS, memo=MEMO, pins=PINS)
-    results.append({**r, "kind": "row", "target": "synthetic request Program"})
     assert r["calls"] == 42 and len(r["definitions"]) >= 8
     _clean(r)
 
@@ -360,13 +341,6 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
     r = CK.check_row(_request_program(tmp_path, attn=True), OPTS, memo=MEMO, pins=PINS)
     assert "partition/output-not-committed Gemm_v1{K=48,N=16} (4 Call(s) under model.model.layers.0.self_attn.o_proj)" in \
         [f["name"] for f in r["failures"]]
-
-
-@pytest.mark.circuit_suite
-def test_known_failures_are_current(suite):
-    """Each known entry still fails somewhere: a fixed one is dropped from `circuit_check.known`."""
-    fails = [f for fid in sorted(suite) for f in CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
-    assert not KN.stale(fails), KN.stale(fails)
 
 
 # --- the vectors ----------------------------------------------------------------------------------------------------------------
