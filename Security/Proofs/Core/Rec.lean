@@ -152,12 +152,12 @@ end Rec.Compiled
 /-- **`RecZK`**: at each statement, `zkmalAt_layout_stop` over the prefix (`zkmalAt_prefix`) and the sessions, each
 `O`'s zero knowledge at its statement on the slot's coins, with its witness from `WitnessIn`. -/
 theorem SecurityProofs.RecZK : Guarantees.RecZK := by
-  intro W WS Sa Gp NO ΩO _ _ _ _ _ _ _ _ H O G δ₁ hO hHid hC hS hW
+  intro W WS Sa Gp NO ΩO _ _ _ _ _ _ _ _ H O G δ₁ go hgo hO hHid hC hS hW
   refine (zkmalRx_iff_at _ _ _ _ _ _ _ _ _).2 fun x => ?_
   obtain ⟨hg, hB⟩ := hS
   have h := zkmalAt_layout_stop (G.T₀ x) (G.lay x) G.stop H x (G.nS x) (fun w => G.P₀ w x)
     (Rec.slotP O (G.NB x) (G.ΩB x)) G.R O.R G.S₀ (fun j x' => G.CS x' j)
-    (fun j x' u => progOf O.S (G.CS x' j) (G.xs x' j u)) (fun j x' => goesOn (G.start x' j))
+    (fun j x' u => progOf O.S (G.CS x' j) (G.xs x' j u)) go
     (2 * ((G.kI x : ℝ) + G.nC x) * δ₁) (G.γS x) (G.εS δ₁ x)
     (zkmalAt_prefix H G.mask (fun y => H (G.saltMsg y)) hHid G.str (G.kI x) (G.nC x) (G.stg x)
       (fun w => G.P₀ w x) (G.R x) x (hC x) (G.S₀.prog x) (G.S₀_eval H x))
@@ -172,28 +172,51 @@ theorem SecurityProofs.RecZK : Guarantees.RecZK := by
       rw [progOf_of hCe, ← hk]
       exact h1.mono hε hγ)
     (fun j hj w hw t₀ u hu hp hf => hW x j hj w hw t₀ u (by rwa [G.lay_start] at hu) hp hf)
-    (fun j _ ask pm => by rw [G.lay_start])
+    (fun j hj ask pm => by rw [G.lay_start]; exact hgo x j hj ask pm)
     (fun j hj => (hB x j hj).1) (hg x)
   rw [G.lay_start] at h
   exact h
 
-/-- **The leak at public stop positions, over any recursion**: a prover that releases `Rec.system O G`'s run cut at one
-of `|pos x|` public positions leaks at most `log₂ |pos x|` bits beyond `RecZK`'s bound. -/
+namespace Rec.Compiled
+
+variable {W WS Sa Gp : Type} (G : Rec.Compiled W WS Sa Gp)
+
+theorem start_pos (x : Msg) : ∀ j, 0 < G.start x j
+  | 0 => Nat.succ_pos _
+  | j + 1 => by
+    show 0 < G.start x j + G.n x j
+    exact Nat.lt_of_lt_of_le (start_pos x j) (Nat.le_add_right _ _)
+
+/-- `goesOn` itself is a continuation test `RecZK` takes. -/
+theorem goesOnAt_goesOn : G.GoesOnAt fun j x => goesOn (G.start x j) :=
+  fun _ _ _ _ _ => rfl
+
+/-- **That the last answer is a message** (`Claims.Recursion.goesOn`, `Claims.Recursion.SimStop`'s test) is a
+continuation test `RecZK` takes: every session starts after the prefix's rounds, so a real run there is cut short only
+by a decision, its last answer. -/
+theorem goesOnAt_recursion : G.GoesOnAt fun _ _ => Claims.Recursion.goesOn :=
+  fun x j _ ask pm => recGoesOn_interact ask pm _ [] (G.start_pos x j)
+
+end Rec.Compiled
+
+/-- **The leak at public stop positions, over any recursion**: a prover that releases `Rec.system O G go`'s run cut at
+one of `|pos x|` public positions leaks at most `log₂ |pos x|` bits beyond `RecZK`'s bound. -/
 theorem recZK_leak {W WS Sa Gp : Type} {NO ΩO : Msg → Type} [Fintype Sa] [Nonempty Sa] [AddCommGroup Gp]
     [Fintype Gp] [∀ x, Fintype (NO x)] [∀ x, Nonempty (NO x)] [∀ x, Fintype (ΩO x)] [∀ x, Nonempty (ΩO x)]
     {K : Msg → Type} [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)]
     {H : Msg → Msg} {O : ZkSystem WS NO ΩO} {G : Rec.Compiled W WS Sa Gp} {δ₁ : ℝ≥0}
+    {go : ℕ → Msg → List (Msg × Out) → Bool} (hgo : G.GoesOnAt go)
     (hO : O.ZK H δ₁) (hHid : Hm96Hiding G.mask (fun y => H (G.saltMsg y)) δ₁) (hC : G.Commits H)
     (hS : G.ByShape O δ₁) (hW : G.WitnessIn H O)
     (P' : W → (x : Msg) → Prover ((((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).N ×
       ((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).Ω) × K x))
-    (stop : Msg) (pos : Msg → Finset ℕ) (hcut : CutsOf H (Rec.system O G).k P' (Rec.system O G).P stop pos)
+    (stop : Msg) (pos : Msg → Finset ℕ) (hcut : CutsOf H (Rec.system O G go).k P' (Rec.system O G go).P stop pos)
     (hne : ∀ x, (pos x).Nonempty) :
     ZKmalRLeak (fun x => ((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).N)
-      (fun x => ((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).Ω) K H (Rec.system O G).k P' (Rec.system O G).P G.R
-      (leakyAt (Rec.system O G).S (Rec.system O G).k stop pos hne) (fun x => (pos x).card)
-      ((Rec.system O G).εzk δ₁) (Rec.system O G).γzk :=
-  zkmalRLeak_of_cuts (SecurityProofs.RecZK H O G δ₁ hO hHid hC hS hW) hcut hne
+      (fun x => ((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).Ω) K H (Rec.system O G go).k P'
+      (Rec.system O G go).P G.R (leakyAt (Rec.system O G go).S (Rec.system O G go).k stop pos hne)
+      (fun x => (pos x).card) ((Rec.system O G go).εzk δ₁) (Rec.system O G go).γzk :=
+  zkmalRLeak_of_cuts (SecurityProofs.RecZK H O G δ₁ go hgo hO hHid hC hS hW) hcut hne
 
 /-- **The deployed recursion's leak at its stop positions**: from its zero knowledge with the stop
 (`Claims.Recursion.ZKStop`), a release of its run cut at one of `|pos x|` public positions leaks at most
