@@ -458,24 +458,24 @@ theorem fresh_readLines (label : String) (after : ByteArray) (records : List Jso
   | l :: ls, ts, pending, ξ => by
     unfold readLines
     by_cases ht : treeLine l = true
-    · rw [if_pos ht, List.filter_cons_of_neg (by simp [ht])]
+    · rw [ite_eq_left ht, List.filter_cons_of_neg (by simp [ht])]
       split
       · rw [freshCoins_cons_tree (Option.bind_eq_some_iff.1 ‹_›).choose_spec.2]
         exact fresh_readLines label after records ls _ pending ξ
       · exact fresh_readLines label after records ls ts pending ξ
-    · rw [if_neg ht, List.filter_cons_of_pos (by simp [ht])]
+    · rw [ite_eq_right ht, List.filter_cons_of_pos (by simp [ht])]
       cases pending with
       | none => exact fresh_readLines label after records ls ts (some l) ξ
       | some a =>
         simp only [Option.toList_some, List.cons_append, List.nil_append]
         by_cases hm : (rootOf a).1 = label ∧ (rootOf a).2 = after
-        · rw [if_pos hm, countFresh, if_pos hm]
+        · rw [ite_eq_left hm, countFresh, ite_eq_left hm]
           simp only [freshCoins, List.filterMap_cons, and_self, ite_true]
           rw [chunks]
           congr 1
           exact fresh_readLines label after records ls ts none _
-        · rw [if_neg hm, countFresh, if_neg hm, Nat.add_zero]
-          simp only [freshCoins, List.filterMap_cons, if_neg hm]
+        · rw [ite_eq_right hm, countFresh, ite_eq_right hm, Nat.add_zero]
+          simp only [freshCoins, List.filterMap_cons, ite_eq_right hm]
           exact fresh_readLines label after records ls ts none ξ
 
 
