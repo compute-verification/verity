@@ -512,9 +512,23 @@ def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_
 BF16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
 
 
-def made_whole(m: formalism.Measured, k_whole: float) -> formalism.Measured:
-    square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": k_whole} | BF16
-    return dataclasses.replace(m, products={"k": AP.CONSOLE[1], "order": "chain", "products": [square]})
+def made_whole(m: formalism.Measured, *k_whole: float) -> formalism.Measured:
+    squares = [{"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": k} | BF16 for k in k_whole]
+    return dataclasses.replace(m, products={"k": AP.CONSOLE[1], "order": "chain", "products": squares})
+
+
+def test_the_kinds_cell_names_the_products_a_best_subset_drops():
+    """te_core 4.10 bounds the fresh-products term on the best subset of its products, so a short whole-making chain
+    voids no step's term, and the kinds cell says beside the term what that subset dropped; a term on every product,
+    or an unmeasured one, names no subset."""
+    m = info()["starts"][0].rows[0]["measured"]
+    one = formalism.published(made_whole(m, 512, 64), reading="A")
+    got = json.loads(AP.kinds(one))
+    assert one["terms"]["fresh_products"] > 0 and got["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL[
+        "fresh_products"]}
+    assert got["fresh_subset"] == {"dropped": 1, "of": 2, "dropped_macs_share": 0.5, "k_whole_min": 512}
+    for alone in (512, 64):
+        assert "fresh_subset" not in json.loads(AP.kinds(formalism.published(made_whole(m, alone), reading="A")))
 
 
 def test_a_void_fresh_products_term_is_what_io_bound_voids_under_reading_a_where_fit_fails():
