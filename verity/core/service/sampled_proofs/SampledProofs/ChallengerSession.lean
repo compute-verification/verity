@@ -208,7 +208,7 @@ private def isTime (j : Json) : Bool := (nat? j).isSome
 `event` is `TREE_EVENT` or `OPEN_EVENT`. -/
 def treeLine (line : String) : Bool :=
   match event line with
-  | .ok j => getD j "event" == Json.str TREE_EVENT || getD j "event" == Json.str OPEN_EVENT
+  | .ok j => jsonStrIs (getD j "event") TREE_EVENT || jsonStrIs (getD j "event") OPEN_EVENT
   | .error _ => false
 
 /-- The roots the challenger received, by family in order. -/
