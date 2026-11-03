@@ -71,7 +71,7 @@ def test_effective_compute_inverts_the_fit():
 
 
 def test_a_starts_targets_are_daniels_gain_on_the_fit_below_its_loss_with_the_fits_rms_in_compute():
-    """A gain from l0 to L is C(L)/C(l0) on the fit (TRN-40): `target` inverts `gain_from`, is the fit's loss at
+    """A gain from l0 to L is Daniel's C(L)/C(l0) on the fit: `target` inverts `gain_from`, is the fit's loss at
     g·C_eff(l0) whatever the start's own gain, and lies below l0 at every gain; a start at or below E has none.
     `c_spread` is the fit's rms in loss over its slope in log compute there."""
     for l0 in (1.0, 1.2, 1.5):
