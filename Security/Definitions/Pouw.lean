@@ -10,6 +10,8 @@ import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
+import Definitions.Pouw.Dimension.Pointwise
+import Definitions.Pouw.Dimension.Ssn
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
@@ -30,6 +32,11 @@ import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
+import Definitions.Pouw.Lead.Deployed
+import Definitions.Pouw.Lead.Forward
+import Definitions.Pouw.Lead.Gap
+import Definitions.Pouw.Lead.Layout
+import Definitions.Pouw.Lead.Model
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs
