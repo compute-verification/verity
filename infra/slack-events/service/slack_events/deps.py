@@ -95,7 +95,7 @@ class VercelQueue:
 def vercel_oidc() -> str:
     """The deployment's OIDC token as the vercel SDK finds it: the request's x-vercel-oidc-token header, then
     VERCEL_OIDC_TOKEN, then VERCEL_OIDC_TOKEN_FILE. A function's environment usually lacks the variable at run time."""
-    from vercel.oidc import get_vercel_oidc_token_sync  # noqa: PLC0415
+    from vercel.oidc import get_vercel_oidc_token_sync
 
     return get_vercel_oidc_token_sync()
 
