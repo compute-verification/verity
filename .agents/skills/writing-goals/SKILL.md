@@ -21,8 +21,11 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
 - **Something that finishes, never an ongoing activity** ("Work on demos"). A tier-1 title is a project's name in
   Daniel's words: "Split the Verity and infra repos", "Security posture finalized". A tier-2 or tier-3 title says what
   will be true, in at most eight plain words: "A full check finishes within 45 minutes". "X measured" isn't a goal until
-  it names what's delivered: "Second swarm's training results out".
-- **One owner** (`--owner`, your handle), who keeps it true and confirms it at least daily (`research goals confirm ID`).
+  it names what's delivered: "Second swarm's training results out". A title says what happens, not the mechanism's
+  name: "Each day's serving runs one program fixed in advance", not "One declared circuit per day".
+- **One owner** (`--owner`): the lead of the project it serves, who keeps it true and confirms it at least daily
+  (`research goals confirm ID`). Teams that do pieces of it are @handle in its plan; a check the remote demo runs is
+  the demo lead's goal even when proofs writes it in Lean.
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
@@ -32,7 +35,9 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   `proofs`, `lean`, `vllm`, `compute-accounting`, `network-accounting`, `memory-accounting`, `accounting` (only for
   work across all three), `training`, `ci`, `infra`, `security`, `cleanup`. `proofs` is what the theorems say; `lean`
   is Lean's code and build (the module system, the Lean check, toolchain bumps). The site refuses any other tag.
-  Nothing from your own bookkeeping goes in a tag.
+  Nothing from your own bookkeeping goes in a tag. Tags name the projects a goal serves (follow it up to its tier-1
+  project), not the teams doing the work: the daily-program check under the remote demo is `remote-demo`, not `proofs`
+  and `training`.
 - **Three tiers** (Daniel, 2 Nov):
   - Tier 1, a project: about a dozen across the plan, each one Daniel would name himself. Its description opens with
     the state that finishes it.
