@@ -15,16 +15,18 @@ and its `δ` is that law's own `P_a`. This file holds what the statement reads a
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;
 * `LawOn law ns kd`: `law` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
-  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none;
+  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none (`NotBernoulli`);
 * `pa_stratified`, `pa_work`: such a law's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
   and draws; `pa_empty_of_lawOn`: it misses nothing with probability `1`;
 * `drawUnits_miss_le`: the deployed draw misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
   `strata_bound`);
 * `execSel src law pop`: the deployed draw as a law on the verifier's bytes `src`, a draw that runs out of them drawing
   every unit; `execSel_escape_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
-* `lawOn_size`: a draw file that decodes to the verifier's draw under such a law has `kd` units, at any population
-  (`ofJson_shape`, and `UnitDraw.ofJson`'s per-stratum count, `ofJson_count`, `ofJson_count_work`, in strata whose ranges
-  it checks tile the population, `strataProblem_none`, `workProblem_chain`);
+* `lawSized_size`: a draw file that decodes to the verifier's draw under a law that is `subset kd`, or whose strata
+  hold each slot once and draw `kd` units in all (`LawSized`, as a law on strata is, `lawSized_of_lawOn`), has `kd`
+  units, at any population (`ofJson_shape`, and `UnitDraw.ofJson`'s per-stratum count, `ofJson_count`,
+  `ofJson_count_work`, in strata whose ranges it checks tile the population, `strataProblem_none`,
+  `workProblem_chain`); `lawOn_size` at a law on strata;
 * `All`: the rule's law is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
   (`lawOn_all`), and under it the deployed draw holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
 -/
@@ -83,6 +85,10 @@ def LawOn (law : Flock.Draw.Law) (ns : List ℕ) (kd : ℕ) : Prop :=
   | .work K ws => StrataOn (ws.toList.map (·.toStratum)) ns ∧
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
+
+/-- **No Bernoulli law**: `law` draws a count its strata or its `k` fix, not one the coins set, as `LawOn` and
+`LawSized` require. -/
+def NotBernoulli (law : Flock.Draw.Law) : Prop := ∀ a b, law ≠ .bernoulli a b
 
 /-- A stratified law's design misses `B` with `strataPa` of its strata's sizes and draws, when its strata have sizes `ns`
 and each stratum's `k` is the rule's. -/
@@ -314,11 +320,37 @@ theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ 
   simp only [Properties.SampledProofs.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
   exact ⟨r, hr, h1, by omega⟩
 
-/-- **A draw file of the verifier's draw under such a law decodes only to `kd` units**, at any population: a subset
+/-- **A law whose draw files hold `kd` units** (`lawSized_size`): `subset kd`, or a stratified or work law whose
+strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli law is none. -/
+def LawSized (law : Flock.Draw.Law) (kd : ℕ) : Prop :=
+  match law with
+  | .subset k => k = kd
+  | .bernoulli _ _ => False
+  | .stratified _ St =>
+    (St.toList.flatMap fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
+      (St.toList.map (·.k)).sum = kd
+  | .work _ ws =>
+    ((ws.toList.map (·.toStratum)).flatMap fun s =>
+        Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
+      (ws.toList.map (·.k)).sum = kd
+
+/-- A law on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
+theorem lawSized_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : LawOn law ns kd) : LawSized law kd := by
+  cases law with
+  | subset k => exact h.1
+  | bernoulli a b => exact h.elim
+  | stratified K St =>
+    obtain ⟨⟨hon, -⟩, -, -, -, hsum⟩ := h
+    exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
+  | work K ws =>
+    obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
+    exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
+
+/-- **A draw file of the verifier's draw under a sized law decodes only to `kd` units**, at any population: a subset
 draw has its `k` (`ofJson_shape`), and a stratified or work draw `k_s` units in each stratum (`ofJson_count`,
 `ofJson_count_work`), whose slots hold each unit once and whose ranges hold each of its units, since `UnitDraw.ofJson`
 checks that they tile the draw's population (`strataProblem_none`, `workProblem_chain`). -/
-theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd)
+theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSized law kd)
     {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.DrawFileZK dj law n) (S : Finset (Fin n))
     (D : Flock.Draw.UnitDraw) (hD : Flock.Draw.UnitDraw.ofJson (dj S) = .ok D) : D.units.size = kd := by
   obtain rfl := hdj S D hD
@@ -328,11 +360,11 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
     exact v.isLt
   cases law with
   | subset k =>
-    obtain ⟨rfl, -⟩ := hlaw
+    obtain rfl := hlaw
     exact (Discharge.Composed.ofJson_shape hD).2.2 _ rfl
   | bernoulli a b => exact hlaw.elim
   | stratified K St =>
-    obtain ⟨⟨hon, -⟩, -, -, -, hsum⟩ := hlaw
+    obtain ⟨hnd, hsum⟩ := hlaw
     have hch := (Audit.StrataExec.strataProblem_none (Audit.StrataExec.ofJson_stratified hD rfl).1).2.2.2
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList,
         u ∈ St.toList.flatMap fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList := by
@@ -354,8 +386,7 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
       exact (any_iff_mem_expand s.units u).symm
     have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
       Properties.SampledProofs.SecurityProofs.expand s.units.toList) St.toList
-      (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList
-      (by rw [hon]; exact List.nodup_range) hin
+      (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList hnd hin
     calc (Discharge.ZkLink.drawOf (.stratified K St) n S).units.size
         = (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.length := Array.length_toList.symm
       _ = (St.toList.map fun s => ((Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.filter fun u =>
@@ -363,7 +394,7 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
       _ = (St.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
   | work K ws =>
-    obtain ⟨⟨hon, -⟩, -, hsum⟩ := hlaw
+    obtain ⟨hnd, hsum⟩ := hlaw
     have hch := Audit.StrataExec.workProblem_chain (Audit.StrataExec.ofJson_work hD rfl)
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList,
         u ∈ (ws.toList.map (·.toStratum)).flatMap fun s =>
@@ -386,8 +417,7 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
       exact (any_iff_mem_expand s.units u).symm
     have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
       Properties.SampledProofs.SecurityProofs.expand s.units.toList) (ws.toList.map (·.toStratum))
-      (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList
-      (by rw [hon]; exact List.nodup_range) hin
+      (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList hnd hin
     calc (Discharge.ZkLink.drawOf (.work K ws) n S).units.size
         = (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.length := Array.length_toList.symm
       _ = ((ws.toList.map (·.toStratum)).map fun s => ((Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.filter
@@ -399,5 +429,11 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
           rfl
       _ = (ws.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
+
+/-- **A draw file of the verifier's draw under a law on strata decodes only to `kd` units** (`lawSized_size`). -/
+theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd)
+    {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.DrawFileZK dj law n) (S : Finset (Fin n))
+    (D : Flock.Draw.UnitDraw) (hD : Flock.Draw.UnitDraw.ofJson (dj S) = .ok D) : D.units.size = kd :=
+  lawSized_size (lawSized_of_lawOn hlaw) hdj S D hD
 
 end Flock.Bridge
