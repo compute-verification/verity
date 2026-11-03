@@ -1020,10 +1020,19 @@ FAKE_RECORDS_AUDIT = '''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+if a[0] == "warm":
+    open(os.environ["ORDER"] + ".warm", "w").write(json.dumps(a))
+    if os.environ.get("FAIL_WARM"):
+        print("records_audit.py warm: a template's compose was killed", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps({"template": "a@0", "seconds": 1.5, "kept": False, "pin": "ab"}))
+    print("WARM " + json.dumps({"templates": 3, "kept": 0, "seconds": 2.0}, sort_keys=True))
+    sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
-    assert ("--tie" in a) == ("--tie-prefix" in a)
+    assert ("--tie" in a) == ("--tie-prefix" in a) and a[a.index("--challenger") + 1] == "local"
     open(os.environ["ORDER"] + ".audit", "w").write(json.dumps(a))
+    open(os.environ["ORDER"] + ".main", "w").write(open(a[a.index("--main") + 1]).read())
     out.mkdir(parents=True)
     (out / "summary.json").write_text("{}")
     print("RECORDS " + json.dumps({"verdict": "accept", "population": 37, "window": 7}))
@@ -1035,6 +1044,7 @@ if os.environ.get("FAIL_PERIOD"):
 out.write_text(json.dumps({"free": 0}))
 print("PERIOD " + json.dumps({"verdict": "accept"}))
 '''
+TOY_MAIN = f"{'ef' * 20}\n{'01' * 20}\n"
 CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.args"; echo "chain on window $2"'
 PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
 
@@ -1042,9 +1052,9 @@ PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"ver
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
          records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
-    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed and
-    the split certifier's two commands set (``extra`` adds to the environment, None unsetting): the exit status, the
-    verdict lines, the steps in order and the limits."""
+    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
+    main's first-parent line a toy MAIN_FILE and the split certifier's two commands set (``extra`` adds to the
+    environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
@@ -1058,6 +1068,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
     _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
+    (tmp_path / "main.txt").write_text(TOY_MAIN)
     # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
     # shadow the installed verity
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
@@ -1069,7 +1080,8 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
-           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512"}
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
+           "MAIN_FILE": str(tmp_path / "main.txt")}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -1267,6 +1279,126 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
     assert _audited(tmp_path) == ({"--law": "stratified:1", "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
+
+
+@pytest.mark.parametrize("tied, extra, limit", [
+    (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "180m"),
+    (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),
+])
+def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_takes_their_cache(tmp_path, tied, extra, limit):
+    """With V3C_WARM_JOBS, records_audit's warm composes every template of the committed window into its compose cache,
+    that many at a time, at the audit's sampling design, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT), before the
+    audit, which takes the cache and so composes none; without it, no warm and no cache."""
+    if tied:
+        _tied_commit(tmp_path, "same")
+    rc, lines, order, limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    if limit is None:
+        assert "warm" not in order and "--compose-cache" not in audit and not (tmp_path / "order.warm").exists()
+        assert not any(line.startswith("V3C-WARM") for line in lines)
+        return
+    vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"]
+    assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
+    assert json.loads((tmp_path / "order.warm").read_text()) == [
+        "warm", "--window", str(vw / "window"), "--law", "stratified:1" if tied else "subset:1",
+        "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs]
+    assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
+    assert limits.count(limit) == 1 + (limit == "180m"), limits
+    assert f'V3C-WARM class {W63K4} (records_audit.py warm exit 0, {jobs} at a time): WARM ' \
+           '{"kept": 0, "seconds": 2.0, "templates": 3}' in lines
+
+
+def test_a_warm_that_fails_says_why_and_the_audit_composes_what_it_did_not_keep(tmp_path):
+    """The warm only makes the audit's composes early: one that fails is said, and the audit, taking the cache, composes the
+    templates it holds no circuit of."""
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_WARM_JOBS="2", FAIL_WARM="1")
+    assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
+    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): records_audit.py warm: a template's " \
+           "compose was killed; the audit composes the templates it didn't keep" in lines
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert "--compose-cache" in audit
+
+
+@pytest.mark.parametrize("jobs, records_audit, line", [
+    ("0", FAKE_RECORDS_AUDIT, "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a "
+                              "positive integer, not 0"),
+    ("two", FAKE_RECORDS_AUDIT, "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a "
+                                "positive integer, not two"),
+    ("2", "import sys\n", "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py "
+                          "warm, which this tree's records_audit.py doesn't have"),
+])
+def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree_without_it(tmp_path, jobs, records_audit,
+                                                                                             line):
+    """V3C_WARM_JOBS is a count of composes at once, and a tree whose records_audit.py has no warm is refused, not run
+    with every compose inside the audit's limit: before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_WARM_JOBS=jobs)
+    assert (rc, lines, order) == (3, [line], [])
+
+
+@pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
+def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_parent_line(tmp_path, given):
+    """records_audit samples only on the auditor's challenger's coins, so V3c's audit takes a local development session's
+    (--challenger local), pinned on main's first-parent line: MAIN_FILE's, else MAIN_SHA's in the tree, kept as
+    $OUT/v3c-audit/main.txt, the --main the audit reads."""
+    extra, line = {}, TOY_MAIN
+    if given == "MAIN_SHA":
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        git = lambda *a: subprocess.run(["git", "-C", str(tree), "-c", "user.name=t", "-c", "user.email=t@t", *a],  # noqa: E731
+                                        check=True, capture_output=True, text=True).stdout
+        git("init", "-q")
+        for m in ("one", "two", "three"):
+            git("commit", "-q", "--allow-empty", "-m", m)
+        extra, line = {"MAIN_FILE": None, "MAIN_SHA": git("rev-parse", "HEAD~1").strip()}, git("rev-list", "--first-parent", "HEAD~1")
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert len(line.split()) == 2 and (tmp_path / "order.main").read_text() == line
+    assert (tmp_path / "out" / "v3c-audit" / "main.txt").read_text() == line
+
+
+@pytest.mark.parametrize("main, head, tail", [
+    ("gone.txt", "V3C-AUDIT: MAIN_FILE ", ", main's first-parent line its challenger session pins on, is missing or empty"),
+    (None, "V3C-AUDIT: no first-parent line of main for its challenger session to pin on (MAIN_FILE unset, and HEAD has "
+           "none in this tree): set MAIN_FILE", ""),
+])
+def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_path, main, head, tail):
+    """A MAIN_FILE that isn't there, or none in a tree without MAIN_SHA's line, leaves the session nothing to pin on: V3c
+    says so and runs no audit, which records_audit would refuse."""
+    rc, lines, order, _limits = _v3c(tmp_path, MAIN_FILE=main and str(tmp_path / main),
+                                     GIT_CEILING_DIRECTORIES=str(tmp_path))
+    assert rc == 1 and "audit" not in order, (lines, order)
+    assert sum(x.startswith(head) and x.endswith(tail) for x in lines) == 1, lines
+
+
+LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
+V3C_COINS = " V3c's audit: a local development challenger session where it runs;"
+
+
+@pytest.mark.parametrize("extra, coins, v3c", [
+    ({}, LOCAL_COINS, V3C_COINS),
+    ({"PP_CHALLENGER": "gate:research@auditor", "PP_PEER": "vy-dc-h200"},
+     "the challenger gate:research@auditor (peer vy-dc-h200)", V3C_COINS),
+    ({"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}, LOCAL_COINS, ""),
+])
+def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
+    """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
+    unless PP_CHALLENGER names a challenger), PoUW H1's, and V3c's audit's when it runs. Here step 0's `predict row` then
+    fails, and the run stops there."""
+    venv = tmp_path / "toy-venv" / "bin"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
+                             f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **extra)
+    assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
+    assert f"COINS sampled proofs: {coins}; PoUW H1: not served (H1_GATE empty);{v3c} the bandwidth audit's: " \
+           "vy-auditor-2's bw_party, inside PoUS's piece" in lines, lines
+
+
+def test_the_script_parses_whole():
+    """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
+    run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
 
 
 def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
