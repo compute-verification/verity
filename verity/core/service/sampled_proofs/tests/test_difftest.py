@@ -3208,7 +3208,7 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
     with an instance of `IDENTITY`, of no gate; both take an instance of 262,144 bits, the widest class (the measured
     widths' `Gemm_v2{K=2048,N=16384}`), and `SHARED` under `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width
     rule with 16 returned bits while it holds a constant a later unit reads, 24 bits in the 32-bit class, and at `X = 8`,
-    where that constant is in no unit, and agree on their slots."""
+    where that constant is in no unit, and agree on their draws."""
     case = {"closure": None, "rule": {"law": "subset:1", "rule": "law"},
             "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None}
     shared = json.loads(_calls((0, 5)))
@@ -3216,13 +3216,13 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
     for program, query in [(_template_population(over, 1), P.template_instance_query(over.id)),
                            (json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id]))]:
         refused = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
+        assert D.replay(SELECT, refused, pieces)[0] == "reject", query
         with pytest.raises(D.Reject):
-            slots(copy.deepcopy(refused))
+            select(copy.deepcopy(refused))
     for program, query in [(_template_population(widest, 1), P.template_instance_query(widest.id)),
                            (shared, PO.call_query(16)), (shared, PO.call_query(8))]:
         taken = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken)))), query
+        assert D.replay(SELECT, taken, pieces) == ("output", D.canonical(select(copy.deepcopy(taken)))), query
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",

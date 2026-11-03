@@ -22,9 +22,11 @@ import Flock.ProvedScope
 import Flock.RecResiduals
 import Flock.Registered
 
-namespace SampledProofs.FileUnits
+namespace SampledProofs
 
 open Flock (V Circuit Public WORD)
+
+namespace FileUnits
 
 /-- The column Δ copies into a unit input, without the template instance (`Aliased.Src`): a forced zero, message bit
 `bit` of byte `byte` of row port `p`, output column `col` of net `net`'s slot `slot`, the fixed column `col`, or input
@@ -144,4 +146,6 @@ private def testPublic : Public :=
   some (2 + 3 * 256, 2 + 3 * 256 + 3 * 3 * 6, #[(2 + 3 * 256 + 18, 2 + 3 * 256 + 36), (2 + 256, 2 + 256 + 1)])
 #guard (ofFile testCircuit { testPublic with n := 2 }).toOption.isNone
 
-end SampledProofs.FileUnits
+end FileUnits
+
+end SampledProofs
