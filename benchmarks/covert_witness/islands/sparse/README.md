@@ -20,6 +20,7 @@ too, `--klass reference|e1mb|e100kb`, with `--cap` a bin below its cap.
 | `qlora` | `lora`'s ranks at (d_in + d_out) · `--bits` / 8 bytes a rank | CWQUAN1 lora entries: `--bits`-bit midrise codes, A one f16 scale per row, B one per 64 rows |
 | `signrows` | whole rows of block matrices by `--select` energy per byte (d_in · `--bits` / 8 + 2 bytes a row) | a CWQUAN1 delta over each touched matrix: the rows' codes (1 bit: a sign times the row's scale, mean \|V\|), every other row scale 0, which xz all but drops |
 | `entries` | single entries of the candidate matrices and of the gains `--norms` names, by `--select` energy times the tensor's learning rate squared, as many as fit `--cap` bytes and at most `--values` | CWSPAR1: varint index gaps and `--entry-dtype` (f16 or bf16) values, sized exactly |
+| `bitfit` | a new bias vector on every block's `--bias` matrices (`all`, `out`, `mlp`, `attn` or leaf names), zero at θ, with the gains `--norms` names; `--layers all` only, since every bias differs from θ's absent one | CWMODL1: the `lf` config with its `bias` key, the biases in `--entry-dtype` and the trained gains in θ's fp32 |
 
 `qlora` and `signrows` train fp32 latents straight-through (the forward reads their codes, exactly what CWQUAN1 decodes),
 and carry the gains (`--norms`) as `--norm-bits` deltas with one f16 scale per `--norm-group` entries, since θ is fp32
@@ -48,6 +49,10 @@ rows equal to each sequence's gradient (relative difference 1e-7). te_core 4.1's
 partials as bools (its narrowest cut, 1 bit a value a sequence) and prices Δ_grad at its 32-bit floor, state 0. The
 notes give `grad_bits` at the vote sum's width, ceil(log2(B + 1)) bits a value, with `partial_bits` and `floor_bits`
 beside it. The counter sees no weight gradient, so a matrix with entries is declared as a rank-1 adapter.
+
+`--budget-fraction` is of the tier's FLOPs as the harness meters them: the step planner adds the attention products the
+harness counts beyond `prepare.train_flops` (the whole ctx × ctx square and flash attention's five-product backward,
+about 15% of a step that trains every block), so 0.98 stays inside the search tier's `flop_budget` check.
 
 `--opt` is `adamw` (the default), `sign` (sign descent) or `sgd` (no momentum); the last two keep no state, so only the
 gradient passes between token blocks and Fit's reduction bound, 2Δ_grad ≤ k, holds up to k/64 trained values. Every
