@@ -48,7 +48,9 @@ transformer's step attention's d_h-long chains are, so the proved factor is the 
 r_j = c_j·k/(K_j²·b), μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² at its least fixed point (exact class by class in feeding
 order, a cycle iterated) and e = Σ_i A_i,counted·μ_i, void where a cycle with no fixed point feeds a counted product.
 Proved: Λ = SHARE·feed·whole_chain, at the kept products' widest operand and the whole-making factor of the classes
-that feed them, so a subset that drops the products a high-μ class feeds has its own smaller factor (`bound`). Each
+that feed them, so a subset that drops the products a high-μ class feeds has its own smaller factor (`bound`); a
+product a class with no fixed point feeds is never dropped, so a step that counts one is void, with the best subset
+of the rest beside it (`bound`'s `converged`). Each
 factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
 width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
@@ -188,10 +190,11 @@ def bound(products: list[dict], c: float, k: float, C: float, whole: float | Non
     Both forms hold on any subset of the products, so the proved figures are each the best over the subsets that keep
     the products whose whole-making chain is at least a threshold, one threshold for each `k_whole` among them and one
     keeping only those with none, every product's gates still in |C| (a product with a short chain would otherwise
-    void Λ for the whole step): `subset` (with P-cell) and `subset_no_cell` give the threshold (`k_whole_min`, None:
-    only products with no whole-making chain), the products kept (`kept`, indices into the counted ones), how many are
-    dropped and their share of the counted MACs, and that subset's Λ. Where every subset's Λ is void (`whole_chain`
-    past r = 1/4) the proved figures are None, never 0; with no counted product they are 0.
+    take the whole step's Λ to its own large factor): `subset` (with P-cell) and `subset_no_cell` give the threshold
+    (`k_whole_min`, None: only products with no whole-making chain), the products kept (`kept`, indices into the
+    counted ones), how many are dropped and their share of the counted MACs, and that subset's Λ. Where every subset's
+    Λ is void (`whole_chain` past r = 1/4), or a counted product's own chains have no fixed point (below), the proved
+    figures are None, never 0; with no counted product they are 0.
 
     `whole` is the step's `whole_chain` from its whole-making system (`whole_chain_of(chain_classes(graph, k), k)`),
     one factor for every subset, ∞ where a cycle with no fixed point feeds a counted product (void). Without it Λ takes
@@ -206,20 +209,37 @@ def bound(products: list[dict], c: float, k: float, C: float, whole: float | Non
     for each value among them: so where a short chain's class makes e large (an adapter's rank-r class), the term is
     never below what the products it doesn't feed give alone. Each subset's `rule` says which threshold kept it
     (``k_whole``, ``e`` or ``mu``), with its `threshold`, its `e` and the classes only its dropped products read
-    (`dropped_fed`)."""
+    (`dropped_fed`).
+
+    A subset drops a product only where every class that feeds it has a fixed point (coordinator 19:30Z): a product
+    fed by a class whose μ is ∞, or under the one-class rule one whose own whole-making chain has no bound (r past
+    1/4), can't be dropped to escape the void, so where one is counted the proved figures are None, as the whole
+    system's are (`diverged_fed`: their indices). The best subset over the rest is still a lower bound, published
+    beside the term, never in it: `converged` has its figures and subsets, the proved ones' fields, None where no
+    counted product is so fed."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
     zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks_root": 0.0, "blocks_linear": 0.0, "blocks": 0.0, "rho": 0.0,
             "rho_main": 0.0, "blocks_no_cell": 0.0, "rho_no_cell": 0.0}
+    void = dict.fromkeys(zero) | {"subset": None, "subset_no_cell": None}
     if not ps:
         return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0,
-                      "proved": zero | {"subset": None, "subset_no_cell": None}, "numerical": zero}
+                      "proved": zero | {"subset": None, "subset_no_cell": None}, "numerical": zero,
+                      "diverged_fed": [], "converged": None}
     if made_whole is not None and not all("fed" in p for p in ps):
         raise ValueError("bound(made_whole=...) reads each product's `fed` (te_core.capture.products' rows from te_core 4.12.1 "
                          "on); without them pass the step's `whole`")
     fed = [{K: a for K, a in p["fed"]} for p in ps] if made_whole is not None else None
     ks = [p["k_whole"] for p in ps if p.get("k_whole")]
+    if made_whole is not None:
+        stuck = [i for i, f in enumerate(fed) if any(a > 0 and math.isinf(made_whole.get(K, 0.0)) for K, a in f.items())]
+    elif whole is None:
+        stuck = [i for i, p in enumerate(ps)
+                 if p.get("k_whole") and math.isinf(whole_chain(k, p["k_whole"], min(p["b_a"], p["b_b"])))]
+    else:
+        stuck = []
+    out["diverged_fed"] = stuck
     if made_whole is not None:
         e_all = _e_of(fed, made_whole)
         wc = (1 + e_all) ** 1.5 if math.isfinite(e_all) else math.inf
@@ -267,12 +287,13 @@ def bound(products: list[dict], c: float, k: float, C: float, whole: float | Non
             if fig not in best or f[fig] > best[fig][fig]:
                 best[fig] = f
     if not best:
-        out["proved"] = dict.fromkeys(zero) | {"subset": None, "subset_no_cell": None}
-        return out
-    cell, no_cell = best["blocks"], best["blocks_no_cell"]
-    out["proved"] = {x: cell[x] for x in zero if x not in ("blocks_no_cell", "rho_no_cell")} | {
-        "blocks_no_cell": no_cell["blocks_no_cell"], "rho_no_cell": no_cell["rho_no_cell"],
-        "subset": cell["subset"], "subset_no_cell": no_cell["subset"]}
+        figures = void
+    else:
+        cell, no_cell = best["blocks"], best["blocks_no_cell"]
+        figures = {x: cell[x] for x in zero if x not in ("blocks_no_cell", "rho_no_cell")} | {
+            "blocks_no_cell": no_cell["blocks_no_cell"], "rho_no_cell": no_cell["rho_no_cell"],
+            "subset": cell["subset"], "subset_no_cell": no_cell["subset"]}
+    out["proved"], out["converged"] = (void, figures) if stuck else (figures, None)
     return out
 
 
@@ -1094,8 +1115,10 @@ def vectors() -> dict:
         ("operands made whole from K = 128 chains", CONSOLE, 1e18, [square | {"k_whole": 128}]),
         ("operands made whole from K = 64 chains: no subset has a proved bound", CONSOLE, 1e18,
          [square | {"k_whole": 64}]),
-        ("a rank-1 adapter's product beside a square one: the best subset drops it", CONSOLE, 1e18,
-         [square, {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16]),
+        ("a rank-1 adapter's product beside a square one: void, never dropped, the square one's figure beside it",
+         CONSOLE, 1e18, [square, {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16]),
+        ("a small product made whole from K = 128 chains beside a square one: the best subset drops it", CONSOLE, 1e18,
+         [square, square | {"macs": 5e11, "outputs": 5e11 / 128, "k_dim": 128, "k_whole": 128}]),
         ("mixed widths", CONSOLE, 1e18, [{"macs": 4e14, "outputs": 4e14 / 512, "k_dim": 512, "k_whole": 512} | bf16,
                                          {"macs": 2e14, "outputs": 2e14 / 1408, "k_dim": 1408, "k_whole": 512, "b_a": 8,
                                           "b_b": 16, "b_c": ACC_BITS, "gates_per_mac": 9128 / 32, "cell_gates": 9128.0}]),
@@ -1113,12 +1136,15 @@ def vectors() -> dict:
         term = {f"{lam}_{x}": b[lam][x] for lam in ("proved", "numerical")
                 for x in ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "blocks_no_cell", "rho_no_cell")} | \
             {"share": b["share"], "proved_subset": b["proved"]["subset"],
-             "proved_subset_no_cell": b["proved"]["subset_no_cell"]}
+             "proved_subset_no_cell": b["proved"]["subset_no_cell"], "diverged_fed": b["diverged_fed"],
+             "converged": b["converged"] and {x: b["converged"][x] for x in ("rho", "rho_no_cell", "subset",
+                                                                             "subset_no_cell")}}
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": ps}, "cap": cap, "term": term})
     return {"about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms on "
                      "every product, `term` the blocks and ρ, the proved ones on their best subsets "
-                     "(`proved_subset`, `proved_subset_no_cell`; null where no subset has a proved Λ) "
-                     "(python -m te_core.io_bound vectors)", "vectors": out}
+                     "(`proved_subset`, `proved_subset_no_cell`; null where no subset has a proved Λ, or where a "
+                     "counted product's chains have no bound, `diverged_fed`, which no subset drops; `converged` "
+                     "then has the best subset of the rest) (python -m te_core.io_bound vectors)", "vectors": out}
 
 
 def main(argv=None) -> int:
