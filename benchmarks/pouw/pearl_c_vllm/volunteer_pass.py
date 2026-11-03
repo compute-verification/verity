@@ -81,15 +81,23 @@ def words(p: VR.Pass, jobs: int) -> dict[tuple[int, int], tuple[np.ndarray, np.n
     finally:
         undo()
         _JOB.clear()
-    first: dict[int, int] = {}
-    for ref in p.verifier.refs:
-        first.setdefault(ref.matmul, ref.id)
+    first = _first(p)
     return {(p.verifier.refs[t].matmul, t - first[p.verifier.refs[t].matmul]): (a, z) for t, a, z in got}
 
 
-def _over(scheme, records, counts) -> list[dict]:
-    return [{"record": x["record"], "tile": x["tile"], "debit": float(x["debit"]), "cap": float(x["cap"]),
-             "rows": [[i, float(d), float(c)] for i, d, c in x["rows"]]} for x in CW.over_words(scheme, records, counts)]
+def _first(p: VR.Pass) -> dict[int, int]:
+    """Each record position's first tile id (`verifier.refs`' numbering, the verdict's)."""
+    first: dict[int, int] = {}
+    for ref in p.verifier.refs:
+        first.setdefault(ref.matmul, ref.id)
+    return first
+
+
+def _over(p: VR.Pass, records, counts) -> list[dict]:
+    first = _first(p)
+    return [{"record": x["record"], "tile": x["tile"], "tile_id": first[x["record"]] + x["tile"], "debit": float(x["debit"]),
+             "cap": float(x["cap"]), "rows": [[i, float(d), float(c)] for i, d, c in x["rows"]]}
+            for x in CW.over_words(p.scheme, records, counts)]
 
 
 def volunteer(path: Path, coins: CoinCommitment, jobs: int) -> dict:
@@ -116,9 +124,9 @@ def volunteer(path: Path, coins: CoinCommitment, jobs: int) -> dict:
         tmp = path.with_name(path.name + ".tmp")
         tmp.write_text(json.dumps(man, indent=1) + "\n")
         os.replace(tmp, path)
-    left = _over(p.scheme, records, counts)
+    left = _over(p, records, counts)
     credit = (CW.work(p.scheme, p.records)[1], CW.work(p.scheme, records)[1])
-    out = {"manifest": str(path), "tiles": len(counts), "over": _over(p.scheme, p.records, counts),
+    out = {"manifest": str(path), "tiles": len(counts), "over": _over(p, p.records, counts),
            "voluntary_a": {str(i): rows for i, rows in va.items()}, "voluntary_b": {str(w): rows for w, rows in vb.items()},
            "left": left, "records_root": {"before": before, "after": man["records_root"]},
            "credit_kept": float(credit[1] / credit[0]) if credit[0] else None, "ok": not left}

@@ -1117,13 +1117,9 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     p = VR.load(path, coins)
     failed = _replay_every_tile(p)
     assert failed and all("replayed debit" in r and "the row cap" in r for r in failed.values()), failed
-    first = {}
-    for ref in p.verifier.refs:
-        first.setdefault(ref.matmul, ref.id)
-    over = CW.over_words(p.scheme, p.records, VP.words(p, 1))
-    assert {first[x["record"]] + x["tile"] for x in over} == set(failed)
     out = VP.volunteer(path, coins, 1)
     after = json.loads(path.read_text())
+    assert {x["tile_id"] for x in out["over"]} == set(failed)
     assert out["ok"] and not out["left"] and out["voluntary_a"] and 0 < out["credit_kept"] < 1, out["line"]
     assert after["records_root"] == out["records_root"]["after"] != before["records_root"]
     assert {k: v for k, v in after.items() if k not in ("records_root", "matmuls", "weights")} == \
