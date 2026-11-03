@@ -5,7 +5,8 @@
 Each queue line is `CLASS START ; NOTE ; TRAIN_ARGS` (`#` comments). A line launches once (keyed by its text), with
 `launch.py --no-wait --island ISLAND --node NODE` from this checkout, whose island must be clean (the run ships HEAD's);
 `--class CLASS` is added to TRAIN_ARGS when they lack it, and NODE is whichever of `--nodes` holds fewer of the queue's
-runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`. Every
+runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`,
+retried on the next passes (its slot held) when that yields no row, up to five tries. Every
 launch and collection goes to `state.jsonl` beside the queue, from which a restarted driver resumes. No launch at or
 after `--stop`.
 
@@ -66,6 +67,7 @@ def main() -> int:
     def research(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(["research", *args], capture_output=True, text=True, env=env, cwd=REPO)
 
+    tries: dict[str, int] = {}
     while True:
         seen, flying, last = set(), {}, {n: "" for n in nodes}
         for x in state_path.read_text().splitlines() if state_path.exists() else []:
@@ -86,6 +88,11 @@ def main() -> int:
             r = subprocess.run([sys.executable, str(LAUNCH), klass, start, "--note", note, "--collect", s["run"]],
                                capture_output=True, text=True, env=env, cwd=REPO)
             rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
+            if not rows and tries.get(key, 0) < 4:
+                # a fetch that fails on a busy machine or a full disk is retried on the next pass
+                tries[key] = tries.get(key, 0) + 1
+                print(f"{utc():%H:%M}Z collect failed ({tries[key]}), retrying: {s['run']}  {r.stderr[-200:]}", flush=True)
+                continue
             record({"key": key, "run": s["run"], "state": state, "row": rows[-1] if rows else None,
                     "collect_rc": r.returncode, "err": r.stderr[-500:] if not rows else ""})
             print(f"{utc():%H:%M}Z ended {state}: {key}  {rows[-1] if rows else r.stderr[-300:]}", flush=True)
