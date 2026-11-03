@@ -10,11 +10,11 @@ deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) 
 witness):
 - the warden's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
-  its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
-  server holds its whole body;
+  its `max_tokens`; and its release, the bucket s_rel of its connection's last ingress cell (`Request.end`), from which
+  the server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
   which the warden's fixed schedule sets (egress cell i in bucket s + Δ_nc + ⌊i/r⌋, s its connection's admission).
-The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
+The reference order is the warden's release order, the requests by (s_rel, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
 comes after the release and overtakes it under load (the trace corpus behind the warden: 2,970 inversions of 499,500
@@ -731,7 +731,7 @@ def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
 
 def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> Record:
     """A trace's certified record (`replay.Trace`, clocked, with each request's tokens): each request's certified
-    ingress bucket standing for its release a, its ingress time then its engine index for its ordinal, so that the
+    ingress bucket standing for its release s_rel, its ingress time then its engine index for its ordinal, so that the
     record is in release order, and the trace's release buckets."""
     if not trace.clocked():
         raise V1Error("the trace has no clock, so no certified buckets")
