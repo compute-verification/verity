@@ -1,15 +1,15 @@
-"""Red team ra-remote-redteam-impl against the remote bandwidth audit as implemented: each test asserts the property the
-audit's claim needs, and was marked xfail with its finding id while the reference broke it (the report is
-note:memory-accounting/ra-remote-redteam-impl); RB-1, RB-2 and RB-3 are fixed and pass.  The exploits run on
-`test_remote_bandwidth`'s store and drivers."""
+"""The red team's exploits against the remote bandwidth audit as implemented: each test asserts the property the
+audit's claim needs, and was marked xfail with its finding id while the reference broke it; RB-1, RB-2 and RB-3 are
+fixed and pass.  The exploits run on `test_remote_bandwidth`'s store and drivers."""
 
 from __future__ import annotations
 
 import pytest
 
-from test_remote_bandwidth import N, SCHEDULE, Clock, Entropy, drive, finish, params, store  # noqa: F401
+from remote_bandwidth_fakes import Clock, Entropy
+from test_remote_bandwidth import N, SCHEDULE, drive, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
-from verity.core.protocols.remote_bandwidth.audit import Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun
 
 BLOCK = 4096
 CAPACITY = N * BLOCK / 300e-9    # a pass of the store fills its 300 ns at the node's capacity
@@ -21,11 +21,12 @@ def window_shortfall(w: audit.WindowRecord) -> float:
 
 
 def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa: F811
-    """The claim is the hybrid: short by under 0.15% over the horizon and by under 1% in every window.  `Ledger.floor` is
-    the every-window half, but it is only the openings' bound on a window's wrong receipts.  A prover that reads one
-    block a pass through window 5 (every receipt correct, every one opened) is accepted with floor 0; the window's
-    certified reads are 3.3% of its capacity, and the session's γ moves by about 1/W of that, 8% at W = 12 (0.17% at
-    600 windows of 1 s).  Fixed: the ledger reads each window over its own span, and names window 5 the worst."""
+    """The claim is the hybrid: short by under 0.15% over the horizon and by under 1% in every window.
+    `GammaTerms.floor` is the every-window half, but it is only the openings' bound on a window's wrong receipts.  A
+    prover that reads one block a pass through window 5 (every receipt correct, every one opened) is accepted with
+    floor 0; the window's certified reads are 3.3% of its capacity, and the session's γ moves by about 1/W of that, 8%
+    at W = 12 (0.17% at 600 windows of 1 s).  Fixed: the ledger reads each window over its own span, and names window 5
+    the worst."""
     windows, idle = 12, 5
     schedule = timing.honest(1000, windows, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
     p = params(windows=windows, samples=N * 4)
@@ -85,7 +86,7 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
 
 
 def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> None:  # noqa: F811
-    """`Session(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
+    """`AuditRun(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
     (`PROTOCOL.md` §5), and it was optional: left out, it failed open.  Two sessions run at once over one clock, both
     told they may start at 0, as only a verifier that runs them at once would; each block is read once a pass and
     serves a receipt of each chain.  Both are accepted with every receipt opened, and the two records together certify
@@ -93,10 +94,10 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     waits it out."""
     p = params(windows=2, samples=N * 3, window_ns=910)
     clock = Clock()
-    sessions = [Session(p, store.registration, None,
-                        coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
-                        not_before_ns=0, clock=clock) for k in (0, 1)]
-    provers = [audit.Prover(store, None, s.commitment, entropy=Entropy(b"unused")) for s in sessions]
+    sessions = [AuditRun(p, store.registration, None,
+                         coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
+                         not_before_ns=0, clock=clock) for k in (0, 1)]
+    provers = [audit.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
     challenges = [s.start() for s in sessions]
     previous = [store.registration.digest] * 2
@@ -117,12 +118,12 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     credited = sum(s.record().receipts for s in sessions)
     assert credited == 2 * reads[0] == 2 * 6 * N
     with pytest.raises((TypeError, ValueError)):
-        Session(p, store.registration, None,
-                coins.local(store.registration.digest, 2, p.windows, Entropy(b"coins 2"), appends=1), clock=clock)
+        AuditRun(p, store.registration, None,
+                 coins.local(store.registration.digest, 2, p.windows, Entropy(b"coins 2"), appends=1), clock=clock)
     end = max(s.record().end_ns for s in sessions)
-    nxt = Session(p, store.registration, None,
-                  coins.local(store.registration.digest, 3, p.windows, Entropy(b"coins 3"), appends=1),
-                  not_before_ns=end, clock=clock)
+    nxt = AuditRun(p, store.registration, None,
+                   coins.local(store.registration.digest, 3, p.windows, Entropy(b"coins 3"), appends=1),
+                   not_before_ns=end, clock=clock)
     clock.now = end - 1
     with pytest.raises(audit.SessionError, match="may still be reading"):
         nxt.start()

@@ -1,7 +1,7 @@
 """The Python held to PoUW's commitments in Lean (`PouwCommit`), PoUW's verifier of record (`pouw.verifier`).
 
 `tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
-`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the draw
+`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the sample
 keys and the work-weighted draws), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
 case whose Python outcome is not the Lean's, naming the Lean's. `test_the_python_is_the_lean` runs it here on the cases
 this checkout writes, so a change to the Python that the Lean doesn't make fails with the Lean's verdict. `check` also runs

@@ -1,4 +1,4 @@
-"""Render the NCI literature index as Markdown on stdout: the parameters with the findings each estimate merges, the
+"""Render the inference-only policy's literature index as Markdown on stdout: the parameters with the findings each estimate merges, the
 board's slowdown brackets, and every source with its quoted findings, by topic. Never committed (README.md, "Rendering").
 
     python benchmarks/nci/render.py > /tmp/nci-index.md

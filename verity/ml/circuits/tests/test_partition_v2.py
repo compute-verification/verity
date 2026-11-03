@@ -1,5 +1,5 @@
 """`verity/partition/v2` (`verity.ml.circuits.partition_v2`): the advice of a private partition, its rows, the statement, the
-global predicates G1-G7 and their refusals, the local predicates L1-L4 on each drawn unit (from the opened rows alone, against
+global predicates G1-G7 and their refusals, the local predicates L1-L4 on each sampled proof block (from the opened rows alone, against
 the advice root of `verity.ml.commitments.advice`), v1's numbering in query mode, and the pinned vector
 `partition_v2_vectors.json`.  `python verity/ml/circuits/tests/test_partition_v2.py --write` rewrites it.
 
@@ -92,7 +92,7 @@ def _registered(program, q=None, preds=None, family="test", grid_bits=V.GRID_BIT
     preds = dict(preds)
     preds["grid_bits"] = grid_bits
     rs = V.pad(V.rows(adv), grid_bits)
-    reg = A.register(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
+    reg = A.commit(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
     return adv, rs, reg, V.statement(family, preds, adv, reg.root)
 
 
@@ -468,7 +468,7 @@ def test_the_pinned_vector():
     P = codec.decode_program(json.loads(want["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
     assert codec.program_digest(P) == want["program_digest"] == codec.program_digest(_program())
     assert V.check(want["statement"], rs, P).ok and V.decode(rs) == V.build(P)
-    assert A.register(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
+    assert A.commit(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
 
 
 if __name__ == "__main__" and "--write" in sys.argv:

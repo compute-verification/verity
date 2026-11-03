@@ -1,4 +1,4 @@
-"""`read_slots`: a unit's reads of the pinned MUFU tables split out to C-Flock lookup slots. On a unit reading EX2, then RCP of
+"""`read_slots`: a unit's reads of the pinned MUFU tables split out to Flock lookup slots. On a unit reading EX2, then RCP of
 a sum over it (depth 2, a sigmoid's shape), with a depth-0 word returned by the last stage: the unit, the slots and the stages
 compute what the flat circuit does on every lane, and a flipped unit row fails its lane; the wires fill every stage and slot
 input once, each from a port of its width, each stage reading only earlier stages and slots; a cap on a net's ANDs cuts the

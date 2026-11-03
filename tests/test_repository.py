@@ -30,7 +30,7 @@ ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
-#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
+#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
@@ -202,6 +202,8 @@ def test_markdown_size_caps() -> None:
 
 #: Test files that need torch, a GPU or cargo, and were never part of `check`.
 UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
+#: what pytest collects from a module: a function or a class of its own named as a test
+_DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
@@ -217,11 +219,13 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 def test_every_test_file_is_in_a_suite() -> None:
     """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
-    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
+    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests. A module
+    named as a test file that defines no test (the graph's `test-file` family's lister and runner) is none."""
     tracked = _tracked()
     testpaths = _testpaths(tracked)
     tests = [p for p in tracked if p.endswith(".py") and (os.path.basename(p).startswith("test_") or p.endswith("_test.py"))]
-    offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)]
+    offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)
+                 and (ROOT / p).is_file() and _DEFINES_A_TEST.search((ROOT / p).read_text(encoding="utf-8", errors="replace"))]
     assert not offenders, "test files that no suite runs:\n" + "\n".join(offenders)
 
 

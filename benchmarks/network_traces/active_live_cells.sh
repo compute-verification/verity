@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Several active_live.sh cells back to back in one GPU lease, so their acceptance is read under the same node load:
-#   research run --queue --source <tree> --cwd source --project verity --gpus 1 --preemptible --max-min M --mem-gb 48 \
-#     --declared-output 'out/*' --send calibration.json --send NAME.trace.json.gz -- \
-#     bash benchmarks/network_traces/active_live_cells.sh NAME="ARGS" ... -- COMMON ARGS
+# Several active_live.sh cells back to back in one GPU lease, so their acceptance is read under the same node load, from
+# the shipped tree's root, as one preemptible job with 48 GB whose inputs are calibration.json and NAME.trace.json.gz
+# and whose outputs are out/*:
+#   bash benchmarks/network_traces/active_live_cells.sh NAME="ARGS" ... -- COMMON ARGS
 # Each cell writes out/NAME/ with its own vLLM; out/cells.jsonl has each cell's start, end, rc and load averages, and
 # out/loadavg.log samples /proc/loadavg every 30 s. A cell gets at most CELL_MINUTES (default 42) and never more than
 # what is left of JOB_MINUTES less 4 minutes; one that can't get 10 is skipped. CPUs: a 16-core

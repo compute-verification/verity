@@ -1,4 +1,4 @@
-"""hidden_zk's fast staging (stage.py under HZ_STAGE=fast: fast_stage.py's patches of C-Flock's staging) writes the bytes the
+"""hidden_zk's fast staging (stage.py under HZ_STAGE=fast: fast_stage.py's patches of Flock's staging) writes the bytes the
 library writes: the circuit, its instances, public file and pin, and the same stage.json but for its timings and its label."""
 
 from __future__ import annotations
@@ -60,6 +60,8 @@ d = bind(definition("FastStageToy", 1, lambda C, a, b, w: add(C, a, b, width=20,
                     (("a", Array(12, BIT)), ("b", Array(20, BIT)), ("w", Array(2048, BIT))), Array(22, BIT), register=False))
 st = CS.UnitStager(d, "unit/fast-stage-toy", [("ab", V2, 32, ["a", "b"]), ("w", V2, 2048, ["w"])], [(V2, (0,))],
                    circuit=out / "circuit.txt", layout=layout, structural=bool(structural))
+if mode == "fast" and layout is None:
+    assert isinstance(st.low.layout, fast_stage.CST.CompactLayout)
 print(json.dumps({"pin": st.pin, "class": st.class_sha512}))
 """
 
@@ -69,9 +71,10 @@ print(json.dumps({"pin": st.pin, "class": st.class_sha512}))
 def test_fast_staging_composes_the_library_circuit_flat_and_templated(layout, tmp_path):
     """About 20 s: a Boolean unit's `UnitStager` circuit, flat, templated from the flat unit (`circuit.compose`'s
     ``layout``) and templated from struct_lower (``structural``, the H1 stagers' form under ``H1_TMPL=structural``), built under
-    fast_stage's patches and without them, each in its own process: the same file, pin and class. The flat file is the
-    one fast_stage streams from its scratch netlist; a templated one has no unit section to stream, and a structural
-    one's unit_sha256 is over its template, never a netlist."""
+    fast_stage's patches and without them, each in its own process: the same file, pin and class. The stager's file is
+    `circuit.compose_to`'s either way (fast_stage's scratch netlist is `stage_unit`'s,
+    `test_fast_staging_writes_the_library_bytes`), under fast_stage's lowering, layout and digests; a templated one has no
+    unit section to stream, and a structural one's unit_sha256 is over its template, never a netlist."""
     runs = {mode: subprocess.Popen([sys.executable, "-c", STAGER, mode, str(tmp_path / mode), layout, str(STAGE.parent)],
                                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             for mode in ("fast", "library")}

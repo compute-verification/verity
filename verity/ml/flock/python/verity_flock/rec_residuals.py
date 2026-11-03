@@ -15,8 +15,8 @@ then zero words.
   commits them (`rec_live.message_rows`). The verifier registers the round's two ``c_k`` (rep 0's, rep 1's) as the value
   ``rec-c<i>`` from the inner session's public record alone (`commits_entry`: a registered value's tree over the given
   ``b || c``), and instance r reads row r: the prover opens the row it committed in the inner session under its salt, so
-  each message is the one the coins after it were drawn against. A holo shape's h round (`rec_algebra.h_round`) is one of
-  them, absorbed after z_partial and before r′ and ζ_c are drawn: the one registered value both this statement (L4′, h an XOR
+  each message is the one the coins after it were sampled against. A holo shape's h round (`rec_algebra.h_round`) is one of
+  them, absorbed after z_partial and before r′ and ζ_c are sampled: the one registered value both this statement (L4′, h an XOR
   term of the comb's operand, no product of its own) and `rec_sparse.RecSparse`'s ``h`` (H1) read at row r.
 * ``acc0``, ``acc1``: the rep's running sums before its first opening and after its last (two F elements, then the 48 words
   `rec_open` carries): rows of the prover's ``rec-acc`` registration, which the opening statements read too
@@ -76,8 +76,8 @@ OUT_WORDS = 128
 F_WORDS = 8
 ROW_BLOCK = 64
 LEAVES = 3 ** 7
-ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
-VERIFIER_SALT = b"verity/rec-v0/verifier-salt/v0"
+ZERO_SALT = b"verity/rec-v1/zero-residual-salt/v1"
+VERIFIER_SALT = b"verity/rec-v1/verifier-salt/v1"
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
 # the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
@@ -403,9 +403,14 @@ def subcircuit(S: dict, name: str) -> SimpleNamespace:
 
 # --- the statement ----------------------------------------------------------------------------------------------------------
 
+def salt_of(msg: bytes) -> bytes:
+    """A salt from ``msg`` (`Flock.RecCoins.saltOf`): SHA-512 in counter mode, ``SHA-512(msg || u32be c)`` for each of the
+    salt's 64-byte blocks, each output whole."""
+    return b"".join(hashlib.sha512(msg + c.to_bytes(4, "big")).digest() for c in range(hm96.SHA512.salt_bytes // 64))
+
+
 def zero_salts(value: str, n: int) -> list[bytes]:
-    return [hashlib.shake_256(ZERO_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes)
-            for i in range(n)]
+    return [salt_of(ZERO_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")) for i in range(n)]
 
 
 def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
@@ -413,7 +418,7 @@ def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
     i alone. They are public, as the rows are: the commitment's binding (cr/sha-512) is what the reads need, and it hides
     nothing the verifier does not publish."""
     head = VERIFIER_SALT + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
-    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes) for i in range(n)]
+    return [salt_of(head + i.to_bytes(4, "little")) for i in range(n)]
 
 
 def verifier_value(program: str, value: str, rows: list[list[int]]):

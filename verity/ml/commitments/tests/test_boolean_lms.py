@@ -1,6 +1,6 @@
 """`verity.ml.commitments.gates.lms`: the Boolean LMS verifier accepts every signature `lms.sign_at` makes at
 (N, W) = (64, 1) on trees of height 1 and 2, refuses each with one thing wrong (a chain value, C, a path node, the leaf index,
-the message, I, the root) exactly where `lms.verify` does, its parts cost the gates pinned here, and C-Flock lowers a part
+the message, I, the root) exactly where `lms.verify` does, its parts cost the gates pinned here, and Flock lowers a part
 by the builder its trace was taken from."""
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def test_the_parts_cost_the_pinned_gates() -> None:
 
 @pytest.mark.parametrize("name, statics", [("Sha512Compress", ()), ("LmsEqual", (64,))])
 def test_a_part_lowers_by_the_builder_its_trace_was_taken_from(name, statics) -> None:
-    """C-Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`: ``build(C, *e)`` for a part without
+    """Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`: ``build(C, *e)`` for a part without
     statics, ``build(C, S, *e)`` with), whose commits keep a compression's forms short; called so, it traces to the part's
     own gates."""
     d = getattr(G, name)

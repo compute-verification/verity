@@ -25,7 +25,7 @@ from verity.ml.circuits.codec import program_digest
 
 from . import model as M
 from .block import Context, MemoryNet
-from .hardware import OUTSIDE, Hardware
+from .hardware import OUTSIDE, DeviceGraph
 
 HERE = Path(__file__).resolve().parent
 DATACENTER = str(HERE.parents[1] / "datacenter")
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     config = {"workload": args.workload, "spec": spec, "blocks": args.blocks, "devices": args.devices, "plan": args.plan,
               "frame_bytes": args.frame_bytes, "bucket_ticks": args.bucket_ticks, "seed": args.seed}
     if args.graph:
-        config["hardware"] = Hardware.from_datacenter(declaration(args.graph)).to_json()
+        config["hardware"] = DeviceGraph.from_datacenter(declaration(args.graph)).to_json()
     if args.step_ticks:
         config["step_ticks"] = args.step_ticks
     ctx = Context(config)

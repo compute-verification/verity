@@ -19,12 +19,13 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the challenger's coins name their claim instance (sampled_proofs/challenger.py's `coin_claim`)
           "verity/core/claims/__init__.py",
-          # the Lean verifier the sessions run beside audit.Session, which computes auditor_line.py's line
+          # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
           # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
           # path requires
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
@@ -32,6 +33,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/core/difftest/python",
+          # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
+          "benchmarks/word_codec/cuda_lib.py",
           # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
           "verity/core/protocols/bandwidth",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit

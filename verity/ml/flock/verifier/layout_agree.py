@@ -38,7 +38,7 @@ def ceil_log2(n):
 
 def make_layouts(rng, types, order, unit_digest, info):
     """One layout per type, callees first; a generated read layout per placed read."""
-    layouts: list[LY.Layout] = []
+    layouts: list[LY.BlockLayout] = []
     index: dict[str, int] = {}
     gens: dict[tuple, int] = {}
     for d in order:
@@ -59,10 +59,10 @@ def make_layouts(rng, types, order, unit_digest, info):
                     key = (sha, ib, vb, lo)
                     if key not in gens:
                         n = LY.read_rows_placed(ib, lo, LY.k_of(sha, vb, info(sha)))
-                        layouts.append(LY.Layout(None, ceil_log2(n), (), (), ("gen", sha, ib, vb, lo), (), ()))
+                        layouts.append(LY.BlockLayout(None, ceil_log2(n), (), (), ("gen", sha, ib, vb, lo), (), ()))
                         gens[key] = len(layouts) - 1
                     reads.append((i, gens[key], 0))
-        lay = LY.Layout(d, None if is_unit else 7, (), (), ("derive",), tuple(calls), tuple(reads))
+        lay = LY.BlockLayout(d, None if is_unit else 7, (), (), ("derive",), tuple(calls), tuple(reads))
         layouts.append(lay)
         j = len(layouts) - 1
         size = LY.own_size(types, layouts, j, info)
@@ -183,8 +183,8 @@ def fanout(m, r):
     items = [(CT.CALL, 0, (((i,), 0),)) for i in range(m)] + [(CT.READ, 0, tuple(((i % m,), 0) for _ in range(4))) for i in range(r)]
     outs = [((m + i,), 0) for i in range(m)] + [((2 * m + 4 * i + b,), 0) for i in range(r) for b in range(4)]
     unit = CT.CircuitType(library.PROGRAM, ((m, 1),), ((len(outs), 1),), (callee.digest(),), ((sha, 4, 4),), tuple(items), tuple(outs))
-    layouts = [LY.Layout(callee.digest(), 10, (), (), ("derive",), (), ()), LY.Layout(None, 10, (), (), ("gen", sha, 4, 4, 2), (), ()),
-               LY.Layout(unit.digest(), None, (), (), ("derive",), tuple((i, 0, i) for i in range(m)), tuple((m + i, 1, i) for i in range(r)))]
+    layouts = [LY.BlockLayout(callee.digest(), 10, (), (), ("derive",), (), ()), LY.BlockLayout(None, 10, (), (), ("gen", sha, 4, 4, 2), (), ()),
+               LY.BlockLayout(unit.digest(), None, (), (), ("derive",), tuple((i, 0, i) for i in range(m)), tuple((m + i, 1, i) for i in range(r)))]
     return archive([callee.digest(), unit.digest()], {callee.digest(): callee, unit.digest(): unit}, {sha: ws}, layouts, 2)
 
 
@@ -200,11 +200,11 @@ def shape_cases():
         t = CT.CircuitType(library.PROGRAM, ((ib, 1),), ((vb, 1),), (), ((sha, ib, vb),),
                            ((CT.READ, 0, tuple(((b,), 0) for b in range(ib))),), tuple(((ib + b,), 0) for b in range(vb)))
         if gen:
-            layouts = [LY.Layout(None, 10, (), (), ("gen", sha, gen[0], gen[1], 2), (), ()),
-                       LY.Layout(t.digest(), None, (), (), ("derive",), (), ((0, 0, 0),))]
+            layouts = [LY.BlockLayout(None, 10, (), (), ("gen", sha, gen[0], gen[1], 2), (), ()),
+                       LY.BlockLayout(t.digest(), None, (), (), ("derive",), (), ((0, 0, 0),))]
             out.append(archive([t.digest()], {t.digest(): t}, {sha: ws}, layouts, 1))
         else:
-            out.append(archive([t.digest()], {t.digest(): t}, {sha: ws}, [LY.Layout(t.digest(), None, (), (), ("derive",), (), ((0, None, 2),))], 0))
+            out.append(archive([t.digest()], {t.digest(): t}, {sha: ws}, [LY.BlockLayout(t.digest(), None, (), (), ("derive",), (), ((0, None, 2),))], 0))
     return out
 
 

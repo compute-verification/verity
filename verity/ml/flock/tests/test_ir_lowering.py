@@ -1,5 +1,5 @@
 """C-Flock's generic IR lowering: the pieces against the IR primitives, the units read off each template's IR graph, the
-lowered templates against the IR evaluator on captured #101 slices and synthetic sets, the pins, and the negatives."""
+lowered templates against the IR evaluator on captured served slices and synthetic sets, the pins, and the negatives."""
 from __future__ import annotations
 
 import itertools
@@ -527,7 +527,7 @@ def test_silu_v2_circuit_units_are_a_power_of_two():
 
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
 def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
-    """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
+    """`LoweredUnit.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
     pairs of every row of the unit's ``flock-ir-unit/v2`` text, which the block places in the unit's slot, each below
     ``useful``."""
     from verity.ml.circuits.defs import bind
