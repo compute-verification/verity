@@ -409,7 +409,8 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
         con = one["console"]
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
-                     con["binding_kind"], con["rests_on"], kinds(con, bound["console"]),
+                     con["binding_kind"], con["rests_on"],
+                     kinds(con, bound["console"]),
                      rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
                                "w_fwd_gates": w_fwd, "labels": m.labels,
