@@ -54,6 +54,35 @@ def ns_flops(shape: tuple[int, int], steps: int = 5) -> int:
     return steps * (4 * m * m * n + 2 * m ** 3)
 
 
+def gather_selects(n: int, bits: int = 32, chunk_bits: int = 10) -> int:
+    """te_core/flops.py's gather multiplexers per selected word over n words, copied: a program may import only te_core's
+    hooks and codecs."""
+    def tree(m: int, k: int) -> int:
+        out = 0
+        for _ in range(k):
+            m = (m + m % 2) // 2
+            out += m
+        return out
+
+    chunk = 1 << chunk_bits
+    if n <= chunk:
+        return tree(n, bits)
+    full, r = divmod(n, chunk)
+    return full * tree(chunk, chunk_bits) + (tree(r, chunk_bits) if r else 0) + tree(full + (r > 0), bits - chunk_bits)
+
+
+def pass_flops(rec: dict, trainable: dict, lookup: int, op: str, n_tokens: int) -> int:
+    """The FLOPs the harness counts for a pass: prepare.train_flops plus what it leaves out, a trained table's token
+    lookup (`lookup` a token) and the attention's other half (the whole score matrix, with a backward of 2.5x its
+    forward: one more attention_flops a layer forward, three more a layer the backward reaches)."""
+    ctx = prepare.EVAL_CTX
+    tf = prepare.train_flops(rec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])
+    first = tuple(tf["lowest_trained"] or ()) if op == "train" else ()
+    n_layer = rec["config"]["n_layer"]
+    reached = sum((layer, 1) >= first for layer in range(1, n_layer + 1)) if first else 0
+    return tf["flops"] + (lookup + prepare.attention_flops(rec, ctx) * (n_layer + 3 * reached)) * n_tokens
+
+
 class Muon(torch.optim.Optimizer):
     """Muon: momentum, Newton-Schulz orthogonalized. `scale` "shape" is the seed's sqrt(max(1, rows/cols)); "rms" is
     0.2 sqrt(max(rows, cols)), an update RMS of 0.2 like AdamW's, so its rate is on AdamW's scale."""
@@ -162,12 +191,17 @@ def main() -> int:
     trainable = {"full": sorted(trained)}
     tokens = a.batch * prepare.EVAL_CTX
     extra = sum(ns_flops(tuple(params[n].shape), a.ns_steps) for n in mats) if a.mat_opt == "muon" else 0
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
+    lookup = 2 * gather_selects(params[embed].shape[0]) * params[embed].shape[1] if embed in trained else 0
+
+    def flops(op: str, n_tokens: int) -> int:
+        return pass_flops(rec, trainable, lookup, op, n_tokens)
+
+    per_step = flops("train", tokens) + extra
     snap_at = [float(x) for x in a.snap_at.split(",") if x.strip()]
     fork_at = [float(x) for x in a.forks.split(",") if x.strip()]
     val_tokens = a.val_rows * prepare.EVAL_CTX
     n_val = ((len(snap_at) + 1) * (2 if a.ema_frac else 1) + len(fork_at)) if a.val_rows else 0
-    val_flops = n_val * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": val_tokens}])["flops"]
+    val_flops = n_val * flops("forward", val_tokens)
     room = a.budget_fraction * prepare.budget(a.start)["train_flops"] - val_flops
 
     def fork_lens(n: int) -> dict[int, int]:
