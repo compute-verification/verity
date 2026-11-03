@@ -477,7 +477,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
             for grp, lr in zip(opt.param_groups, lrs):
                 grp["lr"] = lr * frac
             rows = data.next(a.batch)
-            total = 0.0
+            total = torch.zeros((), device=dev)
             for i in range(0, a.batch, a.micro):
                 xb = rows[i: i + a.micro]
                 with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
@@ -485,19 +485,19 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                 loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), xb[:, 1:].reshape(-1)) * (
                     len(xb) / a.batch)
                 loss.backward()
-                total += float(loss.detach())
+                total += loss.detach()
             torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
             opt.step()
             opt.zero_grad(set_to_none=True)
             steps.append({"op": "train", "tokens": tokens})
             ema = total if ema is None else 0.98 * ema + 0.02 * total
             if (step + 1) % 100 == 0:
-                print(json.dumps({"arm": k, "step": step + 1, "loss": total, "ema": ema,
+                print(json.dumps({"arm": k, "step": step + 1, "loss": float(total), "ema": float(ema),
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
             if sched.due(g, step == n_k - 1):
                 emit(*pieces(x, factors, norms))
             g += 1
-        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "targets": targets, "norms": norms,
+        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": float(ema), "targets": targets, "norms": norms,
                         "trainable": tr, "pieces": pieces(x, factors, norms),
                         "n_entries": sum(A.numel() + B.numel() for A, B, _ in factors.values())
                         + sum(params[n].numel() for n in norms)})
@@ -682,7 +682,7 @@ def main() -> int:
             rows = data.next(a.batch)
             if a.declare and qarrays:
                 prepare.declare_step(encode_quan(arm_entries(qarrays, params, names), theta))
-            total = 0.0
+            total = torch.zeros((), device=dev)
             for i in range(0, a.batch, a.micro):
                 xb = rows[i: i + a.micro]
                 with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
@@ -690,7 +690,7 @@ def main() -> int:
                 loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), xb[:, 1:].reshape(-1)) * (
                     len(xb) / a.batch)
                 loss.backward()
-                total += float(loss.detach())
+                total += loss.detach()
             for n in quantized:
                 latent[n].grad, params[n].grad = params[n].grad, None
             torch.nn.utils.clip_grad_norm_([opt_of[n] for n in names], 1.0)
@@ -704,7 +704,7 @@ def main() -> int:
                 steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
             ema = total if ema is None else 0.98 * ema + 0.02 * total
             if (step + 1) % 100 == 0:
-                print(json.dumps({"arm": k, "step": step + 1, "loss": total, "ema": ema,
+                print(json.dumps({"arm": k, "step": step + 1, "loss": float(total), "ema": float(ema),
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
             if sched.due(g, step == n_arm - 1):
                 if quantized and a.emit == "quan":
@@ -721,7 +721,7 @@ def main() -> int:
                     buckets.append(note | {"bucket": b, "step": g, "arm": k})
                     del model_v
             g += 1
-        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "qarrays": qarrays, "delta_grad": dgrad,
+        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": float(ema), "qarrays": qarrays, "delta_grad": dgrad,
                         "rest": {n: params[n].detach().cpu().clone() for n in names if n not in qarrays},
                         "latent": {n: v.cpu() for n, v in latent.items()} if x.qat == "sparse" else None})
         del latent, opt_of, muon, adam, opts
