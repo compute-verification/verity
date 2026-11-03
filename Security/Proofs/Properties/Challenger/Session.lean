@@ -170,11 +170,14 @@ def chainSteps (lines : List String) : List ByteArray :=
 theorem logHashed_eq (lines : List String) : logHashed lines =
     [field LOG_TAG.toUTF8] ++ chainSteps lines ++ [(String.join (lines.map (· ++ "\n"))).toUTF8] := rfl
 
+theorem stepF_fst (acc : ByteArray × List ByteArray) (x : String) :
+    (stepF acc x).1 = Flock.Sha512.hash (acc.1 ++ field x.toUTF8) := rfl
+
 theorem foldl_fst (l : List String) (acc : ByteArray × List ByteArray) :
     (l.foldl stepF acc).1 = l.foldl (fun h x => Flock.Sha512.hash (h ++ field x.toUTF8)) acc.1 := by
   induction l generalizing acc with
   | nil => rfl
-  | cons x l ih => exact ih _
+  | cons x l ih => rw [List.foldl_cons, List.foldl_cons, ih, stepF_fst]
 
 theorem logChain_eq (l : List String) :
     logChain l = (l.foldl stepF (Flock.Sha512.hash (field LOG_TAG.toUTF8), [])).1 := by
@@ -340,7 +343,8 @@ theorem sessionOf_read {key : ChallengerKey} {record log close : Json} {res : Li
   all_goals
     refine ⟨_, _, _, _, _, by assumption, by assumption, by assumption, lms_of_check (by assumption),
       by first | rfl | assumption, mapM_str_of (by assumption) (fun j s hj => by cases j <;> cases hj <;> rfl),
-      beq_iff_eq.1 (by assumption), by first | assumption | exact none_of_forall (by assumption),
+      beq_iff_eq.1 (by assumption), by first | assumption | exact none_of_forall (by assumption) |
+        exact none_of_forall (by subst_vars; assumption),
       by assumption, rfl⟩
 
 theorem sessionOf_ok_spec (key : ChallengerKey) (record log close : Json) :
@@ -390,7 +394,10 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ) ?_ h
   clear h
   mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedSessionOf_ok_spec, challengerStream_ok_spec]
-  all_goals exact ⟨_, _, by assumption, by assumption⟩
+  all_goals first
+    | exact ⟨_, _, by assumption, by assumption⟩
+    | (intro h; exact ⟨_, _, by assumption, h⟩)
+    | (intro h; subst_vars; exact ⟨_, _, by assumption, h⟩)
 
 /-! ## What the ledger's entries sign -/
 
