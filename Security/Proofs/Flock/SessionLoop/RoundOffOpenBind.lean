@@ -432,10 +432,10 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     (hN : ¬ Masked.Refused x C (Masked.ligP0 x j r)) {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE C spec) = .ok extras) :
     ∃ T, T = FlockComplete.rsTarget (Masked.ligCoin C) (Masked.rankSlot x j.val r.val)
-        ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val).sv (extras.size + 2) ∧
+        ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val).sv (extras.size + 2) ∧
       finS.enc x C (Masked.ligP0 x j r) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) =
         0 :: (encs (openBind T (FlockComplete.flat (FlockComplete.layerOf (fun a b => _root_.Flock.Sha512.hash (a ++ b))
-          (Masked.lv0 x j).d (Masked.swSrcE x C w (vs x w ν C) t j.val).leaf0
+          (Masked.lv0 x j).d (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).leaf0
           ((Masked.lv0 x j).d - (Masked.lv0 x j).cap)))) ++ (Frame.sq 2 (Masked.zkTab x j).sch.n).enc) := by
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
@@ -450,29 +450,29 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     exact (hall i hi').2.2
   let cmOf : ℕ → FlockComplete.Commit := fun i =>
     Classical.choose (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i))
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))
   have hcm : ∀ i, (FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
       _root_.Flock.Hashes V) _root_.Flock.MerkleScheme.hm96Sha512 (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i) : V _) = .ok (cmOf i) := fun i =>
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i) : V _) = .ok (cmOf i) := fun i =>
     (Classical.choose_spec (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i))).1
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))).1
   have hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
           _root_.Flock.Hashes FlockComplete.PS)
         (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x C w (vs x w ν C) t i)).go l =
+        (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i)).go l =
       (.ok ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).map cmOf), l) := by
     intro l
     have hq : FlockComplete.quietS.R
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash : _root_.Flock.Hashes V)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x C w (vs x w ν C) t i))
+            (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
               _root_.Flock.Hashes FlockComplete.PS)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x C w (vs x w ν C) t i)) :=
+            (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i)) :=
       _root_.Flock.With.Sim.mapM_array FlockComplete.quietS _ fun i =>
         FlockComplete.CutEq.commit0Cut_quiet _ _ _ _
     rw [hq l, FlockComplete.mapM_ok_mem cmOf _ fun i hi => ?_]
@@ -482,10 +482,10 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
       _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-    ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val)
-  have hrc := Masked.runCut_openBody hx w t C (Masked.swSrcE x C w (vs x w ν C) t) hsx hs hcms j r hN hext (ic := ic)
+    ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val)
+  have hrc := Masked.runCut_openBody hx w t C (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t) hsx hs hcms j r hN hext (ic := ic)
     (fun l => by rw [FlockComplete.CutEq.padsTreeCut_quiet _ _ _ l, hic0])
-  have hsrc : Masked.swSrcE x C w (vs x w ν C) t =
+  have hsrc : Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x C) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) :=
     rfl
   have hj' : j.val < (FlockDeploy.tabsOf (Masked.stsOf x)).size := by simpa [FlockDeploy.tabsOf] using hj
@@ -493,10 +493,10 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     rw [getElem!_pos ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).map cmOf) j.val (by simpa using hj'),
       Array.getElem_map, Array.getElem_range]
   have hcap' : (cmOf j.val).cap = FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r))
-      (schs[j.val]!.1.levels.getD 0 default).d (Masked.swSrcE x C w (vs x w ν C) t j.val).leaf0
+      (schs[j.val]!.1.levels.getD 0 default).d (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).leaf0
       ((schs[j.val]!.1.levels.getD 0 default).d - (schs[j.val]!.1.levels.getD 0 default).cap) :=
     (Classical.choose_spec (FlockComplete.commit0Cut_cap (schs[j.val]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t j.val))).2
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val))).2
   have hlv : schs[j.val]!.1.levels.getD 0 default = Masked.lv0 x j := by
     rw [hschs j]
     try rfl
@@ -858,7 +858,7 @@ theorem release_sched_openBind_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
     (by have := hN0; rwa [hn] at this) hext
   rw [hreal] at hre
   have hcap := Loop.cap_zcBind hL0 ν t (Loop.finS.pad (K := refK x) cs)
-    (vs x w ν (Loop.finS.pad (K := refK x) cs)) j r hre
+    (vs x w ν (Loop.finS.pad (K := refK x) cs) (Loop.finS.seenOf x t)) j r hre
   have hcap2 : tr.cm0.toC.cap = _ := hcap
   -- the targets agree: the coins are the openings' words, the switched vectors the session's
   have hT : TL = TR := by

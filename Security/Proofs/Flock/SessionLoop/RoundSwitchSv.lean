@@ -101,7 +101,7 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
         _root_.Flock.Firewall.Finish.claimsOf (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j)
           (_root_.Flock.Firewall.Drive.linkPoints (Masked.stAt x j)
             (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0))))[k]! =
-        ((Masked.swSrcE x (finS.pad (K := refK x) cs) w (vs x w ν (finS.pad (K := refK x) cs)) t j.val).rep
+        ((Masked.swSrcE x (finS.pad (K := refK x) cs) w (vs x w ν (finS.pad (K := refK x) cs) (finS.seenOf x t)) t j.val).rep
           r.val).sv k) := by
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
@@ -195,8 +195,8 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
   rw [htm, htk', (hS0.realOf ν t j r hre).2.2.2, hpk,
     FlockComplete.switchVec_packed (by omega) (Masked.trsE x w (Masked.UE.tapeZk t))[j.val]! _ hx6,
     FlockComplete.Replay.switchVec_x hxk]
-  exact (Masked.swSrc_sv (finS.pad (K := refK x) cs) hR t j r (vs x w ν (finS.pad (K := refK x) cs)) hx hN hsx heS
-    k hkE (by omega)).symm
+  exact (Masked.swSrc_sv (finS.pad (K := refK x) cs) hR t j r
+    (vs x w ν (finS.pad (K := refK x) cs) (finS.seenOf x t)) hx hN hsx heS k hkE (by omega)).symm
 
 end Loop
 

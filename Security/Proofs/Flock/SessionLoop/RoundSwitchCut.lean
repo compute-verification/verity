@@ -208,7 +208,7 @@ theorem enc_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Liv
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE C spec) = .ok extras)
     (hk : k ≤ extras.size + 2) :
     finS.enc x C (Masked.rankSlot x j.val r.val + k) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) =
-      0 :: Switch.rsBody ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val).sv (extras.size + 2) [] k := by
+      0 :: Switch.rsBody ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val).sv (extras.size + 2) [] k := by
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
   obtain ⟨schs, hs, -⟩ := Masked.schedsPZk_live hx
@@ -222,29 +222,29 @@ theorem enc_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Liv
     exact (hall i hi').2.2
   let cmOf : ℕ → FlockComplete.Commit := fun i =>
     Classical.choose (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i))
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))
   have hcm : ∀ i, (FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
       _root_.Flock.Hashes V) _root_.Flock.MerkleScheme.hm96Sha512 (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i) : V _) = .ok (cmOf i) := fun i =>
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i) : V _) = .ok (cmOf i) := fun i =>
     (Classical.choose_spec (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i))).1
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))).1
   have hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
           _root_.Flock.Hashes FlockComplete.PS)
         (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x C w (vs x w ν C) t i)).go l =
+        (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i)).go l =
       (.ok ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).map cmOf), l) := by
     intro l
     have hq : FlockComplete.quietS.R
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash : _root_.Flock.Hashes V)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x C w (vs x w ν C) t i))
+            (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
               _root_.Flock.Hashes FlockComplete.PS)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x C w (vs x w ν C) t i)) :=
+            (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i)) :=
       _root_.Flock.With.Sim.mapM_array FlockComplete.quietS _ fun i =>
         FlockComplete.CutEq.commit0Cut_quiet _ _ _ _
     rw [hq l, FlockComplete.mapM_ok_mem cmOf _ fun i hi => ?_]
@@ -254,10 +254,10 @@ theorem enc_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Liv
     (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
       _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-    ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val)
-  have hrc := Masked.runCut_switchBody hx C (Masked.swSrcE x C w (vs x w ν C) t) hsx hs hcms j r hN hext (ic := ic)
+    ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val)
+  have hrc := Masked.runCut_switchBody hx C (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t) hsx hs hcms j r hN hext (ic := ic)
     (fun l => by rw [FlockComplete.CutEq.padsTreeCut_quiet _ _ _ l, hic0]) hk
-  have hsrc : Masked.swSrcE x C w (vs x w ν C) t =
+  have hsrc : Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x C) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) :=
     rfl
   have h0 : Masked.rankSlot x j.val r.val + k ≠ 0 := by
@@ -277,7 +277,7 @@ theorem swMsgAt_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked
       .ok extras)
     (hk : k ≤ extras.size + 2) :
     finS.swMsgAt x (finS.wt x w) (vs x w ν) t cs =
-      0 :: Switch.rsBody ((Masked.swSrcE x (finS.pad (K := refK x) cs) w (vs x w ν (finS.pad (K := refK x) cs)) t
+      0 :: Switch.rsBody ((Masked.swSrcE x (finS.pad (K := refK x) cs) w (vs x w ν (finS.pad (K := refK x) cs) (finS.seenOf x t)) t
         j.val).rep r.val).sv (extras.size + 2) [] k := by
   rw [swMsgAt_enc vs w ν t cs hlt, hn]
   exact enc_switch vs w hx hsx ν t (finS.pad (K := refK x) cs) j r hN hext hk

@@ -68,46 +68,46 @@ theorem swMsgAt_lig (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Li
           (Masked.ligBasis x (finCoins x ops) w t j r extras)
           (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
             (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0)
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)).run t₃).go l₃ =
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)).run t₃).go l₃ =
         (.error err, L) ∧
       finS.swMsgAt x (finS.wt x w) (vs x w ν) t (ops.map fun p => finS.decOf p.2) = 0 :: L[ops.length]! := by
   have hj := Masked.lt_of_jOf j
   obtain ⟨schs, hs, -⟩ := Masked.schedsPZk_live hx
   let cmOf : ℕ → FlockComplete.Commit := fun i =>
     Classical.choose (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i))
+      (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i))
   have hcm : ∀ i, (FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
       _root_.Flock.Hashes V) _root_.Flock.MerkleScheme.hm96Sha512 (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i) : V _) = .ok (cmOf i) := fun i =>
+      (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i) : V _) = .ok (cmOf i) := fun i =>
     (Classical.choose_spec (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i))).1
+      (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i))).1
   have hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
           _root_.Flock.Hashes FlockComplete.PS)
         (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i)).go l =
+        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i)).go l =
       (.ok ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).map cmOf), l) := by
     intro l
     have hq : FlockComplete.quietS.R
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash : _root_.Flock.Hashes V)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i))
+            (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i))
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
               _root_.Flock.Hashes FlockComplete.PS)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i)) :=
+            (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i)) :=
       _root_.Flock.With.Sim.mapM_array FlockComplete.quietS _ fun i =>
         FlockComplete.CutEq.commit0Cut_quiet _ _ _ _
     rw [hq l, FlockComplete.mapM_ok_mem cmOf _ fun i hi => ?_]
     rw [tabs_merkle hx hsx (i := i) (by simpa using hi)]
     exact hcm i
   obtain ⟨T, sws, t₃, l₃, err, L, hl₃, hb, hL, hrl, hrn⟩ := Masked.runCut_lig hx w t (finCoins x ops)
-    (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t) hsx hs hcms j r h1 h2 hN hext
+    (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t) hsx hs hcms j r h1 h2 hN hext
   rw [tabs_merkle hx hsx (i := j.val) (by simpa [FlockDeploy.tabsOf] using hj), hb] at hL
   refine ⟨T, _, t₃, l₃, err, L, hl₃, hL, ?_⟩
-  have hsrc : Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t =
+  have hsrc : Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
         (finS.swCutOf x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t) :=
     rfl
@@ -239,15 +239,15 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len 0)
     r.val (Masked.zkTab x j).tPad ((Masked.UE.tapeZk t).extra j.val) ((Masked.UE.tapeZk t).lanePad j.val)
     (fun l => _root_.Flock.Firewall.Finish.saltAt (his.getD (l - 1) ByteArray.empty)) (fun _ _ => 0)
-    ((Masked.swSrcE x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops)) t j.val).rep r.val) t₃ tr₂ l₃ l₂
+    ((Masked.swSrcE x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val).rep r.val) t₃ tr₂ l₃ l₂
     hsz hk0 hsn hlv
     (fun ha hb => by
       rw [hl₃] at ha hb ⊢
-      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops)) t j.val r.val).1]
+      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).1]
       exact Masked.ligY1E x hx w hR t (Loop.finCoins x ops) ops.length hN s0 spec hsx j r extras hext ha hb)
     (fun ha hb => by
       rw [hl₃] at ha hb ⊢
-      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops)) t j.val r.val).2.1]
+      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).2.1]
       exact Masked.ligYbarE x hx w hR t (Loop.finCoins x ops) ops.length hN s0 spec hsx j r extras hext ha hb)
     (fun ha hb l hl1 hl2 p hp => by
       rw [hl₃] at ha hb
@@ -256,7 +256,7 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       have hmj : (Masked.ligSt x j).merkle = _root_.Flock.MerkleScheme.hm96Sha512 :=
         Loop.tabs_merkle hx hsx (by simpa [FlockDeploy.tabsOf] using hj)
       rw [hmj] at es
-      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops)) t j.val r.val).2.2]
+      rw [(Masked.swSrcE_restart x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val r.val).2.2]
       simp only [Loop.RepSrc.salt hS'.2 ν t j r hreal' l hl1 hl2 p hp]
       exact es)
   have hB : l₃.size + (Masked.zkTab x j).sch.k0 + 4 ≤ ops.length := by

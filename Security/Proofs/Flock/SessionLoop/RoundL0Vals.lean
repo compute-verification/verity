@@ -68,7 +68,7 @@ theorem padsL0_vs {vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals} {x 
     {k : ℕ} (hlo : (layE x j).zp 64 ≤ k) (hhi : k < (layE x j).hab) :
     (FlockComplete.LigLock.padsL0 (ligCoin c) (ligP0 x j r) (zkTab x j).sch (ligTab x w τ j)
       (ligBasis x c w τ j r extras) (layE x j) ((UE.tapeZk τ).extra j.val) r.val
-      ((swSrcE x c w (vs x w ν c) τ j.val).rep r.val))[k]! =
+      ((swSrcE x c w (vs x w ν c ((CoinLayer.session loopNr Masked.dataE).seenOf x τ)) τ j.val).rep r.val))[k]! =
       (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   unfold FlockComplete.LigLock.padsL0
   rw [FlockSoundness.Discharge.Composed.Zerocheck.get_map_range _ hhi]
@@ -90,7 +90,7 @@ theorem l0BodyAt_vs {vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals} {
       (ligBasis x c w τ j r extras) (layE x j)
       (FlockComplete.LigLock.padsL0 (ligCoin c) (ligP0 x j r) (zkTab x j).sch (ligTab x w τ j)
         (ligBasis x c w τ j r extras) (layE x j) ((UE.tapeZk τ).extra j.val) r.val
-        ((swSrcE x c w (vs x w ν c) τ j.val).rep r.val))
+        ((swSrcE x c w (vs x w ν c ((CoinLayer.session loopNr Masked.dataE).seenOf x τ)) τ j.val).rep r.val))
       r.val ((UE.tapeZk τ).extra j.val) nonce i =
     FlockComplete.LigLock.l0BodyAt (ligCoin c) (ligP0 x j r) P T cap (zkTab x j).sch (ligTab x w τ j)
       (ligBasis x c w τ j r extras) (layE x j) (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h
