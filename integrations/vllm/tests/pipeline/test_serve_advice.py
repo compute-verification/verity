@@ -604,6 +604,19 @@ def test_a_run_extends_the_deployments_log_with_its_days_declaration_and_a_day_d
         {"blocks": [], "day": d, "program": compiler.digest} for d in (0, 1)]
     with pytest.raises(ValueError, match=r"refuses day 1's declaration of B \(duplicate-declaration\): a day has one program"):
         SA.register(tmp_path / "d1b", serve, 4096, day=1, log=second["registration"]["log"])
+    log_file = str(tmp_path / "d1" / SA.REGISTRATION)
+
+    def refusal(**kw) -> str | None:
+        return SA.refusal(SimpleNamespace(commit=True, out=str(tmp_path / "d9"),
+                                          advising=SA.AdviceOptions(advice=True, advice_log=log_file, **kw)))
+
+    assert refusal(advice_day=2) is None
+    assert refusal(advice_day=1) == f"--advice-log {log_file}: it declares day 1 already, and a day has one program"
+    assert refusal(advice_day=2, advice_composite="remote") \
+        == f"--advice-log {log_file}: the registration log is onsite's, not remote's"
+    (tmp_path / "bad.json").write_text(json.dumps({"composite": "onsite", "entries": [log[1].to_json()]}))
+    log_file = str(tmp_path / "bad.json")
+    assert refusal(advice_day=2).startswith(f"--advice-log {log_file}: not a registration log that checks (Refused: entry 0")
     with pytest.raises(ValueError, match="registers another builder than B"):
         SA.register(tmp_path / "d2", serve, 8192, day=2, log=second["registration"]["log"])
     with pytest.raises(ValueError, match="the registration log is onsite's, not remote's"):

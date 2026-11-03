@@ -17,7 +17,8 @@
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under `--advice --advice-cap CAP`
 #     (`serve_advice`) the server registers the served compiler B, capped at CAP bits (ℓ_a), before its engine loop runs
-#     ($D/advice_registration.json), and commits each closed window's advice as it serves under the weights registration
+#     ($D/advice_registration.json), with the day's declaration of B as its one program (SERVE_ARGS' `--advice-day`, default
+#     0; `--advice-log` extends an earlier day's log), and commits each closed window's advice as it serves under the weights registration
 #     (`--advice-weights`), each window's line ($D/advice.jsonl: its root and ℓ_a) out before any coin of the window.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),

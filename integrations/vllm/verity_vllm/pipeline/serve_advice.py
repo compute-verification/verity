@@ -80,7 +80,8 @@ class AdviceOptions:
 
 def refusal(opts: Any) -> str | None:
     """Why ``--advice`` can't hold (None: it can): it reads the Commit's windows, ℓ_a is a whole number of bits, a multiple
-    of 8 and at least 8, the day is a natural number, and a log it extends is a file."""
+    of 8 and at least 8, the day is a natural number, and a log it extends is the deployment's, checks and doesn't declare
+    the day yet (B's own refusals, which need serve.json, are `declared_log`'s)."""
     a = opts.advising
     if not a.advice:
         return None
@@ -90,8 +91,18 @@ def refusal(opts: Any) -> str | None:
         return f"--advice-cap {a.advice_cap}: ℓ_a is a whole number of bits, a multiple of 8 and at least 8"
     if isinstance(a.advice_day, bool) or a.advice_day < 0:
         return f"--advice-day {a.advice_day}: a day is its index among the monitoring period's days, 0 or more"
-    if a.advice_log is not None and not Path(a.advice_log).is_file():
-        return f"--advice-log {a.advice_log}: no such file"
+    if a.advice_log is not None:
+        if not Path(a.advice_log).is_file():
+            return f"--advice-log {a.advice_log}: no such file"
+        try:
+            theirs, entries = REG.log_of(log_doc(json.loads(Path(a.advice_log).read_text())))
+            view = REG.check(REG.Auditor(), theirs, entries).view()
+        except (KeyError, TypeError, ValueError, REG.Refused) as e:
+            return f"--advice-log {a.advice_log}: not a registration log that checks ({type(e).__name__}: {e})"
+        if theirs != a.advice_composite:
+            return f"--advice-log {a.advice_log}: the registration log is {theirs}'s, not {a.advice_composite}'s"
+        if view.declared(a.advice_day) is not None:
+            return f"--advice-log {a.advice_log}: it declares day {a.advice_day} already, and a day has one program"
     if (Path(opts.out) / REGISTRATION).exists():
         return (f"{Path(opts.out) / REGISTRATION} exists: a run registers B once, so a server doesn't serve into another's serve "
                 "dir (give a fresh --out)")
@@ -100,7 +111,7 @@ def refusal(opts: Any) -> str | None:
 
 def log_doc(doc: Mapping[str, Any]) -> Mapping[str, Any]:
     """The committed registration log in ``doc``: a run's ``advice_registration.json`` (its ``registration.log``) or the log."""
-    return doc["registration"]["log"] if doc.get("schema") == SCHEMA else doc
+    return doc["registration"]["log"] if isinstance(doc, Mapping) and doc.get("schema") == SCHEMA else doc
 
 
 def declared_log(composite: str, compiler: AW.Capped, day: int, log: Mapping[str, Any] | None = None) -> list[REG.Entry]:
