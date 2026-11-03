@@ -22,8 +22,9 @@ Each part of a run must fit a block of k bits (te_core.formalism `at`):
   measures 512 bits on a traced step (the EMAs and the warm's lr as carried state); with `--subspace K` it adds the K
   coefficients (16 bits each) as carried state.
 - d: the decoder replays every entry over S, T·|S| fp32 FMAs at F32Fma_v4's 12,637 gates; `notes.decoder` gives d at
-  each checkpoint, and the scorer prices it against te_core's session c (dashboard, 10:23Z 3 Nov), which nothing here
-  sets. At s-t20's old attention-free c, d < c needed T·|S| < 2.0e10; the session c is about 1.57× that.
+  each checkpoint, and te_core prices it against its own c, which nothing here sets: rho_default's E0 reference (4,096
+  forward tokens of the start; on s-t20 d < c needs T·|S| < 2.0e10) and the console's session c (`te_core.policy`,
+  about 2.1× that on s-t20).
 
 ## What limits the gain
 
