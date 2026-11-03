@@ -1,7 +1,7 @@
-"""`verity.ml.definitions.registry.boolean_ref_prims`: `I64ToI32_v2`, `F32MaxRef_v2` and `F32Sqrt_v2` are Boolean, name their
-`ref_prims` word primitive, and agree with it on edge and random words (both zeros, the infinities, NaNs with either sign and
-payload, subnormals, every binade's ends, the i32 range's edges); their gate counts are pinned. `F32Sqrt_v2` is held on every
-one of the 2^32 words by `benchmarks/f32_exhaustive/run.py boolean F32Sqrt`."""
+"""`verity.ml.definitions.registry.boolean_scalar`'s Boolean versions of `ref_prims`' `I64ToI32_v1`, `F32MaxRef_v1` and
+`F32Sqrt_v1`: each is Boolean, names its word primitive, and agrees with it on edge and random words (both zeros, the
+infinities, NaNs with either sign and payload, subnormals, every binade's ends, the i32 range's edges); their gate counts are
+pinned. `F32Sqrt_v2` is held on every one of the 2^32 words by `benchmarks/f32_exhaustive/run.py boolean F32Sqrt`."""
 from __future__ import annotations
 
 import numpy as np
@@ -11,7 +11,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.definitions.boolean import boolean_version
-from verity.ml.definitions.registry import boolean_ref_prims as BR
+from verity.ml.definitions.registry import boolean_scalar as BR
 from verity.ml.definitions.registry import ref_prims as RP
 
 #: id -> (And, Xor, Not gates)

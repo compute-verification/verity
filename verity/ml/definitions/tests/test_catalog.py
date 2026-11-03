@@ -90,6 +90,8 @@ COUNT += 5  # `torch_step`'s TrainStep_v1 with its TrainStepConstants_v1, and F.
 
 COUNT += 1  # `ref_prims`' F32LogRn_v1, a line of its own so it merges with any other change to the count
 
+COUNT += 3  # `boolean_scalar`'s F32MaxRef_v2, F32Sqrt_v2 and I64ToI32_v2, a line of its own so it merges with any other change
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
