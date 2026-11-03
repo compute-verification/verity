@@ -9,13 +9,14 @@ of the runs, refused unless traced by a te_core from `TRACED_SINCE` to this one)
 dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
 them (`about`, and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
 checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures
-(annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced as
-te_core.algorithm_policy prices a run, by formalism.published under `READING`: `rho_default` and `rho_console` are its
-ρ at the dial's default (`points`: c = 4,096 tokens of the start's forward, k = 80,000 bits) and at algorithm_policy's
-`CONSOLE`, the console's default session, and `binding_kind`, `rests_on` and `kinds` (algorithm_policy's `kinds`: the
-terms its max takes, the sensitivities beside it) are published's at the console's (`cells`: under reading A, null and
-none where Fit fails and no measured kind is above 1, never 1, resting on "unmeasured" where the one bound measures no
-kind; a reading-A ρ is never infinite, so `build` refuses one). `rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which
+(annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
+formalism.published under `READING`: `rho_default` and `rho_console` are its ρ at the dial's default (`points`: c =
+4,096 tokens of the start's forward, k = 80,000 bits) and at algorithm_policy's `CONSOLE` (te_core.policy's, one full
+session of the 45M reference, attention included), and `binding_kind`, `rests_on` and `kinds` are published's at the
+console's. Under reading A ρ is max(1, the measured kinds' terms), binding none where none exceeds 1, and null,
+resting on "unmeasured", only where no kind is measured; it is never infinite, so `build` refuses one. `kinds` is
+algorithm_policy's cell of the terms the max takes and, beside them, the sensitivities `SENSITIVITIES`: reduction,
+update and reading B's token and decoding forms. `rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which
 algorithm_policy.page_rho gives the dial's ρ at any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's
 ρ at either point or whose token dials miss its measured tokens (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
@@ -58,9 +59,11 @@ NAME = "standard-workloads"
 PANEL = f"training/{NAME}"
 COLUMNS = ["workload", "model", "dials", "run", "rho_inputs", "input_status", "rho_default", "rho_console", "reading",
            "te_core", "binding_kind", "rests_on", "kinds"]
-#: the reading every row publishes (formalism.published's): B, a target, until te_core prices the console's full
-#: session, attention included, and the fresh-products kind; then A, the one bound over the kinds valid on their own
-READING = "B"
+#: the reading every row publishes (formalism.published's): A, the one bound over the kinds valid on their own, with
+#: reading B's forms among the kinds cell's sensitivities
+READING = "A"
+#: the kinds cell's sensitivities, beside the terms the bound's max takes: published's and reading B's two forms
+SENSITIVITIES = (*formalism.CELL_SENSITIVITIES, "token_form", "decoding_form")
 #: the `rho_inputs` cell's keys, algorithm_policy.rho_inputs' in its order
 KEYS = ("C_gates", *panels.PACKED, *algorithm_policy.SPLIT)
 #: the first te_core whose traces this one's formalism reads whole: their entries and partial and gradient cuts
@@ -215,7 +218,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
         record = rounds(record, notes, {(tensors[n][1][1], tensors[n][1][0]) for n in names})
         record["formalism"] = round_formalism(notes, tensors, shape["vocab"])
         structures = {}
-        read = {"rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
+        read = {"traces": [], "rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
                 "fp4_macs": sum(r[5] * sum(s["struct"] == sid for s in record["steps"])
                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
@@ -293,18 +296,15 @@ def priced(m: formalism.Measured, w_fwd: float, at: dict[str, dict]) -> str:
     return text
 
 
-def rho_cell(v: float) -> float | str:
-    return "inf" if math.isinf(v) else float(algorithm_policy.num(v))
+def rho_cell(v: float | None) -> float | str | None:
+    return None if v is None else "inf" if math.isinf(v) else float(algorithm_policy.num(v))
 
 
-def cells(one: dict, b: dict) -> tuple[float | str | None, str, str]:
-    """formalism.published's `one` as the row's cells (ρ, its binding kind and what it rests on), beside the one bound
-    `b` at its point: under reading A, where Fit fails and no measured kind is above 1 (binding none), null, never
-    max(1, ...), which reads as no slowdown; resting on "unmeasured" where `b` measures no kind, else on published's
-    (no measured kind > 1), its terms in the kinds cell."""
-    if one["reading"] == "A" and one["binding_kind"] == "none":
-        return None, "none", "unmeasured" if b["max"] is None else one["rests_on"]
-    return rho_cell(one["rho"]), one["binding_kind"], one["rests_on"]
+def kinds(one: dict, b: dict) -> str:
+    """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
+    from the one bound `b` at its point, less any `one`'s max takes."""
+    return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
+                                                           if s not in one["terms"]}})
 
 
 def finite(x):
@@ -343,13 +343,13 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
                    and math.isinf(v["rho"])]:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: reading A's rho is infinite at "
                              f"{' and '.join(inf)}, which no row publishes")
-        (rho_default, _, _), (rho_console, binding, rests) = cells(one["default"], bound["default"]), \
-            cells(one["console"], bound["console"])
         st = status(m, ROUNDS if r.get("rounds") else None)
         said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
         run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
-        rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st), rho_default, rho_console,
-                     one["console"]["reading"], VERSION, binding, rests, algorithm_policy.kinds(one["console"])])
+        con = one["console"]
+        rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
+                     rho_cell(one["default"]["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
+                     con["binding_kind"], con["rests_on"], kinds(con, bound["console"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
                                "w_fwd_gates": w_fwd, "labels": m.labels,
                                "parts": [dataclasses.asdict(p) for p in m.parts], "tail_share": m.tail_share,
@@ -364,15 +364,15 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
 
 def note(p: dict, art: str | None = None) -> str:
     """The panel's note, its readings as its rows have them, and `art` the stored tables."""
-    c, k = algorithm_policy.CONSOLE
+    (c, k), (n, bits), (into, out) = algorithm_policy.CONSOLE, panels.DEFAULT, policy.CONSOLE_SESSION
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
-    how = ("reading B, a target and not a bound (the tables hold reading A's bound)" if got <= {"B"} else
-           "reading A, the one bound over the kinds valid on their own")
-    return (f"Covert workloads, small real runs from registered starts, te_core {VERSION}: formalism.published, {how}, "
-            f"at the dial's default (c = {policy.SESSION_TOKENS} w_fwd, k = {policy.REFERENCE_K_BITS:,}) and the "
-            f"console's (c = {algorithm_policy.num(c, 5)} gates, the 45M reference's 5,120-token session without "
-            f"attention, k = {k:,}); binding_kind, rests_on, kinds: the console's. input_status: measured, or assumed "
-            "and why." + (f" Tables {art}." if art else ""))
+    how = ("reading B, a target and not a bound (the tables hold reading A's)" if got <= {"B"} else
+           "reading A, the one bound over the valid kinds (null: none measured)")
+    return (f"Small real runs, te_core {VERSION}: formalism.published, {how}, at the dial's default (c = {n} w_fwd, "
+            f"k = {bits:,}) and the console's (c = {algorithm_policy.num(c, 5)} gates, one full session of the "
+            f"{policy.REFERENCE_PARAMS / 1e6:.0f}M reference, attention included, {into:,} tokens in, {out:,} out: "
+            f"policy.session_gates; k = {k:,.0f}), where binding_kind, rests_on and kinds are. input_status: measured, "
+            f"or assumed and why." + (f" Tables {art}." if art else ""))
 
 
 def refused(p: dict) -> list[str]:

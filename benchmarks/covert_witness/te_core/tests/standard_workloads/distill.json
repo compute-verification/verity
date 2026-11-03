@@ -2453,12 +2453,12 @@
   "r20261103-064849-6854 art:e2787bc18892ae133f6e90e154295ad7976d6044b9a2a504c0fc7f96fcff51d8 (a half-width student (d_model 256, 6 layers) from scratch on the teacher's logits)",
   "{\"C_gates\":2.7015e18,\"w_gates\":1.37385e11,\"sigma\":0.999856,\"tau_bits\":15,\"a_bits\":4096,\"delta_t_bits\":4.16432e8,\"d_gates\":0,\"delta_grad_bits\":1.24917e9,\"w_fit_gates\":1.37385e11,\"alpha_ratio\":1,\"delta_bits\":4.16432e8,\"w_fwd_gates\":6.21404e10,\"u_points\":\"0:0;0.780834:0;0.780834:3.39321e8;1:3.39321e8\",\"u_in_points\":\"0:0;0:80000;0:145568;0:800000;0:8e6;0:8e7;1:3.39321e8\"}",
   "{\"C_gates\":\"measured\",\"w_gates\":\"measured\",\"sigma\":\"measured\",\"tau_bits\":\"measured\",\"a_bits\":\"measured\",\"delta_t_bits\":\"measured\",\"d_gates\":\"measured\",\"delta_grad_bits\":\"measured\",\"w_fit_gates\":\"measured\",\"alpha_ratio\":\"measured\",\"delta_bits\":\"measured\",\"w_fwd_gates\":\"measured\",\"u_points\":\"measured\",\"u_in_points\":\"measured\"}",
-  121.463,
-  198.638,
-  "B",
-  "4.5",
-  "target",
-  "target: A1 at reading B, not a bound",
-  "{\"bound\":{\"token_form\":198.6},\"sensitivity\":{\"reduction\":6255,\"update\":481.2}}"
+  1.0,
+  1.0,
+  "A",
+  "4.6",
+  "none",
+  "no measured kind > 1",
+  "{\"bound\":{\"fresh_products\":null,\"token\":0.5736,\"decoding\":0.5736},\"sensitivity\":{\"reduction\":6059,\"update\":757.3,\"token_form\":312.6,\"decoding_form\":0.5736}}"
  ]
 }
