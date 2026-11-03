@@ -211,7 +211,13 @@ namespace Flock.Guarantees
 at each statement's message count `M s p`) and every recursive session `s`: what reached the auditor of each statement
 of `s` is what `cutAt` keeps at the stop the run reached (`recStop`), nothing of any statement past `s`'s, and each
 statement's from one outer session, admitted at most once; `s` runs through unless a statement of it was not released;
-and where `s` is scheduled, each statement `j` whose proofs left did so at its release time (`releaseMs`). -/
+and where `s` is scheduled, each statement `j` whose proofs left did so at its release time (`releaseMs`).
+
+It is about `StopCount.run`, a model of the loop's ops, not about `Firewall.Loop` or `rec_live` themselves. Its ops are
+the record's own functions, and three of its guards are the model's: only the outer slot's holder relays, and at most
+`M s p` messages of each statement (`relay`); the auditor's verdict releases a statement only after its last message
+(`verdict`); and every op reads back the events the record holds as written (`St.evs`). That `Firewall.Loop` and
+`rec_live` keep these guards is open, among it that nothing of an outer session reaches the auditor after its stop. -/
 def RecStopsOfRun : Prop :=
   ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (s : String),
     (∀ p, (StopCount.run M steps).sent s p =
