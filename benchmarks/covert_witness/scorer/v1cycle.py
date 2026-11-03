@@ -930,9 +930,9 @@ def main() -> int:
         trace40.MEASURED)
     last = rescore(rs, args.gates, final, root)
     on = nxt or trace40.TE40_WT
-    left = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
-    hold = (f"{len(left)} of the published and reached runs not yet traced on capture {capture_version(on)}"
-            if left else None)
+    untraced = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
+    hold = (f"{len(untraced)} of the published and reached runs not yet traced on capture {capture_version(on)}"
+            if untraced else None)
     policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root)
     if hold:
         policy |= {k: f"not PUT ({hold})" for k in ("algorithm-policy", FIT) if k in policy}
@@ -985,8 +985,8 @@ def main() -> int:
         meta["tiers"] = tiers
     if pools:
         meta["pools"] = pools
-    if left:
-        meta["put_held_for"] = left
+    if untraced:
+        meta["put_held_for"] = untraced
     if mem_wait:
         meta["trace_mem_wait"] = mem_wait
     if held:
