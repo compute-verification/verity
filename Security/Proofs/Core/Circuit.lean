@@ -40,19 +40,19 @@ theorem run_free {fix : (g : Fin C.N) → Option (BitVec (C.w g))} {g : Fin C.N}
     C.run fix g = C.op g (C.run fix) := by
   rw [run_eq, h]
 
-theorem eval_input (a : C.Transcript) {g : Fin C.N} (h : C.isInput g = true) : C.eval a g = a g :=
+theorem eval_input (a : C.Trace) {g : Fin C.N} (h : C.isInput g = true) : C.eval a g = a g :=
   C.run_fixed (by simp [h])
 
-theorem eval_op (a : C.Transcript) {g : Fin C.N} (h : C.isInput g = false) :
+theorem eval_op (a : C.Trace) {g : Fin C.N} (h : C.isInput g = false) :
     C.eval a g = C.op g (C.eval a) :=
   C.run_free (by simp [h])
 
 /-- The honest trace agrees with its inputs. -/
-theorem inputsAgree_eval (a : C.Transcript) : C.InputsAgree (C.eval a) a :=
+theorem inputsAgree_eval (a : C.Trace) : C.InputsAgree (C.eval a) a :=
   fun _ h => C.eval_input a h
 
 /-- The evaluation reads only the inputs. -/
-theorem eval_congr {a b : C.Transcript} (h : C.InputsAgree a b) : C.eval a = C.eval b := by
+theorem eval_congr {a b : C.Trace} (h : C.InputsAgree a b) : C.eval a = C.eval b := by
   funext g
   induction g using WellFoundedLT.induction with
   | _ g ih => ?_
@@ -119,15 +119,15 @@ theorem committed_inter_gates (u : Fin n) : P.committed ∩ P.gates u = C.exits 
     · exact ⟨Or.inr (Or.inl hc), hu⟩
     · exact ⟨Or.inr (Or.inr ⟨h, hgh, fun he => hh (by rw [he, hu])⟩), hu⟩
 
-theorem localEval_of_mem (X : C.Transcript) {u : Fin n} {g : Fin C.N} (h : P.unit g = some u) :
+theorem localEval_of_mem (X : C.Trace) {u : Fin n} {g : Fin C.N} (h : P.unit g = some u) :
     P.localEval X u g = C.op g (P.localEval X u) :=
   C.run_free (by simp [h])
 
-theorem localEval_of_not_mem (X : C.Transcript) {u : Fin n} {g : Fin C.N} (h : P.unit g ≠ some u) :
+theorem localEval_of_not_mem (X : C.Trace) {u : Fin n} {g : Fin C.N} (h : P.unit g ≠ some u) :
     P.localEval X u g = X g :=
   C.run_fixed (by simp [h])
 
-theorem mem_wrong {X : C.Transcript} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
+theorem mem_wrong {X : C.Trace} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
   classical
   simp [wrong]
 
@@ -139,7 +139,7 @@ theorem mem_cone {T : Finset (Fin C.N)} {u : Fin n} {t g : Fin C.N} (ht : t ∈ 
 
 /-- The induction behind `compose_cone`: on the gates feeding `T`, committed wires carry their evaluation, and so does
 each unit's local evaluation of its own gates. -/
-theorem cone_induction (X a : C.Transcript) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
+theorem cone_induction (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
     (hc : ∀ u ∈ P.cone T, P.Correct X u) :
     ∀ m (g : Fin C.N), g.val = m → (∃ t ∈ T, C.Feeds g t) →
       (∀ u, P.unit g = some u → P.localEval X u g = C.eval a g) ∧
@@ -173,7 +173,7 @@ theorem cone_induction (X a : C.Transcript) (T : Finset (Fin C.N)) (hin : C.Inpu
 
 /-- **A consumer's value, through its cone.** If the committed inputs are the anchors' values and no unit of `T`'s cone
 is wrong, every committed wire of `T` carries its evaluation. -/
-theorem compose_cone (X a : C.Transcript) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
+theorem compose_cone (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
     (h : Disjoint (P.wrong X) (P.cone T)) : ∀ t ∈ T, t ∈ P.committed → X t = C.eval a t := by
   intro t ht htc
   have hc : ∀ u ∈ P.cone T, P.Correct X u := fun u hu => by
@@ -183,11 +183,11 @@ theorem compose_cone (X a : C.Transcript) (T : Finset (Fin C.N)) (hin : C.Inputs
 
 /-- **Composition.** If every unit is correct and the committed inputs are the anchors' values, every committed wire
 carries its value in the circuit's evaluation. -/
-theorem compose (X a : C.Transcript) (hin : C.InputsAgree X a) (h : P.wrong X = ∅) :
+theorem compose (X a : C.Trace) (hin : C.InputsAgree X a) (h : P.wrong X = ∅) :
     ∀ g ∈ P.committed, X g = C.eval a g :=
   fun g hg => P.compose_cone X a P.committed hin (by simp [h]) g hg hg
 
-theorem localEval_congr {X Y : C.Transcript} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g) :
+theorem localEval_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g) :
     ∀ m (g : Fin C.N), g.val = m → P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
   classical
   intro m
@@ -204,7 +204,7 @@ theorem localEval_congr {X Y : C.Transcript} {u : Fin n} (hXY : ∀ g ∈ P.io u
     exact ⟨P.mem_committed_of_read hx (by rw [hu]; exact Ne.symm hxu), Or.inr ⟨g, hu, hx⟩⟩
 
 /-- A unit's correctness depends only on its committed inputs and outputs. -/
-theorem correct_congr {X Y : C.Transcript} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g)
+theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g)
     (hY : P.Correct Y u) : P.Correct X u := by
   classical
   intro g hg hu
@@ -231,7 +231,7 @@ theorem committed_subset : Pc.committed ⊆ Pf.committed := by
 
 /-- The induction behind `exists_wrong_fine`: when every fine unit inside `u` is correct in `Y`, and `Y` agrees with
 `X` on the coarse committed wires, `u`'s local evaluation in `X` is each fine unit's local evaluation in `Y`. -/
-theorem localEval_eq {X Y : C.Transcript} {u : Fin nc}
+theorem localEval_eq {X Y : C.Trace} {u : Fin nc}
     (hY : ∀ g ∈ Pc.committed, Y g = X g) (hf : ∀ v, r.parent v = u → Pf.Correct Y v) :
     ∀ m (g : Fin C.N) (v : Fin nf), g.val = m → Pf.unit g = some v → r.parent v = u →
       Pc.localEval X u g = Pf.localEval Y v g := by
@@ -261,7 +261,7 @@ theorem localEval_eq {X Y : C.Transcript} {u : Fin nc}
 
 /-- **A wrong coarse unit has a wrong fine unit inside it**, whatever `Y` holds on the coarse unit's interior, as long
 as `Y` agrees with `X` on the coarse committed wires. -/
-theorem exists_wrong_fine {X Y : C.Transcript} (hY : ∀ g ∈ Pc.committed, Y g = X g)
+theorem exists_wrong_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g)
     {u : Fin nc} (hu : u ∈ Pc.wrong X) : ∃ v, r.parent v = u ∧ v ∈ Pf.wrong Y := by
   by_contra hno
   push Not at hno
@@ -276,7 +276,7 @@ theorem exists_wrong_fine {X Y : C.Transcript} (hY : ∀ g ∈ Pc.committed, Y g
 
 /-- A fine trace that extends a coarse one has at least as many wrong fine units as the coarse one has wrong
 coarse units. -/
-theorem card_wrong_le {X Y : C.Transcript} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
+theorem card_wrong_le {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
     (Pc.wrong X).card ≤ (Pf.wrong Y).card := by
   classical
   calc (Pc.wrong X).card ≤ ((Pf.wrong Y).image r.parent).card := by
@@ -294,10 +294,10 @@ namespace Containment
 variable {C D : Circuit} (M : Containment C D)
 
 /-- The inputs `D` gives `C` through `M`. -/
-def pull (a : D.Transcript) : C.Transcript := fun g => (a (M.emb g)).cast (M.emb_w g)
+def pull (a : D.Trace) : C.Trace := fun g => (a (M.emb g)).cast (M.emb_w g)
 
 /-- `D`'s evaluation, read at the images of `C`'s gates, is `C`'s evaluation on the inputs `D` gives it. -/
-theorem eval_emb (a : D.Transcript) (g : Fin C.N) : (D.eval a (M.emb g)).cast (M.emb_w g) = C.eval (M.pull a) g := by
+theorem eval_emb (a : D.Trace) (g : Fin C.N) : (D.eval a (M.emb g)).cast (M.emb_w g) = C.eval (M.pull a) g := by
   induction g using WellFoundedLT.induction with
   | _ g ih => ?_
   cases hi : C.isInput g

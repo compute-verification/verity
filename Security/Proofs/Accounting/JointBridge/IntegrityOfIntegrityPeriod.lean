@@ -26,7 +26,7 @@ theorem IntegrityOfIntegrityPeriod : Accounting.Guarantees.Bridge.IntegrityOfInt
           (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.wrong).sum : ℝ) := by
     rintro x ⟨hacc, hfail⟩
     refine ⟨(R.accepts_iff _).1 hacc, ?_⟩
-    have hfail' : ¬ (((r.parts.wrong (r.transcript (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
+    have hfail' : ¬ (((r.parts.wrong (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
         c.ε * r.units) := hfail
     have hlt := not_le.mp hfail'
     rw [R.wrong_eq] at hlt

@@ -45,7 +45,7 @@ open Finset
 (`Placed.Faithful`), and what each leaf holds at the start of each tick (`Placed.Holding`). -/
 structure Actual.Run (L : Type*) where
   A : Placed L
-  val : A.Transcript
+  val : A.Trace
   faithful : A.Faithful val
   held : L → ℕ → Finset (Fin A.N)
   holding : A.Holding held
@@ -145,7 +145,7 @@ values at `P`'s inputs, the other inputs and the coins the same, which this take
 position, a leaf `y` of `X`, a cell `c` and a tick `u < t`, chosen before `v`, at which every run `S v` places a gate
 with `o`'s width and its value at `v`. With the position chosen after `v`, a one-bit output is among almost any run's
 values, so that form gives a runtime of about 0. -/
-def Actual.Computes {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actual.Run L) (X : Finset L) (t : ℕ) :
+def Actual.Computes {L : Type*} {P : Verity.Circuit} (S : P.Trace → Actual.Run L) (X : Finset L) (t : ℕ) :
     Prop :=
   ∀ o ∈ P.outputs, ∃ y ∈ X, ∃ c u, u < t ∧ ∀ v, ∃ g, (S v).A.x g = y ∧ (S v).A.cell g = c ∧ (S v).A.t g = u ∧
     (S v).A.w g = P.w o ∧ ((S v).val g).toNat = (P.eval v o).toNat
@@ -154,7 +154,7 @@ def Actual.Computes {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actua
 by which some positions before `t` in `X`, the same for every value of `P`'s inputs, hold `P`'s outputs in every run
 `S v` (`Actual.Computes`); `⊤` when no `t` does. One run holds only the branches its data took, so no one run says
 this. -/
-noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actual.Run L) (X : Finset L) :
+noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Trace → Actual.Run L) (X : Finset L) :
     ℕ∞ :=
   ⨅ (t : ℕ) (_ : Actual.Computes S X t), (t : ℕ∞)
 

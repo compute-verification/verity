@@ -34,7 +34,7 @@ stated on these objects.
   included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`.
   Proof blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each proof block, read by
   nothing of `d`.
-* The **size ratio** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
+* The **size ratio** relative to a reference of size `T₀` is `|C| / T₀` (`sizeRatio`), a ratio of circuit sizes.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
@@ -63,7 +63,7 @@ def FanIn (C : Circuit) (a : ℕ) : Prop := ∀ g, (C.reads g).card ≤ a
 
 /-- The bits of a bundle of gates `l` in `X`, gate by gate in `l`'s order, each gate's value least significant bit
 first. On a Boolean circuit, one bit per gate. -/
-def bits (C : Circuit) (X : C.Transcript) (l : List (Fin C.N)) : List Bool :=
+def bits (C : Circuit) (X : C.Trace) (l : List (Fin C.N)) : List Bool :=
   l.flatMap fun g => List.ofFn fun i : Fin (C.w g) => (X g).getLsbD i
 
 /-- A value's least significant bit, in `ZMod 2`. -/
@@ -121,13 +121,13 @@ structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaratio
   pad_reads : ∀ g', g' ∉ Set.range M.emb → ∀ a ∈ d'.D.reads g', a ∈ d'.θ
 
 /-- **The size ratio** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
-noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
+noncomputable def sizeRatio (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
 
 /-- **The committed declaration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration
 `(C, θ)`, the committed values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` proof blocks. -/
 structure Committed where
   d : Declaration
-  val : d.D.Transcript
+  val : d.D.Trace
   B : ℕ
   P : Partition d.D B
 
@@ -136,12 +136,12 @@ namespace Committed
 variable (R : Committed)
 
 /-- A run of the registered circuit: its evaluation on inputs that agree with the registered values on `θ`. -/
-def Honest (a : R.d.D.Transcript) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
+def Honest (a : R.d.D.Trace) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
 /-- **Proof block `u` recomputed** from `R` and `X`: a registered gate takes its registered value, every
 other gate outside the proof block takes `X`'s value, and the proof block's gates are computed in order. On the proof
 block and its inputs, only `X`'s values on `in(I) \ θ` matter. -/
-def recompute (X : R.d.D.Transcript) (u : Fin R.B) : R.d.D.Transcript :=
+def recompute (X : R.d.D.Trace) (u : Fin R.B) : R.d.D.Trace :=
   R.d.D.run fun g => if g ∈ R.d.θ then some (R.val g) else if R.P.unit g = some u then none else some (X g)
 
 end Committed
@@ -165,14 +165,14 @@ noncomputable def LDL {ρ : Type} (M : Decoder ρ) (t : ℕ) (r : ρ) (y : List 
 
 /-- The program Lemma 1 hands a decoder for proof block `u` of a run `X`: the evaluator `e`, the proof block's index,
 and the bits of its unregistered inputs in gate order. -/
-def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Transcript) (u : Fin R.B) : List Bool :=
+def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Trace) (u : Fin R.B) : List Bool :=
   e ++ indexCode u ++ R.d.D.bits X ((R.d.unregistered (R.P.gates u)).sort (· ≤ ·))
 
 /-- **A fixed evaluator** `e` performs the extraction rule `y` within time `t` for every proof block: on proof block
 `u`'s program of any run `X`, `M` outputs the string `y u` extracts from proof block `u` recomputed from that program's
 contents. -/
 def Evaluates {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (R : Committed) (e : List Bool)
-    (y : Fin R.B → R.d.D.Transcript → List Bool) : Prop :=
+    (y : Fin R.B → R.d.D.Trace → List Bool) : Prop :=
   ∀ u X, M.run r (blockProgram R e X u) t = some (y u (R.recompute X u))
 
 end Verity

@@ -23,7 +23,7 @@ theorem LDL_le {D : Decoder} {t : ℕ} {y p : List Bool} (h : D p t = some y) : 
   iInf₂_le p h
 
 /-- A block recomputed from the circuit's evaluation is the evaluation. -/
-theorem localEval_eval {C : Circuit} {n : ℕ} (P : Partition C n) (inp : C.Transcript) (u : Fin n) :
+theorem localEval_eval {C : Circuit} {n : ℕ} (P : Partition C n) (inp : C.Trace) (u : Fin n) :
     P.localEval (C.eval inp) u = C.eval inp := by
   funext g
   induction g using WellFoundedLT.induction with
