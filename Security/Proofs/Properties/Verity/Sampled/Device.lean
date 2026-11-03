@@ -1,4 +1,5 @@
 import Proofs.Properties.Verity.Sampled.Lines
+import Proofs.Properties.Verity.Sampled.Binding
 import Proofs.Properties.NetworkCertifier.LinkWindow
 import Proofs.Core.Game.Tape
 
@@ -6,8 +7,8 @@ import Proofs.Core.Game.Tape
 # The device's history at a play: the run that printed the play's log
 
 `Lines.PrintsLog` is what the device's history at a play is to have for v2's read of a session to be the play's log
-(`Binding.binds_of_prints`). This file builds that history from the play (`dev`) and proves its first part: each run in
-it prints the play's log after its release log's head (`prints_dev`).
+(`Binding.binds_of_prints`). This file builds that history from the play (`dev`) and proves it has them
+(`printsLog_dev`), so `Binding.Binds` holds at it at every setup (`binds_dev`).
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
@@ -21,12 +22,23 @@ it prints the play's log after its release log's head (`prints_dev`).
   family's coin of `8 * COIN_BYTES` bits, a tree's root and key of whole bytes, and a round's coins of whole bytes, of a
   tree it sampled and a stream of that tree's spec.
 * **The history** (`RunSetup`, `runOf`, `dev`): under the device's key, the run that released the play's log, its
-  release log its head and the printed lines, its coins the play's where the play released them. At every play it is
-  the history's one run (`dev_play`), and every run in it prints the play's log (`prints_dev`).
+  release log its head and the printed lines, its coins the play's where the play released them. It holds no run where
+  the play's log releases more of a family's coins than the setup's layout holds (`Fits`), which no play under that
+  layout does (`coins_fit`). At every play it is the history's one run (`dev_play`), and every run in it prints the
+  play's log (`prints_dev`).
+* **The roots v2 reads** (`view`, `RootsAfter`, `rootsOf_ok`, `prints_pairs`): where `releasedRootsOf` accepts a run's
+  release log, each family's roots are the ones the first lines of its pairs of lines after the head, but the coin
+  trees', show, in order; of lines the device printed, the bytes each fresh release of that family answered.
+* **The coins it released** (`fold_released`, `position_place`, `holds_dev`): `Run.released` concatenates the run's
+  coins at the positions of the family's coins whose root is the bytes after. Each has a position its layout places as
+  that coin (`position_place`), where the run holds the play's coin, `COIN_BYTES` bytes of it (`coinAt`,
+  `printLog_fresh`), so the run released of each family after each root the play's coins (`Lines.Holds`).
 
 What a run holds beside its releases (its id and host, its layout, the coins and salts the play didn't release, how it
 ended, its lines' times and the ledger lines it signed) is the history's parameter (`RunSetup`).
 -/
+
+open private pairs from SampledProofs.ChallengerSession
 
 namespace Verity.Sampled.Device
 
@@ -419,26 +431,131 @@ def runOf (S : RunSetup) (log : List Release) (lines : List String) : Run :=
   let r : Run := ⟨S.id, S.host, S.scheme, S.epoch, S.families, coinAt S log, S.salts, [], S.ended⟩
   { r with log := headLine r.commitment :: lines }
 
+/-- **The coins of family `label` the layout `fs` holds**: its first family of that name's, the ones
+`LiveCommitment.position` places; none where no family has that name. -/
+def firstCount (label : String) : Families → ℕ
+  | [] => 0
+  | (l, n) :: fs => if l = label then n else firstCount label fs
+
+/-- **The releases `log` release at most each family's coins the layout `fs` holds**, as the device releases them
+(`takeCoin`, `coins_fit`). -/
+def Fits (fs : Families) (log : List Release) : Prop := ∀ label, (coinsOf label log).length ≤ firstCount label fs
+
+open Classical in
 /-- **The device's history at the play that ended with `o`**, of the setup `S o`: under its key, the run that released
-the play's log, its release log the lines `printLog` prints of it after its head, and the ledger lines it signed. -/
-def dev (S : Exchange → RunSetup) (o : Exchange) : History where
+the play's log, its release log the lines `printLog` prints of it after its head, and the ledger lines it signed. It
+holds no run where the play's log releases more of a family's coins than the setup's layout holds, which no play under
+that layout does (`coins_fit`). -/
+noncomputable def dev (S : Exchange → RunSetup) (o : Exchange) : History where
   runs pk :=
-    if pk = (S o).key then
+    if pk = (S o).key ∧ Fits (S o).families o.log then
       match printLog (S o).time PrintState.init o.log with
       | some lines => [runOf (S o) o.log lines]
       | none => []
     else []
   ledger pk := if pk = (S o).key then (S o).ledger else []
 
-/-- **At every play the device's history holds the play's run under its key, and no other run.** -/
+theorem takeCoin_count {l : String} : ∀ {fs fs' : List (String × ℕ)}, takeCoin l fs = some fs' →
+    ∀ label, firstCount label fs = firstCount label fs' + if l = label then 1 else 0
+  | [], _, h, _ => by cases h
+  | (l', n) :: fs, fs', h, label => by
+    unfold takeCoin at h
+    by_cases hl : l' = l
+    · rw [ite_eq_left hl] at h
+      cases n with
+      | zero => cases h
+      | succ m =>
+        cases h
+        subst hl
+        simp only [firstCount]
+        by_cases hL : l' = label
+        · rw [ite_eq_left hL, ite_eq_left hL, ite_eq_left hL]
+        · rw [ite_eq_right hL, ite_eq_right hL, ite_eq_right hL, Nat.add_zero]
+    · rw [ite_eq_right hl] at h
+      obtain ⟨fs'', h', rfl⟩ := Option.map_eq_some_iff.1 h
+      simp only [firstCount]
+      by_cases hL : l' = label
+      · subst hL
+        rw [ite_eq_left rfl, ite_eq_left rfl, ite_eq_right (Ne.symm hl), Nat.add_zero]
+      · rw [ite_eq_right hL, ite_eq_right hL, takeCoin_count h' label]
+
+/-- **The device releases at most each family's coins**: at most `k` frames more under the families `fs`, with the trees
+`ts` open, a log releases at most the coins `fs` holds of each family. -/
+theorem coins_fit : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (log : List Release),
+    Game.Reaches (releases k fs ts) log → Fits fs log
+  | 0, _, _, log, h => by
+    cases h
+    exact fun _ => Nat.zero_le _
+  | k + 1, fs, ts, log, h => by
+    obtain ⟨m, hm⟩ := h
+    rcases m with _ | ⟨_ | _ | _, b⟩
+    · cases hm
+      exact fun _ => Nat.zero_le _
+    · rename_i l
+      cases hc : takeCoin l fs with
+      | none =>
+        simp only [hc] at hm
+        cases hm
+        exact fun _ => Nat.zero_le _
+      | some fs' =>
+        simp only [hc] at hm
+        obtain ⟨x, hx⟩ := hm
+        obtain ⟨log', h', hret⟩ := Game.reaches_bind hx
+        cases hret
+        intro label
+        have ih := coins_fit k fs' ts log' h' label
+        rw [takeCoin_count hc label]
+        simp only [coinsOf]
+        by_cases hl : l = label
+        · rw [ite_eq_left hl, ite_eq_left hl, List.length_cons]
+          omega
+        · rw [ite_eq_right hl, ite_eq_right hl]
+          omega
+    · rename_i spec
+      simp only at hm
+      split at hm
+      · obtain ⟨t, ht⟩ := hm
+        obtain ⟨log', h', hret⟩ := Game.reaches_bind ht
+        cases hret
+        exact coins_fit k fs _ log' h'
+      · cases hm
+        exact fun _ => Nat.zero_le _
+    · rename_i i s n
+      simp only at hm
+      split at hm
+      · split at hm
+        · cases hm
+          exact fun _ => Nat.zero_le _
+        · split at hm
+          · cases hm
+            exact fun _ => Nat.zero_le _
+          · obtain ⟨d, hd⟩ := hm
+            obtain ⟨log', h', hret⟩ := Game.reaches_bind hd
+            cases hret
+            exact coins_fit k fs _ log' h'
+      · cases hm
+        exact fun _ => Nat.zero_le _
+
+/-- **At every play the device's history holds the play's run under its key, and no other run**, at a setup whose
+layout is the play's families. -/
 theorem dev_play (S : Exchange → RunSetup) {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray}
-    {F : Array ByteArray} {c : ByteArray} {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) :
+    {F : Array ByteArray} {c : ByteArray} {o : Exchange} (h : Game.Reaches (play fs D θ F c) o)
+    (hS : (S o).families = fs) :
     ∃ lines, printLog (S o).time PrintState.init o.log = some lines ∧
       (dev S o).runs (S o).key = [runOf (S o) o.log lines] ∧ ∀ pk, pk ≠ (S o).key → (dev S o).runs pk = [] := by
   obtain ⟨lines, hl⟩ := printable_play h (S o).time
+  have hfit : Fits (S o).families o.log := by
+    obtain ⟨a, ha⟩ := h
+    obtain ⟨log, hlog, hf⟩ := Game.reaches_bind ha
+    obtain ⟨b, ρ, e, he⟩ := hf
+    subst he
+    rw [hS]
+    exact coins_fit _ fs [] log hlog
   refine ⟨lines, hl, ?_, fun pk hpk => ?_⟩
-  · simp only [dev, hl, ite_true]
-  · simp only [dev, hpk, ite_false]
+  · simp only [dev]
+    rw [ite_eq_left ⟨rfl, hfit⟩, hl]
+  · simp only [dev]
+    rw [ite_eq_right fun h => hpk h.1]
 
 /-- **Each run of the device's history prints the play's log after its head** (`Lines.PrintsLog`'s first part). -/
 theorem prints_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r : Run}
@@ -452,5 +569,431 @@ theorem prints_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {
       exact prints_printLog (S o).time PrintState.init o.log hl
     · cases hr
   · cases hr
+
+/-! ## The roots v2 reads of the run's release log -/
+
+/-- **The roots `releasedRootsOf` holds of family `L` in the state `s`**: its first entry's of that family, as
+`Run.released` reads them; none where no entry is of that family. -/
+def view (s : Array (String × Array ByteArray)) (L : String) : List ByteArray :=
+  ((s.toList.find? (·.1 == L)).map (·.2.toList)).getD []
+
+theorem find?_modify {label L : String} {b : ByteArray} :
+    ∀ {xs : List (String × Array ByteArray)} {k : ℕ}, xs.findIdx? (·.1 == label) = some k →
+      (xs.modify k fun x => (x.fst, x.snd.push b)).find? (·.1 == L) =
+        (xs.find? (·.1 == L)).map fun x => if x.1 = label then (x.fst, x.snd.push b) else x
+  | [], _, h => by simp at h
+  | x :: xs, k, h => by
+    simp only [List.findIdx?_cons] at h
+    by_cases hx : x.1 = label
+    · rw [ite_eq_left (by simpa using hx)] at h
+      cases h
+      rw [List.modify_zero_cons, List.find?_cons, List.find?_cons]
+      by_cases hL : x.1 = L
+      · subst hL
+        simp [hx]
+      · simp only [beq_eq_false_iff_ne.2 hL]
+        cases hf : xs.find? (·.1 == L) with
+        | none => rfl
+        | some y =>
+          have hy : y.1 = L := by simpa using List.find?_some hf
+          rw [Option.map_some, ite_eq_right fun e => hL (hx.trans (hy.symm.trans e).symm)]
+    · rw [ite_eq_right (by simpa using hx)] at h
+      obtain ⟨k', hk', rfl⟩ := Option.map_eq_some_iff.1 h
+      rw [List.modify_succ_cons, List.find?_cons, List.find?_cons]
+      by_cases hL : x.1 = L
+      · simp only [hL, beq_self_eq_true, Option.map_some]
+        rw [ite_eq_right (by rw [← hL] at *; exact hx)]
+      · simp only [beq_eq_false_iff_ne.2 hL]
+        exact find?_modify hk'
+
+theorem view_modify {s : Array (String × Array ByteArray)} {label : String} {k : ℕ} {b : ByteArray}
+    (h : s.findIdx? (·.1 == label) = some k) (L : String) :
+    view (s.modify k fun x => (x.fst, x.snd.push b)) L = view s L ++ if label = L then [b] else [] := by
+  rcases s with ⟨xs⟩
+  have h' : xs.findIdx? (·.1 == label) = some k := by simpa using h
+  unfold view
+  rw [Array.toList_modify, find?_modify h']
+  cases hf : xs.find? (·.1 == L) with
+  | none =>
+    simp only [Option.map_none, Option.getD_none, List.nil_append]
+    split
+    · rename_i hl
+      subst hl
+      obtain ⟨hk, hp, -⟩ := List.findIdx?_eq_some_iff_getElem.1 h'
+      exact absurd hp (by simpa using List.find?_eq_none.1 hf _ (List.getElem_mem hk))
+    · rfl
+  | some y =>
+    have hy : y.1 = L := by simpa using List.find?_some hf
+    simp only [Option.map_some, Option.getD_some]
+    by_cases hl : label = L
+    · rw [ite_eq_left (hy.trans hl.symm), ite_eq_left hl, Array.toList_push]
+    · rw [ite_eq_right (fun e => hl (e.symm.trans hy)), ite_eq_right hl, List.append_nil]
+
+theorem view_init (fs : Families) (L : String) :
+    view (fs.map fun x => (x.fst, (#[] : Array ByteArray))).toArray L = [] := by
+  unfold view
+  cases hf : (fs.map fun x => (x.fst, (#[] : Array ByteArray))).toArray.toList.find? (·.1 == L) with
+  | none => rfl
+  | some y =>
+    have hy := List.mem_of_find?_eq_some hf
+    simp only [List.mem_map] at hy
+    obtain ⟨a, -, rfl⟩ := hy
+    rfl
+
+/-- **What `releasedRootsOf`'s loop holds after the pairs of lines `pre`**: each pair's lines parse (`event`), and each
+family's roots in the state `s` are the ones `Verity.Sampled.rootOf` reads of those pairs' first lines, in order. -/
+def RootsAfter (pre : List (String × String)) (s : Array (String × Array ByteArray)) : Prop :=
+  (∀ p ∈ pre, (∃ j, event p.1 = .ok j) ∧ ∃ j, event p.2 = .ok j) ∧
+    ∀ L, view s L = ((pre.filterMap fun p => Verity.Sampled.rootOf p.1).filter (·.1 == L)).map (·.2)
+
+theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+/-- **The roots `releasedRootsOf` accepts are its loop's** (`RootsAfter`) over the pairs of its log's lines after the
+head that are no coin tree's, an even number of them. -/
+theorem rootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots) :
+    ∃ res, RootsAfter (pairs (log.tail.filter fun l => !treeLine l)) res ∧
+      (log.tail.filter fun l => !treeLine l).length % 2 = 0 ∧
+      roots = res.toList.map fun x => (x.fst, x.snd.toList) := by
+  unfold releasedRootsOf at h
+  dsimp only at h
+  split at h
+  · split at h
+    · cases h
+    · rename_i hodd
+      obtain ⟨res, hres, hpure⟩ := bind_ok h
+      refine ⟨res, ?_, by simp only [beq_iff_eq] at hodd; omega, (Except.ok.inj hpure).symm⟩
+      have hI := Verity.Sampled.Trees.forIn_inv (I := RootsAfter) ?_ _ [] _ res
+        ⟨fun _ h => absurd h List.not_mem_nil, fun L => by rw [view_init]; rfl⟩ hres
+      · simpa using hI
+      intro pre x s r hI hr
+      cases hev : event x.fst with
+      | error e => rw [hev] at hr; cases hr
+      | ok ja =>
+        rw [hev, Verity.Sampled.Trees.ok_bind] at hr
+        cases hev' : event x.snd with
+        | error e => rw [hev'] at hr; cases hr
+        | ok jb =>
+          rw [hev', Verity.Sampled.Trees.ok_bind] at hr
+          split at hr
+          · rename_i label hlab
+            split at hr
+            · rename_i k hk
+              split at hr
+              · rename_i root hroot
+                split at hr
+                · rename_i bytes hbytes
+                  split at hr
+                  · cases hr
+                    have hro : Verity.Sampled.rootOf x.fst = some (label, bytes) := by
+                      have h1 : (event x.fst).toOption = some ja := by rw [hev]; rfl
+                      unfold Verity.Sampled.rootOf
+                      rw [h1]
+                      simp only [Option.bind_eq_bind, Option.bind_some, hlab, hroot, hbytes]
+                      rfl
+                    refine ⟨_, rfl, fun p hp => ?_, fun L => ?_⟩
+                    · rcases List.mem_append.1 hp with hp | hp
+                      · exact hI.1 p hp
+                      · rw [List.mem_singleton.1 hp]
+                        exact ⟨⟨ja, hev⟩, ⟨jb, hev'⟩⟩
+                    · rw [view_modify hk L, hI.2 L, List.filterMap_append, List.filter_append, List.map_append]
+                      congr 1
+                      simp only [List.filterMap_cons, hro, List.filterMap_nil]
+                      by_cases hL : label = L
+                      · simp [hL]
+                      · simp [hL]
+                  · cases hr
+                · cases hr
+              · cases hr
+            · cases hr
+          · cases hr
+  · cases h
+
+theorem mem_pairs :
+    ∀ {rest : List String}, rest.length % 2 = 0 → ∀ l ∈ rest, ∃ p ∈ pairs rest, l = p.1 ∨ l = p.2
+  | [], _, _, hl => absurd hl List.not_mem_nil
+  | [_], h, _, _ => by simp at h
+  | a :: b :: rest, h, l, hl => by
+    rcases List.mem_cons.1 hl with rfl | hl
+    · exact ⟨(l, b), List.mem_cons_self, .inl rfl⟩
+    · rcases List.mem_cons.1 hl with rfl | hl
+      · exact ⟨(a, l), List.mem_cons_self, .inr rfl⟩
+      · obtain ⟨p, hp, he⟩ := mem_pairs (rest := rest) (by simp only [List.length_cons] at h; omega) l hl
+        exact ⟨p, List.mem_cons_of_mem _ hp, he⟩
+
+/-- The family and the bytes each fresh release of `log` answered, in order. -/
+def freshRoots : List Release → List (String × ByteArray)
+  | [] => []
+  | x :: xs => match x.frame with
+    | .fresh l => (l, x.answers) :: freshRoots xs
+    | _ => freshRoots xs
+
+/-- **The roots v2 reads of lines the device printed are its fresh releases'**: where each line `releasedRootsOf` keeps
+(no coin tree's) parses, its pairs' first lines read (`Verity.Sampled.rootOf`) as each fresh release's family and the
+bytes it answered. -/
+theorem prints_pairs : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines : List String} {log : List Release},
+    Prints ts lines log → (∀ l ∈ lines.filter (fun l => !treeLine l), ∃ j, event l = .ok j) →
+      (pairs (lines.filter fun l => !treeLine l)).filterMap (fun p => Verity.Sampled.rootOf p.1) = freshRoots log := by
+  intro ts lines log hp
+  induction hp with
+  | nil ts => intro _; rfl
+  | @fresh ts lines log d d' l l' lab b cs hd hr hd' hp' _ ih =>
+    intro hev
+    have hf : (l :: l' :: lines).filter (fun l => !treeLine l) = l :: l' :: lines.filter (fun l => !treeLine l) := by
+      simp [Lines.treeLine_plain hd hr.plain, Lines.treeLine_plain hd' hp']
+    rw [hf] at hev ⊢
+    obtain ⟨j, hj⟩ := hev l List.mem_cons_self
+    show List.filterMap _ ((l, l') :: pairs _) = (lab, b) :: freshRoots log
+    rw [List.filterMap_cons_some (f := fun p : String × String => Verity.Sampled.rootOf p.1) (a := (l, l'))
+      (Lines.rootOf_value hj hd hr), ih fun x hx => hev x (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hx))]
+  | @hello ts lines log d l spec ν root key hd hh _ ih =>
+    intro hev
+    cases hevl : event l with
+    | error e =>
+      obtain ⟨j, hj⟩ := hev l (by simp [Lines.treeLine_error hevl])
+      rw [hevl] at hj
+      cases hj
+    | ok j =>
+      have hT : treeLine l = true := by
+        rw [Lines.treeLine_ok hevl, Lines.str_of hevl hd hh.event]
+        simp [jsonStrIs]
+      have hf : (l :: lines).filter (fun l => !treeLine l) = lines.filter (fun l => !treeLine l) := by
+        simp [hT]
+      rw [hf] at hev ⊢
+      exact ih hev
+  | @opening ts lines log d l i s n k root b cb spec stream hi hs hd ho _ ih =>
+    intro hev
+    cases hevl : event l with
+    | error e =>
+      obtain ⟨j, hj⟩ := hev l (by simp [Lines.treeLine_error hevl])
+      rw [hevl] at hj
+      cases hj
+    | ok j =>
+      have hT : treeLine l = true := by
+        rw [Lines.treeLine_ok hevl, Lines.str_of hevl hd ho.event]
+        simp [jsonStrIs]
+      have hf : (l :: lines).filter (fun l => !treeLine l) = lines.filter (fun l => !treeLine l) := by
+        simp [hT]
+      rw [hf] at hev ⊢
+      exact ih hev
+
+/-! ## The coins the run released -/
+
+local instance lawfulBEqByteArrayDevice : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
+
+/-- The coins of family `label` the releases `log` released, each with the bytes it answered, in order. -/
+def freshList (label : String) : List Release → List (ByteArray × List Bool)
+  | [] => []
+  | x :: xs => match x.frame with
+    | .fresh l => if l = label then (x.answers, x.coins) :: freshList label xs else freshList label xs
+    | _ => freshList label xs
+
+theorem coinsOf_eq (L : String) : ∀ log : List Release, coinsOf L log = (freshList L log).map (·.2)
+  | [] => rfl
+  | x :: xs => by
+    rcases x with ⟨_ | _ | _, b, cs⟩
+    · rename_i l
+      simp only [coinsOf, freshList]
+      by_cases hl : l = L
+      · simp [hl, coinsOf_eq L xs]
+      · simp [hl, coinsOf_eq L xs]
+    · exact coinsOf_eq L xs
+    · exact coinsOf_eq L xs
+
+theorem freshOf_eq (L : String) (after : ByteArray) : ∀ log : List Release,
+    Lines.freshOf L after log = ((freshList L log).filter (·.1 == after)).map (·.2)
+  | [] => rfl
+  | x :: xs => by
+    rcases x with ⟨_ | _ | _, b, cs⟩
+    · rename_i l
+      simp only [Lines.freshOf, freshList]
+      by_cases hl : l = L
+      · by_cases hb : b = after
+        · simp [hl, hb, freshOf_eq L after xs]
+        · simp [hl, hb, freshOf_eq L after xs]
+      · simp [hl, freshOf_eq L after xs]
+    · exact freshOf_eq L after xs
+    · exact freshOf_eq L after xs
+
+theorem freshRoots_filter (L : String) : ∀ log : List Release,
+    ((freshRoots log).filter (·.1 == L)).map (·.2) = (freshList L log).map (·.1)
+  | [] => rfl
+  | x :: xs => by
+    rcases x with ⟨_ | _ | _, b, cs⟩
+    · rename_i l
+      simp only [freshRoots, freshList]
+      by_cases hl : l = L
+      · simp [hl, freshRoots_filter L xs]
+      · simp [hl, freshRoots_filter L xs]
+    · exact freshRoots_filter L xs
+    · exact freshRoots_filter L xs
+
+/-- The bytes of the coins `css`, each coin's (`Lines.coinBytes`) in order. -/
+def catBytes : List (List Bool) → ByteArray
+  | [] => .empty
+  | cs :: css => Lines.coinBytes cs ++ catBytes css
+
+theorem fold_released (after : ByteArray) (step : ByteArray → ByteArray × ℕ → ByteArray) :
+    ∀ (F : List (ByteArray × List Bool)) (i : ℕ) (acc : ByteArray),
+      (∀ j (hj : j < F.length) a, step a (F[j].1, i + j) = a ++ Lines.coinBytes F[j].2) →
+      (((F.map (·.1)).zipIdx i).filter (·.1 == after)).foldl step acc =
+        acc ++ catBytes ((F.filter (·.1 == after)).map (·.2))
+  | [], _, acc, _ => by simp [catBytes, ByteArray.append_empty]
+  | (a, cs) :: F, i, acc, h => by
+    have h0 : ∀ x, step x (a, i) = x ++ Lines.coinBytes cs := fun x => h 0 (by simp) x
+    have ih := fold_released after step F (i + 1)
+    simp only [List.map_cons, List.zipIdx_cons, List.filter_cons]
+    by_cases ha : (a == after) = true
+    · rw [ite_eq_left ha, ite_eq_left ha, List.foldl_cons, h0, List.map_cons, catBytes, ← ByteArray.append_assoc]
+      refine ih _ fun j hj x => ?_
+      have := h (j + 1) (by simp; omega) x
+      simpa [Nat.add_assoc, Nat.add_comm 1 j] using this
+    · rw [ite_eq_right ha, ite_eq_right ha]
+      refine ih _ fun j hj x => ?_
+      have := h (j + 1) (by simp; omega) x
+      simpa [Nat.add_assoc, Nat.add_comm 1 j] using this
+
+theorem holds_catBytes : ∀ {css : List (List Bool)}, (∀ cs ∈ css, cs.length = 8 * COIN_BYTES) →
+    Lines.Holds (catBytes css) css
+  | [], _ => .nil _
+  | cs :: css, h => by
+    have hl := h cs List.mem_cons_self
+    have hs : (Lines.coinBytes cs).size = COIN_BYTES := by rw [Lines.coinBytes_size, hl]; omega
+    have hh := Lines.Holds.cons hs (holds_catBytes fun c hc => h c (List.mem_cons_of_mem _ hc))
+    rwa [Lines.bits_coinBytes (by rw [hl]; omega)] at hh
+
+theorem go_place (label : String) (i : ℕ) : ∀ (fs : Families) (offset : ℕ), i < firstCount label fs →
+    ∃ p, LiveCommitment.position.go label (i : Int) fs offset = some (offset + p) ∧ placeOf fs p = some (label, i)
+  | [], _, h => absurd h (Nat.not_lt_zero _)
+  | (l, n) :: fs, offset, h => by
+    simp only [firstCount] at h
+    by_cases hl : l = label
+    · rw [ite_eq_left hl] at h
+      refine ⟨i, ?_, ?_⟩
+      · simp [LiveCommitment.position.go, hl, h]
+      · simp [placeOf, h, hl]
+    · rw [ite_eq_right hl] at h
+      obtain ⟨p, hp, hpl⟩ := go_place label i fs (offset + n) h
+      refine ⟨n + p, ?_, ?_⟩
+      · rw [LiveCommitment.position.go, ite_eq_right (by simpa using hl), hp, Nat.add_assoc]
+      · rw [placeOf, ite_eq_right (show ¬n + p < n by omega), Nat.add_sub_cancel_left, hpl]
+
+/-- **A coin of family `label` below its count has a position**, which the layout places as that coin. -/
+theorem position_place {c : LiveCommitment} {label : String} {i : ℕ} (h : i < firstCount label c.families) :
+    ∃ p, c.position label i = some p ∧ placeOf c.families p = some (label, i) := by
+  obtain ⟨p, hp, hpl⟩ := go_place label i c.families 0 h
+  exact ⟨p, by rw [LiveCommitment.position, hp, Nat.zero_add], hpl⟩
+
+/-- **The printer prints only fresh coins of `8 * COIN_BYTES` bits**. -/
+theorem printLog_fresh (time : ℕ → ℕ) (label : String) :
+    ∀ (st : PrintState) (log : List Release) {lines : List String}, printLog time st log = some lines →
+      ∀ p ∈ freshList label log, p.2.length = 8 * COIN_BYTES
+  | _, [], _, _ => fun _ h => absurd h List.not_mem_nil
+  | st, ⟨.fresh l, b, cs⟩ :: log, lines, h => by
+    simp only [printLog] at h
+    split at h
+    · rename_i hcs
+      obtain ⟨ls, hls, -⟩ := Option.map_eq_some_iff.1 h
+      intro p hp
+      simp only [freshList] at hp
+      split at hp
+      · rcases List.mem_cons.1 hp with rfl | hp
+        · exact hcs
+        · exact printLog_fresh time label _ log hls p hp
+      · exact printLog_fresh time label _ log hls p hp
+    · cases h
+  | st, ⟨.hello spec, ν, cs⟩ :: log, lines, h => by
+    simp only [printLog] at h
+    split at h
+    · obtain ⟨ls, hls, -⟩ := Option.map_eq_some_iff.1 h
+      exact printLog_fresh time label _ log hls
+    · cases h
+  | st, ⟨.opening i s n, b, cs⟩ :: log, lines, h => by
+    simp only [printLog] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · obtain ⟨ls, hls, -⟩ := Option.map_eq_some_iff.1 h
+          exact printLog_fresh time label _ log hls
+        · cases h
+
+theorem commitment_families {s : Run} {c : LiveCommitment} (h : s.commitment = some c) : c.families = s.families := by
+  unfold Properties.Challenger.Run.commitment at h
+  split at h
+  · cases h
+    rfl
+  · cases h
+
+/-- **Where v2 reads a run of the device's history, it released of each family after each root the play's coins**
+(`Lines.PrintsLog`'s second part): at the run's commitment, where `releasedRootsOf` accepts its release log, the roots
+it reads are the play's fresh releases' (`rootsOf_ok`, `prints_pairs`), each coin has a position its layout places as
+that coin (`position_place`, where the play's log fits the layout), and the run's coin there is the play's
+(`coinAt`). -/
+theorem holds_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r : Run} (hr : r ∈ (dev S o).runs pk)
+    {c : LiveCommitment} {roots : Roots} (hc : r.commitment = some c) (hroots : releasedRootsOf c r.log = .ok roots)
+    (label : String) (after : ByteArray) :
+    Lines.Holds (r.released label after) (Lines.freshOf label after o.log) := by
+  simp only [dev] at hr
+  split at hr
+  · rename_i hk
+    split at hr
+    · rename_i lines hl
+      rw [List.mem_singleton] at hr
+      subst hr
+      have hfam : c.families = (S o).families := commitment_families hc
+      have hp := prints_printLog (S o).time PrintState.init o.log hl
+      obtain ⟨res, hI, hev2, hres⟩ := rootsOf_ok hroots
+      have e : (runOf (S o) o.log lines).log.tail = lines := rfl
+      rw [e] at hI hev2
+      have hevs : ∀ l ∈ lines.filter (fun l => !treeLine l), ∃ j, event l = .ok j := by
+        intro l hl
+        obtain ⟨p, hp, he⟩ := mem_pairs hev2 l hl
+        rcases he with rfl | rfl
+        · exact (hI.1 p hp).1
+        · exact (hI.1 p hp).2
+      have hrs : ((roots.find? (·.1 == label)).map (·.2)).getD [] = (freshList label o.log).map (·.1) := by
+        rw [hres, List.find?_map, Option.map_map]
+        rw [← freshRoots_filter, ← prints_pairs hp hevs, ← hI.2 label]
+        rfl
+      simp only [Properties.Challenger.Run.released, hc, hroots]
+      rw [hrs, fold_released after _ _ 0 .empty, ByteArray.empty_append, freshOf_eq]
+      · exact holds_catBytes fun cs hcs => by
+          obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hcs
+          exact printLog_fresh _ label _ _ hl q (List.mem_filter.1 hq).1
+      · intro j hj a
+        have hfit : j < firstCount label c.families := by
+          rw [hfam]
+          have := hk.2 label
+          rw [coinsOf_eq, List.length_map] at this
+          omega
+        obtain ⟨p, hpos, hpl⟩ := position_place hfit
+        simp only [Nat.zero_add, hpos]
+        show a ++ coinAt (S o) o.log p = _
+        rw [hfam] at hpl
+        have hget : (coinsOf label o.log)[j]? = some (freshList label o.log)[j].2 := by
+          rw [coinsOf_eq, List.getElem?_map, List.getElem?_eq_getElem hj]
+          rfl
+        simp only [coinAt, hpl, hget]
+    · cases hr
+  · cases hr
+
+/-- **The device printed the play's log** (`Lines.PrintsLog`), at every setup: each run of its history prints the
+play's log after its head (`prints_dev`), and where v2 reads it, released the play's coins (`holds_dev`). -/
+theorem printsLog_dev (S : Exchange → RunSetup) (o : Exchange) : Lines.PrintsLog (dev S o) o.log :=
+  fun _ _ _ hr _ => ⟨prints_dev S o hr, fun ⟨_, _, hc, hroots⟩ => holds_dev S o hr hc hroots⟩
+
+/-- **`Binds` at v2's read, at the device's history at each play** (`Binding.binds_of_prints`): at every setup, each
+play's history printed its log (`printsLog_dev`). -/
+theorem binds_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+    (k : Verity.Registration.Composite) (S : Exchange → RunSetup) (θ : ByteArray) :
+    Binding.Binds V k Binding.readsV2 (dev S) θ :=
+  Binding.binds_of_prints V k (dev S) θ fun o _ => printsLog_dev S o
 
 end Verity.Sampled.Device
