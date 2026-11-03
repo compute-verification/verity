@@ -31,6 +31,9 @@ strategy of the period's game projects to. This module states its C-Flock side.
   C-Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Coins`: other
   families' coins, other trees' samples) widen the draw's sample (`Live.extend`), which the draw doesn't read: the draw's
   law, A3 and the leg's δ are the session's.
+* **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
+  game as flock-verify `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
+  finders' terms, the tree openings' hiding term, the read finder's collision and the forger's forgery.
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
@@ -355,5 +358,25 @@ structure FinderCR (V : Vocab d α) (K : Constructions V) (A : Live) (θ : ByteA
   record : Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ)
   file : Claims.StrictBirthday Verity.sha512Msg (V.fileFinder θ F)
   publicFile : Claims.StrictBirthday Verity.sha512Msg (V.publicFinder θ F)
+
+/-- **The coupling, the projection's target at the session `A`**: the plays of the period's game whose sampled verdict
+accepts are at most as likely as the live audit's plays, at the session widened by the projection's coins and the
+strategy projected there, that flock-verify `--zk` accepts at `own` (`LiveAcceptsZKP`), plus the square root of each
+two-continuation finder's success (one per round the device opens after a digest of the prover's message, and one for
+the record), the tree openings' hiding term, the read finder's collision and the forger's forgery of the device's
+signature. Its pieces are the draw (the device's coins the draw reads, `Properties.Challenger.CoinsFromLog`, are the
+live audit's draw), the rounds (each round's coins, from the coin trees' log, are the live session's) and the messages
+(each message the evidence reveals is the projected strategy's). The leg reads it at each session v2 sets up on the
+parameters and the committed files. -/
+def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Constructions V) (A : Live)
+    (θ : ByteArray) (F : Array ByteArray) : Prop :=
+  ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
+      FlockSoundness.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) (K.live A θ F c σ).game
+          (K.project A θ F c σ) +
+        (∑ j, ENNReal.ofReal (Real.sqrt ((K.msgFinder A θ F c σ j).Pr Verity.sha512Msg)) +
+          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
+          ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
+          ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
 
 end Verity.Sampled
