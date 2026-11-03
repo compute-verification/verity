@@ -188,34 +188,57 @@ def survey(a, net, rec, theta, params: dict, names: list[str]) -> int:
 
 
 def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
-    """`--first-order K`: plain SGD on S by backprop, its update written as a seed log. The update rule reads and
-    writes S's fp32 masters (Δ_t, 32 bits a value) and passes on the batch gradient over S (Δ_grad, 32 bits a value, no
-    optimizer state), so Fit's reduction clause holds S to about k/64 values. Each E is θ′_S − θ_S projected onto K ≥ |S|
-    shared-seed directions (`prepare.seedlog_step`'s z_j, seeds `seed + j`) by the least-norm solve, exact up to the
-    coefficients' rounding: Δ is K coefficients and d is K·|S| FMAs. The lr is `--lr`, or `--lr-auto F` over the
-    three-point curvature along the first batch's gradient (F/λ_g, the quadratic model's best step at F = 1)."""
+    """`--first-order K`: SGD on S by backprop, its update a K-coefficient seed log over S: θ_S − Σ_j c_j z_j, z_j
+    `prepare.seedlog_step`'s draw from seed `seed + j`, so Δ is K coefficients and d is K·|S| FMAs.
+
+    - K ≥ |S|: plain SGD on S's fp32 masters (Δ_t = 32|S|), passing on the batch gradient over S (Δ_grad = 32|S|, no
+      state); each E is the update projected onto the K directions by the least-norm solve, exact up to the rounding.
+    - K < |S|: SGD on the K coefficients themselves (random-subspace training). A step draws its batch, rebuilds θ_S from
+      the fp32 coefficients alone, projects the batch gradient onto the directions (Z g) and adds lr times that to the
+      coefficients, so the cut from the step's tokens to its carried state is K wide (Δ_grad = 32K) and the update the
+      next step reads is the coefficients (Δ_t = 32K). Z is kept on the device at bf16 (K·|S|·2 bytes, at most
+      `--max-z-gb`); E is the coefficients, decoded at fp32.
+
+    The lr is `--lr`, or `--lr-auto F`: F / λ, λ the top eigenvalue of the Hessian over what SGD moves (S, or the
+    coefficients), by `--power-iters` steps of power iteration from the first batch's gradient on central-difference
+    Hessian-vector products at `--curv-rel` × |θ_S| (fp32, `--curv-batch` sequences). SGD is stable below F = 2."""
     dev, vocab = prepare.DEVICE, rec["config"]["vocab"]
     live = [params[n] for n in names]
     masters = [w.detach().float().clone() for w in live]
-    base = [m.clone() for m in masters]
-    d = sum(m.numel() for m in masters)
-    K = a.first_order
-    if K < d:
-        raise SystemExit(f"train: --first-order {K} directions can't hold an update of S's {d} values; K >= |S|")
+    sizes = [m.numel() for m in masters]
+    base = torch.cat([m.reshape(-1) for m in masters])
+    d, K = base.numel(), a.first_order
+    proj = K < d
     blob0 = prepare.encode_seedlog(names, a.seed, [0.0] * K, a.coeff)
     if 8 * len(blob0) > a.max_bits:
         raise SystemExit(f"train: K = {K} coefficients are {8 * len(blob0)} bits, over --max-bits {a.max_bits}")
+    if K * d * (2 if proj else 4) > a.max_z_gb * 1e9:
+        raise SystemExit(f"train: Z is K x |S| = {K} x {d} at {'bf16' if proj else 'fp32'}, over --max-z-gb {a.max_z_gb}")
     gen = torch.Generator(device=dev)
-    Z = torch.empty(d, K, dtype=torch.float32, device=dev)
+    Z = torch.empty(K, d, dtype=torch.bfloat16 if proj else torch.float32, device=dev)
     for j in range(K):
         gen.manual_seed(a.seed + j)
-        Z[:, j] = torch.cat([torch.randn(m.shape, generator=gen, device=dev, dtype=torch.float32).reshape(-1)
-                             for m in masters])
-    zzt = Z @ Z.T
+        Z[j] = torch.cat([torch.randn(m.shape, generator=gen, device=dev, dtype=torch.float32).reshape(-1)
+                          for m in masters])
+    zz = None if proj else Z.T @ Z
+    coef = torch.zeros(K, dtype=torch.float32, device=dev)
+
+    @torch.no_grad()
+    def put(flat: torch.Tensor) -> None:
+        for w, m, x in zip(live, masters, flat.split(sizes)):
+            m.copy_(x.view(m.shape))
+            w.copy_(m)
+
+    def rebuilt_from_coef() -> torch.Tensor:
+        return base - (coef.to(Z.dtype) @ Z).float()
 
     def coefficients() -> list[float]:
-        delta = torch.cat([(m - b).reshape(-1) for m, b in zip(masters, base)])
-        return (-(Z.T @ torch.linalg.solve(zzt, delta))).to(prepare.DTYPES[a.coeff]).float().tolist()
+        if proj:
+            c = coef
+        else:
+            delta = torch.cat([m.reshape(-1) for m in masters]) - base
+            c = -(Z @ torch.linalg.solve(zz, delta))
+        return c.to(prepare.DTYPES[a.coeff]).float().tolist()
 
     def encoded() -> bytes:
         return prepare.encode_seedlog(names, a.seed, coefficients(), a.coeff)
@@ -237,48 +260,55 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
         hooks.plan(1 + n_steps)
     deadline = T_MAIN + (a.time_budget or 0.92 * budget["gpu_seconds"])
 
-    def grad_on(x: torch.Tensor) -> float:
+    def grad_on(x: torch.Tensor, autocast: bool) -> torch.Tensor:
         for w in live:
             w.grad = None
-        tot = 0.0
+        tot = torch.zeros((), dtype=torch.float32, device=dev)
         for xm in x.split(a.micro):
-            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16, enabled=a.precision == "bf16"):
+            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16, enabled=autocast):
                 logits = net(xm[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, vocab), xm[:, 1:].reshape(-1)) * (xm.shape[0] / x.shape[0])
             loss.backward()
-            tot += float(loss)
+            tot += loss.detach()
         return tot
 
-    @torch.no_grad()
-    def loss32() -> torch.Tensor:
-        tot = torch.zeros((), dtype=torch.float32, device=dev)
-        for xm in xc.split(a.micro):
-            tot += F.cross_entropy(net(xm[:, :-1]).float().view(-1, vocab), xm[:, 1:].reshape(-1)).float() * xm.shape[0]
-        return tot / xc.shape[0]
+    def flat_grad() -> torch.Tensor:
+        return torch.cat([w.grad.float().reshape(-1) for w in live])
+
+    def lift(v: torch.Tensor) -> torch.Tensor:
+        return (v.to(Z.dtype) @ Z).float() if proj else v
+
+    def drop(h: torch.Tensor) -> torch.Tensor:
+        return (Z @ h.to(Z.dtype)).float() if proj else h
 
     t0 = time.perf_counter()
-    grad_on(data.next(a.batch))
-    g = [w.grad.detach().float().clone() for w in live]
-    gnorm = torch.sqrt(sum((x * x).sum() for x in g))
-    rms = float(torch.sqrt(sum((m * m).sum() for m in masters) / d))
+    grad_on(data.next(a.batch), a.precision == "bf16")
+    g0 = flat_grad()
+    rms = float(base.pow(2).mean().sqrt())
     eps = a.curv_rel * rms * math.sqrt(d)
     tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
-    with torch.no_grad():
-        l0 = loss32()
-        ls = []
-        for sign in (1.0, -1.0):
-            for w, m, x in zip(live, masters, g):
-                w.copy_(m - sign * eps * x / gnorm)
-            ls.append(loss32())
-        for w, m in zip(live, masters):
-            w.copy_(m)
+    l0 = grad_on(xc, False)
+    v = drop(g0)
+    lams = []
+    for _ in range(a.power_iters):
+        u = lift(v)
+        nu = u.norm()
+        put(base + eps * u / nu)
+        grad_on(xc, False)
+        hp = flat_grad()
+        put(base - eps * u / nu)
+        grad_on(xc, False)
+        hv = drop((hp - flat_grad()) / (2 * eps)) * nu
+        lams.append((v @ hv) / (v @ v))
+        v = hv / hv.norm()
+    put(base)
     torch.backends.cuda.matmul.allow_tf32 = tf32
-    lam = ((ls[0] + ls[1] - 2 * l0) / eps**2).clamp(min=1e-30)
+    lam = lams[-1].abs().clamp(min=1e-30)
     lr0 = torch.tensor(a.lr, dtype=torch.float32, device=dev) if a.lr is not None else a.lr_auto / lam
-    print(json.dumps({"d": d, "K": K, "steps": n_steps, "flop_cap": flop_cap, "rms": rms, "grad_norm": float(gnorm),
-                      "eps": eps, "lambda_g": float(lam), "lr": float(lr0), "l0": float(l0),
-                      "s": round(time.perf_counter() - t0, 1)}), flush=True)
+    print(json.dumps({"d": d, "K": K, "projected": proj, "steps": n_steps, "flop_cap": flop_cap, "rms": rms,
+                      "grad_norm": float(g0.norm()), "eps": eps, "lambda_power": [float(x) for x in lams],
+                      "lr": float(lr0), "l0": float(l0), "s": round(time.perf_counter() - t0, 1)}), flush=True)
 
     cps, ema, every, n_done = [], None, max(1, n_steps // CHECKPOINTS), 0
     for i in range(n_steps):
@@ -286,48 +316,72 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
             break
         if i > 0 and i % every == 0:
             blob = encoded()
-            cps.append({"step": i, "e_bytes": len(blob), "delta_bits": 8 * len(blob), "loss_ema": ema})
+            cps.append({"step": i, "e_bytes": len(blob), "delta_bits": 8 * len(blob), "loss_ema": float(ema)})
         lr_i = lr0 * (1 - i / n_steps) if a.schedule == "linear" else lr0
-        loss = grad_on(data.next(a.batch))
+        x = data.next(a.batch)
+        if proj:
+            put(rebuilt_from_coef())
+        loss = grad_on(x, a.precision == "bf16")
         with torch.no_grad():
-            for w, m in zip(live, masters):
-                m.sub_(lr_i * w.grad.float())
-                w.copy_(m)
+            if proj:
+                coef.add_(lr_i * drop(flat_grad()))
+            else:
+                for w, m in zip(live, masters):
+                    m.sub_(lr_i * w.grad.float())
+                    w.copy_(m)
         ema = loss if ema is None else 0.99 * ema + 0.01 * loss
         n_done = i + 1
         if (i + 1) % 100 == 0:
-            print(json.dumps({"step": i + 1, "loss_ema": ema, "lr": float(lr_i),
+            print(json.dumps({"step": i + 1, "loss_ema": float(ema), "lr": float(lr_i),
                               "s": round(time.perf_counter() - T_MAIN, 1)}), flush=True)
     for w in live:
         w.requires_grad_(False)
         w.grad = None
 
+    trained = rebuilt_from_coef() if proj else torch.cat([m.reshape(-1) for m in masters])
     blob = encoded()
-    rebuilt = [b.clone() for b in base]
+    rebuilt = [b.clone() for b in base.split(sizes)]
     for j, c in enumerate(coefficients()):
         prepare.seedlog_step(rebuilt, a.seed + j, c, gen)
-    err = float(torch.sqrt(sum(((r - m) ** 2).sum() for r, m in zip(rebuilt, masters))
-                           / sum(((m - b) ** 2).sum() for m, b in zip(masters, base)).clamp(min=1e-30)))
+    rebuilt = torch.cat([r.reshape(-1) for r in rebuilt])
+    err = float((rebuilt - trained).norm() / (trained - base).norm().clamp(min=1e-30))
+    put(rebuilt)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    with torch.no_grad():
+        tot = torch.zeros((), dtype=torch.float32, device=dev)
+        for xm in xc.split(a.micro):
+            tot += F.cross_entropy(net(xm[:, :-1]).float().view(-1, vocab), xm[:, 1:].reshape(-1)) * xm.shape[0]
+        l_end = tot / xc.shape[0]
+    torch.backends.cuda.matmul.allow_tf32 = tf32
     macs = K * d
     c_gates = 4096 * (prepare.STORE.get(a.start, {}).get("shape", {}).get("forward_macs_per_token")
                       or per_tok / 2) * GEMM_BF16_GATES
-    notes = {"method": "seedlog-sgd", "args": vars(a), "steps": n_done, "K": K, "names": names, "d": d,
-             "lambda_g": float(lam), "lr": float(lr0), "eps": eps, "l0_cal": float(l0), "projection_rel_error": err,
+    width = K if proj else d
+    what = ("the batch gradient projected onto the K directions (Z g, the step's cut from its tokens to the carried "
+            "coefficients); the fp32 coefficients are Delta_t, and each step rebuilds S from them" if proj else
+            "the batch gradient over S at fp32 (plain SGD, no state); S's fp32 masters are Delta_t, the form the "
+            "update rule reads and writes")
+    notes = {"method": "seedlog-sgd-subspace" if proj else "seedlog-sgd", "args": vars(a), "steps": n_done, "K": K,
+             "names": names, "d": d, "lambda_power": [float(x) for x in lams], "lr": float(lr0), "eps": eps,
+             "l0_cal": float(l0), "l_end_cal": float(l_end), "projection_rel_error": err,
              "mechanism": {"label": a.label, "description": a.description},
-             "delta_bits": 8 * len(blob), "delta_t_bits": 32 * d,
-             "delta_grad": {"trainable": d, "grad_bits": 32 * d, "adam_bits": 0, "muon_bits": 0, "latent_bits": 32 * d,
-                            "bits": 32 * d, "bytes": 4 * d,
-                            "what": "the batch gradient over S at fp32 (plain SGD, no state); S's fp32 masters are "
-                                    "Delta_t, the form the update rule reads and writes"},
+             "delta_bits": 8 * len(blob), "delta_t_bits": 32 * width,
+             "delta_grad": {"trainable": d, "grad_bits": 32 * width, "adam_bits": 0, "muon_bits": 0,
+                            "latent_bits": 32 * width, "bits": 32 * width, "bytes": 4 * width, "what": what},
              "decoder": {"macs": macs, "gates": macs * F32_FMA_GATES, "d_over_c": macs * F32_FMA_GATES / c_gates,
                          "c_gates": c_gates, "rule": "prepare.rebuild_macs (K x |S| fp32 FMAs) at F32Fma_v4's gates"},
              "checkpoints": cps}
-    steps = [{"op": "train", "tokens": (n_done + 1) * a.batch * a.ctx, "ctx": a.ctx},
-             {"op": "forward", "tokens": 3 * a.curv_batch * a.ctx, "ctx": a.ctx}]
-    model = dict(theta) | {n: m.to(theta[n].dtype).cpu() for n, m in zip(names, masters)}
+    extra = 4 * K * d * (n_done + 1 + a.power_iters) if proj else 0
+    steps = [{"op": "train", "tokens": (n_done + 1) * a.batch * a.ctx + (1 + 2 * a.power_iters) * a.curv_batch * a.ctx,
+              "ctx": a.ctx},
+             {"op": "forward", "tokens": a.curv_batch * a.ctx, "ctx": a.ctx}]
+    if extra:
+        steps.append({"op": "extra", "flops": extra})
+    model = dict(theta) | {n: r.view(theta[n].shape).to(theta[n].dtype).cpu()
+                           for n, r in zip(names, rebuilt.split(sizes))}
     prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=names, notes=notes)
-    print(json.dumps({"submitted": len(blob), "steps": n_done, "projection_rel_error": err,
-                      "s": round(time.perf_counter() - T_MAIN, 1)}), flush=True)
+    print(json.dumps({"submitted": len(blob), "steps": n_done, "projection_rel_error": err, "l0_cal": float(l0),
+                      "l_end_cal": float(l_end), "s": round(time.perf_counter() - T_MAIN, 1)}), flush=True)
     return 0
 
 
@@ -369,7 +423,9 @@ def main() -> int:
     ap.add_argument("--description", default="")
     ap.add_argument("--survey", type=int, default=0, help="measure N batches' per-tensor G, E[ĝ²] and tr H at θ, no run")
     ap.add_argument("--first-order", type=int, default=0, metavar="K",
-                    help="plain SGD on S by backprop, each E its update projected onto K >= |S| shared-seed directions")
+                    help="SGD on S by backprop, its update K shared-seed coefficients (K < |S|: in their subspace)")
+    ap.add_argument("--power-iters", type=int, default=12, help="--first-order --lr-auto: power iterations for λ_max")
+    ap.add_argument("--max-z-gb", type=float, default=60.0, help="--first-order: the most memory Z may take")
     a = ap.parse_args()
     if a.survey or a.first_order:
         if a.first_order and (a.lr is None) == (a.lr_auto is None):
