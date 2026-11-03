@@ -15,9 +15,13 @@
 # in-domain linear at decode's and prefill's M under the serial schedule, its decode calls graphed and eager, and under
 # deferred-a, prefill's again under run.py's h3 chain (PEARLC_CHAIN=h3, into $OUT/timing-h3), and decode's forward captured
 # whole, serial, deferred and as served, over LAYERS layers' linears (--whole --layers, into $OUT/whole; default MODEL's
-# layers for llama32_1b, 16, and one for glm53, whose in-domain linears aren't one layer's).  Then
-# (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease, and
-# (VERIFY=1, the default) glm53_passes.py verify replays the passes on this machine's CPUs, after every lease is released, and
+# layers for llama32_1b, 16, and one for glm53, whose in-domain linears aren't one layer's); TIMING=0 ends the lease after the
+# capture, timing nothing.  Then
+# (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
+# (VOLUNTEER=1, the default) glm53_passes.py volunteer gives up prefill's and decode's rows over a debit cap in their records
+# on this machine's CPUs, after every lease is released and before any verifier coin, and
+# (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
+# `served_passes.DRAWS`), and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
 # leaf, every real row's served y): about 17 CPU-hours for glm53 (13 min on a CPU pod at --jobs 96), so FULL=0 leaves it
 # to a run elsewhere on the published passes.
@@ -42,7 +46,7 @@ SHAPES=""
 for nk in $NKS; do
   SHAPES="$SHAPES 64x$nk 8192x$nk"
 done
-export O D PY SHAPES MODEL LAYERS LOCK_MHZ=${LOCK_MHZ:-}
+export O D PY SHAPES MODEL LAYERS LOCK_MHZ=${LOCK_MHZ:-} TIMING=${TIMING:-1}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 : > "$O/rc.txt"
 tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha256)
@@ -62,6 +66,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
   [ "$rc" = 0 ] || exit "$rc"
   "$PY" "$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes" > "$O/capture.log" 2>&1
   echo "capture rc $?" >> "$O/rc.txt"
+  [ "$TIMING" = 1 ] || exit 0
   U=$GPU_LEASE_UUID
   if [ -n "$LOCK_MHZ" ]; then
     trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1" EXIT
@@ -85,8 +90,12 @@ if [ "${PIN:-1}" = 1 ]; then
   bash benchmarks/pouw/harness/jobs/pin_target.sh "${TK:-13.0.1-sm_90a}" "$CUDA" > "$O/pin.log" 2>&1
   echo "pin rc $?" >> "$O/rc.txt"
 fi
+if [ "${VOLUNTEER:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
+  "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" > "$O/volunteer.log" 2>&1
+  echo "volunteer rc $?" >> "$O/rc.txt"
+fi
 if [ "${VERIFY:-1}" = 1 ] && [ -f "$O/passes/control/manifest.json" ]; then
-  "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --jobs "$(nproc)" > "$O/verify.log" 2>&1
+  "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
   echo "verify rc $?" >> "$O/rc.txt"
 fi
 if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
@@ -95,6 +104,6 @@ if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
 fi
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
-tail -4 "$O/capture.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
+tail -4 "$O/capture.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
 grep -E "slowdown|no stock" "$O/timing.log" "$O/timing-h3.log" "$O/whole.log" 2>/dev/null | head -80
 ! grep -qv " rc 0$" "$O/rc.txt"
