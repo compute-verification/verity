@@ -229,10 +229,25 @@ def quantize(y: torch.Tensor, bits: int, group: int, stochastic: bool, gauss: bo
         step = y.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)
     step = step.to(torch.bfloat16).float().clamp_min(1e-30)
     half = 2 ** (bits - 1)
-    return ((torch.floor(y / step).clamp(-half, half - 1) + 0.5) * step).reshape(shape)
+    j = torch.floor(y / step).clamp(-half, half - 1)
+    if bits <= 8 and group % 8 == 0:
+        j = through_bytes((j + half).long(), bits).float() - half
+    return ((j + 0.5) * step).reshape(shape)
 
 
-#: Each `m` boundary's running mean of the residual (bf16 values in fp32), from the training batches coded before.
+def through_bytes(c: torch.Tensor, bits: int) -> torch.Tensor:
+    """Codes c in [0, 2^bits) (trailing axis a multiple of 8) through one uint8 tensor, eight codes to `bits` bytes, and
+    back unchanged: the code exists in the step at its own width, so a trace's narrowest cut (te_core 4.x's measured a)
+    can be the code, where a float of the same values would count 32 bits a coordinate."""
+    lanes = torch.arange(8, device=c.device, dtype=torch.int64)
+    octets = torch.arange(bits, device=c.device, dtype=torch.int64)
+    word = (c.reshape(*c.shape[:-1], -1, 8) << (bits * lanes)).sum(-1)
+    packed = ((word.unsqueeze(-1) >> (8 * octets)) & 255).to(torch.uint8)
+    word = (packed.long() << (8 * octets)).sum(-1)
+    return ((word.unsqueeze(-1) >> (bits * lanes)) & (2 ** bits - 1)).reshape(c.shape)
+
+
+#: Each `m` boundary's running mean of the coded residual (bf16 values in fp32), from the training batches coded before.
 CUT_MEAN: dict = {}
 MEAN_DECAY = 0.9
 
@@ -425,8 +440,8 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
     as CODE = [d]q<forward bits>[m][e][o<k>][b<backward bits>[s|e]][g<group>] in a randomized-DCT basis (group d
     unless given); `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index
-    each. `m` codes the forward about the boundary's running mean (CUT_MEAN; earlier batches only, so causal) on the
-    Gaussian grid, charged a bf16 mean per coordinate every SESSION tokens. `b<bits>s` rounds the gradient onto the
+    each. `m` codes the forward about the boundary's running mean (CUT_MEAN; earlier batches' coded states only, so
+    causal and computed on the receiving side, no bits sent) on the Gaussian grid. `b<bits>s` rounds the gradient onto the
     RMS-scaled grid (STOCH_STEP) at the same bits. `e` (after q's bits, or b's) codes that direction entropy-coded in
     d·bits bits plus e_side_bits (`ecode`; whole tokens, no o<k>). With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
     B for the same tokens, which the receiving side recomputes from the token's data; it needs B above the lowest
@@ -455,7 +470,7 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         if (ecode_f or ecode_b) and (group != d or (ecode_f and k) or not (bf <= 8 and bb <= 8)):
             raise SystemExit(f"wildcard: --cut {part!r}: an `e` code takes whole tokens (no g<group>), no o<k>, at "
                              f"most 8 bits")
-        side = k * (16 + math.ceil(math.log2(d))) + (math.ceil(16 * d / SESSION) if mean else 0)
+        side = k * (16 + math.ceil(math.log2(d)))
         fwd = (d * bf + e_side_bits() if ecode_f else code_bits(d, bf, group)) + side
         bwd = d * bb + e_side_bits() if ecode_b else code_bits(d, bb, group)
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
@@ -497,8 +512,9 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
     """Each boundary's code as a forward hook on the block below it (boundary B: block B - 1's output), active while
     CUT["on"]. A delta code's hook adds h_frozen back after coding h - h_frozen; h_frozen is carried up from block
     `low`'s input through frozen copies of blocks low.. (frozen_blocks). An `m` code's hook codes about CUT_MEAN, then
-    moves CUT_MEAN toward this batch's mean only in a training forward or with CUT["calibrate"] (never a probe's), so
-    a token's code reads no later token. An `e` code's model learns on the same terms (`ecode`)."""
+    moves CUT_MEAN toward this batch's coded mean only in a training forward or with CUT["calibrate"] (never a
+    probe's), so a token's code reads no later token, and the mean reads nothing the receiving side lacks. An `e`
+    code's model learns on the same terms (`ecode`)."""
     CUT_MEAN.clear()
     ECODE.clear()
     by_block = {c["boundary"] - 1: c for c in cuts}
@@ -534,7 +550,7 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                                 c["grad_gauss"], ekeys, learn)
             if c["mean"] and learn:
                 with torch.no_grad():
-                    now = out.detach().float().mean(tuple(range(out.dim() - 1)))
+                    now = coded.detach().float().mean(tuple(range(coded.dim() - 1)))
                     old = CUT_MEAN.get(c["boundary"])
                     new = now if old is None else MEAN_DECAY * old + (1 - MEAN_DECAY) * now
                     CUT_MEAN[c["boundary"]] = new.to(torch.bfloat16).float()
