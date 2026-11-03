@@ -2,7 +2,8 @@
 encoded as mask plus values in the fixed formats; and the first-order trade between the mask's encoding cost and its values.
 
 `islands/e1mb/train.py` and `islands/e100kb/train.py` on this branch are links to this file, which takes the class as
-`--klass` (the harness runs the resolved path, so the link's directory doesn't reach it).
+`--klass` on a pin with classes (the harness runs the resolved path, so the link's directory doesn't reach it). A pin
+without classes (v3) takes no `--klass`, and `--cap` is E's byte cap there.
 
 A probe (`--probe N` batches) takes the mean gradient G at θ of every tensor, priced in the step log as a forward pass plus
 the full backward's FLOPs (`extra`). From G the record's notes get, for each budget in BUDGETS, the share of ||G||² that each
@@ -29,7 +30,9 @@ both the lookup and the head), its (vocab + d) · R entries taken before the blo
 byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy).
 
 The record's notes give `delta_grad`: the trainable values N and the gradient plus AdamW's m and v passed between token
-blocks, 3N fp32 values (a straight-through code trains fp32 latents, so codes shrink E and not this).
+blocks, 3N fp32 values (a straight-through code trains fp32 latents, so codes shrink E and not this), in the lowrank
+island's keys too (`bits`/`bytes` that state; `latent_bits`, apart from it, the fp32 latents a straight-through code
+trains: the update application's Δ_t).
 
 E is encoded at the end of every 5% of the harness's steps (the probe's batches included, `hooks.plan`), so each of the
 harness's checkpoints scores the most training its 5% holds.
@@ -490,11 +493,13 @@ def tie_lora(lm, A, B, s: float) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--klass", required=True, choices=("e1mb", "e100kb"))
+    classes = getattr(prepare, "CLASSES", None)
+    ap.add_argument("--klass", required=bool(classes), choices=("e1mb", "e100kb") if classes else None)
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows"))
-    ap.add_argument("--cap", type=int, default=0, help="E's byte bin, at most the class's cap (0: the class's)")
+    ap.add_argument("--cap", type=int, default=0,
+                    help="E's byte bin, at most the class's cap (0: the class's); required on a pin without classes")
     ap.add_argument("--bits", type=int, default=1, help="qlora: the factors' bits; signrows: the rows' code bits")
     ap.add_argument("--norm-bits", type=int, default=4, help="qlora, signrows: the gains' delta code bits")
     ap.add_argument("--norm-group", type=int, default=64, help="qlora, signrows: gain entries per f16 scale")
@@ -533,10 +538,15 @@ def main() -> int:
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
     L = rec["config"]["n_layer"]
-    cap = prepare.CLASSES[a.klass]["max_e_bytes"]
-    if a.cap > cap:
-        raise SystemExit(f"sparse: --cap {a.cap} is over {a.klass}'s cap of {cap}")
-    cap = a.cap or cap
+    if classes:
+        cap = classes[a.klass]["max_e_bytes"]
+        if a.cap > cap:
+            raise SystemExit(f"sparse: --cap {a.cap} is over {a.klass}'s cap of {cap}")
+        cap = a.cap or cap
+    elif a.cap > 0:
+        cap = a.cap
+    else:
+        raise SystemExit("sparse: this pin has no classes, so --cap N (E's byte cap) is required")
     quant = a.mech in ("qlora", "signrows")
     if quant and not (1 <= a.bits <= 8 and 1 <= a.norm_bits <= 8):
         raise SystemExit("sparse: --bits and --norm-bits are 1 to 8")
@@ -802,12 +812,15 @@ def main() -> int:
     changed = sorted(set(norms) | set(adapters))
     n_train = sum(p.numel() for grp in opt.param_groups for p in grp["params"])
     notes["delta_grad"] = {"values": n_train, "fp32_bytes": 12 * n_train,
-                           "what": "the gradient and AdamW's m and v of every trained value (fp32 latents for codes)"}
+                           "what": "the gradient and AdamW's m and v of every trained value (fp32 latents for codes)",
+                           "trainable": n_train, "grad_bits": 32 * n_train, "adam_bits": 64 * n_train, "muon_bits": 0,
+                           "latent_bits": 32 * n_train if quant else 0, "bits": 96 * n_train, "bytes": 12 * n_train}
     notes["E_bytes"] = {"planned": size, "encoded": len(blob), "format": prepare.format_of(blob)}
     notes["E_bytes"]["over_cap"] = len(blob) > cap
     print(json.dumps({"delta_grad": notes["delta_grad"], "E_bytes": notes["E_bytes"]}), flush=True)
     notes["seconds"] = round(time.perf_counter() - t_start, 1)
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed, notes=notes)
+    prepare.submit(Path(a.out), a.start, *([a.klass] if classes else []), blob, model, trainable, steps, changed=changed,
+                   notes=notes)
     return 0
 
 
