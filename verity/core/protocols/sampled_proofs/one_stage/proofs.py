@@ -258,16 +258,17 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
                   if accepted and strata is not None else None)
     out = []
     for s, v in zip(proof.sessions, lines):
-        ok, why = v.get("accepted") is True, str(v.get("why", ""))
+        ok = v.get("accepted") is True
         if ok and form is not None:
             return None, ("form", f"the verifier of record accepted session {s}, whose files its mirror refuses "
                                   f"(`ks_form_why`): {form}")
         if ok and population is not None:
-            ok, why = False, population
+            out.append(Finding(str(s), False, population, v.get("program_sha512"), v.get("registered") or {}, ()))
+            continue
         if ok and v.get("program_sha512") != want:
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
-        out.append(Finding(str(s), ok, why, v.get("program_sha512"), v.get("registered") or {},
+        out.append(Finding(str(s), ok, str(v.get("why", "")), v.get("program_sha512"), v.get("registered") or {},
                            proved_units(proof.public, s) if ok else ()))
     return out, None
 
