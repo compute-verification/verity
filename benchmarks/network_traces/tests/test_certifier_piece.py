@@ -6,9 +6,9 @@ and its outcome. The piece, on a serve dir whose window was the network certifie
 link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
 the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
-is the three files `network-period` read, as `composite.py` reads a piece's case; the chain opens no endpoint records,
-and its report stays in the kept run. A window request the warden didn't certify is
-rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
+is the three files `network-period` read, as `composite.py` reads a piece's case, each field of DIR's of a public kind
+or a certificate (`kind_scan`); the chain opens no endpoint records, and its report stays in the kept run. A window
+request the warden didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
@@ -45,6 +45,7 @@ sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "ben
 
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
+import kind_scan as KS  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
@@ -195,6 +196,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
+    assert KS.scan(piece)[0] == []
     seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
     raw = (piece / CP.CASE).read_bytes()
     case = json.loads(raw)
@@ -452,7 +454,7 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's warden path leaves in out/ on a served window: each step's file carrying the window's private
+    """What the chain's active-warden path leaves in out/ on a served window: each step's file carrying the window's private
     values where the chain writes them, and the report and report.md that ``chain_record.py report`` makes of them."""
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
@@ -494,6 +496,7 @@ def test_the_piece_publishes_no_count_of_the_window_and_the_guard_moves_out_what
     published = {p.relative_to(hold).as_posix(): p for p in hold.rglob("*") if p.is_file()}
     assert sorted(published) == sorted(f"chain/{rel}" for rel in CP.PUBLIC)
     assert {rel: _numbers(p) & PRIVATE for rel, p in published.items()} == dict.fromkeys(published, set())
+    assert KS.scan(hold)[0] == []
     report = json.loads(published["chain/report/report.json"].read_text())
     assert report["verdict"] == "accepted" and set(report["steps"]) == {"custody", "certificates", "n2", "scan", "lean"}
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
@@ -550,8 +553,10 @@ def _lean(tmp_path: Path, answer: dict) -> list[str]:
     return ["--lean", str(_stub_lean(tmp_path, answer))]
 
 
-#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins: the period check here is a stub)
-PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"v3c": 2}, "steps": 0}
+#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins of the kinds `kind_scan` declares: the
+#: period check here is a stub)
+PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"program": "cd" * 64},
+          "steps": 0}
 
 
 def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
@@ -567,7 +572,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, w=warden["w"]), "CR_SCAN_ARGS=--x 1") == 0
     assert (piece / "chain.log").read_text().splitlines()[-1] == (
         f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json")
-    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted", "v3c": str(v3c)}
+    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted"}
     assert f"CR_SCAN_ARGS=--class w63k4 --v3c {v3c / 'window'} --x 1" in (tmp_path / "chain-args").read_text()
     assert not (piece / "answer.json").exists()
     (v3c / "period.json").write_text(json.dumps(PERIOD))

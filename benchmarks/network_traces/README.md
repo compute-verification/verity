@@ -102,7 +102,7 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch, which opens no endpoint
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's active-warden path on that fetch, which opens no endpoint
 records or advice, its run dir and quarantine private beside the fetch, and answers with `network-period check` on the
 rows form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
 request of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer
@@ -112,7 +112,11 @@ request late, say) or a step that can't run, the piece refuses (`refused.txt`), 
 accept's profile names its placement: the certifier on the gate's host, and the chain, the period check and their
 proofs' coins on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's out/
 stays beside the fetch but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers): the report's
-other keys and the steps' summaries count the window's certified requests and outputs. The leak guard (`--public`) moves
+other keys and the steps' summaries count the window's certified requests and outputs. The kind scan (`kind_scan.py`)
+then holds every field the piece would release, the case's commitment and evidence decoded, to one of the four public
+kinds or the network certifier's certificates, and refuses the piece on any other field (a window's own number, a count
+of its requests, the advice's realized length: an advice binding's length is structure only at the registered width
+ℓ_a, `--advice-bits`). The leak guard (`--public`) moves
 any file the piece doesn't declare out of its directory. Split in two around V3c (`CERTIFIER_CHAIN_CMD` and
 `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window (`scan_zk.py --v3c`: its
 scan state and slot entries are the scan's state and prog trees), and its `period` runs the consistency check on the

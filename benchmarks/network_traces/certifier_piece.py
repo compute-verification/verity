@@ -61,7 +61,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
   report's counts or a step's summary, which are private) and the check's three input files in
-  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach
+  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700), where the
+  kind scan (`kind_scan.py`) must find every field of them one of the four public kinds or the network certifier's
+  certificate, else the piece refuses (its findings in the hold's `KIND_SCAN`), and reach
   DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
   witness, DIR declared to hold those files, the split's `CHAINED` and the logs alone (`PIECE_FILES`), moves what
   holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The
@@ -70,8 +72,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params).
   DIR/period then goes, so the case has one copy; the guard reads the files before they are hex, which it searches
   only for a binary witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal
-  the gate's check didn't pass, a build, a tool or the chain failing without a report, an input missing, the leak
-  guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing
+  the gate's check didn't pass, a build, a tool or the chain failing without a report, an input missing, a field the
+  kind scan finds, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
+  refuses, releasing nothing
   from the hold: DIR keeps only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which
   `served_verdicts.py` reads as the certifier missing. Each step it runs (the build, the chain, the check and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
@@ -143,6 +146,8 @@ CASE = "case.json"
 V3C_SCAN_CLASS = "w63k4"
 #: the split piece's chain step's accept, which its period step reads
 CHAINED = "chain.json"
+#: the kind scan's findings, which a refusing piece leaves in its hold
+KIND_SCAN = "kind-scan.txt"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
@@ -645,23 +650,38 @@ def said(got: dict) -> int:
     return 0 if got.get("verdict") == "accept" else 1
 
 
-def settle(serve_dir: Path, window: int, d: Path, limit: str,
+def kind_scan(hold: Path) -> None:
+    """`kind_scan.scan` of the hold: `NotRun` on a field of no public kind, its findings (file and key path) in the
+    hold's `KIND_SCAN`, never in the refusal, which DIR keeps."""
+    import kind_scan as KS
+    found, kinds = KS.scan(hold)
+    print(f"kind scan: {len(found)} findings, {json.dumps({k: kinds[k] for k in KS.KINDS})}", flush=True)
+    if found:
+        (hold / KIND_SCAN).write_text("".join(f"{f}\n" for f in found))
+        raise NotRun(f"the kind scan found fields of no public kind ({len(found)}) in "
+                     f"{sorted({f.file for f in found})}: DIR withheld, the piece's files and the findings "
+                     f"({KIND_SCAN}) left in {hold}")
+
+
+def settle(serve_dir: Path, d: Path, limit: str,
            step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
-    accept's profile with its `placement`, all released to DIR by the leak guard and the case written; None where the
-    split's chain step accepted. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't run."""
+    accept's profile with its `placement`, each field of every file of one public kind or a certificate (`kind_scan`),
+    all released to DIR by the leak guard and the case written; None where the split's chain step accepted. `NotRun`
+    (SIGTERM included, naming ``limit``) for a step that can't run or a field the kind scan finds."""
     was, unpacked, hold = signal.signal(signal.SIGTERM, ended(limit)), None, None
     try:
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
         (serve_dir / PRIVATE / "held").mkdir(mode=0o700, exist_ok=True)
-        hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{window}-"))
+        hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix="piece-"))
         got, unpacked = step(hold)
         if got is not None:
             if isinstance(got.get("profile"), dict):
                 got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir))}}
             (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        kind_scan(hold)
         g = guard(d, hold, unpacked, serve_dir / PRIVATE / "quarantine")
         if g not in (0, 3) or got is not None and not (d / "answer.json").is_file():
             raise NotRun(f"the leak guard failed (exit {g}): DIR withheld, the piece's files left in {hold}")
@@ -696,7 +716,7 @@ def piece(a: argparse.Namespace) -> int:
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, a.set), a.chain_cmd)  # noqa: E731
         return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
     try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step)
+        got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
         return refuse(d, str(e))
     return said(got)
@@ -724,13 +744,13 @@ def chain_step(a: argparse.Namespace) -> int:
     try:
         sets = v3c_scan(v3c, a.scan_class, a.set)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, sets), a.chain_cmd)  # noqa: E731
-        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT",
+        got = settle(serve_dir, d, "CERTIFIER_TIMEOUT",
                      lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None))
     except NotRun as e:
         return refuse(d, str(e))
     if got is not None:
         return said(got)
-    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "v3c": str(v3c)}, indent=1, sort_keys=True) + "\n")
+    (d / CHAINED).write_text(json.dumps({"chain": "accepted"}, indent=1, sort_keys=True) + "\n")
     print(f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
           flush=True)
     return 0
@@ -752,7 +772,7 @@ def period_step(a: argparse.Namespace) -> int:
         return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
                       case=v3c_case(v3c))
     try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step)
+        got = settle(serve_dir, d, "CERTIFIER_PERIOD_TIMEOUT", step)
     except NotRun as e:
         return refuse(d, str(e))
     return said(got)
