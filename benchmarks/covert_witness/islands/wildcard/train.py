@@ -43,12 +43,12 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
 - `--ia3` with `--set` naming wk, wv and w_up: IA3, a trained scale per output channel of each matrix (keys, values
   and MLP hidden units), E as encode_lora2's DoRA magnitudes over zero factors, which decode to exactly diag(l)·W.
 - `--grow 1 --adapter r [--adapter-z q]`: a bottleneck adapter after the last block, as a grown block with zero
-  attention and r live MLP hidden units (SwiGLU down to r, w_down back up, both trained), the r units optionally
-  handed to w_down at q bits each.
+  attention and r live MLP hidden units (SwiGLU down to r, w_down back up, both trained, the step reading only their
+  live slices), the r units optionally handed to w_down at q bits each (`--z-rotate`: in a randomized-DCT basis).
 - `--prefix P` with a `--set` of every block's prefix_k, prefix_v and prefix_gate: prefix tuning, P learned key/value
   pairs in every block behind a zero per-head gate. `--block-adapter r` with a `--set` of every block's adapter_norm,
   adapter_down and adapter_up: Pfeiffer's bottleneck adapter of r units after every block's MLP, its up-projection from
-  zero, its units optionally handed up at q bits each (`--block-adapter-z q`). Both are model.py's extensions (`prefix`, `adapter`), which must be in the measurement commit; E is the model
+  zero, its units optionally handed up at q bits each (`--block-adapter-z q`, rotated with `--z-rotate`). Both are model.py's extensions (`prefix`, `adapter`), which must be in the measurement commit; E is the model
   with them (`encode_model`).
 
 Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
@@ -963,26 +963,33 @@ def encode_ia3(theta: dict, scales: dict, full: dict) -> bytes:
     return prepare.encode_lora2(fac, 8, "f32", mags, full)
 
 
-def bottleneck(net, params: dict, tuned: list[str], r: int, zbits: int, method: str) -> None:
-    """Keep a grown adapter block's dead parts at zero (the gradients of w_gate's and w_up's rows from r on, and of
-    w_down's columns from r on, are zeroed, and AdamW moves no zero entry with a zero gradient), and with `zbits` hand
-    its r live hidden units to w_down as a code (zero for the dead units, a constant)."""
+#: The seed of --z-rotate's randomized DCT for the adapters' unit codes.
+Z_ROTATE_SEED = 4099
+
+
+def bottleneck(net, params: dict, tuned: list[str], r: int, zbits: int, method: str, rotate: bool = False) -> None:
+    """Run a grown adapter block's MLP on its live parts alone (w_gate's and w_up's first r rows, w_down's first r
+    columns), so the step casts and multiplies only those and the dead parts get no gradient (AdamW leaves a zero entry
+    with a zero gradient at zero), and with `zbits` hand its r hidden units to w_down as a code (`rotate`: in a
+    randomized-DCT basis)."""
     j = GROWN["start"]
     live = re.compile(rf"blocks\.{j}\.(mlp_norm|(w_gate|w_up|w_down)\.weight)")
     if method != "adamw" or GROWN["config"]["n_layer"] != j + 1 or not all(live.fullmatch(n) for n in tuned):
         raise SystemExit(f"wildcard: --adapter trains block {j}'s mlp_norm, w_gate, w_up and w_down (one grown block, "
                          f"AdamW, which leaves a zero entry with zero gradient at zero)")
-    for n in tuned:
-        if n.endswith(("w_gate.weight", "w_up.weight")):
-            params[n].register_hook(lambda g: torch.cat([g[:r], torch.zeros_like(g[r:])]))
-        elif n.endswith("w_down.weight"):
-            params[n].register_hook(lambda g: torch.cat([g[:, :r], torch.zeros_like(g[:, r:])], 1))
+    blk = net.inner.blocks[j]
+    for m in (blk.w_gate, blk.w_up):
+        m.forward = lambda x, m=m: F.linear(x, m.weight[:r])
+    blk.w_down.forward = lambda x, m=blk.w_down: F.linear(x, m.weight[:, :r])
     if zbits:
-        def pre(m, inp):
-            x = inp[0]
-            return (torch.cat([Coded.apply(x[..., :r], zbits, zbits, r, 0, False, 0), torch.zeros_like(x[..., r:])],
-                              -1),)
-        net.inner.blocks[j].w_down.register_forward_pre_hook(pre)
+        blk.w_down.register_forward_pre_hook(
+            lambda m, inp: (Coded.apply(inp[0], zbits, zbits, r, Z_ROTATE_SEED, rotate, 0),))
+
+
+def flop_budget(a) -> float:
+    """--budget-fraction of the tier's training FLOPs (`prepare.budget`: the search budget, or the long tier's
+    LONG_C0 x the start's C0 under CW_TIER=long)."""
+    return a.budget_fraction * prepare.budget(a.start)["train_flops"]
 
 
 def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
@@ -991,11 +998,12 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     gains = [n for n in tuned if params[n].ndim == 1]
     opts, extra, factors, scales = [], 0, {}, {}
     if GROWN.get("adapter"):
-        bottleneck(net, params, tuned, GROWN["adapter"], a.adapter_z, a.method)
+        bottleneck(net, params, tuned, GROWN["adapter"], a.adapter_z, a.method, a.z_rotate)
     if a.block_adapter_z:
         for blk in net.inner.blocks:
             blk.adapter_up.register_forward_pre_hook(
-                lambda m, inp: (Coded.apply(inp[0], a.block_adapter_z, a.block_adapter_z, a.block_adapter, 0, False, 0),))
+                lambda m, inp: (Coded.apply(inp[0], a.block_adapter_z, a.block_adapter_z, a.block_adapter,
+                                            Z_ROTATE_SEED, a.z_rotate, 0),))
     if a.ia3:
         if a.lora_rank or a.confine or GROWN or not mats:
             raise SystemExit("wildcard: --ia3 scales the output channels of --set's matrices of θ; it takes no "
@@ -1095,7 +1103,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         calib_tokens = a.micro * prepare.EVAL_CTX
         reserve += prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": calib_tokens}])["flops"]
         reserve += code_fwd * calib_tokens
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // per_step)
+    n_steps = int((flop_budget(a) - reserve) // per_step)
     if n_steps < 1:
         raise Skip(f"wildcard {a.method}: the budget leaves no step after the line search's reserve")
     base = [[g["lr"] for g in o.param_groups] for o, _ in opts]
@@ -1191,7 +1199,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
                                       "isn't one, so only the submission is scored"}
         if GROWN.get("adapter"):
             j, r = GROWN["start"], GROWN["adapter"]
-            info["grown"]["adapter"] = {"live_units": r, "z_bits": a.adapter_z, "dead_entries_nonzero": int(sum(
+            info["grown"]["adapter"] = {"live_units": r, "z_bits": a.adapter_z, "z_rotate": a.z_rotate,
+                                        "dead_entries_nonzero": int(sum(
                 int((params[f"blocks.{j}.{m}.weight"][r:] != 0).sum()) for m in ("w_gate", "w_up"))
                 + int((params[f"blocks.{j}.w_down.weight"][:, r:] != 0).sum())
                 + sum(int((params[f"blocks.{j}.{m}.weight"] != 0).sum()) for m in ("wq", "wk", "wv", "wo")))}
@@ -1264,7 +1273,7 @@ def train_kfac(a, net, rec, theta, params, tuned, data):
     moment_flops = sum(2 * tokens * (params[n].shape[0] ** 2 + params[n].shape[1] ** 2) for n in mats)
     rounds = a.kfac_rounds
     reserve = rounds * probe_flops(a, rec, trainable, len(a.etas) + 1)
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // (per_step + moment_flops)) // rounds
+    n_steps = int((flop_budget(a) - reserve) // (per_step + moment_flops)) // rounds
     if n_steps < 1:
         raise Skip("wildcard kfac: the budget leaves no accumulation step after the line searches' reserve")
     steps, snaps, searches = [], [], []
@@ -1385,7 +1394,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     mic = max(T, a.cached_micro // T * T) if seq else a.cached_micro
     trainable = {"full": tuned}
     fill_tok = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1}])["flops"] + 2 * V * d
-    n_pos = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (fill_tok + a.epochs * per_pos))
+    n_pos = int(flop_budget(a) // (fill_tok + a.epochs * per_pos))
     chunks = a.snaps + 1
     seqs = max(chunks, n_pos // prepare.EVAL_CTX) // chunks * chunks
     n_pos = seqs * prepare.EVAL_CTX
@@ -1603,6 +1612,8 @@ def main() -> int:
                          "(`extend`); E is the model with them (`encode_model`)")
     ap.add_argument("--block-adapter-z", type=int, default=0,
                     help="hand every --block-adapter's units to its up-projection as a code of this many bits each")
+    ap.add_argument("--z-rotate", action="store_true",
+                    help="code --adapter-z's and --block-adapter-z's units in a randomized-DCT basis, as the cut codes do")
     ap.add_argument("--confine", action="store_true",
                     help="after every step, project each trained wo and w_down's update onto the p<keep> cut's span, so "
                          "the whole effect lies in what the cut hands on; everything trained must be in the block "
@@ -1656,6 +1667,8 @@ def main() -> int:
         raise SystemExit("wildcard: --adapter-z codes an --adapter's live units, r a multiple of 8 (whole bytes)")
     if a.block_adapter_z and (not a.block_adapter or a.block_adapter % 8):
         raise SystemExit("wildcard: --block-adapter-z codes a --block-adapter's units, r a multiple of 8 (whole bytes)")
+    if a.z_rotate and not (a.adapter_z or a.block_adapter_z):
+        raise SystemExit("wildcard: --z-rotate rotates an --adapter-z or --block-adapter-z code")
     ext = {k: n for k, n in (("prefix", a.prefix), ("adapter", a.block_adapter)) if n}
     if len(ext) > 1 or ext and (a.grow or a.lora_rank or a.ia3 or a.suite):
         raise SystemExit("wildcard: --prefix and --block-adapter are each their own update (no --grow, --lora-rank, "
