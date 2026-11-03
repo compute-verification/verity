@@ -473,6 +473,16 @@ def test_a_bias_extension_at_zero_biases_reproduces_thetas_function_exactly(monk
             prepare.decode(th, prepare.encode_model({**small, "bias": bad}, {}), device="cpu")
 
 
+def test_every_encoder_is_one_the_harness_and_capture_wrap():
+    """Each of prepare's `encode_*` is in te_core.cw's ENCODERS, which the harness wraps to keep each checkpoint's E, and
+    in te_core.capture.script's, whose recording leaves the encoding out, so no format's encoding is traced as training."""
+    from te_core import cw
+    from te_core.capture import script
+
+    names = {n for n in vars(prepare) if n.startswith("encode_") and callable(getattr(prepare, n))}
+    assert names == set(cw.ENCODERS) == set(script._ENCODERS)
+
+
 def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_part(tmp_path, monkeypatch):
     lengths = (41, 9, 2, 25)
     (tmp_path / "parts").mkdir()
