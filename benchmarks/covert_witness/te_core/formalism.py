@@ -884,9 +884,10 @@ def traced_products(p: dict | None, block: dict | None) -> dict | None:
     gathered rows, which it would read as this te_core's, 4.12.1's kept them at the console's k only, though the trace
     keeps rows at each k of the dial (`at`, which `classified_at` reads), te_core 4.8's kept the trace's order unknown,
     which it never measures, and before 4.10 an upcast operand's product was an expansion. Taken again, rows captured
-    before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered` are measured on
-    their system, at each k their trace keeps rows at. Products a record has of its own (no `kinds_macs`), and a block
-    with no trace rows, stand."""
+    before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`), rows captured before `ELEMENTWISE_FROM` that no
+    capture looked at for products written elementwise say so (`FRESH_UNCHECKED`), and the rest are measured on their
+    system, at each k their trace keeps rows at. Products a record has of its own (no `kinds_macs`), and a block with
+    no trace rows, stand."""
     if p is None or block is None or "kinds_macs" not in p:
         return p
     per = sum(r["count"] * r["macs"] for r in block["rows"])
