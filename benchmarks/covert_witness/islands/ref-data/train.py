@@ -92,6 +92,19 @@ def gather_selects(n: int, bits: int = 32, chunk_bits: int = 10) -> int:
     return full * tree(chunk, chunk_bits) + (tree(r, chunk_bits) if r else 0) + tree(full + (r > 0), bits - chunk_bits)
 
 
+def pass_flops(rec: dict, trainable: dict, lookup: int, op: str, ctx: int, n_tokens: int) -> int:
+    """The FLOPs the harness counts for a pass of n_tokens: prepare.train_flops, plus what it leaves out. `lookup` is a
+    trained table's token lookup (2 x gather_selects(V) x d a token, te_core's gather_macs; 0 for θ's own table), in
+    every pass. Attention: prepare prices the causal half of the score matrix (attention_flops), the harness the whole
+    of it, with a backward of 2.5x its forward, so one more attention_flops a layer in the forward and three more a
+    layer the backward reaches."""
+    tf = prepare.train_flops(rec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])
+    first = tuple(tf["lowest_trained"] or ()) if op == "train" else ()
+    n_layer = rec["config"]["n_layer"]
+    reached = sum((layer, 1) >= first for layer in range(1, n_layer + 1)) if first else 0
+    return tf["flops"] + (lookup + prepare.attention_flops(rec, ctx) * (n_layer + 3 * reached)) * n_tokens
+
+
 class Muon(torch.optim.Optimizer):
     """Muon: momentum, Newton-Schulz orthogonalized. `scale` "shape" is the seed's sqrt(max(1, rows/cols)); "rms" is
     0.2 sqrt(max(rows, cols)), an update RMS of 0.2 like AdamW's, so its rate is on AdamW's scale."""
@@ -355,13 +368,10 @@ def main() -> int:
     tokens = a.batch * CTX
     extra = sum(ns_flops(tuple(params[n].shape), a.ns_steps) for n in mats) if a.mat_opt == "muon" else 0
 
-    # te_core prices a token lookup of an updated table as the gather circuit's multiplexers (gather_macs), which
-    # prepare.train_flops leaves out: a trained tied embedding adds that to every pass
     lookup = 2 * gather_selects(params[embed].shape[0]) * params[embed].shape[1] if embed in trained else 0
 
     def flops(op: str, ctx: int, n_tokens: int) -> int:
-        return prepare.train_flops(mrec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])["flops"] \
-            + lookup * n_tokens
+        return pass_flops(mrec, trainable, lookup, op, ctx, n_tokens)
 
     step_long = flops("train", CTX, tokens) + extra
     step_short = flops("train", a.short_ctx, tokens) + extra
