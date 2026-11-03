@@ -58,8 +58,15 @@ DOC_TERMS = {
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
-    "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
-                                                             "registered compiler turns into the execution block",
+    "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
+                                                             "the registered compiler turns into the execution block",
+    "registered work": "registered circuit (D)",
+    "the prover's node, machine, host or site, a machine the prover doesn't control, prover-controlled, the prover system":
+        "the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware "
+        "(\"prover\" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover)",
+    "onsite deployment, remote deployment": "composite protocol (onsite or remote, the Lean's `Composite`)",
+    "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
+                                       "theorem's hypothesis stays a premise)",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
@@ -82,6 +89,10 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?"
+                       rf"|prover{_SPACE}systems?|prover-controlled|prover{_SPACE}runs{_SPACE}or{_SPACE}hosts"
+                       rf"|prover's{_SPACE}(?:own{_SPACE})?(?:nodes?|machines?|hosts?|sites?|datacenters?|servers?|GPUs?|hardware)"
+                       rf"|prover{_SPACE}(?:doesn't|does{_SPACE}not){_SPACE}control|(?:hosts?|machines?){_SPACE}the{_SPACE}prover{_SPACE}controls"
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
@@ -358,6 +369,21 @@ def test_the_doc_scan_reads_each_form():
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
         ("b.md", 8, "thread block")]
+
+
+def test_the_doc_scan_reads_the_party_terms():
+    """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
+    prover, a theorem's premise, a deployment record, `verity.core.deploy` and a registered workload stay."""
+    docs = {
+        "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
+                "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
+                "premise and the card premise. Flock's prover, a cheating prover, a theorem's premise, a deployment record,"
+                " `verity.core.deploy` and a registered workload stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "prover runs or hosts"), ("a.md", 1, "prover doesn't control"), ("a.md", 2, "prover's node"),
+        ("a.md", 2, "prover-controlled"), ("a.md", 2, "prover system"), ("a.md", 2, "remote deployment"),
+        ("a.md", 2, "registered work"), ("a.md", 2, "named premise"), ("a.md", 3, "card premise")]
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
