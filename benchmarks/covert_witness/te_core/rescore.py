@@ -272,7 +272,7 @@ def compare_markdown(c: dict) -> str:
     for r in c["rows"]:
         q, qa, x, v, va = r["measured"], r["analysis"], r["ratio"], r["cell"], r["cell_analysis"]
         lines.append(
-            f"| {r['id'][-12:]}@{r['checkpoint_step']} | {r['start']} | {r['direction']}/{r['mechanism']} | "
+            f"| {r['id']}@{r['checkpoint_step']} | {r['start']} | {r['direction']}/{r['mechanism']} | "
             f"{_g(x['sigma'])} | {_g(x['affected_share'])} | {_g(x['w'])} | {_g(x['a_bits'])} | "
             f"{_g(q['tail_share'])}, {_g(qa['tail_share'])} | {_g(x['u1_bits'])} | {_g(x['delta_bits'])} | "
             f"{_g(x['delta_grad_bits'])} | {_g(x['gates'])} | {_g(v['rho'])} ({_g(v['x0'])}, {_g(v['s_star'])}) | "
