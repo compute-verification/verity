@@ -2,9 +2,9 @@
 Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
-  (the agreed rule: `{"law": "subset", "k"}` or `{"law": "stratified" | "work", "k"}`; `{"law": "bernoulli", "p":
-  "NUM/DEN"}` decodes, and the protocol refuses it, `paramsCovered`, as the sampled audit's soundness statement doesn't
-  cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
+  (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
+  "k"}`; the protocol refuses `bernoulli` at `0 < p < 1`, `paramsCovered`, as the sampled audit's soundness statement
+  doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
   `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
@@ -392,12 +392,12 @@ def publicJson (x : Public) : Json :=
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
       | none => Json.null)]
 
-/-- **The parameters, refused outside the sampled audit's soundness statement**: `paramsOfJson`, and a `bernoulli` law
-refused (`Draw.bernoulli`), as the stream's run refuses it. -/
+/-- **The parameters, refused outside the sampled audit's soundness statement**: `paramsOfJson`, and a `bernoulli` law at
+`0 < p < 1` refused (`Draw.countVaries`), as the stream's run refuses it. -/
 def paramsCovered (j : Json) : V Params := do
   let p ← paramsOfJson j
-  if Draw.bernoulli p.verifier.law then
-    throw "the law is bernoulli, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
+  if Draw.countVaries p.verifier.law then
+    throw "the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
   return p
 
 /-- **The evidence, refused outside the sampled audit's soundness statement** (the stream's run refuses its closure map,

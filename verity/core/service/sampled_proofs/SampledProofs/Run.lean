@@ -6,12 +6,12 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
   (`Registration.check`) against the challenger's copies under the law the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), a rule or law the sampled audit's soundness statement doesn't
-  cover (`everyUnit`: `rule-all`; `Draw.bernoulli`: `bernoulli`), a program and query whose population is not the
-  registration's units in order (`Slots.popOk`: `population-order`), and the receipt (`registration.receipt`);
+  (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`Draw.countVaries`: `shapes`), a
+  program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
+  the receipt (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work draw widened by one is outside the
-  statement); the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
-  population, `Select.resolve`); the coins are what the run's source says (`coinsHold`, code `coins`): from the
+  sampled audit's soundness statement); the draw of record on the bytes of the challenger's coins (`Select.select`,
+  under the rule over the program's population, `Select.resolve`); the coins are what the run's source says (`coinsHold`, code `coins`): from the
   verifier's own coins, no evidence; from the auditor's challenger, evidence (`coins`) that the bytes it read are
   exactly the coins the session the ledger opens for the registration's window (the verifier's `windowRoot`) released
   after the registration's digest, every one read and each opening checked against the challenger's commitment
@@ -78,13 +78,6 @@ def receipt (record : Json) (challenger received : String) : V Json := do
   return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
     ("verifier", Json.str challenger), ("received", Json.str received)]
 
-/-- `service.uncovered`'s `rule-all`: the `All` rule, which proves every unit without drawing from the coins. The sampled
-audit's soundness statement covers a draw by `Draw.drawUnits` on the challenger's coins, so the run refuses it; a Spec
-that proves every unit states the rate law `rate:1/1`, which draws `subset:N`. -/
-def everyUnit : Select.Rule → Bool
-  | .all => true
-  | .law _ => false
-
 /-- The draw's coins are what its source says: a draw from the verifier's own coins carries no evidence (`null`), and
 one from the auditor's challenger carries evidence that holds of the bytes it read (`Challenger.coinsReason`, after the
 registration's digest, for the window whose open root `window` the verifier holds), so missing evidence, or a verifier
@@ -108,8 +101,7 @@ def run (i : Input) : V Json := do
   let v := { v with law }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
-  if everyUnit rule then return refused "register" #["rule-all"]
-  if Draw.bernoulli law then return refused "register" #["bernoulli"]
+  if Draw.countVaries law then return refused "register" #["shapes"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable

@@ -111,9 +111,9 @@ one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds
 its `draw` is null when the registration was not sampled. `Outcome.record` is its SHA-512.
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline. After R1 to R7, `register` refuses a selection the sampled audit's soundness statement doesn't
-cover (`uncovered`): the `All` rule (`rule-all`) and a `bernoulli` sampling design (`bernoulli`); `select` refuses a closure
-map (`closure`).
+check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
+at `0 < p < 1`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't
+cover either.
 """
 from __future__ import annotations
 
@@ -226,9 +226,7 @@ class Value:
 
 @dataclass(frozen=True)
 class All:
-    """Every proof block is proved, drawing no coins. A `Stream` refuses it at `register` (`rule-all`, `uncovered`): the sampled
-    audit's soundness statement covers draws from the challenger's coins. A Spec that proves every proof block states
-    `Law("rate:1/1")`, which samples `subset:N`."""
+    """Every proof block is proved."""
 
     def to_json(self) -> dict[str, Any]:
         return {"rule": "all"}
@@ -383,24 +381,32 @@ class Spec:
 
 
 @dataclass(frozen=True)
-class Terms:
-    """The outcome's named error terms: `sampling`, the profile's delta. The proof's and binding's terms come with the
-    soundness composition (the joint note's §6 step 13)."""
+class Exhaustive:
+    """Every one of `units` proof blocks was proved, and the verifier accepted them."""
 
-    sampling: float
+    units: int
+
+
+@dataclass(frozen=True)
+class Terms:
+    """The outcome's named error terms: `sampling`, the profile's delta (None for an exhaustive selection). The proof's and
+    binding's terms come with the soundness composition (the joint note's §6 step 13)."""
+
+    sampling: float | None
 
 
 @dataclass(frozen=True)
 class Outcome:
     """A registration's final outcome. `verdict.codes` is empty when accepted, and otherwise the one visible symbol
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
-    sample. `public`: the check's public outputs, as the verifier
+    sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
     of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
     delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
 
     accepted: bool
     verdict: Verdict
     profile: IntegrityProfile | None
+    exhaustive: Exhaustive | None
     terms: Terms
     public: Mapping[str, Any]
     record: str
@@ -602,16 +608,15 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     return {"law": "subset", "k": k}
 
 
-def uncovered(rule: Selection, law: Mapping[str, Any]) -> str | None:
-    """Why the sampled audit's soundness statement doesn't cover the selection `rule` with its `law` (a `selection_law`),
-    as the code `register` refuses it with, or None: the `All` rule (`rule-all`), which proves every proof block without
-    drawing from the coins, and a `bernoulli` sampling design at any p (`bernoulli`), whose drawn count varies. The
-    statement covers `subset`, `stratified` and `work` samples drawn from the challenger's coins. The Lean verifier's
-    `Run.everyUnit` and `Draw.bernoulli` are this. A Spec that wants every proof block states `rate:1/1`, and one that wants
-    Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
-    if isinstance(rule, All):
-        return "rule-all"
-    return "bernoulli" if law.get("law") == "bernoulli" else None
+def count_varies(law: Mapping[str, Any]) -> bool:
+    """Whether `law` (a `selection_law`) draws a count that varies from draw to sample, so the sessions of one registration
+    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sample's closure varies too, and `Stream.select`
+    refuses a closure map (`closure`). The Lean verifier's `Draw.countVaries` is this. A Spec
+    that wants Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
+    if law.get("law") != "bernoulli":
+        return False
+    num, _, den = str(law.get("p")).partition("/")
+    return D.digits(num) and D.digits(den) and 0 < int(num) < int(den)
 
 
 def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
@@ -1367,8 +1372,8 @@ class Stream:
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
         samples none or more than N proof blocks (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
-        when the soundness statement doesn't cover the selection (`rule-all`, `bernoulli`: `uncovered`), when the
-        program's proof blocks read stratum by stratum are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
+        when the sampling design samples a count that varies (`shapes`, `count_varies`), when the program's proof blocks read stratum by stratum
+        are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1396,8 +1401,8 @@ class Stream:
                 earlier = self._earlier(record, supplied)
                 v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             work_table, registered, supplied, pinned, self.binding, schemas, window_root, held)
-                if v.ok and (code := uncovered(self.spec.selection, law)) is not None:
-                    v = _refuse(code, {"law": law, "rule": self.spec.selection.to_json()}).verdict
+                if v.ok and count_varies(law):
+                    v = _refuse("shapes", {"law": law}).verdict
                 if v.ok and not P.in_order(program, self.spec.check.query, n):
                     v = _refuse("population-order", {"population": n}).verdict
                 got.update(program=program, law=law, earlier=earlier)
@@ -1481,12 +1486,12 @@ class Stream:
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's sampling design (`select_draw`). A `closure`, the challenger's closure map, is refused before any
-        coin is read (`closure`, as the Lean's `Run.run` refuses it): a work sample it widens proves a set whose size varies
-        with the sample, which the sampled audit's soundness statement doesn't cover. The draw of
-        record is the verifier's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
-        draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
-        closure map (before any coin is read), the two verifiers drawing differently
+        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). A `closure`,
+        the challenger's closure map, is refused before any coin is read (`closure`, as the Lean's `Run.run` refuses it): a
+        work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
+        statement doesn't cover. The draw of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
+        bytes of the coins this draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before
+        (nothing redraws), a closure map (before any coin is read), the two verifiers drawing differently
         (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
                               "registration": _registration_token(registration)}
@@ -1679,11 +1684,13 @@ class Stream:
         if halt is not None:
             body["halt"] = dict(halt)
         accepted = symbol == ACCEPT
+        exhaustive = isinstance(self.spec.selection, All)
         e.outcome = Outcome(
             accepted=accepted,
             verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit, halt)}),
-            profile=A.profile(reg.record, draw.draw, self.delta) if accepted else None,
-            terms=Terms(self.delta),
+            profile=A.profile(reg.record, draw.draw, self.delta) if accepted and not exhaustive else None,
+            exhaustive=Exhaustive(len(draw.draw["units"])) if accepted and exhaustive else None,
+            terms=Terms(None if exhaustive else self.delta),
             public=dict(public),
             record=_sha512(body))
         self._records.append(body)
@@ -1701,7 +1708,7 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
             "verdicts": {k: v.get("accepted") for k, v in audit["verdicts"].items()}}
 
 
-__all__ = ["ACCEPT", "All", "Check", "Draw", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
+__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
            "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
            "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
            "select_draw", "selection_law"]

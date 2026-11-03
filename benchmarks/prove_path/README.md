@@ -165,8 +165,8 @@ match is refused. It is never a soundness gap.
 
 The unit closes the named gap: the advice is never opened, and the verifier never recompiles.
 
-- **Selection `rate:1/1`.** Each registration has one compile unit, always proved: its Spec's selection draws it as
-  `subset:1` whatever the coins, and its proof goes through the ZK server like every unit's.
+- **Selection All.** Each registration has one compile unit, always proved. Its Spec's selection is `service.All`, so it is
+  never sampled. It reads no coins, and its proof goes through the ZK server like every unit's.
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);

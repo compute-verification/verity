@@ -1,6 +1,6 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on a certifier-serve run: each
 execution phase committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's
-`Stream`), selected (Selection `rate:1/1`: its one proof block, whatever the coins), its proof block (`NetworkLinkWindow_v5`, both ends'
+`Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkLinkWindow_v5`, both ends'
 head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by
 `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the
 verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
@@ -161,7 +161,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
     and no sync declared.
 
     With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
-    check takes it: each execution phase registered (``digest``), selected (Selection `rate:1/1`) and decided before the next
+    check takes it: each execution phase registered (``digest``), selected (Selection All) and decided before the next
     by `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
     if warden:
         lw, plan, certified, refused = warden_link(run)
@@ -191,7 +191,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
             expect=int(word == 0b11 and others), statement=None))
     rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
     if clock is not None:
-        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._window_coins, clock=clock)
+        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
         previous = None
         for x in out:
             reg = lw.register(st, lw.registration(x.opening, previous))
@@ -486,7 +486,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
-                       coins=cs._window_coins, clock=time.monotonic)
+                       coins=cs._no_coins, clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
     env = {**firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}

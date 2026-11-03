@@ -29,7 +29,7 @@
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_zk.py prove`'s (Selection `rate:1/1`: every link-window's one unit proved) or a sampled draw's
+  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
   the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
@@ -166,7 +166,7 @@ def _json(path) -> dict | None:
 def subset_bound(n: int, k: int, delta: float) -> int | None:
     """The most incorrect proof blocks an accepted uniform sample of k of n proof blocks hides except with probability
     δ: the integrity profile's count bound (`Stratified.count_bound`), the largest b with C(n − b, k) / C(n, k) ≥ δ.
-    Every block drawn (k = n, `rate:1/1`) is 0."""
+    Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
     from verity.core.protocols.profile import Stratified

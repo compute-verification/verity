@@ -18,7 +18,7 @@ Each case states the bits it bounds.
 - **data vs padding (CLOSED to timing).** For a fixed (s, egress length) the cell kinds and buckets don't move with
   the server's send timing: 0 bit from timing.
 - **content (tie-bound).** The client reads the relayed bytes unchanged, so the content is pinned only by the
-  all-frames tie (selection `rate:1/1`) and batch invariance; two responses of one length give one wire shape.
+  all-frames tie (selection All) and batch invariance; two responses of one length give one wire shape.
 - **the lane (COUPLED).** A fail ends the connection at its fail bucket, freeing the lane early, so the fail cell also
   shifts the next queued connection's admission — no entropy beyond the charged fail term, but it reaches another
   client.
@@ -173,7 +173,7 @@ def test_the_cell_kinds_and_buckets_dont_move_with_the_servers_send_timing():
 def test_the_client_reads_the_relayed_bytes_so_content_is_pinned_only_by_the_all_frames_tie():
     """Two responses of the same length give the client different bytes in exactly the same (bucket, kind) cells, and
     the audit accepts both (it checks the schedule, not which bytes). So the content is bound only by the all-frames
-    egress tie at selection `rate:1/1`; if kernels aren't batch invariant the server chooses these bytes by batching, so the
+    egress tie at selection All; if kernels aren't batch invariant the server chooses these bytes by batching, so the
     bound's content term (ε·egress bits at δ) rests on batch-invariant kernels (a named assumption)."""
     one = bytes(range(256))
     two = bytes((255 - x) for x in range(256))

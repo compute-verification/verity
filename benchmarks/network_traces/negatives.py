@@ -36,11 +36,11 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   (`certificate.Issuer`, which lists the link-window in `refused`), so the window has no certified record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
-  row of the warden's ingress link-window at selection `rate:1/1`, `io_request.reference`: each lane's cells, read from its
+  row of the warden's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
   carry-in, are its connection's pads and canonical id-request cells, leaving its carry-out, on the verifier's lanes
   from the advice's prompt lengths and the warden's release; its verdict on every window, under the advice's digest
   and with the release giving `received`, is the tie, `tie_service.IoTieVerdict`),
-  ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection `rate:1/1` over one egress link-window,
+  ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection All over one egress link-window,
   `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows of sampled ids open at
   each bucket's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0 and
   the warden's admissions: a `PAD` or the `END` on its request's stream, B zero bytes in a slot no connection holds,
@@ -1418,13 +1418,13 @@ def tie_runs(src: Path, ids: Path | None = None) -> dict:
 
 def n2(run: Path, clock=time.monotonic) -> dict:
     """N2's verdict on every execution phase of the run's `certified.jsonl`, through the proof system's stream as
-    `certifier_serve.check` takes it (Selection `rate:1/1`, the Lean audit, `unproved_outcome`: nothing is proved, so the
+    `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
     link-window's codes (`codes`), and their union. The link stops at the first window without both certified records,
     whose code is `ISSUER_REFUSED` when the certifier listed it as refused, else ``no-certified-record``."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._window_coins, clock=clock)
+    st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
     certified, refused = cs.read_certified(run / "certified.jsonl")
     rows, previous = [], None
     for w in range(plan["windows"]):
