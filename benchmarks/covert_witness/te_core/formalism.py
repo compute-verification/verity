@@ -83,11 +83,15 @@ most that. The kinds:
   premise on the partition (`P_CELL`; the whole-cell figure is the sensitivity fresh_cell). io_bound's cap has the
   chain order's constant (its premise P-chain), which is the reference circuit's order by construction (`ORDER`:
   te_core.gates prices a GEMM MAC as a dot cell adding into one running 32-bit sum), so the term is measured on every
-  run's products. Λ proved is taken on the best subset of the products (io_bound's `bound`: a product whose
-  whole-making chain is too short would void it for the whole step), the dropped products still in |C|, and `inputs`
-  names how many it dropped and their share of the counted MACs (`subset`); where no subset has a root the term is
-  unmeasured (`FRESH_VOID`), never 0. It is unmeasured, with io_bound's chain figure in `inputs`, also for a circuit
-  that declares a tree (none does), and on a record with no product rows. A record with an op log and no product
+  run's products. Λ proved reads the step's whole-making system (io_bound's `whole_chain_of`: every product with both
+  operands affected, a class by its chain length, at its least fixed point), one factor for every subset of the
+  products; the figures are the best subset's (io_bound's `bound`), the dropped products still in |C|, and `inputs`
+  names how many it dropped and their share of the counted MACs (`subset`). Where the system has no fixed point the
+  term is unmeasured (`FRESH_VOID`), never 0, and so it is where an op breaks P-match, on a trace whose product rows
+  predate the system (`FRESH_RETRACE`). Products that come without one (a model's, a hand-written set) take io_bound's
+  one-class rule, named in `inputs` (`ONE_CLASS`). It is unmeasured, with io_bound's chain figure in `inputs`,
+  also for a circuit that declares a tree (none does), and on a record with no product rows. A record with an op log
+  and no product
   rows (a ledger row traced before 4.8) has its log's
   (`products_of_ops`: dims, widths, θ or attention's where the log's class says so), but a log doesn't keep whether an
   operand is fresh (`LOG_UNKNOWN`), so the term is unmeasured there with the share of MACs whose freshness is unknown;
@@ -590,9 +594,11 @@ RESTS_ON = {
     "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products "
                       "of two fresh operands, amortized over the partition, on the best subset of them (every "
                       "product still in |C|), each operand and partial sum at its "
-                      "passed width, given its premises on the reference circuit, P-width and P-chain (each output "
-                      "entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and "
-                      f"the standard algorithm; {_CELL}",
+                      "passed width, given its premises on the reference circuit, P-width extended to every value "
+                      "a block reads while making operands whole (attention's and the optimizer's included), P-match "
+                      "(elementwise steps map operand entries one to one, so fan-out is at most fan-in; checked on "
+                      "the traced step) and P-chain (each output entry summed along one chain of whole dot cells, as "
+                      f"te_core.gates prices a GEMM), P-share and the standard algorithm; {_CELL}",
     "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's "
              "path in segments (the trace's entries) and the matrix-product tiles of the record's op log, "
              "weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading "
@@ -639,9 +645,19 @@ PRODUCTS_FROM = "4.8"
 FRESH_UNMEASURED = ("unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, "
                     f"and a recorded program's trace has them from te_core {PRODUCTS_FROM} on)")
 #: why the fresh-products kind is unmeasured where every subset of the counted products voids the proved Λ
-FRESH_VOID = ("unmeasured: no subset of the counted products has a proved bound at this k: each has an operand made "
-              "whole by a chain, and even the longest such chain is too short (r = k/(3 K^2 b) past 1/4, "
-              "te_core.io_bound.whole_chain), so Λ has no root; a void is never a measured 0")
+FRESH_VOID = ("unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound."
+              "whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, "
+              "and that compounds), so Λ has no proved value on any subset; a void is never a measured 0")
+#: the first te_core whose capture writes the whole-making system's rows (each product's `fed` and `P`, the trace's
+#: `p_match`)
+SYSTEM_FROM = "4.12"
+#: why the fresh-products kind is unmeasured on a trace captured before `SYSTEM_FROM`
+FRESH_RETRACE = (f"unmeasured: the trace's product rows predate te_core {SYSTEM_FROM}, so they don't say which chains "
+                 "make each operand whole (te_core.capture.products' fed), and the one-class rule they'd fall back on "
+                 f"misses attention's chains; retrace the run with te_core {SYSTEM_FROM} or later")
+#: what Λ's whole-making factor is on products that come with no whole-making system (a model's, a hand-written set):
+#: io_bound's one-class rule at each subset's least k_whole, which misses any shorter chain nested below their operands
+ONE_CLASS = "one-class rule at the least k_whole (no whole-making system given)"
 #: an op log's class (te_core.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
 #: product: its non-token operand is θ (the product is never fresh), or it is attention's, which io_bound doesn't count
 LOG_KIND = {"theta": "theta", "registered": "theta"}
@@ -683,18 +699,24 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
     """`Measured.products` for a run of captured steps, `segments` [(steps, StepGraph)] as te_core.capture.capture_run
     takes them, each captured by capture_step or capture_fn: every product te_core.io_bound.rows_of counts at k (kind
     "fresh"; k the console's by default), its MACs and output entries times its steps (the bound's G and Q add over
-    steps, so its blocks do too), and the order its entries are summed in (`ORDERS`; None: the reference circuit's,
-    `ORDER`)."""
+    steps, so its blocks do too), the order its entries are summed in (`ORDERS`; None: the reference circuit's,
+    `ORDER`), and the steps' whole-making system and P-match check from their product rows (te_core.capture.products,
+    `system_of`)."""
+    from te_core.capture import products
+
     if order not in (None, *ORDERS):
         raise ValueError(f"order {order!r}: one of {ORDERS}, or None for the reference circuit's ({ORDER})")
     k = float(policy.CONSOLE[1] if k is None else k)
-    out = []
+    out, rows, broken = [], [], []
     for n, g in segments:
         for r in io_bound.rows_of(g, gemm_dtype, k):
             if r.kind == "fresh":
                 p = r.product()
                 out.append(p | {"macs": n * p["macs"], "outputs": n * p["outputs"]})
-    return {"k": k, "order": order or ORDER, "products": out}
+        block = products.rows(g, k, gemm_dtype)
+        rows += block["rows"]
+        broken += block["p_match"]
+    return {"k": k, "order": order or ORDER, "products": out, "system": system_of(rows), "p_match": broken}
 
 
 def product_kind(row: dict) -> str:
@@ -730,7 +752,39 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
                         "gates_per_mac": r["gates_per_mac"], "cell_gates": r["cell_gates"]})
     order = ORDER if block["order"] == "unknown" else block["order"]
     return {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
-            "products": out, "kinds_macs": kinds}
+            "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match")}
+
+
+def system_of(rows: list[dict]) -> dict | None:
+    """The step's whole-making system (te_core.io_bound's `chain_classes`) from a trace's product rows: a class for
+    each chain length K among the rows with both operands affected, with c (`io_bound.C_SELF` where it holds a product
+    of an array with itself, else `C_PAIR`), P and the classes feeding it ([K, A] pairs), the counted rows' feeds, and
+    the least width of a class's operand; None for rows captured before `SYSTEM_FROM`, which have no `fed`."""
+    if any("fed" not in r for r in rows):
+        return None
+    classes: dict = {}
+    counted: dict = {}
+    b = math.inf
+    for r in rows:
+        if all(r["affected"]):
+            e = classes.setdefault(r["dims"]["k"], {"k": r["dims"]["k"], "c": io_bound.C_PAIR, "P": 1.0, "feeds": {}})
+            e["c"] = max(e["c"], io_bound.C_SELF if r["self"] else io_bound.C_PAIR)
+            e["P"] = max(e["P"], r["P"])
+            for K, w in r["fed"]:
+                e["feeds"][K] = max(e["feeds"].get(K, 0.0), w)
+            b = min(b, *r["widths"])
+        if product_kind(r) == "fresh":
+            for K, w in r["fed"]:
+                counted[K] = max(counted.get(K, 0.0), w)
+    return {"classes": [e | {"feeds": [list(x) for x in sorted(e["feeds"].items())]} for _, e in sorted(classes.items())],
+            "counted": [list(x) for x in sorted(counted.items())], "b": b if math.isfinite(b) else 16}
+
+
+def whole_chain(system: dict, k: float) -> dict:
+    """te_core.io_bound's `whole_chain_of` on a system `system_of` gives."""
+    return io_bound.whole_chain_of({"classes": {e["k"]: {"c": e["c"], "P": e["P"], "feeds": dict(e["feeds"])}
+                                                for e in system["classes"]},
+                                    "counted": dict(system["counted"]), "b": system["b"]}, k)
 
 
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
@@ -762,7 +816,23 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
         return None, (f"unmeasured: the products were classified at k = {p['k']:g} (te_core.io_bound.rows_of), not at "
                       f"this k; take them again at it (formalism.products_of, or a trace's by "
                       f"te_core.capture.products.rows)"), got
-    got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates)
+    if "system" not in p:
+        got["whole_making"] = ONE_CLASS
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates)
+    elif p["system"] is None:
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
+        return None, FRESH_RETRACE, got
+    elif p.get("p_match"):
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
+        got["p_match"] = p["p_match"]
+        ops = ", ".join(f"{x['op']} (fan-out {x['fan_out']:.3g}, {x['count']}×)" for x in p["p_match"])
+        return None, (f"unmeasured: the traced step breaks P-match, the premise that elementwise steps map operand "
+                      f"entries one to one: {ops} hand one entry to several on the way into a product's operand "
+                      f"(te_core.capture.products)"), got
+    else:
+        w = whole_chain(p["system"], k)
+        got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None}
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"])
     if order == "chain":
         proved = got["io_bound"]["proved"]
         got["fresh_cell"] = proved["rho"]
@@ -903,7 +973,7 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
 #: target, not a bound), or `unmeasured` (ρ None) where Fit fails, no measured term exceeds 1 and a kind is unmeasured
 RESTS_ON_CELL = {
     "fit": "Fit's construction",
-    "fresh_products": f"theorem for this circuit (Loomis-Whitney) under P-width and P-chain, "
+    "fresh_products": f"theorem for this circuit (Loomis-Whitney) under P-width (extended), P-match and P-chain, "
                       f"{'with' if P_CELL else 'without'} P-cell",
     "token": "A1 (reading A), its family: runs and tiles",
     "decoding": "assumption (D), with A1 (reading A)",

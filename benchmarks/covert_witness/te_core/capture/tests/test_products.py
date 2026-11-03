@@ -71,6 +71,49 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
                                    + [("backward", "fresh")] * 3)
 
 
+class Fan(nn.Module):
+    """Three trained layers; the second's output reaches the third's operand through one column repeated across the
+    row (`fan`), through a row norm (`norm`), or directly."""
+
+    def __init__(self, d: int, via: str) -> None:
+        super().__init__()
+        self.w1, self.w2, self.w3 = (nn.Parameter(torch.randn(d, d)) for _ in range(3))
+        self.via = via
+
+    def forward(self, x):
+        h = (x @ self.w1) @ self.w2
+        if self.via == "fan":
+            h = h[:, :1].expand(-1, h.shape[1])
+        elif self.via == "norm":
+            h = h / h.norm(dim=-1, keepdim=True)
+        return h @ self.w3
+
+
+@pytest.mark.parametrize("via, broken", (("direct", []), ("norm", []),
+                                         ("fan", [{"op": "expand", "fan_out": 16.0, "count": 1}])))
+def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_operand(via, broken):
+    """A product's output carried into the next product's operand one to one (directly, or through a row norm whose
+    statistic is charged nothing and whose broadcast its reduction pays for) keeps P-match, and the step's whole-making
+    system reads the class (K = 16) feeding the third layer's operand; one column repeated across its row hands each
+    entry made whole to 16, so P-match fails at the expand and the fresh-products term is unmeasured with the reason."""
+    torch.manual_seed(0)
+    m = Fan(16, via)
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: tF.mse_loss(mm(b[0]), b[1]),
+                     (torch.randn(6, 16), torch.randn(6, 16)))
+    k = policy.CONSOLE[1]
+    got = products.rows(g, k)
+    assert got["p_match"] == broken
+    third = [r for r in got["rows"] if r["phase"] == "forward" and all(r["affected"]) and r["fed"]]
+    assert bool(third) == (not broken) and all([16, 1.0] in r["fed"] for r in third)
+    p = formalism.products_of([(1, g)], k)
+    assert p["p_match"] == broken and p["system"] is not None
+    m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=6, token_gates=got["gates"],
+                                                  affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
+                            u_in=0.0, delta_bits=0.0, products=p)
+    term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
+    assert (term is None and "breaks P-match" in why and "expand (fan-out 16" in why) if broken else why is None
+
+
 class MatVec(nn.Module):
     """A layer plus a bias made by a matrix-vector product of its weight and a trained vector (aten.mv)."""
 
