@@ -2912,6 +2912,27 @@ def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_p
     assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
 
 
+def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world, capsys):
+    """Under `land_into = "checked"` a lock change lands on `checked` well before `main` follows it, and a PR that merges
+    `checked` (to resolve a conflict with one landed there) carries it: against `main` the gate blamed that PR for every lock
+    the landings changed.  Against `checked` it judges the PR's own change, so a lock change of its own is still
+    refused, naming `checked`."""
+    world.with_store_remote()
+    _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    landed = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    _git(world.dev, "push", "-q", "origin", f"{landed}:refs/heads/checked")
+    pr = world.change({"x.txt": "x\n"})
+    _git(world.dev, "checkout", "-q", "--detach", pr)
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", landed)
+    merged = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{merged}:refs/heads/pr-1")
+    capsys.readouterr()
+    assert _mark(world, 1, merged) == 0, capsys.readouterr().err
+    own = world.change({LOCK: _lock(A="2", B="3")}, base=landed)
+    assert _mark(world, 2, own) == 1
+    assert f"#2 is not marked ready at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
+
+
 def test_a_store_put_and_label_made_while_a_marks_preflight_runs_take_the_catalog_without_waiting_for_it(world):
     """A mark refreshes the store's attempts from the remote (its records gate) and then runs its preflight (a merge, the Lean
     gate, the suites' collection: minutes), while the machine's other lanes write the same catalog: `research data put`, its
@@ -2956,27 +2977,6 @@ def test_a_store_put_and_label_made_while_a_marks_preflight_runs_take_the_catalo
     assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
     assert other.index.artifact(art)["remote"] is True
     assert [x["value"] for x in other.index.labels(art, vocab.NOTE)] == ["kept"]
-
-
-def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world, capsys):
-    """Under `land_into = "checked"` a lock change lands on `checked` well before `main` follows it, and a PR that merges
-    `checked` (to resolve a conflict with one landed there) carries it: against `main` the gate blamed that PR for every lock
-    the landings changed.  Against `checked` it judges the PR's own change, so a lock change of its own is still
-    refused, naming `checked`."""
-    world.with_store_remote()
-    _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
-    landed = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
-    _git(world.dev, "push", "-q", "origin", f"{landed}:refs/heads/checked")
-    pr = world.change({"x.txt": "x\n"})
-    _git(world.dev, "checkout", "-q", "--detach", pr)
-    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", landed)
-    merged = _git(world.dev, "rev-parse", "HEAD")
-    _git(world.dev, "push", "-q", "origin", f"{merged}:refs/heads/pr-1")
-    capsys.readouterr()
-    assert _mark(world, 1, merged) == 0, capsys.readouterr().err
-    own = world.change({LOCK: _lock(A="2", B="3")}, base=landed)
-    assert _mark(world, 2, own) == 1
-    assert f"#2 is not marked ready at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
 
 
 def test_a_run_whose_indexed_manifest_cant_be_read_vouches_for_nothing_and_the_refusal_says_so(world, capsys):
