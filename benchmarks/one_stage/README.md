@@ -207,12 +207,14 @@ negatives.
   `served_verdicts.sh` writes after its composite step when the network certifier's piece ran. It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
   with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
-  table's symbols, with its overcount and the connections it counts, and that bound over the run's own certification
-  period (proved) and each monitoring period for the node, the census's reference datacenter and the world (scaled,
-  each naming its rule and parameters, beside its figure over one execution phase). The realized advice charge is
-  private, and `--advice-charge` states a test run's measurement beside the bound as that run's.
+  table's symbols, with its overcount, the seconds it covers and the connections it counts, and that bound over the
+  run's own certification period (proved) and each monitoring period for the node (proved where the run's period
+  covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
+  whose sources the record states, beside its figure over one execution phase. The realized advice charge is private:
+  the record carries the registered width as its upper bound, and `--advice-charge` states a test run's measurement
+  beside the bound as that run's.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
-  over a test run with public inputs: each execution phase's advice bits, unpadded, beside its requests' prompt and
+  over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
   (`PRODUCT=remote`, `H1_GATE` empty) and writes it.
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B

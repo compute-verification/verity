@@ -33,9 +33,9 @@ count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the
 has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the bound,
 ``advice_charge``: the served run's realized advice charge stays out of the record (`ADVICE`, which says what hides it
 and what doesn't yet); ``registered`` is ℓ_{a,i}, the registered width each execution phase's term charges, an upper
-bound on the honest charge (`REGISTERED`), with its share of K; and ``measured`` is honest serving's, measured on a test
-run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as that run's, never a figure of
-this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
+bound on the honest charge (`REGISTERED`), with its share of K; and ``measured`` is honest serving's |a_j| a Commit
+period, of which an execution phase holds several, measured on a test run with public inputs (`advice_charge.py`'s
+record, ``--advice-charge``) and labelled as that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
 **Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
 for the serving node, the census's reference datacenter and the world. A node's cell is proved where the run's period
@@ -280,9 +280,9 @@ def measured(path: Path | None) -> dict[str, Any]:
     doc = json.loads(path.read_text())
     if doc.get("format") != AC.FORMAT:
         raise ValueError(f"{path} is {doc.get('format')!r}, not {AC.FORMAT}")
-    return {"label": doc["label"], "run": doc["run"], "from": str(path), "bits_per_phase": doc["bits"],
-            "phases_measured": len(doc["phases"]), "finishes": doc["finishes"], "prompt_len": doc["prompt_len"],
-            "output_len": doc["output_len"]}
+    return {"label": doc["label"], "run": doc["run"], "from": str(path), "bits_per_commit_period": doc["bits"],
+            "commit_periods_measured": len(doc["commit_periods"]), "finishes": doc["finishes"],
+            "prompt_len": doc["prompt_len"], "output_len": doc["output_len"]}
 
 
 def lines(out: Path, name: str) -> list[str]:

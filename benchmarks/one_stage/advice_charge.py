@@ -1,17 +1,19 @@
 """advice-charge: honest serving's advice charge, measured on a test run whose inputs are public (``advice-charge.json``,
-`FORMAT`): each execution phase's advice length |a_j| as `verity-vllm advice` writes it, unpadded, beside the prompt and
-output lengths and finishes of the requests it admits, so the mix it was measured at is on the record. A served run's
-advice length is private (a value), so only a test run with public inputs is measured, and its record says so
-(``label``): a figure of that test run, never of a served run.
+`FORMAT`): each Commit period's advice length |a_j| as `verity-vllm advice` writes it, unpadded, beside the prompt and
+output lengths and finishes of the requests it admits, so the mix it was measured at is on the record. A Commit period
+is WINDOW_STEPS engine steps, one in the run of record, so an execution phase of T buckets of τ holds several, and
+ℓ_{a,i}, the width the network certifier's bound charges execution phase i, is set against their sum, which this record
+doesn't hold. A served run's advice length is private (a value), so only a test run with public inputs is measured, and
+its record says so (``label``): a figure of that test run, never of a served run.
 
     python benchmarks/one_stage/advice_charge.py ADVICE --run RUN [--tau S] --to FILE
 
 ADVICE is `verity-vllm advice`'s output over every closed Commit period of a serve-openai run (its ``windows.json`` and
-each ``w<k>/``). Each of ``phases`` is one Commit period's: ``bits``, its registration's binding's length, and
+each ``w<k>/``). Each of ``commit_periods`` is one Commit period's: ``bits``, its registration's binding's length, and
 ``by_egress_window``, the bits I1 charges each egress window of ``T`` buckets of τ (``--tau``, the advice's) that holds
-any, with the requests it admits and carries in and its engine steps. ``bits`` summarizes the phases, and
-``prompt_len``, ``output_len`` and ``finishes`` (``eos``: a stop token ended it; ``length``: its cap did; ``abort``)
-the requests, each once, in the phase that admits it. ``serving`` is the engine's configuration the step trace
+any, counted from the Commit period's first step, with the requests it admits and carries in and its engine steps.
+``bits`` summarizes the Commit periods, and ``prompt_len``, ``output_len`` and ``finishes`` (``eos``: a stop token
+ended it; ``length``: its cap did; ``abort``) the requests, each once, in the Commit period that admits it. ``serving`` is the engine's configuration the step trace
 records (`verity-vllm advice`'s report), the settings it was measured at. ``refused`` and ``open`` are the Commit
 periods the advice refused or left open, which no figure counts. `served_verdicts.sh advice-charge` serves such a run
 and writes it.
@@ -45,7 +47,7 @@ def charge(advice: Path, run: str, tau: float) -> dict[str, Any]:
     if index.get("schema") != INDEX:
         raise ValueError(f"{advice / 'windows.json'} is {index.get('schema')!r}, not {INDEX} (`verity-vllm advice` over "
                          "a serve-openai run)")
-    phases: list[dict[str, Any]] = []
+    periods: list[dict[str, Any]] = []
     prompts: list[int] = []
     outputs: list[int] = []
     finishes: Counter[str] = Counter({f: 0 for f in FINISHES})
@@ -62,20 +64,20 @@ def charge(advice: Path, run: str, tau: float) -> dict[str, Any]:
             raise ValueError(f"Commit period {k}'s registration binds {bits} bits, and windows.json {w['bits']}")
         compilers.add(json.dumps(reg["binding"]["compiler"], sort_keys=True))
         admitted = adv["requests"]
-        phases.append({"phase": int(k), "bits": bits, "by_egress_window": reg["bits_by_window"],
+        periods.append({"period": int(k), "bits": bits, "by_egress_window": reg["bits_by_window"],
                        "admitted": len(admitted), "carried_in": len(adv.get("carried") or ()),
                        "engine_steps": len(adv["steps"])})
         prompts += [int(q["prompt_len"]) for q in admitted]
         outputs += [int(q["output_len"]) for q in admitted]
         finishes.update(str(q["finish"]) for q in admitted)
-    if not phases:
+    if not periods:
         raise ValueError(f"{advice}: no closed Commit period's advice (refused {index.get('refused')}, open "
                          f"{index.get('open')}): nothing measured")
     if len(compilers) != 1:
         raise ValueError(f"{advice}: its Commit periods' advice is bound to {len(compilers)} compilers, not one")
     return {"format": FORMAT, "label": LABEL.format(run=run), "run": run, "T": int(index["T"]), "tau": tau,
-            "compiler": json.loads(compilers.pop()), "serving": serving, "phases": phases,
-            "bits": stats([p["bits"] for p in phases]), "prompt_len": stats(prompts), "output_len": stats(outputs),
+            "compiler": json.loads(compilers.pop()), "serving": serving, "commit_periods": periods,
+            "bits": stats([p["bits"] for p in periods]), "prompt_len": stats(prompts), "output_len": stats(outputs),
             "finishes": dict(finishes), "refused": index.get("refused") or {}, "open": index.get("open") or []}
 
 
