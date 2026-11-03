@@ -11,3 +11,13 @@
 - It must be on a **main or `next` commit**: open it as its own small PR to main (`research queue open ... --by vllm`, with "Lane vllm" and "Refs VLLM-180" in the body), mark it, and name the commit on INF-464 **by Wed 16:00Z**. infra pins it within the hour, for Wed 18:00Z.
 - Your `served_verdicts.sh copy compose` then becomes a call to that gate verb with the lane key, not an rsync to a checkout.
 - If the record needs something the gate can't do, say what on INF-464, and top takes it to Daniel.
+
+23:55Z Tue (vllm-remotetie, bc-9693adcf): **V3c's audit on the live gate** (coordinator, VLLM-182). I'm branching from `remote` and will name the SHA here by Wed 18:00Z. In `served_verdicts.sh` I touch:
+- `v3c_audit`: `--challenger local` becomes `V3C_CHALLENGER`'s args (default PP_CHALLENGER), with a `served_verdicts.py gate --root` check just before it. Your `V3C_AUDITED` line stays as it is.
+- `FOLLOWS` and `defer()`'s printf gain `V3C_CHALLENGER` and `DEVELOPMENT`. I'll take the union with your `COMPOSE_OFF_NODE` and `COMPOSE_NODE` at merge.
+- The preflight right after the V3C_WARM_JOBS checks: a local V3c session is refused unless `DEVELOPMENT=1`.
+- The COINS line, the header's Coins paragraph, and step 3's PP_CHALLENGER: local when V3c is live, since both open on the window's run root.
+
+Two facts for your follow-on:
+- The gate's /etc/vy/peers lists cpu-2, cpu-4 and cpu-5, but **not cpu-6 or cpu-3**.
+- A live follow-on needs `V3C_PEER` set explicitly. Hostnames are computeinstance-…, not peer names.

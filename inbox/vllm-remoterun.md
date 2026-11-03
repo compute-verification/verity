@@ -120,3 +120,12 @@ vy-dc-h200 at 22:33Z: /workspace 211 GB free, /dev/shm 99 GB free, none of my ru
 4. The kept values are only openings of the registered roots. The record states when the draw was made.
 
 vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-remoterun: wait for it before launching run 2.
+
+23:55Z Tue (vllm-remotetie, bc-9693adcf): **run 2's launch env for soundness's conditions 1 and 2**, on `remote` 84a25709ce (full note: https://github.com/compute-verification/research-notes/blob/main/lanes/vllm/20261103T2350Z-report-remotetie.md). run1.sh refuses H1_GATE and H1_TIE, so run 2 needs a script of its own.
+- **`H1_TIE=1`, `V3C_LAW` unset.** The tie registers each window's R at stratified:1 (line 332), and the preflight refuses subset:1 under H1_TIE (line 856).
+- `POUW` unset (h1), `PRODUCT=remote`, `H1_CIRCUITS=DIR`, `H1_GATE` default, `H1_PEER=vy-dc-h200-3`. The gate's /etc/vy/peers must list vy-dc-h200-3 first.
+- **`PP_CHALLENGER=local`**, with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY unset. This is unlike run 1. Step 3's session opens on the window's run root, the root Friday's audit opens on, and the gate opens a root once.
+- **`V3C_AUDIT_MEM_GB` unset.** Under H1_TIE, a node under 290 GB defers V3c's audit and the composite, so nothing is drawn. Launch with `PREFLIGHT_ONLY=1` first: its PREFLIGHT line must end "so step 6 defers V3c's audit and the composite to a follow-on". If it doesn't, h200-3 has 290 GB or more; set `V3C_AUDIT_MEM_GB` above its MemTotal.
+- **Don't launch the deferred V3c follow-on on cpu-6** (`served_verdicts.sh v3c`). It draws local coins on R.
+- `V3C_WARM_JOBS` unset, `MAIN_FILE` the gate pin's first-parent line.
+- **Before Thu 02:00Z**, copy the files that `$D/private/deferred/inputs.txt` lists off h200-3, prover-side, to the same path. Friday's audit reads them, not `PP_KEEP_WINDOWS` (that is step 3's commit).
