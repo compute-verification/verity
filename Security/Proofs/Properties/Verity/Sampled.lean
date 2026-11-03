@@ -73,7 +73,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
     open: the leaf's coins against fresh ones, at the mean over the device's fresh tree key of hm96's hiding gap
     (`CROnly.hidingGap`), which the leftover hash lemma bounds by `2^-257` a leaf, so `Claims.Hm96Hiding` holds at it
     with no premise (`CROnly.hm96Hiding_gap`). The device refuses every tree past its caps, so a play's trees hold at
-    most `maxLeaves` (`2^46`) leaves, and the term is the closed `2 · 2^46/2^257 = 2^-210` (`hidingTerm`);
+    most `maxLeaves` (`2^46`) leaves, and the term is the closed `2 · 2^46/2^257 = 2^-210` (`Live.hidingTerm`);
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's published bound at `t` (`cr`, `Vocab.crBound`).
 -/
@@ -201,16 +201,16 @@ theorem avg_fst {Ω T : Type} [Fintype Ω] [Fintype T] [Nonempty T] (G : Ω → 
   (FlockSoundness.ZK.avg_prod_split _).trans
     (congrArg Verity.Game.avg (funext fun c => FlockSoundness.Game.avg_const (G c)))
 
+namespace Live
+
+variable (A : Live)
+
 /-- **The coin trees' hiding term**: each leaf the device's coin trees hold in a play, twice, at `2^-257`, the leftover
 hash lemma's bound on the mean over the device's fresh tree key of hm96's hiding gap at one leaf. The prover sees every
 leaf before it chooses what to open, so the term counts the leaves the device samples, not the rounds the session
 opens; the device refuses every tree past its caps (`Verity.releases`), so a play's trees hold at most `maxLeaves`
-(`2^46`) leaves and the term is `2 · 2^46/2^257 = 2^-210`, with no premise. -/
-noncomputable def hidingTerm : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
-
-namespace Live
-
-variable (A : Live)
+(`2^46`) leaves and the term is `2 · 2^46/2^257 = 2^-210` at every session, with no premise. -/
+noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
 /-- **The session with the draw's sample widened by the coins `S`**: the draw reads only the session's bytes, so the
 draw's law is the session's and A3 holds at the widened sample (`uniform_fst`). -/
@@ -311,9 +311,9 @@ noncomputable def twoRun (q : ℝ) : ℝ≥0∞ := ENNReal.ofReal (Real.sqrt (q 
 
 /-- **The leg's δ at the session, `t` SHA-512 calls and the read finder's bound `cr`**: the session's error, a
 two-continuation term per round opened after a digest and one for the record, the coin trees' hiding term
-(`hidingTerm`), the two file finders' `2²/2^513`, and `cr`. -/
+(`Live.hidingTerm`), the two file finders' `2²/2^513`, and `cr`. -/
 noncomputable def delta (t : ℕ) (cr : ℝ) : ℝ≥0∞ :=
-  A.sessionDelta t + A.rounds * twoRun (A.qM t) + twoRun (A.qM t) + hidingTerm +
+  A.sessionDelta t + A.rounds * twoRun (A.qM t) + twoRun (A.qM t) + A.hidingTerm +
     2 * ENNReal.ofReal ((2 : ℝ) ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal cr
 
 /-- **The tables' knowledge term at the widened sample is the session's**: the draw reads only the session's bytes. -/
@@ -464,7 +464,7 @@ structure FinderCR (V : Vocab d α) (K : Constructions V) (A : Live) (θ : ByteA
 accepts are at most as likely as the live audit's plays, at the session widened by the projection's coins and the
 strategy projected there, that flock-verify `--zk` accepts at `own` (`LiveAcceptsZKP`), plus the square root of each
 two-continuation finder's success (one per round the device opens after a digest of the prover's message, and one for
-the record), the coin trees' hiding term (`hidingTerm`, at every leaf the device's trees hold), the read finder's
+the record), the coin trees' hiding term (`Live.hidingTerm`, at every leaf the device's trees hold), the read finder's
 collision and the forger's forgery of the device's signature. Its pieces are the draw (the device's coins the draw reads, `Properties.Challenger.CoinsFromLog`, are the
 live audit's draw), the rounds (each round's coins, from the coin trees' log, are the live session's) and the messages
 (each message the evidence reveals is the projected strategy's). The leg reads it at each session v2 sets up on the
@@ -476,7 +476,7 @@ def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Con
       FlockSoundness.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) (K.live A θ F c σ).game
           (K.project A θ F c σ) +
         (∑ j, ENNReal.ofReal (Real.sqrt ((K.msgFinder A θ F c σ j).Pr Verity.sha512Msg)) +
-          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) + hidingTerm +
+          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
           ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
 
