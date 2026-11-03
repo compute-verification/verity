@@ -68,7 +68,7 @@ class _LiveSession:
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through the node's certifier
     coin link. Reserved at
-    construction (`commit_coins.Gate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
+    construction (`commit_coins.ChallengerGate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
     `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the weights' root once they are committed, its
     salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete. Refused before
     reserving while ``lane``'s open period in the auditor's ledger (``period``) is H1's, and before its open when the
@@ -78,10 +78,10 @@ class _LiveSession:
     k = 0
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str) -> None:
-        from verity_vllm.pipeline.commit_coins import Gate
+        from verity_vllm.pipeline.commit_coins import ChallengerGate
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
-        self.gate = Gate(gate)
+        self.gate = ChallengerGate(gate)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
         self.client = self.commitment = None
         self.carried: dict[str, Any] = {}
