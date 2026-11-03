@@ -15,7 +15,9 @@ import Definitions.Nci.Formalism.Circuits
 * The **slowdown** `ρ = min_𝓘 |𝓘| c / |C|` (`slowdown d c k`) is an infimum in `ℝ≥0∞` over those partitions of
   `|𝓘| c / |C|` (`partitionSlowdown`), so it is `⊤` when none exists. A lower bound `X ≤ ρ` is the same as
   `X ≤ |𝓘| c / |C|` for each of them (`Nci.Formalism.le_slowdown_iff`), and the theorems state it so.
-* `max_I |I ∩ S|` over the inference blocks `I` is `maxInBlock d c k S`.
+* **Kinds of work**: a kind `K` is a set of gates `B_K ⊆ C` with a cap `cap_K` on the gates of `B_K` that any inference
+  block holds (`Caps`, the caps of a family of kinds), and its bound is `(|B_K| / |C|) / (cap_K / c)` (`kindBound`), the
+  blocks its work alone needs, priced at `c` a block, against `|C|`.
 * A block's inputs split three ways: registered values `in(I) ∩ θ` (`registeredReads`), which are free; other inputs
   `in(I) ∩ (in(C) \ θ)` (`dataReads`), which are data; computed values `in(I) \ in(C)` (`computedReads`), which come from
   other blocks. `k` bounds the last two together, `in(I) \ θ` (`Nci.Formalism.reads_split`).
@@ -31,7 +33,7 @@ namespace Nci.Formalism
 
 open Finset
 open Verity (Declaration Partition)
-open scoped ENNReal
+open scoped NNReal ENNReal
 
 /-- **An inference block** of `d`: a set of gates `I` with `|I| ≤ c` and `|in(I) \ θ| ≤ k`. -/
 def InferenceBlock (d : Declaration) (c k : ℕ) (I : Finset (Fin d.D.N)) : Prop :=
@@ -50,9 +52,15 @@ is none. -/
 noncomputable def slowdown (d : Declaration) (c k : ℕ) : ℝ≥0∞ :=
   ⨅ (B : ℕ) (P : Partition d.D B) (_ : P.IsCK d c k), partitionSlowdown d B c
 
-/-- `max_I |I ∩ S|`: the most gates of `S` an inference block holds. -/
-def maxInBlock (d : Declaration) (c k : ℕ) (S : Finset (Fin d.D.N)) : ℕ :=
-  (univ.filter (InferenceBlock d c k)).sup fun I => (I ∩ S).card
+/-- **The caps of kinds of work** `K`: each kind's work `B_K` is a set of gates of `C`, and every inference block holds
+at most `cap_K` of its gates. -/
+def Caps (d : Declaration) (c k : ℕ) {κ : Type} (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) : Prop :=
+  ∀ K, GateSet d.D (B K) ∧ ∀ I, InferenceBlock d c k I → ((I ∩ B K).card : ℝ≥0) ≤ cap K
+
+/-- **A kind's bound** `(|S| / |C|) / (cap / c)`: the blocks that hold at most `cap` gates of `S` each need for `S`,
+priced at `c` a block, against `|C|`. -/
+noncomputable def kindBound (d : Declaration) (c : ℕ) (S : Finset (Fin d.D.N)) (cap : ℝ≥0) : ℝ≥0∞ :=
+  ((S.card : ℝ≥0∞) / (d.D.computed.card : ℝ≥0∞)) / ((cap : ℝ≥0∞) / (c : ℝ≥0∞))
 
 /-- `in(I) ∩ θ`: the registered values `I` reads, which are free. -/
 def registeredReads (d : Declaration) (I : Finset (Fin d.D.N)) : Finset (Fin d.D.N) := d.D.into I ∩ d.θ
