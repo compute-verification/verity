@@ -13,7 +13,7 @@ import torch.nn.functional as tF
 from torch import nn
 
 from te_core import formalism, io_bound, policy
-from te_core.capture import capture_step, products, script
+from te_core.capture import capture_fn, capture_step, products, script
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
 V, H, B, CTX = 16, 256, 4, 8
@@ -47,7 +47,7 @@ def recorded(tmp_path, monkeypatch):
 def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
     """The forward's head product is fresh and its fc product an expansion (io_bound's rule pays a lookup at the token
     ids at no rate); in the backward three products are fresh and one an expansion. The trace keeps the rows with the
-    capture's version, and the order is unknown."""
+    capture's version, and the order is unknown, and at each other k of the console's dial the rows there."""
     k = policy.CONSOLE[1]
     model = Toy()
     ref = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3),
@@ -55,7 +55,14 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
                        (torch.zeros(B, CTX, dtype=torch.long), torch.zeros(B, CTX, dtype=torch.long)))
     got, want = products.rows(recorded, k), products.rows(ref, k)
     assert comparable(got) == comparable(want)
-    assert recorded.formalism["products"] == got and (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
+    kept = dict(recorded.formalism["products"])
+    at = kept.pop("at")
+    assert kept == got and (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
+    assert sorted(map(int, at)) == sorted(set(products.DIAL_K) - {k})
+    for x, block in at.items():
+        there = products.rows(recorded, float(x))
+        assert block == {"k": float(x), "rows": there["rows"], "p_match": there["p_match"]}
+    assert at[str(800_000_000)]["rows"] != got["rows"]
     assert got["gates"] == recorded.formalism["gates"] and want["gates"] == io_bound.step_gates(ref, "bfloat16")
     dims = ("batch", "m", "k", "n")
     by_dims = {(r.phase, *(r.dims[x] for x in dims)): r for r in io_bound.rows_of(ref, "bfloat16", k)}
@@ -69,6 +76,16 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
         kinds.append((r["phase"], o.kind))
     assert sorted(kinds) == sorted([("forward", "fresh"), ("forward", "expansion"), ("backward", "expansion")]
                                    + [("backward", "fresh")] * 3)
+
+
+def test_the_capture_keeps_rows_at_the_consoles_dial_levels():
+    """The capture's dial is te_core.panels' `K_LEVELS` (products can't import panels, which imports formalism, which
+    imports products); a trace has no rows at a level added after it was captured, so a new level means a retrace."""
+    from te_core import panels
+
+    assert products.DIAL_K == panels.K_LEVELS, (
+        f"set te_core.capture.products.DIAL_K to te_core.panels.K_LEVELS {panels.K_LEVELS}, bump products.CAPTURE and "
+        "say on the board that traces need a retrace for the new levels")
 
 
 class Fan(nn.Module):
@@ -112,6 +129,59 @@ def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_o
                             u_in=0.0, delta_bits=0.0, products=p)
     term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
     assert (term is None and "breaks P-match" in why and "expand (fan-out 16" in why) if broken else why is None
+
+
+class Embedded(nn.Module):
+    """An embedding's rows into two trained layers, wide enough that the first's outputs are paid, with a position's
+    table sliced to the context between them (`pos`) or not."""
+
+    def __init__(self, pos: bool, d: int = 256) -> None:
+        super().__init__()
+        self.e = nn.Embedding(16, d)
+        self.w1, self.w2 = nn.Parameter(torch.randn(d, d) / d ** 0.5), nn.Parameter(torch.randn(d, 16) / d ** 0.5)
+        self.register_buffer("table", torch.randn(64, d))
+        self.pos = pos
+
+    def forward(self, ids):
+        h = self.e(ids) @ self.w1
+        if self.pos:
+            h = h * self.table[: ids.shape[-1]]
+        return h @ self.w2
+
+
+@pytest.mark.parametrize("pos", (False, True))
+def test_products_that_read_an_embeddings_rows_before_a_position_makes_them_token_specific_are_dropped(pos):
+    """Tokens that share an id share its row, and so do their first layer's outputs, so the second layer's forward
+    product and its weight gradient read gathered rows unless a position's table makes them token-specific first. A
+    trace's rows say which operands do (`gathered`), and the fresh-products term drops those products from G (never
+    |C|), with how many and their share of the counted MACs in what it read. io_bound's P-match check and the
+    capture's agree that the gather breaks nothing: no class's outputs reach the table it reads."""
+    torch.manual_seed(0)
+    m = Embedded(pos)
+
+    def step(mm, ids, opts):
+        for o in opts:
+            o.zero_grad()
+        tF.cross_entropy(mm(ids[:, :-1]).reshape(-1, 16), ids[:, 1:].reshape(-1)).backward()
+        for o in opts:
+            o.step()
+
+    g = capture_fn(step, m, torch.randint(0, 16, (2, 9)), optimizers=torch.optim.SGD(m.parameters(), lr=0.1))
+    k = policy.CONSOLE[1]
+    got = products.rows(g, k)
+    flags = sorted((r["phase"], r["dims"]["k"], tuple(r["gathered"])) for r in got["rows"] if any(r["gathered"]))
+    first = [("backward", 16, (True, False)), ("forward", 256, (True, False))]
+    second = [("backward", 16, (True, False)), ("forward", 256, (True, False))]
+    assert flags == sorted(first if pos else first + second)
+    assert got["p_match"] == [] and io_bound.p_match(g, k) == []
+    p = formalism.products_of_trace(got)
+    second_fresh = [r for r in got["rows"] if r["dims"]["n"] == 16 and formalism.product_kind(r) == "fresh"]
+    assert second_fresh and all(any(r["gathered"]) != pos for r in second_fresh)
+    dropped = sum(r["count"] for r in got["rows"] if formalism.product_kind(r) == "fresh" and any(r["gathered"]))
+    assert p["gathered"]["dropped"] == dropped and (dropped == 0) == pos
+    assert p["gathered"]["of"] == sum(r["count"] for r in got["rows"] if formalism.product_kind(r) == "fresh")
+    assert len(p["products"]) == sum(formalism.product_kind(r) == "fresh" and not any(r["gathered"])
+                                     for r in got["rows"])
 
 
 class MatVec(nn.Module):

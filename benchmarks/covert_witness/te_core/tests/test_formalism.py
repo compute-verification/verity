@@ -755,7 +755,7 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     merged, and their whole-making system is io_bound.chain_classes', so io_bound's bound is the same: at the console's
     policy about 69,676 fresh MACs a block, 0.552 of |C| and ρ 2.87e6 with P-cell. The trace's order is unknown
     and the reference circuit's chain stands, so the term is measured: the figure without P-cell, 1.637e5, with 2.87e6
-    beside it as fresh_cell. The rows are the fixture the
+    beside it as fresh_cell. The rows, with those at the console dial's other k, are the fixture the
     vectors read (`dense_45m.products.json`). The one check of the strong bound's figure on a model's own shape (about
     6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
     import collections
@@ -766,7 +766,8 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     g = io_bound.capture("dense", size="s", vocab=32000, batch=2, ctx=256, micro_steps=1)
     c, k = policy.CONSOLE
     block = products.rows(g, k)
-    assert block == json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    assert json.loads(json.dumps(products.rows_on_dial(g))) == json.loads(
+        (FIXTURES / "dense_45m.products.json").read_text())
     got = F.products_of_trace(block)
     rows = io_bound.rows_of(g, "bfloat16", k)
     kinds = collections.Counter()
@@ -799,7 +800,11 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
     its least k_whole gave 1.033), and the term is 163,708 without P-cell, 2,870,251 with it (the io-bound worker's
     table). A rank-1 adapter's class on the residual stream added to the system (r = k/(3·1²·16), fed by the 512-long
     chains and feeding them and the counted operands) has no fixed point, so the term is void: unmeasured
-    (`FRESH_VOID`), never a measured 0. A broken P-match is unmeasured with the op that breaks it."""
+    (`FRESH_VOID`), never a measured 0. A broken P-match is unmeasured with the op that breaks it. No counted product
+    reads the embedding's rows before RoPE or attention's output makes them token-specific (layer 0's projections of
+    them and their weight gradients are expansion products, PV and dP attention's), so G drops none of the 333; a
+    counted row that read them would be dropped, and a 4.12 trace, whose rows don't say, is unmeasured until it is
+    traced again (`FRESH_RETRACE`)."""
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
     got = F.products_of_trace(rows)
     c, k = policy.CONSOLE
@@ -812,6 +817,21 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
 
     rho, why, inputs = term(got)
     assert why is None and round(rho) == 163_708 and round(inputs["fresh_cell"]) == 2_870_251
+    assert inputs["gathered"] == {"dropped": 0, "of": 333, "dropped_macs_share": 0.0}
+    kinds = {(F.product_kind(r), tuple(r["gathered"]), r["phase"], r["dims"]["k"]) for r in rows["rows"]
+             if any(r["gathered"])}
+    assert kinds == {("expansion", (True, False), "forward", 512), ("expansion", (False, True), "backward", 512),
+                     ("attention", (False, True), "forward", 256), ("attention", (False, True), "backward", 64)}
+    fresh = next(i for i, r in enumerate(rows["rows"]) if F.product_kind(r) == "fresh")
+    one = rows | {"rows": [r | {"gathered": [True, False]} if i == fresh else r for i, r in enumerate(rows["rows"])]}
+    dropped = F.products_of_trace(one)
+    share = rows["rows"][fresh]["count"] * rows["rows"][fresh]["macs"] / sum(p["macs"] for p in got["products"])
+    assert dropped["gathered"] == {"dropped": rows["rows"][fresh]["count"], "of": 333,
+                                   "dropped_macs_share": pytest.approx(share, rel=1e-12)}
+    assert len(dropped["products"]) == len(got["products"]) - 1
+    old = F.products_of_trace(rows | {"capture": "4.12", "rows": [
+        {x: y for x, y in r.items() if x != "gathered"} for r in rows["rows"]]})
+    assert old["system"] is None and old["gathered"] is None and term(old)[1] == F.FRESH_RETRACE
     assert inputs["whole_making"]["e"] == pytest.approx(0.058322155, rel=1e-6)
     assert inputs["io_bound"]["whole_chain"] == pytest.approx(1.08874665, rel=1e-6) and "subset" not in inputs
     w = F.whole_chain(got["system"], k)
@@ -829,14 +849,51 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
     assert inputs["p_match"] == [{"op": "expand", "fan_out": 2.0, "count": 6}]
 
 
+def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_dial_reads_as_c_times_a_number():
+    """A trace from te_core 4.12.1 on keeps its product rows at each k of the console's dial (te_core.capture.products'
+    `at`), so the fresh-products term is measured at each of them on that k's products and whole-making system, and
+    off the dial it is unmeasured with the reason. At a fixed k io_bound's blocks don't move with c, so the dial reads
+    the term as c times a number for each k (`fresh_per_c`, [without P-cell, with it]). On the 45M dense step the term
+    falls with k (163,708 at the console's 65,536 bits, 131,294 at 80,000 and 64,497 at the served block's 145,568)
+    and is void from 800,000 bits up, where its whole-making system has no fixed point."""
+    from te_core.capture import products
+
+    rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    got = F.products_of_trace(rows)
+    C = rows["gates"]
+    m = replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
+    assert sorted(got["at"], key=int) == [str(k) for k in products.DIAL_K if k != policy.CONSOLE[1]]
+    assert all(b["k"] == float(x) and "at" not in b for x, b in got["at"].items())
+    per = F.fresh_per_c(m)
+    assert list(per) == [str(k) for k in products.DIAL_K]
+    for k in products.DIAL_K:
+        for c in (1e12, policy.CONSOLE[0]):
+            term, why, inputs = F.fresh_products(m, c, k)
+            assert inputs["k_classified"] == k
+            if per[str(k)] is None:
+                assert term is None and why == F.FRESH_VOID
+            else:
+                assert why is None and term == pytest.approx(c * per[str(k)][0], rel=1e-12)
+                assert inputs["fresh_cell"] == pytest.approx(c * per[str(k)][1], rel=1e-12)
+    c = policy.CONSOLE[0]
+    assert [round(c * per[str(k)][0]) for k in (65_536, 80_000, 145_568)] == [163_708, 131_294, 64_497]
+    assert [per[str(k)] is None for k in products.DIAL_K] == [False] * 3 + [True] * 4
+    term, why, _ = F.fresh_products(m, c, 100_000)
+    assert term is None and "keep none at it" in why and "DIAL_K" in why
+    assert F.fresh_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {"65536": per["65536"]}
+    assert F.fresh_per_c(replace(m, products=None)) is None
+    assert F.from_json(m.to_json()).products == m.products
+
+
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
 def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name):
     """Each fixture's product rows (the `.products.json` beside its circuit, te_core.capture.products of the step the
-    circuit traces, at te_core 4.12): the capture's version, the console's k, the order unknown, the circuit's tokens
-    and |C|, and by kind every product the op log places. On the tiny start no product is fresh: every counted
+    circuit traces, at te_core 4.12.1): the capture's version, the console's k, the order unknown, the circuit's
+    tokens and |C|, and by kind every product the op log places. On the tiny start no product is fresh: every counted
     candidate has an operand read through a repeating view or a broadcast below its width (each view read at its own
     value's rate), so the term is a measured 0 with nothing counted, though its whole-making system (attention's
-    32-long chains, r = 4/3) has no fixed point; P-match holds."""
+    32-long chains, r = 4/3) has no fixed point; P-match holds, and G drops nothing for an embedding's rows (the
+    products that read them are expansion, θ or attention products)."""
     from te_core.capture import products
     from te_core.capture.circuit import StepCircuit, measure
 
@@ -849,6 +906,8 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name):
     total = sum(got["kinds_macs"].values())
     assert total == sum(op["macs"] for op in ops if op["products"])
     assert got["kinds_macs"]["fresh"] == 0 and not got["products"]
+    assert got["gathered"] == {"dropped": 0, "of": 0, "dropped_macs_share": 0.0}
+    assert any(any(r["gathered"]) for r in block["rows"])
     b = F.bound(replace(one_segment(), products=got), 1e11, policy.CONSOLE[1])
     fp = b["inputs"]["fresh_products"]
     assert b["terms"]["fresh_products"] == fp["io_bound"]["proved"]["rho_no_cell"] == 0 and "subset" not in fp
