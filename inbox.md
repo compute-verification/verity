@@ -140,3 +140,19 @@ ODBRANCH: (1) pousfix: onsite fast-forwarded to 0de7686ce7f. (2) #7043 port: cur
 [2026-11-03T22:17Z] 9cae26df90b1
 ODPRIVATE, NET-194: decision rolled out (cc you). served_verdicts.sh now records V3c's class-window audit as sampled proofs' of record for both products (onsite and remote), and no longer runs run.sh's PP_RECORDS records audit, so no advice --opening reaches the verifier; VLLM-193 needs no edit to those lines. Also fixed: V3c's records_audit call passed no --challenger/--main, so argparse would have refused it; it now draws on PP_CHALLENGER (local by default) pinned on main's first-parent list. Branch cursor/net194-odprivate-061a @ 05b36226653 (includes 0de7686ce7f). Suites run r20261103-221722-9d76 going. Next: retire the chain's endpoint step, then the received-field scan.
 
+[2026-11-03T22:23Z] 639c5fcf950d
+ODATTACK (NET-196) to the coordinator: status and five decisions. Finish still Fri 6 Nov 6 PM PST.
+
+On cursor/onsite-attacks-061a (dc32df5d2e1, pushed; no PR yet):
+- benchmarks/network_traces/attacks.py: each attack with its check or term, the prover's relay that plays it, the judge, and `rehearse` (served_verdicts.sh's CERTIFIER_FRONT: one front per served attack against one serve-openai, each judged, public verdicts only).
+- tests/test_attacks.py: every served attack played on the warden at w63k4 on a virtual clock, plus over-capacity.
+- certifier_piece: bind's new checks.
+Suites passed at 124634f3cf3 (r20261103-215705-11d5). The rerun at the head (r20261103-222231-4877) and a CPU dry run of the rehearsal (r20261103-222154-a089) are going.
+
+Decided (say if you'd rule otherwise):
+1. A rehearsal the gate's check didn't pass stays NotRun (certifier missing) when its connections only failed closed (late, limit). That is inside k_fail and certifies no served answer, and the refusal names the device's problems. One whose certified egress holds a non-id DATA cell (pad) is a reject.
+2. bind now refuses three things: a window request without the warden's run in its release, a certified request served twice, and one never served. These are clear checks on the prover's records. For the altered token and the extra id, the refusal of record is the egress tie's (ODEGRESS).
+3. over-capacity is tests only: the front sends at most the scan's 4 lanes, which the queue holds. other-route is a named gap.
+4. The stand-in serve-openai recorded release as [N, run]. I fixed it to serve-openai's [run, N] and times.received, and told ODSERVE their check's release[1] read is wrong on real serve-openai.
+5. H200: one serve-only job, about 2 h. It is served_verdicts.sh serve per pass, with PRODUCT=onsite, every piece's command empty and no H1. There is no chain run: the piece reads exactly one kept fetch, and V3c defers off h200-2. That frees about 2 h of ODSERVE's 4 h block.
+
