@@ -693,7 +693,7 @@ class Served:
             n = sum(k for _u0, k in HW.call_units(self.program))
             self.ok = self._tree(run, self.program.fn.bindings["PREFIX"] + HW.OUTPUTS[1],
                                  np.tile(np.array(CC.OK_ROW, np.uint16), (n, 1)), 0, self.root,
-                                 row_salts=NR.PublicSalts(CC.OK_SALT_TAG + self.root.encode() + b"\0", 0, n, shake=True))
+                                 row_salts=NR.PublicSalts(CC.OK_SALT_TAG + self.root.encode() + b"\0", 0, n, ok=True))
 
     def tables(self) -> list[str]:
         """Every value the Program's proof blocks open at: each K's ``b/<K>``, then each step's A tables, then each call's z
