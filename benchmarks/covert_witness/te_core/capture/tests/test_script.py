@@ -116,6 +116,19 @@ def test_integer_reads_numpy_and_math_on_read_backs_are_listed(starts, monkeypat
     assert len(rec.listed("data_dependent")) == 6
 
 
+@pytest.mark.parametrize("unrecorded", [True, False])
+def test_e_sized_through_prepares_quant_arrays_lists_no_read_back(starts, monkeypatch, unrecorded):
+    """sparse's and shallow's E sizing (`prepare._quant_array` in the steps, no encode): its range and finiteness checks
+    and its bytes are E's, unrecorded as the encoders are, and the update measures as without them; recorded, the same
+    reads are listed."""
+    if not unrecorded:
+        monkeypatch.setattr(script, "_E_PARTS", ())
+    g = recorded(starts, "--update", "inplace", "--size-e")
+    assert fwd_roles(g) == ["updated", "updated"] and g.updated_macs() == T * FWD
+    assert sorted({e["kind"] for e in g.formalism["data_dependent"]}) == ([] if unrecorded else [
+        "bool() of a tensor (a branch on its value)", "int() of a tensor", "numpy() of a tensor"])
+
+
 def test_a_python_float_folded_over_steps_is_listed_and_grows_delta_grad(starts):
     """seed-mezo's 04:15Z TOOL: an EMA kept as a Python float carries every earlier step's read-back as a value of its
     own, so Δ_grad grows with the step; kept as a 0-dim tensor it is one carried value at every step."""
