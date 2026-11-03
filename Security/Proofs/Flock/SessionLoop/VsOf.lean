@@ -1,5 +1,7 @@
 import Proofs.Flock.SessionLoop.Phase
 import Proofs.Flock.SessionLoop.FinalC
+import Proofs.Flock.SessionLoop.Inner
+import Proofs.Flock.SessionLoop.FreeWords
 
 /-!
 # The values a pad-blind worker supplies
@@ -32,6 +34,7 @@ whose roots agree validate the same openings.
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
+open FlockSoundness.Discharge
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (V F128)
 open _root_.Flock.Firewall.Finish (Tab)
@@ -130,7 +133,7 @@ theorem vsWord_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) (ν : CoinLayer
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 i := by
   unfold vsWord
-  rw [dif_pos hi]
+  rw [dite_eq_left hi]
   rfl
 
 /-- **`vsOf`'s `final_c` is its round-1c values' c_eval**, at every coins: `vsOf` sets it so, and the round-1c indices
@@ -148,11 +151,11 @@ theorem finalCFixed_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) : FinalCFi
   have hfc : (layE x j).fc < (tabC PE x j).z.nE := by rw [hE]; exact lt_hab (layE x j) le_rfl
   have hr1c : ∀ i < 64, (layE x j).r1c i < (tabC PE x j).z.nE := fun i hi => by
     rw [hE]; exact lt_hab (layE x j) (hlt i hi).le
-  rw [vsWord_vsOf L bx x w ν c τ j r hfc, if_pos rfl]
+  rw [vsWord_vsOf L bx x w ν c τ j r hfc, ite_eq_left rfl]
   refine congrArg₂ _root_.Flock.dot rfl (Array.ext (by simp) fun i h1 _ => ?_)
   have hi : i < 64 := by simpa using h1
   simp only [Array.getElem_map, Array.getElem_range]
-  rw [vsWord_vsOf L bx x w ν c τ j r (hr1c i hi), if_neg (Nat.ne_of_lt (hlt i hi))]
+  rw [vsWord_vsOf L bx x w ν c τ j r (hr1c i hi), ite_eq_right (Nat.ne_of_lt (hlt i hi))]
 
 end VsOf
 
