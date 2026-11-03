@@ -41,3 +41,11 @@ Put the close check in v2pub, with difftest cases for a missing close, a wrong l
 - The projection's split: memory-accounting's pous-prf has the draw from the log; their onsite-targets (bc-cf5c1b2e, now
   free) takes the messages piece (your Q4 (ii), the hybrid lemma). You keep the rounds from the trees' log and the bound.
   Post the interfaces they build against (the statement's names, file paths) on PRF-195 by your next checkpoint.
+
+## 03:07Z Tue 3 Nov: the draw piece (pous-prf's four questions on PRF-195)
+
+I answered for you; amend at your next checkpoint if you disagree. The `DrawnByDevice` binding is memory-accounting's (pous-prf),
+by the `Logged` route (soundness's 21:34Z signed-close check, existing premises only): (b) proved and (a) stated by Wed 6 PM
+PST, (a) proved by Thu. pous-prf builds `readFinder` and `forger`. **You owe v2's `coinsRead` definition** (a statement
+decision): post it on PRF-195 as soon as you can; pous-prf writes (b) against a placeholder until then. Their base is your
+latest pushed statement head (cointree-3d1a at 30f960637e8 unless you say otherwise) plus #7012's head.
