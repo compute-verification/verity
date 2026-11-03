@@ -16,7 +16,7 @@ since the link term does not read it, under expected-time collision resistance o
 * **The trial** (`trialGZC`) for a commit string `c`: a draw that reads `c`, uniform among such draws; a fresh compiled
   session; if it accepts, `k` waits of at most `Rw` reruns each for a rerun in which it accepts. It reads what the
   extraction from the runs found reads at `c` (`rdTZC`), and costs `t'` per run it plays (`cTZC`), `t'(1 + k)` in
-  expectation.
+  expectation, `t'` one run's SHA-512 evaluations: the prover's and the verifier's, whose verdict the trial reads.
 * **The value layer** (`XplurZC`) is the plurality of the trial's single readings at each commit string.
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions (`outCZC_spec`), so under
   A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
@@ -108,7 +108,9 @@ noncomputable def rdTZC (c : vb.Pos) (e : TrialOutZC F L D Sl) : Finset vb.Val :
   else ∅
 
 open Classical in
-/-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. -/
+/-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. `t'` is one run's SHA-512
+evaluations, the prover's and the verifier's: the trial reads each run's verdict, and its extraction (`extractTableZ`)
+reads only openings the accepted runs' verification checked. -/
 noncomputable def cTZC (t' : ℝ) (e : TrialOutZC F L D Sl) : ℝ :=
   t' * (1 + if accωZC planZ R e.1 e.2.1 then (e.2.2.map (waitCost (accωZC planZ R e.1))).sum else 0)
 
@@ -720,9 +722,9 @@ with the expected-time extractor (`analysisZC`, at any knowledge bound) and the 
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on every table's `N₀/(ek)`,
-`t'` the SHA-512 evaluations of one session run, `M` the finder's further trials and `Rw` the waits' length. At any other
-prover the bound is `⊤` (`linkBoundZC`). It is `zk_linkSoundC_at` at the plurality, each binding error bounded under
-A2 (`errZC_le`). -/
+`t'` the SHA-512 evaluations of one session run, the prover's and the verifier's (`cTZC`), `M` the finder's further
+trials and `Rw` the waits' length. At any other prover the bound is `⊤` (`linkBoundZC`). It is `zk_linkSoundC_at` at
+the plurality, each binding error bounded under A2 (`errZC_le`). -/
 theorem zk_linkSoundC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)

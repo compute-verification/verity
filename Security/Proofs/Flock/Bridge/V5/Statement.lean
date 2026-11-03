@@ -177,7 +177,9 @@ open Classical in
 `--zk --public-inputs` at `own` accepts and the committed trace fixed at registration, read as the sampling witness
 of the session's statement at the constants `constsOfP` (the constant, the zero and every proof block's public input bits), is
 outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at the deployed commitment at the public file's leaf map, with
-probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`). -/
+probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`).
+The link finders are charged `t'` per run (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's
+`t' + v`. -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)

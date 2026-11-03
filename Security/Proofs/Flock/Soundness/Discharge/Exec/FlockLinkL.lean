@@ -18,7 +18,8 @@ named).
 * **The trial** (`trialGL`) for a commit string `c`: a draw that reads `c`, uniform among such draws;
   a fresh session; if the session accepts, `k` waits of at most `Rw` reruns each for a rerun in which
   the session accepts. It reads what the extraction from the runs found reads at `c` (`rdTL`), and
-  costs `t'` per run it plays (`cTL`), `t'·(1 + k)` in expectation.
+  costs `t'` per run it plays (`cTL`), `t'·(1 + k)` in expectation, `t'` one run's SHA-512 evaluations: the
+  prover's and the verifier's, whose verdict the trial reads.
 * **The value layer** (`XplurL`) is the plurality of the trial's single readings at each commit
   string. It is a function of the registration state.
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions
@@ -117,7 +118,9 @@ noncomputable def rdTL (c : vb.Pos) (e : TrialOutL L D Sl) : Finset vb.Val :=
   else ∅
 
 open Classical in
-/-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. -/
+/-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. `t'` is one run's SHA-512
+evaluations, the prover's and the verifier's: the trial reads each run's verdict, and its extraction (`extractTableSL`)
+reads only openings the accepted runs' verification checked. -/
 noncomputable def cTL (t' : ℝ) (e : TrialOutL L D Sl) : ℝ :=
   t' * (1 + if accωL plan R e.1 e.2.1 then (e.2.2.map (waitCost (accωL plan R e.1))).sum else 0)
 
@@ -553,8 +556,8 @@ with the expected-time extractor (`analysisBEL`) and the plurality value layer (
 commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRL`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on every table's `N₀/(ek)`,
-`t'` the SHA-512 evaluations of one session run, `M` the finder's further trials and `Rw` the waits' length. At any other
-prover the bound is `⊤` (`linkBoundCRL`). -/
+`t'` the SHA-512 evaluations of one session run, the prover's and the verifier's (`cTL`), `M` the finder's further
+trials and `Rw` the waits' length. At any other prover the bound is `⊤` (`linkBoundCRL`). -/
 theorem flock_batched_linkSoundEL
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
