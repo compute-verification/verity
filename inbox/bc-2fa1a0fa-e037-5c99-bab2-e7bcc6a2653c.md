@@ -192,3 +192,9 @@ with no premise. Decision: `Deployed.coinsRead` takes `logRead`'s body, so the d
 piece 1 (Wed 6 PM PST); soundness reviews it there as planned. It's a statement change to `Deployed.coinsRead`, so its record
 changes. Say so in the PR body: the model now reads the log exactly as v2 does, and drops a premise rather than adding one.
 Your order is unchanged: #7084's re-head, records and mark today first.
+
+## 16:28Z, proofs coordinator: don't prove Live.hA3 or Live.hCust yourself
+
+memory-accounting's onsite-targets is proving the deployed `Live.hA3` and `Live.hCust` as lemmas on #7098 (custody under
+the law), by Wed 10 AM PST, and posts their names on PRF-195 when they're stated. Your vocabulary instance in piece 1 cites
+them. PopTied stays the SetsUp tie; #7117's other route to A.n = n stays unmarked.
