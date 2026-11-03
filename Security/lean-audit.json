@@ -1402,41 +1402,25 @@
    "owner": "@compute-accounting",
    "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   },
-  "Nci.Formalism.Annotation.TokensLinked": {
-   "owner": "@training",
-   "digest": "e89320b5bd22ea9e68b6916a9bb181d42ac6fec719b2f8395fc9e1d694b154c3"
-  },
   "Nci.Formalism.Annotation.Valid": {
    "owner": "@training",
    "digest": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b"
   },
   "Nci.Formalism.Assumptions.CutCost": {
    "owner": "@training",
-   "digest": "8ae1986ebc112dc773dd03f144af03121f4031867dc48e760bb106752f3a4205"
+   "digest": "455f5b3daaa55025c16ab1b6d30fea692f9f5540d41baae52bffc4227d97c4b0"
   },
   "Nci.Formalism.Assumptions.EfficiencyFloor": {
    "owner": "@training",
    "digest": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
   },
-  "Nci.Formalism.BottomShare": {
-   "owner": "@training",
-   "digest": "37cc810dca99f7cb6ab52723be49dbe1eb5944ac56b342ad932d9691dc6c0529"
-  },
-  "Nci.Formalism.FrozenTail": {
-   "owner": "@training",
-   "digest": "9dd8657c37d37e5e441a38b2faa0156863e4797aea9430c21526e72896b27f5e"
-  },
   "Nci.Formalism.InPeriods": {
    "owner": "@training",
    "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
   },
-  "Nci.Formalism.IsCKPartition": {
-   "owner": "@training",
-   "digest": "9600579c22030c88ec75257fa46b0e00a843d5351cd8203735fdcffdbe760c6a"
-  },
   "Nci.Formalism.PeakBound": {
    "owner": "@training",
-   "digest": "3a7b459c6624d5b6a1a32924874d3e304552c44874efd2d25c611b84cd7c60c0"
+   "digest": "2f381efb7adae7c01b0836ab87bb62a726c0becce3af52ba41fcc74f89e5a87c"
   },
   "Nci.Formalism.Run.Among": {
    "owner": "@training",
@@ -1456,15 +1440,7 @@
   },
   "Nci.Formalism.SessionBlocks": {
    "owner": "@training",
-   "digest": "973e6c780a875090ec945732dc5d86cd92df306e9365d98d6231ec5919ba8fd7"
-  },
-  "Nci.Formalism.TreeBlocks": {
-   "owner": "@training",
-   "digest": "eb348733b4f1757fba37a6f2dd6145a5a6765d2ef5b000f6354386ce444c52b7"
-  },
-  "Nci.Formalism.TreeFits": {
-   "owner": "@training",
-   "digest": "881e443a2d3d780d57a538aa89fa46082f959f75c3285a885b1eb57a84785729"
+   "digest": "34bcb8ec9972cc06cb477dc919bab4e382f0b55caf1c3a13a463fc952dba78f3"
   },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
@@ -2217,6 +2193,42 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Nci.Formalism.Annotation.Identical": {
+   "owner": "@training",
+   "digest": "d636f4cb7a89a4b0902503282d2d758d2acd4c40c676ed04536cc0e7bf3aaf06"
+  },
+  "Nci.Formalism.Annotation.ProfileAtMost": {
+   "owner": "@training",
+   "digest": "1f1937d4697ed02f90be5ec8a4b6d03d70bc96850451f696719d91ebdc5f821b"
+  },
+  "Nci.Formalism.Annotation.ReachableAtMost": {
+   "owner": "@training",
+   "digest": "1406546020e27691e7538ad3978ec24ee95cad8b9f58f8750ce05e2f8f5f2339"
+  },
+  "Nci.Formalism.Assumptions.InputCost": {
+   "owner": "@training",
+   "digest": "67549dad1ea58a50787a3303b0e1a78e7ceb9880c80f9e2315c90a17edc7b74c"
+  },
+  "Nci.Formalism.FrozenShare": {
+   "owner": "@training",
+   "digest": "c30991424d10c653456174911ca697182c759d28d99a48ba4981edcbbd8e3e90"
+  },
+  "Nci.Formalism.GateSet": {
+   "owner": "@training",
+   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
+  },
+  "Nci.Formalism.ReachLimit": {
+   "owner": "@training",
+   "digest": "ecf2d1fae4a5e57e7ec817351f39c27baad3baf3144088f22cbd48a841ed02cc"
+  },
+  "Nci.Formalism.TrainingBlocks": {
+   "owner": "@training",
+   "digest": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac"
+  },
+  "Nci.Formalism.TrainingFits": {
+   "owner": "@training",
+   "digest": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60"
   }
  },
  "meaning": [
@@ -9011,16 +9023,28 @@
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
   "Nci.Formalism.SecurityProofs.CapacityBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.CapacityBound : Nci.Formalism.Guarantees.CapacityBound"],
+   "assumptions": [],
+   "type_hash": "660c60e5ca63e3897699d792cab40a3dc8b086605fa89c6f653bd25778fa1d9c"
   },
   "Nci.Formalism.SecurityProofs.Counting": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Counting : Nci.Formalism.Guarantees.Counting"],
+   "assumptions": [],
+   "type_hash": "96c5ec87f0094bf26dad0608ccc8e4aca5b07c8c8daf55870a94e21c7ce8e320"
   },
   "Nci.Formalism.SecurityProofs.Counting_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Counting_honest : Nci.Formalism.Guarantees.Counting_honest"],
+   "assumptions": [],
+   "type_hash": "b10ec018942105655f56fef0e92100c9a101d1b53d359eb44cc2b48ae008f9d5"
   },
   "Nci.Formalism.SecurityProofs.Counting_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Counting_nontrivial : Nci.Formalism.Guarantees.Counting_nontrivial"],
+   "assumptions": [],
+   "type_hash": "2916c4d34047aedd76252d35416171baf1d1c692683ca2118ba1d243bc7025da"
   },
   "Nci.Formalism.SecurityProofs.FitHonestServing": {
    "owner": "@training",
@@ -9035,10 +9059,16 @@
    "type_hash": "e495189c93343b179f33a6e3dc20b0e59b31ff2ba0ea94c144900aebaa47672d"
   },
   "Nci.Formalism.SecurityProofs.FitServing_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitServing_honest : Nci.Formalism.Guarantees.FitServing_honest"],
+   "assumptions": [],
+   "type_hash": "7bd5fa3db95d5252a3b9d113b6f187507277577f65a917beddd1a45171e0cf05"
   },
   "Nci.Formalism.SecurityProofs.FitServing_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitServing_nontrivial : Nci.Formalism.Guarantees.FitServing_nontrivial"],
+   "assumptions": [],
+   "type_hash": "e90625923ba8586020b0987f4b2c4b47b0089548cbcb73a0204303fcc6c0c58c"
   },
   "Nci.Formalism.SecurityProofs.FitTraining": {
    "owner": "@training",
@@ -9047,13 +9077,22 @@
    "type_hash": "13cfd833481570bc9c77447603c713773b929bbf159c95ed608e485233e21cf7"
   },
   "Nci.Formalism.SecurityProofs.FitTraining_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitTraining_honest : Nci.Formalism.Guarantees.FitTraining_honest"],
+   "assumptions": [],
+   "type_hash": "285bd5f860212f82b59cd28446cd3a686f049a8361a04e2f585cc87100ff3842"
   },
   "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitTraining_nontrivial : Nci.Formalism.Guarantees.FitTraining_nontrivial"],
+   "assumptions": [],
+   "type_hash": "a2e416e64a3c7e18867956a05e3d0c38262e210d1dac1b439fa94770011e7bb7"
   },
   "Nci.Formalism.SecurityProofs.ReachableShareBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.ReachableShareBound : Nci.Formalism.Guarantees.ReachableShareBound"],
+   "assumptions": [],
+   "type_hash": "3fcc3573196ca9cd1c96d540386e5fc1e085b1f922939cac23f089b4c15f989b"
   },
   "Nci.Formalism.SecurityProofs.Security": {
    "owner": "@training",
@@ -9080,13 +9119,24 @@
    "type_hash": "ba14aa73d3305b0ebe3f9f179382ced038d2bb3cb762a14e3edaaadaad14e0cd"
   },
   "Nci.Formalism.SecurityProofs.SlowdownClaim": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.SlowdownClaim : Nci.Formalism.Guarantees.SlowdownClaim"],
+   "assumptions": [],
+   "type_hash": "cfab3854dd756b9d3c53952d563eae955fd02dfccfc9f91d86f12795793fe28b"
   },
   "Nci.Formalism.SecurityProofs.SlowdownClaim_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.SlowdownClaim_honest : Nci.Formalism.Guarantees.SlowdownClaim_honest"],
+   "assumptions": [],
+   "type_hash": "6e19e665237a855716552d69c5acb9865eacd7865cc4770492dbbdf3c5989b8a"
   },
   "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial : Nci.Formalism.Guarantees.SlowdownClaim_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "a47e495d45f086a99561741aca2bac694414a93e87e41bc836c948f1ec836d86"
   },
   "Nci.Formalism.SecurityProofs.SlowdownEven": {
    "owner": "@training",
@@ -9109,13 +9159,24 @@
    "type_hash": "05e94ad923a68fc114b71c347af763756157f6014446422370618105b0451208"
   },
   "Nci.Formalism.SecurityProofs.SlowdownFrozen": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.SlowdownFrozen : Nci.Formalism.Guarantees.SlowdownFrozen"],
+   "assumptions": [],
+   "type_hash": "5349b884651d68726714bab433a375840588014ccceb18ee6ecfb1b0737cae85"
   },
   "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.SlowdownFrozen_honest : Nci.Formalism.Guarantees.SlowdownFrozen_honest"],
+   "assumptions": [],
+   "type_hash": "b2ca2948b2c2bc9c117cef092591bee691c121e97b108b8ae2beee6177e6933d"
   },
   "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial : Nci.Formalism.Guarantees.SlowdownFrozen_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "6ebba903146289a24b8a54376eeb569db8d471dbadb32167e9aa234432057f80"
   },
   "Nci.Formalism.SecurityProofs.Slowdown_honest": {
    "owner": "@training",
@@ -9130,22 +9191,44 @@
    "type_hash": "8c096d237b91c06c539129c94179a07a86ccb30f0a957146abf518d2e0991320"
   },
   "Nci.Formalism.SecurityProofs.TokenForm": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenForm : Nci.Formalism.Guarantees.TokenForm"],
+   "assumptions": [],
+   "type_hash": "7959740b5dc2a5b1290ee6297f4be52321160b9e2bcc47504dc9be8500a8bab6"
   },
   "Nci.Formalism.SecurityProofs.TokenFormVarying": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenFormVarying : Nci.Formalism.Guarantees.TokenFormVarying"],
+   "assumptions": [],
+   "type_hash": "7ebcfa7aa7707d1cd26455e3698f2a28b0179f2312285fefab94c9863a3593c8"
   },
   "Nci.Formalism.SecurityProofs.TokenFormVarying_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest : Nci.Formalism.Guarantees.TokenFormVarying_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "21bfdc2b8cb79f7d54d6fbc660f90934623c51ee5c49985a37f20745c0c979b9"
   },
   "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial : Nci.Formalism.Guarantees.TokenFormVarying_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "d904f6931f8294a3211437f84932d1aa4a09391262d9dbfe9711cf127b295b39"
   },
   "Nci.Formalism.SecurityProofs.TokenForm_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenForm_honest : Nci.Formalism.Guarantees.TokenForm_honest"],
+   "assumptions": [],
+   "type_hash": "1f4be96d963940cda576cbb7d305ab4a3a890fcc141874ae4ce92fb89e41a4a0"
   },
   "Nci.Formalism.SecurityProofs.TokenForm_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenForm_nontrivial : Nci.Formalism.Guarantees.TokenForm_nontrivial"],
+   "assumptions": [],
+   "type_hash": "27d6a8b9067912fd84cbd628cc8df6f77d871e6b7ed41e5a804daed252c1cc83"
   },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
    "owner": "@training",
@@ -22258,18 +22341,28 @@
     "Verity.Annotation.holds": "6299df41fb09a80c810eccf8a70f5706742de18792a3711272d7795252fb5fa9"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
-    "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
    ]
   },
   "Definitions.Core.Assumptions": {
@@ -22645,21 +22738,39 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
     "Nci.Formalism.SecurityProofs.FitTraining",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
@@ -22794,21 +22905,39 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
     "Nci.Formalism.SecurityProofs.FitTraining",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
@@ -23044,18 +23173,39 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
     "Nci.Formalism.SecurityProofs.FitTraining",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
+    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.CompliesCK",
@@ -23932,18 +24082,37 @@
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
+    "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
     "Nci.Formalism.SecurityProofs.FitTraining",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
+    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
@@ -27024,24 +27193,27 @@
    ]
   },
   "Definitions.Nci.Assumptions.Formalism": {
-   "digest": "1d02da5fa005ef173b0d91d8b7f9e8aa1e0dcd01dcee7778d4706626c69eb38e",
+   "digest": "4e2b0ef9295d77b6fb1e06f371ccd355b0f578fb421de275e2c37b366e7bc29c",
    "definitions": {
-    "Nci.Formalism.Assumptions.CutCost": "8ae1986ebc112dc773dd03f144af03121f4031867dc48e760bb106752f3a4205",
-    "Nci.Formalism.Assumptions.EfficiencyFloor": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
+    "Nci.Formalism.Assumptions.CutCost": "455f5b3daaa55025c16ab1b6d30fea692f9f5540d41baae52bffc4227d97c4b0",
+    "Nci.Formalism.Assumptions.EfficiencyFloor": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d",
+    "Nci.Formalism.Assumptions.InputCost": "67549dad1ea58a50787a3303b0e1a78e7ceb9880c80f9e2315c90a17edc7b74c"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
-    "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
-    "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial"
    ]
   },
   "Definitions.Nci.Assumptions.Info": {
@@ -27414,84 +27586,130 @@
    ]
   },
   "Definitions.Nci.Formalism.Circuits": {
-   "digest": "c609a5a8143b9d4b98b4885d1f49430f8902b609de5e44edd4b8ee72a46744c8",
+   "digest": "5e9558cd6a2cdd7030291e8233bd63d0f57c05c50a786426cc8ae459bf92ae9a",
    "definitions": {
     "Nci.Formalism.DependsOn": "9f9a8c6eba758cdc1ffc21938e27f058a9ed0a182caa5145bff6b1f71893525b",
     "Nci.Formalism.FeedsWithin": "5f5473466b77ac0c95736c7996f7639b98a71d8a1aa698e83a9fcd40499bf9ab",
     "Nci.Formalism.FeedsWithin.refl": "fd4984844deec75c4b1386f439fe422c1ecabc41425d0797808f2851c8c1c669",
-    "Nci.Formalism.FeedsWithin.step": "e07c86d9bb818e0d451808464698383bd6310098871d069aa97bdf466c62f795"
+    "Nci.Formalism.FeedsWithin.step": "e07c86d9bb818e0d451808464698383bd6310098871d069aa97bdf466c62f795",
+    "Nci.Formalism.GateSet": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e",
+    "Nci.Formalism.inputs": "c7dd1d423b8d22a4489da5b95f135d0c5dea9e8bd11df3e241008234a00977ea"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
-    "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
    ]
   },
   "Definitions.Nci.Formalism.Inference": {
-   "digest": "7c529f5f99a87990774749ca6319b5806ec3273fc5b0dbc9d5782658417fcae1",
+   "digest": "b4fce6dce80f0cbab4e953285b8ed5668fed4e815d9e6295569a7146c982735a",
    "definitions": {
-    "Nci.Formalism.IsCKPartition": "9600579c22030c88ec75257fa46b0e00a843d5351cd8203735fdcffdbe760c6a",
+    "Nci.Formalism.ComputeBlock": "20430193e391548f59aa189aece4770e01054a04a63297d5203ee51b01e9c8e4",
+    "Nci.Formalism.InferenceBlock": "f4c513ca7a5316a39db0af97dadc2728462cdcef93f0ab5ecdb53ba9e99ffd4e",
+    "Nci.Formalism.ReductionBlock": "ba84dfa80db087c760a034a2f6bcf2a33ea7cd4e62f4275e497f5137476e81cd",
     "Nci.Formalism.ServingFits": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4",
-    "Nci.Formalism.SessionBlocks": "973e6c780a875090ec945732dc5d86cd92df306e9365d98d6231ec5919ba8fd7",
-    "Nci.Formalism.TreeBlocks": "eb348733b4f1757fba37a6f2dd6145a5a6765d2ef5b000f6354386ce444c52b7",
-    "Nci.Formalism.TreeFits": "881e443a2d3d780d57a538aa89fa46082f959f75c3285a885b1eb57a84785729",
-    "Nci.Formalism.computedReads": "393eb61f9e37bf5bc4417af3841f029be27df57544ca2b762918bc7c4ca56ec1",
-    "Nci.Formalism.inputs": "edaf57e1e3c4882549fc09e93835a127d65363f8dbf7faaf9841699bce22c37e",
-    "Nci.Formalism.slowdown": "d1f4a936ef11fc288ee0312fcb676a5108069b07fd190bf5809d4b7ea0e57174"
+    "Nci.Formalism.SessionBlocks": "34bcb8ec9972cc06cb477dc919bab4e382f0b55caf1c3a13a463fc952dba78f3",
+    "Nci.Formalism.TrainingBlocks": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac",
+    "Nci.Formalism.TrainingFits": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60",
+    "Nci.Formalism.UpdateBlock": "419565e4999e8ddb6db862c44d026b77902b73c2ebc940a5dd82704b03be65b5",
+    "Nci.Formalism.computedReads": "bb6dc1fee0bd4d49951110feb8bfedb8e9405c074a1f03fb613f2f57ce878f71",
+    "Nci.Formalism.instDecidablePredFinsetFinNDInferenceBlock": "b1a684d61a116754566a4f1e118710a26a69888327a42525b1bd0d30120bc745",
+    "Nci.Formalism.maxInBlock": "dc6336056cf0bb8ab2a332e8d6491be1da98be90e53a8ff889af83b16b474cc7",
+    "Nci.Formalism.partitionSlowdown": "008125ed66bbcb214bb43ff5d4b48752a3e0f51da9572356b08c0545defb445e",
+    "Nci.Formalism.slowdown": "749ca592199752f3b1ad1fde2b9702787dcf494c9f3064107edd476e3824518f"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
     "Nci.Formalism.SecurityProofs.FitTraining",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
-    "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
    ]
   },
   "Definitions.Nci.Formalism.Instances": {
-   "digest": "042bd1cd555c3c41491c3a82cbb0222156f2c124fc689bac09ecdc5a57c401e3",
+   "digest": "323b4c7cf7b64d9b6aec5422e552abe77d3124caf39716a3291086065de5e055",
    "definitions": {
-    "Nci.Formalism.Counter.A": "c448c1f2e748a2ea442c4fd0fd728c2b93abb2c2a72cfc370334422cc676396e",
-    "Nci.Formalism.Counter.C": "d91b53bc43a6ff2436fcc627c21d436186b39f259022058eff0e20373f5e8573",
-    "Nci.Formalism.Counter.P": "78831adc52444b372dc23bd31c5ca3d5235ec0490cd5e5f1328e73b04c692e97",
-    "Nci.Formalism.Counter.d": "dcd82e1aebfbacc294d3229f7b1e49f9f0404981bb8ae6632bbf9576c4ca9285",
-    "Nci.Formalism.Counter.methods": "dcb63f84e9f72e1ca2619047a246450bbc638ff5688ff1b6d1e95cd5206bbf5b",
-    "Nci.Formalism.Counter.r": "d27c9e548500038aa5d7313204222db6ba59b5c139a0906f847e816edb8c7f4b",
-    "Nci.Formalism.Honest.A": "4f5c605037b36ede5a834e545f6b5d3b90ecc2f4fa3c006437e4f60c6b26385e",
+    "Nci.Formalism.Chain.A": "13b0728b5f3dbeddc47226dbf857555e1dd2c30b879c8e988df590c8cd2cf003",
+    "Nci.Formalism.Chain.C": "de302dab8410acf20b177abc2f195e2930cb7d9d9b8767930318056b9630c180",
+    "Nci.Formalism.Chain.blocks": "ccfada045435c7ae61a85175510087a2bbc33f781058077accda8468c58169a9",
+    "Nci.Formalism.Chain.d": "255d959b0373594ea08f71912cc1e7c778eb30f7e7ed5c78e72ead31c9a8c755",
+    "Nci.Formalism.Chain.methods": "6444268784cda082f21ed780d6cf9113be72d5e8402d8cf60b8135bca216e023",
+    "Nci.Formalism.Chain.r": "7e3c457ab40de47620cdd0c45a2dc78e1ccc117436ebda212fe02b47211318f8",
+    "Nci.Formalism.Chain.whole": "a329fbbc6aa79c612debdc4b3ae8631ccfb71d482ef0196c119413959daee465",
     "Nci.Formalism.Honest.C": "4a518890c3e4db1028630a61a6f0f885abaa7a9968cb711e5c46e9ff44c6454a",
     "Nci.Formalism.Honest.P": "413195c1d171fee28a870db259bf198cae3627a1bd0d419ecc00a429778155c5",
     "Nci.Formalism.Honest.d": "d2bae5cbba8f5ff35338b8bf9b0d1edc717f565dfb9a6d7feab3a695d16f4097",
-    "Nci.Formalism.Honest.methods": "c7615a29cd48f845808f875efb99d0c9fed4306d1d57825e3a6e8123d152e3ac",
-    "Nci.Formalism.Honest.r": "86725f897dce5539adb27a433e64e9d6c1b29e39573de2d930dc856290270bd7",
     "Nci.Formalism.silent": "e02c3849a1760aa1440ceb52ae868834681699d556697473f6def58b8635c123"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
    ]
   },
   "Definitions.Nci.Formalism.Runs": {
@@ -27516,41 +27734,61 @@
    ]
   },
   "Definitions.Nci.Formalism.Training": {
-   "digest": "89dc674fa10845c4784482b59da16176abccc081d68b181fad9648a79a52aa5c",
+   "digest": "ecf906a2f40d04826388641e558953d7bceb1a30ccc33ce02a197be8baf96590",
    "definitions": {
     "Nci.Formalism.Annotation": "413c74d61b9251d9879712b9e07bfd9186289901b61c3a4950a853895d5f58f2",
-    "Nci.Formalism.Annotation.EntersMidPath": "53af8d6ad6e5ce1d8b344c0a98c297c5bd3233754571d7e05b8a071bdd7384ec",
-    "Nci.Formalism.Annotation.TokensLinked": "e89320b5bd22ea9e68b6916a9bb181d42ac6fec719b2f8395fc9e1d694b154c3",
+    "Nci.Formalism.Annotation.FromInputs": "5953af36aedf208677cddfd2771acbcad71c5d011b2cf01c6efbb9926edc0584",
+    "Nci.Formalism.Annotation.Identical": "d636f4cb7a89a4b0902503282d2d758d2acd4c40c676ed04536cc0e7bf3aaf06",
+    "Nci.Formalism.Annotation.ProfileAtMost": "1f1937d4697ed02f90be5ec8a4b6d03d70bc96850451f696719d91ebdc5f821b",
+    "Nci.Formalism.Annotation.ReachableAtMost": "1406546020e27691e7538ad3978ec24ee95cad8b9f58f8750ce05e2f8f5f2339",
     "Nci.Formalism.Annotation.Valid": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b",
-    "Nci.Formalism.Annotation.dep": "87812e11e0313e6945597ed79216be87d0945af5eb39dab15b9eb6a1a7b799d6",
-    "Nci.Formalism.Annotation.depShare": "73bdcf57e64c6d4ee3aaa33745f2c314994dec8305f5843600a4be142cf94595",
+    "Nci.Formalism.Annotation.affected": "83644e2007a4500179e22ef7c2e4c9f4eab02873b916b2b6640fec60880b27e3",
+    "Nci.Formalism.Annotation.cuts": "9c07280f9dad5eacc20247016e2ce106a8985e5aa35bfa8e476954640bb495aa",
+    "Nci.Formalism.Annotation.dependencies": "3aef539a22cd9a70fcad2bf3ea4185e2dc1d4b9e0dcfe329a642e8c7f0f4b517",
+    "Nci.Formalism.Annotation.dependencyProfile": "e7d27ed7d4f219dcbcbef4b38418799b56db6a28aa2472aca58acdb61248860f",
+    "Nci.Formalism.Annotation.dependencyShare": "28b59c0fbecf5324f51440c4b22c82876ed3b88496a52f29ab0f64f5c7b7b96e",
+    "Nci.Formalism.Annotation.maxAffected": "55404a862e885a42ec7d594dfd7d9737361c46717a61b94fdd4c12046d31b60f",
     "Nci.Formalism.Annotation.maxShare": "a9e50872e978dd87738e479f37976bd1e4f945cb24861a2b49f90ab17fe413aa",
-    "Nci.Formalism.Annotation.midEntries": "dcd7a1666d214f222639c0f93a75f44eab771b22821efac528d47be3de0bccd5",
-    "Nci.Formalism.Annotation.share": "878b9fbfba8a7e80c1ff9ba8a872046f30a13a491e0ec4313460f9531c80ceec",
-    "Nci.Formalism.Annotation.tokenDep": "43df8f03097b9daac6dd8bd905feecb67c4dbbe41887d1e8d2d6bee68be04ba9",
+    "Nci.Formalism.Annotation.reachable": "7cc7c2cd5c8a232b04a799a99069654639ba61b77c140a66d8469bd6c8dac712",
+    "Nci.Formalism.Annotation.reachableShare": "8770192f49fbea1c7fd7ac4af9731c38ef0bf77d5544868ac8ae34320e99ce12",
+    "Nci.Formalism.Annotation.share": "fd5440576db70d6b541b1eae8403f98e6e086d4c79f210f19fa0d1523418bf14",
+    "Nci.Formalism.Annotation.tokenAffected": "01c7bf374f6c57ab1e57c1c708a078ef58c12008f9200b11db3bc16414ef9366",
     "Nci.Formalism.Annotation.tokenGates": "062342d7a6d25499cd7ec04883e976d4ff53484c5bd10bba094541cf9a2b6564",
+    "Nci.Formalism.Annotation.tokenShare": "c6d4d41f905c639c5a076bc4116c6d9260aa59ba9690799ca83b378847e3e683",
     "Nci.Formalism.Annotation.tokens": "5d45b499998b10099781ad5cbb87f5c491502db1631c6698c8fdca07e34c0f23",
-    "Nci.Formalism.Annotation.tokensPerBlock": "1359ba38b320d4c25ef7811bea7984f731238e0d4bff05d727c8b01ab77d1bce",
+    "Nci.Formalism.Annotation.tokensPerBlock": "0991a8fba49f76396f03cddb35bfaae23cfe8e62bc6796307594227be7a313eb",
     "Nci.Formalism.Annotation.totalUpdate": "c1f388b2f958cc3dad57fa00206f16e63c3976096bb098c73f3adb49eb3072eb",
+    "Nci.Formalism.Annotation.unreachableCapacity": "3c9da5036d60b2388d291d08c6a6cab1ef4b7c851f78cf4459fc8bd6cc481a05",
+    "Nci.Formalism.Annotation.unreachableWork": "e6d7b2197e16e5dddb0a7e13c6ff150c772ba2701804777032ec3ba43a00eb57",
     "Nci.Formalism.Annotation.work": "82e98306cb330d77c68642728558d77779b1b373d3280e49d03674d7b4b98c44",
     "Nci.Formalism.Annotation.θ'": "c36bb29467369ba299bc1f820857190375b35ce280264dc04de6ff3752a7ece7",
-    "Nci.Formalism.BottomShare": "37cc810dca99f7cb6ab52723be49dbe1eb5944ac56b342ad932d9691dc6c0529",
-    "Nci.Formalism.FrozenTail": "9dd8657c37d37e5e441a38b2faa0156863e4797aea9430c21526e72896b27f5e",
-    "Nci.Formalism.PeakBound": "3a7b459c6624d5b6a1a32924874d3e304552c44874efd2d25c611b84cd7c60c0"
+    "Nci.Formalism.FrozenShare": "c30991424d10c653456174911ca697182c759d28d99a48ba4981edcbbd8e3e90",
+    "Nci.Formalism.PeakBound": "2f381efb7adae7c01b0836ab87bb62a726c0becce3af52ba41fcc74f89e5a87c",
+    "Nci.Formalism.ReachLimit": "ecf2d1fae4a5e57e7ec817351f39c27baad3baf3144088f22cbd48a841ed02cc"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
-    "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
    ]
   },
   "Definitions.Nci.Guarantees": {
@@ -27758,47 +27996,83 @@
    ]
   },
   "Definitions.Nci.Guarantees.Formalism": {
-   "digest": "49026a96f66f95804f607474d802d6fc545f990d42eecf0dd2fb8aa12d8b44a9",
+   "digest": "c61eaab8451e5ae8d9c87cc4c290a4b4d868e7dcd8cf774e93cde3bd16b5f517",
    "definitions": {
-    "Nci.Formalism.Guarantees.FitHonestServing": "92ae79e604fcafe793fbe74199588eb2eba55a3b91d56b9d24c9a0aec76f8e69",
-    "Nci.Formalism.Guarantees.FitServing": "579e47b1a051c6eeb897f280d226303b2bff226bd485b2415a00efd37129a019",
-    "Nci.Formalism.Guarantees.FitTraining": "ee545346ab6bd3574b249db4e485b12de423ed7251506992d9be0c8349c837b3",
-    "Nci.Formalism.Guarantees.Security": "1761ab7561088126452185cef609d2c172a099b229a2908a3de8ac8e70a0e20f",
-    "Nci.Formalism.Guarantees.Slowdown": "29db519b4d9efc32d896ba2b35ece5f46a31c241a31186c0d3b72e772e71679e",
-    "Nci.Formalism.Guarantees.SlowdownEven": "7881758023aed802fe91717a56650488518b863cc34389473fa87fbda6ecaa0e",
-    "Nci.Formalism.Guarantees.SlowdownFrozenTail": "906b16ed241835eb5531291ab78b6752352f6ed3b59c0c2be93ec2d6de868d83"
+    "Nci.Formalism.Guarantees.CapacityBound": "74870949b4b1666660bf3c366fb4f6d493aca90dfbda5d86336e1892a323f3c8",
+    "Nci.Formalism.Guarantees.Counting": "6998db00f9cbfdeca10e42d8bc465432181984e87ba5ae97a2e1ec471e887852",
+    "Nci.Formalism.Guarantees.FitHonestServing": "974760070b07ba321f59e7510d0cefab6a0dfaad27777eb3684df01af4f3bdbe",
+    "Nci.Formalism.Guarantees.FitServing": "087b43ca9e00a97e5777b54a75b74ebd40f617791edcf4ab7088b7af703a281d",
+    "Nci.Formalism.Guarantees.FitTraining": "cbc8d17a14ef16b878b19d5be0db3b4e8524f645fa50c4ee5b77ad369f630993",
+    "Nci.Formalism.Guarantees.ReachableShareBound": "26f7318a06e8173c77649cc911777ca90eb4e75c4af4e8030a4ae256a9638149",
+    "Nci.Formalism.Guarantees.Security": "fc9bd3dee62e6c1da519d2beefb15a82ea554e43a6272d9241fe73e8357e59f9",
+    "Nci.Formalism.Guarantees.Slowdown": "f1f732b1e58818d46dbc060df4a5a6f20671ffe279967a9420c71f37cb126155",
+    "Nci.Formalism.Guarantees.SlowdownClaim": "d17d920f31c5cd0c34f236fb2b61597f48be2bb95e2c581b2ab56776648afa53",
+    "Nci.Formalism.Guarantees.SlowdownEven": "4198c707c48018ff7a6f0510c852c1fb38d2c18572f8ef184567478563eeec2a",
+    "Nci.Formalism.Guarantees.SlowdownFrozen": "14d8b00666231f19583d8fa15fd36d5cc8fb646a75601fa91bba17f3e6798f62",
+    "Nci.Formalism.Guarantees.TokenForm": "923f14d181c78525281ac98bb57e32c765f27fceb8ae04c294cfb3bd8f397e92",
+    "Nci.Formalism.Guarantees.TokenFormVarying": "e6a5bebbe477f4b1f978c3bc07de7e996d161cff157b47c90f27b8918a9275a9"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.CapacityBound",
+    "Nci.Formalism.SecurityProofs.Counting",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
     "Nci.Formalism.SecurityProofs.FitTraining",
+    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim",
     "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail"
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
+    "Nci.Formalism.SecurityProofs.TokenForm",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying"
    ]
   },
   "Definitions.Nci.Guarantees.Formalism.Witnesses": {
-   "digest": "2c370582d20830ef4de358cfcd9d0b273ea31e5bef00332ba0c1a32f1a13a89e",
+   "digest": "ac6a5f39f94183958e965724d2f94564ae6655d91cca6c7fcb2bf3d6a4c9be8c",
    "definitions": {
-    "Nci.Formalism.Guarantees.Security_honest": "41a502bdfffc03660eacf6b97843967afd1332fb1e83913a081c760dcf28b404",
-    "Nci.Formalism.Guarantees.Security_nontrivial": "4f9789d8cabee4016f18beec4a2dba3028989a16ac78d30a621020592834cf6f",
-    "Nci.Formalism.Guarantees.SlowdownEven_honest": "43d9042fd1a67344b0ba17de3a0c01e36a64160c241e10bcd8355a1f1dbe0131",
-    "Nci.Formalism.Guarantees.SlowdownEven_nontrivial": "d85f63fd5fce15316938f6fd06f3a5f9db4e3d03aa2228ed7a886057667bdb15",
-    "Nci.Formalism.Guarantees.SlowdownFrozenTail_honest": "81c8e4c3f48fae177c6d8314cffd68b7cce4723a1e4b4682c335111a4a748f8b",
-    "Nci.Formalism.Guarantees.SlowdownFrozenTail_nontrivial": "02a93de68c488d952ccb09c0a90c8d59de2668f1fe9e890401952cde2e21bc87",
-    "Nci.Formalism.Guarantees.Slowdown_honest": "63c6d6a667304c36cf1cf7fd8aa3833583423738bd1ae83399d19ad57396b774",
-    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "6c48fdf0d3258c4c7a56785d4a57c16c314bf7449e48c70343a5ebbafe8205d4"
+    "Nci.Formalism.Guarantees.Counting_honest": "b7a5302b72a55eb692d106ef1d91fa452478f6e859823a96722dc5c792c83fd0",
+    "Nci.Formalism.Guarantees.Counting_nontrivial": "fbb12dd38bd8c111539819e4592affbb4f5c753b287ab6e1a36d9b8d06b091b8",
+    "Nci.Formalism.Guarantees.FitServing_honest": "c542dbfe54ee351fc9bbeb6ab1266e8f95eafa7feaf7325a9e19a3f7a2762d6a",
+    "Nci.Formalism.Guarantees.FitServing_nontrivial": "7935455fdb436211e244a377e64604640b7b74675f4744f87986c1685a63501e",
+    "Nci.Formalism.Guarantees.FitTraining_honest": "08b86b85eaeb90e09e3c3660be10fcf04fcc9f56f29eb1ec33e8ecab47044ba9",
+    "Nci.Formalism.Guarantees.FitTraining_nontrivial": "ca49f36e0f5dced0af098600bc423ae4356fc07f8a6ef3c5950965a11ff3e044",
+    "Nci.Formalism.Guarantees.Security_honest": "71eeb858d1e49cabc9249a7007594aa2b4979da84d8d631eb9dbdb7eb3cdbf26",
+    "Nci.Formalism.Guarantees.Security_nontrivial": "48baa68974935bac3a19cdc109082092f09c76fb7b530c2526dec7b2dd23eadb",
+    "Nci.Formalism.Guarantees.SlowdownClaim_honest": "ea8d1bebd62a75df88a5e055ada9a73ed5078277ee28ed5674355bea75b2d64f",
+    "Nci.Formalism.Guarantees.SlowdownClaim_nontrivial": "86be058c88998666101e69566a4fd18d72679470064e95469cfa88a5d91c46f7",
+    "Nci.Formalism.Guarantees.SlowdownEven_honest": "d814fd07b3848efbe6061c8679d378232c1b1e2b36c45e998162438345fcdcaf",
+    "Nci.Formalism.Guarantees.SlowdownEven_nontrivial": "337406208f5a256fbf116658e80b0b44073cfbafe86c1e3efb0b910e1bfc07e7",
+    "Nci.Formalism.Guarantees.SlowdownFrozen_honest": "44e5698566501da991a150ec29c4ba9ae25cce4c601ee4d315bbf8588257ad0d",
+    "Nci.Formalism.Guarantees.SlowdownFrozen_nontrivial": "216a227d6bf507f3c9159dd98c5ca98121589a26c0d7362836190672759a219b",
+    "Nci.Formalism.Guarantees.Slowdown_honest": "041a4cf74875cd49ede82b809db7e6591a08ccc3c013ef81656db17827f4cf94",
+    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "b1b7778f813e4e8265303f9c0109d9a4fb6f7a29f9ab3b71e489b0d75758971b",
+    "Nci.Formalism.Guarantees.TokenFormVarying_honest": "b72eb83fb1da7f9dcdf342290f0bc264838d136ebd94f0a8e492898bc12d7e4d",
+    "Nci.Formalism.Guarantees.TokenFormVarying_nontrivial": "dd2de679770f9ef47fdc1dea35c96c0b095baf3950caacc5d1ca99a12c6de3e6",
+    "Nci.Formalism.Guarantees.TokenForm_honest": "ab58ca6b5882a226f73f91b7969897fe0c3eb123973312f15f29dda02c078e07",
+    "Nci.Formalism.Guarantees.TokenForm_nontrivial": "b41d26a6690ee4bec9120bb74cc083aa7a5f16942d5eef8a8b4ae987831e4a50"
    },
    "guarantees": [
+    "Nci.Formalism.SecurityProofs.Counting_honest",
+    "Nci.Formalism.SecurityProofs.Counting_nontrivial",
+    "Nci.Formalism.SecurityProofs.FitServing_honest",
+    "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
+    "Nci.Formalism.SecurityProofs.FitTraining_honest",
+    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
     "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
     "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
+    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
+    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenForm_honest",
+    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
    ]
   },
   "Definitions.Nci.Guarantees.Info": {
