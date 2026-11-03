@@ -160,7 +160,8 @@ only an hour later; the preflight builds those modules (`LakeBuild`), from a mac
 (a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
 leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and refuses nothing
-(the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), the merged tree's
+(the after-landing run checks it).  A conflict only in pins, or in Lean the tip only ported that the head deletes, is merged
+as the sync merges it (`merged_tree`), the merged tree's
 Lean is ported as the sync ports it (`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it
 merges onto, as the sync's clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
 `tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so drive's sync runs the merged tree's
@@ -1779,7 +1780,12 @@ class Queue:
         if tree is None:
             return None, self._unmerged(r, files, members)
         if files:
-            self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
+            pins, gone = taken(self.workdir, tree, files)
+            if pins:
+                self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(pins)} rebuilt from the merged tree")
+            if gone:
+                self.log(f"research queue: #{pr.number} deletes {', '.join(gone)}, which `{self.branch}` changed only by "
+                         "porting it to the module system: deleted in the merge")
         elif not _git(self.workdir, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
             return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
         tree, files, pins, why = ported(self.workdir, tree)
@@ -2406,9 +2412,10 @@ def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
                 config: tuple[str, ...] = ()) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
     """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`;
     ``config``, git's `-c` options, from `base_drivers` to run them from ``base``'s tools): (the merged tree, the conflicted
-    files, `git merge-tree`'s result).  A merge whose every conflict is in a pin gives the tree with each pin rebuilt
-    (`repinned`) and those pins; one that doesn't merge gives None.  A git without `--attr-source` (before 2.40) merges
-    without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+    files, `git merge-tree`'s result).  A merge whose every conflict is in a pin, or in a `.lean` file ``head`` deleted that
+    ``base`` changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt (`repinned`) and each such
+    file deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without
+    `--attr-source` (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
     r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
              check=False)
     if r.returncode == 129 and "attr-source" in r.stderr:
@@ -2417,8 +2424,48 @@ def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
         r = _git(repo, *config, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
     if r.returncode == 1:
         files = sorted({f for f in r.stdout.splitlines()[1:] if f})
-        return repinned(repo, r.stdout.split()[0], base, head, files), files, r
+        tree, rest = port_deletions(repo, r.stdout.split()[0], base, head, files)
+        return (repinned(repo, tree, base, head, rest) if rest else tree), files, r
     return (None if r.returncode else r.stdout.split()[0]), [], r
+
+
+def port_deletions(repo: Path, tree: str, ours: str, theirs: str, conflicted: list[str]) -> tuple[str, list[str]]:
+    """(``tree``, a merge of ``theirs`` onto ``ours``, with each conflicted `.lean` file ``theirs`` deleted and ``ours``
+    changed only by porting it deleted, the files still conflicted).  Git runs no merge driver on a modify/delete, so a
+    branch made before the port that deletes a `.lean` file conflicts with the port's rewrite of it, where without the port
+    the merge is the deletion.  On a tip on the module system (`on_modules`), a file whose text there is what the tip's
+    `MODULES` makes of the merge base's (`_codemod`, over the tip's tree with the base's text in its place) is deleted; one
+    the tip changed beyond porting it, or with more than one merge base, stays conflicted."""
+    lean = [f for f in conflicted if f.endswith(".lean")]
+    if not lean:
+        return tree, conflicted
+    bases = _git(repo, "merge-base", "--all", ours, theirs, check=False).stdout.split()
+    if len(bases) != 1 or not on_modules(repo, ours)[0]:
+        return tree, conflicted
+    sides = _blobs(repo, [f"{c}:{f}" for c in (bases[0], ours, theirs) for f in lean])
+    gone = [f for f in lean if f"{theirs}:{f}" not in sides and f"{bases[0]}:{f}" in sides and f"{ours}:{f}" in sides]
+    if not gone:
+        return tree, conflicted
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
+        _git(repo, "read-tree", ours, env=env)
+        for f in gone:
+            mode, _, sha = _out(repo, "ls-tree", bases[0], "--", f).split("\t", 1)[0].split()
+            _git(repo, "update-index", "--cacheinfo", f"{mode},{sha},{f}", env=env)
+        new, _, _, _ = _codemod(repo, _git(repo, "write-tree", env=env).stdout.strip())
+        port = _blobs(repo, [f"{new}:{f}" for f in gone]) if new else {}
+        if not (take := [f for f in gone if port.get(f"{new}:{f}") == sides[f"{ours}:{f}"]]):
+            return tree, conflicted
+        _git(repo, "read-tree", tree, env=env)
+        _git(repo, "update-index", "--force-remove", *take, env=env)
+        return _git(repo, "write-tree", env=env).stdout.strip(), [f for f in conflicted if f not in take]
+
+
+def taken(repo: Path, tree: str, files: list[str]) -> tuple[list[str], list[str]]:
+    """(the pins, the deleted `.lean` files) among ``files``, the conflicts `merged_tree` resolved into ``tree``: a pin is
+    rebuilt in it, a file `port_deletions` took isn't in it."""
+    held = _blobs(repo, [f"{tree}:{f}" for f in files])
+    return [f for f in files if f"{tree}:{f}" in held], [f for f in files if f"{tree}:{f}" not in held]
 
 
 #: a path in a merge driver's command (`tools/verity/lean/merge.py`), relative to the top of the worktree git runs it in
@@ -2458,7 +2505,8 @@ def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     """The files a merge of ``head`` onto ``base`` would leave conflicted, so `status` names a conflict on any VM, not only on
     the one whose last sync recorded it; [] when it merges cleanly.  It merges as `Queue._merge` does (`merged_tree`): a
     conflict only in pins counts as none, since the sync rebuilds them (a conflict over PoUS's TRUSTED.sha256, which the sync
-    merges, refuses nothing)."""
+    merges, refuses nothing), and so does one over a `.lean` file the head deletes that the tip only ported
+    (`port_deletions`)."""
     tree, files, _ = merged_tree(repo, base, head)
     return [] if tree else files
 
@@ -3758,7 +3806,12 @@ class Preflight:
             notes.append(f"the merged tree's checks: `git merge-tree` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
         else:
             if files:
-                notes.append(Ran(f"conflicts only in pins: {', '.join(files)}, rebuilt from the merged tree"))
+                pins, gone = taken(self.repo, tree, files)
+                if pins:
+                    notes.append(Ran(f"conflicts only in pins: {', '.join(pins)}, rebuilt from the merged tree"))
+                if gone:
+                    notes.append(Ran(f"deletes {', '.join(gone)}, which {onto} changed only by porting it to the module "
+                                     "system: deleted in the merge"))
             tree, files, pins, why = ported(self.repo, tree)
             if tree is None:
                 found.append(why)

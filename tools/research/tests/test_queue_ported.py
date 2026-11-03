@@ -122,6 +122,28 @@ def test_each_pin_recording_a_ported_file_records_its_ported_digest_and_keeps_ev
             f"x.lean, y.lean ported by `{MODULES}`, and the pins {TRUSTED}, {EXFIL} rebuilt" in world.logs), world.logs
 
 
+def test_a_pr_made_before_the_port_deleting_a_file_the_port_only_ported_merges_with_it_deleted(world, tmp_path):
+    """Git runs no merge driver on a modify/delete, so a PR made before the port that deletes a `.lean` file conflicts with
+    the port's rewrite of it.  Where the tip's text is what its codemod makes of the merge base's, the merge takes the
+    deletion, as git's did before the port, and the log names it; a file the tip changed beyond porting it still conflicts."""
+    from research.queue import conflicting_files
+
+    old = "-- made before the port\nimport Init\n"
+    _move_main(world, {"Lib/Gone.lean": old, "Lib/Edited.lean": old})
+    world.gh.put(1, one := world.change({"Lib/Gone.lean": None, "a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"Lib/Edited.lean": None}))
+    main = _move_main(world, {**_tooling(tmp_path / "argv"), "Lib/Gone.lean": _port(old),
+                              "Lib/Edited.lean": _port(old) + "\ndef y := 2\n"})
+    assert conflicting_files(world.dev, main, one) == []
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1], {n: e.why for n, e in entries.items()}
+    assert _git(world.origin, "ls-tree", "--name-only", members[0].commit, "--", "Lib/Gone.lean") == ""
+    assert _show(world, members[0].commit, "a.txt") == "a1\n"
+    assert ("research queue: #1 deletes Lib/Gone.lean, which `next` changed only by porting it to the module system: deleted "
+            "in the merge" in world.logs), world.logs
+    assert entries[2].state == "refused" and entries[2].why == "conflicts with `next` in Lib/Edited.lean", entries[2].why
+
+
 def test_a_base_without_the_port_merges_lean_files_as_the_pr_wrote_them(world):
     """Before the port lands the tree has no codemod, and the merge is git's alone."""
     new = "import Lib.Old\n"
