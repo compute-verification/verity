@@ -17,6 +17,8 @@ sys.path.insert(0, str(HERE.parent))
 import kv as K  # noqa: E402
 import kv_twin as T  # noqa: E402
 
+from verity.core.protocols.remote_bandwidth import codec as RB  # noqa: E402
+
 SEED = hashlib.sha256(b"verity/word-codec/kv/vectors").digest()
 NAMES = sorted(K.FIELDS)
 VECTORS = HERE / "kv_vectors.json"
@@ -62,7 +64,7 @@ def test_fields(name):
     assert _probable_prime(f.p)
     assert not any(_probable_prime((1 << f.n) - c) for c in range(1, f.c, 4))
     assert f.root_squarings == f.n - 3
-    assert f.root_multiplies == {"p512": 18, "p768": 18, "p1024": 21, "p1280": 18, "p1536": 19}[name]
+    assert K.root_multiplies(f) == {"p512": 18, "p768": 18, "p1024": 21, "p1280": 18, "p1536": 19}[name]
     assert f.word_bytes == f.n // 8 and f.c < 1 << 16
     with pytest.raises(ValueError, match="unknown field"):
         K.field("p511")
@@ -133,6 +135,18 @@ def test_masked_round_trip(name, rounds):
         y = K.encode_word(m, 1000 + i, k)
         assert 0 <= y < f.p and K.decode_word(y, 1000 + i, k) == m
         assert (y == K.encode_word(m, 1000 + i, plain)) == (rounds == 1)
+
+
+@pytest.mark.parametrize("name", ["p512", "p1024"])
+@pytest.mark.parametrize("rounds,mask", [(2, False), (3, False), (2, True), (3, True)])
+def test_at_a_registrable_codec_a_key_is_the_stores(name, rounds, mask):
+    """At p512 and p1024, k ≥ 2, a key (the store codec's derivation over a `Sloth`) has the constants, mask and seed
+    of `codec.key` for the codec a registration names, and so its words and bound offsets."""
+    k, s = K.key(name, SEED, rounds, mask=mask), RB.key(SEED, RB.Codec(RB.FIELDS[name], rounds, mask))
+    assert k.codec == RB.Sloth(RB.FIELDS[name], rounds, mask) and k.field is s.field is K.field(name)
+    assert (k.c, k.tau, k.mask, k.seed) == (s.c, s.tau, s.mask, s.seed)
+    d, block = K.digest(_bound_data()), 3 * K.LAYERS + 17
+    assert K.binding(d, block, k) == RB.binding(d, block, s)
 
 
 def test_sigma_is_an_involution_on_the_field():
@@ -283,7 +297,7 @@ def test_twin_root_is_the_chain(name):
     a = random.Random(f.n + 3).randrange(f.p)
     x, sq, mu = T.root(K.to_limbs(a, f), f)
     assert K.from_limbs(x) % f.p == pow(a, f.root_exp, f.p)
-    assert (sq, mu) == (f.root_squarings, f.root_multiplies)
+    assert (sq, mu) == (f.root_squarings, K.root_multiplies(f))
 
 
 @pytest.mark.parametrize("name", NAMES)

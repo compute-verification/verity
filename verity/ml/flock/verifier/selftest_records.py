@@ -1,4 +1,4 @@
-"""`flock-circuit selftest --record-dir DIR` (PR #83 bb9a2a90) as replay sessions for `agree.py`.
+"""`flock-circuit selftest --record-dir DIR` (M0 at bb9a2a90) as replay sessions for `agree.py`.
 
     python selftest_records.py RECORD_DIR OUT_DIR
 

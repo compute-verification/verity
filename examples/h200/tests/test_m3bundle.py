@@ -1,4 +1,4 @@
-"""M3 proper's drawn blocks (``m3bundle.py``) at the small mini-rows shape: a draw of one block of every family the step
+"""M3 proper's sampled proof blocks (``m3bundle.py``) at the small mini-rows shape: a sample of one block of every family the step
 registers, through the weights, replay and build phases, bundles and checks every family but the gathers (references in
 the Program, with no Definition: visible failures), among them PV past n (V rows of no reads), the norms (their gain one
 registered row a word) and the embedding (its token the argmax its sequence committed a step before); a registered piece

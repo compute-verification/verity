@@ -9,7 +9,7 @@ import Flock.Firewall.Assumptions
 namespace Flock.Firewall.Contract
 
 /-- Under D8 (a), every value an accepted session lets out by the firewall's own computation is `spec`'s for its name. -/
-theorem holds_computed {spec : String → Option ByteArray} {pub : PublicInput} {t : Transcript} (h : Holds pub t)
+theorem holds_computed {spec : String → Option ByteArray} {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t)
     (hc : FirewallComputes spec t) {what : String} {src : By} {want sent : ByteArray} {ps : Array Nat}
     (hm : Item.fixed what src want sent ps ∈ t.items.toList) (hs : src = .recheck ∨ src = .shadow ∨ src = .own) :
     spec what = some sent := by

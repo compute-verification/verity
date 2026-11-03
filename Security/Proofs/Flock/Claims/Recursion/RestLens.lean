@@ -74,6 +74,7 @@ theorem statements_cap {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, hK0, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h

@@ -1,6 +1,6 @@
-"""The H200 plan (`h200.py`): the block's units are circuits' partition, every sampling block is a uniform draw its tables
+"""The H200 plan (`h200.py`): the block's units are circuits' partition, every execution phase is a uniform draw its tables
 divide within the statement cap, its K0 is IntegrityPeriodLog's, commitments are priced beside the proving and not in
-it, both alternative cuts are priced, the frontier is monotone and a sampling block of `window_blocks` blocks proves within its
+it, both alternative cuts are priced, the frontier is monotone and an execution phase of `window_blocks` blocks proves within its
 GPU time."""
 
 from __future__ import annotations

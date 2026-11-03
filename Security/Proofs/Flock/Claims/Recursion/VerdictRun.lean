@@ -22,7 +22,7 @@ namespace RecDeploy
 open Flock
 
 theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.merkle.Named) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
+    (sess : RunRecord) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hpar : (p.params != pcsParams st.merkle sch) = false)
     (hprog : FlockSoundness.Refine.repProg st sch p extras
       (Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8) = .ok ((), t₄))
@@ -43,7 +43,7 @@ theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.me
   rfl
 
 theorem verifyRepDWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.merkle.Named) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
+    (sess : RunRecord) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hs : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
       some stream)
     (hex : st.extra sess.points = .ok extras)

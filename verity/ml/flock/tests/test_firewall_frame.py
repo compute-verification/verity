@@ -1,4 +1,4 @@
-"""The outer firewall's frame (`Flock/Firewall/Frame.lean`, `flock-firewall frame`, live PROTOCOL.md §10.1) on hand-made reps.
+"""The outer ZK server's frame (`Flock/Firewall/Frame.lean`, `flock-firewall frame`, live PROTOCOL.md §10.1) on hand-made reps.
 At its start the frame draws the rep's randomness from the OS and commits it: the pads `h` (with `h_ab = h_a h_b` and the
 triple's `w = x y`), `μ`, the rows' padding, `τ`'s salt and the pads tree's salts, then the root; a start that brings any of
 them is refused. Each value absorbed in a masked phase leaves as `v + h_i` under the next pad of `zk_veil::Layout::absorbed`'s
@@ -14,8 +14,8 @@ failed. The frame decides the rep's refusals from the coins the stream answered 
 zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot short of full rank on the claim points of the table's
 reps (`prior`'s and the rep's own); level 0's `ρ_0, ρ_1` dependent over F128; and `β = 0` in the inner proof, whose four
 rounds leave through the frame too. Each answers `stop` at once, nothing of the round leaving. The frame fixes the inner
-proof's rounds: `(ρ, σ)` and `Y` are its own, from its draws and the coins (computed here with `gmul`), and of the other two
-only `final_c'` and `τ`'s commitment are the firewall's. Under the firewall `flock-circuit`
+proof's rounds: `(ρ, σ)` and `Y` are its own, from its samples and the coins (computed here with `gmul`), and of the other two
+only `final_c'` and `τ`'s commitment are the ZK server's. Under the ZK server `flock-circuit`
 hands the frame each device round unmasked (`firewall::Gate`), and Rust's `ρ` and `β` checks agree with the frame's
 (`live/src/coin_stop_vectors.json`). The prover's every other OS read is `flock-firewall tap`'s: a line `N` answered with
 `N` fresh bytes."""
@@ -129,7 +129,7 @@ class Frame:
         return [a ^ gmul(beta, m) for a, m in zip(self.h + self.pad_h, self.mu + self.pad_mu)]
 
     def own(self, content: bytes) -> bytes:
-        """The inner proof's round that the placeholder `content` stands for, from this rep's draws and coins; any other
+        """The inner proof's round that the placeholder `content` stands for, from this rep's samples and coins; any other
         round as it is."""
         if content not in (RHO_SIGMA, Y):
             return content
@@ -159,8 +159,8 @@ class Frame:
     def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None, sched: bytes | None = None,
               answer: bool = True):
         """The round's answer; a released round's coins (seeded, never 0 or 1, unless `coins`) are answered back, as the
-        firewall does, unless not `answer`. A device round comes with the scheduled round in its place (`sched`, else the
-        round itself, which then passes); the inner proof's rounds, the firewall's own (`own`), and a `fail` round come
+        ZK server does, unless not `answer`. A device round comes with the scheduled round in its place (`sched`, else the
+        round itself, which then passes); the inner proof's rounds, the ZK server's own (`own`), and a `fail` round come
         alone."""
         inner = any(content == r for r, _ in INNER)
         self.last, content = content, self.own(content)
@@ -288,7 +288,7 @@ def test_a_failed_round_stops_the_rep_whose_algebraic_values_then_leave_as_their
 def test_a_stopped_rep_releases_under_pads_h_what_the_honest_rep_releases_under_h_plus_v():
     """`h ↦ h + v` is a bijection of the uniform pads, so before `Finish` a stopped rep's release is distributed as an honest
     rep's, whatever the device sent and wherever its check failed; only `finish` differs. The inner proof's rounds, which
-    carry no device value, are compared as the frame's own from its draws."""
+    carry no device value, are compared as the frame's own from its samples."""
     o = order(**LAY)
     garbage = [(5 * i + 1) << 70 for i in range(len(ALG))]
     #: each round's first absorbed position: the device's honest values before the failed round, anything from it on
@@ -528,8 +528,8 @@ INNER_WHY = ["the inner proof's round 0 is not its label, final_c' and ε's sque
     (3, lambda f: obs(f.y()[:-1]) + squeeze(2, 4)),
 ])
 def test_the_frame_fixes_the_inner_proofs_rounds_and_computes_rho_sigma_and_y_itself(k, bad):
-    """`innerOwn`: of the inner proof's four rounds only `final_c'` and `τ`'s commitment are the firewall's, and `(ρ, σ)`
-    and `Y` are the frame's, from its draws and the coins (`zk_veil::prove_inner`'s formulas, here with `gmul`). A round
+    """`innerOwn`: of the inner proof's four rounds only `final_c'` and `τ`'s commitment are the ZK server's, and `(ρ, σ)`
+    and `Y` are the frame's, from its samples and the coins (`zk_veil::prove_inner`'s formulas, here with `gmul`). A round
     with a frame more, a value changed or one short is refused and releases nothing; the rep stays stopped, its own
     round then goes, and its `finish` is `stop`."""
     rounds = rep_rounds(ALG)

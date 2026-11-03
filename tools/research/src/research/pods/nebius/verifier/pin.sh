@@ -1,6 +1,6 @@
 #!/bin/bash
 # vy-verifier-pin COMMIT < TAR: pin the tree the verifier runs from, as root. TAR is infra's `git archive` of a pushed commit (below);
-# it is unpacked root-owned at /opt/vy-verifier/COMMIT, never changed after. The Lean toolchain the remote audit's Lake package names
+# it is unpacked root-owned at /opt/vy-verifier/COMMIT, never changed after. The Lean toolchain PoUB's Lake package names
 # is installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build
 # remote-audit-verifier remote-audit-difftest` and `sampled-proofs-verifier` (what a gate run's kit builds first) run there as

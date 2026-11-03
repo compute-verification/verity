@@ -172,7 +172,7 @@ carries row D's running sums at its rep's ends (`D.accE` at `W`: `acc0` the run'
 (`chainHolds_off`). The accumulator ports are `w`'s last four (`hjb`). -/
 theorem accPorts_of_chain {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {xi : Msg}
     {ms : List Msg} {cs : List Coin} (D : Rows.DecAt rd xi ms cs) (cls : FlockSoundness.Discharge.Recursion.HClass)
-    {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)
+    {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)
     (hx : xi = xIOf xo) {W : ℕ → ℕ → Array F128} (hW : Top.ChainHolds rd key xi ms cs W) (kk : ℕ × ℕ × ℕ × ℕ)
     (hn : kk.2.1 + kk.2.2.1 < 2) (copy : ℕ → F128)
     (hjb : ∀ e j, elemPort xi kk.1 e = some j → accBase xi ≤ j → j < accBase xi + 4)

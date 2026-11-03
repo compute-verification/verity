@@ -351,7 +351,7 @@ start's `cv` its midstate, every other `cv` the previous compression's output, a
 the digest bit `HmRow.msgBit` names. -/
 theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
+    (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) {segs : Array (ℕ × ℕ)} (hs : st.c.ports[p]!.segs = some segs) :
     (∀ k ≤ st.c.ports[p]!.chunks, ∀ j, HmRow.chainStart st.c.ports[p]! k = some j → ∀ t < 512,
       blockBit (L.model regs) z o (segCvCol st.c g p k + t) =
@@ -365,8 +365,8 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
       blockBit (L.model regs) z o (segMsgCol st.c g p k + t) = blockBit (L.model regs) z o (digestSrc st.c g p kk col)) := by
   have R := RowRanges.ofL L F.parse F.check
   have hrw : RowWires st.c := F.parse.rowWires
-  have hpin := pin_bit L hz o
-  have hzero := zero_bit L F hupv (by omega) hz o
+  have hpin := pin_bit_ex L hz o
+  have hzero := zero_bit_ex L F hupv (by omega) hz o
   -- every column of the row is a self input bit of its slot
   have hat : ∀ k ≤ st.c.ports[p]!.chunks, ∀ off < 1536, ∀ src,
       (rowCopiesAny st.c st.pin ++
@@ -422,18 +422,18 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
 `hm96` slot reads. -/
 theorem seg_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p l : ℕ} (hg : g < st.c.g)
+    (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p l : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hs : st.c.ports[p]!.segs = some (HmRow.segShape l).1) (hbits : st.c.ports[p]!.bits = l)
     (hn : st.c.ports[p]!.chunks = firstOf (HmRow.segShape l).1 (count l) + outerComps l) (hfit : SegFits l) :
     bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       (enc l (bytesOf (blockBit (L.model regs) z o) ((l + 7) / 8) (Typed.msgCol st.c g p)))
       (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
   have R := RowRanges.ofL L F.parse F.check
-  have hhm := hmSlot_flat L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
+  have hhm := hmSlot_flat_ex L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
   obtain ⟨hcvS, hcvC, hmC, hmD⟩ := seg_copies_tgt L F hda hupv hz o hg hp hs
   have hpos := segShape_pos l
   refine port_commit_seg R _ hp hs hbits hn hfit
-    (fun k hk => shaSlot_flat L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)) hhm
+    (fun k hk => shaSlot_flat_ex L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)) hhm
     (fun j hj t ht => ?_) hcvC hmC hmD
   have hsz : (HmRow.segShape l).1.size = count l := Binding.RowSeg.size_segShape l
   have hle : firstOf (HmRow.segShape l).1 j ≤ st.c.ports[p]!.chunks := by

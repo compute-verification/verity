@@ -122,7 +122,7 @@ class Renderer:
     """One request's completion stream rendered from its compact records (the module docstring): `chunk(cell)` gives
     the SSE event of one record, a stock OpenAI completions chunk, and `done()` the stream's end. `request` is the
     request's ingress ordinal, which every record must name. `id` and `created` are the client's own (a deployment's
-    shim draws the id as vLLM does)."""
+    shim samples the id as vLLM does)."""
 
     def __init__(self, vocab: Vocab, prompt: Sequence[int], model: str, *, request: int, id: str = "cmpl-compact",
                  created: int = 0) -> None:

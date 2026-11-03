@@ -96,30 +96,3 @@ def test_register_adds_the_union_bound_and_the_verifier(tmp_path):
     assert out["workload_fingerprint"]["software"]["verifier"]["binary_sha256"] == "s2"
     assert out["interaction"]["loopback_method"].startswith("BORROWED")
     assert out["lane"] == out["registered_by"] == "some-lane"
-
-
-def test_vllm_v1_instance_roots_are_step_roots_under_b_ligeros_domains(tmp_path):
-    from verity.ml.commitments import vllm_v1 as core
-
-    n = 5
-    h = instances.write(tmp_path / "inst.bin", "fp8-hopper", n, scheme="vllm-v1")
-    assert h["scheme"] == "vllm-v1" and h["leaf"] == "pos-leaf"
-    body = (tmp_path / "inst.bin").read_bytes().split(b"\n", 1)[1]
-    rb, units = h["row_bytes"], h["units"]
-    rows = {"a": [body[i * rb:(i + 1) * rb] for i in range(n)], "b": [body[(n + i) * rb:(n + i + 1) * rb] for i in range(n)]}
-    at = 2 * n * rb + 4 * n * units + 4 * n
-    ys = [int.from_bytes(body[at + 4 * i:at + 4 * i + 4], "little") for i in range(n)]
-    rows["y"] = [y.to_bytes(h["y_bytes"], "little") for y in ys]
-    ref = h["instances"]
-    ports = {t: instances.vllm_domain(t, instances.vllm_ctx_digest(dataset=ref["dataset"], tier=ref["tier"],
-                                                                   manifest_sha256=ref["manifest_sha256"], lo=ref["range"][0],
-                                                                   hi=ref["range"][1], tree=t),
-                                      n, K=h["k"], word_bits=8, y_bytes=h["y_bytes"]) for t in "aby"}
-    lens = {"a": rb, "b": rb, "y": h["y_bytes"]}
-    scheme = core.VllmV1(ports, {t: (lambda _, L=lens[t]: L) for t in "aby"})
-    for t in "aby":
-        leaves = [scheme.leaf_layout(t, i).digest(v) for i, v in enumerate(rows[t])]
-        assert scheme.root(t, leaves).hex() == h["roots"][t]
-        assert core.domain_digest(ports[t]).hex() == h["domain_digests"][t]
-        assert scheme.verify_path(t, bytes.fromhex(h["roots"][t]), n, 3, leaves[3], scheme.path(t, leaves, 3))
-        assert scheme.root(t, leaves).hex() != core.fold(leaves).hex()

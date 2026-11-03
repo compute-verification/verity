@@ -4,4 +4,6 @@ import Proofs.Flock.Soundness.Discharge.Inst.Prog
 import Proofs.Flock.Soundness.Discharge.Inst.Keys
 import Proofs.Flock.Soundness.Discharge.Inst.Order
 import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
-import Proofs.Flock.Soundness.Discharge.Inst.Tail
+import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+import Proofs.Flock.Soundness.Discharge.Composed.RegWords

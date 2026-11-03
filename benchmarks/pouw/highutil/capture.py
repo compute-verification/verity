@@ -1,4 +1,4 @@
-"""HIGHUTIL's activations: the s8 input of every linear of a W8A8 forward of the pinned checkpoint over real text.
+"""The highutil period's activations: the s8 input of every linear of a W8A8 forward of the pinned checkpoint over real text.
 
 The checkpoint is verity-int8/Llama-3.1-8B-INT8 (int8 weights, one float32 scale an output row). The text is the start of
 wikitext-2-raw-v1's test split, tokenized by the checkpoint's tokenizer into `--seqs` sequences of `--len` tokens (BOS

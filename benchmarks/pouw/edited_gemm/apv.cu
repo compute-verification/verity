@@ -4,7 +4,7 @@
 // Attention's P.V for H query heads sharing kvh = H / rep KV heads, s tokens (s <= 32768), head dimension 128. P_prob (H s
 // x s, row h s + q, in [0, 127]: softmax's quantized P, one scale a query row) is the peeled side; key 0 is its own P block
 // (p_sink), so the unit's block is keys 1 .. q and M = [1 <= key <= q]. P~ = M (P_prob - 64 + U(q, key mod 32)), U on
-// +-1 .. +-64 drawn once a call (s x 32) and shared by the heads. V (kvh 128 x s, channel-major, floor-quantized) is the
+// +-1 .. +-64 sampled once a call (s x 32) and shared by the heads. V (kvh 128 x s, channel-major, floor-quantized) is the
 // served side: X = V + b (b a fresh bit an entry). A 32-query block j (warp row w of 128-query tile qt, j = 4 qt + w) has
 // b_l = j: its keys are 0 .. 32 (j + 1) - 1, Ycum(rho, ch) = sum of X(key, ch) over 1 <= key < 32 j with key = rho mod 32,
 // split as Ycum = Y0 + 256 Y1 + 65536 Y2 (Y0, Y1 its low bytes as s8; |Ycum| <= 4 s, so Y2 = 0 at s <= 4096 and |Y2| <= 2

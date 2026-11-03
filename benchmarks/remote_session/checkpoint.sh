@@ -4,11 +4,10 @@
 # (HF_HOME, default /workspace/hf), any missing fetched from the Hub; then $HF_HOME/pinned/ROLE-REV8, a directory of hard
 # links to the cache's blobs (regular files, which `remote_bandwidth.store.check` takes and a snapshot's symlinks aren't:
 # `verifier.py --checkpoint`), every file of it held to the pin's SHA-512 (`store.check`, WORKERS processes); the
-# snapshot (`node.py --model-dir`) and the pinned directory each get a retention record (`research keep`, owner OWNER,
+# snapshot (`node.py --model-dir`) and the pinned directory each get a retention record (owner OWNER,
 # KEEP_EXPIRES). CHECK_ONLY=1 fetches and links nothing: it holds what is there to the pin. Writes $OUT/checkpoint.json.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 16 --timeout 2h \
-#     -- bash benchmarks/remote_session/checkpoint.sh
+#   OUT=DIR bash benchmarks/remote_session/checkpoint.sh      # on the GPU node
 set -uo pipefail
 : "${OUT:?}"
 ROLE=${ROLE:-QWEN25_32B_BF16}

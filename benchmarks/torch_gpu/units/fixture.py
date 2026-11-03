@@ -79,7 +79,7 @@ def sprinkle(rng, a: np.ndarray, p: float, pool: np.ndarray = SPECIALS) -> np.nd
 
 
 def words_with(rng, shape, exps) -> np.ndarray:
-    """Words of random sign and mantissa whose exponent fields are drawn from ``exps``."""
+    """Words of random sign and mantissa whose exponent fields are sampled from ``exps``."""
     e = rng.choice(np.asarray(exps), size=shape)
     return ((rng.integers(0, 2, size=shape) << 15) | (e << 7) | rng.integers(0, 128, size=shape)).astype(np.uint16)
 

@@ -64,7 +64,7 @@ against `manifest.json` (`tiers.<tier>.files.<file>.sha256`) before trusting it.
 
 `vu-k1536`: 64 blocks of 64 ids; each block holds 54 real instances and 10 corners at positions 3, 9, ..., 57, so every
 prefix is representative. Real = the 24 seeds + 24 × 143 (seed activation row × another real weight row of the same
-layer/op, drawn deterministically from the pinned Hugging Face checkpoint). Corner families and the sensitivity table
+layer/op, sampled deterministically from the pinned Hugging Face checkpoint). Corner families and the sensitivity table
 are in `manifest.json` and printed by `python -m verity_numerical.bench.instances stats`.
 
 ## Notes recorded while building
