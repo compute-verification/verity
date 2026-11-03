@@ -278,7 +278,8 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     elementwise, a step that writes some, a step that breaks P-match, and a void, never a measured 0: a counted product
     fed by a cycle with no fixed point at the k, which no subset drops, with the best set of the products no such
     cycle feeds beside it where there are any, their figure alone and the share of the step's counted fresh
-    multiplications they are); and assumed where untraced steps that update count none."""
+    multiplications they are, and where every counted product is so fed, that none is); and assumed where untraced
+    steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
 
@@ -316,7 +317,10 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     assert SW.products(bounds(products_rows(PRODUCT, p_match=[gather]))) == f"assumed: {broken}"
     short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
     assert unmeasured(products_rows(short)) == formalism.FRESH_VOID
-    assert SW.products(bounds(products_rows(short))) == f"assumed: {formalism.FRESH_VOID}"
+    alone = bounds(products_rows(short))
+    assert alone["console"]["inputs"]["fresh_products"]["converged"]["term"] is None
+    assert SW.products(alone) == (f"assumed: {formalism.FRESH_VOID}; every counted product is fed by such a cycle, so "
+                                  "no set is beside it")
     stuck = bounds(products_rows(PRODUCT, short))
     conv = stuck["console"]["inputs"]["fresh_products"]["converged"]
     assert stuck["console"]["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
