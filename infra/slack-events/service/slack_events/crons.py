@@ -2,10 +2,11 @@
 what they find next time); both stamp last_success_at in the cache.
 
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
-  again, urgent, as every doorbell it rings is (a person is waiting): the names of its routing line, else the rule's; when
-  that line sent it to the person's usual lane, @top is rung as well, once; after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
-  list of the chat threads still open goes to @top's inbox.  And `stall`: an event published STALL_S ago or more with no
-  message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it; and
+  again, urgent, as every doorbell it rings is (a person is waiting): the names of its routing line, else the rule's;
+  when that line sent it to the person's usual lane, the admin is rung as well, once; after ESCALATE_S with no lane reply
+  it rings @top and says so in the thread; in the run that falls in DAILY_AT, a list of the chat threads still open goes
+  to @top's inbox.  And `stall`: an event published STALL_S ago or more with no message done by the consumer since rings
+  @comms (at most hourly), since health's other numbers can't show it; and
   `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour.  A person's post that should ring someone and has
   neither a routing line nor a doorbell in any inbox is enqueued again, keyed on its channel and ts, so a second pass
@@ -35,7 +36,7 @@ OLDEST_TTL_S = 30 * 60                                           # reconcile's f
 DAILY_AT = (16, 0)                                               # UTC hour and minute: 9 AM PDT; the run within 5 minutes after
 EVERY_S = 5 * 60                                                 # the watchdog's schedule (vercel.json)
 REMINDER = "no :eyes: or lane reply in 15 min"                 # a shortcode: Slack may read an emoji back as one
-LANE_QUIET = "no answer in 15 min from @{lane}, their usual lane"   # @top's reminder for a post sent to a person's usual lane
+LANE_QUIET = "no answer in 15 min from @{lane}, their usual lane"   # the admin's reminder for a post sent to a person's usual lane
 ESCALATION = "no lane reply in 60 min"
 ESCALATED = "router: no lane has replied in 60 min; sent to @top"
 DAILY_HEAD = "from watchdog, chat threads still open (daily):"

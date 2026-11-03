@@ -53,9 +53,9 @@ def with_lane(world, lane: str) -> None:
 
 
 def test_with_no_model_a_persons_unaddressed_chat_post_goes_to_their_usual_lane(world, monkeypatch):
-    """Luke usually works with @circuits (people.d's `lane`): his posts that name no lane ring it, not @top, with a routing
-    line that says why.  A post naming a lane rings that lane; someone else's post in his chat, and a lane the registry
-    doesn't have, go to @top as before; a model's pick wins over the lane."""
+    """Luke usually works with the circuits lane (people.d's `lane`): his posts that name no lane ring it, not the admin,
+    with a routing line that says why.  A post naming a lane rings that lane; someone else's post in his chat, and a lane
+    the registry doesn't have, go to the admin as before; a model's pick wins over the lane."""
     with_lane(world, "circuits")
     post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
     assert consume(world.deps, world.event(CHAT, post), 1) == "unaddressed: @circuits"

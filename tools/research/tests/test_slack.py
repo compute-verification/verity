@@ -17,7 +17,7 @@ import tempfile
 import threading
 import urllib.error
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -1593,7 +1593,7 @@ def test_a_persons_doorbell_says_how_long_they_have_waited_and_still_rings_once(
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
     now = [1700001090.0]                                                                  # 18 min 10 s after the post
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(now[0], timezone.utc))
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(now[0], UTC))
     box = inbox(fake, routes_dirs, "top")
     reg, routes, api = slack.load_registry(registry), slack.Routes(), slack.Slack(TOKEN)
     ask = fake.add("CCHAT1", ts="1700000000.000100", text="is anyone there?", user=LUKE)
@@ -2261,7 +2261,7 @@ def test_a_route_that_cannot_be_read_is_not_rung_and_a_handle_with_no_route_has_
     """With no clone (the Slack events service has none), a name's route is its published copy.  One that can't be read,
     or reads as no JSON, is a failure to try again, NOT RUNG like a failed post, not a name with no inbox.  A name with no
     published copy (a 404) was read, and has no inbox.  Read again, it rings, once."""
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, UTC))
     top = inbox(fake, routes_dirs, "top", where="remote")
     down = {"top"}
 
@@ -2282,8 +2282,8 @@ def test_a_route_that_cannot_be_read_is_not_rung_and_a_handle_with_no_route_has_
     good = (routes_dirs[1] / "top.json").read_text()
     down.clear()
     (routes_dirs[1] / "top.json").write_text(good[:20])                                # cut short: not JSON
-    assert slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top"], log=out)[0] == \
-        "@top: NOT RUNG (its route couldn't be read: its published copy is not JSON)"
+    unread = "@top: NOT RUNG (its route couldn't be read: its published copy is not JSON)"
+    assert slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top"], log=out)[0] == unread
     (routes_dirs[1] / "top.json").write_text(good)
     routes = slack.Routes(get=get)
     for _ in range(2):

@@ -5,8 +5,8 @@ post in a chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting`
 `research msg deliver --channel KEY --event -` does today on @top's watcher. A post that names no one goes to @top, with
 a routing line in its thread: `sent to @top: no lane named; routing by model is off`. In a person's chat, their own post
 that names no one goes instead to the lane their people.d record names (`lane`, set by `research msg chat open|expect
---lane HANDLE`): `sent to @circuits: no lane named; douglas's usual lane`; a lane the registry doesn't have falls back to
-@top. Nothing is routed in `#agent-coordination`: there the sender rings its own doorbells. A newcomer whom
+--lane HANDLE`): `sent to @LANE: no lane named; NAME's usual lane`; a lane the registry doesn't have falls back to the
+admin's inbox. Nothing is routed in `#agent-coordination`: there the sender rings its own doorbells. A newcomer whom
 `research msg chat expect` published gets their chat when they join the workspace.
 
 ## Outline
@@ -26,9 +26,9 @@ that names no one goes instead to the lane their people.d record names (`lane`, 
     topic is empty or 45 s have passed. A failure retries with backoff; after 5 deliveries the message goes to
     `slack-events-dead`, a failure line goes in its thread and @top is rung.
   - `slack_events/crons.py`: the watchdog (every 5 minutes) rings again a chat post with no 👀 and no lane reply after
-    15 minutes (the names of its routing line, else the rule's), and @top as well, once, when that line sent it to the
-    person's usual lane; it rings @top and says so in the thread after 60, each doorbell URGENT (a person is waiting); once a day (16:00Z) posts the open chat threads to
-    @top's inbox. Reconciliation (every 10 minutes) re-enqueues, keyed on channel and ts, a person's post of the last
+    15 minutes (the names of its routing line, else the rule's), and the admin as well, once, when that line sent it to
+    the person's usual lane; it rings @top and says so in the thread after 60, each doorbell URGENT (a person is
+    waiting); once a day (16:00Z) posts the open chat threads to @top's inbox. Reconciliation (every 10 minutes) re-enqueues, keyed on channel and ts, a person's post of the last
     hour that should ring someone and has neither a routing line nor a doorbell. Both keep no state but what they post.
   - `slack_events/router.py`: `route_unaddressed`, the seam for routing by model. It returns None (no-model mode)
     unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built.

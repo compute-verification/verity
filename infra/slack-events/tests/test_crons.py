@@ -97,8 +97,9 @@ def with_lane(world, lane: str | None) -> None:
 
 
 def test_a_post_sent_to_a_persons_usual_lane_rings_top_as_well_once_when_that_lane_is_quiet_15_min(world):
-    """No model: Luke's unaddressed post goes to @circuits, his usual lane.  After 15 min with no 👀 and no lane reply the
-    reminder rings @circuits, and @top as well, once, both urgent; after 60 the escalation rings @top again."""
+    """No model: Luke's unaddressed post goes to the circuits lane, his usual lane.  After 15 min with no 👀 and no lane
+    reply the reminder rings that lane, and the admin as well, once, both urgent; after 60 the escalation rings the admin
+    again."""
     with_lane(world, "circuits")
     post = routed(world, "how do I read a PoUW receipt?")
     assert [m["text"] for m in world.lines(CHAT, post["ts"])] == ["sent to @circuits: no lane named; luke's usual lane"]

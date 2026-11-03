@@ -5,7 +5,7 @@ It keeps no state of its own.  The queue's lease keeps a message invisible while
 
 - A person's post that names no one gets a routing line in its thread, posted by `router` before any doorbell, naming the
   lanes picked and carrying the post's ts and those names in its metadata (ROUTING_LINE).  With no model, a chat's person
-  with a usual lane (people.d's `lane`) has it picked; anyone else's goes to @top.  A redelivery reads the thread
+  with a usual lane (people.d's `lane`) has it picked; anyone else's goes to the admin.  A redelivery reads the thread
   first: finding the line, it rings the names the line gives, with no second pick; `deliver`'s once-per-post check skips
   the lanes already rung.  Where the bot can't read the channel, a redelivery picks again and may post a second line.
 - A post routed by the names it starts with needs no line: its doorbells are its record.
@@ -166,7 +166,7 @@ def post_line(deps: Deps, ch: str, thread: str, ts: str, text: str, names: list[
 def route(deps: Deps, eid: str, ev: dict) -> str:
     """A person's post in a chat or ask channel: `deliver`, as `research msg deliver --channel KEY --event` does.  An
     unaddressed one rings the names of its routing line: the one already in its thread, else a new one naming the
-    model's picks, which in no-model mode is the chat person's usual lane, else @top."""
+    model's picks, which in no-model mode is the chat person's usual lane, else the admin's inbox."""
     rs, api, ch = deps.rs, deps.slack, ev["channel"]
     reg = registry_for(deps, ch)
     key = rs.key_of(reg, ch)
