@@ -59,11 +59,10 @@ def asksPad (C : Array (Array F128)) : Asks (StateT ℕ V) where
     set (k + 1)
     return fun i => cs[i]!
 
-/-- **A run answered by `C`'s coins as one answered past them by ones**: a run from round `k` that returns `a` at round
-`k'` takes no fewer rounds, and where `k'` is within `C`, the run answered past `C` by ones (`asksPad`) returns the
-same. -/
-def padSim (C : Array (Array F128)) : _root_.Flock.With.Sim (StateT ℕ V) (StateT ℕ V) where
-  R x y := ∀ k a k', x.run k = .ok (a, k') → k ≤ k' ∧ (k' ≤ C.size → y.run k = .ok (a, k'))
+/-- **A run as one that returns alike within `n` rounds**: a run from round `k` that returns `a` at round `k'` takes no
+fewer rounds, and where `k' ≤ n`, the other run returns the same. -/
+def padSim (n : ℕ) : _root_.Flock.With.Sim (StateT ℕ V) (StateT ℕ V) where
+  R x y := ∀ k a k', x.run k = .ok (a, k') → k ≤ k' ∧ (k' ≤ n → y.run k = .ok (a, k'))
   pure _ _ _ _ h := by
     cases h
     exact ⟨Nat.le_refl _, fun _ => rfl⟩
@@ -85,18 +84,20 @@ def padSim (C : Array (Array F128)) : _root_.Flock.With.Sim (StateT ℕ V) (Stat
       cases h
       exact ⟨Nat.le_refl _, fun _ => rfl⟩
 
-/-- `asksOf C` and `asksPad C` answer each round below `C.size` alike. -/
-theorem asksPad_rel (C : Array (Array F128)) :
-    _root_.Flock.Firewall.Finish.AsksRel (padSim C) (_root_.Flock.Firewall.Finish.asksOf C).toC
+/-- `asksOf C'` and `asksPad C` answer each round below `C'.size` alike, where `C'` is a prefix of `C`. -/
+theorem asksPad_rel (C' C : Array (Array F128)) (hpre : ∀ k < C'.size, C[k]? = C'[k]?) :
+    _root_.Flock.Firewall.Finish.AsksRel (padSim C'.size) (_root_.Flock.Firewall.Finish.asksOf C').toC
       (asksPad C).toC where
   link _ _ _ _ _ h := by cases h
   round c k a k' h := by
-    change ((_root_.Flock.Firewall.Finish.asksOf C).round c).run k = _ at h
+    change ((_root_.Flock.Firewall.Finish.asksOf C').round c).run k = _ at h
     dsimp only [_root_.Flock.Firewall.Finish.asksOf] at h
     rw [StateT.run_bind, StateT.run_get, pure_bind] at h
-    rcases hk : C[k]? with _ | cs
-    · rw [hk] at h; cases h
-    · rw [hk] at h
+    rcases hk' : C'[k]? with _ | cs
+    · rw [hk'] at h; cases h
+    · rw [hk'] at h
+      have hk : C[k]? = some cs := by
+        rw [hpre k (Array.getElem?_eq_some_iff.1 hk').1, hk']
       dsimp only at h
       split at h
       · rw [StateT.run_bind] at h
@@ -113,21 +114,21 @@ theorem asksPad_rel (C : Array (Array F128)) :
         simp only [asksPad, StateT.run_bind, StateT.run_get, StateT.run_set, StateT.run_pure, pure_bind, hg, hn',
           Bool.false_eq_true, ↓reduceIte]
 
-/-- **`repCons` answered past its coins by ones** returns as `repCons` answered by them, where that returns within
-them. -/
-theorem repCons_asksPad (C : Array (Array F128)) (st : _root_.Flock.Setup)
+/-- **`repCons` answered past its coins by ones** returns as `repCons` answered by a prefix `C'` of them, where that
+returns within `C'`. -/
+theorem repCons_asksPad (C' C : Array (Array F128)) (hpre : ∀ k < C'.size, C[k]? = C'[k]?) (st : _root_.Flock.Setup)
     (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : _) (extras : Array _root_.Flock.Claim) (pads : _) (ic : _)
     (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (tr : _root_.Flock.Transcript)
     {r : _} {tr' : _root_.Flock.Transcript} {k' : ℕ}
-    (h : ((_root_.Flock.Firewall.Finish.repCons (_root_.Flock.Firewall.Finish.asksOf C)
+    (h : ((_root_.Flock.Firewall.Finish.repCons (_root_.Flock.Firewall.Finish.asksOf C')
       (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
       extra lanePad salt).run tr).run 0 = .ok ((r, tr'), k'))
-    (hk : k' ≤ C.size) :
+    (hk : k' ≤ C'.size) :
     ((_root_.Flock.Firewall.Finish.repCons (asksPad C)
       (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
       extra lanePad salt).run tr).run 0 = .ok ((r, tr'), k') :=
-  ((_root_.Flock.Firewall.Finish.repCons_rel (padSim C) (asksPad_rel C) st hm sch tPad rep dom g cm0 extras pads ic
+  ((_root_.Flock.Firewall.Finish.repCons_rel (padSim C'.size) (asksPad_rel C' C hpre) st hm sch tPad rep dom g cm0 extras pads ic
     vals extra lanePad salt tr 0 (r, tr') k' h).2 hk)
 
 /-- **The finish's live inner proof of a rep** on the table `t`, as rep `rep` of a stream whose transcript starts at
@@ -237,7 +238,6 @@ theorem wordBytes_words_inner2 {t : ByteArray} (ht : t.size = 64) : wordBytes (w
           omega
         rw [getElem!_pos _ 0 hz]
         simp only [words, Array.getElem_map, Array.getElem_range, Nat.mul_zero, Nat.add_zero]
-        rfl
       rw [e1, wd_drop (hd i hi)]
       simp
   rw [hw]
@@ -424,9 +424,12 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       hr hown hv hI j r hrep hslot, Loop.wordBytes_words_inner0, Loop.finalCOf_inner0]
     exact FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self _ _
   · intro m w' j r _ _ _ hvs hrep hslot hv2
+    have key : ∀ T : ByteArray, T.size = 64 → Loop.inner2 (wordBytes (words (Loop.inner2 T) 16 4)) = Loop.inner2 T :=
+      fun T hT => by rw [Loop.wordBytes_words_inner2 hT]
     rw [finOf_tau_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok
-      hr hown hv hI j r hrep hslot, Loop.wordBytes_words_inner2 (Loop.vsTau_size _ _ _ _ _ _ _ _)] at hv2
-    exact Loop.inner2_inj (hvs.symm.trans hv2)
+      hr hown hv hI j r hrep hslot, key] at hv2
+    · exact Loop.inner2_inj (hvs.symm.trans hv2)
+    · exact Loop.vsTau_size _ _ _ _ _ _ _ _
 
 /-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesValsOwn`
 (`Loop.takesValsOwn_honestVals`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix
