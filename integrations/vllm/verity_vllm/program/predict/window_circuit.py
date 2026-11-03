@@ -39,7 +39,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K columns, halved while an earlier node reads that slice
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
 - An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit `Int8RowQuant_v3{K, R}` (v1 with
-  ``x`` as R rows of K / R, R its writers' rows: one after a norm, a head's at o_proj), and its product `ScaledMmS8_v1{K, N}`,
+  ``x`` as R rows of K / R, R its writers' rows: one after a norm, a head's at o_proj; v5 at the K of H1's tables, below),
+  and its product `ScaledMmS8_v1{K, N}`,
   ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
   is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
@@ -81,6 +82,17 @@ table, as the LM head's rows and as ``x0``'s rows at the table's width. Nothing 
 another or to the checkpoint: the verifier pins each by name, its root and domain id (`interface.registered_reads`), at the
 committer's registration (`window_weights`).
 
+Given H1's tables of the window (`Tables`, by the names the Commit record registers them under: round s's A table of one K,
+``row-table/<s>/k<K>``, and its input-ids table, ``input-ids/<s>``), the circuit reads them where the model makes them, each
+a read of an output row (`interface.Read`), which fills no input and holds the proof block's output row to the registered
+row, so a table that isn't what the model computed fails the proof of the proof block that reads it. Each quantizer at
+that K is `Int8RowQuant_v5{K, R}`, whose ``o2`` is H1's leaf of its row (its codes four to a u32, then its scale: the
+node's words whole), read as row c·m + i of its round's A table, c its index among its position's int8 linears of that K
+and i its position's row; each position's token row (its lane's of the slot's `ScanSlots_v2`, its `TokenFeed_v1`'s or the
+previous select's) is read as row i of its round's input-ids table. A position's round and row are a fixed load's (`Tables.at`):
+every request of the class's prompt length and outputs, all admitted at round 0 in slot order, so the circuit is still the
+class's alone, and a window that isn't that load is refused (`takes`).
+
 A reader port that reads m writer rows is cut m ways (`interface.Layout.cut`, `window_builder._Builder.settle`), a row of
 it a writer row, so no unit copies rows together: a template's port is read at one row count, its rows its outer elements
 cut that many ways. Every wire and read is stated per node as a pattern (a node's heads, KV groups and slices as digits of
@@ -96,7 +108,9 @@ digit, then the run), and like entries that follow on merge, at one step and the
 (`window_builder.inference`).
 
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary than
-its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program would read
+its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), with H1's tables a window that
+isn't the fixed load, a class of more than one boundary or whose round 0 passes a table's rows a call, and a position whose
+int8 linears of the tables' K aren't their calls a round, a request whose Program would read
 more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request
 a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16
 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port read at two row counts
@@ -203,6 +217,46 @@ class WindowClass:
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
 
 
+@dataclass(frozen=True)
+class Tables:
+    """H1's tables of a window that its circuit reads where its proof blocks make them (module docstring), a table a round of
+    the class's ``outputs`` rounds: the A table of contraction ``k``, ``m`` rows of each of the round's ``calls`` int8
+    linears of K = ``k``, call after call, each row H1's leaf (codes four to a u32, then the f32 scale), and the input-ids
+    table, ``m`` rows of one u32 id. Their names are the ones the Commit record registers them under (pouw's
+    `credit.commit_rows` and `credit.commit_ids`), and a position's rows are at the fixed load's public rows (`at`)."""
+    k: int
+    m: int
+    calls: int
+
+    def __post_init__(self) -> None:
+        if not all(type(v) is int and v >= 1 for v in (self.k, self.m, self.calls)):
+            raise ValueError(f"H1's tables' K, rows a call and calls a round are positive integers, not {self}")
+
+    def a(self, s: int) -> str:
+        """Round ``s``'s A table of K = ``k``."""
+        return f"row-table/{s}/k{self.k}"
+
+    @staticmethod
+    def ids(s: int) -> str:
+        """Round ``s``'s input-ids table."""
+        return f"input-ids/{s}"
+
+    @staticmethod
+    def at(cls: WindowClass, slot: int, position: int) -> tuple[int, int]:
+        """Slot ``slot``'s position ``position`` as its round and row under a fixed load: every request of the class's
+        prompt length and outputs, all admitted at round 0 in slot order, so a prompt position is round 0's row
+        ``slot · prompt + position`` and a later one round ``position - prompt + 1``'s row ``slot``."""
+        L = cls.prompt
+        return (0, slot * L + position) if position < L else (position - L + 1, slot)
+
+    @staticmethod
+    def schedule(cls: WindowClass) -> list[list[tuple[int, int, int]]]:
+        """The fixed load's rows by round, ``(request, start, n)`` each (`steps.RowRef`): round 0 each slot's prompt, in
+        slot order, and each later round each slot's next position."""
+        L, S = cls.prompt, cls.slots
+        return [[(k, 0, L) for k in range(S)]] + [[(k, L + s - 1, 1) for k in range(S)] for s in range(1, cls.outputs)]
+
+
 _GRAIN = Grain()
 
 
@@ -230,11 +284,14 @@ class _Program:
     (`WindowClass.anchor`, `WindowClass.lane`) through ``scan`` (`scan_state.bridge`), its outputs the scan's through
     ``entry`` (`io_shell.SlotEntry_v1`, its last position's `SelectEntry_v1`'s): each node's output as the rows that hold it,
     ``(lo, hi, row)`` its words [lo, hi) as ``row`` and the units after it, (hi - lo) / ``row.words`` rows of one output at
-    consecutive units (none for the last position's select, which nothing reads)."""
+    consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
+    (`Tables`)."""
 
-    def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any) -> None:
+    def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any,
+                 tables: Tables | None = None) -> None:
         self.b, self.fn, self.cls, self.name, self.slot_index = b, fn, cls, name, slot
         self.anchor, self.lane, self.scan, self.entry = cls.anchor(slot), cls.lane(slot), scan, entry
+        self.tables = tables
         params = [name for name, _ in self.fn.signature()[0]]
         if set(params) != {PROMPT, WEIGHTS}:
             raise Unexpressible(f"{name}: its inputs are {params}; the window's lowering takes a prompt and the weights record "
@@ -264,6 +321,10 @@ class _Program:
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
         self.entry_unit: tuple[str, int] | None = None
+        #: with ``tables``: each position's int8 linears of K = tables.k so far, and each such quantizer's H1 leaf row
+        #: (`Int8RowQuant_v5`'s ``o2``, the node's words whole), which no reader reads
+        self.quants: list[int] = []
+        self.packed: dict[int, Row] = {}
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -357,7 +418,8 @@ class _Program:
     def _token(self, tok: Any) -> tuple[Row, ...]:
         """The next position's token: the first's its lane's of the scan state row the slot's `ScanSlots_v2` reads at its
         anchor (with the slot it carries, its occupancy word and its head), below the class's prompt cap every other's
-        `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select."""
+        `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select.
+        With ``tables``, that row is held to the position's row of its round's input-ids table (`Tables.at`)."""
         p, NP = self.position, self.cls.prompt
         self.position += 1
         segs = self.segments(tok.refs)
@@ -371,20 +433,29 @@ class _Program:
             self.slot, self.occ, self.head = (Row(tid, u, f"o{o + 1}", 2 * (NP + 1)), Row(tid, u, f"o{o + 2}", 2),
                                               Row(tid, u, f"o{o + 3}", 4))
             self.tokens.append(None)
-            return (Row(tid, u, f"o{o}", 2),)
-        if p >= NP:
+            rows: tuple[Row, ...] = (Row(tid, u, f"o{o}", 2),)
+        elif p >= NP:
             self.tokens.append(None)
-            return self.rows(tok.refs)
-        tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=False))
-        self.b.feed(tid, "slot", u, 1, (self.slot,))
-        self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
-        self.tokens.append((tid, u))
-        self.slot = Row(tid, u, "o1", 2 * (NP + 1))
-        return (Row(tid, u, "o0", 2),)
+            rows = self.rows(tok.refs)
+        else:
+            tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=False))
+            self.b.feed(tid, "slot", u, 1, (self.slot,))
+            self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
+            self.tokens.append((tid, u))
+            self.slot = Row(tid, u, "o1", 2 * (NP + 1))
+            rows = (Row(tid, u, "o0", 2),)
+        if self.tables is not None:
+            if len(rows) != 1 or rows[0].words != 2:
+                raise Unexpressible(f"{self.name}: position {p}'s token is rows {rows}, not one u32 row an input-ids row holds")
+            s, i = self.tables.at(self.cls, self.slot_index, p)
+            self.b.value(rows[0].tid, rows[0].out, rows[0].unit, self.tables.ids(s), i, self.tables.m)
+            self.quants.append(0)
+        return rows
 
-    def _one(self, j: int, node: Any, fn: Any = None) -> None:
+    def _one(self, j: int, node: Any, fn: Any = None) -> tuple[str, int]:
         """A node that is one unit of its own Definition, or of ``fn`` where given (one over the same leaves, its ports
-        other shapes of them): each parameter a weight read or its writers' rows."""
+        other shapes of them, its first outputs the node's return fields): each parameter a weight read or its writers'
+        rows. -> the unit."""
         fn = node.fn if fn is None else fn
         tid, u = self.b.unit(fn)
         lay = IF.layout(fn)
@@ -394,8 +465,10 @@ class _Program:
                 self.b.read(tid, p, u, (1,), self.weight(arg.refs, words), (0,))
             else:
                 self.b.feed(tid, p, u, 1, self.rows(arg.refs))
-        ends = list(accumulate((w for _, w in lay.outs), initial=0))
-        self.outs[j] = [(a, e, Row(tid, u, o, w)) for (o, w), a, e in zip(lay.outs, ends, ends[1:])]
+        outs = lay.outs[:len(self.words[j]) - 1]
+        ends = list(accumulate((w for _, w in outs), initial=0))
+        self.outs[j] = [(a, e, Row(tid, u, o, w)) for (o, w), a, e in zip(outs, ends, ends[1:])]
+        return tid, u
 
     _RMSNormTriton = _one
 
@@ -407,7 +480,8 @@ class _Program:
         (N, eps), xs, rs = (node.fn.bindings[k] for k in ("N", "EPS")), self.rows(x.refs), self.rows(res.refs)
         if self.b.read_rows.get((descriptor_id(node.fn), "x"), len(xs)) == len(xs) and \
                 len(xs) + len(rs) + 3 <= self.b.grain.rows:
-            return self._one(j, node)
+            self._one(j, node)
+            return
         C = min(self.b.grain.norm, N)
         if N % C:
             raise Unexpressible(f"{node.fn.id}: its {N} elements aren't parts of the grain's {C}")
@@ -425,11 +499,22 @@ class _Program:
 
     def _Int8RowQuant(self, j: int, node: Any) -> None:
         """`Int8RowQuant_v1{K}` as one unit `Int8RowQuant_v3{K, R}`, its ``x`` the R rows its writers hold it in (one after a
-        norm, a head's at o_proj), so each template's ``x`` is read at one row count; refused where R doesn't divide K."""
+        norm, a head's at o_proj), so each template's ``x`` is read at one row count; refused where R doesn't divide K. At
+        the K of ``tables``, `Int8RowQuant_v5{K, R}`, whose ``o2`` is held to row c·m + i of its round's A table: c its
+        index among its position's int8 linears of that K, i its position's row (`Tables.at`)."""
         R, K = len(self.rows(node.args[0].refs)), node.fn.bindings["K"]
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
-        self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
+        t = self.tables
+        if t is None or K != t.k:
+            self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
+            return
+        fn = bind(IX.Int8RowQuantV5, K=K, R=R)
+        tid, u = self._one(j, node, fn)
+        self.packed[j] = Row(tid, u, "o2", dict(IF.layout(fn).outs)["o2"])
+        s, i = t.at(self.cls, self.slot_index, self.position - 1)
+        self.b.value(tid, "o2", u, t.a(s), self.quants[-1] * t.m + i, t.calls * t.m)
+        self.quants[-1] += 1
 
     def _SiluMul(self, j: int, node: Any) -> None:
         """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
@@ -705,35 +790,44 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  name: str = NAME, provable: bool = True) -> IF.Circuit:
+                  name: str = NAME, provable: bool = True, tables: Tables | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
-    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is every
-    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block Flock's composer
-    proves (`_Builder.settle`) unless not ``provable`` (a probe's, or a test's of too small a class)."""
-    return lower(registered, cls, programs, grain, name, provable=provable).circuit
+    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), and with ``tables`` H1's
+    tables (`Tables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
+    (`class_size`). Each unit is a proof block Flock's composer proves (`_Builder.settle`) unless not ``provable`` (a probe's,
+    or a test's of too small a class)."""
+    return lower(registered, cls, programs, grain, name, provable=provable, tables=tables).circuit
 
 
 def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME,
-          wired: bool = True, provable: bool = True) -> Lowered:
+          wired: bool = True, provable: bool = True, tables: Tables | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
-    wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`)."""
+    wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`). With ``tables``,
+    refused unless the class is one boundary, round 0's rows (each slot's prompt) fit a table's ``m`` rows a call and
+    every position has ``tables.calls`` int8 linears of K = ``tables.k``."""
     programs = cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
+    if tables is not None and (len(cls.boundaries) != 1 or cls.slots * cls.prompt > tables.m):
+        raise Unexpressible(f"{cls}: H1's tables {tables} are read at a fixed load's rows, every slot at the window's one "
+                            f"boundary and round 0 its {cls.slots} slots' prompts of {cls.prompt}, at most {tables.m} rows")
     try:
         scan = SS.bridge(cls.scan, cls.prompt)
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
     b, fn = _Builder(grain, programs, provable), class_program(registered, cls).program.fn
-    progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry) for k in range(programs)]
+    progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry, tables) for k in range(programs)]
     for (j, node), r in product(enumerate(fn.body.nodes), progs):
         r.lower(j, node)
     for r in progs:
         if r.position != cls.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
+        if tables is not None and set(r.quants) != {tables.calls}:
+            raise Unexpressible(f"{r.name}: int8 linears of K = {tables.k} by position {r.quants}, not H1's {tables.calls} "
+                                "calls a round")
     if wired:
         b.settle()
     roots, openings = b.merged()
@@ -748,18 +842,22 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
-                   placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True) -> IF.Circuit:
+                   placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
+                   tables: Tables | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
     ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
     certifier's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
-    end unchecked. A last output past the window's end is the scan's to carry (module docstring)."""
-    takes(compiled, cls, placed)
-    return class_circuit(registered, cls, None, grain, name, provable)
+    end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
+    tables read (`Tables`), refused unless the window is the fixed load."""
+    takes(compiled, cls, placed, tables)
+    return class_circuit(registered, cls, None, grain, name, provable, tables)
 
 
-def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None) -> None:
-    """Refuse a window ``cls``'s slots don't take (`window_circuit`)."""
+def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None,
+          tables: Tables | None = None) -> None:
+    """Refuse a window ``cls``'s slots don't take (`window_circuit`); with ``tables``, one whose rows by step aren't the
+    fixed load's (`Tables.schedule`), the public rows H1's tables are read at."""
     units = [u for u in compiled.requests if u is not None]
     if len(units) > cls.slots:
         raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
@@ -787,7 +885,11 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
         if u.LP > cls.prompt or u.T + 1 > cls.outputs:
             raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
+    if tables is not None and (got := [[(r.request, r.start, r.n) for r in step] for step in compiled.steps]) \
+            != Tables.schedule(cls):
+        raise Unexpressible(f"the window's rows by step {got} (request, start, n), not its class's fixed load "
+                            f"{Tables.schedule(cls)}, the rows H1's tables are read at")
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "WindowClass", "class_circuit",
-           "class_program", "lower", "stop_ids", "takes", "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "Tables", "WindowClass",
+           "class_circuit", "class_program", "lower", "stop_ids", "takes", "window_circuit"]
