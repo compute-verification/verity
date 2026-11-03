@@ -944,7 +944,7 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
         args = (w[k] for k in cases.WINDOW_ARGS[4:-2])
         assert Cr._window_outcomes(d["key"], d["ledger"], d["pins"], d["main"], *args, big_k, t, rc.lms_verify)[1] is None
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
-    assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one credit period" in refused[1]
+    assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
     assert "doesn't count toward it, so the credit period earns nothing" in refused[1]
     got, refused = _period("no-circuit", seed)
     assert got is None and refused[0] == "circuit"

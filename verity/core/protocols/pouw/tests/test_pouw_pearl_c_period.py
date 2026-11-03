@@ -247,7 +247,7 @@ def test_a_context_not_a_string_refuses_the_period_as_a_refused_pass():
     p0, p0b, p1 = a
     for context in (None, 7, [p0b["context"]], {"context": p0b["context"]}):
         got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, {**p0b, "context": context}, p1]))
-        assert got is None and why[0] == Cr.PASS_REFUSED and "pass 1 of period p-a" in why[1], context
+        assert got is None and why[0] == Cr.PASS_REFUSED and "pass 1 of credit period p-a" in why[1], context
         assert "context is not a string" in why[1]
 
 
