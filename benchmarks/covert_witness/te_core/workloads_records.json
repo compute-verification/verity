@@ -1,6 +1,6 @@
 {
- "source": "training/standard-workloads (art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f, 2026-11-03T08:28:25Z): python -m te_core.standard_workloads (te_core 4.2, reading B; islands/standard-workloads)",
- "tables": "art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f",
+ "source": "training/standard-workloads (art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6, 2026-11-03T09:35:36Z): python -m te_core.standard_workloads (te_core 4.4, reading B; islands/standard-workloads)",
+ "tables": "art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6",
  "rows": [
   {
    "workload": "standard",
@@ -14,7 +14,8 @@
     "seq_len": 1024,
     "batch_tokens": 131072,
     "optimizer": "muon",
-    "tokens_per_param": 4.23084
+    "tokens_per_param": 4.23084,
+    "vocab": 32000
    },
    "rho_inputs": {
     "C_gates": 5.82439e+19,
@@ -30,7 +31,7 @@
     "d_gates": 0,
     "delta_grad_bits": null,
     "w_fit_gates": 62975900000.0,
-    "alpha_ratio": 0.998695
+    "alpha_ratio": 0.99905
    },
    "input_status": {
     "C_gates": "measured",
@@ -44,14 +45,14 @@
     "delta_bits": "measured",
     "delta_t_bits": "measured",
     "d_gates": "measured",
-    "delta_grad_bits": "assumed: unmeasured, 6 of 2302 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 2.80663e9 bits)",
+    "delta_grad_bits": "assumed: unmeasured, 1 of 2302 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 2.80663e9 bits)",
     "w_fit_gates": "measured",
     "alpha_ratio": "measured"
    },
-   "rho_default": 184.071,
-   "rho_console": 301.026,
+   "rho_default": 184.136,
+   "rho_console": 301.133,
    "reading": "B",
-   "te_core": "4.2",
+   "te_core": "4.4",
    "steps": 2302,
    "checkpoint": 2301,
    "invalid": [],
@@ -62,7 +63,9 @@
      "token_gates": 2.504732588587358e+16,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     },
     {
      "gates": 5.819802784245152e+19,
@@ -70,15 +73,19 @@
      "token_gates": 5.798585415611526e+19,
      "affected_gates": 5.798585415611526e+19,
      "steps": 2296,
-     "delta_grad_bits": 2806628352
+     "delta_grad_bits": 2806628352,
+     "partial_bits": 1141063680,
+     "grad_bits": 1141063680
     },
     {
      "gates": 2.063595361796096e+16,
      "tokens": 327680.0,
      "token_gates": 2.063595361796096e+16,
-     "affected_gates": 0.0,
+     "affected_gates": 2.063595361796096e+16,
      "steps": 5,
-     "delta_grad_bits": null
+     "delta_grad_bits": 1141063680,
+     "partial_bits": 0,
+     "grad_bits": 0
     }
    ],
    "traces": [
@@ -93,6 +100,18 @@
      "tail_share": 0.7316123602699095,
      "delta_grad_bits": 2806628352,
      "state_bits": 1665564672
+    },
+    {
+     "step": 140,
+     "tokens": 65536,
+     "sigma": 1.0,
+     "affected_share": 1.0,
+     "token_factor": 1.0,
+     "a_bits": 8192.0,
+     "u1_bits": 832782336.0,
+     "tail_share": 0.5946843836339681,
+     "delta_grad_bits": 1141063680,
+     "state_bits": 1141063680
     }
    ]
   },
@@ -110,7 +129,9 @@
     "optimizer": "adamw",
     "inner_steps": 50,
     "syncs": 8,
-    "sync_bits": 1141063680
+    "sync_bits": 1141063680,
+    "workers": 4,
+    "vocab": 32000
    },
    "rho_inputs": {
     "C_gates": 5.03723e+18,
@@ -147,7 +168,7 @@
    "rho_default": 184.933,
    "rho_console": 302.437,
    "reading": "B",
-   "te_core": "4.2",
+   "te_core": "4.4",
    "steps": 408,
    "checkpoint": 408,
    "invalid": [],
@@ -158,7 +179,9 @@
      "token_gates": 0,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     },
     {
      "gates": 1.25398850174507e+16,
@@ -166,7 +189,9 @@
      "token_gates": 1.2523662942960472e+16,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     },
     {
      "gates": 5.024676955669427e+18,
@@ -174,7 +199,9 @@
      "token_gates": 5.021567307734269e+18,
      "affected_gates": 5.021567307734269e+18,
      "steps": 399,
-     "delta_grad_bits": 13692764160
+     "delta_grad_bits": 13692764160,
+     "partial_bits": 1141063680,
+     "grad_bits": 4564254720
     },
     {
      "gates": 10814716293120.0,
@@ -182,7 +209,9 @@
      "token_gates": 0,
      "affected_gates": 0.0,
      "steps": 8,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     }
    ],
    "traces": [
@@ -213,6 +242,267 @@
    ]
   },
   {
+   "workload": "rl",
+   "model": "20M",
+   "run": "r20261103-073616-b950",
+   "art": "art:50be50932e5725ab777908df4bd705337286d815f58ba0914cb14954b95f99a8",
+   "about": "the rollouts alone: s-t20 with a rank-16 LoRA on every matrix, trained 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
+   "dials": {
+    "n_params": 35658240,
+    "update": "lora",
+    "rank": 16,
+    "targets": "all",
+    "layers": null,
+    "rollout_precision": "fp4",
+    "prompt_tokens": 256,
+    "generated_tokens": 512,
+    "vocab": 32000
+   },
+   "rho_inputs": {
+    "C_gates": 2405010000000000.0,
+    "w_gates": 16247600000.0,
+    "w_fwd_gates": 62140400000.0,
+    "sigma": 0.994872,
+    "tau_bits": 5.00652,
+    "a_bits": 8192,
+    "u_points": "0:0;1:1.51388e7",
+    "u_in_points": "0:0;1:1.51388e7",
+    "delta_bits": 15138800.0,
+    "delta_t_bits": 15138800.0,
+    "d_gates": 4382720000000.0,
+    "delta_grad_bits": 0,
+    "w_fit_gates": 16247600000.0,
+    "alpha_ratio": 1
+   },
+   "input_status": {
+    "C_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+    "w_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+    "w_fwd_gates": "measured",
+    "sigma": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+    "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16); a round is not traced (its decode loop's length is no token axis of the capture)",
+    "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "u_in_points": "assumed: te_core's stub (A1'), u_in = u; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "delta_bits": "measured",
+    "delta_t_bits": "measured",
+    "d_gates": "measured",
+    "delta_grad_bits": "measured",
+    "w_fit_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's untraced convention); a round is not traced (its decode loop's length is no token axis of the capture)"
+   },
+   "rho_default": 1201640.0,
+   "rho_console": 2401160.0,
+   "reading": "B",
+   "te_core": "4.4",
+   "steps": 3,
+   "checkpoint": 203,
+   "invalid": [],
+   "parts": [
+    {
+     "gates": 2405012863023162.0,
+     "tokens": 147264,
+     "token_gates": 2392679626553472.0,
+     "affected_gates": 206237157654528.0,
+     "steps": 3,
+     "delta_grad_bits": 0.0,
+     "partial_bits": 0.0,
+     "grad_bits": 0.0
+    }
+   ],
+   "rounds": [
+    {
+     "after_step": 1,
+     "prompt": 256,
+     "generated": 512,
+     "sequences": 64
+    },
+    {
+     "after_step": 100,
+     "prompt": 256,
+     "generated": 512,
+     "sequences": 64
+    },
+    {
+     "after_step": 200,
+     "prompt": 256,
+     "generated": 512,
+     "sequences": 64
+    }
+   ]
+  },
+  {
+   "workload": "rl",
+   "model": "20M",
+   "run": "r20261103-073633-f483",
+   "art": "art:6895c5250c73946c73a6fd1d48f9f1df062f75d84bacead87de262b9dfdd984e",
+   "about": "the rollouts alone: s-t20 fully fine-tuned 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
+   "dials": {
+    "n_params": 35658240,
+    "update": "full",
+    "rollout_precision": "fp4",
+    "prompt_tokens": 256,
+    "generated_tokens": 512,
+    "vocab": 32000
+   },
+   "rho_inputs": {
+    "C_gates": 2267730000000000.0,
+    "w_gates": 15315300000.0,
+    "w_fwd_gates": 62140400000.0,
+    "sigma": 0.994561,
+    "tau_bits": 5.00652,
+    "a_bits": 8192,
+    "u_points": "0:0;1:1.6054e8",
+    "u_in_points": "0:0;1:1.6054e8",
+    "delta_bits": 160540000.0,
+    "delta_t_bits": 160540000.0,
+    "d_gates": 0,
+    "delta_grad_bits": 0,
+    "w_fit_gates": 15315300000.0,
+    "alpha_ratio": 1
+   },
+   "input_status": {
+    "C_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+    "w_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+    "w_fwd_gates": "measured",
+    "sigma": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+    "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16); a round is not traced (its decode loop's length is no token axis of the capture)",
+    "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "u_in_points": "assumed: te_core's stub (A1'), u_in = u; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "delta_bits": "measured",
+    "delta_t_bits": "measured",
+    "d_gates": "measured",
+    "delta_grad_bits": "measured",
+    "w_fit_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's untraced convention); a round is not traced (its decode loop's length is no token axis of the capture)"
+   },
+   "rho_default": 13579300.0,
+   "rho_console": 27111000.0,
+   "reading": "B",
+   "te_core": "4.4",
+   "steps": 3,
+   "checkpoint": 203,
+   "invalid": [],
+   "parts": [
+    {
+     "gates": 2267727095724090.0,
+     "tokens": 147264,
+     "token_gates": 2255393859254400.0,
+     "affected_gates": 1558600751306112.0,
+     "steps": 3,
+     "delta_grad_bits": 0.0,
+     "partial_bits": 0.0,
+     "grad_bits": 0.0
+    }
+   ],
+   "rounds": [
+    {
+     "after_step": 1,
+     "prompt": 256,
+     "generated": 512,
+     "sequences": 64
+    },
+    {
+     "after_step": 100,
+     "prompt": 256,
+     "generated": 512,
+     "sequences": 64
+    },
+    {
+     "after_step": 200,
+     "prompt": 256,
+     "generated": 512,
+     "sequences": 64
+    }
+   ]
+  },
+  {
+   "workload": "inference",
+   "model": "20M",
+   "run": "r20261103-073641-d1f4",
+   "art": "art:9cc81ba658eb834ce70646a83f13c5c60c15c39eec9091bcf5644d9e6513225e",
+   "about": "an unregistered model of s-t20's shape (fresh init, 600 AdamW steps from scratch), served NVFP4 W4A4 with an NVFP4 head; the rounds alone, 3 (after steps 1, 300 and 600) of 64 sequences",
+   "dials": {
+    "n_params": 35658240,
+    "precision": "fp4",
+    "prompt_tokens": 768,
+    "generated_tokens": 192,
+    "tokens": 184128,
+    "vocab": 32000
+   },
+   "rho_inputs": {
+    "C_gates": 2952080000000000.0,
+    "w_gates": 15965800000.0,
+    "w_fwd_gates": 62140400000.0,
+    "sigma": 0.995822,
+    "tau_bits": 12.0125,
+    "a_bits": 8192,
+    "u_points": "0:0;1:1.6054e8",
+    "u_in_points": "0:0;1:1.6054e8",
+    "delta_bits": 160540000.0,
+    "delta_t_bits": 160540000.0,
+    "d_gates": 0,
+    "delta_grad_bits": 0,
+    "w_fit_gates": 15965800000.0,
+    "alpha_ratio": 1
+   },
+   "input_status": {
+    "C_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+    "w_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+    "w_fwd_gates": "measured",
+    "sigma": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+    "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16); a round is not traced (its decode loop's length is no token axis of the capture)",
+    "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "u_in_points": "assumed: te_core's stub (A1'), u_in = u; a round is not traced (its decode loop's length is no token axis of the capture)",
+    "delta_bits": "measured",
+    "delta_t_bits": "measured",
+    "d_gates": "measured",
+    "delta_grad_bits": "measured",
+    "w_fit_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's untraced convention); a round is not traced (its decode loop's length is no token axis of the capture)"
+   },
+   "rho_default": 13042600.0,
+   "rho_console": 26039500.0,
+   "reading": "B",
+   "te_core": "4.4",
+   "steps": 3,
+   "checkpoint": 603,
+   "invalid": [],
+   "parts": [
+    {
+     "gates": 2952075385874490.0,
+     "tokens": 184128,
+     "token_gates": 2939742149404800.0,
+     "affected_gates": 1476540314183040.0,
+     "steps": 3,
+     "delta_grad_bits": 0.0,
+     "partial_bits": 0.0,
+     "grad_bits": 0.0
+    }
+   ],
+   "rounds": [
+    {
+     "after_step": 1,
+     "prompt": 768,
+     "generated": 192,
+     "sequences": 64
+    },
+    {
+     "after_step": 300,
+     "prompt": 768,
+     "generated": 192,
+     "sequences": 64
+    },
+    {
+     "after_step": 600,
+     "prompt": 768,
+     "generated": 192,
+     "sequences": 64
+    }
+   ]
+  },
+  {
    "workload": "lora",
    "model": "20M",
    "run": "r20261103-053921-7400",
@@ -227,7 +517,8 @@
     "optimizer": "adamw",
     "seq_len": 1024,
     "batch_tokens": 65536,
-    "tokens": 247136256
+    "tokens": 247136256,
+    "vocab": 32000
    },
    "rho_inputs": {
     "C_gates": 6.86893e+19,
@@ -264,7 +555,7 @@
    "rho_default": 17.638,
    "rho_console": 28.8449,
    "reading": "B",
-   "te_core": "4.2",
+   "te_core": "4.4",
    "steps": 7542,
    "checkpoint": 7541,
    "invalid": [],
@@ -275,7 +566,9 @@
      "token_gates": 0,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     },
     {
      "gates": 6.868016462145184e+19,
@@ -283,7 +576,9 @@
      "token_gates": 6.868002912640049e+19,
      "affected_gates": 6.8446335954919645e+19,
      "steps": 7541,
-     "delta_grad_bits": 37748736
+     "delta_grad_bits": 37748736,
+     "partial_bits": 12582912,
+     "grad_bits": 12582912
     },
     {
      "gates": 9107795747958536.0,
@@ -291,7 +586,9 @@
      "token_gates": 9107522526920108.0,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     }
    ],
    "traces": [
@@ -324,7 +621,8 @@
     "optimizer": "adamw",
     "seq_len": 1024,
     "batch_tokens": 65536,
-    "tokens": 242253824
+    "tokens": 242253824,
+    "vocab": 32000
    },
    "rho_inputs": {
     "C_gates": 6.85987e+19,
@@ -361,7 +659,7 @@
    "rho_default": 17.3941,
    "rho_console": 28.446,
    "reading": "B",
-   "te_core": "4.2",
+   "te_core": "4.4",
    "steps": 7393,
    "checkpoint": 7392,
    "invalid": [
@@ -374,7 +672,9 @@
      "token_gates": 0,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     },
     {
      "gates": 6.8589438152937054e+19,
@@ -382,7 +682,9 @@
      "token_gates": 6.85891149910616e+19,
      "affected_gates": 6.8357480983951114e+19,
      "steps": 7392,
-     "delta_grad_bits": 90832896
+     "delta_grad_bits": 90832896,
+     "partial_bits": 30277632,
+     "grad_bits": 30277632
     },
     {
      "gates": 9279573988384520.0,
@@ -390,7 +692,9 @@
      "token_gates": 9278766597553580.0,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     }
    ],
    "traces": [
@@ -422,7 +726,9 @@
     "seq_len": 1024,
     "batch_tokens": 32768,
     "optimizer": "adamw",
-    "tokens_per_param": 1.51094
+    "tokens_per_param": 1.51094,
+    "vocab": 32000,
+    "student_d_model": 256
    },
    "rho_inputs": {
     "C_gates": 2.7015e+18,
@@ -459,7 +765,7 @@
    "rho_default": 121.463,
    "rho_console": 198.638,
    "reading": "B",
-   "te_core": "4.2",
+   "te_core": "4.4",
    "steps": 600,
    "checkpoint": 600,
    "invalid": [],
@@ -470,7 +776,9 @@
      "token_gates": 0,
      "affected_gates": 0.0,
      "steps": 1,
-     "delta_grad_bits": null
+     "delta_grad_bits": null,
+     "partial_bits": null,
+     "grad_bits": null
     },
     {
      "gates": 2.7014958497880376e+18,
@@ -478,7 +786,9 @@
      "token_gates": 2.7011063505838986e+18,
      "affected_gates": 1.5496283472372805e+18,
      "steps": 600,
-     "delta_grad_bits": 1249173504
+     "delta_grad_bits": 1249173504,
+     "partial_bits": 416391168,
+     "grad_bits": 416391168
     }
    ],
    "traces": [
