@@ -78,10 +78,13 @@ class Start:
 
 
 def starts(scored: list[dict], shapes: dict[str, dict], rate: float) -> list[Start]:
-    """Each start with scored checkpoints and an l0 on a data, the headline data first (te_core.panels' `DATA`)."""
-    out = [Start(s, shapes[s], d, [r for r in scored if (r["start"], panels.data_of(r)) == (s, d)], rate)
-           for s, d in sorted({(r["start"], panels.data_of(r)) for r in scored},
-                              key=lambda sd: (panels.DATA.index(sd[1]), sd[0]))]
+    """Each start with scored checkpoints and an l0, on its data (`data_of_shape`), the headline data first
+    (te_core.panels' `DATA`). A checkpoint is on its start's data whether or not its record carries `data`: the scorer's
+    measured copy of a traced record need not, and te_core.frontier scores no v3 record from a start of another
+    tokenizer."""
+    out = [Start(s, shapes[s], data_of_shape(shapes[s]), [r for r in scored if r["start"] == s], rate)
+           for s in sorted({r["start"] for r in scored},
+                           key=lambda s: (panels.DATA.index(data_of_shape(shapes[s])), s))]
     return [s for s in out if s.l0 is not None]
 
 
