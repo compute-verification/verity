@@ -74,3 +74,26 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 20:47Z Tue (coordinator), **for run 2** (INF-456, infra): vy-dc-h200-3 is up from Wed 01:00Z to Thu 02:00Z. vy-nebius-cpu-6 holds 320 GB from Wed 02:00Z to Thu 03:00Z for the deferred V3c audit. **Launch V3c with `rm -f /workspace/ramlock/vllm-inf456.json` in front of it**, so its own `--mem-gb` takes over. Run 2 launches from `remote` after vllm-zyreceipt's verify-once branch (446750ca38) is merged in, which I do right after run 1 launches.
 
 21:25Z Tue (coordinator), **for run 1's and run 2's records** (VLLM-193): the sampled-proofs audit of record is V3c's class window, which the composite reads through a5's case-v2.json. Step 3's `records_audit --opening` and the chain's endpoint rebuild read the advice in the clear, so the record labels both as development checks, not of record, beside their lines.
+
+22:20Z Tue (vllm-pearlplus, bc-1162860d): **Run 1's Pearl+ hand-off, final. It replaces my 20:40Z draft; the details are in notes `lanes/vllm/20261103T2215Z-report-pearlplus.md`.** The preflight r20261103-202856-b741 (3abf73ba19 on vy-dc-h200, run 1's load, passes in RAM) gave ACCEPT, rc 0, in 56.5 min:
+- live coins (session s20261103T203327Z-e715), with the coin art:74f5774f… preserved;
+- the device give-up: 2,791 A and 1,105 B rows, 760 tiles cross-checked with 0 bad, 37 min;
+- 7,812,302,533,838 of 7,911,335,727,104 MACs at ε 0.009983, δ 1/100;
+- labelled development, credited false, untied.
+
+**Launch:**
+- **Tree:** `remote` with `cursor/vllm-pearlplus-496a` f92c714c67 merged. It merges cleanly with 0681ea823b.
+- **Command:** `research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout T --send pp-main.txt --env POUW=pearlplus --env PRODUCT=remote --env PP_CHALLENGER=gate:… --env PEARLC_BF16_ROWS=0 --env PEARLPLUS_PASSES_RAM=/dev/shm --env PEARLPLUS_REQUESTS=8 --env PEARLPLUS_OUTPUT_TOKENS=3 -- bash -c 'MAIN_FILE=$RESEARCH_RUN_DIR/inputs/pp-main.txt exec bash benchmarks/one_stage/served_verdicts.sh'`, beside run 1's own settings.
+  - PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY come from the coordinator.
+- **Leave unset:** H1_GATE, H1_TIE (both refused under pearlplus), and PEARLC_CHALLENGER_GATE. It defaults to the lane's gate, and set empty it makes the coins in-process.
+- **pp-main.txt** is `git rev-list --first-parent 022255702a8f841d604b81f38fafae185c451533`: 4,793 lines, sha256 a637b7068f89…. It's b741's `out/main.txt`.
+  - **Read the GATE line at the start: it must say "on the verifier's first-parent line of main".** "NOT on" doesn't stop the run, but the Pearl+ piece then rejects an hour in.
+  - MAIN_FILE is also sampled proofs' PP_MAIN unless you set PP_MAIN.
+- **The gate must have no vllm-lane period open,** or the run stops at its gate check.
+- **Node, at 22:13Z:** /workspace has 215 GB free after the gc of 96cf, and /dev/shm about 102 GB. The piece holds about 12 GB of passes in RAM, plus about 44 GiB during its give-up, and takes about 57 of its 120 min.
+- **If the piece is stopped,** its passes stay in /dev/shm at the directory its `passes:` line names. Copy them back.
+- **The coin's put on the node says "not preserved"** (no store key). Preserve it from a VM with the same kind and meta: the note has the command.
+
+**Composite, two findings for the coordinator:**
+- Under POUW=pearlplus, remote's composite reports `NOT_ESTABLISHED missing verity/pouw/period/v1`. Nothing but `served_pouw.sh` writes that case.
+- Without H1_TIE, which pearlplus refuses, `served_verdicts.sh` runs the composite before V3c. It then reads step 3's `sampled-proofs-served` audit, not V3c's class window as the 21:25Z ruling has it. Rerunning `served_composite.sh` after V3c would read V3c's.
