@@ -208,13 +208,15 @@ files = ["**/*.md"]
 words = { "laws" = "sampling designs", "law" = "sampling design", "Laws" = "Sampling designs", "Law" = "Sampling design" }
 
 [rewrite]
-# Never rewritten: the term source and its lint (they name the old words), records of what was (the earlier moves and
-# their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated fixtures, files whose
-# bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
-exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/allowlists/**", "tools/move/**",
-           "tools/verity/check/tests/test_move_check.py", "archive/**", ".agents/skills/friction/SKILL.md",
-           "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
-           "**/lake-manifest.json"]
+# Never rewritten: the term source and the lints and tables that spell the old words on purpose (the ratchet, the older
+# retired-terms test, which research's message vocabulary reads, and its tests), records of what was (the earlier moves
+# and their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated fixtures, files
+# whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files. The ratchet's allowlist
+# holds only paths and counts, so it is rewritten: its paths follow their files.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json"]
 
 [keep]
 # A domain tag or format id, a note, an artifact, a branch, a lane. Then what recorded data or another system reads: a
@@ -237,8 +239,9 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/a
 # and the names PoUB's kept `draw` shares with the rest of the tree: `draw_salt` (PoUS's and the bandwidth audit's) and the
 # guarantee `drawIsSubset` (`--moves` renames a guarantee by its lock's path, not its file's)
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
-            '(?<![\w\\])(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\("coins", )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
-            '[\x22\x27][a-z_]+/(?:draw|drawn|draws|law|firewall)[\x22\x27]',
+            '(?<![\w\\])(?<!parametrize\()(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\("coins", )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
+            '\\[\x22\x27](?![A-Z])[^\s\x22\x27\\/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27\\/{]*\\[\x22\x27]',
+            '[\x22\x27][a-z_-]+/[\w-]*(?i:draw|law|firewall|coin.server)[\w-]*[\x22\x27]', '\buniform/flock-coin-server\b',
             '\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)*\b|\b(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)+\b',
             '(?<=[/.])(?:draw|drawn|draws|firewall|law)\.(?:json|jsonl|log|bin|lock|txt|npz)\b', '\bfirewall\.slice\b',
             '(?<![\w-])-{0,2}(?:\w+-)+\w*(?i:draw|law|firewall)\w*(?:-\w+)*(?![\w-])',
@@ -246,7 +249,10 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '(?<![\w-])--\w*(?i:draw|law|firewall)\w*(?![\w-])',
             '(?<!a\.sizes, )\ba\.(?:draw|draws|drawn|undrawn|law|firewall)\b',
             '\b(?:draw_k|draw_file|draws_dir|fresh_draws|os_draws|lean_refuses_drawn|lean_refuses_drawless|rec_inner_draw|replay_draw)\b',
-            '\bdraw_salt\b', '\bdrawIsSubset\b',
+            '\b(?:drawn_at|checks_before_draw|unit_draw|draw_counts|draw_coin|draw_after|served_is_lean_draw|draw_reason|draws_scan)\b',
+            '\bdraw_salt\b', '\bdrawIsSubset\b', '\bverity_flock[./]firewall\b', '(?<=from verity_flock import )firewall\b',
+            '\binner\.draw\b', '\b(?:every|need \d+) draw coins?\b', '(?<=listen: )firewall\b',
+            '\bGATE_(?:ABSENT|PEERS|ROLE)=[^\x22\x27\n]*',
             '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
             '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
             '(?<!import Definitions\.Accounting\.)\bRemote\.Draw\b', '\bDrawnLayer\b',
@@ -262,6 +268,9 @@ strings = []
 # two things each, so its `draw` and `draws` wait for a name of its owner's; a vector file Rust includes by name; the
 # vLLM pouw-serve options whose field is its flag's attribute; a versioned schema's file
 "verity/core/service/firewall/**" = ["firewall"]
+"verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]
+"benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
+"benchmarks/numerical/tests/bench/test_placement_gate.py" = ["firewall"]
 "verity/core/protocols/remote_bandwidth/**" = ["draw", "draws"]
 "benchmarks/remote_session/**" = ["draw", "draws"]
 "Security/Properties/RemoteAudit*" = ["draw", "draws"]
