@@ -113,20 +113,22 @@ pilot's unless `--pin` names the commits. `training/frontier-fit` is `frontier_f
 `v2.3-pilot`), L(C) = E + A·C^(−γ) fitted to its unconstrained frontier, the least held-out bits per byte at each total
 training compute in gates (from scratch: the pilot's pretraining runs, or the v3 ladder's from `--ladder-points` and
 `--ladder-fit`; each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their
-residuals. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and 11, a
-checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching g, else
-"no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start on the
-same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ, and the
-inputs the console's dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in
-exact at the dial's k), so S = pρ; `build` refuses a row whose columns miss `formalism.at` at a dial cell. Its coverage
-(gain target by data by decade of ρ) names the cells nothing reaches. `training/frontier-branches` (`panels`'s: the
-frontier and each start's honest and throttled branches over the dial) is retired from the console and no longer PUT;
-`panels` still holds the dial both use (`dial`, `rho_columns`, `page_inputs`, `mismatches`). Every scoring command
-(`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`, `algorithm_policy`) applies one cap, `policy.eligible`: a
-checkpoint is scored only when its model's forward gates per token are at most the greater of its start's and the
-compute-optimal model's at its loss under the ladder's fit (their `--ladder-fit FILE`, `policy.ladder_fit`), and twice
-its start's where there is no fit or the fit doesn't reach its loss (`policy.CAP_FALLBACK`), so a grown model is still
-scored; the rest are left out as `over-cap`.
+residuals; a data with neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then
+converts its from-scratch losses or prices C0. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and
+gain target g (1.1, 2 and 11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's
+first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any
+checkpoint from the start on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against
+the policy's slowdown ρ, and the inputs the console's dial recomputes ρ from at any (c, k) (te_core 4.x's per-part
+Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ; `build` refuses a row whose columns miss
+`formalism.at` at a dial cell. Its coverage (gain target by data by decade of ρ) names the cells nothing reaches, and
+counts the valid checkpoints `formalism.refusal` refuses, which no cell holds (`tables/refused.json` gives each one's
+reason). `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
+`page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
+`algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
+token are at most the greater of its start's and the compute-optimal model's at its loss under the ladder's fit (their
+`--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or the fit doesn't reach its
+loss (`policy.CAP_FALLBACK`), so a grown model is still scored; the rest are left out as `over-cap`.
 
 ## What the integrator calls
 
