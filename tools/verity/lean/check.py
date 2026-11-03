@@ -1006,21 +1006,15 @@ def facts_program(pkg: Path) -> str:
     return str(program)
 
 
-def stored_facts(path: Path) -> dict:
-    """The facts document at ``path``: a `FACTS` that `facts_of` kept, or the plain `facts.json` of an older audit."""
-    data = path.read_bytes()
-    return json.loads(gzip.decompress(data) if path.suffix == ".gz" else data)
-
-
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
-    runs): the facts document it writes, which ``work`` keeps only gzipped (`FACTS`, read back by `stored_facts`), since a
-    recorded run publishes ``work``.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
+    runs): the facts document it writes.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
     `lift`: that definition (`head`), its module, and the SHA-256 of its type with the definition unfolded once
     (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
     also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
-    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`)."""
+    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`).  ``work`` keeps the document only
+    gzipped, as `FACTS` (read back by `stored_facts`), since a recorded run publishes ``work``."""
     out, kept, canon = work / "facts.json", work / FACTS, work / "canon.jsonl"
     for p in (out, kept, canon):
         p.unlink(missing_ok=True)
@@ -1066,6 +1060,12 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
         for r in es:
             r["sha256"] = hashes[f"read:{r['name']}"]
     return facts
+
+
+def stored_facts(path: Path) -> dict:
+    """The facts document at ``path``: a `FACTS` that `facts_of` kept, or the plain `facts.json` of an older audit."""
+    data = path.read_bytes()
+    return json.loads(gzip.decompress(data) if path.suffix == ".gz" else data)
 
 
 def renamed(name: str, moved: dict[str, str]) -> str:
