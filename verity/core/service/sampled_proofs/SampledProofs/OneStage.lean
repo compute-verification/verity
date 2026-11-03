@@ -3,7 +3,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`; the protocol refuses `bernoulli` at `0 < p < 1`, `paramsCovered`, as the sampled audit's soundness statement
+  "k"}`; the protocol refuses `bernoulli` at `0 < p < 1`, `paramsOfJson`, as the sampled audit's soundness statement
   doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
   `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
@@ -30,7 +30,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
   absent), and `coins` when the parameters name a challenger: the evidence of the draw's coins
   (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); the protocol refuses a draw that carries a
-  `closure` (`evidenceCovered`), outside the sampled audit's soundness statement;
+  `closure` (`evidenceOf`), outside the sampled audit's soundness statement;
 * **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
@@ -126,7 +126,9 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
-def paramsOfJson (j : Json) : V Params := do
+/-- The parameters as parsed, before `paramsOfJson`'s refusal of the law: the stream's run reads them and refuses the law
+itself (`Run.run`, `shapes`). -/
+def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
@@ -247,12 +249,21 @@ def paramsOfJson (j : Json) : V Params := do
       "windows is named in held (or pinned)")
   pure p
 
+/-- The parameters (`paramsParsed`), with a `bernoulli` law at `0 < p < 1` refused (`Draw.countVaries`): its drawn count
+varies, which the sampled audit's soundness statement doesn't cover. -/
+def paramsOfJson (j : Json) : V Params := do
+  let p ← paramsParsed j
+  if Draw.countVaries p.verifier.law then
+    throw "the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
+  return p
+
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
   if !(j matches .obj _) then throw "the registration record is not an object"
   return { record := j, digest := ← Registration.digest j }
 
-def evidenceOf (b : ByteArray) : V Evidence := do
+/-- The evidence as parsed, before `evidenceOf`'s refusal of a closure. -/
+def evidenceParsed (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
   let keys := #["draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions", "statement",
     "verdicts"]
@@ -277,6 +288,15 @@ def evidenceOf (b : ByteArray) : V Evidence := do
              | .null => pure none
              | x => some <$> nats x "served",
            sessionRoots := ← opt "session_roots" (obj · "session_roots"), coins := getD j "coins" }
+
+/-- The evidence (`evidenceParsed`), with a draw that carries a closure refused: a work draw widened by a closure map
+proves a set whose size varies with the draw, which the sampled audit's soundness statement doesn't cover (the stream's
+run refuses its closure map, `closure`). -/
+def evidenceOf (b : ByteArray) : V Evidence := do
+  let e ← evidenceParsed b
+  if (field? e.draw "closure").isSome then
+    throw "the draw carries a closure, which the sampled audit's soundness statement doesn't cover"
+  return e
 
 /-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
@@ -392,23 +412,6 @@ def publicJson (x : Public) : Json :=
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
       | none => Json.null)]
 
-/-- **The parameters, refused outside the sampled audit's soundness statement**: `paramsOfJson`, and a `bernoulli` law at
-`0 < p < 1` refused (`Draw.countVaries`), as the stream's run refuses it. -/
-def paramsCovered (j : Json) : V Params := do
-  let p ← paramsOfJson j
-  if Draw.countVaries p.verifier.law then
-    throw "the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
-  return p
-
-/-- **The evidence, refused outside the sampled audit's soundness statement** (the stream's run refuses its closure map,
-`closure`): `evidenceOf`, and a draw that carries a closure refused. A work draw widened by a closure map proves a set
-whose size varies with the draw, which the statement doesn't cover. -/
-def evidenceCovered (b : ByteArray) : V Evidence := do
-  let e ← evidenceOf b
-  if (field? e.draw "closure").isSome then
-    throw "the draw carries a closure, which the sampled audit's soundness statement doesn't cover"
-  return e
-
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL
   Params := Params
@@ -416,9 +419,9 @@ def protocol : Core.Protocol where
   Evidence := Evidence
   Public := Public
   Profile := Core.Integrity
-  params := paramsCovered
+  params := paramsOfJson
   commitment := commitmentOf
-  evidence := evidenceCovered
+  evidence := evidenceOf
   digest c := c.digest
   check := checkLive
   publicJson := publicJson
