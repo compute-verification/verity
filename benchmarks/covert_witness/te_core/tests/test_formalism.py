@@ -1,5 +1,6 @@
 """te_core.formalism and te_core.policy: Fit and Slowdown as the formalism v2 states them (a frozen tail always
 charged), the attack side beside them, the stubs, assumptions and upper bounds labelled, the grid."""
+import dataclasses
 import math
 from dataclasses import replace
 
@@ -121,6 +122,18 @@ def test_fit_k_is_the_least_k_at_which_fit_holds():
     assert F.fit_k(F.Measured(m.parts + (setup,), 32, 8192, m.u, m.u_in, 1e3), c, w_run) == pytest.approx((run, train))
     assert F.fit_k(measured(u1=1e6), c, w_run)[1] is None
     assert F.fit_k(measured(u1=1e6, decoder=c), c, w_run) == (None, None)
+
+
+def test_update_application_reads_delta_t_where_the_run_has_latents():
+    """A straight-through run's update application reads its fp32 latents Δ_t, not its code Δ (coordinator 00:47Z):
+    Δ_t + Δ_grad ≤ k, while compute still reads Δ; a run with no Δ_t reads Δ there."""
+    c, k = 1e13, 1e6
+    code = measured(u1=1e5, dgrad=1e5)
+    latent = dataclasses.replace(code, delta_t_bits=k)
+    assert F.at(code, c, k)["fit"] and code.delta_t == code.delta_bits
+    assert F.at(latent, c, k)["parts"][0]["fit"] == {"compute": True, "reduction": True, "update": False}
+    assert F.fit_k(latent, c, 2e8)[1] == pytest.approx(k + 1e5)
+    assert F.from_json(latent.to_json()).delta_t_bits == k
 
 
 def test_the_attack_side_is_reported_beside_the_bounds():

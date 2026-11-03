@@ -1,5 +1,6 @@
 """The headline plots P1-P4 and the A2 curve, from the ledger, as five panels in the panels route's body, each with a
-PNG drawn from its rows. They are off the console, whose one training panel is `training/frontier-branches` (te_core.panels).
+PNG drawn from its rows. They are off the console, whose training panels are `training/frontier-branches`
+(te_core.panels) and `training/algorithm-policy` (te_core.algorithm_policy).
 
     python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy reference|inference|server|c1e14/k1e4]
                             [--drop 0.01] [--g 1] [--from-scratch F.json]
