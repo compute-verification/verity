@@ -246,6 +246,21 @@ def reduce_tree(leaves: torch.Tensor, code: Message) -> torch.Tensor:
     return m[0]
 
 
+def reduce_all(ads: list, code: Message) -> None:
+    """The tree's root over this step's block gradients of every trained tensor, as their gradients (autograd's sums
+    discarded). A block's message is its whole gradient, the tensors laid end to end, so the eager step runs one tree's
+    ops rather than a tree a tensor: the harness's counter sees every op, at a cost each. No qN group straddles two
+    tensors while each holds a multiple of MSG_GROUP entries; otherwise each tensor takes its own tree."""
+    pend = [(p, gs[0] if len(gs) == 1 else torch.cat(gs)) for ad in ads for p, gs in ad.pending()]
+    if any(p.numel() % MSG_GROUP for p, _ in pend):
+        for p, g in pend:
+            p.grad = reduce_tree(g, code)
+        return
+    root = reduce_tree(torch.cat([g.reshape(g.shape[0], -1) for _, g in pend], 1), code)
+    for (p, _), r in zip(pend, root.split([p.numel() for p, _ in pend])):
+        p.grad = r.view(p.shape)
+
+
 class LowRank:
     """One target's factors (fp32 latents A, B), its scale and precision, the straight-through offsets to the values E
     stores (`refresh`), and with DoRA the magnitudes (init: W's row norms). With `leaf` (sequences a token block), the
@@ -274,11 +289,10 @@ class LowRank:
         self.gB.append(torch.einsum("ntd,ntr->ndr", gs, hs))
         self.gA.append(torch.einsum("ntr,ntd->nrd", gs @ fb.float(), xs))
 
-    def reduce(self, code: Message) -> None:
-        """The tree's root over this step's block gradients, as A's and B's gradient (autograd's sums discarded)."""
-        self.A.grad = reduce_tree(torch.cat(self.gA), code)
-        self.B.grad = reduce_tree(torch.cat(self.gB), code)
-        self.gA, self.gB = [], []
+    def pending(self) -> list[tuple[torch.nn.Parameter, list[torch.Tensor]]]:
+        """A and B, each with this step's block gradients (one tensor a micro-batch), which it then forgets."""
+        out, self.gA, self.gB = [(self.A, self.gA), (self.B, self.gB)], [], []
+        return out
 
     def latents(self) -> int:
         """The fp32 values the update rule reads and writes beside what E stores: the factors (bf16 or coded in E) and
@@ -352,10 +366,9 @@ class VeRA:
         self.gb.append((gs * zs).sum(1))
         self.gd.append(((gs * bv) @ self.vb * us).sum(1))
 
-    def reduce(self, code: Message) -> None:
-        self.d.grad = reduce_tree(torch.cat(self.gd), code)
-        self.b.grad = reduce_tree(torch.cat(self.gb), code)
-        self.gd, self.gb = [], []
+    def pending(self) -> list[tuple[torch.nn.Parameter, list[torch.Tensor]]]:
+        out, self.gd, self.gb = [(self.d, self.gd), (self.b, self.gb)], [], []
+        return out
 
     def hook(self, mod, inp, out):
         dv, bv = self.d + self.dd, self.b + self.db
@@ -813,8 +826,7 @@ def main() -> int:
             total += float(loss.detach())
         steps.append({"op": "train", "tokens": tokens})
         if coded:
-            for ad in ads.values():
-                ad.reduce(msg)
+            reduce_all(list(ads.values()), msg)
             steps.append({"op": "extra", "flops": msg_extra, "what": "block messages: block gradients, codes, tree sums"})
         torch.nn.utils.clip_grad_norm_(trained, 1.0)
         if a.opt == "riemann":
