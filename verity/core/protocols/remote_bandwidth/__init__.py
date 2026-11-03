@@ -1,4 +1,4 @@
-"""The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): how many reads of a node's registered blocks the node
+"""PoUB v0 (`verity/remote-bandwidth/v0`): how many reads of a node's registered blocks the node
 made, window by window, certified by a verifier with no hardware at the site.  The store is encoded under kv/v0's codec,
 the one its registration names, p = 2^1024 − 105 masked at k = 3 by default (`codec`); the challenger's live coins,
 committed before the session, are each window's challenge and its openings coin (`coins`); within a window each pass

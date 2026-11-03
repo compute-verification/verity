@@ -5,7 +5,7 @@
 - **root**: `receipts.tree(seed, Plan.whole(units), those receipts, the pass's salts)`'s root, against the GPU's;
 - **σ**: sampled units' σ from C*'s bytes (`p2.Sketcher.block` on each of the unit's four blocks, from the encoded
   store's segment files, read only), against the GPU's: every unit a tensor's first or last block lies in, each
-  segment's first and last unit, and `--sample` more drawn by `--seed`, in a process pool.
+  segment's first and last unit, and `--sample` more sampled by `--seed`, in a process pool.
 
 A pass whose units aren't the ones the store's tensors lie in (0 .. ⌈e / 4⌉ − 1, e the end of the last tensor's
 blocks; the padding past the head is in no receipt) is refused before anything is checked.

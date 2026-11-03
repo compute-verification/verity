@@ -1,15 +1,15 @@
-"""The prove path's compiler, its advice commitment and its draw-order check, and its prover's and verifier's windows on the CPU
+"""The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's windows on the CPU
 TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
   refused the same way.
-* The advice is fixed before the draw: `advice_before_draw` holds the registration the verifier opens the advice under to the
-  one the draw's receipt names, and refuses the advice re-committed after the coins.
+* The advice is fixed before the sample: `advice_before_draw` holds the registration the verifier opens the advice under to the
+  one the sample's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the draw passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
-  only inside plain's interim scope, one table under a stratified draw (`a5.plain_refusal`).
+  changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
+  only inside plain's interim scope, one table under a stratified sample (`a5.plain_refusal`).
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
@@ -20,7 +20,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run.
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
-  row dir holds under the same digests, and its compile command runs with no vLLM importable."""
+  row dir holds under the same digests, and its compile command runs with no vLLM importable.
+* A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
+  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`)."""
 from __future__ import annotations
 
 import argparse
@@ -40,11 +42,11 @@ from typing import Any
 import pytest
 
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.ml.windows import rows as CS
+from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -292,7 +294,7 @@ def test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit(summa
 
 @pytest.fixture(scope="module")
 def tp(tmp_path_factory):
-    """The deferred stand-in TP Commit and its declared advice; both ranks' windows over every unit (subset:8), and rank 0's again
+    """The deferred stand-in TP Commit and its advice; both ranks' windows over every unit (subset:8), and rank 0's again
     with member 0's unit 1 forged, each commit with its own opening."""
     pytest.importorskip("torch")
     root = tmp_path_factory.mktemp("prove-path")
@@ -402,8 +404,8 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
-    """`--plain` covers one table under a stratified draw (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under stratified:8, and refused before the draw under its own subset:8, drawn outside a stream, with a
+    """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
+    unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
     plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
@@ -716,7 +718,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
     another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
-    request Programs as vllm's advice compiler writes them (``manifest.json``);
+    request Programs as vllm's registered compiler writes them (``manifest.json``);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
     from verity_vllm.program.predict import steps as ST
 
@@ -833,7 +835,7 @@ def _circuit(compiler: Any, data: bytes, partition: Mapping[str, Any]) -> tuple[
 
     p = compiler.load(0, 1, PP.compile_advice(compiler, data))
     window, rows = SRW.population(p.progs, dict(partition), "", p.dirs, arrivals=p.arrivals, transfer_gates=compiler.transfer_gates)
-    return SRW.circuit_record(window), rows
+    return SRW.circuit_record(window, rows, p.arrivals), rows
 
 
 def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, monkeypatch):
@@ -945,7 +947,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does: a run
+    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
@@ -974,7 +976,7 @@ def test_a_served_run_registers_the_public_default_seed_and_one_that_records_ano
 def test_a_stand_in_records_the_public_default_seed_and_its_seedless_sampled_requests_bring_the_records(tmp_path, monkeypatch):
     """`serve-standin` lays a declared Commit out as serve-openai does, so its serve.json records the public default seed and
     passes `registered_seed`; a sampled request of the record that named no seed brings the declared run's default seed, the
-    one its draw used, and a greedy or seeded one brings what the record served it under."""
+    one its sample used, and a greedy or seeded one brings what the record served it under."""
     phi = SimpleNamespace(model={"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"},
                           execution="bi-eager", target=TARGET)
     ingress = {"r0": {"prompt": [0, 1, 2, 3, 4], "max_tokens": 3, "temperature": 0.0},
@@ -1075,7 +1077,7 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
 
 def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
-    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
     file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
@@ -1380,6 +1382,48 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
                     "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
     assert s.compiles == [True] and list(out.parent.iterdir()) == [out] and sys.modules["vllm"] is None
     assert json.loads(out.read_text())["templates"]
+
+
+def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
+                                                                                                      capsys):
+    """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
+    writes its record from the advice alone: each unit reads the gate and up projection's output, a row before the window, so
+    the record declares that port window ingress at its engine step (r0's four prompt tokens at step 0 and its decode at 1;
+    r1, arriving at 2, at 2, 3 and 4). Counted from its members alone (`records_audit.leak_count`) every input bit is other
+    and the bound vacuous, and the run figure (`declared_count`'s, only the run's ingress counted) is the same: the window
+    reads none of the run's ingress. The window figure beside it subtracts the window ingress, leaving the advice's bits,
+    the charge, only under its premise (`records_audit.WINDOW_PREMISE`), which the count names, and ``records_audit.py
+    count`` prints both figures so. The verifier's window from the record is the one the prover's Programs make
+    (`_circuit`), and the prover's record is the compiler's."""
+    import records_audit as RA
+
+    s = _tiny_served(tmp_path, monkeypatch)
+    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    out = tmp_path / "circuit.json"
+    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+    doc, bits = json.loads(out.read_text()), s.bound["advice"]["bits"]
+    assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
+        ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
+    assert "ingress" not in doc
+    mine = IF.window_of_record(doc, DR.parse_law(LAYER0["law"]), IF.resolve)
+    inputs = 11 * 16 * 2 * 128
+    assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
+    assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
+                                                     "other_inputs": inputs, "advice_bits": bits, "bound": "vacuous"}
+    window_figure = {"ingress": inputs, "free": 0, "other_inputs": bits, "bound": "within the charge",
+                     "premise": RA.WINDOW_PREMISE}
+    count = {"units": 11, "inputs": inputs, "wired": 0, "registered": 0, "ingress": 0, IF.WINDOW_INGRESS: inputs,
+             "free": inputs, "other_inputs": inputs + bits, "advice_bits": bits, "bound": "vacuous", "window": window_figure}
+    assert RA.declared_count(doc, bits) == count
+    capsys.readouterr()
+    assert RA.main(["count", "--circuit", str(out), "--bits", str(bits)]) == 0
+    assert json.loads(capsys.readouterr().out) == count
+    _row_dir(Path(s.a.row_dir), s)
+    prover = PP.compiler_of_args(argparse.Namespace(**vars(s.a), transfer_gate=[]))
+    record, _rows = _circuit(prover, s.data, LAYER0)
+    assert IF.circuit_of(record) == IF.circuit_of(doc)
 
 
 def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):

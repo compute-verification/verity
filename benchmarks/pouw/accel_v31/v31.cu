@@ -1824,7 +1824,7 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   mask(std::integral_constant<int, 0>{}, Y);
   salt_prf_block(k, off + pos, 1, Y + 8);
   mask(std::integral_constant<int, 1>{}, Y + 8);
-  cpy8(c, C.mid_salt);
+  cpy8(c, C.hm.mid_salt);
   sha::compress(c, Y);
   salt_prf_block(k, off + pos, 2, Y);
   mask(std::integral_constant<int, 2>{}, Y);
@@ -1834,8 +1834,7 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   Y[15] = (128 + 192) * 8;
   sha::compress(c, Y);
   u64 my[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  rc::mask_words(m, my);
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
@@ -4060,6 +4059,13 @@ int v31_sync(void* h) {
   CK(cudaStreamSynchronize(f.s0));
   CK(cudaStreamSynchronize(f.s1));
   return 0;
+}
+// The compute (which 0) or commit (1) stream every context shares, for the caller's timing events: each call's compute
+// runs on the first, and its commit and v31_levels_async's copies on the second, after it. Null from a foreign thread
+void* v31_stream(void* h, int which) {
+  if (foreign()) return nullptr;
+  const Fill& f = ctx_of(h)->f;
+  return which ? f.s1 : f.s0;
 }
 
 void v31_destroy(void* h) {

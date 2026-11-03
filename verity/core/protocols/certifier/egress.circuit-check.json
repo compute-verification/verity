@@ -11,6 +11,10 @@
   "EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}": {
    "and": 5795,
    "type": "9f4e6dbc2dd2e5a73d40c5b4fb086292efc3e3e7a0feb1c0083b35d11a2c6a7592ac30eaaff5f49b2bd6c7b2d755362693fc104b3b774c3139d6e329f1abb0f7"
+  },
+  "EgressBucket_v1{B=512,R=16,r=4,NR=4,K=4,IB=17,D=27}": {
+   "and": 7499,
+   "type": "75042249aea1a3ae1f0dff6c56b812d0c58067ae04918dd31cad5205b195ff2d268a2ac9c24da2efe520298c4a48b315aa05b374e68e0d0150e2f1ebbfb278bb"
   }
  }
 }

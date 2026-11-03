@@ -19,16 +19,16 @@ salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
 `drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
-`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the draw the
+`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
 J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
-`pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
-the units a draw coin draws from a window's layout and each of them proved, a served window whole with its layout read
+`pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
+the units a sampling coin selects from a window's layout and each of them proved, a served window whole with its layout read
 from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
 to its A trees, a period of the
 auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its
-open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the drawn
-units, the weights' root or null, or the same refusal.
+open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the sampled
+proof blocks, the weights' root or null, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
@@ -41,7 +41,7 @@ read from the session's own files, a drawn `pass_index` and call indices offset 
 output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
-multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
+multiple of 32 below 2^17, then sampled integers and non-integers, compared output for output: the count, or the same refusal.
 """
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_check(server):
-    """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the draw: the
+    """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the sample: the
     seeded draw moves whenever the cases' modules change, and a run of it has drawn no `answer-undecided`."""
     RULES.clear()
     stats = D.run(PORT, examples=EXAMPLES, server=server)
@@ -156,7 +156,7 @@ opening_server = D.server_fixture(OPENING)
 
 
 def test_opening(opening_server):
-    """Generated openings, then each mutation over a few seeds (`replay`), so every reason is reached whatever the draw."""
+    """Generated openings, then each mutation over a few seeds (`replay`), so every reason is reached whatever the sample."""
     OPENED.clear()
     stats = D.run(OPENING, examples=2000, server=opening_server)
     swept = Counter(D.replay(OPENING, openings.instance(random.Random(f"{name}/{seed}"), name), opening_server)[0]
@@ -228,7 +228,7 @@ pass_server = D.server_fixture(PASS)
 
 def test_pass_and_draw(pass_server):
     """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
-    every refusal is reached whatever the draw."""
+    every refusal is reached whatever the sample."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
     swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -349,17 +349,17 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 
 def test_credit(pass_server):
-    """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
+    """Generated served windows' credited sets, sampled proof blocks and their outcomes, whole windows and periods, and A rows,
     then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
-    multiple of 32), a credit bit flipped after the draw coin, units the prover chose, a drawn unit failed or missing,
+    multiple of 32), a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or missing,
     a period unclosed or a window of it missing or out of order, an A tree the round roots
-    didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
+    didn't commit, a window's round log the challenger never received, entries or a sampled proof block's proof of another
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
     its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
-    Commit record the draw root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
+    Commit record the sample root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
     another session, round 0's request table at another root than request_table, twice, under another PREFIX or bound
     to another session or to the open root, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
     honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
@@ -393,7 +393,9 @@ def test_credit(pass_server):
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
-                 "credit coin: the challenger's session is not trusted", "outcome missing: ", "outcome failed: ",
+                 "credit coin: the draw's session is not trusted",
+                 "credit coin: the session the auditor's ledger opens on the window does not withhold",
+                 "outcome missing: ", "outcome failed: ",
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
@@ -408,8 +410,8 @@ def test_credit(pass_server):
                  "period layout: period ", "'s open commits no table rows T (rows, a positive integer",
                  "so the period earns nothing: layout: the period's T = # table rows give an A slot",
                  "window manifest: call # states # served rows and call # #, both of step #",
-                 "period period: period ", "period missing: window #", "period order: window #",
-                 "period period: the windows presented run past", "period period: window ", "period window: window #",
+                 "period period: period ", "period missing: session #", "period order: session #",
+                 "period period: the sessions presented run past", "period period: session ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
                  "drawn budget: the draw's K is not",
                  "drawn budget: the window's # units are fewer than K", "period budget: period ",
@@ -496,10 +498,14 @@ def test_credit(pass_server):
 def test_honest_j10r_windows_are_credited(pass_server):
     """The compiled `Credit.window` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
     a call), as the Python verifier does: the code fact `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` takes as `hacc`.
-    `test_credit` replays these cases but holds only the two sides to each other."""
+    `test_credit` replays these cases but holds only the two sides to each other. A window whose calls all carry credit
+    bit false is credited with nothing, so the test asks only that some of them credit a call."""
+    credited = []
     for seed in range(3):
         kind, out = D.replay(WINDOW, credit_cases.window_instance(random.Random(f"j10r/{seed}"), "j10r"), pass_server)
-        assert kind == "output" and json.loads(out).get("credited"), out
+        assert kind == "output" and "credited" in json.loads(out), out
+        credited.append(json.loads(out)["credited"])
+    assert any(credited), credited
 
 
 def leaf_words(case: dict) -> dict:
@@ -650,7 +656,7 @@ def test_live_salt(pass_server):
     """Generated live Pearl-C passes, salted by a salt-only session the auditor's signed ledger reserves, opens on the
     pass's salt epoch's root and ends complete, read through the session's own files, then each mutation over a few
     seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
-    on another root (W itself, another epoch's, or one the manifest doesn't name), #3868's H1 layout, a session reserved for another layout or ended
+    on another root (W itself, another epoch's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
     other refusal of `core_check.live_salt`."""
     LIVE_SALTED.clear()

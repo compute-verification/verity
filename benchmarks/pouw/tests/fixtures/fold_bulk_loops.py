@@ -1,6 +1,6 @@
-"""Writes fold_bulk_loops.json, test_lean_headline.py's bulk folds, from RT4-SHEET's sm_120 SASS of fold_bulk.cu.
+"""Writes fold_bulk_loops.json, test_lean_headline.py's bulk folds, from the sm_120 SASS of fold_bulk.cu.
 
-`research fetch r20261019-234605-a812 --all` (fold_bulk.sh on sm_120: every kernel bit-exact, 0 bad words), then
+From a run of fold_bulk.sh on sm_120 (every kernel bit-exact, 0 bad words):
 `uv run benchmarks/pouw/tests/fixtures/fold_bulk_loops.py RUN_DIR/out/sass/fold_bulk.sass`.
 
 Each kernel's timed loop is its longest backward branch. Its opcodes split as fold_bulk.sh's: what every warp issues,

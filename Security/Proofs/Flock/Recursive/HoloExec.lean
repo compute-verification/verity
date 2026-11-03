@@ -18,7 +18,7 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   padded to `PAD_TO` as the verifier opens R (the default, whose empty levels reject R, where `ℓ` is out of
   `[6, k_log]`, which the verifier refuses: `SparseRangeOk`).
 * `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
-  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
+  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditHolo` does
   not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
 * `StackedTopAt lv st reg cap salt bcs'`: `cap` is R's registered top at the explicit commit strings `bcs'` under the
   held salts `salt` (`registrant-holds-openings`), the `stacked`
@@ -150,7 +150,7 @@ it registered. The registered `stacked` entry is the one computed from `bcs` (th
 `salt` are a tree and salts whose commit strings are `bcs` (`TopOf`). Those are the prover's workers' own tree and
 salts, behind the firewall. That is reasonable because an honest registrant registers the entry of the rows it
 committed and holds them. A prover that registers strings it can't open is outside the guarantee. The first two
-conjuncts are the verifier's checks only at a transcript's own top (`FlockC3.RegLevels.stackedTop_of_innerCommits`).
+conjuncts are the verifier's checks only at a transcript's own top.
 At the held `bcs` they are part of the premise: `TopColl.collision` reads them to turn a held top other than `bcs` into
 a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)

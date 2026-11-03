@@ -17,7 +17,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
-* `slots`: the claims' partition over the program and query, and that draw's checked proof units in its slots
+* `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
   (`Slots.select`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
@@ -30,10 +30,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
-* `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
-* `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
+* `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
+* `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
-* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 * `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
@@ -49,6 +49,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
   `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
   auditor's ledger opens for the verifier's window (`trusted_session_of`).
+* `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
+  release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
+  one tree a session (`sessions_tree_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
@@ -69,6 +72,7 @@ import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
+import SampledProofs.ChallengerTrees
 import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
@@ -248,7 +252,7 @@ def select (j : Json) : V Json := do
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
-and the proof units of the challenger's draw on the source's bytes as `[slot, index]` (`Slots.checked`); refused where
+and the slots of the challenger's draw on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
 `select` is. -/
 def slots (j : Json) : V Json := do
   let rule ← Select.Rule.ofJson (getD j "rule")
@@ -264,7 +268,7 @@ def slots (j : Json) : V Json := do
   let rule ← Select.resolve rule p (getD j "query")
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
-    ("checked", Json.arr (checked.map fun (v, i) => Json.arr #[Lean.toJson v, Lean.toJson i]))]
+    ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
@@ -581,6 +585,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
+   ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 

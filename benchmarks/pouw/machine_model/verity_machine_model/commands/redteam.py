@@ -1,6 +1,6 @@
 """machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C] [--vector V]
                                           the red-team audit (redteam.py): each design's binding and near-binding
-                                          facets, the decision-76 move in the cheater's favour at which the core
+                                          facets, the move in the cheater's favour at which the core
                                           first rises (per row), and, where Π prices no uniform datapath, the ε a
                                           sibling-rate uniform route would open (default q* = 1.22, credit floor)"""
 from __future__ import annotations

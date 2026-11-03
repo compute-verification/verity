@@ -3,6 +3,7 @@ import VStar.Holo
 import VStar.Json
 import VStar.Menu.Pinned
 import VStar.Stage
+import Flock.JsonParse
 
 /-!
 # The `vstar` command: write V*'s circuit files
@@ -27,7 +28,7 @@ namespace VStar.Cli
 open Lean (Json)
 
 def readJson (path : String) : IO Json := do
-  match Json.parse (← IO.FS.readFile path) with
+  match Flock.JsonParse.parse (← IO.FS.readFile path) with
   | .ok j => pure j
   | .error e => throw (IO.userError s!"{path}: not JSON: {e}")
 
@@ -76,6 +77,8 @@ def stmtJson : Stmt → Json
       ("ports", Json.arr (ports.toArray.map fun (nm, n) => Json.arr #[(nm : Json), (n : Json)])), ("nv", (nv : Json))]
   | s@(.cap l N) => Json.mkObj [("name", s.name), ("template", "rec-cap"), ("dir", s.dir), ("instances", (N : Json)),
       ("level", (l : Json))]
+  | s@(.link UB PB N) => Json.mkObj [("name", s.name), ("template", "rec-link"), ("dir", s.dir), ("instances", (N : Json)),
+      ("UB", (UB : Json)), ("PB", (PB : Json))]
 
 /-- The pinned menus' inner sessions, each once, with the models whose menus hold it. -/
 def menuSessions : Array (Algebra.Shape × Array String) := Id.run do

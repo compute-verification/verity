@@ -4,8 +4,7 @@ import Flock.HmRow
 /-!
 # The verification tree
 
-The SHA-512 Merkle tree whose root binds the stored blocks (`p2/PROTOCOL.md` §4, "Setup commitment, salt and
-verification root"):
+The SHA-512 Merkle tree whose root binds the stored blocks:
 
 ~~~text
 R(c)        = SHA512(P(8·|c|) || c)                                   sha512/row/v2, P = Flock.HmRow.rowPrefixV2
@@ -14,7 +13,7 @@ packageLeaf = SHA512(0x00 || salt[24] || u64le(s) || u16le(v) || R(c_i))      th
 node(l, r)  = SHA512(0x01 || l || r)
 ~~~
 
-for block `i = s · blocks_per_segment + v`. The two leaves differ only in their wrapper (`p2/PROTOCOL.md` §8's table):
+for block `i = s · blocks_per_segment + v`. The two leaves differ only in their wrapper:
 the spec's binds the 32-byte setup salt and big-endian indices, the generic protocol's `tag_s` (its 24-byte salt and
 `s` as one 32-byte little-endian integer) and `v` little-endian.
 

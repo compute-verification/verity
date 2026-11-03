@@ -10,6 +10,8 @@ import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
+import Definitions.Pouw.Dimension.Pointwise
+import Definitions.Pouw.Dimension.Ssn
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
@@ -30,6 +32,11 @@ import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
+import Definitions.Pouw.Lead.Deployed
+import Definitions.Pouw.Lead.Forward
+import Definitions.Pouw.Lead.Gap
+import Definitions.Pouw.Lead.Layout
+import Definitions.Pouw.Lead.Model
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs
@@ -40,6 +47,7 @@ import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
 import Definitions.Pouw.NCP.Witness
 import Definitions.Pouw.NCP.Word
+import Definitions.Pouw.OnsiteFreed
 import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.Completeness
 import Definitions.Pouw.PearlC.Deadline
@@ -99,6 +107,7 @@ import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
 import Definitions.Pouw.Window
+import Definitions.Pouw.Witness
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
