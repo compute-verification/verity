@@ -68,6 +68,8 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
   (te_core.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
   listed them for, which te_core.formalism refuses as unchecked.
+- `products`: the step's matrix products as te_core.io_bound reads them (te_core.capture.products' rows), which the
+  circuit keeps too; absent for a circuit recorded before te_core 4.8.
 """
 from __future__ import annotations
 
@@ -84,6 +86,8 @@ FORWARD, BACKWARD, OTHER = 0, 1, 2
 COMPUTED, TOKEN_INPUT, OTHER_INPUT, CARRIED, RANDOM, ATTR = range(6)
 SEED_BITS = 64
 ACCUMULATOR_BITS = 32
+#: the circuit's fields saved as JSON beside its arrays
+JSON_FIELDS = ("read_backs", "products")
 
 
 @dataclass
@@ -119,20 +123,24 @@ class StepCircuit:
     #: None and 0 for a trace whose variant doesn't halve the context
     mix: np.ndarray | None = None
     ctx: int = 0
+    #: the step's matrix products as te_core.io_bound reads them (te_core.capture.products' `rows`), which `measure`
+    #: returns; None for a circuit recorded before te_core 4.8
+    products: dict | None = None
 
     def save(self, path: Path) -> None:
         arrays = {f.name: getattr(self, f.name) for f in fields(self)
-                  if f.name != "read_backs" and getattr(self, f.name) is not None}
-        if self.read_backs is not None:
-            arrays["read_backs"] = np.array(json.dumps(self.read_backs))
+                  if f.name not in JSON_FIELDS and getattr(self, f.name) is not None}
+        for name in JSON_FIELDS:
+            if getattr(self, name) is not None:
+                arrays[name] = np.array(json.dumps(getattr(self, name)))
         np.savez_compressed(path, **arrays)
 
     @classmethod
     def load(cls, path: Path) -> "StepCircuit":
         z = np.load(path, allow_pickle=False)
         out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens", "ctx") else z[f.name])
-               for f in fields(cls) if f.name != "read_backs" and f.name in z.files}
-        return cls(**out, read_backs=json.loads(str(z["read_backs"])) if "read_backs" in z.files else None)
+               for f in fields(cls) if f.name not in JSON_FIELDS and f.name in z.files}
+        return cls(**out, **{name: json.loads(str(z[name])) if name in z.files else None for name in JSON_FIELDS})
 
     def __len__(self) -> int:
         return len(self.phase)
@@ -651,7 +659,8 @@ def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
             "u_in": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
             "group_gates": g_total, "group_tokens": group_tokens, "update_cut_bits": update_cut,
             "grad_cut_bits": grad_cut, "partial_cut_bits": partial_cut, "state_bits": state,
-            "delta_grad_bits": None if grad_cut is None else grad_cut + state, "entries": entries} | (c.read_backs or {})
+            "delta_grad_bits": None if grad_cut is None else grad_cut + state, "entries": entries} | (c.read_backs or {}) | (
+        {"products": c.products} if c.products is not None else {})
 
 
 def main(argv=None) -> int:
