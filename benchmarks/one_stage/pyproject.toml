@@ -37,7 +37,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
-# demo's endpoint (`test_vllm_example`).
+# demo's endpoint (`test_vllm_example`). network_e2e's endpoint advice: `verity-vllm advice`'s output, which
+# advice_charge's tests read.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py", "examples/vllm/serve.sh",
@@ -45,6 +46,7 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/census/deployments.json",
+          "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/core/protocols/network/nci/lean/lakefile.toml",
