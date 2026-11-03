@@ -1,12 +1,13 @@
 """drawn.py: the CLI of a served H1 window's drawn units staged as C-Flock statements and checked as credit does
 (`verity_vllm.protocols.pouw.h1.drawn`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
 live challenger's model registry (`live_challenger.models`) and ``check`` credit's own verification (`credit._verified`
-with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`).
+with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`), its Lean runs ``--jobs`` at a time
+(`verity_vllm.protocols.pouw.h1.answers`), one ``LEAN`` line a verdict.
 
     python drawn.py stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                           [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
     python drawn.py statements --work W --out FILE
-    python drawn.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
+    python drawn.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY [--jobs J]
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ import numpy as np
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity_vllm.protocols.pouw.h1 import answers as A
 from verity_vllm.protocols.pouw.h1 import drawn as D
 
 MODELS = Path(__file__).resolve().parents[2] / "live_challenger" / "models.py"
@@ -51,13 +53,18 @@ def checkpoint_weights(checkpoint: Path, linears: Sequence[tuple[str, int, int]]
     return out
 
 
-def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path
+def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path, jobs: int | None = None
              ) -> tuple[list | None, tuple | None]:
     """Credit's verification of a window's drawn statements (`credit._verified` under the window's draw, then
-    `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`."""
+    `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`: every run `_verified` makes answered first,
+    `jobs` at a time (`answers.fill`, J by `answers.jobs` when None), then `_verified` judging each answer in its order."""
     PF.executable = lambda: lean
+    answers = A.Answers(by="the fill")
+    runs, _refused = A.window_runs(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
+                                   win["steps"], win["salt"], win["draw"])
+    A.fill(answers, runs, A.jobs(jobs))
     proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
-                               win["steps"], PF.verify, win["salt"], win["draw"])
+                               win["steps"], answers, win["salt"], win["draw"])
     return proofs, why if why is not None else CR._proved(units, proofs)
 
 
@@ -87,8 +94,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--statements", required=True)
     c.add_argument("--lean", required=True)
     c.add_argument("--k", type=int)
+    c.add_argument("--jobs", type=int, help=f"Lean runs at once (default {A.JOBS_ENV}, else floor((memory - "
+                                            f"headroom) / {A.RUN_GB} GiB))")
     a = ap.parse_args(argv)
-    a.checkpoint_weights, a.verified = checkpoint_weights, verified
+    a.checkpoint_weights = checkpoint_weights
+    a.verified = lambda *x: verified(*x, jobs=getattr(a, "jobs", None))
     return D.run(a.cmd, a)
 
 
