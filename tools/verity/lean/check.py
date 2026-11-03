@@ -218,7 +218,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "witnesses",
-         "unwitnessed", "compile_time",
+         "unwitnessed", "witnesses_assumed", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
@@ -1084,8 +1084,11 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses` and `unwitnessed` with every guarantee and theorem they name `renamed` by ``moved``."""
+    """The policy's `witnesses`, `unwitnessed` and `witnesses_assumed` with every guarantee, theorem and assumption they
+    name `renamed` by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    if isinstance(taken := policy.get("witnesses_assumed"), dict):
+        out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
     if isinstance(ws, dict):
         out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
                                                 if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
@@ -1414,7 +1417,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     walked = {a: (next((e["module"] for e in es if e["name"] == a), None), digest(es))
               for a, es in facts.get("assumption_reads", {}).items() if es}
     records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds, walked)
-    fails += why
+    fails += why + assumed_failures(policy, facts, records)
     ifails, inline, _ = inline_failures(policy, facts)
     fails += ifails
     out = dict(policy)
@@ -1706,24 +1709,57 @@ def assumed_module(module: str, policy: dict) -> bool:
 
 def honest_premises(pin: dict, policy: dict, own: set[str]) -> list[str]:
     """The premises of a guarantee (`Facts.lean`'s `premises`) that its honest lemmas conclude at the deployed instance:
-    each headed by a constant of a module this repository builds (``own``) outside `assumed_module`. A premise that can
-    never hold makes the guarantee say nothing, and only its honest lemma shows that it can."""
-    return sorted({p["head"] for p in pin.get("premises") or []
-                   if p.get("head") and (m := p.get("module") or "") in own and not assumed_module(m, policy)})
+    each headed by a constant of a module this repository builds (``own``) outside `assumed_module` and not under
+    `witnesses_assumed` (`assumed_failures`). A premise that can never hold makes the guarantee say nothing, and only its
+    honest lemma shows that it can."""
+    taken = policy.get("witnesses_assumed")
+    taken = taken if isinstance(taken, dict) else {}
+    return sorted({p["head"] for p in pin.get("premises") or [] if p.get("head") and p["head"] not in taken
+                   and (m := p.get("module") or "") in own and not assumed_module(m, policy)})
+
+
+def assumed_failures(policy: dict, facts: dict, records: dict) -> list[Failure]:
+    """`witnesses_assumed` ({named assumption: why}, hand-written: `--update` keeps it as it is and adds none) lists the
+    named assumptions a witness takes as it stands rather than concluding, as it takes one of an `assumed_module`: a
+    computational assumption no theorem concludes, say. Every other premise is still concluded (`honest_premises`). An
+    entry no guarantee the lock lists takes as a premise fails, and so does one that is no named assumption under
+    `assumptions` (as the update writes them, ``records``)."""
+    taken = policy.get("witnesses_assumed")
+    if taken is None:
+        return []
+    if not isinstance(taken, dict) or not all(isinstance(v, str) and v.strip() for v in taken.values()):
+        return [Failure("witnesses.assumed-form", None, "witnesses: `witnesses_assumed` is {named assumption: why a witness "
+                        "takes it rather than concluding it}, each reason one sentence")]
+    premised = {p.get("head") for g in policy.get("guarantees") or {}
+                for p in (facts["pins"].get(g) or {}).get("premises") or []}
+    fails = []
+    for a in sorted(taken):
+        if a not in premised:
+            fails.append(Failure("witnesses.assumed-stale", a, f"witnesses: `witnesses_assumed` lists {a}, which no "
+                                 f"guarantee the lock lists takes as a premise; remove the entry"))
+        elif a not in records:
+            fails.append(Failure("witnesses.assumed-unlisted", a, f"witnesses: `witnesses_assumed` lists {a}, which is no "
+                                 f"named assumption under `assumptions`: a witness takes only a listed one as it stands"))
+    return fails
 
 
 def assumes(pin: dict, policy: dict, own: set[str]) -> list[str]:
     """Why a witness assumes more than the named assumptions the lock lists, one line each: a hypothesis over its own
-    inputs (it holds at one instance), a closed one that is no listed assumption, or a premise that is no `assumed_module`
-    assumption (it is to be concluded, not taken)."""
-    listed = policy.get("assumptions") or {}
+    inputs (it holds at one instance), a closed one that is no listed assumption nor headed by one `witnesses_assumed`
+    lists (`Hm96Hiding mask c δ₁`, applied at the instance), or a premise that is neither an `assumed_module` assumption
+    nor one `witnesses_assumed` lists (it is to be concluded, not taken)."""
+    listed, taken = policy.get("assumptions") or {}, policy.get("witnesses_assumed")
+    taken = set(taken) if isinstance(taken, dict) else set()
+    heads: dict[str, set[str]] = {}
+    for p in pin.get("premises") or []:
+        heads.setdefault(p.get("binder"), set()).add(p.get("head"))
     out = []
     for h in pin.get("hypotheses") or []:
         if not h.get("closed"):
             out.append(f"takes ({h['binder']} : {h['type']}), a hypothesis over its own inputs")
-        elif h.get("named") not in listed:
+        elif h.get("named") not in listed and not (heads.get(h["binder"]) and heads[h["binder"]] <= taken):
             out.append(f"takes ({h['binder']} : {h['type']}), which is no named assumption the lock lists")
-    out += [f"rests on {h}, no named assumption of an `Assumptions` or `shape.premises` module"
+    out += [f"rests on {h}, no named assumption of an `Assumptions` or `shape.premises` module or `witnesses_assumed`"
             for h in honest_premises(pin, policy, own)]
     return out
 
@@ -1762,7 +1798,7 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
         f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
         f"there" if exists else "")
     return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the honest deployed instance d, at the deployed "
-            f"verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module) and "
+            f"verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or `witnesses_assumed`) and "
             f"`{name}_nontrivial : {nontrivial}` (its conclusion is false for a verifier that accepts everything{why})."
             f"{construct} List both under `guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under "
             f"`witnesses` (LEAN-66)")
@@ -1776,7 +1812,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
 
     - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
-      a named assumption's module (`honest_premises`) and, for a property, its function's acceptance (`accepted`): a
+      a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
+      acceptance (`accepted`): a
       conjunct headed by or applying each. Each says something (`vacuous_meets`), and none applies a verifier that accepts
       everything (`accept_all`: that is the nontrivial lemma's object). A premise that can never hold fails here;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
@@ -1879,8 +1916,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             what = [*missing, *([f"{' or '.join(fns)} accepting"] if fns and not any(reaches(f, reached) for f in fns) else [])]
             fails.append(Failure("witnesses.honest-uncovered", g, f"witnesses: {g}'s `honest` witnesses "
                                  f"({', '.join(w['honest'])}) conclude nothing of {', '.join(what)} at the deployed instance: "
-                                 f"each premise outside a named assumption's module, and a property's acceptance, is a "
-                                 f"conjunct of one (a premise that can never hold makes {g} say nothing)"))
+                                 f"each premise outside a named assumption's module and `witnesses_assumed`, and a "
+                                 f"property's acceptance, is a conjunct of one (a premise that can never hold makes {g} "
+                                 f"say nothing)"))
         if skip == "nontrivial":
             continue
         n = w["nontrivial"]

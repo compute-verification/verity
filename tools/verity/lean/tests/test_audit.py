@@ -1772,6 +1772,68 @@ def test_a_renamed_unwitnessed_guarantee_passes_under_moved_and_its_entry_is_re_
     assert unshaped(audit(False)) == []
 
 
+HIDDEN = ("theorem hidden (n : Nat) (_h : Hiding n) (hs : Small n) : verifySmall n := hs\n"
+          "theorem hidden_honest (_h : Hiding 1) : Small 1 := by unfold Small; omega\n"
+          "theorem hidden_nontrivial : ¬ verifySmall 10 := by unfold verifySmall; omega\n")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_premise_witnesses_assumed_lists_is_taken_and_another_listed_one_is_still_concluded(tmp_path):
+    """On a real build: `Control.hidden` reads the verifier `verifySmall` and takes `Hiding n`, a named assumption of a
+    definitions module that no theorem concludes (as `Claims.Hm96Hiding` is), and `Small n`; its honest witness takes
+    `Hiding 1` and concludes `Small 1`. Without a `witnesses_assumed` entry the witness fails for taking `Hiding` and for
+    not concluding it, though the lock lists it under `assumptions`. With one, `Hiding` is taken, and `--update` keeps the
+    entry as it is. `Small`, listed under `assumptions` too, is still concluded: a witness that concludes something else
+    fails. Once no guarantee takes `Hiding` as a premise, the entry fails as stale."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    defs, thms = pkg / "Control" / "Defs.lean", pkg / "Control" / "Thms.lean"
+    defs.write_text(defs.read_text().replace(
+        "end Control", "def verifySmall (n : Nat) : Prop := n < 10\ndef Hiding (n : Nat) : Prop := n ≠ 7\n\nend Control"))
+    thms.write_text(thms.read_text().replace("end Control", f"{HIDDEN}\nend Control"))
+    pol = A.load(pkg)
+    names = ("Control.hidden", "Control.hidden_honest", "Control.hidden_nontrivial")
+    A.dump(pkg, pol | {"assumptions": pol["assumptions"] | {"Control.Hiding": {"owner": "@lean"}},
+                       "claims": pol["claims"] | {"not": {"Control.verifySmall": "the toy verifier the guarantee reads"}},
+                       "guarantees": pol["guarantees"] | {n: {"owner": "@lean"} for n in names},
+                       "witnesses": {"Control.hidden": {"honest": ["Control.hidden_honest"],
+                                                        "nontrivial": "Control.hidden_nontrivial"}}})
+
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def witnessing(update):
+        return [f for f in A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)[
+            "failures"] if f.code.startswith("witnesses")]
+
+    def lock():
+        return json.loads((pkg / A.POLICY).read_text())
+    build()
+    fails = witnessing(True)
+    assert sorted(f.code for f in fails) == ["witnesses.honest-form"] * 2 + ["witnesses.honest-uncovered"], fails
+    assert any("takes (_h : Control.Hiding 1), which is no named assumption the lock lists" in f for f in fails), fails
+    assert any("rests on Control.Hiding, no named assumption of an `Assumptions`" in f for f in fails), fails
+    assert any("conclude nothing of Control.Hiding at the deployed instance" in f for f in fails), fails
+    assert {"Control.Hiding", "Control.Small"} <= set(lock()["assumptions"])
+    why = "the toy's hiding assumption, which no theorem concludes"
+    A.dump(pkg, lock() | {"witnesses_assumed": {"Control.Hiding": why}})
+    assert witnessing(False) == [] and witnessing(True) == [] and lock()["witnesses_assumed"] == {"Control.Hiding": why}
+
+    concluded = "(_h : Hiding 1) : Small 1 := by unfold Small; omega"
+    thms.write_text(thms.read_text().replace(concluded, "(_h : Hiding 1) : verifySmall 1 := by unfold verifySmall; omega"))
+    build()
+    fails = witnessing(True)
+    assert [f.code for f in fails] == ["witnesses.honest-uncovered"] and \
+        "conclude nothing of Control.Small at the deployed instance" in fails[0], fails
+
+    thms.write_text(thms.read_text().replace("(_h : Hiding 1) : verifySmall 1 := by unfold verifySmall; omega",
+                                             concluded).replace("(_h : Hiding n) ", "").replace("(_h : Hiding 1) ", ""))
+    build()
+    assert witnessing(True) == ["witnesses: `witnesses_assumed` lists Control.Hiding, which no guarantee the lock lists "
+                                "takes as a premise; remove the entry"]
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
@@ -1990,7 +2052,8 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
     assert A.witness_failures({**pol, "witnesses": {}}, f, WOWN) == [
         "witnesses: P.sound lists no witnesses that it says something, and the rule holds it to them (it reads the claim "
         "P.Holds): prove `P.sound_honest : P.Compiled d …` (its hypotheses hold at the honest deployed instance d, at the "
-        "deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module) and "
+        "deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or "
+        "`witnesses_assumed`) and "
         "`P.sound_nontrivial : ¬ P.Holds at acceptAll …` (its conclusion is false for a verifier that accepts "
         "everything). Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: "
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
@@ -2033,8 +2096,8 @@ def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():
     assert witness_codes(*witnessed(honest={"body": wbody("P.Other")})) == ["witnesses.honest-uncovered"]
     assert A.witness_failures(*witnessed(honest={"body": wbody("P.Other")}), WOWN)[0] == (
         "witnesses: P.sound's `honest` witnesses (P.sound_honest) conclude nothing of P.Compiled at the deployed instance: "
-        "each premise outside a named assumption's module, and a property's acceptance, is a conjunct of one (a premise "
-        "that can never hold makes P.sound say nothing)")
+        "each premise outside a named assumption's module and `witnesses_assumed`, and a property's acceptance, is a "
+        "conjunct of one (a premise that can never hold makes P.sound say nothing)")
     assert witness_codes(*witnessed(honest=never)) == ["witnesses.honest-form"] * 2
     assert witness_codes(*witnessed(honest={"body": wbody("P.Compiled", absurd=True)})) == ["witnesses.honest-form"]
     assert witness_codes(*witnessed(honest={"hypotheses": [{"binder": "hd", "type": "P.Compiled d", "closed": False}]})) == \
@@ -2082,8 +2145,8 @@ def test_a_property_of_an_acceptance_has_an_honest_witness_that_the_deployment_i
     pol, f = witnessed({"reads": fact()["reads"]}, shape=prop)
     assert A.witness_failures(pol, f, WOWN) == [
         "witnesses: P.sound's `honest` witnesses (P.sound_honest) conclude nothing of P.verify accepting at the deployed "
-        "instance: each premise outside a named assumption's module, and a property's acceptance, is a conjunct of one (a "
-        "premise that can never hold makes P.sound say nothing)"]
+        "instance: each premise outside a named assumption's module and `witnesses_assumed`, and a property's acceptance, "
+        "is a conjunct of one (a premise that can never hold makes P.sound say nothing)"]
     accepts = {"body": wbody("And", conclusion=[wk("P.Compiled"), wk("Eq", ["P.verify", "P.deploy"])])}
     assert witness_codes(*witnessed({"reads": fact()["reads"]}, accepts, shape=prop)) == []
     assert A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0].startswith(
@@ -2161,6 +2224,47 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
         "witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": "Q.a_n"}}, "unwitnessed": {"Q.b": h}}
     assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {}
+
+
+def test_a_premise_witnesses_assumed_lists_is_taken_and_every_other_premise_is_concluded():
+    """`witnesses_assumed` ({named assumption: why}) lists the assumptions a witness takes as it stands rather than
+    concluding, as it takes one of an `assumed_module`: the guarantee's honest witness needn't conclude a premise headed by
+    one, and a witness may take one, as a premise or as a closed hypothesis applied at its instance. Every other premise is
+    still concluded, one listed under `assumptions` too. An entry no lock-listed guarantee takes as a premise fails as
+    stale, one that is no listed assumption fails, and so does one without its reason; `--moved` renames an entry."""
+    hiding = {"binder": "hh", "head": "P.Hiding", "module": "P.Defs"}
+    why = "hiding at the pinned key: a computational assumption no theorem concludes"
+    both = {"premises": [COMPILED, hiding]}
+    pol, f = witnessed(both)
+    listed = {**pol, "assumptions": {**pol["assumptions"], "P.Compiled": {"owner": "@lean"}, "P.Hiding": {"owner": "@lean"}}}
+    assert A.witness_failures(listed, f, WOWN)[0].startswith(
+        "witnesses: P.sound's `honest` witnesses (P.sound_honest) conclude nothing of P.Hiding at the deployed instance")
+    taken = {**listed, "witnesses_assumed": {"P.Hiding": why}}
+    assert A.honest_premises(f["pins"]["P.sound"], taken, WOWN) == ["P.Compiled"]
+    assert witness_codes(taken, f) == []
+    other = witnessed(both, honest={"body": wbody("P.Other")})[1]
+    assert A.witness_failures(taken, other, WOWN)[0].startswith(
+        "witnesses: P.sound's `honest` witnesses (P.sound_honest) conclude nothing of P.Compiled at the deployed instance")
+
+    applied = {"hypotheses": [{"binder": "hh", "type": "P.Hiding P.deploy", "closed": True, "named": None}],
+               "premises": [hiding]}
+    assert witness_codes(*witnessed(honest=applied)) == ["witnesses.honest-form"] * 2
+    assert witness_codes(*witnessed(honest=applied, witnesses_assumed={"P.Hiding": why})) == []
+    mixed = {"hypotheses": applied["hypotheses"], "premises": [hiding, {**hiding, "head": "P.Other"}]}
+    assert witness_codes(*witnessed(honest=mixed, witnesses_assumed={"P.Hiding": why})) == ["witnesses.honest-form"] * 2
+
+    records = {a: {} for a in listed["assumptions"]}
+    assert A.assumed_failures(taken, f, records) == [] and A.assumed_failures(listed, f, records) == []
+    assert A.assumed_failures({**taken, "witnesses_assumed": {"P.Gone": why}}, f, records) == [
+        "witnesses: `witnesses_assumed` lists P.Gone, which no guarantee the lock lists takes as a premise; remove the entry"]
+    assert A.assumed_failures(taken, f, {"P.Hyp": {}}) == [
+        "witnesses: `witnesses_assumed` lists P.Hiding, which is no named assumption under `assumptions`: a witness takes "
+        "only a listed one as it stands"]
+    for bad in ({"P.Hiding": " "}, ["P.Hiding"]):
+        assert [x.code for x in A.assumed_failures({**taken, "witnesses_assumed": bad}, f, records)] == \
+            ["witnesses.assumed-form"]
+    assert A.renamed_witnesses({"witnesses_assumed": {"P.Hiding": why}}, {"P": "Q"}) == {
+        "witnesses_assumed": {"Q.Hiding": why}}
 
 
 def premise(text, head=None, unfolded=None, range=False, closed=False, outer=True, binder="h"):
