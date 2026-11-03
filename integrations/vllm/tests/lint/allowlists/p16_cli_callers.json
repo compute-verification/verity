@@ -13,7 +13,8 @@
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
     "weights-tie": "benchmarks/prove_path/run.sh",
     "workload": "benchmarks/stacked_share/job.sh",
-    "research-outputs": "examples/vllm/commit.sh"
+    "research-outputs": "examples/vllm/commit.sh",
+    "block-counts": "benchmarks/one_stage/served_verdicts.sh"
   },
   "entries": [
     {"file": "verity_vllm/acquire/served.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "served"},

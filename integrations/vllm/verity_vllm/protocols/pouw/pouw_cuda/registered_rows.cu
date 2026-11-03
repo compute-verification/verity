@@ -50,9 +50,9 @@ __global__ void k_public_salts(Pub p, uint64_t* out) {
   if (i < p.n) public_salt(p, p.first + i, out + 24 * (size_t)i);
 }
 
-__global__ void k_shake_salts(Pub p, uint64_t* out) {
+__global__ void k_ok_salts(Pub p, uint64_t* out) {
   const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < p.n) shake_salt(p, p.first + i, out + 24 * (size_t)i);
+  if (i < p.n) ok_salt(p, p.first + i, out + 24 * (size_t)i);
 }
 
 static unsigned blocks(uint64_t n, unsigned per) { return (unsigned)((n + per - 1) / per); }
@@ -65,10 +65,10 @@ extern "C" int rr_public_salts(void* stream, const Pub* p, uint64_t* out) {
   return (int)cudaGetLastError();
 }
 
-// The same of the ok salts (`shake_salt`).
-extern "C" int rr_shake_salts(void* stream, const Pub* p, uint64_t* out) {
+// The same of the ok salts (`ok_salt`).
+extern "C" int rr_ok_salts(void* stream, const Pub* p, uint64_t* out) {
   if (p->n == 0 || p->len > 8 * PUB_WORDS) return -1;
-  k_shake_salts<<<blocks(p->n, 128), 128, 0, (cudaStream_t)stream>>>(*p, out);
+  k_ok_salts<<<blocks(p->n, 128), 128, 0, (cudaStream_t)stream>>>(*p, out);
   return (int)cudaGetLastError();
 }
 

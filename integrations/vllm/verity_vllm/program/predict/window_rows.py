@@ -12,7 +12,8 @@ node's on its operands: FA3's key block follows its launch's query rows (`target
 attention isn't the class Program's one-row decode's, though at as few keys as one block of either holds the two agree.
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
-cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum. Every other unit holds
+cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum; a quantizer that is
+`Int8RowQuant_v5` holds the value's words whole as its H1 leaf row too (`_Program.packed`). Every other unit holds
 its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
@@ -441,6 +442,10 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
+            if (r := P.packed.get(j)) is not None:
+                if len(w) != r.words:
+                    raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not its leaf row {r}'s {r.words}")
+                self._put(r.tid, r.unit, r.out, w.reshape(1, r.words), S.source[j])
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
@@ -533,6 +538,28 @@ class Rows:
     def slots(self, tid: str) -> np.ndarray:
         """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
         return self._span(tid, 2)
+
+    def value(self, param: str, rows: int, empty: Sequence[int]) -> np.ndarray:
+        """Registered value ``param``'s ``rows`` rows as u16 words as the circuit's proof blocks make them: each row a read of
+        an output row ties (`interface.Read`), its unit's output row, and every other row ``empty`` (a row's words). Refused
+        where a read of ``param`` fills an input or reads past its rows, or two units make one row two ways."""
+        empty = np.asarray(empty, dtype=np.uint16)
+        out, made = np.tile(empty, (rows, 1)), np.zeros(rows, dtype=bool)
+        for r in self.circuit.registered.reads if self.circuit.registered else ():
+            if r.param != param:
+                continue
+            outs = [p for p, _ in self.lays[r.reader].outs]
+            if r.port not in outs or self.lays[r.reader].outs[outs.index(r.port)][1] != len(empty):
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(empty)} words")
+            leaf = r.source(np.arange(r.units))
+            at, got = leaf // len(empty), self.outs[r.reader][outs.index(r.port)][r.at:r.at + r.units]
+            if (leaf % len(empty)).any() or (at >= rows).any():
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(empty)} words")
+            fresh = ~made[at]
+            out[at[fresh]], made[at] = got[fresh], True
+            if not np.array_equal(out[at], got):
+                raise ValueError(f"{param!r}: two units make one of its rows two ways")
+        return out
 
     def record(self, win: IF.Window) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
