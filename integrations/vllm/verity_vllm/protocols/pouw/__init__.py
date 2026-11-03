@@ -105,7 +105,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session")
+        "backend", "draw_session", "commit_record")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -199,6 +199,8 @@ class Settings:
     backend: Any = None
     #: H1's draw session: the gate's reserve answer for the window's draw coin, opened withheld (`pouw_h1_window.DrawSession`)
     draw_session: Mapping[str, Any] | None = None
+    #: H1's Commit record named at the window's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
+    commit_record: Any = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -239,8 +241,9 @@ class Settings:
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
             raise ValueError(f"pouw setting 'backend' is the lead's kernel and committer (`lead.LeadBackend`): "
                              f"{', '.join(PL.BACKEND)}")
-        *h1, draw_session = PHS.of(raw)
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session)
+        *h1, draw_session, commit_record = PHS.of(raw)
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session,
+                   commit_record)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -735,7 +738,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
                    transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
                    admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served,
-                   session=session.reserved["session"] if session is not None else None, graphs=settings.graphs)
+                   session=session.reserved["session"] if session is not None else None, graphs=settings.graphs,
+                   commit_record=settings.commit_record)
     run.commits.update(weights_root=wroot.hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())

@@ -27,6 +27,7 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E
@@ -252,7 +253,7 @@ def _served_commit(com, model, quant=None):
 
 
 def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
-            order=None, coins=None, key=hashlib.sha512(b"w").digest(), served_commit=False):
+            order=None, coins=None, key=hashlib.sha512(b"w").digest(), served_commit=False, commit_record=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
@@ -263,7 +264,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger. The Commit is
     H1's own (`h1_commit.attach` on the stand-in `Committer`), or with ``served_commit`` the server's (`_served_commit`,
     H1's tap on it `h1_commit.tap`); either way the ids are its step-input port's, each step's model input padded by
-    `GRAPH_PAD` positions past its scheduled tokens."""
+    `GRAPH_PAD` positions past its scheduled tokens. ``commit_record`` is the pouw setting, unset when None."""
     if coins is None:
         _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com = model or Model(edit), com or Committer()
@@ -279,7 +280,8 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
         served._a = _Laid(lay)
-    kw = {"transcript_dir": str(tmp_path / "w"), "served": served}
+    kw = {"transcript_dir": str(tmp_path / "w"), "served": served,
+          **({} if commit_record is None else {"commit_record": commit_record})}
     settings = (_remote(rows=ROWS, steps=STEPS, **kw) if coins is None
                 else coins(SimpleNamespace(runner=Runner()), {**kw, "admission": "round-0"}))
     runner = settings["pouw"]["runner"]
@@ -303,12 +305,14 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
             com._cur = None
     finally:
         lied.uninstall()
-        comp.close()
-        if served_commit:
-            src.uninstall()
-        else:
-            com.close()
-        tap.untap()
+        try:
+            comp.close()
+        finally:
+            if served_commit:
+                src.uninstall()
+            else:
+                com.close()
+            tap.untap()
     return json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text()), run, tap
 
 
@@ -465,6 +469,103 @@ def test_the_commits_record_is_under_calls_root(tmp_path, monkeypatch):
     assert CR.calls_root(PHC.program_salt_of(c), record["calls"],
                          SV.digest_of(c["served"]["entries"], c["served"]["refused"]),
                          CT.digest(c["commit"])).hex() == c["calls_root"]
+
+
+#: the audited circuit's Program, whose registration a window names as its Commit record (a stand-in digest)
+AUDITED = hashlib.sha512(b"the audited circuit's Program").hexdigest()
+
+
+def _reusing(window, edit):
+    """A registration of the `AUDITED` Program that reuses the window's tables from its registration ``window``: a value
+    of its own, then each round's A table of K and its input-ids table under the Commit's name with ``window``'s entry
+    of it, chained right after ``window``; ``edit`` makes the record of that."""
+    theirs = {e["value"]: e for e in window["registered"]}
+    tables = [(CR.commit_rows(s, K), f"{SV.PREFIX}a/{K}@{s}") for s in range(STEPS)]
+    tables += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}") for s in range(STEPS)]
+    own = {"value": "scan/state", "leaves": 16, "words": 1, "root": "ab" * 64, "domain": "cd" * 64}
+    return edit({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": AUDITED, "query": "01" * 64,
+                 "partition": "02" * 64, "population": 4, "law": {"law": "subset", "k": 1}, "scheme": "hm96-sha512",
+                 "roots": [], "leaf_layer": None, "anchors": [], "window": {"kind": "served", "run": "ef" * 64},
+                 "registered": [own, *({**theirs[v], "value": name} for name, v in tables)],
+                 "previous": REG.digest(window)})
+
+
+def _named(previous=None, edit=lambda rec: rec, window=lambda w: w):
+    """The pouw setting ``commit_record``: the window's registration chained after ``previous`` (as ``window`` makes it
+    of the window's own) and `_reusing`'s record of it, kept in its ``got``."""
+    def commit_record(run):
+        w = CT.registration(run, previous)
+        commit_record.got = (w, _reusing(w, edit))
+        return window(w), commit_record.got[1]
+    return commit_record
+
+
+def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_draw_coin(tmp_path, monkeypatch):
+    """With ``commit_record`` the window names, in its tap's place, a registration of another Program that reuses its
+    tables. The window's registration W is a v2 record of its served entries under its Program and open root, chained
+    after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
+    (`registration._earlier`). The named record R is chained right after W and registers each round's A table and
+    input-ids table under the Commit's name with W's entry of it: R is the window's Commit record, one digest for every
+    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the draw coin opens, and core's
+    ROOTS1 steps pass on it."""
+    previous, named = "12" * 64, _named("12" * 64)
+    record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
+    window, rec = named.got
+    c = record["commitment"]
+    assert window["format"] == REG.FORMAT_V2 and window["previous"] == previous
+    assert window["program"] == run.served.program_digest and window["window"]["open_root"] == run.served.root
+    assert window["registered"] == c["served"]["entries"]
+    for e in window["registered"]:
+        want = {"leaves": e["leaves"], "words": e["words"], "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        assert REG._earlier([window], REG.digest(window), "value", e["value"], want) == e
+    assert c["commit"] == canonical_json(rec).hex() == CT.record_of(run) != run.served.tap.hex(run.served)
+    assert CT.digest(c["commit"]).hex() == REG.digest(rec)
+    assert run.details["commit_record"] == {"named": True, "registration": REG.digest(window), "record": REG.digest(rec)}
+    assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
+    assert c["draw"]["coin"] is not None and "refused" not in c["draw"]
+    assert all(v["credit"] for v in run.gated().values())
+
+
+def _registered(edit):
+    return lambda rec: {**rec, "registered": edit(rec["registered"])}
+
+
+def _fails(run):
+    raise ValueError("window-commit refused the window")
+
+
+@pytest.mark.parametrize("named,why", [
+    (_named(edit=_registered(lambda r: [r[0], {**r[1], "root": "00" * 64}, *r[2:]])),
+     f"registers {CR.commit_rows(0, K)} at another root, domain or leaf count"),
+    (_named(edit=_registered(lambda r: [e for e in r if e["value"] != CR.commit_ids(1)])),
+     f"registers {CR.commit_ids(1)} not"),
+    (_named(edit=_registered(lambda r: [*r, r[1]])), f"registers {CR.commit_rows(0, K)} twice"),
+    (_named(edit=lambda rec: {**rec, "previous": None}), "previous is not the window registration's digest"),
+    (_named(edit=lambda rec: {**rec, "format": REG.FORMAT}), "is not a Commit record credit reads"),
+    (_named(window=lambda w: {**w, "registered": w["registered"][1:]}), "the window's registration is not its own"),
+    (_fails, "ValueError: window-commit refused the window"),
+], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",
+        "hook-fails"])
+def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
+                                                                                                named, why):
+    """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
+    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its draw coin stays
+    unopened, its transcript says why, and its release raises ValueError, the window's visible refusal."""
+    with pytest.raises(ValueError, match="the window names no Commit record"):
+        _window(tmp_path, monkeypatch, commit_record=named)
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    c, named = record["commitment"], record["details"]["commit_record"]
+    assert named["named"] is False and why in named["reason"]
+    assert c["commit"] is None and c["draw"]["coin"] is None and why in c["draw"]["refused"]
+    assert PHC.manifest_reason(record) is None and CR.commit_of(c["commit"]) == (None, ("commit", CR.COMMIT_FORM))
+
+
+def test_commit_record_is_h1s_setting_a_callable_beside_served():
+    """The setting ``commit_record`` is a callable, and only H1's with its served tables."""
+    with pytest.raises(ValueError, match="'commit_record' is commit_record"):
+        pouw.Settings.of({"commit_record": "w.json"})
+    refused = PO.refusals(PO.Context(stage="serve", enabled=(ENTRY,), settings=_remote(commit_record=_fails)))
+    assert any("'commit_record' names H1's" in r for r in refused)
 
 
 def _experts(name):
