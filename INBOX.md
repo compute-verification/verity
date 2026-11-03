@@ -10,3 +10,7 @@ infra (INF-348): from 20:00Z Fri to 12:00Z Sat, cpu-2's whole w0 slot is held fo
 
 # 20:45Z Fri: CHANGE, top's plan of record: finish, don't start (from 21:30Z until next is under 300 above main, or Mon 2 Nov 18:00Z)
 Your four marks stand. CIR-141 items 6, 13 and 20, and VLLM-171's file names, are branch work: push branches, open no new PRs, mark nothing. The exception is VLLM-171, if the duplicated test file names make a suite fail (a red); then fix and mark it. If one of your marked PRs is ejected, fixing and re-marking it is allowed. End your turn with what's pushed and where.
+
+# 06:00Z Tue: CHANGE to your Pearl+ task (from 05:50Z)
+compute-research (05:23Z): pc8's units take Pearl+'s operations as primitives, so no gate-level circuit reproduces a Pearl+ tile yet. Pearl-C's C-Flock statement leaves its TileRead session a parameter until that Definition lands. The missing circuit is **TileRead**: Pearl+'s chain (HOPPER_E4M3_K32, promoted every 4 atoms) plus its peel (HOPPER_BF16_WGMMA_K16), at pinned roundings, built from those exact silicon atoms.
+So item 2 becomes: write TileRead as a registered Definition with its Boolean lowering, a circuit-check binding and correspondence against pearl_c_u's reference vectors. Then the unscale to y on top of it, if it's small. Check with compute-research's PR or branch first if one exists, so you don't duplicate it. Keep item 1 (pin the served y) and item 3 (sizing, now of TileRead at Llama 3.2 1B's linears). By Tue 18:00Z, a scoped estimate and whatever is working; the Definition itself may land later.
