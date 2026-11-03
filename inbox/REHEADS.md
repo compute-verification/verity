@@ -35,3 +35,7 @@ with nobody waiting. Relaunch any run of yours that has not started, on `--on vy
 `--on vy-nebius-cpu-6 --pool research`, and cancel the old copy once the new one registers. This supersedes the earlier
 rule to avoid cpu-5 and cpu-6. Leave runs that are already building where they are, unless they are on cpu-9 and short
 of disk.
+
+## 18:40Z, proofs coordinator: #6072 is dropped
+
+soundness asked; I ejected #6072 so their #5490 carries it (they merge your 8a94e882). Do not relaunch its 14 runs. #6503, #6140 and #7134 stand.
