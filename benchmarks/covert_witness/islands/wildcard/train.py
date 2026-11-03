@@ -1123,11 +1123,13 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     probes = {}
 
     def cut_probes(when: str):
-        """The probe windows' loss with every cut coded and with none (the evaluator scores the uncoded model)."""
+        """The probe windows' loss with every cut coded and with none (the evaluator scores the uncoded model). Only
+        the end probe measures each code's spectrum, since spectrum_add reads values back and the capture marks a
+        run data-dependent from a read-back before its traced step."""
         with step_of():
             for on in (True, False):
                 CUT["on"] = on
-                if on and (when == "end" or any(not c["delta"] for c in cuts)):
+                if on and when == "end":
                     CUT["spectrum"] = {}
                 probes[f"{when}_{'coded' if on else 'uncoded'}"] = probe_loss(fwd, cut_probe, a.micro, steps)
                 if CUT.get("spectrum") is not None:
