@@ -2,7 +2,7 @@
 write paths give.
 
   retain_profile.py probe --scratch DIR --out probe.json [--gb 8]
-  retain_profile.py serve --profile PROFILE.json SERVE_ARGS...
+  retain_profile.py serve --profile PROFILE.json [--seed S] [--wait-ends] SERVE_ARGS...
 
 ``probe`` measures the node: 1 GiB device-to-host copies into pinned and pageable memory and a device-to-device copy, fresh
 pinned allocations of 1 and 8 GiB, page-cache writes of ``--gb`` GiB from pinned memory in 256 MiB files by 1, 4, 8 and 12
@@ -13,7 +13,13 @@ kernel's dirty-page limits.
 wrapped where its module holds it, skipped where it is absent): per pass, each part's calls, host seconds and bytes, the y
 trees' seconds on the GPU (CUDA events around `served_y.y_tree`, read at the run's end), the writer threads' seconds, and
 /proc/meminfo's Dirty and Writeback at each pass end.  It writes the parts by pass, with served.json's ``step_s`` beside
-them, to ``--profile``.
+them, to ``--profile``.  ``--seed S`` draws the epoch's coins and the hm96 salt key from ``random.Random(S)`` (two serves of
+one load then retain the same bytes, so two trees' retention paths compare file by file); ``--wait-ends`` completes each
+step's retained pass in its step (`PassEnds.retain_behind` off).
+
+  retain_profile.py digests DIR --out DIGESTS.json
+
+``digests`` writes each file under DIR (relative path) and its bytes' SHA-256.
 """
 from __future__ import annotations
 
@@ -35,11 +41,15 @@ GiB = 1 << 30
 PARTS = {
     "retained_call": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._retained"),
     "excluded": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded"),
+    "excluded_host": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded_host"),
     "y_tree": ("verity_vllm.protocols.pouw.pearl_c.served_y", "y_tree"),
     "write_behind": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_behind"),
-    "stage": ("verity_vllm.protocols.pouw.pearl_c.retain", "Retainer.stage"),
+    "staged": ("verity_vllm.protocols.pouw.pearl_c.ends", "staged"),
+    "copies": ("verity_vllm.protocols.pouw.pearl_c.host", "_Copies.start"),
+    "arena_take": ("verity_vllm.protocols.pouw.pearl_c.host", "_Arena.take"),
     "stream_sync": ("torch.cuda.streams", "Stream.synchronize"),
     "event_sync": ("torch.cuda.streams", "Event.synchronize"),
+    "landed": ("verity_vllm.protocols.pouw.pearl_c.host", "_landed"),
     "writer": ("verity_vllm.protocols.pouw.pearl_c.host", "_write_host"),
     "join": ("verity_vllm.protocols.pouw.pearl_c.ends", "joined"),
     "write_retained": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._write_retained"),
@@ -48,6 +58,7 @@ PARTS = {
     "manifest": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_manifest"),
     "readback": ("verity_vllm.protocols.pouw.pearl_c.ends", "_bytes"),
     "end": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.end"),
+    "retained_ends": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.retained_ends"),
     "finish": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.finish"),
 }
 
@@ -228,6 +239,17 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
     sys.path.insert(0, str(HERE))
     import served_passes as SP
 
+    if args.seed is not None:
+        import random
+
+        from verity.core.protocols.pouw import verifier
+        from verity_vllm.protocols.pouw import pearl_c as PPD
+        draw = random.Random(args.seed)
+        verifier.coins = draw.randbytes
+        PPD.new_salt_key = lambda scheme: draw.randbytes(32)
+    if args.wait_ends:
+        from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
+        PassEnds.retain_behind = False
     prof = _Profile()
     parts = _install(prof)
     t = time.perf_counter()
@@ -235,9 +257,9 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
     total = time.perf_counter() - t
     out = Path(rest[rest.index("--out") + 1])
     served = json.loads(out.read_text()) if out.exists() else {}
-    doc = {"parts_timed": parts, "rc": rc, "process_s": total, "vm": _vm(),
+    doc = {"parts_timed": parts, "rc": rc, "process_s": total, "vm": _vm(), "seed": args.seed, "wait_ends": args.wait_ends,
            **{k: served.get(k) for k in ("retained", "generate_s", "step_s", "engine_steps", "requests", "prompt_tokens",
-                                         "output_tokens", "retain_drain_s", "close_s")},
+                                         "output_tokens", "close_s")},
            "passes_timed": [p["pass"] for p in served.get("passes", []) if p.get("timed")],
            "by_pass": prof.doc()}
     Path(args.profile).write_text(json.dumps(doc, indent=1) + "\n")
@@ -253,8 +275,33 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--gb", type=int, default=8)
     sv = sub.add_parser("serve")
     sv.add_argument("--profile", required=True)
+    sv.add_argument("--seed", type=int)
+    sv.add_argument("--wait-ends", action="store_true")
+    dg = sub.add_parser("digests")
+    dg.add_argument("dir")
+    dg.add_argument("--out", required=True)
     args, rest = p.parse_known_args(argv)
+    if args.cmd == "digests":
+        return digests(args)
     return probe(args) if args.cmd == "probe" else serve(args, rest)
+
+
+def digests(args: argparse.Namespace) -> int:
+    import hashlib
+    root = Path(args.dir)
+
+    def one(p: Path) -> str:
+        h = hashlib.sha256()
+        with open(p, "rb") as f:
+            while chunk := f.read(64 << 20):
+                h.update(chunk)
+        return h.hexdigest()
+    files = sorted(p for p in root.rglob("*") if p.is_file())
+    with ThreadPoolExecutor(os.cpu_count() or 4) as pool:
+        got = dict(zip((str(p.relative_to(root)) for p in files), pool.map(one, files)))
+    Path(args.out).write_text(json.dumps(got, indent=0, sort_keys=True) + "\n")
+    print(f"digests: {len(got)} files under {root}, {hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest()}")
+    return 0
 
 
 if __name__ == "__main__":

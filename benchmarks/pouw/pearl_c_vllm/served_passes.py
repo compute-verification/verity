@@ -15,7 +15,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
 O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
 writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
-it (``timed``), the timed call's wall (``generate_s``) and each of its engine steps' (``step_s``), the engine steps, the
+it (``timed``), the timed call's wall (``generate_s``), each of its engine steps' (``step_s``) and the engine's close
+(``close_s``: what retaining completes behind the steps, waited for there), the engine steps, the
 caps, the install's ``max_step_tokens`` and whether every pass is within the caps, to ``--out`` and ``DIR/served.json``,
 and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is
 within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
@@ -146,6 +147,7 @@ def serve(args: argparse.Namespace) -> int:
     outs = llm.generate(batch, sp, use_tqdm=False)
     wall = time.perf_counter() - t0
     llm.close()
+    close = time.perf_counter() - t0 - wall
     caps = {"tiles": run.capacity, "units": PPD.CALL_CAPACITY, "screened_rows": len(run.flag_buf)}
     got = [{"pass": i, "timed": i >= warm, **{k: p.get(k) for k in KEEP if k in p}, "macs": macs(p.get("manifest"))}
            for i, p in enumerate(run.details["passes"])]
@@ -155,7 +157,7 @@ def serve(args: argparse.Namespace) -> int:
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))}, "retained": args.retain,
            "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "generate_s": wall, "engine_steps": len(walls),
-           "step_s": walls[warm_steps:], "pass_ends": run.details.get("pass_ends"),
+           "step_s": walls[warm_steps:], "close_s": close, "pass_ends": run.details.get("pass_ends"),
            "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over,
            "ok": sum(p["timed"] for p in held) >= 3 and not over and (not args.retain or all(p.get("manifest") for p in held))}
