@@ -239,7 +239,10 @@ def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None]:
     p = _JOB["passes"][i]
     scheme, epoch, transcript = p.scheme, p.epoch, p.transcript
     ref = p.verifier.refs[tid]
-    opened = p.prover.open(epoch, tid)
+    try:
+        opened = p.prover.open(epoch, tid)
+    except (OSError, ValueError) as ex:
+        return i, tid, False, f"the prover's files don't open it: {type(ex).__name__}: {ex}"
     v = p.verifier.check_tile(transcript, opened)
     if not v.ok:
         return i, tid, False, v.reason
