@@ -13,6 +13,8 @@ along the coins up to the round that frees it:
 * `Loop.freeWord_congr`: where every round that frees a pad does so after at most `t` openings, the word `freeWord`
   reads there is one at two coin vectors that agree below `t` (`freedAt_unique`).
 * `Loop.vsWord_vsOf_l0`: no round frees a pad from level 0's on (`freeWord_ligAt`), so there `vsOf` is the honest values.
+* **`Loop.swCausal_oneTape_vsOf`**: one-tape `SwCausal` at `vsOf` on `Loop.SwOk`'s coin vectors
+  (`RefSession.SwCausalOn`), where `RowsOK` gives the rows at both (`swCausal_rows`, `rOuter_ne_one_of_swOk`).
 -/
 
 set_option synthInstance.maxSize 100000
@@ -1073,6 +1075,42 @@ theorem swCausal_rows
       (sizesOk_of_serves hSv) (fun ρ _ _ _ hs => by rw [hreal]; exact realTabs_of src x w ρ hs)
       (_root_.Flock.SecurityProofs.LoopInnerRound0Own Masked.dataE L₁ real fin x w))
     s _ ω p hcc hr hr'
+
+/-- **`SwOk`'s coin vectors meet `RowsOK`'s outer-coin condition** at a statement the loop serves: none of their outer
+coins is `1` (`outerReads_czExe`), or every table admits them. -/
+theorem rOuter_ne_one_of_swOk {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} (h : SwOk Masked.dataE x c)
+    (hSv : Serves x) (j : Fin (jOf x)) : ∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1 := by
+  rcases h with h | h
+  · intro r y hy
+    obtain ⟨e, he, rfl⟩ := outerReads_czExe PE x c j r y hy
+    have hj := lt_of_jOf j
+    exact h (live_of_lt j) hSv j.val hj r.val r.isLt e (by rw [getElem!_pos (stsOf x) j.val hj]; exact he)
+  · exact (h j).2.2.2
+
+/-- **One-tape `SwCausal` at `vsOf`, at `SwOk`'s coin vectors** (`RefSession.SwCausalOn`): `swCausal_rows` at the tape's
+bases, what the workers see of it and its level-0 leaves' pairs, the rows at both coin vectors from `RowsOK` at the tape
+(`rOuter_ne_one_of_swOk`). -/
+theorem swCausal_oneTape_vsOf
+    (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (fin : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      List (Msg × Msg) → Array ByteArray)
+    (hreal : real = realOf src)
+    (bx : AlgWorker (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real))
+    (hrows : ∀ x w, Serves x → RowsOK (vsOf _ bx) x w) :
+    (CoinLayer.session loopNr Masked.dataE).SwCausalOn (SwOk Masked.dataE) (vsOf _ bx) :=
+  fun x w ν t p1 c c' i hcc hc hc' =>
+    swCausal_rows L₁ src real fin hreal bx x w ν ((CoinLayer.session loopNr Masked.dataE).eP x t).1
+      ((CoinLayer.session loopNr Masked.dataE).seenOf x t) ((CoinLayer.session loopNr Masked.dataE).tapePairs x t p1)
+      c c' i hcc (fun hSv j => hrows x w hSv ν c t j (rOuter_ne_one_of_swOk hc hSv j))
+      fun hSv j => hrows x w hSv ν c' t j (rOuter_ne_one_of_swOk hc' hSv j)
 
 end Loop
 
