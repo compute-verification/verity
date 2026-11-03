@@ -220,7 +220,7 @@ theorem plainQueryRound_verifyJWithMK (keep : Bool → Bool) (hs : Hashes Flock.
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
       st.fold.kLog = st.kLog)
     (h : verifyJWithMK keep hs spec tabs j proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeJWithK keep hs spec j = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeJWithK keep hs spec j = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧

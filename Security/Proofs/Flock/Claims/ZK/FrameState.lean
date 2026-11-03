@@ -156,8 +156,9 @@ its kind: `prog` is the state the session loop's requests leave the rep's frame 
 schedule `Drive.reqs` fixes), which a release takes as given. The frame's step (`Frame.step`) sets its state, at a round
 that leaves, to what `check` returns at the statement's scheduled round (`Place.sched`), to `round`'s of a stopped rep at
 the rep's stop (`Place.fail`: `check`'s of a stopped rep, where the loop sends the scheduled round) and to `round`'s at
-an inner proof's round (`Place.own`: `check`'s with the round in its own place, `check_self`, where the loop sends the
-firewall's own round); the Prop adds that the loop's requests are those. The frame's own code is `check_l0`, proved. At
+an inner proof's round (`Place.own`, `Drive.reqs`' place for them: `check`'s with the round in its own place,
+`check_self`; the loop places it at `Place.sched` of the frame's own round, `Frame.innerSched`, which, relayed as the frame
+computed it, leaves the same state); the Prop adds that the loop's requests are those. The frame's own code is `check_l0`, proved. At
 the loop's own frames (`LeanRelease.ofLoop`) the Prop is a theorem (`ofLoop_progChecks`). -/
 def ProgChecks {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) : Prop :=
   ∀ (ρ : R) (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray),
@@ -199,7 +200,7 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
       L.rep x ((h ++ [(0 :: out.data.toList, a)]).length - 1)) = true := by
     rw [List.length_append, List.length_singleton, Nat.add_sub_cancel]
     exact decide_eq_true hrep
-  rw [L.answered_of_opens x ρ _ ho]
+  rw [answered_append hA _ ho]
   unfold frameAnswer
   rw [show (h ++ [(0 :: out.data.toList, a)]).getLast? = some (0 :: out.data.toList, a) by simp]
   dsimp only
