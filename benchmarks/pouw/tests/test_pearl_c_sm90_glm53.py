@@ -1,6 +1,7 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
-checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, the H200
-session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
+checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, Llama-3.2-1B's
+(llama32_1b.py) beside them, the H200 session's shapes each model's table's, glm53_timing's slowdowns and --whole over a
+stand-in card, and glm53_passes' full check of a retained pass."""
 
 from __future__ import annotations
 
@@ -164,17 +165,64 @@ def test_the_stamps_give_each_phase_since_its_ctas_start_and_the_tail_since_the_
     assert s["tail_us"] == {"start": 37.0, "level1": 40.0, "seed_a": 50.0} and s["tail_cta"] == [1, 7]
 
 
+def _llama():
+    """llama32_1b.py, which imports glm53 by its own name from its directory."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_llama32_1b", HERE / "llama32_1b.py")
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_llama_linears_are_one_cards_and_all_in_the_domain():
+    """Llama-3.2-1B at TP 1: qkv (32 + 2 · 8 heads of 64), o, the merged gate and up, down; every one in the sm_90a kernels'
+    domain, with γ at both FADD readings (the data sheet's above the record's) by glm53's formula, and the decode M
+    examples/vllm serves at (8) among DECODE_M."""
+    L = _llama()
+    rows = {r["name"]: r for r in L.table()}
+    assert {x: (r["n"], r["k"]) for x, r in rows.items()} == {
+        "self_attn.qkv_proj": (3072, 2048), "self_attn.o_proj": (2048, 2048), "mlp.gate_up_proj": (16384, 2048),
+        "mlp.down_proj": (2048, 8192)}
+    assert not any(r["refused"] for r in rows.values())
+    for name, r in rows.items():
+        assert 0 < r["gamma"]["record"] < r["gamma"]["sheet"] < 0.011, name
+        assert r["gamma"]["record"] == float(G.gamma(G.scheme(G.FADD_READINGS["record"]), r["n"], r["k"]))
+    assert set(L.in_domain()) == {(r["n"], r["k"]) for r in rows.values()}
+    assert 8 in L.DECODE_M and 2048 in L.PREFILL_M and L.SCHEME == G.SCHEME
+
+
 def test_h200_session_runs_the_tables_shapes():
-    """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192; it times decode's
-    forward whole (--whole, every in-domain shape) and prefill under the h3 chain beside the default one, and checks the
-    captured passes' outputs in full after every lease."""
+    """h200.sh's run.py SHAPES are every in-domain (n, k) of its MODEL (`in_domain`, each model's list), at decode's 64 and
+    prefill's 8192; every step after the check runs at MODEL's linears; it times decode's forward whole (--whole, every
+    in-domain shape) and prefill under the h3 chain beside the default one, and checks the captured passes' outputs in full
+    after every lease."""
     sh = (HERE / "h200.sh").read_text()
-    listed = re.search(r"for nk in ([\dx ]+); do", sh).group(1).split()
-    assert {tuple(map(int, x.split("x"))) for x in listed} == set(G.in_domain())
-    assert 'SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
-    assert '"$D/glm53_timing.py" --whole --out "$O/whole"' in sh
-    assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --out "$O/timing-h3" --m 2048 8192' in sh
+    listed = dict(re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)" ;;$', sh, re.M))
+    T = _timing()
+    assert set(listed) == set(T.MODELS) and "MODEL=${MODEL:-glm53}" in sh
+    for model, mod in (("glm53", G), ("llama32_1b", _llama())):
+        assert {tuple(map(int, x.split("x"))) for x in listed[model].split()} == set(mod.in_domain()), model
+    assert 'for nk in $NKS; do\n  SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
+    assert '"$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes"' in sh
+    assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" >' in sh
+    assert '"$D/glm53_timing.py" --model "$MODEL" --whole --out "$O/whole"' in sh
+    assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
+
+
+def test_slowdowns_divide_by_the_fastest_stock_call_its_graph_and_the_plain_gemm_apart():
+    """A row's slowdowns: over the fastest stock arm that ran eagerly, over the fastest of their graphs, and over the fastest
+    plain arm, eager or graphed; a plain arm is never the stock divisor, and a divisor no arm of its kind ran is None."""
+    T = _timing()
+    med = {"pearlc": 6.0, "pearlc-nohash": 4.0, "deepgemm": 3.0, "cublaslt": 2.0, "deepgemm-graph": 1.5,
+           "cublaslt-gemm": 1.2, "cublaslt-gemm-graph": 1.0}
+    got = T.slowdowns(med, {"pearlc": None}, ["deepgemm", "cutlass", "cublaslt"], {"cublaslt-gemm": None})
+    assert got == {"fastest_stock": "cublaslt", "slowdown": 3.0, "slowdowns": {"pearlc": 3.0}, "slowdown_nohash": 2.0,
+                   "fastest_stock_graphed": "deepgemm-graph", "slowdowns_graphed": {"pearlc": 4.0},
+                   "fastest_plain": "cublaslt-gemm-graph", "slowdowns_plain": {"pearlc": 6.0}}
+    none = T.slowdowns({"pearlc": 6.0, "pearlc-nohash": 4.0}, {"pearlc": None}, [], {"cublaslt-gemm": None})
+    assert none["fastest_stock"] is none["slowdown"] is none["fastest_plain"] is none["slowdowns_graphed"] is None
 
 
 def _timing():
@@ -365,7 +413,8 @@ def test_whole_names_a_deferred_capture_that_commits_otherwise(monkeypatch, leak
     assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"]["pearlc-deferred"]
 
 
-@pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"]])
+@pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"],
+                                  ["--model", "llama32_1b", "--m", "8192"], ["--model", "gpt2"]])
 def test_whole_refuses_what_it_cant_capture(tmp_path, args):
     """--whole runs the serial schedule at M up to GRAPH_ROWS over distinct shapes (a deferred call joins at once after its
     own shape's), and refuses anything else before it touches a card."""
