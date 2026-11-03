@@ -25,7 +25,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
   it: their law is the full sample, which samples every unit at every byte string (`execOS_subset_full_mem`,
-  `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3` are proved from
+  `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditHolo` are proved from
   their forms with no A3 premise (`…NoA3`). `RecursiveSound` is proved the same way but is no longer a guarantee: its
   form admits a possibilistic break, and the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. Those are fork
   forms and state no bits; the recursion's knowledge form, `Claims.Recursion.KS`, is at its level

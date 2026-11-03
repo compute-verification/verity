@@ -396,14 +396,14 @@ with `A.n = n` from `population_eq`. -/
 theorem coupled_draw_held {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hpub : ∃ p, ParamsAt θ p ∧ Flock.hexOf (Flock.Sha512.hash A.I.publicFile) = p.own.pub)
-    (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange}
+    (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
     (hθ : o.params = θ) (hF : o.files = F) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧ A.n = n ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T,
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_setsUp K A θ F c σ hA hR hk hθ hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_setsUp K A θ F c σ hA hR hθ hv hl
   have hn := population_eq hA hpub hθ hF hv hd
   exact ⟨dr, L, n, ξ, units, hd, hn, fun ω hp => h ω hn hp⟩
 
@@ -411,7 +411,7 @@ theorem coupled_draw_held {V : Vocab d α} {k : Verity.Registration.Composite} (
 theorem coupled_draw_coins_held {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hpub : ∃ p, ParamsAt θ p ∧ Flock.hexOf (Flock.Sha512.hash A.I.publicFile) = p.own.pub)
-    (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange}
+    (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
     (hθ : o.params = θ) (hF : o.files = F) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
     (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
     (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
@@ -420,7 +420,7 @@ theorem coupled_draw_coins_held {V : Vocab d α} {k : Verity.Registration.Compos
       ∀ ω : A.Ω × (K.coins A θ F c σ).T,
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins_setsUp K A θ F c σ hA hR hk hθ hv hl κ hsrc
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins_setsUp K A θ F c σ hA hR hθ hv hl κ hsrc
   have hn := population_eq hA hpub hθ hF hv hd
   exact ⟨dr, L, n, ξ, units, hd, hn, fun ω hp => h ω hn hp⟩
 
