@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """SHA-512 Merkle trees with hm96-sha512/v1 leaves on the device for verity/flock-circuit: install verity/ml/flock/cuda/sha512.cuh into a Flock b684b12
-checkout, with the GPU's one SHA-512 (verity/ml/kernels/sha512.cuh) beside it as kernels_sha512.cuh, and widen every Merkle node from 32 to 64 bytes (FLOCK_HB): the tree kernels, the node gathers and cap copies, the
-proof writer, and the tree allocations and cap observations of the chunk and circuit provers and the Ligerito levels.
+checkout, with the GPU's one SHA-512 (verity/ml/kernels/sha512.cuh) beside it as kernels_sha512.cuh, and widen every Merkle
+node from 32 to 64 bytes (FLOCK_HB): the tree kernels, the node gathers and cap copies, the proof writer, and the tree
+allocations and cap observations of the chunk and circuit provers and the Ligerito levels.
 
 Run from the flock checkout after verity/ml/flock/cuda_circuit_patch.py, together with verity/ml/flock/flock-sha512-b684b12.patch
 (the Rust side: 64-byte digests, HashKind::Sha512); flock-live's feature `sha512` selects it. Every edit must match exactly
