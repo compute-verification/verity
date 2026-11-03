@@ -73,10 +73,13 @@ def gather_selects(n: int, bits: int = 32, chunk_bits: int = 10) -> int:
 
 def pass_flops(rec: dict, trainable: dict, lookup: int, op: str, n_tokens: int) -> int:
     """The FLOPs the harness counts for a pass: prepare.train_flops plus what it leaves out, a trained table's token
-    lookup (`lookup` a token) and the attention's other half (the whole score matrix, with a backward of 2.5x its
-    forward: one more attention_flops a layer forward, three more a layer the backward reaches)."""
+    lookup (`lookup` a token) and, at a pin whose train_flops prices causal attention as half the square (one without
+    `prepare.attention_macs`), the attention's other half (the whole score matrix, with a backward of 2.5x its forward:
+    one more attention_flops a layer forward, three more a layer the backward reaches)."""
     ctx = prepare.EVAL_CTX
     tf = prepare.train_flops(rec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])
+    if hasattr(prepare, "attention_macs"):
+        return tf["flops"] + lookup * n_tokens
     first = tuple(tf["lowest_trained"] or ()) if op == "train" else ()
     n_layer = rec["config"]["n_layer"]
     reached = sum((layer, 1) >= first for layer in range(1, n_layer + 1)) if first else 0
