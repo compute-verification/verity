@@ -11,7 +11,7 @@
   "Firewall": {
    "imports": ["Lean", "Std", "Flock", "CoreProtocol", "Firewall"],
    "except": [],
-   "why": "the release side is code: Lean core and its Std (the wall clock), C-Flock's verifier library (its canonical JSON, SHA-512, the firewall's contract and its session loop) and the core protocol interface, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the release side is code: Lean core and its Std (the wall clock), C-Flock's verifier library (its canonical JSON, SHA-512, the firewall's contract and its session loop) and the core protocol interface, no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
   }
  },
  "dependencies": {

@@ -13,24 +13,14 @@ import pytest
 pytest.importorskip("verity.core.protocols.pous")
 
 WIPE_RESUME = Path(__file__).resolve().parents[1] / "wipe_resume"
+POUS_TESTS = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "pous" / "tests"
 
 
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(f"wipe_resume_{name}", WIPE_RESUME / f"{name}.py")
+def _load(name: str, where: Path = WIPE_RESUME):
+    spec = importlib.util.spec_from_file_location(f"wipe_resume_{name}", where / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-class Tick:
-    """A clock that advances 1 µs at each reading."""
-
-    def __init__(self) -> None:
-        self.now = 10**9
-
-    def __call__(self) -> int:
-        self.now += 1000
-        return self.now
 
 
 @pytest.fixture(scope="module")
@@ -43,7 +33,7 @@ def streamed(tmp_path_factory):
         return v, {"python": {"accepted": v.accepted, "egress_mib": v.egress_mib, "reasons": list(v.reasons)}}
 
     out = resume.run(n=256, k=400, limit_ns=1_000_000, decide="python", scratch=tmp_path_factory.mktemp("wipe-resume"),
-                     clock=Tick(), untimed_tries=1 << 10, sample_sessions=0, judge=python, coin_secret=b"fixed coins")
+                     clock=_load("pous_fakes", POUS_TESTS).Clock(10 ** 9, 1_000), untimed_tries=1 << 10, sample_sessions=0, judge=python, coin_secret=b"fixed coins")
     return resume, {s["prover"]: s for s in out["sessions"]}, out
 
 

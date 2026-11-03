@@ -3,7 +3,8 @@ at a time with each allocation's slots side by side (`_Builder.unit`), the rows 
 registered reads (the weights' and the scan state's), and `settle`: each port read as m writer rows cut m ways, a row of
 its reader a writer row, and every feed wired as `interface.Wire` patterns, one a run of rows from one writer's output at a
 constant unit step. No unit copies rows together: a reader reads each writer's row as it is. A unit holds at most
-``Grain.rows`` rows in and out.
+``Grain.rows`` rows in and out. Each template's units are the circuit's inference entries by their (slot, step)
+(`inference`).
 """
 from __future__ import annotations
 
@@ -43,11 +44,36 @@ class Grain:
     """The units' size (Llama-3.2-1B's by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
     // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
     `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (C-Flock's
-    composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), and a
-    token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16)."""
+    composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), a
+    token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16), and a fused norm
+    cut at its residual add is parts of ``norm`` elements (256: 8 parts at N = 2,048, each x 64 rows of a `Gemm_v2{8192, 4}`)."""
     gemm_words: int = 32768
     rows: int = 256
     select: int = 2672
+    norm: int = 256
+
+
+def _spans(what: str, fields: Sequence[tuple[str, Any]]) -> list[tuple[int, int, int]]:
+    """``fields`` laid end to end as u16 words: each one's ``(first leaf, first word, leaf bits)``, then ``(leaves, words, 0)``;
+    refused where a field isn't leaves of one whole-byte width filling whole words (an s8 weight's are two a word)."""
+    out, leaf, word = [], 0, 0
+    for label, ty in fields:
+        ws = ty.width_set()
+        bits = next(iter(ws))
+        if len(ws) != 1 or bits % 8 or ty.leaves * bits % 16:
+            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole u16 "
+                                "words")
+        out.append((leaf, word, bits))
+        leaf, word = leaf + ty.leaves, word + ty.leaves * bits // 16
+    return out + [(leaf, word, 0)]
+
+
+def _word(spans: Sequence[tuple[int, int, int]], leaf: int, what: str) -> int:
+    """The u16 word leaf ``leaf`` of ``spans`` (`_spans`) starts, refused inside a word."""
+    first, word, bits = spans[bisect.bisect_right([s[0] for s in spans], leaf) - 1]
+    if (leaf - first) * bits % 16:
+        raise Unexpressible(f"{what}: leaf {leaf} starts inside a u16 word of {bits}-bit leaves")
+    return word + (leaf - first) * bits // 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,3 +299,43 @@ def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     (`interface.unit_rows`)."""
     lay = IF.layout(fn)
     return len(lay.cut(cuts)) + len(lay.outs)
+
+
+def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int]], axis: str,
+            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int]]:
+    """``groups`` (first unit, digits as ``(radix, axis)``, step), consecutive, with each run of like ones (one digits, their
+    steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
+    out, i = [], 0
+    while i < len(groups):
+        at, digits, step = groups[i]
+        j = i + 1
+        while j < len(groups) and groups[j][1] == digits and groups[j][2] == step + (j - i) * delta:
+            j += 1
+        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step))
+        i = j
+    return out
+
+
+def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> list[IF.InferenceEntry]:
+    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, an allocation's
+    slots' runs of one length at one step side by side, are one entry (the slot, then the run), and like entries that follow
+    on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused where a template's
+    units aren't such runs."""
+    out = []
+    for tid, spans_ in spans.items():
+        merged: list[tuple[int, int, int, int]] = []
+        for at, n, slot, step in sorted(spans_):
+            if merged and merged[-1][2:] == (slot, step):
+                merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
+            else:
+                merged.append((at, n, slot, step))
+        groups = []
+        for i in range(0, len(merged), slots):
+            g = merged[i:i + slots]
+            if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3]) for r in g}) != 1:
+                raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step")
+            groups.append((g[0][0], ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3]))
+        for axis, delta in (("-", 0), ("step", 1)):
+            groups = _follow(groups, axis, delta)
+        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step) for at, d, step in groups]
+    return out

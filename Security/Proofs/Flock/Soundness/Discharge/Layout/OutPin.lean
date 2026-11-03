@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+import Properties.Flock.Circuit.Outs
 
 set_option Elab.async false
 
@@ -45,16 +46,6 @@ theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg
 /-! ## The returned outputs' columns -/
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
-
-/-- Column `16 j + t` of the unit's returned-output group, in the unit's rows. -/
-def outCol (j t : ℕ) : ℕ := (c.unit.outGroups.getD 0 default).col * WORD + (16 * j + t)
-
-/-- **Stacked column `x` of a template instance is a returned output's bit**: copy `u'`'s computed column `outCol j t`,
-for output `j` of the copy's leaf and bit `t < 16`. -/
-def OutColAt (x u' j t : ℕ) : Prop :=
-  u' < c.upv ∧ j < (c.leavesOut.getD u' #[]).size ∧ t < 16 ∧ (Rows.ofNet hU).nIn ≤ outCol c j t ∧
-    outCol c j t < (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp ∧
-    x = c.upv * (Rows.ofNet hU).nIn + (u' * ((Rows.ofNet hU).nComp + 1) + (1 + (outCol c j t - (Rows.ofNet hU).nIn)))
 
 /-- The copy, output and bit a stacked computed column is on (`OutColAt` read back). -/
 noncomputable def outDecode (x : ℕ) : ℕ × ℕ × ℕ :=

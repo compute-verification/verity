@@ -36,7 +36,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
+from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -63,7 +63,7 @@ FOLD1 = PrimitiveDefinition("H1ServedTestFold1", 1, (("key", V1), ("x", V1)), V1
                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
 #: the stand-in's receipt: 16 bits, one u16 word a proof block (a receipt is bits, as the tile's u32 words are)
 RECEIPT = Array(16, V1)
-OUT = Record(("receipt", RECEIPT), ("ok", V1))
+OUT = RecordType(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):
@@ -1056,6 +1056,29 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
              for e in served.entries()]
     assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
+
+
+#: one Llama-3.2-1B decoder layer's int8 linears (n, K): qkv, o and gate_up at the hidden size, down_proj at the
+#: intermediate size
+LLAMA_1B = {"qkv_proj": (3072, 2048), "o_proj": (2048, 2048), "gate_up_proj": (16384, 2048), "down_proj": (2048, 8192)}
+
+
+@pytest.mark.slow
+def test_the_pouw_setting_j10r_over_one_k_declares_the_form_a_periods_guarantee_covers():
+    """serve-openai's ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` (`unit_of`, the linears at K = 2048): the Program it
+    declares over a Llama-3.2-1B layer at T 64, S 1 has its units at one K, each J10-R's, as credit reads the descriptor
+    (`credit.shape_of`): the form a PoUW period's guarantee covers. Unset (v1) its unit takes per-unit noise, and J10-R
+    with down_proj's K = 8192 beside it has units at two K's. Its three declarations are real (up to a minute together):
+    the stand-in tests hold the setting's plumbing, and only a real one gives the descriptor credit reads."""
+    def tiles(names, unit):
+        shapes = [LLAMA_1B[n] for n in names]
+        raw = SV.descriptor(SV.declared(shapes, dict(enumerate(names)), 64, 1, unit=SV.unit_of(unit)))
+        return {k: t["j10r"] for k, t in CR.shape_of(raw)["tiles"].items()}
+
+    one_k = [n for n, (_n, k) in LLAMA_1B.items() if k == 2048]
+    assert tiles(one_k, "j10r") == {2048: True}
+    assert tiles(one_k, None) == {2048: False}
+    assert tiles(list(LLAMA_1B), "j10r") == {2048: True, 8192: True}
 
 
 def _last_chunk_code(w):

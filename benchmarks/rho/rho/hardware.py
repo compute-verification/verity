@@ -1,5 +1,5 @@
-"""The physical model, `𝒜_phys`: the inventory's locations, its dark leaves and the horizon, in gates (the working
-draft's §8).
+"""The physical model (GLOSSARY.md's "The physical model": HW and INV, `Accounting.Hardware` and `Accounting.Covered`),
+which bounds the feasible set 𝓕: the inventory's locations, its dark leaves and the monitoring period, in gates.
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
@@ -18,7 +18,8 @@ RAM, disks): the capacity the wipe's per-server bound is stated against.
 A **fleet** is the inventory: the monitored locations, and the dark leaves `L_dark` with `Φ(L_dark) = ε_dark Φ_total`,
 one connected pool outside every monitored location (ruled). The physical model bounds every gate at capacity,
 so the bound counts the dark leaves at `Φ`; `mfu_train` and `mfu_dark` are what a construction (an attack) gets of the
-monitored and the dark gates. A **horizon** is the monitoring period a result is over.
+monitored and the dark gates. A **monitoring period** is the stretch of time a result is over, one of core's
+(`params.PERIODS`).
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
 rate (no `links`-form serving block).
@@ -97,7 +98,7 @@ class Fleet:
 
 
 @dataclass(frozen=True)
-class Horizon:
+class MonitoringPeriod:
     name: str
     seconds: float
 
@@ -118,5 +119,5 @@ def fleet(registry: Registry, name: str) -> Fleet:
     return registry.fields(Fleet, f"fleet.{name}")
 
 
-def horizon(registry: Registry, name: str) -> Horizon:
-    return registry.fields(Horizon, f"horizon.{name}")
+def monitoring_period(registry: Registry, name: str) -> MonitoringPeriod:
+    return registry.fields(MonitoringPeriod, f"horizon.{name}")

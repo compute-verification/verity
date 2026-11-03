@@ -9,7 +9,8 @@ import Mathlib.Data.Rat.Cast.Order
 
 * **The grid** is every value of a call's coin bits, `Bits m C`: bit `b` of row `i`'s 32-bit coin word `c`. Targets and
   free values are affine in the bits (`aff`).
-* **The free values** (`FreeB`) are the constants and the raw coin words `Σ_b 2^b·x(r, c, b)`.
+* **The free values** (`FreeB`) are the constants and the raw coin words `Σ_b 2^b·x(r, c, b)`; `FreeInputs` says a
+  program's inputs are all free.
 * **A committed word** (`ssnWordB`) of row `i`, column `j`, after step `t` is its data case's constant `κ i j t` plus,
   at every bit, the weight of the used lane that reads it (`bitCoef`): step `s` reads lane `q` from bit `pos s q` of
   coin word `src s` and weighs it `W s q j` in column `j`. `ssnWords` is the set of a call's words over `n` columns,
@@ -51,6 +52,9 @@ def coinCoef (r : Fin m) (c : Fin C) : Fin m × Fin C × Fin 32 → ℚ :=
 /-- The free values in the bit model: the constants and the raw coin words. -/
 def FreeB (m C : ℕ) : Set (Bits m C → ℚ) :=
   {f | (∃ q : ℚ, f = fun _ => q) ∨ ∃ r c, f = aff 0 (coinCoef (m := m) (C := C) r c)}
+
+/-- A program's inputs are free values: each of `I` is a constant or a raw coin word. -/
+def FreeInputs (m C : ℕ) (I : List (Bits m C → ℚ)) : Prop := ∀ f ∈ I, f ∈ FreeB m C
 
 /-- The weight bit `k` carries in row `i`'s word of column `j` after step `t`: the weight of the used lane that reads it
 (step `s` reads lane `q` from bit `pos s q` of coin word `src s`). -/

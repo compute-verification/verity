@@ -1,4 +1,4 @@
-"""dither-a's -zy records pinned to h1zy's (RT4-INT-33): `benchmarks/hash/dither/dither_a.py`'s `_dithera_epilogue` at ZL = 2,
+"""dither-a's -zy records pinned to h1zy's: `benchmarks/hash/dither/dither_a.py`'s `_dithera_epilogue` at ZL = 2,
 one record a `dither_a.UNIT` unit, through `dithera_mm` and `dithera_mm_tma` as `Side.gemm` launches them. A -zy row commits
 these records, and a unit opens only a record that parses as `h1zy.RECORD` into its exact z and `h1zy.dequant`'s y, as
 integrations/vllm's `test_int8_zy_h1zy` pins `verity_int8::scaled_mm_zy`'s.
@@ -12,9 +12,9 @@ one:
 * every cell of the served y (all M rows) is `h1zy.dequant` of its z at its row's s_a and its column's s_w, and every cell
   of every record's y is `h1zy.dequant` of the record's z at the slot's s_a: an empty slot is zero codes under s_a = +0,
   so its y is dq(0, +0, s_w), +0 under a finite positive s_w (the served case), 0x8000 under a negative one and 0x7FFF
-  under an infinite or NaN one (CA's #3080: Served's DequantOf on every cell);
+  under an infinite or NaN one (CA's : Served's DequantOf on every cell);
 * the records are `scaled_mm_zy`'s byte for byte on the same inputs (its rows the m live ones);
-* `ycommit`'s y records (the served y's, RT4-INT-11) are the records' y halves byte for byte, so the two y roots agree;
+* `ycommit`'s y records (the served y's) are the records' y halves byte for byte, so the two y roots agree;
 * the cells where the y changed from dither-a's earlier "0 past m" (0x0000 on every empty slot) are exactly the empty
   slots of columns whose dq(0, +0, s_w) isn't +0: under served scales none, so the fix leaves every served byte as it was.
 
@@ -302,7 +302,7 @@ def _edge(DA, sd: SimpleNamespace) -> tuple[dict, np.ndarray]:
 # -- CPU -----------------------------------------------------------------------------------------------------------------
 
 def test_the_byte_layout_compared_is_int8_exacts_and_parses_as_h1zy_record():
-    """`records_of`, the layout the CUDA tests compare dither-a's bytes in, is `int8_exact.zy_records` (#3018's records),
+    """`records_of`, the layout the CUDA tests compare dither-a's bytes in, is `int8_exact.zy_records` ('s records),
     and `record_fields` reads it back as `h1zy.RECORD` into the same z and y: random words over 3 x 5 units."""
     rng = np.random.default_rng(2930)
     rows, n = 3 * UR, 5 * UC

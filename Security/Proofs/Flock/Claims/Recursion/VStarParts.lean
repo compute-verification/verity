@@ -203,16 +203,36 @@ theorem layout_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {
 is one `HmRow.parse` returned (`tableAt`), which carries no template. -/
 theorem flat_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
-    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) :
-    p.sts[t].c.tmpl = none := by
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
+    (hrec : Flock.HmOut.recUnit p.sts[t].c.unit.name = true) : p.sts[t].c.tmpl = none := by
   obtain ⟨p', hx', hp', -⟩ := relS_of_check h
   rw [hx] at hx'
   cases hx'
   obtain ⟨hc, -⟩ := tableAt (tablesOf_of_parses hp') ht hpi htl
   unfold ProvedScope.circuitOf at hc
   split at hc
-  · exact (FlockSoundness.parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht hc).1).tmpl
+  · rcases FlockSoundness.Discharge.Hidden.committed_of_commit hc with hc | hc
+    · exact (FlockSoundness.parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht hc).1).tmpl
+    · rw [FlockSoundness.TmplValue.parseTmpl_notRec hc] at hrec
+      cases hrec
   · exact (FlockSoundness.parse_facts hc).tmpl
+
+theorem recUnit_open {n : String} {L H : ℕ}
+    (h : Flock.RecOpen.params n = some (L, H) ∨ Flock.RecOpen.stackedParams n = some (L, H)) :
+    Flock.HmOut.recUnit n = true := by
+  rcases h with h | h <;> simp [Flock.HmOut.recUnit, h]
+
+theorem recUnit_residuals {n : String} {q : ℕ × ℕ × ℕ × ℕ} (h : Flock.RecResiduals.params n = some q) :
+    Flock.HmOut.recUnit n = true := by
+  simp [Flock.HmOut.recUnit, h]
+
+theorem recUnit_sparse {n : String} {sh : Flock.RecSparse.Shape} (h : Flock.RecSparse.params n = some sh) :
+    Flock.HmOut.recUnit n = true := by
+  simp [Flock.HmOut.recUnit, h]
+
+theorem recUnit_opening {n : String} {q : ℕ × ℕ × ℕ} (h : Flock.RecOpening.params n = some q) :
+    Flock.HmOut.recUnit n = true := by
+  simp [Flock.HmOut.recUnit, h]
 
 /-- **An algebra part's copies compute its residuals at `Flock.check`** (`partCols_of_satisfies` at every table):
 wherever `Flock.check` holds at the deployed parser, at an untyped parsed statement without public input words, a
@@ -232,7 +252,7 @@ theorem partCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     PartCols S W vv (copyCol p.sts.size t w p.sts[t].c.kLog o
       (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos) (partBase S ns nv) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  exact partCols_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
+  exact partCols_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_residuals hp)) regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
 
 /-- **A rec-open part's copies climb at `Flock.check`** (`climb_of_satisfies` at every table): wherever `Flock.check`
 holds at the deployed parser, at an untyped parsed statement without public input words, a table `RecOpen.check`
@@ -263,7 +283,7 @@ theorem climb_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w
         (Flock.MerkleScheme.rowBytes #[FlockVBridge.consTerm LANES r a cf 0, FlockVBridge.consTerm LANES r a cf 1] ++
           rest)) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  exact climb_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
+  exact climb_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_open (.inl hp))) regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
     hcoef hdir
 
 /-- The columns of copy `u` of VU `g` in block `o` of table `t`, off the hidden values (`copyCol`). -/
@@ -346,7 +366,7 @@ part `s`,
 * the output tie: S's residuals at `W`, `vv` on that copy's output columns (`PartCols`) give the inner check `chk s`. -/
 def ResLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
         (ns : List ℕ) (nv : ℕ),
@@ -386,7 +406,7 @@ what is left of the input tie sits in the output tie's premise: S's residuals at
 inner check, which they do once those elements are the held messages' and the coins' coefficients. -/
 def ResReads (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
         (ns : List ℕ) (nv : ℕ),
@@ -434,7 +454,7 @@ for part `s`,
   `chk s`. -/
 def OpenLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ LANES Ht : ℕ,
         _root_.Flock.RecOpen.check p.sts[t].c = .ok () ∧
@@ -485,7 +505,7 @@ among the calls the part records, which read the copy's SHA-512 gadgets. -/
 def OpenLogLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
     (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ LANES Ht : ℕ,
         _root_.Flock.RecOpen.check p.sts[t].c = .ok () ∧
@@ -581,7 +601,7 @@ coins for part `s`, each inner round's message the part holds opens under `openi
 public file names for that round (the `b ‖ c` the part's hm96 row computes), through calls the part records. -/
 def HeldOpens {Coin Col T : Type} (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (opening : Opening) (dig : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → ∀ c, shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
       ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (dig x i xO) m cs
 
@@ -594,7 +614,7 @@ input either climb hashes is one the setup evaluates at `xO` (`D.setup xO`) or o
 def RegClimbs {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt dig : Msg → ℕ → Msg → Msg) (s : ℕ) :
     Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → ∀ c, shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
       ∃ fs gs : List (Msg → Msg), StepsApart fs gs ∧ chainH H fs (dig x i xO) = chainH H gs (cmt x i xO) ∧
         ∀ u ∈ chainIns H fs (dig x i xO) ++ chainIns H gs (cmt x i xO), u ∈ D.setup xO ∨ (u, H u) ∈ L.calls x s w
