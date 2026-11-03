@@ -70,14 +70,14 @@ theorem recordsLiveZKJA_iff (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) 
   Iff.rfl
 
 /-- The session `setup` sets up for `record`, and the session `Record.decode` decodes `record` to there. -/
-def sessOf (record : String) : Option (SessionSpec × Session) :=
+def sessOf (record : String) : Option (SessionSpec × RunRecord) :=
   match setup record with
   | .ok (spec, _) => (Record.decode spec record).toOption.map (spec, ·)
   | .error _ => none
 
 /-- Table `j`'s rep `r` stream's rounds in the decoded session `sess` of `spec` (`<table>/rep<r>`, as `Zk.verifyRep`
 finds it), none where it has no such stream. -/
-def repRounds (spec : SessionSpec) (sess : Session) (j r : ℕ) : List Round :=
+def repRounds (spec : SessionSpec) (sess : RunRecord) (j r : ℕ) : List Round :=
   ((sess.streams.find? fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString r).map
     (·.rounds.toList)).getD []
 
@@ -92,7 +92,7 @@ def viewA (J mPts : ℕ) (t : Exec.Transcript) : LiveOutJ J mPts where
 
 variable {acc setup}
 
-theorem sessOf_eq {record : String} {spec : SessionSpec} {sts : Array Stmt} {sess : Session}
+theorem sessOf_eq {record : String} {spec : SessionSpec} {sts : Array Stmt} {sess : RunRecord}
     (hs : setup record = .ok (spec, sts)) (hd : Record.decode spec record = .ok sess) :
     sessOf setup record = some (spec, sess) := by
   simp only [sessOf, hs, hd]
@@ -210,7 +210,7 @@ theorem recordCustodyZKJP_wrZP_printed (I : Exec.Inputs) (own : Option ByteArray
 its record decodes to at its setup has, at each table `j` of the setup and each rep `r`, the stream `<table>/rep<r>`,
 since `Zk.verifyRep` refuses a table without it (S11). -/
 theorem acceptsZKP_streams {I : Exec.Inputs} {own : Option ByteArray} {t : Exec.Transcript}
-    (ha : AcceptsZKP I own t) {spec : SessionSpec} {sts : Array Stmt} {sess : Session}
+    (ha : AcceptsZKP I own t) {spec : SessionSpec} {sts : Array Stmt} {sess : RunRecord}
     (hs : Exec.setupOfP (zkInputs I) own t.record = .ok (spec, sts)) (hd : Record.decode spec t.record = .ok sess) :
     ∀ j < sts.size, ∀ r < 2, ∃ s : StreamRec,
       sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString r) = some s := by
