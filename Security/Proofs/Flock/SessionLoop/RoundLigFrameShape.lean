@@ -111,14 +111,15 @@ theorem ht_bind {Pre : Transcript → Array Claims.Msg → Prop} {Mid : α → T
     exact hf a t' L (hok a t' L e)
 
 theorem ht_pure {Pre : Transcript → Array Claims.Msg → Prop} {Post : α → Transcript → Array Claims.Msg → Prop} {a : α}
-    (h : ∀ t l, Pre t l → Post a t l) : HT P Pre Post (pure a) := by
+    (hP : ∀ t l, Pre t l → Post a t l) : HT P Pre Post (pure a) := by
   intro t l hp
   refine ⟨fun e L h => ?_, fun a' t' L h => ?_⟩
-  · cases h
+  · have e' : ((Except.ok (a, t) : Except String (α × Transcript)), l) = (.error e, L) := h
+    cases e'
   · have e : ((Except.ok (a, t) : Except String (α × Transcript)), l) = (.ok (a', t'), L) := h
     simp only [Prod.mk.injEq, Except.ok.injEq] at e
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := e
-    exact h t l hp
+    exact hP t l hp
 
 theorem ht_mono {Pre Pre' : Transcript → Array Claims.Msg → Prop} {Post Post' : α → Transcript → Array Claims.Msg → Prop}
     {x : TMW PS α} (h : HT P Pre Post x) (hpre : ∀ t l, Pre' t l → Pre t l)
@@ -153,18 +154,19 @@ theorem ht_liftPS {Pre : Transcript → Array Claims.Msg → Prop} {Q : α → P
   cases r with
   | error err =>
     refine ⟨fun e' L' h => ?_, fun a t' L' h => ?_⟩
-    · simp only [Prod.mk.injEq] at h
-      rw [← h.2]
+    · have e'' : ((Except.error err : Except String (α × Transcript)), L) = (.error e', L') := h
+      simp only [Prod.mk.injEq] at e''
+      rw [← e''.2]
       exact he t _ hp
-    · simp at h
+    · have e'' : ((Except.error err : Except String (α × Transcript)), L) = (.ok (a, t'), L') := h
+      cases e''
   | ok a =>
     refine ⟨fun e' L' h => ?_, fun a' t' L' h => ?_⟩
-    · cases h
-    · have e' : ((Except.ok (a, t) : Except String (α × Transcript)), y.go l |>.2) = (.ok (a', t'), L') := by
-        rw [e]; exact h
+    · have e'' : ((Except.ok (a, t) : Except String (α × Transcript)), L) = (.error e', L') := h
+      cases e''
+    · have e' : ((Except.ok (a, t) : Except String (α × Transcript)), L) = (.ok (a', t'), L') := h
       simp only [Prod.mk.injEq, Except.ok.injEq] at e'
       obtain ⟨⟨rfl, rfl⟩, rfl⟩ := e'
-      rw [e]
       exact ⟨hp, hq _ a _ e⟩
 
 /-! ## Through the prover's state -/
@@ -254,11 +256,20 @@ theorem hl_forIn (n : ℕ) (J : ℕ → σ → Transcript → Array Claims.Msg �
     exact ih (a + 1) v (by omega) s t l hv
 
 theorem hl_forIn_bind {n : ℕ} (J : ℕ → σ → Transcript → Array Claims.Msg → Prop)
-    {Post : β → Transcript → Array Claims.Msg → Prop} {body : ℕ → σ → LP PS (ForInStep σ)} {u : σ}
-    {f : σ → LP PS β}
+    {Pre : Transcript → Array Claims.Msg → Prop} {Post : β → Transcript → Array Claims.Msg → Prop}
+    {body : ℕ → σ → LP PS (ForInStep σ)} {u : σ} {f : σ → LP PS β} (h0 : ∀ t l, Pre t l → J 0 u t l)
     (hb : ∀ i < n, ∀ u, HL P (J i u) (fun r t l => ∃ v, r = .yield v ∧ J (i + 1) v t l) (body i u))
-    (hf : ∀ r, HL P (J n r) Post (f r)) : HL P (J 0 u) Post (forIn [:n] u body >>= f) :=
-  hl_bind (hl_forIn n J body hb u) hf
+    (hf : ∀ r, HL P (J n r) Post (f r)) : HL P Pre Post (forIn [:n] u body >>= f) :=
+  hl_mono (hl_bind (hl_forIn n J body hb u) hf) h0 fun _ _ _ h => h
+
+/-- A fact the precondition carries beside `Pre`, taken out. -/
+theorem hl_pre_and {Q : Prop} {Pre : Transcript → Array Claims.Msg → Prop}
+    {Post : α → Transcript → Array Claims.Msg → Prop} {x : LP PS α} (h : Q → HL P Pre Post x) :
+    HL P (fun t l => Q ∧ Pre t l) Post x := fun s t l hp => h hp.1 s t l hp.2
+
+theorem hl_pre_and' {Q : Prop} {Pre : Transcript → Array Claims.Msg → Prop}
+    {Post : α → Transcript → Array Claims.Msg → Prop} {x : LP PS α} (h : Q → HL P Pre Post x) :
+    HL P (fun t l => Pre t l ∧ Q) Post x := fun s t l hp => h hp.2 s t l hp.1
 
 theorem hl_forIn_list {Pre : Transcript → Array Claims.Msg → Prop} {τ : Type} (l : List τ)
     (body : τ → σ → LP PS (ForInStep σ))
@@ -298,7 +309,7 @@ theorem ht_sqA (kind : UInt8) {k : ℕ} (hk : k ≠ 0) {s : ℕ} (hsN : s < N) (
   intro t l hp
   have hp' : l.size = s := hp
   rw [LigLock.squeezeP_cut_ok coin kind hk t (by omega)]
-  refine ⟨fun e L h => by cases h, fun a t' L h => ?_⟩
+  refine ⟨fun e L h => (by cases h), fun a t' L h => ?_⟩
   simp only [Prod.mk.injEq, Except.ok.injEq] at h
   obtain ⟨⟨-, rfl⟩, rfl⟩ := h
   exact ⟨by rw [Array.size_push, hp'], rfl⟩
@@ -311,6 +322,11 @@ theorem hl_sampleKPA {s : ℕ} (hsN : s < N) (hsP : s < P) :
     HL P (Sz s) (fun _ => Sz (s + 1)) (liftT (sampleKP (asksCut coin N))) := by
   unfold sampleKP
   exact hl_liftT (ht_bind (ht_sqA' 2 two_ne_zero hsN hsP) fun _ => ht_pure fun _ _ h => h)
+
+theorem hl_samplePA {s : ℕ} (hsN : s < N) (hsP : s < P) :
+    HL P (Sz s) (fun _ => Sz (s + 1)) (liftT (sampleP (asksCut coin N))) := by
+  unfold sampleP
+  exact hl_liftT (ht_bind (ht_sqA' 1 one_ne_zero hsN hsP) fun _ => ht_pure fun _ _ h => h)
 
 theorem hl_sampleKPA' {s : ℕ} (hsN : s < N) (hsP : s < P) :
     HL P (Sz s) (fun _ t l => l.size = s + 1 ∧ t.pending = ByteArray.empty) (liftT (sampleKP (asksCut coin N))) := by
@@ -334,14 +350,17 @@ theorem hl_closeLabel :
     HL P (fun t l => l.size = P ∧ t.pending = ByteArray.empty) (fun _ => Inv P)
       (liftT (liftTM (label Zk.LABEL_CLOSE)) : LP PS Unit) := by
   refine hl_liftT fun t l hp => ?_
-  rw [liftTM_go]
-  refine ⟨fun e L h => by cases h, fun a t' L h => ?_⟩
+  have hlab : label Zk.LABEL_CLOSE t = .ok ((), { t with pending := t.pending ++ header 2 0 Zk.LABEL_CLOSE.toUTF8.size ++
+      padded Zk.LABEL_CLOSE.toUTF8 }) := rfl
+  rw [liftTM_ok hlab]
+  refine ⟨fun e L h => (by cases h), fun a t' L h => ?_⟩
   simp only [Prod.mk.injEq, Except.ok.injEq] at h
   obtain ⟨⟨-, rfl⟩, rfl⟩ := h
   obtain ⟨hl, ht⟩ := hp
   refine ⟨hl.ge, logQ_le hl.le, [], ?_, fun _ h => nomatch h⟩
+  show (t.pending ++ header 2 0 Zk.LABEL_CLOSE.toUTF8.size ++ padded Zk.LABEL_CLOSE.toUTF8).data.toList = _
   rw [label_enc, ht, preAt, if_pos hl]
-  simp [encs]
+  simp [encs, Claims.ZKServer.empty_toList]
 
 /-! ## Past the close: good frames and bodies -/
 
@@ -392,7 +411,11 @@ theorem hl_absorbBytes (b : ByteArray) (hn : b.size < 2 ^ 64) :
 theorem hl_pow (v : UInt64) : HL P (Inv P) (fun _ => Inv P) (liftT (liftTM (pow v)) : LP PS Unit) :=
   hl_lTMB _ fun t _ _ h => by
     cases h
-    exact ⟨.bytes (le64 v), ⟨by simp [le64], trivial, trivial⟩, absorbBytes_enc _ _⟩
+    have h8 : (le64 v).size = 8 := by
+      have := congrArg List.length (FlockSoundness.Refine.le64_data v)
+      simpa using this
+    exact ⟨.bytes (le64 v), ⟨show (le64 v).size < 2 ^ 64 by rw [h8]; decide, trivial, trivial⟩,
+      absorbBytes_enc _ _⟩
 
 /-- **A squeeze past the close**: of `0` coins its frame stays pending; else it sends a `Body` and leaves no pending
 bytes. -/
@@ -406,7 +429,7 @@ theorem ht_sqB (kind : UInt8) {k : ℕ} (hk : kind = 2 ∨ (kind = 1 ∧ k = 1))
     subst hk2
     have e : ((squeezeP (asksCut coin N) 2 0).run t).go l = (.ok (#[], { t with pending := framed t 2 0 }), l) := rfl
     rw [e]
-    refine ⟨fun e L h => by cases h, fun a t' L h => ?_⟩
+    refine ⟨fun e L h => (by cases h), fun a t' L h => ?_⟩
     simp only [Prod.mk.injEq, Except.ok.injEq] at h
     obtain ⟨⟨-, rfl⟩, rfl⟩ := h
     refine ⟨h1, h2, fs ++ [.sq 2 0], ?_, fun g hg' => ?_⟩
@@ -425,11 +448,11 @@ theorem ht_sqB (kind : UInt8) {k : ℕ} (hk : kind = 2 ∨ (kind = 1 ∧ k = 1))
       rw [← h.2]
       exact hq
     · rw [LigLock.squeezeP_cut_ok coin kind h0 t (by omega)]
-      refine ⟨fun e L h => by cases h, fun a t' L h => ?_⟩
+      refine ⟨fun e L h => (by cases h), fun a t' L h => ?_⟩
       simp only [Prod.mk.injEq, Except.ok.injEq] at h
       obtain ⟨⟨-, rfl⟩, rfl⟩ := h
       refine ⟨by rw [Array.size_push]; omega, hq, [], ?_, fun _ h => nomatch h⟩
-      rw [Array.size_push, preAt, if_neg (by omega)]
+      rw [Array.size_push, preAt, if_neg (show l.size + 1 ≠ P by omega)]
       rfl
 
 theorem hl_sampleP : HL P (Inv P) (fun _ => Inv P) (liftT (sampleP (asksCut coin N))) := by
@@ -462,10 +485,8 @@ theorem hl_commit (ms : MerkleScheme) (hms : ms = MerkleScheme.hm96Sha512) (lv :
   refine hl_liftT (ht_liftPS _ (fun l => by rw [hq l]) inv_logQ fun l a L e => ?_)
   rw [hq l] at e
   simp only [Prod.mk.injEq] at e
-  obtain ⟨hc, -⟩ := commitP_cap Sha512.hash_size lv g salt (.inl hms) e.1
-  obtain ⟨hc1, hc2⟩ := hc, commitP_cap Sha512.hash_size lv g salt (.inl hms) e.1 |>.2
+  obtain ⟨hc1, hc2⟩ := commitP_cap Sha512.hash_size lv g salt (.inl hms) e.1
   rw [flat_size hc2]
-  have := Nat.mul_le_mul_left 64 hc1
   omega
 
 theorem hl_challengeP (split : Bool) :
@@ -474,14 +495,16 @@ theorem hl_challengeP (split : Bool) :
   apply hl_bind hl_sampleKP; intro _
   apply hl_bind (hl_modify _); intro _
   dsimp only
-  apply hl_bind (Mid := fun _ => Inv P)
-  · split
-    · exact hl_modify _
-    · exact hl_pure fun _ _ h => h
-  intro _
-  apply hl_bind hl_get; intro _
-  apply hl_bind (hl_sendMsg _); intro _
-  exact hl_pure fun _ _ h => h
+  apply hl_ite
+  · intro _
+    apply hl_bind (hl_modify _); intro _
+    apply hl_bind hl_get; intro _
+    apply hl_bind (hl_sendMsg _); intro _
+    exact hl_pure fun _ _ h => h
+  · intro _
+    apply hl_bind hl_get; intro _
+    apply hl_bind (hl_sendMsg _); intro _
+    exact hl_pure fun _ _ h => h
 
 theorem hl_oodIntroP (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hd : dim < 2 ^ 64) :
     HL P (Inv P) (fun _ => Inv P) (oodIntroP (asksCut coin N) nonce g dim) := by
@@ -539,15 +562,16 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
     apply hl_bind (hl_modify _); intro _
     apply hl_bind (hl_lTMA (by omega) _); intro _
     apply hl_bind (hl_powPA (by omega) nonce 2); intro _
-    apply hl_bind (hl_liftT (by
-      unfold sampleP
-      exact ht_bind (ht_sqA' (coin := coin) (N := N) 1 one_ne_zero (s := s + 1) (by omega) (by omega))
-        fun _ => ht_pure fun _ _ h => h)); intro _
+    apply hl_bind (hl_samplePA (coin := coin) (N := N) (s := s + 1) (by omega) (by omega)); intro _
     apply hl_bind (hl_modify _); intro _
     apply hl_bind hl_get; intro _
     apply hl_bind (hl_sendMsgA (by omega) _); intro _
     -- the lane rounds: round `s + 2 + i` lane round `i`'s challenge; the last one's pair, `ρ`'s and the close
     apply hl_forIn_bind (fun i _ t l => (i < sch.k0 ∧ Sz (s + 2 + i) t l) ∨ (i = sch.k0 ∧ Inv (s + sch.k0 + 4) t l))
+      (fun _ l h => .inl ⟨by omega, by
+        have : l.size = s + 1 + 1 := h
+        show l.size = s + 2 + 0
+        omega⟩)
     · intro i hi u
       refine hl_mono (Pre := Sz (s + 2 + i)) ?_ (fun _ _ h => by
         rcases h with ⟨-, h⟩ | ⟨h, -⟩
@@ -565,9 +589,9 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
         apply hl_bind (hl_sampleKPA' (s := s + 2 + i + 1 + 1) (by omega) (by omega)); intro _
         apply hl_ite
         · intro _
-          exact hl_throw_bind _ fun _ l h => logQ_le (by rw [h.1]; omega)
+          exact hl_throw_bind _ fun _ l h => logQ_le (by have := h.1; omega)
         · intro _
-          refine hl_bind (hl_mono hl_closeLabel (fun _ _ h => ⟨by rw [h.1]; omega, h.2⟩) fun _ _ _ h => h) ?_
+          refine hl_bind (hl_mono hl_closeLabel (fun _ _ h => ⟨by have := h.1; omega, h.2⟩) fun _ _ _ h => h) ?_
           intro _
           apply hl_bind (hl_absorbK _); intro _
           apply hl_bind (hl_absorbSlice _ (by rw [pairs_size, Array.size_map, Array.size_range]; exact htp)); intro _
@@ -590,9 +614,8 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
       -- level 1's commitment, its out-of-domain samples, level 0's queries
       apply hl_bind hl_get; intro _
       apply hl_bind (hl_commit _ rfl _ _ _ (hd 1)); intro _
-      refine hl_bind (Mid := fun _ => Inv (s + sch.k0 + 4))
-        (fun st t l hI => (hl_absorbBytes _ hI.2 st) t l hI.1) ?_
-      intro _
+      refine hl_pre_and' fun hc => ?_
+      apply hl_bind (hl_absorbBytes _ hc); intro _
       apply hl_bind (hl_oodIntroP nonce _ (dim := sch.n - sch.k0 + 1) (by omega)); intro _
       apply hl_bind (hl_oodIntroP nonce _ (dim := sch.n - sch.k0 + 1) (by omega)); intro _
       apply hl_bind (hl_queryP nonce _ _ cm0 (hq 0)); intro _
@@ -601,17 +624,13 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
       apply hl_bind hl_sampleP; intro _
       apply hl_bind (hl_modify _); intro _
       -- the recursive levels and the final one
-      apply hl_mono (Pre := fun t l => (sch.n - sch.k0 + 1 ≤ sch.n + 1) ∧ Inv (s + sch.k0 + 4) t l)
-        (Post := fun _ => Inv (s + sch.k0 + 4)) ?_ (fun _ _ h => ⟨by omega, h⟩) fun _ _ _ h => h
       apply hl_forIn_bind (fun _ u t l => u.1 ≤ sch.n + 1 ∧ Inv (s + sch.k0 + 4) t l)
+        (fun _ _ h => ⟨by first | (dsimp only; omega) | omega, h⟩)
       · intro i _ u
         obtain ⟨sd, pc, cs, rps, fn⟩ := u
-        intro st tt ll hJ
-        obtain ⟨hsd, hI⟩ := hJ
-        dsimp only at hsd
-        revert tt ll
-        refine (?_ : HL _ (Inv (s + sch.k0 + 4)) _ _) st
-        apply hl_forIn_bind (fun _ _ => Inv (s + sch.k0 + 4))
+        refine hl_pre_and fun hsd => ?_
+        replace hsd : sd ≤ sch.n + 1 := hsd
+        apply hl_forIn_bind (fun _ _ => Inv (s + sch.k0 + 4)) (fun _ _ h => h)
         · intro j _ v
           apply hl_ite
           · intro _
@@ -629,9 +648,8 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
           apply hl_ite
           · intro _
             apply hl_bind (hl_commit _ rfl _ _ _ (hd (i + 2))); intro _
-            refine hl_bind (Mid := fun _ => Inv (s + sch.k0 + 4))
-              (fun st t l hI => (hl_absorbBytes _ hI.2 st) t l hI.1) ?_
-            intro _
+            refine hl_pre_and' fun hc => ?_
+            apply hl_bind (hl_absorbBytes _ hc); intro _
             apply hl_bind (hl_oodIntroP nonce _ (dim := sd - 4 + 1) (by omega)); intro _
             apply hl_bind (hl_oodIntroP nonce _ (dim := sd - 4 + 1) (by omega)); intro _
             apply hl_bind (hl_queryP nonce _ _ _ (hq (i + 1))); intro _
@@ -639,7 +657,7 @@ theorem ligeritoPZk_shape (coin : ℕ → ℕ → F128) (N : ℕ) (sch : Schedul
             apply hl_bind (hl_powP nonce 2); intro _
             apply hl_bind hl_sampleP; intro _
             apply hl_bind (hl_modify _); intro _
-            exact hl_pure fun _ _ h => ⟨_, rfl, by dsimp only; omega, h⟩
+            exact hl_pure fun _ _ h => ⟨_, rfl, by first | (dsimp only; omega) | omega, h⟩
           · intro _
             refine hl_bind (hl_forIn_array _ _ (fun _ _ => hl_bind (hl_absorbF _) fun _ =>
               hl_pure fun _ _ h => ⟨⟨_, rfl⟩, h⟩) _) fun _ => ?_
