@@ -1,12 +1,13 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 import Proofs.Flock.Claims.Complete.Files
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked run's proof files
 
 `Files.lean` at the masked run: the rep goals on the masked proof files, `RepDecodesZk`, `RepParamsZk`, `PadsRoot` and
 `CapCommittedZk`, and `FinalFitsZk` (the record's length from `readyZk`, `RunZk.recordFits`), at every honest masked
-run, under the masked record goals' hypotheses (`JsonSpec`, `Out64`, `StmtOkZk`, `ProverOkZk`) and one more:
+run, under the masked record goals' hypotheses (`Out64`, `StmtOkZk`, `ProverOkZk`) and one more:
 
 * `RepShapedZk`: each masked proof a rep returns, on the case's trace, its masked level-0 commitment under the case's
   tape, the table's extra claims at the link's points, and the tape's pads committed, is `Shaped` at the shape the
@@ -100,7 +101,7 @@ its extra claims `e` at the link's points; the first send is the link of `cm`'s 
 each a `RepFileZk`. -/
 theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Lean.Json}
-    (hown : Lean.Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
+    (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {r : String × Array ByteArray}
     {bodies : Array Claims.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
@@ -213,7 +214,7 @@ def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 level-0 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's
 file decodes at the masked verifier's shape to a proof with `cm`'s cap, the table's PCS parameters, and the root of its
 pads' commitment. -/
-theorem RunZk.rep (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem RunZk.rep (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit), o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧
       o.sess.rootB = #[flat cm.cap] ∧ o.proofs.size = 2 ∧ (∀ b ∈ o.proofs, b.size < 2 ^ 64) ∧ ∀ r < 2,
@@ -222,9 +223,9 @@ theorem RunZk.rep (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H
         ∃ pads isalt ic, innerCommitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) pads isalt = .ok ic ∧
           (o.zp 0 r).inner.root = ic.root := by
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    RunZk.json S h64 hS hP o
+    RunZk.json h64 hS hP o
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz', hc, -⟩ := S.canon_ok _ hg
+  obtain ⟨hz', hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct', hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, -⟩ := hP o.toCaseZk st (by rw [hst]; simp)
   have hrun := o.ran
@@ -330,29 +331,29 @@ theorem innerCommitP_root {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size
 
 
 /-- **The rep's masked proof file decodes** at its shape: the goal `RepDecodesZk`. -/
-theorem repDecodesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem repDecodesZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : RepDecodesZk H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, htabs, -, -, -, -, hrep⟩ := RunZk.rep S h64 hS hP hR o
+  obtain ⟨st, v, cm, htabs, -, -, -, -, hrep⟩ := RunZk.rep h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   exact (hrep r hr).1
 
 /-- **The rep's PCS parameters are the `--zk` schedule's** (R7/F2): the goal `RepParamsZk`. -/
-theorem repParamsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem repParamsZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : RepParamsZk H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, htabs, hsch0, -, -, -, hrep⟩ := RunZk.rep S h64 hS hP hR o
+  obtain ⟨st, v, cm, htabs, hsch0, -, -, -, hrep⟩ := RunZk.rep h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   rw [(hrep r hr).2.2.1, hsch0, show o.tabs[0]! = Setup.ofCircuit st by rw [htabs]; rfl]
   exact FlockVBridge.Family.pcs_bne_self _
 
 /-- **The pads' root is 64 bytes**: the goal `PadsRoot`. -/
-theorem padsRoot_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem padsRoot_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : PadsRoot H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, htabs, -, -, -, -, hrep⟩ := RunZk.rep S h64 hS hP hR o
+  obtain ⟨st, v, cm, htabs, -, -, -, -, hrep⟩ := RunZk.rep h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   obtain ⟨-, -, -, pads, isalt, ic, hic, hroot⟩ := hrep r hr
@@ -360,10 +361,10 @@ theorem padsRoot_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out
   rfl
 
 /-- **The rep's cap is the committed `root_B`** (S16): the goal `CapCommittedZk`. -/
-theorem capCommittedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem capCommittedZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : CapCommittedZk H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, htabs, -, hroot, -, -, hrep⟩ := RunZk.rep S h64 hS hP hR o
+  obtain ⟨st, v, cm, htabs, -, hroot, -, -, hrep⟩ := RunZk.rep h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   rw [(hrep r hr).2.1, hroot]
@@ -373,10 +374,10 @@ theorem capCommittedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Clai
 
 /-- **The last message's lengths fit their words**: the goal `FinalFitsZk`, the printed record's length from `readyZk`
 (`RunZk.recordFits`). -/
-theorem finalFitsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem finalFitsZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : FinalFitsZk H rel := by
   intro o
-  obtain ⟨st, v, cm, -, -, -, hsz, hb, -⟩ := RunZk.rep S h64 hS hP hR o
+  obtain ⟨st, v, cm, -, -, -, hsz, hb, -⟩ := RunZk.rep h64 hS hP hR o
   exact ⟨o.recordFits, by omega, hb⟩
 
 end FlockComplete.JsonRT
