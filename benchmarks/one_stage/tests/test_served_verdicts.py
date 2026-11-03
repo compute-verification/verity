@@ -2071,7 +2071,7 @@ DEFERRED_LINE = {
     "1": (f"DEFERRED V3c's audit: {SHORT}. A follow-on on a node with the memory runs it there and writes the compose "
           "hand-off, from the serve dir's audit inputs copied prover-side, outside any run dir, each file its "
           "private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c; the final record "
-          "and the composite are composed off both nodes, on COMPOSE_NODE (vy-nebius-cpu-6), from that hand-off"),
+          "and the composite are composed off both nodes, on COMPOSE_NODE (vy-auditor-2), from that hand-off"),
     "0": (f"DEFERRED V3c's audit and the composite: {SHORT}. A follow-on on a node with the memory runs them and composes "
           "the final record there, from the serve dir's audit inputs copied prover-side, outside any run dir, each file "
           "its private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c")}
@@ -2095,7 +2095,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
         "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off,
-        "COMPOSE_NODE": "vy-nebius-cpu-6"}
+        "COMPOSE_NODE": "vy-auditor-2"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2188,7 +2188,7 @@ def test_a_follow_on_refuses_a_copy_unlike_the_served_nodes_another_setting_a_no
 
 ONLY = "PREFLIGHT_ONLY: nothing kept, built or served"
 DEFERS = "so step 6 defers V3c's audit to a follow-on"
-OFF = "the final record composed off this node, on COMPOSE_NODE (vy-nebius-cpu-6), from its compose hand-off"
+OFF = "the final record composed off this node, on COMPOSE_NODE (vy-auditor-2), from its compose hand-off"
 SHORT_REMOTE = {**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
 
 
@@ -2222,7 +2222,7 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
     assert (rc, lines, order) == (0, ["PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral, its "
-                                      f"compose hand-off for COMPOSE_NODE (vy-nebius-cpu-6). {ONLY}"], [])
+                                      f"compose hand-off for COMPOSE_NODE (vy-auditor-2). {ONLY}"], [])
 
 
 def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_follow_ons_record(tmp_path):
@@ -2258,7 +2258,7 @@ HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", 
                 f"v3c-w7-{VTAG}/audit/window/case.json")
 HANDED_OWN = ("private/compose/compose.env", "private/compose/inference-only.json",
               "private/compose/pieces/pouw/answer.json", "private/compose/pieces/pouw/served.json")
-HANDOFF_LINE = ("HANDOFF the final record and the composite, composed off this node: on COMPOSE_NODE (vy-nebius-cpu-6), "
+HANDOFF_LINE = ("HANDOFF the final record and the composite, composed off this node: on COMPOSE_NODE (vy-auditor-2), "
                 "from the serve dir's verifier-side files and no witness, each file its private/compose/inputs.txt lists, "
                 "copied to the same path there: D={d} bash benchmarks/one_stage/served_verdicts.sh compose")
 
@@ -2327,7 +2327,7 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     d, dc, out = tmp_path / "serve", tmp_path / "serve" / "private" / "compose", tmp_path / "served-out"
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "COMPOSE_NODE": "vy-nebius-cpu-6", "COMPOSE_TREE": SHA, "AUDITED_ON": "", "STEPS": "0,3"}
+        "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
     assert not set(listed) & set(HELD_BACK) and S.witness(listed) == []
@@ -2431,7 +2431,7 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), **extra: str | None) ->
     return rc, said.read_text().splitlines() if said.exists() else [], order.read_text().split() if order.exists() else []
 
 
-COMPOSED = ("COMPOSE on vy-auditor-2 (COMPOSE_NODE vy-nebius-cpu-6): the final record and the composite of the served "
+COMPOSED = ("COMPOSE on vy-auditor-2 (COMPOSE_NODE vy-auditor-2): the final record and the composite of the served "
             "node vy-dc-h200, from its compose hand-off (verifier-side files, no witness; {audit}), each file as it hashed "
             "it (the serve dir's private/compose/inputs.sha256): {verdict}")
 
@@ -2466,7 +2466,7 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
     ((), "sampled-proofs-served/window/m0/pub-0.bin", {}, COMPOSED.format(
         audit="no V3c audit", verdict="FAIL (the serve dir's private/compose/check.log)")),
     ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
-     "nothing composed here claims a record: compose on COMPOSE_NODE (vy-nebius-cpu-6)"),
+     "nothing composed here claims a record: compose on COMPOSE_NODE (vy-auditor-2)"),
     (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served run, "
      "and this node's serve dir does (WITNESS advice/wK/private/advice.bin: the advice and its opening): compose on a "
      "node that holds the hand-off alone"),
@@ -2513,7 +2513,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "COMPOSE_NODE": "vy-nebius-cpu-6", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
+        "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([
         "h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/compose/compose.env",
@@ -2532,6 +2532,102 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6")
     assert rc == 3 and order == [] and lines[0].startswith("PREFLIGHT: the compose follow-on holds no witness")
+
+
+#: rsync as `served_verdicts.sh copy` calls it: each file --files-from lists, from the source dir to $COPIED/HOST/PATH
+#: for the destination HOST:PATH, its arguments in $COPIED.args, exiting $RSYNC_EXIT
+FAKE_RSYNC = f'''exec {sys.executable} - "$@" <<'EOF'
+import json, os, shutil, sys
+a = sys.argv[1:]
+json.dump(a, open(os.environ["COPIED"] + ".args", "w"))
+listed = next(x.split("=", 1)[1] for x in a if x.startswith("--files-from="))
+host, dest = a[-1].split(":", 1)
+for f in open(listed).read().split():
+    to = os.path.join(os.environ["COPIED"], host.split("@")[-1], dest.lstrip("/"), f)
+    os.makedirs(os.path.dirname(to), exist_ok=True)
+    shutil.copy2(os.path.join(a[-2], f), to)
+sys.exit(int(os.environ.get("RSYNC_EXIT", "0")))
+EOF'''
+
+
+def _copy(tmp_path: Path, kind: str, to: str, **extra: str) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh copy KIND TO` with D alone on the node `extra`'s HOST names (default vy-dc-h200), through
+    `FAKE_RSYNC`: the exit status, the lines it said and the files that reached TO's serve dir."""
+    d, copied = tmp_path / "serve", tmp_path / "copied"
+    _script(tmp_path / "copy-bin" / "rsync", FAKE_RSYNC)
+    (tmp_path / "served-tree").mkdir(exist_ok=True)
+    env = {"PATH": f"{_hosts(tmp_path)}:{tmp_path / 'copy-bin'}:{os.defpath}", "HOME": str(tmp_path), "D": str(d),
+           "OUT": str(tmp_path / "copy-out"), "SERVE_ROOT": str(tmp_path / "root"), "HOST": "vy-dc-h200",
+           "COPIED": str(copied), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "copy", kind, to], cwd=tmp_path / "served-tree",
+                        env=env, check=False, capture_output=True).returncode
+    said = tmp_path / "copy-out" / "verdicts.txt"
+    there = copied / to.split("@")[-1] / str(d).lstrip("/")
+    return (rc, said.read_text().splitlines() if said.exists() else [],
+            sorted(str(p.relative_to(there)) for p in there.rglob("*") if p.is_file()) if there.exists() else [])
+
+
+@pytest.mark.parametrize("kind, to, host, what", [
+    ("compose", "vy-auditor-2", "vy-dc-h200", "the hand-off's verifier-side"),
+    ("deferred", "research@vy-nebius-cpu-6", "vy-dc-h200", "the deferral's prover-side"),
+    ("compose", "vy-auditor-2", "cpu-6", "the hand-off's verifier-side"),
+])
+def test_copy_sends_each_file_a_list_names_and_nothing_else_to_the_same_path_on_its_host(tmp_path, kind, to, host, what):
+    """`served_verdicts.sh copy deferred|compose HOST` sends the files a deferral's or a hand-off's inputs.txt lists, its
+    sums among them, and nothing else of the serve dir, to the same path on HOST, creating it there; the copy passes the
+    sums its follow-on holds it to. A hand-off goes to COMPOSE_NODE from the served node or from a deferral's follow-on
+    (cpu-6, which holds the window's witness and sends none of it)."""
+    if kind == "compose" and host == "vy-dc-h200":
+        assert _handed(tmp_path).returncode == 0
+    else:
+        assert _deferred(tmp_path).returncode == 0
+        if kind == "compose":
+            assert _follow(tmp_path)[0] == 0
+    d = tmp_path / "serve"
+    listed = (d / "private" / kind / "inputs.txt").read_text().splitlines()
+    rc, lines, there = _copy(tmp_path, kind, to, HOST=host)
+    assert rc == 0 and there == sorted(listed), (lines, there)
+    assert lines == [f"COPY {what} list's {len(listed)} files to {to.split('@')[-1]}, each to the same path there: PASS"]
+    assert kind == "deferred" or S.witness(there) == []
+    args = json.loads((tmp_path / "copied.args").read_text())
+    assert args[-2:] == [f"{d}/", f"{to}:{d}/"] and f"--rsync-path=mkdir -p {d} && rsync" in args
+    copy = tmp_path / "copied" / to.split("@")[-1] / str(d).lstrip("/")
+    subprocess.run(["sha256sum", "--check", "--strict", "--quiet", f"private/{kind}/inputs.sha256"], cwd=copy, check=True)
+
+
+@pytest.mark.parametrize("made, kind, to, extra, rc, line", [
+    ("deferred", "deferred", "vy-auditor-2", {}, 3, "COPY refused: the deferral's list holds the window's witness, and "
+     "vy-auditor-2 is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"),
+    ("deferred", "deferred", "research@vy-auditor-3.example", {"COMPOSE_NODE": "vy-auditor-3"}, 3, "COPY refused: the "
+     "deferral's list holds the window's witness, and vy-auditor-3.example is COMPOSE_NODE, an auditor host where no "
+     "witness goes: copy it to a prover node"),
+    ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
+     "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
+    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
+     "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
+    ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir {d} holds no compose list "
+     "(private/compose/inputs.txt and compose.env)"),
+    ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST, not values"),
+    ("handed", "compose", "vy-auditor-2", {"RSYNC_EXIT": "23"}, 23, "COPY the hand-off's verifier-side list's 22 files "
+     "to vy-auditor-2, each to the same path there: FAIL (exit 23, the serve dir's private/copy-compose.log)"),
+])
+def test_copy_never_sends_a_deferrals_witness_to_compose_node_nor_a_hand_off_to_the_served_node_or_with_a_witness(
+        tmp_path, made, kind, to, extra, rc, line):
+    """The deferral's list is prover-side (the window's witness), so it never goes to COMPOSE_NODE, the deferral's or the
+    environment's, however its host is written; a hand-off never goes back to the served node, and its list is held to
+    `served_verdicts.py witness` again before it leaves, so a list edited to name a witness sends nothing. No list, or
+    another kind, is refused, and a failed transfer says so and where its log is."""
+    if made == "deferred":
+        assert _deferred(tmp_path).returncode == 0
+    else:
+        assert _handed(tmp_path).returncode == 0
+    d = tmp_path / "serve"
+    if made == "handed+witness":
+        with open(d / "private" / "compose" / "inputs.txt", "a") as listed:
+            listed.write("requests.jsonl\n")
+    got, lines, there = _copy(tmp_path, kind, to, **extra)
+    assert (got, lines) == (rc, [line.replace("{d}", str(d))]), lines
+    assert there == [] or rc != 3
 
 
 def _script(path: Path, body: str) -> None:
