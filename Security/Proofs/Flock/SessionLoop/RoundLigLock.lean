@@ -664,7 +664,7 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
           fun f s₁ f' s₁' t₁ t₁' l₁ l₁' hL₁ hp₁ hI₁ => ?after
         case inner =>
           intro j hj f s f' s' tj tj' lj lj' hLj hpj ⟨hf, htabj, hwj⟩
-          dsimp only at hf
+          dsimp only at hf htabj hwj
           subst hf
           have hpj := hpj trivial
           by_cases h4 : (j + 1 == 4) = true
