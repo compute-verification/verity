@@ -170,7 +170,7 @@ def seen_windows(rec: dict, n_seq: int) -> np.ndarray | None:
 
 def fresh_order(data, rec: dict) -> dict:
     """Drop the windows the start read from the stream's order."""
-    n_seq = (len(data.tokens) - 1) // data.ctx
+    n_seq = int(data.starts[-1])
     seen = seen_windows(rec, n_seq)
     if seen is None:
         return {"fresh": False, "why": "the start's provenance names no data order"}
