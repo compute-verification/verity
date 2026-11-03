@@ -286,6 +286,10 @@ def test_shape_and_traced_quantities():
     assert 2.319e11 * 0.99 < w < 2.341e11 * 1.01
     # a served sequence: the forward at the prompt and every generated token but the last, the head at the sampled
     assert W.served(256, 512) == (767, 512 / 767)
+    # a forward's weight reads are its weight GEMMs alone, also at bf16, where attention's MACs share their price
+    for precision in ("bf16", "fp4"):
+        tok = W.forward(sh, precision, 1024)
+        assert math.isclose(1 - tok.t, sh.params * W.per_mac(f"gemm/{precision}") / tok.alpha), precision
 
 
 def island(workload: str | None = None) -> list:

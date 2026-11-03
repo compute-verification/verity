@@ -334,9 +334,9 @@ def training(sh: Shape, precision: str, span: float) -> Token:
 def forward(sh: Shape, precision: str, span: float, head_share: float = 1.0) -> Token:
     """An inference token: every weight's forward at `precision` (the head's at the `head_share` of tokens whose logits
     are sampled) and attention over `span` in bf16, all affected."""
-    gemm = f"gemm/{precision}"
-    macs = _add({gemm: sh.params - (1 - head_share) * sh.vocab * sh.d_model}, {"gemm/bf16": sh.attention(span)})
-    return Token(macs, macs, {gemm: macs[gemm]})
+    gemm, weights = f"gemm/{precision}", sh.params - (1 - head_share) * sh.vocab * sh.d_model
+    macs = _add({gemm: weights}, {"gemm/bf16": sh.attention(span)})
+    return Token(macs, macs, {gemm: weights})
 
 
 def served(prompt: float, generated: float) -> tuple[float, float]:

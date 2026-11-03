@@ -2337,7 +2337,7 @@
       "sigma": 1.0,
       "tau_bits": 12.8025,
       "a_bits": 8192.0,
-      "u_points": "0:0;0.025974:0;0.025974:1.87137e7;1:7.20478e8",
+      "u_points": "0:0;0.526259:0;0.526259:3.79158e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
       "delta_bits": 720478200.0,
       "delta_t_bits": 720478200.0,
@@ -2391,8 +2391,8 @@
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 1.645903, "share": 0.4583596, "numerical": 143575.0, "attention_share": 0.5002847},
-       "target": {"rho": 33840.13, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 33840.13, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 137563.2, "fresh_cell": 2594280.0},
+       "target": {"rho": 1670.214, "basis": "target"},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1670.214, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 137563.2, "fresh_cell": 2594280.0},
        "token_A": "unmodelled",
        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
        "fit": false,
@@ -2400,13 +2400,13 @@
        "rho_fit": 1.0,
        "s": 7032.356,
        "x0": 9.096181e-05,
-       "s_star": 0.2077922,
+       "s_star": 4.21007,
        "b": [142200],
        "fit_delta_bits": -24495.73,
        "fit_delta_grad_bits": 32768.0
       }
      },
-     "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.02597403}
+     "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.5262587}
     },
     "7B": {
      "dials": {
