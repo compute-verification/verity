@@ -7,21 +7,23 @@ import Proofs.Flock.SessionLoop.FinInnerParts
 and `Loop.TakesTau`: at every live history, the worker's `final_c'` and `τ` commitment are `vs`'s. Neither follows from
 `Loop.TakesVals`, `SwCausal` and `Loop.FinalCFixed` at every live history, because `live` checks the worker's values and
 not the history's messages, while the loop's finish reads its request off the history. On the deferred release's own
-runs (`ZkServer.OwnHist`) the history's messages are the frame's releases of the worker's own rounds, so the values the
-loop reads back are the worker's, and there both follow from the worker taking `vs`'s values at its own histories
-(`Loop.TakesValsOwn`):
+runs (`ZkServer.OwnHist`) the history's messages are the frame's releases of the worker's own rounds, the switched
+session's where `LiveSchedOwn` holds, so the values the loop reads back are `vs`'s, and there both follow from the worker
+taking `vs`'s values at its own histories (`Loop.TakesValsOwn`, which gives `LiveSchedOwn`:
+`LeanRelease.liveSchedOwn_ofLoopLink`):
 
 * **`LeanRelease.LiveInnerOwn`**: `LiveInner`'s equation on the histories satisfying `OwnHist`, in the place
   `FinalRoundEq` and `LiveRefine` take it. `LeanRelease.liveInnerOwn_of_liveInner`: `LiveInner` gives it.
-* **`LeanRelease.finOf_finalC_own`** and **`LeanRelease.finOf_tau_own`**: at the worker's own histories, the round 0
-  the loop's finish hands the frame (`Loop.finOf`, in `FinInner`) is the inner proof's label and `vs`'s `final_c` under
-  the configuration's pad, and its round 2 `vs`'s `τ` commitment (`Loop.vsTau`): the premises `liveInner_withInner_at`
-  takes at a rep's inner rounds. Each from the parts in `FinInnerParts`.
+* **`LeanRelease.finOf_finalC_own`** and **`LeanRelease.finOf_tau_own`**: at the worker's own histories, where
+  `LiveSchedOwn` holds, the round 0 the loop's finish hands the frame (`Loop.finOf`, in `FinInner`) is the inner proof's
+  label and `vs`'s `final_c` under the configuration's pad, and its round 2 `vs`'s `τ` commitment (`Loop.vsTau`): the
+  premises `liveInner_withInner_at` takes at a rep's inner rounds. Each from the parts in `FinInnerParts`.
 * **`LeanRelease.liveInnerOwn_withInner`**: `LiveInnerOwn` at `withInner` on the finish's rounds (`Loop.finOf`), at every
   worker taking some `vs`'s values at its own histories (`Loop.TakesValsOwn`), where `vs` meets `SwCausal`,
-  `Loop.FinalCFixed` and `Loop.RowsOK`; a worker taking no `vs`'s values is outside it. Its premises on the statement,
-  the tables and the loop's inputs are `SessionLoopZKDeployed`'s own (`Loop.realOf`, `Claims.Flock.Scope`, the witness,
-  `Loop.Serves`, `Loop.Src`). It takes neither `TakesFinalC` nor `TakesTau`.
+  `Loop.FinalCFixed` and `Loop.RowsOK`; a worker taking no `vs`'s values is outside it. Its premises on the session
+  (`Tables`, `TapeOK`), the statement, the tables and the loop's inputs are `SessionLoopZKDeployed`'s own
+  (`Loop.realOf`, `Claims.Flock.Scope`, the witness, `Loop.Serves`, `Loop.Src`). It takes neither `TakesFinalC` nor
+  `TakesTau`.
   `LeanRelease.liveInnerOwn_honestVals`: at the honest values and `Loop.valsWk`, every premise over the worker and the
   values holds.
 -/
@@ -84,8 +86,8 @@ theorem liveInnerOwn_of_liveInner {vs : (CoinLayer.session Loop.loopNr Masked.da
 
 /-- **The finish's round 0 at the worker's own history**: at a history `LiveInnerOwn` reads whose next round is rep
 `2j + r`'s inner round 0, the round the finish hands the frame (`Loop.finOf`) is the inner proof's label and `vs`'s
-`final_c` masked by the configuration's pad there. The loop's request carries the worker's values, `vs`'s at its own
-histories (`Loop.TakesValsOwn`); the finish accepts it at `vs`'s `final_c` alone (`consWhy`'s `zerocheck c_eval`,
+`final_c` masked by the configuration's pad there. The loop's request carries the worker's values, `vs`'s where
+`LiveSchedOwn` holds; the finish accepts it at `vs`'s `final_c` alone (`consWhy`'s `zerocheck c_eval`,
 `Loop.FinalCFixed`), returns there where the rows hold (`Loop.RowsOK`), and masks it with the rep's pads, the
 configuration's. From the parts in `FinInnerParts`. -/
 theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
@@ -103,7 +105,7 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
     (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
-    (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
+    (hSch : LiveSchedOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w)
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w)
     (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
     (κ : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Chk) (m₀ ρ₀ : Msg)
@@ -137,11 +139,11 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
   obtain ⟨s0, spec, sts, tr, hi, q₀, hs, hrt, hq, hlayT, hlay, hcfgh, hfin⟩ :=
     Loop.innerHist_fin L₁ src real hreal x w hR hSv hsc hSrc wk (by decide) hH
   obtain ⟨hsz, -, hpads⟩ :=
-    Loop.innerReq_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hV (by decide) hH hs hrt hq
+    Loop.innerReq_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch (by decide) hH hs hrt hq
   obtain ⟨fc', tc, hfi⟩ :=
-    Loop.finInner_returns_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows (by decide) hH hs hrt hq
+    Loop.finInner_returns_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows (by decide) hH hs hrt hq
   rw [hfin _ fc' tc hfi fun a' ha' =>
-    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hV hC (by decide) hH hs hrt hq a' ha']
+    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hrt hq a' ha']
   show Loop.inner0 fc'.toBytes = _
   have hfv : (Masked.layE x j).fc < q₀.vals.size := by
     rw [hsz]
@@ -162,7 +164,7 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
 
 /-- **The finish's round 2 at the worker's own history**: at a history `LiveInnerOwn` reads whose next round is rep
 `2j + r`'s inner round 2, the round the finish hands the frame (`Loop.finOf`) carries `vs`'s `τ` commitment
-(`Loop.vsTau`). The finish's request carries `vs`'s values (`Loop.TakesValsOwn`), on which it accepts at `vs`'s
+(`Loop.vsTau`). The finish's request carries `vs`'s values (`LiveSchedOwn`), on which it accepts at `vs`'s
 `final_c` (`finOf_finalC_own`), and its inner proof commits to `τ` from the request's values, coins and salts as the
 switched source does where the rows hold (`Loop.RowsOK`). From the parts in `FinInnerParts`. -/
 theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
@@ -180,7 +182,7 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
     (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
-    (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
+    (hSch : LiveSchedOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w)
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w)
     (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
     (κ : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Chk) (m₀ ρ₀ : Msg)
@@ -208,17 +210,18 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
   obtain ⟨s0, spec, sts, tr, hi, q₀, hs, hrt, hq, -, -, -, hfin⟩ :=
     Loop.innerHist_fin L₁ src real hreal x w hR hSv hsc hSrc wk (by decide) hH
   obtain ⟨fc', tc, hfi⟩ :=
-    Loop.finInner_returns_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows (by decide) hH hs hrt hq
+    Loop.finInner_returns_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows (by decide) hH hs hrt hq
   rw [hfin _ fc' tc hfi fun a' ha' =>
-    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hV hC (by decide) hH hs hrt hq a' ha']
+    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hrt hq a' ha']
   exact congrArg Loop.inner2
-    (Loop.finInner_tau_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows hH hs hrt hq hfi)
+    (Loop.finInner_tau_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows hH hs hrt hq hfi)
 
 /-- **`LiveInner` at every worker taking some `vs`'s values, on its own histories**: at `withInner` on the loop's
 finish's rounds (`Loop.finOf`, at `L₁`'s frame draws), at a statement in the masked scope with a witness that the loop
-serves, on the loop's own tables (`Loop.realOf`) and inputs (`Loop.Src`), `LiveInnerOwn` holds at every worker whose free
-words are `vs`'s at its own histories (`Loop.TakesValsOwn`), for every `vs` that is causal (`SwCausal`), whose `final_c`
-its round-1c values fix (`Loop.FinalCFixed`) and whose rows hold (`Loop.RowsOK`). -/
+serves, on the loop's own tables (`Loop.realOf`) and inputs (`Loop.Src`), at the session's `Tables` and `TapeOK`,
+`LiveInnerOwn` holds at every worker whose free words are `vs`'s at its own histories (`Loop.TakesValsOwn`), for every
+`vs` that is causal (`SwCausal`), whose `final_c` its round-1c values fix (`Loop.FinalCFixed`) and whose rows hold
+(`Loop.RowsOK`): there the worker's scheduled rounds are the switched session's (`liveSchedOwn_ofLoopLink`). -/
 theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -229,6 +232,8 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
     (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
+    (hTab : (CoinLayer.session Loop.loopNr Masked.dataE).Tables)
+    (hTape : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK)
     (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
@@ -237,6 +242,7 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w) :
     LiveInnerOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w := by
+  have hSch := liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hV
   intro ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hown hv hI
   have hR' : ∀ (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
@@ -247,13 +253,13 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   refine liveInner_withInner_at vs L₁ src real (Loop.finOf real L₁.draws) x w (Masked.live_of hsc hR) hSv hR'
     hSrc.2 wk hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI ?_ ?_
   · intro w' j r _ _ hrep hslot hv0
-    rw [hv0, finOf_finalC_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows ν t κ m₀ ρ₀ ops v h0 hlt hl
+    rw [hv0, finOf_finalC_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows ν t κ m₀ ρ₀ ops v h0 hlt hl
       hok hr hown hv hI j r hrep hslot, Loop.wordBytes_words_inner0, Loop.finalCOf_inner0]
     exact FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self _ _
   · intro m w' j r _ _ _ hvs hrep hslot hv2
     have key : ∀ T : ByteArray, T.size = 64 → Loop.inner2 (wordBytes (words (Loop.inner2 T) 16 4)) = Loop.inner2 T :=
       fun T hT => by rw [Loop.wordBytes_words_inner2 hT]
-    rw [finOf_tau_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok
+    rw [finOf_tau_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok
       hr hown hv hI j r hrep hslot, key] at hv2
     · exact Loop.inner2_inj (hvs.symm.trans hv2)
     · exact Loop.vsTau_size _ _ _ _ _ _ _ _
@@ -272,6 +278,8 @@ theorem liveInnerOwn_honestVals
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
     (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
+    (hTab : (CoinLayer.session Loop.loopNr Masked.dataE).Tables)
+    (hTape : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK)
     (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
@@ -280,7 +288,7 @@ theorem liveInnerOwn_honestVals
       (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real
       (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals
         (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)) x w :=
-  liveInnerOwn_withInner _ L₁ src real hreal x w hR hSv hsc hSrc (RefSession.swCausal_vals _ hc) _
+  liveInnerOwn_withInner _ L₁ src real hreal x w hTab hTape hR hSv hsc hSrc (RefSession.swCausal_vals _ hc) _
     (Loop.takesValsOwn_honestVals _ src real x w) (Loop.finalCFixed_honestVals x w) (Loop.rowsOK_honestVals hR)
 
 end LeanRelease
