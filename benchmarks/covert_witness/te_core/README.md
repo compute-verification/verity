@@ -118,14 +118,21 @@ the A2 curve, the least |C| to each target against Δ, per start), each `<name>.
 console; `console` cuts each to the panels route's limits and holds one panel's PUT; and `rescore` re-scores v2.3's
 records with the per-record quantities of covert_witness's `analysis/rescore_v1.py`, which has no formula of its own
 (module docstring). The console's two training panels read the ledger through `rescore`'s loading
-(`rescore.arguments`, `rescore.load`). `training/frontier-branches` is `panels`'s: held-out bits per byte against total
-training compute in gates, the best unconstrained learner (the frontier, from scratch or continuing a start, at
-C0 + |C|) and per branch point (each start, `on_frontier` when the frontier passes through it) the best unconstrained
-and constrained learners starting from it (honest at C0 + |C|; throttled at C0 + |C|ρ per (c, k) of its dial, with
-S = W\*/H). `training/algorithm-policy` is `algorithm_policy`'s: per run and end loss it reaches (`frontier`'s
-targets), at its first checkpoint reaching it, the algorithm's inefficiency p = C/H (H the least |C| of any valid
-checkpoint from the start reaching that loss) against the policy's slowdown ρ, with the inputs the console's dial
-recomputes ρ from at any (c, k), so S = pρ.
+(`rescore.arguments`, `rescore.load`), the pin's records and the pilot's unless `--pin` names the commits.
+`training/frontier-branches` is `panels`'s: held-out bits per byte against total training compute in gates, the best
+unconstrained learner (the frontier, from scratch or continuing a start, at C0 + |C|) and per branch point (each start,
+`on_frontier` when the frontier passes through it) the best unconstrained and constrained learners starting from it
+(honest at C0 + |C|; throttled at C0 + |C|ρ per (c, k) of its dial, with S = W\*/H). Its dial is c in tokens of the
+start's forward (and `c_gates`) by k, with the reference policy and the served demo's measured block marked (`mark`);
+every curve is on one data (`data`: `v3` or `v2.3-pilot`), and the console's copy shows v3 once any start has v3
+points, else the pilot. `training/algorithm-policy` is `algorithm_policy`'s: per run and end loss it reaches
+(`frontier`'s targets), at its first checkpoint reaching it, the algorithm's inefficiency p = C/H (H the least |C| of
+any valid checkpoint from the start on the same data reaching that loss) against the policy's slowdown ρ, with the
+inputs the console's dial recomputes ρ from at any (c, k), so S = pρ. Every scoring command (`frontier`, `plots`,
+`rescore`, `panels`, `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its
+model's forward gates per token are at most the greater of its start's and the compute-optimal model's at its loss
+under the ladder's fit (`rescore`'s, `panels`'s and `algorithm_policy`'s `--ladder-fit FILE`, `policy.ladder_fit`;
+without it, the start's); the rest are left out as `over-cap`.
 
 ## What the integrator calls
 
@@ -135,7 +142,8 @@ covert_witness's evaluation job (`cw.score_run`, run by its evaluate.py after th
 sandbox) decodes each E with `prepare.decode` and scores it with `prepare.Scorer`: the output's digest, then a fresh
 slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README; the final
 set only in its final mode). It records each scored model's forward MACs and gates per token, counted on that model's
-own forward (`cw.forward_cost`: what runs, so an MoE's active experts), and the start's; nothing caps them. A batch from `TrainData.next` is token data through any op that reads it, not only an
+own forward (`cw.forward_cost`: what runs, so an MoE's active experts), and the start's; nothing in the harness caps
+them (scoring does, `policy.eligible`). A batch from `TrainData.next` is token data through any op that reads it, not only an
 embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
 harness's own work runs with its own instance of prepare.py, on plain copies of what the program handed it, and with the
 program's torch function modes (a default device among them), global module hooks and profilers off, its own
@@ -157,8 +165,8 @@ python -m te_core.launch --script islands/NAME/train.py --tier 0 --agent A --dir
 python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--reference]
 python -m te_core.frontier [--formalism [--json]]     # --formalism: W*, honest and S per target and (c, k) cell
 python -m te_core.plots --out DIR [--policy reference|inference|server|c1e14/k1e4] [--drop 0.01] [--from-scratch F.json]
-python -m te_core.panels frontier-branches --out DIR [--publish]   # a console training panel; --publish PUTs it
-python -m te_core.algorithm_policy --out DIR [--publish]      # the other; --publish stores the full table if cut
+python -m te_core.panels frontier-branches --out DIR [--publish] [--ladder-fit FIT.json]   # a console training panel
+python -m te_core.algorithm_policy --out DIR [--publish] [--ladder-fit FIT.json]   # the other; stores the full table if cut
 python -m te_core.policy [START ...]                 # each start's reference shapes and (c, k) grid
 python -m te_core.gates [--check]                     # gates per MAC by op; --check recompiles the Definitions
 ~~~

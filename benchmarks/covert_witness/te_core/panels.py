@@ -4,22 +4,29 @@ Boolean gates, every line a frontier (at each loss, the least compute anything r
     python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
                                                [te_core.rescore's ledger and analysis options]
 
-Its rows (`COLUMNS`) are the points of three kinds of curve:
+Its rows (`COLUMNS`) are the points of three kinds of curve, each on one data (`data`: `v3`, harness v3's OLMo 2 mix,
+or `v2.3-pilot`, the v2.3 harness's FineWeb-Edu; a loss on one is no loss on the other, so every curve is per data):
 
 - `frontier`, the best unconstrained learner: the lower envelope by total compute of every honest point, from scratch
-  or continuing a start. From scratch: every start at (C0, l0), and learning_frontier's dense AdamW pretraining runs
-  (`PRETRAINING`: the runs the starts were taken from, and its largest size) at every other evaluation; continuing:
-  every valid checkpoint from a start, at C0 + |C|.
+  or continuing a start. From scratch: every start at (C0, l0), and on the pilot learning_frontier's dense AdamW
+  pretraining runs (`PRETRAINING`: the runs the starts were taken from, and its largest size) at every other
+  evaluation; continuing: every valid checkpoint from a start, at C0 + |C|.
 - `honest`, per branch point, the best unconstrained learner starting from that checkpoint: at each loss the least |C|
   after it over every checkpoint of every valid record from it (te_core.frontier's H), at total compute C0 + |C|.
 - `throttled`, per branch point and dial (c, k), the best constrained learner starting from it: the least |C|·ρ (W*),
   ρ by the formalism v2 at that (c, k) with A1's and A1''s upper bounds, its S = W*/H at its loss and W*'s basis
   (`fit`: ρ = c/(c − d) by Fit; `target`: Slowdown's bound, stated, not proved in Lean). The dial is c in tokens per
-  block of the start's own forward (`TOKENS_PER_BLOCK`, c = n·w) by k (`K_BYTES`; bits in the rows). A dial cell whose
-  curve is the honest one (ρ = 1 at every point of it, so S = 1 at every loss) has no rows.
+  block of the start's own forward (`TOKENS_PER_BLOCK`, c = n·w; `c_gates` = n·w) by k (`K_BYTES`; bits in the rows),
+  and two cells are marked (`mark`): the default (`DEFAULT`, `reference`) and the served demo's measured block
+  (`SERVED`, `served demo`, at its gates in the start's tokens). A dial cell whose curve is the honest one (ρ = 1 at
+  every point of it, so S = 1 at every loss) has no rows.
 
-The branch points are the starts (te_core.policy's `starts`), each at (C0, l0) and labelled by its size and tokens per
-parameter, `on_frontier` "yes" when the frontier passes through it (nothing reaches its loss for less), else "no". C0 is
+It reads the valid records of the pin and of the pilot (pin.py's `pilot`, `frontier.pinned(pilot=True)`) unless `--pin`
+names the commits, and only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit
+from `--ladder-fit`).
+The branch points are the starts (te_core.policy's `starts`) per data, each at (C0, l0) and labelled by its size and
+tokens per parameter, `on_frontier` "yes" when its data's frontier passes through it (nothing reaches its loss for
+less), else "no". C0 is
 the start's counted training gates when its shape has them, else its training tokens at dense AdamW's counted rate
 (`dense_rate`: the gates per token of ref-optim's AdamW-everything checkpoints, in forward passes of the same model, the
 rate a continuation's |C| is counted at), and a from-scratch point's C0 is its tokens at that rate. A from-scratch point's loss
@@ -27,12 +34,12 @@ is learning_frontier's held-out bits per byte (fineweb-edu shard 013's first 2^2
 ratio of the starts' l0 (the search pool's whole documents) to it at the same checkpoints (`ratio`), except at a start,
 whose point is its l0.
 
-Each curve keeps its envelope points only. The console's copy (`cut`) fits the panels route's limits (te_core.console):
-the frontier, each honest curve and each throttled curve at the default dial (`DEFAULT`) keep their points
-`FRONTIER_STEP` apart in loss, and every other throttled curve the most points (`POINTS`) that fit, the first to reach
-each of losses evenly spaced over its own span. DIR gets `frontier-branches.json` (uncut),
-`console/frontier-branches.json` (cut, which `--publish` PUTs) and `frontier-branches.png`, plotted from the cut rows at
-the default dial.
+Each curve keeps its envelope points only. The console's copy (`cut`) is the headline data's rows (`headline`: v3 once
+any start has v3 points, else the pilot), fit to the panels route's limits (te_core.console): the frontier, each honest
+curve and each marked throttled curve keep their points `FRONTIER_STEP` apart in loss, and every other throttled curve
+the most points (`POINTS`) that fit, the first to reach each of losses evenly spaced over its own span. DIR gets
+`frontier-branches.json` (uncut, every data), `console/frontier-branches.json` (cut, which `--publish` PUTs) and
+`frontier-branches.png`, plotted from the cut rows at the marked cells.
 """
 from __future__ import annotations
 
@@ -50,16 +57,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from . import VERSION, console, formalism, frontier, plots, policy, rescore
-from .gates import per_mac
 
 NAME = "frontier-branches"
 PANEL = f"training/{NAME}"
 TOKENS_PER_BLOCK = (1, 10, 100, 1000, 4096)
 K_BYTES = (10_000, 100_000, 1_000_000, 10_000_000, 100_000_000)
-#: the dial's default: one 4,096-token session per block, k = 10 kB (te_core.policy's reference)
-DEFAULT = (policy.SESSION_TOKENS, policy.REFERENCE_K_BITS // 8)
-COLUMNS = ["curve", "start", "start_compute_gates", "start_loss", "on_frontier", "c_tokens_per_block", "k_bits",
-           "compute_total_gates", "compute_after_gates", "loss", "S", "run", "method", "delta_bits", "basis"]
+#: the dial's default, (tokens per block, k bits): one 4,096-token session per block, k = 10 kB (te_core.policy's
+#: reference)
+DEFAULT = (policy.SESSION_TOKENS, policy.REFERENCE_K_BITS)
+#: the served demo's measured block, (c gates, k bits): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c
+#: in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced), k its fresh bits
+SERVED = (30_087_822_237_972, 145_568)
+#: the data a record's held-out loss is on, the headline first: harness v3's, else the v2.3 harness's (`data_of`)
+DATA = ("v3", "v2.3-pilot")
+COLUMNS = ["curve", "data", "start", "start_compute_gates", "start_loss", "on_frontier", "c_tokens_per_block", "c_gates",
+           "k_bits", "mark", "compute_total_gates", "compute_after_gates", "loss", "S", "run", "method", "delta_bits",
+           "basis"]
 LOSSES = ("start_loss", "loss")
 #: learning_frontier's dense AdamW pretraining runs s, m and l (seed 0, 8 tokens per non-embedding parameter), each
 #: run's config.json, curve.json and theta.json under its run id
@@ -69,10 +82,11 @@ PRETRAINING = "art:8c8df28509c05c7cc8f1db3ff584c44339f19019b453370afbd75b9e5fa88
 FORWARD_MACS = {205_677_568: 230_976_512}
 #: the records `dense_rate` reads: a direction and a mechanism prefix (AdamW on every tensor)
 DENSE = ("ref-optim", "adamw")
-#: the console cut's points per off-default throttled curve, n + 1 at most (None: every point), and the least loss
-#: step of every other curve (the frontier, honest, throttled at `DEFAULT`)
+#: the console cut's points per unmarked throttled curve, n + 1 at most (None: every point), and the least loss step
+#: of every other curve (the frontier, honest, the marked throttled ones), tried finest first (`STEPS`)
 POINTS = (None, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1)
 FRONTIER_STEP = 0.0025
+STEPS = (FRONTIER_STEP, 2 * FRONTIER_STEP, 4 * FRONTIER_STEP, 8 * FRONTIER_STEP)
 TARGETS = frontier.TARGETS
 
 
@@ -96,15 +110,15 @@ def pretraining(root: Path) -> list[dict]:
     return out
 
 
-def w_fwd(shape: dict) -> float:
-    """One token's forward in gates (te_core.policy's inference block)."""
-    return shape["forward_macs_per_token"] * per_mac("gemm/bf16")
+def data_of(r: dict) -> str:
+    """The data a ledger row's held-out loss is on (`DATA`): the evaluation's `data` v3, else the pilot."""
+    return DATA[0] if r.get("data") == "v3" else DATA[1]
 
 
 def dense_rate(scored: list[dict], shapes: dict[str, dict]) -> tuple[float, str]:
     """Dense AdamW's gates per training token in forward passes of its model: the median over the valid checkpoints of
     `DENSE`'s records, else 3 forward passes (te_core.policy's stub), and where it comes from."""
-    v = sorted(r["gates"] / (r["measured"].tokens * w_fwd(shapes[r["start"]])) for r in scored
+    v = sorted(r["gates"] / (r["measured"].tokens * policy.w_fwd(shapes[r["start"]])) for r in scored
                if r.get("direction") == DENSE[0] and str(r.get("mechanism", "")).startswith(DENSE[1])
                and r["measured"].tokens)
     if not v:
@@ -114,12 +128,20 @@ def dense_rate(scored: list[dict], shapes: dict[str, dict]) -> tuple[float, str]
 
 def c0(shape: dict, rate: float) -> float:
     gates, how = policy.c0(shape)
-    return rate * w_fwd(shape) * shape["tokens"] if how.startswith("stub") else gates
+    return rate * policy.w_fwd(shape) * shape["tokens"] if how.startswith("stub") else gates
 
 
-def dial(m: formalism.Measured, w: float) -> dict[tuple[int, int], dict]:
-    """The formalism at each (c, k) of the dial, keyed (tokens per block, k bytes)."""
-    return {(n, kb): formalism.at(m, n * w, 8 * kb) for n in TOKENS_PER_BLOCK for kb in K_BYTES}
+def cells(w: float) -> dict[tuple[float, int], str | None]:
+    """The dial at a start whose forward is `w` gates per token, (tokens per block, k bits) -> its mark: every
+    `TOKENS_PER_BLOCK` by every `K_BYTES`, `DEFAULT` marked `reference`, and the served demo's block (`SERVED`) at its
+    gates in the start's tokens."""
+    return ({(n, 8 * kb): None for n in TOKENS_PER_BLOCK for kb in K_BYTES}
+            | {DEFAULT: "reference", (SERVED[0] / w, SERVED[1]): "served demo"})
+
+
+def dial(m: formalism.Measured, w: float) -> dict[tuple[float, int], dict]:
+    """The formalism at each (c, k) of the dial (`cells`)."""
+    return {(n, k): formalism.at(m, n * w, k) for n, k in cells(w)}
 
 
 def least(stair: list[tuple], loss: float) -> float | None:
@@ -128,20 +150,21 @@ def least(stair: list[tuple], loss: float) -> float | None:
 
 
 class Branch:
-    """One start as a branch point: its rows, l0, C0, label and its two kinds of curve."""
+    """One start on one data as a branch point: its rows, l0, C0, label, forward w, dial and its two kinds of curve."""
 
-    def __init__(self, name: str, shape: dict, on: list[dict], rate: float):
-        self.name, self.shape, self.on = name, shape, on
+    def __init__(self, name: str, shape: dict, on: list[dict], rate: float, data: str):
+        self.name, self.shape, self.on, self.data = name, shape, on, data
         self.l0, self.c0, self.label = frontier.start_bpb(on), c0(shape, rate), plots.start_label(shape)
-        w = w_fwd(shape)
+        self.w = policy.w_fwd(shape)
+        self.cells = cells(self.w)
         for r in on:
-            r["dial"] = dial(r["measured"], w)
+            r["dial"] = dial(r["measured"], self.w)
         self.honest = plots.staircase([(r["gates"], r["val_bpb"], r) for r in on])
         self.throttled = {key: plots.staircase([(r["gates"] * r["dial"][key]["rho"], r["val_bpb"], r) for r in on])
-                          for key in ((n, kb) for n in TOKENS_PER_BLOCK for kb in K_BYTES)}
+                          for key in self.cells}
         self.on_frontier = False
 
-    def s_at(self, key: tuple[int, int], loss: float) -> tuple[float | None, dict | None]:
+    def s_at(self, key: tuple[float, int], loss: float) -> tuple[float | None, dict | None]:
         """S = W*/H at `loss` in dial cell `key`, and the checkpoint that sets W*."""
         h = least(self.honest, loss)
         hit = next(((x, r) for x, y, r in self.throttled[key] if y <= loss), None)
@@ -149,22 +172,26 @@ class Branch:
 
 
 def scratch(runs: list[dict], branches: list[Branch], shapes: dict[str, dict], rate: float) -> tuple[list, float]:
-    """The from-scratch points (total compute, loss, row) and the loss ratio (module docstring): every start at its
-    (C0, l0), and every other pretraining evaluation at its tokens' compute and its converted loss."""
+    """The from-scratch points (total compute, loss, row with its `data`) and the loss ratio (module docstring): every
+    start at its (C0, l0), and every other pretraining evaluation (the pilot's data) at its tokens' compute and its
+    converted loss."""
+    pilot = [b for b in branches if b.data == DATA[1]]
+
     def start_of(run, p):
-        return next((b for b in branches if b.shape.get("parameters") == run["parameters"]
+        return next((b for b in pilot if b.shape.get("parameters") == run["parameters"]
                      and b.shape.get("tokens") == p["tokens"]), None)
 
     def what(run):
         return f"dense AdamW from scratch (learning_frontier {run['size']})"
 
     at = {b.name: (run, p) for run in runs for p in run["points"] if (b := start_of(run, p))}
-    pairs = [(b.l0, at[b.name][1]["bpb"]) for b in branches if b.name in at]
+    pairs = [(b.l0, at[b.name][1]["bpb"]) for b in pilot if b.name in at]
     ratio = sum(a / b for a, b in pairs) / len(pairs) if pairs else 1.0
     out = []
     for b in branches:
-        run, p = at.get(b.name, (None, None))
-        out.append((b.c0, b.l0, {"run": f"{run['run']}@{p['step']}" if run else b.name, "start": b.name,
+        run, p = at.get(b.name, (None, None)) if b.data == DATA[1] else (None, None)
+        out.append((b.c0, b.l0, {"data": b.data, "run": f"{run['run']}@{p['step']}" if run else b.name,
+                                 "start": b.name,
                                  "method": (what(run) + ", " if run else "from scratch, ") + f"the start {b.name}"}))
     for run in runs:
         same = next((s for s in shapes.values() if s.get("parameters") == run["parameters"]), None)
@@ -172,8 +199,8 @@ def scratch(runs: list[dict], branches: list[Branch], shapes: dict[str, dict], r
         if macs is None:
             raise SystemExit(f"panels: no forward MACs per token for {run['run']} ({run['parameters']} parameters): "
                              "add its count to te_core.panels' FORWARD_MACS")
-        out += [(rate * w_fwd({"forward_macs_per_token": macs}) * p["tokens"], p["bpb"] * ratio,
-                 {"run": f"{run['run']}@{p['step']}", "method": what(run) + ", loss converted"})
+        out += [(rate * policy.w_fwd({"forward_macs_per_token": macs}) * p["tokens"], p["bpb"] * ratio,
+                 {"data": DATA[1], "run": f"{run['run']}@{p['step']}", "method": what(run) + ", loss converted"})
                 for p in run["points"] if not start_of(run, p)]
     return out, ratio
 
@@ -186,49 +213,59 @@ def _delta(r: dict) -> float | None:
     return r["measured"].delta_bits
 
 
+def row(**values) -> list:
+    return [values.get(c) for c in COLUMNS]
+
+
 def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source: str,
           stamp: str | None = None) -> tuple[dict, dict]:
-    """The panel (uncut) and what it rests on: the branch points, the rate, the ratio."""
+    """The panel (uncut, every data) and what it rests on: the branch points, the rate, the ratio, each data's frontier
+    and the headline data."""
     rate, rate_how = dense_rate(scored, shapes)
-    branches = [b for b in (Branch(s, shapes[s], [r for r in scored if r["start"] == s], rate)
-                            for s in sorted({r["start"] for r in scored})) if b.l0 is not None]
+    branches = [b for b in (Branch(s, shapes[s], [r for r in scored if (r["start"], data_of(r)) == (s, d)], rate, d)
+                            for s, d in sorted({(r["start"], data_of(r)) for r in scored})) if b.l0 is not None]
     points, ratio = scratch(runs, branches, shapes, rate)
     for b in branches:
-        points += [(b.c0 + x, y, {"run": f"{r['id']}@{r.get('checkpoint_step')}",
+        points += [(b.c0 + x, y, {"data": b.data, "run": f"{r['id']}@{r.get('checkpoint_step')}",
                                   "method": f"{_method(r)} from {b.name}", "delta_bits": _delta(r)})
                    for x, y, r in b.honest]
-    env = plots.staircase(points)
-    rows = []
-    for x, y, r in env:
-        rows.append(["frontier", "", None, None, None, None, None, x, None, y, None, r["run"], r["method"],
-                     r.get("delta_bits"), None])
+    envs = {d: plots.staircase([p for p in points if p[2]["data"] == d]) for d in DATA}
+    rows = [row(curve="frontier", data=d, start="", compute_total_gates=x, loss=y, run=r["run"], method=r["method"],
+                delta_bits=r.get("delta_bits")) for d, env in envs.items() for x, y, r in env]
     for b in branches:
-        b.on_frontier = any(r.get("start") == b.name for _, _, r in env)
-        head = [b.label, b.c0, b.l0, "yes" if b.on_frontier else "no"]
+        b.on_frontier = any(r.get("start") == b.name for _, _, r in envs[b.data])
+        head = {"data": b.data, "start": b.label, "start_compute_gates": b.c0, "start_loss": b.l0,
+                "on_frontier": "yes" if b.on_frontier else "no"}
         for x, y, r in b.honest:
-            rows.append(["honest", *head, None, None, b.c0 + x, x, y, None, f"{r['id']}@{r.get('checkpoint_step')}",
-                         _method(r), _delta(r), None])
-        for (n, kb), stair in b.throttled.items():
+            rows.append(row(curve="honest", **head, compute_total_gates=b.c0 + x, compute_after_gates=x, loss=y,
+                            run=f"{r['id']}@{r.get('checkpoint_step')}", method=_method(r), delta_bits=_delta(r)))
+        for (n, k), stair in b.throttled.items():
             if [(x, r["id"]) for x, _, r in stair] == [(x, r["id"]) for x, _, r in b.honest]:
                 continue
             for x, y, r in stair:
                 h = least(b.honest, y)
-                rows.append(["throttled", *head, n, 8 * kb, b.c0 + x, x, y, x / h if h else None,
-                             f"{r['id']}@{r.get('checkpoint_step')}", _method(r), _delta(r),
-                             "fit" if r["dial"][(n, kb)]["fit"] else "target"])
+                rows.append(row(curve="throttled", **head, c_tokens_per_block=n, c_gates=n * b.w, k_bits=k,
+                                mark=b.cells[(n, k)], compute_total_gates=b.c0 + x, compute_after_gates=x, loss=y,
+                                S=x / h if h else None, run=f"{r['id']}@{r.get('checkpoint_step')}",
+                                method=_method(r), delta_bits=_delta(r),
+                                basis="fit" if r["dial"][(n, k)]["fit"] else "target"))
+    headline = next((d for d in DATA if any(b.data == d for b in branches)), DATA[-1])
     p = {"id": PANEL, "title": "The frontier and its branches: loss against total training compute", "kind": "table",
          "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
-         "note": note(ratio, None), "columns": COLUMNS, "rows": rows}
-    return p, {"branches": branches, "rate": rate, "rate_how": rate_how, "ratio": ratio, "frontier": env}
+         "note": note(ratio, None, headline), "columns": COLUMNS, "rows": rows}
+    return p, {"branches": branches, "rate": rate, "rate_how": rate_how, "ratio": ratio, "frontier": envs,
+               "headline": headline}
 
 
-def note(ratio: float, n: int | None) -> str:
-    return ("Held-out bits/byte vs total training gates. frontier: the best unconstrained learner (from scratch or "
-            "C0 + |C| from a start). honest / throttled: the best unconstrained / constrained "
-            "learner starting from checkpoint `start`; throttled: |C| rho, formalism v2, A1/A1' upper bounds; S = W*/H; "
-            "a (c, k) with no throttled rows is honest (S = 1). C0: dense AdamW's counted gates/token. From-scratch "
-            f"loss: learning_frontier's x{ratio:.4f} but at the starts. One seed."
-            + (f" (c, k) but ({DEFAULT[0]}, {8 * DEFAULT[1]}): {n + 1} points." if n else ""))
+def note(ratio: float, n: int | None, data: str, step: float = FRONTIER_STEP) -> str:
+    scratch = f"From-scratch loss: learning_frontier's x{ratio:.4f}. " if data == DATA[1] else "From scratch: the starts. "
+    thin = "" if n is None else (f" Other cells: {n + 1} points"
+                                 + (f", rest {100 * step:g}% apart" if step != FRONTIER_STEP else "") + ".")
+    return (f"Held-out bits/byte ({data}) vs total training gates. frontier: the best unconstrained learner (from scratch "
+            "or a start). honest / throttled: the best unconstrained / constrained learner starting from checkpoint "
+            "`start`; throttled: |C| rho (formalism v2, A1/A1' bounds); S = W*/H, 1 at a cell with no rows. c: "
+            f"start-forward tokens; marked: reference, served demo. C0: dense AdamW's gates/token. {scratch}One seed."
+            + thin)
 
 
 def rounded(row: list) -> list:
@@ -237,25 +274,26 @@ def rounded(row: list) -> list:
 
 
 def thinned(rows: list[list], n: int | None, step: float = FRONTIER_STEP) -> list[list]:
-    """The frontier's, each honest curve's and each default-dial throttled curve's points at least `step` apart in loss,
+    """The frontier's, each honest curve's and each marked throttled curve's points at least `step` apart in loss,
     and each other throttled curve's at most n + 1, the first to reach each of n + 1 losses evenly spaced over its own
     span; a curve's first and last points and the frontier's branch points always kept, and every point with n None."""
     if n is None:
         return rows
     ix = {c: i for i, c in enumerate(COLUMNS)}
-    key = [ix[c] for c in ("curve", "start", "c_tokens_per_block", "k_bits")]
-    starts = {(r[ix["start_compute_gates"]], r[ix["start_loss"]]) for r in rows if r[ix["curve"]] != "frontier"}
+    key = [ix[c] for c in ("curve", "data", "start", "c_tokens_per_block", "k_bits", "mark")]
+    starts = {(r[ix["data"]], r[ix["start_compute_gates"]], r[ix["start_loss"]]) for r in rows
+              if r[ix["curve"]] != "frontier"}
     groups: dict[tuple, list] = {}
     for r in rows:
         groups.setdefault(tuple(r[i] for i in key), []).append(r)
     out = []
-    for (curve, _, c, k), g in groups.items():
+    for (curve, data, _, _, _, mark), g in groups.items():
         loss = [r[ix["loss"]] for r in g]
-        if curve != "throttled" or (c, k) == (DEFAULT[0], 8 * DEFAULT[1]):
+        if curve != "throttled" or mark:
             kept = [0]
             for i in range(1, len(g)):
                 if i == len(g) - 1 or loss[i] <= loss[kept[-1]] * (1 - step) or \
-                        curve == "frontier" and (g[i][ix["compute_total_gates"]], loss[i]) in starts:
+                        curve == "frontier" and (data, g[i][ix["compute_total_gates"]], loss[i]) in starts:
                     kept.append(i)
         else:
             levels = [loss[0] - j * (loss[0] - loss[-1]) / n for j in range(n + 1)]
@@ -264,24 +302,26 @@ def thinned(rows: list[list], n: int | None, step: float = FRONTIER_STEP) -> lis
     return out
 
 
-def cut(p: dict, ratio: float) -> dict:
-    """`p` with the most points per off-default throttled curve (`POINTS`) whose body fits the panels route, numbers to
-    4 significant digits (losses to 5 decimals)."""
-    for n in POINTS:
-        q = p | {"rows": [rounded(r) for r in thinned(p["rows"], n)], "note": note(ratio, n)}
-        if len(q["note"]) > console.NOTE_MAX:
-            raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
-        if bad := console.refused(q):
-            raise ValueError(f"{PANEL}: the panels route refuses {len(bad)} cells ({'; '.join(bad[:3])}): make each a "
-                             f"number, a string of at most {console.CELL_MAX} characters or null")
-        if len(console.body(q)) <= console.BODY_MAX:
-            return q
+def cut(p: dict, ratio: float, data: str) -> dict:
+    """`p`'s rows on `data` at the finest loss step (`STEPS`) and then the most points per unmarked throttled curve
+    (`POINTS`) whose body fits the panels route, numbers to 4 significant digits (losses to 5 decimals)."""
+    on = [r for r in p["rows"] if r[COLUMNS.index("data")] == data]
+    for step in STEPS:
+        for n in POINTS if step == STEPS[0] else POINTS[1:]:
+            q = p | {"rows": [rounded(r) for r in thinned(on, n, step)], "note": note(ratio, n, data, step)}
+            if len(q["note"]) > console.NOTE_MAX:
+                raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
+            if bad := console.refused(q):
+                raise ValueError(f"{PANEL}: the panels route refuses {len(bad)} cells ({'; '.join(bad[:3])}): make each "
+                                 f"a number, a string of at most {console.CELL_MAX} characters or null")
+            if len(console.body(q)) <= console.BODY_MAX:
+                return q
     raise ValueError(f"{PANEL}: no cut fits {console.BODY_MAX} bytes (the last is {len(console.body(q))})")
 
 
-def figure(p: dict, out: Path) -> Path:
-    """The figure at the default dial: the frontier dashed, each branch point's honest curve thin and throttled one
-    thick."""
+def figure(p: dict, out: Path, data: str) -> Path:
+    """The figure on `data` at the marked cells: the frontier dashed, each branch point's honest curve thin, its
+    throttled one at the default dial thick and at the served demo's block dotted."""
     rows = plots.frame(p)
     fig, ax = plt.subplots(figsize=(9, 6))
 
@@ -296,9 +336,10 @@ def figure(p: dict, out: Path) -> Path:
         b = mine[0]
         step([(b["start_compute_gates"], b["start_loss"])] +
              [(r["compute_total_gates"], r["loss"]) for r in mine if r["curve"] == "honest"], color="C0", lw=0.8)
-        step([(b["start_compute_gates"], b["start_loss"])] +
-             [(r["compute_total_gates"], r["loss"]) for r in mine if r["curve"] == "throttled"
-              and (r["c_tokens_per_block"], r["k_bits"]) == (DEFAULT[0], 8 * DEFAULT[1])], color="C3", lw=2)
+        for mark, kw in (("reference", {"lw": 2}), ("served demo", {"lw": 1.2, "ls": ":"})):
+            step([(b["start_compute_gates"], b["start_loss"])] +
+                 [(r["compute_total_gates"], r["loss"]) for r in mine
+                  if r["curve"] == "throttled" and r["mark"] == mark], color="C3", **kw)
         on = b["on_frontier"] == "yes"
         ax.plot([b["start_compute_gates"]], [b["start_loss"]], "o", color="k" if on else "0.6")
         ax.annotate(s + ("" if on else " (off)"), (b["start_compute_gates"], b["start_loss"]),
@@ -306,10 +347,12 @@ def figure(p: dict, out: Path) -> Path:
                     textcoords="offset points")
     ax.plot([], [], color="C0", lw=0.8, label="best unconstrained learner from a checkpoint")
     ax.plot([], [], color="C3", lw=2, label=f"best constrained learner from it, c = {DEFAULT[0]} tokens per block, "
-                                            f"k = {DEFAULT[1] / 1000:g} kB")
+                                            f"k = {DEFAULT[1] / 8000:g} kB")
+    ax.plot([], [], color="C3", lw=1.2, ls=":", label=f"the same at the served demo's block, c = {SERVED[0]:.3g} gates, "
+                                                      f"k = {SERVED[1]:,} bits")
     ax.set_xscale("log")
     ax.set_xlabel("total training compute (Boolean gates)")
-    ax.set_ylabel("held-out bits per byte")
+    ax.set_ylabel(f"held-out bits per byte ({data} data)")
     ax.set_title(p["title"], fontsize=10)
     ax.legend(fontsize=7)
     fig.text(0.01, 0.005, p["note"], fontsize=5.5, wrap=True, va="bottom")
@@ -321,18 +364,20 @@ def figure(p: dict, out: Path) -> Path:
 
 
 def summary(info: dict) -> str:
-    """The branch points, each with whether it lies on the frontier, and S at the default dial per target."""
+    """The branch points on every data, each with whether it lies on its data's frontier, and S at the default dial
+    per target."""
     lines = [f"C0 rate: {info['rate']:.4g} forward passes per training token ({info['rate_how']}); from-scratch loss "
-             f"ratio {info['ratio']:.5f}", "",
-             "| branch point | start | C0 (gates) | l0 | on the frontier | "
-             + " | ".join(f"S at -{100 * t:g}%" for t in TARGETS) + " |", "|---|---|---|---|---|" + "---|" * len(TARGETS)]
+             f"ratio {info['ratio']:.5f}; the console shows {info['headline']}", "",
+             "| data | branch point | start | C0 (gates) | l0 | on the frontier | "
+             + " | ".join(f"S at -{100 * t:g}%" for t in TARGETS) + " |",
+             "|---|---|---|---|---|---|" + "---|" * len(TARGETS)]
     for b in info["branches"]:
         ss = []
         for t in TARGETS:
             s, r = b.s_at(DEFAULT, b.l0 * (1 - t))
             ss.append("unreached" if s is None else f"{s:.3g} ({'fit' if r['dial'][DEFAULT]['fit'] else 'target'})")
-        lines.append(f"| {b.label} | {b.name} | {b.c0:.3g} | {b.l0:.4f} | {'yes' if b.on_frontier else 'no'} | "
-                     + " | ".join(ss) + " |")
+        lines.append(f"| {b.data} | {b.label} | {b.name} | {b.c0:.3g} | {b.l0:.4f} | "
+                     f"{'yes' if b.on_frontier else 'no'} | " + " | ".join(ss) + " |")
     return "\n".join(lines)
 
 
@@ -345,17 +390,17 @@ def main(argv=None) -> int:
                     help=f"the pretraining runs, a directory per run id (default {PRETRAINING}, fetched)")
     a = ap.parse_args(argv)
     d = rescore.load(a)
-    pin, shapes = d["pin"], d["shapes"]
-    scored, _ = plots.load(d["rows"], pin, shapes, d["keep"])
+    pin, shapes = d["pin"] if a.pin else frontier.pinned(pilot=True), d["shapes"]
+    scored, _ = plots.load(d["rows"], pin, shapes, d["keep"], d["ladder"])
     runs = pretraining(a.pretraining or fetch(PRETRAINING))
     source = a.source or (f"python -m te_core.panels {NAME} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
                           f"{len(scored)} valid checkpoints, quantities {'rescore_v1' if d['use'] else 'stubs'})")
     p, info = build(scored, shapes, runs, source)
-    q = cut(p, info["ratio"])
+    q = cut(p, info["ratio"], info["headline"])
     (a.out / f"{NAME}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
     (a.out / "console").mkdir(exist_ok=True)
     (a.out / "console" / f"{NAME}.json").write_bytes(console.body(q))
-    png = figure(q, a.out)
+    png = figure(q, a.out, info["headline"])
     print(summary(info))
     print(f"{PANEL}: {len(p['rows'])} rows uncut; console {len(q['rows'])} rows, {len(console.body(q))} bytes, note "
           f"{len(q['note'])} characters -> {a.out}: {NAME}.json, console/{NAME}.json, {png.name}")

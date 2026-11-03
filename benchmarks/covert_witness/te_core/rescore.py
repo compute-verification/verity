@@ -125,13 +125,16 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
     ap.add_argument("--stubs", action="store_true", help="te_core.formalism's stubs for every row, no analysis")
     ap.add_argument("--source", default=None, help="the panels' `source` (default this command and the pin)")
     ap.add_argument("--manifest", type=Path, default=policy.MANIFEST)
+    ap.add_argument("--ladder-fit", type=Path, default=None,
+                    help="the ladder's fit the scoring cap reads (te_core.policy's `ladder_fit`; default none: the "
+                         "start's forward caps every checkpoint's)")
     return ap
 
 
 def load(a) -> dict:
     """The ledger's rows with the analysis's blocks attached (`attach`; the gate factors cached in `a.out`), the pin,
-    the starts' shapes, which rows to score (`keep`: those the analysis covers, None for every row) and how the
-    quantities were got (`how`)."""
+    the starts' shapes, which rows to score (`keep`: those the analysis covers, None for every row), how the
+    quantities were got (`how`) and the ladder's fit the scoring cap reads (`ladder`, None without `--ladder-fit`)."""
     ledger = Ledger(a.root)
     rows = ledger.index()
     if a.facts:
@@ -143,7 +146,7 @@ def load(a) -> dict:
     how = str(a.analysis) if use else "stubs: " + ("--stubs" if a.stubs else f"no {a.analysis} in this checkout")
     return {"rows": rows, "pin": tuple(a.pin) if a.pin else frontier.pinned(), "shapes": policy.starts(a.manifest),
             "source": source, "keep": (lambda r: source[r["id"]] == "analysis") if use else None, "use": use,
-            "how": how}
+            "how": how, "ladder": policy.ladder_fit(a.ladder_fit) if a.ladder_fit else None}
 
 
 def main(argv=None) -> int:
@@ -154,8 +157,9 @@ def main(argv=None) -> int:
     ap.add_argument("--from-scratch", type=Path, default=None)
     a = ap.parse_args(argv)
     d = load(a)
-    rows, pin, shapes, source, keep, use, how = (d[k] for k in ("rows", "pin", "shapes", "source", "keep", "use", "how"))
-    rep = frontier.formalism_report(rows, pin, shapes, keep)
+    rows, pin, shapes, source, keep, use, how, ladder = (d[k] for k in ("rows", "pin", "shapes", "source", "keep",
+                                                                         "use", "how", "ladder"))
+    rep = frontier.formalism_report(rows, pin, shapes, keep, ladder)
     left_out = frontier.status(rows, pin)
     valid = [r for r in rows if r["id"] not in left_out]
     kept = [r for r in valid if keep is None or keep(r)]
@@ -168,7 +172,7 @@ def main(argv=None) -> int:
             f.write(json.dumps({"id": r["id"], "run_id": r.get("run_id"), "start": r["start"],
                                 "checkpoint_step": r.get("checkpoint_step"), "source": source[r["id"]],
                                 "family": r.get("family"), "formalism": r.get("formalism")}, default=str) + "\n")
-    scored, stubs = plots.load(rows, pin, shapes, keep)
+    scored, stubs = plots.load(rows, pin, shapes, keep, ladder)
     fs = json.loads(a.from_scratch.read_text()) if a.from_scratch else {}
     what = a.source or (f"python -m te_core.rescore (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
                         f"{len(kept)} valid checkpoints, quantities {'rescore_v1' if use else 'stubs'})")

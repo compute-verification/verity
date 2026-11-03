@@ -19,6 +19,10 @@ on, its forward MACs per token as the harness counts them) gives the two referen
 The grid is every decade of c and of k from the least to the greatest of those shapes' (`grid`), keyed
 `c1e<i>/k1e<j>` (`key`). A start is scored at the grid's cells and at the three shapes exactly, keyed by name
 (`cells`). P1, P2 and P4 read the reference policy (`REFERENCE`); P3 marks all three.
+
+The scoring cap (`eligible`): a checkpoint is scored only when its own forward gates per token are at most the greater
+of its start's and the compute-optimal model's at the checkpoint's held-out loss under the ladder's fit (`ladder_fit`).
+Nothing caps what the harness evaluates; scoring reads the count the evaluation job records.
 """
 from __future__ import annotations
 
@@ -55,15 +59,45 @@ def c0(shape: dict) -> tuple[float, str]:
     return macs * per_mac("gemm/bf16"), "stub: 3 x forward MACs per token x training tokens, bf16 GEMM"
 
 
+def w_fwd(shape: dict) -> float:
+    """One token's forward in gates: forward MACs per token at the bf16 GEMM price."""
+    return shape["forward_macs_per_token"] * per_mac("gemm/bf16")
+
+
+def eligible(w: float | None, start_w: float, loss: float | None, ladder=None) -> bool:
+    """The scoring cap: whether a checkpoint whose model's forward is `w` gates per token is scored, `w` at most the
+    greater of the start's `start_w` and the compute-optimal model's at its held-out `loss` under the ladder's fit
+    (`ladder(loss)`, `ladder_fit`'s; None where the fit has no point). A checkpoint whose forward isn't counted (`w`
+    None) has the start's."""
+    at = ladder(loss) if ladder and loss is not None else None
+    return w is None or w <= max(start_w, at or 0.0)
+
+
+def ladder_fit(path: Path):
+    """The ladder's fit as the cap reads it: the compute-optimal model's forward gates per token at a held-out loss,
+    from `path`'s points (`{"points": [{"loss": L, "forward_gates_per_token": W}, ...]}`, at least two), log-linear in
+    loss between neighbours and None outside their span."""
+    pts = sorted((p["loss"], math.log(p["forward_gates_per_token"])) for p in json.loads(path.read_text())["points"])
+    if len(pts) < 2:
+        raise SystemExit(f"te_core.policy: {path} has {len(pts)} ladder points, not at least two")
+
+    def fit(loss: float) -> float | None:
+        for (l1, g1), (l2, g2) in zip(pts, pts[1:]):
+            if l1 <= loss <= l2:
+                return math.exp(g1 + (g2 - g1) * (loss - l1) / (l2 - l1)) if l2 > l1 else math.exp(max(g1, g2))
+        return None
+    return fit
+
+
 def shapes(shape: dict) -> dict[str, dict]:
     """The start's reference shapes (module docstring), each {c, k, why}."""
-    w_fwd = shape["forward_macs_per_token"] * per_mac("gemm/bf16")
+    w = w_fwd(shape)
     ids, ctx = id_bits(shape["vocab"]), shape["ctx"]
     kv = (ctx - 1) * 2 * shape["n_layer"] * shape["d_model"] * ACT_BITS
     c_s, how = c0(shape)
     return {
-        "inference": {"c": w_fwd, "k": ids + kv, "why": "one token's forward at full context: its id and its context's K, V"},
-        "reference": {"c": SESSION_TOKENS * w_fwd, "k": REFERENCE_K_BITS,
+        "inference": {"c": w, "k": ids + kv, "why": "one token's forward at full context: its id and its context's K, V"},
+        "reference": {"c": SESSION_TOKENS * w, "k": REFERENCE_K_BITS,
                       "why": "the draft's reference policy: one 4,096-token session per block, k = 10 kB"},
         "server": {"c": c_s, "k": shape["parameters"] * STATE_BITS,
                    "why": f"the start's training in one block (C0 {how}) and its state beyond theta"},
