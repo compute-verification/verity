@@ -6,20 +6,23 @@ own: `pouw.install`'s pass boundary under serving (`pouw_pass`: each engine step
                          [--output-tokens 16] [--max-num-batched-tokens N]
   served_passes.py verify --passes DIR --out verify.json [--jobs J] [--fast]
 
-``serve`` builds the spec's preset with its Pearl-C arm (`verity_bench`'s ``engine_args`` and ``protocols_config``, whose
-in-process challenger is the epoch's coins) and the pouw setting ``transcript_dir`` DIR, so each pass is retained in its
-own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to ``DIR/coins.json`` before the engine starts.  One
-``generate`` call serves R requests of P seeded random prompt tokens and O output tokens each (greedy, EOS ignored): vLLM's
-scheduler steps the engine, and nothing but the option ends a pass.  It writes each pass's counts, commitment and
-manifest, the engine steps, the caps, the install's ``max_step_tokens`` and whether every pass is within the caps, to ``--out``
-and ``DIR/served.json``, and exits non-zero unless at least three passes hold calls (two boundaries crossed) and every pass
-is within its caps.
+``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`; `verity_bench`'s ``engine_args`` and
+``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting ``transcript_dir`` DIR, so each
+pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to ``DIR/coins.json`` before the engine
+starts.  A warm-up ``generate`` of one short request takes the first calls' one-time costs (the screen's Triton build);
+then one timed ``generate`` call serves R requests of P seeded random prompt tokens and O output tokens each (greedy, EOS
+ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It writes each pass's counts,
+commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made it (``timed``), the timed
+call's wall (``generate_s``), the engine steps, the caps, the install's ``max_step_tokens`` and whether every pass is within
+the caps, to ``--out`` and ``DIR/served.json``, and exits non-zero unless the timed call's passes hold calls in at least three
+(two boundaries crossed) and every pass is within its caps.
 
 ``verify`` first holds the passes together to distinct call indices of one salt (`credit.passes_distinct`: the device
 numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then runs
-`verify_run.py` on each pass's manifest that ``DIR/served.json`` names, in order, against ``DIR/coins.json``, and exits 0
-only when every one is accepted.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PouwCheck).
+`verify_run.py` on each pass's manifest that ``DIR/served.json`` names, in order, against ``DIR/coins.json``, each pass's
+work-law credit and W_ref (`clear_work.work`, from the ``verify.json`` it writes beside the manifest) and its credited cells'
+MACs (`credited_macs`) in its verdict, and exits 0 only when every one is accepted.  An ACCEPT is replay-verified
+(development shortcut; the protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 
@@ -29,6 +32,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from verity_config.settings import of
@@ -36,7 +40,9 @@ from verity_config.settings import of
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
 SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
-ARM = "pouw:pearl-c-sm120-v1-h3"
+#: the arm `serve` serves: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO 6000,
+#: ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
+ARM_PREFIX = "pouw:pearl-c-"
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
 
@@ -47,6 +53,33 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
     return [[3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4) for j in range(tokens)] for i in range(requests)]
 
 
+def macs(manifest: str | None) -> int | None:
+    """A retained pass's linear MACs, its calls' real rows × n × k from its manifest; None without one."""
+    if not manifest:
+        return None
+    return sum(u["real_rows"] * u["n"] * u["k"] for u in json.loads(Path(manifest).read_text())["matmuls"])
+
+
+def credited_macs(manifest: str) -> int:
+    """A retained pass's MACs over its credited cells: each call's real rows less its excluded A rows, times its weight's
+    columns less its excluded B rows, times its kept K (`clear_work`'s credited cells, at their depth)."""
+    man = json.loads(Path(manifest).read_text())
+    return sum((u["real_rows"] - len(u["excluded_a"])) * (u["n"] - len(man["weights"][str(u["weight"])]["excluded_b"]))
+               * u["k_kept"] for u in man["matmuls"])
+
+
+def pearl_c_arm(spec):
+    """The spec's one PoUW Pearl-C arm (`ARM_PREFIX`); SystemExit naming them when it has none or several."""
+    from verity_bench.vllm import arms as A
+
+    got = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+           if a.protocols and all(e.startswith(ARM_PREFIX) for e in a.protocols)]
+    if len(got) != 1:
+        raise SystemExit(f"served_passes.py serves a spec's one {ARM_PREFIX}* arm; {spec.id} has "
+                         f"{[a.id for a in got] or 'none'}")
+    return got[0]
+
+
 def serve(args: argparse.Namespace) -> int:
     from verity_bench.vllm import arms as A
     from verity_bench.vllm import presets as P
@@ -54,7 +87,7 @@ def serve(args: argparse.Namespace) -> int:
     from verity_vllm.engine import env as engine_env
 
     spec = P.resolve_spec(args.spec)
-    (arm,) = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.id == ARM]
+    arm = pearl_c_arm(spec)
     preset = spec.preset
     engine = RN.engine_args(preset, arm.precision or preset.precision, resident=False, eager=True)
     if args.max_num_batched_tokens:
@@ -79,24 +112,32 @@ def serve(args: argparse.Namespace) -> int:
         return step(*a, **kw)
     core.step = counted
     vocab = int(core.model_config.get_vocab_size())
+    llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, 1, 16)],
+                 SamplingParams(max_tokens=2, ignore_eos=True, temperature=0.0), use_tqdm=False)
+    warm = len(run.details["passes"])
     sp = SamplingParams(max_tokens=args.output_tokens, ignore_eos=True, temperature=0.0)
-    outs = llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, args.requests, args.prompt_tokens)], sp, use_tqdm=False)
+    batch = [{"prompt_token_ids": p} for p in prompts(vocab, args.requests, args.prompt_tokens)]
+    t0 = time.perf_counter()
+    outs = llm.generate(batch, sp, use_tqdm=False)
+    wall = time.perf_counter() - t0
     llm.close()
     caps = {"tiles": run.capacity, "units": PPD.CALL_CAPACITY, "screened_rows": len(run.flag_buf)}
-    got = [{"pass": i, **{k: p.get(k) for k in KEEP if k in p}} for i, p in enumerate(run.details["passes"])]
+    got = [{"pass": i, "timed": i >= warm, **{k: p.get(k) for k in KEEP if k in p}, "macs": macs(p.get("manifest"))}
+           for i, p in enumerate(run.details["passes"])]
     held = [p for p in got if p["units"]]
     over = [p["pass"] for p in got if any((p.get(k) or 0) > cap for k, cap in caps.items())]
-    doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": ARM, "run": settings.RESEARCH_RUN_ID,
+    doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))},
            "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
-           "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "engine_steps": steps[0],
+           "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "generate_s": wall, "engine_steps": steps[0],
            "pass_ends": run.details.get("pass_ends"), "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
-           "over_caps": over, "ok": len(held) >= 3 and not over and all(p.get("manifest") for p in held)}
+           "over_caps": over,
+           "ok": sum(p["timed"] for p in held) >= 3 and not over and all(p.get("manifest") for p in held)}
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, indent=1) + "\n")
-    print(f"served {doc['served_tokens']} tokens in {steps[0]} engine steps: {len(held)} passes with calls, "
-          f"{len(over)} over their caps -> {'OK' if doc['ok'] else 'FAIL'}")
+    print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {steps[0]} engine steps (a warm-up's among them): "
+          f"{len(held)} passes with calls, {len(over)} over their caps -> {'OK' if doc['ok'] else 'FAIL'}")
     return 0 if doc["ok"] else 1
 
 
@@ -117,8 +158,12 @@ def verify(args: argparse.Namespace) -> int:
         done = subprocess.run(cmd, capture_output=True, text=True, check=False)
         line = (done.stdout.strip().splitlines() or [""])[-1]
         print(f"pass {p['pass']}: {line}", flush=True)
-        out.append({"pass": p["pass"], "units": p["units"], "tiles": p["tiles"], "rc": done.returncode, "line": line,
-                    "accepted": done.returncode == 0 and line.startswith("ACCEPT"), "stderr": done.stderr[-2000:]})
+        got = Path(p["manifest"]).parent / "verify.json"
+        work = json.loads(got.read_text()) if got.exists() else {}
+        out.append({"pass": p["pass"], "timed": p.get("timed"), "units": p["units"], "tiles": p["tiles"], "macs": p.get("macs"),
+                    "credited_macs": credited_macs(p["manifest"]), "rc": done.returncode, "line": line,
+                    "accepted": done.returncode == 0 and line.startswith("ACCEPT"), "credit": work.get("credit"),
+                    "w_ref": work.get("w_ref"), "stderr": done.stderr[-2000:]})
     ok = bool(out) and all(v["accepted"] for v in out)
     return _write_verify(args, {"schema": "verity-pouw/pearl-c-served-passes-verify/v1", "passes_dir": str(passes),
                                 "served_run": served.get("run"), "verified": len(out), "accepted": sum(v["accepted"] for v in out),

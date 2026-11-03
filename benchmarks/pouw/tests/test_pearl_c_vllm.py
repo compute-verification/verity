@@ -1017,6 +1017,29 @@ def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
     assert (doc["ok"], doc["verified"], doc["accepted"]) == (True, 2, 2) and "refused" not in doc
 
 
+def test_served_passes_counts_a_passs_linear_macs_and_its_credited_cells_macs(tmp_path):
+    """`served_passes.macs` is a pass's real rows × n × k, and `credited_macs` the MACs of the cells `clear_work` credits
+    (`UnitRecord.credited` over the scheme's tiles, at kept K): a filler row, an excluded A row and, once its weight has
+    one, an excluded B row each take their cells out."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    s = PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+
+    def cells(man):
+        recs = [PW.UnitRecord(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]), u["real_rows"], u["k_kept"],
+                              tuple(u["excluded_a"]), tuple(man["weights"][str(u["weight"])]["excluded_b"])) for u in man["matmuls"]]
+        return sum(len(rows) * len(cols) * r.k_kept for r in recs for rows, cols in map(r.credited, s.tiles(r.matmul.shape)))
+
+    assert SP.macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and SP.macs(None) is None
+    assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
+    assert SP.credited_macs(str(path)) == cells(man) < SP.macs(str(path))
+    before, b = cells(man), man["weights"]["0"]["excluded_b"]
+    b.append(min(set(range(man["weights"]["0"]["n"])) - set(b)))
+    path.write_text(json.dumps(man))
+    assert SP.credited_macs(str(path)) == cells(man) < before
+
+
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
     """A pass whose call index is 2^32 (`pearl_c.CALL_RANGE`, past the row seed's range) is refused ``call-range``, and one
     holding an index twice ``repeated-call``, before anything is opened."""

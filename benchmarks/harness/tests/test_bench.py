@@ -1043,6 +1043,35 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
 
 
+def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kernel_from_its_setup(monkeypatch):
+    """`served_pearlplus.sh`'s spec: Llama 3.2 1B's BF16 checkpoint through `pouw:pearl-c-h100-v1-h3` on one H200, its kernel
+    directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
+    adapter's refusals accept it."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.interface import Context
+
+    from verity_bench.vllm.arms import protocols_config
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
+    assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
+    assert spec.setup == "benchmarks/harness/setup/pearl_c_sm90.sh"
+    control, arm, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (control, compiled)] == [
+        ("stock-fp8", "fp8", None, None), ("stock-fp8@compiled", "fp8", None, "compiled")]
+    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-h100-v1-h3",), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
+    with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
+        protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    config = protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90",
+                                    "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    assert (config["pouw"]["kernel"], config["pouw"]["cubin"]) == ("/tree/benchmarks/pouw/pearl_c_sm90",
+                                                                   "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
+    assert pouw.refusals("pearl-c-h100-v1-h3", Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
+
+
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml").read_text()
     path = tmp_path / "spec.toml"
