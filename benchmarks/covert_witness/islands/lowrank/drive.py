@@ -4,7 +4,8 @@
 
 Each queue line is `ISLAND START ; NOTE ; TRAIN_ARGS` (`#` comments; the note's first word is the mechanism tag). A line
 launches once (keyed by its text), with `launch.py START --island ISLAND --note NOTE --node NODE --no-wait` from this
-checkout, whose island must be clean (the run ships HEAD's); NODE is whichever of `--nodes` holds fewer of the queue's
+checkout, whose island must be clean (the run ships HEAD's), once START is in the starts_store.json of the pinned
+commit launch.py ships (`pin.py`; a later start waits for it); NODE is whichever of `--nodes` holds fewer of the queue's
 runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`,
 retried on the next passes (its slot held) when that yields no row, up to twenty tries; once collected, its points are
 cached by `curve.py` and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every
@@ -26,8 +27,9 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path[:0] = [str(HERE), str(HERE.parents[1])]
 import curve  # noqa: E402
+import pin  # noqa: E402
 
 REPO = HERE.parents[3]
 LAUNCH = REPO / "benchmarks" / "covert_witness" / "launch.py"
@@ -48,6 +50,13 @@ def parse(line: str) -> tuple[str, str, str, list[str]] | None:
 
 def utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+def pinned_starts() -> set[str]:
+    """The starts the pinned measurement commit (the one launch.py ships) registers in its starts_store.json."""
+    commit = pin.pinned(fetch=True)["commit"]
+    r = pin.git("show", f"{commit}:benchmarks/covert_witness/starts_store.json")
+    return set(json.loads(r.stdout)["starts"]) if r.returncode == 0 else set()
 
 
 def main() -> int:
@@ -111,6 +120,7 @@ def main() -> int:
                                       cwd=REPO).stdout.strip()
 
         lines = a.queue.read_text().splitlines() if a.queue.exists() else []
+        starts = pinned_starts()
         for line in lines:
             key = line.strip()
             try:
@@ -118,7 +128,8 @@ def main() -> int:
             except ValueError as e:
                 print(f"{utc():%H:%M}Z skipped, unparsable ({e}): {key}", flush=True)
                 continue
-            if p is None or key in seen or utc() >= a.stop or len(flying) >= a.max or not clean(p[0]):
+            if (p is None or key in seen or utc() >= a.stop or len(flying) >= a.max or not clean(p[0])
+                    or p[1] not in starts):
                 continue
             island, start, note, args = p
             load = {n: sum(1 for s in flying.values() if s.get("node") == n) for n in nodes}
