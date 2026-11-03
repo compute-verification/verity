@@ -9,8 +9,9 @@ its max, and the target is formalism.published at reading B (page_rho on the col
 te_core.formalism.fresh_products on the model's products, which match io_bound's count on its captured steps, summed
 in a chain as the standard algorithm's are, so it is measured on every point and binds wherever Fit fails and its
 term exceeds 1: its term io_bound's figure without P-cell, resting on P-width and P-chain (coordinator 12:09Z); the
-token and decoding kinds need a trace's entries and op log, so they are unmeasured on every model and record here,
-and a point whose fresh-products term is at most 1 publishes null; the shapes, u(1), Delta, Delta_grad, a and a
+token and decoding kinds need a trace's entries and op log, so they are unmeasured on every model and on every
+record made a model, while an island row's published rho beside it has its trace's, and a point whose
+fresh-products term is at most 1 publishes null; the shapes, u(1), Delta, Delta_grad, a and a
 training token's gates are what the 45M pilot's traces and the standard-workloads island's rows (s-t20 and m-t20)
 measure; on every record each kind's figure and sensitivity is near the model's at its dials; and the readings the
 spec quotes hold: DiLoCo is standard training's bound until a phase fits a block, a teacher lowers rho by the
@@ -30,11 +31,12 @@ from te_core import formalism, io_bound, policy
 from te_core import workloads as W
 
 #: the console's c before the dashboard's 10:23Z ruling, 5,120 session tokens of the 45M reference at 2N FLOPs and 740
-#: gates a FLOP, attention left out: the c the island's rows in workloads_records.json were published at (te_core 4.4)
+#: gates a FLOP, attention left out
 OLD_C = 5120 * 2 * 45e6 * 740
 WORKLOAD_OF = {ck.name: w.name for w in W.WORKLOADS.values() for ck in w.checks}
 #: the island's generation rows, untraced: each record's target is te_core's untraced stub
-GENERATION = {W.ISLAND_RL_LORA, W.ISLAND_RL_FULL, W.ISLAND_INFERENCE, W.ISLAND_RL_FULL_60M, W.ISLAND_INFERENCE_60M}
+GENERATION = {W.ISLAND_RL_LORA, W.ISLAND_RL_FULL, W.ISLAND_INFERENCE, W.ISLAND_RL_FULL_60M, W.ISLAND_INFERENCE_60M,
+              W.ISLAND_RL_LORA_60M}
 
 
 def close(a, b, rel: float) -> bool:
@@ -181,9 +183,10 @@ def test_the_fresh_products_bind_where_they_exceed_one_and_the_rest_are_null(ref
 
 
 def test_the_token_and_decoding_kinds_need_a_trace(ref):
-    """Te_core 4.5's packer reads a trace's entries and its op log's matrix-product tiles: a model has neither and the
-    records here carry neither, so both kinds are unmeasured (never infinite, never 1), with reading A's verdict beside
-    them: unmodelled on a model, refused on a record."""
+    """Te_core 4.5's packer reads a trace's entries and its op log's matrix-product tiles: a model has neither and a
+    record made a model (`recorded`) carries neither, so both kinds are unmeasured (never infinite, never 1), with
+    reading A's verdict beside them: unmodelled on a model, refused on a record. An island row's published rho,
+    beside it, has both from its trace, and neither on a generation row, which isn't traced."""
     c, k = policy.CONSOLE
     for w in W.WORKLOADS.values():
         for pname, s in w.points:
@@ -192,6 +195,10 @@ def test_the_token_and_decoding_kinds_need_a_trace(ref):
     for at, r in every_rho(ref):
         assert r["terms"]["token"] is None and r["terms"]["decoding"] is None, at
         assert r["token_A"] == ("refused" if at[-1] == "record" else "unmodelled"), at
+    for ck in island():
+        terms = ref["workloads"][WORKLOAD_OF[ck.name]]["checks"][ck.name]["published"]["terms"]
+        untraced = ck.record.split("@")[0] in GENERATION
+        assert all((terms[kind] is None) == untraced for kind in ("token", "decoding")), ck.name
     assert set(ref["reading_a"]) == {"unmodelled", "refused"}
     assert W.NO_TRACE in ref["rests_on"]["token"] and W.NO_TRACE in ref["rests_on"]["decoding"]
 
@@ -333,6 +340,23 @@ def island(workload: str | None = None) -> list:
             if "standard-workloads" in ck.name and workload in (None, w.name)]
 
 
+#: m-t20's (d_in + d_out) and d_in d_out of each LoRA target set's matrices a layer, in d_models, at its 8/3 d MLP
+M_T20_FACTORS, M_T20_ENTRIES = {"attn": 8.0, "all": 8 + 3 * (1 + 8 / 3)}, {"attn": 4.0, "all": 4 + 3 * 8 / 3}
+
+
+def gaps(ck) -> dict:
+    """The model's value over the record's of each adapter-sized input on a LoRA row at m-t20 (W.M_T20_SHAPE: 7.84
+    layers of 2.75 d MLPs where it has 8 of 8/3 d): its factors (u(1), Delta, Delta_t and the gradient's cut and
+    partial, 32 bits a factor value) and its adapted entries (d); 1 elsewhere."""
+    keys = ("u1_bits", "delta_bits", "delta_t_bits", "grad_bits", "partial_bits")
+    t = ck.dials.get("targets") if ck.dials.get("update", "lora") == "lora" else None
+    if t is None or ck.dials.get("d_model") != W.M_T20:
+        return dict.fromkeys((*keys, "d_gates"), 1.0)
+    layers = W.M_T20_LAYERS / 8
+    return (dict.fromkeys(keys, W.TARGETS[t] / M_T20_FACTORS[t] * layers)
+            | {"d_gates": W.TARGET_ENTRIES[t] / M_T20_ENTRIES[t] * layers})
+
+
 def test_the_model_is_calibrated_on_the_records():
     pilot, st20 = W.dense(W.REFERENCE_PARAMS), W.dense(35_658_240, vocab=32_000)
     student = W.dense(13_012_224, vocab=32_000, d_model=256)
@@ -346,22 +370,29 @@ def test_the_model_is_calibrated_on_the_records():
     # Delta_grad: the island's traces, 96 N for AdamW (the student), Muon's state on s-t20, every worker's in DiLoCo
     assert W.delta_grad(student, "adamw") == 1_249_173_504
     assert round(W.delta_grad(st20, "muon")) == 2_806_628_352 == 1_141_063_680 + 1_665_564_672
-    (dl,) = island("diloco")
-    assert dl.dials["workers"] == 4 and round(W.model("diloco", **dl.dials).measured.parts[0].delta_grad_bits) \
-        == 13_692_764_160 == 4 * 96 * 35_658_240
+    traced = {35_658_240: 13_692_764_160, W.M_T20_PARAMS: 31_185_469_440}
+    assert sorted(dl.dials["n_params"] for dl in island("diloco")) == sorted(traced)
+    for dl in island("diloco"):
+        n = dl.dials["n_params"]
+        assert dl.dials["workers"] == 4 and round(W.model("diloco", **dl.dials).measured.parts[0].delta_grad_bits) \
+            == traced[n] == 4 * 96 * n, dl.name
     for ck in island():
         m, col = W.model(WORKLOAD_OF[ck.name], **ck.dials), ck.columns
-        me = m.measured
-        # the shape's u(1), Delta and a and the run's |C|, each the row's (m-t20's at its width)
-        assert math.isclose(me.u1_bits, AP.profile(col["u_points"])[-1][1], rel_tol=2e-3), ck.name
-        assert math.isclose(me.delta_bits, col["delta_bits"], rel_tol=1e-3), ck.name
-        assert math.isclose(me.a_bits, col["a_bits"], rel_tol=1e-9) or ck.record.startswith(W.ISLAND_RL_LORA), ck.name
+        me, gap = m.measured, gaps(ck)
+        # the shape's u(1), Delta, d and a and the run's |C|, each the row's (m-t20's at its width, a LoRA's
+        # adapter-sized inputs by its shape's gap)
+        assert math.isclose(me.u1_bits, gap["u1_bits"] * AP.profile(col["u_points"])[-1][1], rel_tol=2e-3), ck.name
+        assert math.isclose(me.delta_bits, gap["delta_bits"] * col["delta_bits"], rel_tol=1e-3), ck.name
+        assert math.isclose(me.decoder_gates, gap["d_gates"] * col["d_gates"], rel_tol=1e-3), ck.name
+        assert math.isclose(me.a_bits, col["a_bits"], rel_tol=1e-9) or ck.record.startswith(
+            (W.ISLAND_RL_LORA, W.ISLAND_RL_LORA_60M)), ck.name
         assert math.isclose(me.gates, col["C_gates"], rel_tol=0.03), ck.name
         # the gradient cut and one block's partial: 32 bits a trained value (every worker's in DiLoCo)
         main = max(me.parts, key=lambda p: p.token_gates)
-        assert math.isclose(ck.menu["grad_bits"], main.grad_bits, rel_tol=1e-9), ck.name
-        assert math.isclose(ck.menu["partial_bits"], main.partial_bits, rel_tol=1e-9), ck.name
-    # a LoRA's a: its lowest adapted layer's q, k and v rank outputs in bf16, 768 bits at rank 16 (both island rows)
+        assert math.isclose(main.grad_bits, gap["grad_bits"] * ck.menu["grad_bits"], rel_tol=1e-9), ck.name
+        assert math.isclose(main.partial_bits, gap["partial_bits"] * ck.menu["partial_bits"], rel_tol=1e-9), ck.name
+    # a LoRA's a: its lowest adapted layer's q, k and v rank outputs in bf16, 768 bits at rank 16 (every island row)
+    assert len(island("lora")) == 4
     for ck in island("lora"):
         assert ck.columns["a_bits"] == 768 == W.model("lora", **ck.dials).measured.a_bits, ck.name
 
@@ -372,33 +403,44 @@ def test_the_island_rows_are_its_panels(ref):
     assert {ck.record.split("@")[0] for ck in checks} == set(rows) == {
         W.ISLAND_STANDARD, W.ISLAND_DILOCO, W.ISLAND_LORA_ATTN, W.ISLAND_LORA_ALL, W.ISLAND_DISTILL, W.ISLAND_RL_LORA,
         W.ISLAND_RL_FULL, W.ISLAND_INFERENCE, W.ISLAND_STANDARD_60M, W.ISLAND_DISTILL_60M, W.ISLAND_RL_FULL_60M,
-        W.ISLAND_INFERENCE_60M}
-    assert sum(len(w.checks) for w in W.WORKLOADS.values()) == 15 and set(W.ISLAND_DIFFERS) == set(rows)
+        W.ISLAND_INFERENCE_60M, W.ISLAND_DILOCO_60M, W.ISLAND_LORA_ATTN_60M, W.ISLAND_LORA_ALL_60M,
+        W.ISLAND_RL_LORA_60M}
+    assert sum(len(w.checks) for w in W.WORKLOADS.values()) == 19 and set(W.ISLAND_DIFFERS) == set(rows)
     for ck in checks:
         run = ck.record.split("@")[0]
         row = rows[run]
-        # page_rho on the row's columns is the island's own rho at the c its rows were published at
-        assert math.isclose(AP.page_rho(ck.columns, OLD_C, 65_536.0)[0], row["rho_console"], rel_tol=1e-5), ck.name
+        # page_rho on the row's columns is the island's own reading-B rho at the console's policy (formalism.at), and
+        # the check keeps formalism.published on the row as the island published it there, reading A
+        assert math.isclose(AP.page_rho(ck.columns, *policy.CONSOLE)[0], row["target"], rel_tol=1e-5), ck.name
+        got = ref["workloads"][WORKLOAD_OF[ck.name]]["checks"][ck.name]
+        assert got["published"] == ck.published == row["published"] and set(row["published"]) == set(W.PUBLISHED)
+        assert row["published"]["reading"] == "A" and row["published"]["label"].endswith("reading A"), ck.name
         width = {"60M": {"teacher_d_model" if row["workload"] == "distill" else "d_model": W.M_T20}}.get(row["model"], {})
         rounds = {"rounds": True, "tokens": sum(p["tokens"] for p in row["parts"])} if run in W.ISLAND_ROUNDS else {}
         assert ck.dials == row["dials"] | width | rounds, ck.name
         assert ck.differs == W.ISLAND_DIFFERS[run] and ck.record == f"{run}@{row['checkpoint']}"
-        got = ref["workloads"][WORKLOAD_OF[ck.name]]["checks"][ck.name]
         assert got["record_status"]["grad_bits"].startswith("measured: ")
         assert got["record_status"]["partial_bits"].startswith("measured: ")
         status = W.input_status(W.model(WORKLOAD_OF[ck.name], **ck.dials), (ck,))
         measured = {key for key, v in status.items() if v.startswith("measured: ")}
-        assert {"delta_bits", "delta_t_bits", "d_gates"} <= measured, ck.name
+        # each of Delta, Delta_t and d the record measures, unless the shape puts the model's off it (`gaps`): then
+        # assumed, with the record's value beside it
+        for key in ("delta_bits", "delta_t_bits", "d_gates"):
+            off = abs(gaps(ck)[key] - 1) > W.MEASURED_REL
+            assert (key not in measured and f"{ck.record} measures" in status[key]) if off else key in measured, \
+                (ck.name, key)
         assert all(status[key].startswith("measured: " + ck.record) for key in measured)
     assert set(W.ISLAND_ROUNDS) == {r for r, row in rows.items() if row["workload"] == "rl"}
     mt20 = [ck for ck in checks if ck.name.startswith("60M ")]
-    assert len(mt20) == 4 and all(W.M_T20 in ck.dials.values() for ck in mt20)
+    assert len(mt20) == 8 and all(W.M_T20 in ck.dials.values() for ck in mt20)
 
 
 def test_checks_are_near_their_records(ref):
     """Each kind's figure and sensitivity on each record beside the model's at its dials: the fresh-products term, which
-    gives both rows' rho, and its figure under P-cell within 2.5% (the RL LoRA's w is 3% above its record's), update
-    within 2% and reduction by the main part's blocks a step within 2%. The target, reading B's token form, goes as
+    gives both rows' rho, and its figure under P-cell within 2.5%, and within 3% on the RL LoRAs, whose records' tokens
+    are sigma |C| / w with the model's w 3.0% and 3.7% above theirs (the record's products are the model's on its
+    tokens), update within 2% and reduction by the main part's blocks a step within 2%. The target, reading B's token
+    form, goes as
     1/t on the traced dense rows (the model's t, the 45M
     trace's, against each trace's) and within 2% on the island's LoRAs; the 4.1 LoRA pilot's is its a, te_core 4.1's
     residual stream (64 times the model's 128 bits), and up to 20% more by its front-loaded u_in; a generation row's is
@@ -408,11 +450,12 @@ def test_checks_are_near_their_records(ref):
         for cname, ck in w["checks"].items():
             x = ck["rho"]["default"]
             rec, mod = x["record"], x["model"]
+            tol = 0.03 if checks[cname].record.startswith((W.ISLAND_RL_LORA, W.ISLAND_RL_LORA_60M)) else 0.025
             assert rec["basis"] == mod["basis"] == "fresh_products" and rec["partial"] and mod["partial"], cname
-            assert math.isclose(rec["rho"], mod["rho"], rel_tol=0.025), cname
-            assert math.isclose(rec["terms"]["fresh_products"], mod["terms"]["fresh_products"], rel_tol=0.025), cname
+            assert math.isclose(rec["rho"], mod["rho"], rel_tol=tol), cname
+            assert math.isclose(rec["terms"]["fresh_products"], mod["terms"]["fresh_products"], rel_tol=tol), cname
             s, t = rec["sensitivities"], mod["sensitivities"]
-            assert math.isclose(s["fresh_cell"], t["fresh_cell"], rel_tol=0.025), cname
+            assert math.isclose(s["fresh_cell"], t["fresh_cell"], rel_tol=tol), cname
             assert math.isclose(s["update"], t["update"], rel_tol=0.02, abs_tol=1e-12), cname
             blocks = (max(rec["b"]) - 1) / (max(mod["b"]) - 1)
             assert math.isclose(s["reduction"], blocks * t["reduction"], rel_tol=0.02, abs_tol=1e-12), cname
