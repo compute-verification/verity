@@ -84,22 +84,22 @@ def opening (man : Json) (p : Pass) (file : String → Except String ByteArray) 
   let bTree ← file (← path wt "tree")
   let leaves ← file (← path man "leaves")
   let treeT ← file (← path man "tree_t")
-  let a := rows.map fun i => (⟨i, f32Row aRows u.k i ++ hm96Salt key u.index i, pathOf aTree u.m i⟩ : Opening)
-  let b := cols.map fun j => (⟨j, f32Row bRows u.k j ++ hm96Salt key (2 ^ 62 + u.weight) j, pathOf bTree u.n j⟩ : Opening)
-  let leaf : Opening := ⟨tid, leaves.extract (64 * tid) (64 * tid + 64) ++ hm96Salt key (2 ^ 63) tid, pathOf treeT p.count tid⟩
+  let a := rows.map fun i => (⟨i, f32Row aRows u.k i ++ hm96Salt key u.index i, pathOf aTree u.m i⟩ : LeafOpening)
+  let b := cols.map fun j => (⟨j, f32Row bRows u.k j ++ hm96Salt key (2 ^ 62 + u.weight) j, pathOf bTree u.n j⟩ : LeafOpening)
+  let leaf : LeafOpening := ⟨tid, leaves.extract (64 * tid) (64 * tid + 64) ++ hm96Salt key (2 ^ 63) tid, pathOf treeT p.count tid⟩
   let y ← match get? uj "y" with
     | none => pure []
     | some yj => do
       let yRows ← file (← path yj "rows")
       let yTree ← file (← path yj "tree")
       pure ((rows.filter (· < r.realRows)).map fun i =>
-        (⟨i, f32Row yRows u.n i ++ hm96Salt key (2 ^ 61 + u.index) i, pathOf yTree r.realRows i⟩ : Opening))
+        (⟨i, f32Row yRows u.n i ++ hm96Salt key (2 ^ 61 + u.index) i, pathOf yTree r.realRows i⟩ : LeafOpening))
   pure ⟨a, b, leaf, y⟩
 
 def jstr (s : String) : Json := .str s
 def jopt (s : Option String) : Json := s.map jstr |>.getD .null
 
-def output (ans : Answer) : Json :=
+def output (ans : RunAnswer) : Json :=
   Json.mkObj [
     ("verdict", jstr (if ans.accept then "accept" else "reject")),
     ("reason", jopt ans.reason),

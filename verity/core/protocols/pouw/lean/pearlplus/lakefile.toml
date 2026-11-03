@@ -4,7 +4,7 @@
 # pass's tickets and the exclusion tiles, and each drawn tile's openings and -h3 words (Pearl-C v1 on the H100's record), with
 # the served y's openings and unscale. It is code, so it requires nothing of `Security/`: PoUW's commitments (`pouw_commit`)
 # and the evaluator's FP32, FP8 and tensor-core steps (`verity_evaluate`). `pouw-pearlplus` reads a run's pass files and its
-# coins and prints the verdict; `tests/test_pearlplus_difftest.py` holds it to the Python.
+# coins and prints the verdict; `benchmarks/pouw/pearlplus_lean` holds it to the Python.
 name = "pouw_pearlplus"
 defaultTargets = ["PouwPearlPlus", "pouw-pearlplus"]
 

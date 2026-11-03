@@ -26,7 +26,7 @@ namespace PouwCheck.PearlPlus
 open PouwCommit Words
 
 /-- One opened position of a tree: the value (its preimage and 192-byte hm96 salt) and the sibling path, leaf first. -/
-structure Opening where
+structure LeafOpening where
   position : Nat
   value : ByteArray
   path : List ByteArray
@@ -35,10 +35,10 @@ structure Opening where
 /-- A tile's openings (`clear_audit.TileOpening`, and `Opened.open_y`'s y rows: the tile's rows below the call's real rows,
 empty on a call without y). -/
 structure TileOpening where
-  a : List Opening
-  b : List Opening
-  leaf : Opening
-  y : List Opening := []
+  a : List LeafOpening
+  b : List LeafOpening
+  leaf : LeafOpening
+  y : List LeafOpening := []
   deriving Inhabited
 
 def HM96 : String := "hm96-sha512"
@@ -48,7 +48,7 @@ def Y_ROWS_TAG : String := "verity/pouw/pearl-plus/y-rows/v1"
 def yBinding (salt : ByteArray) (index : Nat) : ByteArray := tagged Y_ROWS_TAG [.bytes salt, .int index]
 
 /-- `verify_opening`, a raise (`ProtocolError`) refusing. -/
-def opens (d : Except String RowsDomain) (root : ByteArray) (schema : String) (o : Opening) : Bool :=
+def opens (d : Except String RowsDomain) (root : ByteArray) (schema : String) (o : LeafOpening) : Bool :=
   match d with
   | .ok d => match d.verify root o.position schema o.value o.path with
     | .ok b => b

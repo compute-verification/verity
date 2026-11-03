@@ -39,17 +39,17 @@ structure Plan where
   todo : List (Nat × Nat)
   drawn : Nat
 
-structure Verdict where
+structure TileVerdict where
   pass : Nat
   tile : Nat
   reason : Option String
 
-structure Answer where
+structure RunAnswer where
   accept : Bool
   reason : Option String := none
   refused : Option (String × String) := none
   plan : Option Plan := none
-  verdicts : List Verdict := []
+  verdicts : List TileVerdict := []
 
 /-- `verify_passes` up to the replay: the passes, the run's commitment, the source and the tiles to open. -/
 def plan (i : Input) : Except Refusal Plan := do
@@ -77,9 +77,9 @@ def plan (i : Input) : Except Refusal Plan := do
 
 /-- The verdict of every tile of `pl.todo`, in order, replayed in parallel: the fixed operand's noise once per pass and
 weight, then each tile on it. -/
-def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List Verdict := Id.run do
+def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
   let mut noise : List ((Nat × Nat) × Task (Except String WeightNoise)) := []
-  let mut tasks : Array (Task Verdict) := #[]
+  let mut tasks : Array (Task TileVerdict) := #[]
   for (i, tid) in pl.todo do
     let p := pl.passes[i]!
     let some (pos, _, _) := p.tile? tid
@@ -99,7 +99,7 @@ def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : Li
   return tasks.toList.map Task.get
 
 /-- `verify_passes`: the run's verdict. -/
-def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : Answer :=
+def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : RunAnswer :=
   match plan i with
   | .error r => { accept := false, reason := some r.reason, refused := r.refused }
   | .ok pl =>
