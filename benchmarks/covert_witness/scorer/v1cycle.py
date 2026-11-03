@@ -76,8 +76,9 @@ CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"), ("4.8"
 #: the capture from which every later VERSION captures alike, and which traces the pilot's runs too, after v3's: te_core
 #: 4.8 saves a traced step's product rows in every trace (the toolsmith's 66162c92b1 line; coordinator 12:20Z), and
 #: 4.12.1's stores everything 4.12.x reads, each row's fed, P and gathered and the rows at each k of the console's dial
-#: (the toolsmith's 16:34Z line): an older trace's fresh-products term is unmeasured (formalism.FRESH_RETRACE)
-CAPTURE_FINAL = "4.12.1"
+#: (the toolsmith's 16:34Z line), and 4.12.7's lists the matrix products a step writes with elementwise ops: a trace
+#: captured before 4.12.7 reads unmeasured for the fresh term (the toolsmith's 18:53Z line)
+CAPTURE_FINAL = "4.12.7"
 #: the (machine, pool, cap) node traces go to, each pool's research slots any lane's (auto.py's SPILL, and cpu-9's):
 #: a shard takes a slot free there now past its waiters (`pool_room`), at most `cap` shards in flight there across every
 #: layer's cache, half the pool's slots, so the rest stays other lanes'. Named machines, never `--on auto`, which
@@ -228,8 +229,10 @@ def layers() -> list[Path]:
 def tier_layer(tier: str, top: Path, newest: str) -> Path | None:
     """The layer that traces `tier`'s records over `top`, the layer that traces the rest: the newest
     NEXT_WT-VERSION-TIER whose capture is top's, else one made at the integrator's newest te_core, if that is at or after
-    TIER_FROM's and captures as top does; None before then. Like `next_capture`'s, it stays at its first commit (its
-    cache is per te_core tree) and has no files."""
+    TIER_FROM's and captures as top does; None before then, and where top's own capture replays the tier. Like
+    `next_capture`'s, it stays at its first commit (its cache is per te_core tree) and has no files."""
+    if version(capture_version(top)) >= version(TIER_FROM[tier]):
+        return None
     have = [p for p in layers() if layer_tier(p) == tier and same_capture(capture_version(p), capture_version(top))]
     if have:
         return have[-1]
