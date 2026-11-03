@@ -833,9 +833,18 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
 ])
 def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects_and_one_that_wrote_nothing(tmp_path, served, verified,
                                                                                                reason):
+    """A run Pearl+'s verdict rejects, or that has no verdict, still carries its shares, its declared linears beside a
+    credit of 0; a run that served nothing has none."""
     s, v = _pearlplus_run(verified is not False)
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", s if served else None, None if verified is None else v)
-    assert (doc["verdict"], doc["reasons"][0], doc["shares"]) == ("reject", reason, None)
+    assert (doc["verdict"], doc["reasons"][0]) == ("reject", reason)
+    if served:
+        rho = 4096 * 132 * 1830e6
+        assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
+        assert doc["shares"]["verdict"] == (None if verified is None else "reject")
+        assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": 0}
+    else:
+        assert doc["shares"] is None
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["reason"]) == ("reject", "; ".join(doc["reasons"]))
 

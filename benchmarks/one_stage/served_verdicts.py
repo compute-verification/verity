@@ -819,7 +819,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
     accept when the run served within its caps across at least two pass boundaries and Pearl+'s verdict accepts; it
     carries that verdict's line and credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``), its shares
-    are `served_shares.pearlplus_shares`'s, and it credits nothing (`PEARLPLUS_WHY`). ``unretained``, the same load served
+    are `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
+    missing one credits 0), and it credits nothing (`PEARLPLUS_WHY`). ``unretained``, the same load served
     with no pass retained (``serve --no-retain``), adds the shares' ``unretained`` (`served_shares.pearlplus_unretained`),
     or why there are none; it is a measurement and never decides the verdict."""
     import served_shares as SS
@@ -844,9 +845,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                    **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
     if verified is not None:
         doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"))
-    if served is not None and verified is not None and not reasons:
+    if served is not None and served.get("ok"):
         try:
-            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified))
+            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified or {}))
         except (KeyError, TypeError, ValueError) as e:
             reasons.append(f"no shares: {type(e).__name__}: {e}"[:600])
         if doc["shares"] is not None and unretained is not None:
