@@ -1171,6 +1171,55 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     assert F.complete(now | {"products": own}, out, SHAPE).products == own
 
 
+def test_a_trace_of_another_program_than_the_runs_is_never_priced():
+    """Coordinator 20:42Z: a products term is priced only on a trace of the run's own program. A trace keeps no list
+    of the tensors it trains, so `complete` reads the row's op log beside the trace's rows when the row is read
+    (`other_program`, whatever te_core ingested it): where every matrix-product shape the rows run is a product the
+    log ran, in either orientation, the term is priced as before; where one isn't (a rank, a width or a batch the
+    capture took and the run didn't), the term is unmeasured at every k the trace keeps rows at, with the counts as
+    its reason (`FRESH_OTHER`), and so are fresh_cell and fresh_converged. A batched product is no match for a plain
+    one, and a row with no op log isn't checked."""
+    row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
+           "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
+           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 512,
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [], "P": 1.0, "gathered": [False, False]}
+    served = 145_568.0
+    block = {"capture": F.ELEMENTWISE_FROM, "k": 65536.0, "order": "unknown", "tokens": 8, "gates": None,
+             "p_match": [], "elementwise_products": [], "rows": [row],
+             "at": {f"{served:.0f}": {"k": served, "rows": [row], "p_match": []}}}
+    log = [["fwd", "updated", "mm", "[[4, 512], [512, 8]]", 2, 2 * 16384]]
+    f = F.of_record({"steps": [{"step": 0, "tokens": 8, "struct": "a", "by": {"fwd/updated": 2 * 16384}}],
+                     "structures": {"a": {"updated": [], "log": log, "affected_share": 0.5, "sigma": 1.0,
+                                          "token_factor": 1.0, "delta_grad_bits": 10}},
+                     "formalism": {"trace": {"products": block}}})
+    assert "other_program" not in f["products"]
+
+    def fresh(ops, k=65536.0):
+        r = {"output": {"e_bytes": 10}} | ({} if ops is None else {"macs_log": {"by": {}, "ops": ops}})
+        return F.bound(F.complete(f, r, SHAPE), 1e11, k)
+
+    for ops in (None, {}, {"fwd updated mm [[4, 512], [512, 8]]": [2, 32768]},
+                {"bwd grad mm [[8, 512], [512, 4]]": [2, 32768], "fwd theta mm [[4, 8], [8, 3]]": [1, 96]}):
+        for k in (65536.0, served):
+            b = fresh(ops, k)
+            assert b["terms"]["fresh_products"] > 0 and "fresh_products" not in b["unmeasured"], (ops, k)
+            assert "other_program" not in b["inputs"]["fresh_products"]
+    for ops, ran in (({"fwd updated mm [[4, 512], [512, 3]]": [2, 12288]}, 1),
+                     ({"fwd updated bmm [[1, 4, 512], [1, 512, 3]]": [2, 12288],
+                       "fwd updated bmm [[2, 4, 512], [2, 512, 8]]": [1, 32768]}, 1)):
+        for k in (65536.0, served):
+            b = fresh(ops, k)
+            why = F.FRESH_OTHER.format(unmatched=1, shapes=1, ran=ran, largest="4×512 by 512×8")
+            assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == why, (ops, k)
+            assert b["inputs"]["fresh_products"]["other_program"] == {"shapes": 1, "unmatched": 1, "ran": ran,
+                                                                      "largest": [[4, 512, 8]]}
+            assert b["sensitivities"]["fresh_cell"] is None and b["sensitivities"]["fresh_converged"] is None
+            assert b["unmeasured"]["fresh_cell"] == b["unmeasured"]["fresh_converged"] == why
+            assert "io_bound" not in b["inputs"]["fresh_products"]
+    assert F.fresh_per_c(F.complete(f, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": ops}}, SHAPE)) == {
+        "65536": None, f"{served:.0f}": None}
+
+
 def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whatever_te_core_ingested_it(monkeypatch):
     """The 45M dense step's capture (`dense_45m.products.json`) as a ledger row's trace. Ingested at 4.11 (rows
     with no `fed`, `P` or `gathered`, products with no system) the row published the one-class rule's number; read

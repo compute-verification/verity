@@ -189,13 +189,14 @@ Any row with a nonempty E whose prefix has no affected gates (no step through it
 """
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
 from . import io_bound, policy, tiles
-from .gates import gates, of_log, per_mac
+from .gates import gates, of_log, per_mac, split_key
 
 ACT_BITS = 16
 
@@ -710,6 +711,17 @@ FRESH_UNCHECKED = (f"unmeasured: the trace was captured before {THE_CODE} {ELEME
 FRESH_RETRACE = (f"unmeasured: the trace's product rows predate {THE_CODE} {SYSTEM_FROM}, so they don't say which "
                  "chains make each operand whole or which products read an embedding's rows before any op makes them "
                  f"token-specific, which G drops; retrace the run with {THE_CODE} {ELEMENTWISE_FROM} or later")
+#: the matrix products a trace's rows and a run's op log both give as (m, K, n), by one rule (te_core.capture.
+#: structure's GEMMs and te_core.tiles' `products`): a batched product is left out, since a capture's attention, by
+#: the math backend, has no counterpart in a run's fused attention
+PLAIN_PRODUCTS = ("mm", "_int_mm", "_scaled_mm", "addmm", "addmm_", "mv", "addmv", "addmv_", "dot", "vdot", "addr",
+                  "addr_")
+#: why the fresh-products kind is unmeasured where a trace isn't of the run's own program (`other_program`;
+#: coordinator 20:42Z: a products term is priced only on its run's own program)
+FRESH_OTHER = ("unmeasured: the trace isn't of the run's own program: {unmatched} of the {shapes} matrix-product "
+               "shapes its traced step runs are none of the {ran} the run's op log ran (the largest by "
+               "multiplications: {largest}), so its products aren't the run's and are never priced; retrace the run "
+               "so that its traced step runs the run's own sizes")
 #: what Λ's whole-making factor is on products that come with no whole-making system (a model's, a hand-written set):
 #: io_bound's one-class rule at each subset's least k_whole, which misses any shorter chain nested below their operands
 ONE_CLASS = ("one-class rule: every product's operands made whole along the shortest chain that makes any of them "
@@ -868,11 +880,11 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
 
 def classified_at(p: dict, k: float) -> dict | None:
     """`Measured.products` `p` as classified at k: itself where it was classified at k, else its block at k (`at`: a
-    trace's rows at each k of the console's dial, te_core.capture.products.rows_on_dial) with `p`'s stand_in; None
-    where it has neither."""
+    trace's rows at each k of the console's dial, te_core.capture.products.rows_on_dial) with `p`'s stand_in and
+    other_program; None where it has neither."""
     if math.isclose(p["k"], k, rel_tol=1e-12):
         return p
-    return next((b | {x: p[x] for x in ("stand_in",) if x in p} for b in p.get("at", {}).values()
+    return next((b | {x: p[x] for x in ("stand_in", "other_program") if x in p} for b in p.get("at", {}).values()
                  if math.isclose(b["k"], k, rel_tol=1e-12)), None)
 
 
@@ -909,7 +921,35 @@ def whole_chain(system: dict, k: float) -> dict:
                                     "counted": dict(system["counted"]), "b": system["b"]}, k)
 
 
-def traced_products(p: dict | None, block: dict | None) -> dict | None:
+def other_program(rows: list[dict], log: dict) -> dict | None:
+    """Whether a trace's product rows are of the run whose op log is `log` (te_core.ledger's macs_log), as far as
+    their shapes say (coordinator 20:42Z: a products term is priced only on a trace of the run's own program): None
+    where every shape (m, K, n) of the rows' `PLAIN_PRODUCTS` is a product of one of the log's ops (`tiles.products`),
+    in either orientation; else how many distinct shapes the rows run, how many of those the log never ran, how many
+    the log ran, and the three largest the log never ran by their multiplications. A trace keeps no list of the
+    tensors it trains, but a weight's gradient is a product with that weight's shape as m by n, so a rank, a width or a
+    batch the trace took and the run didn't shows here; a program that differs from the run's only in a vector it
+    trains, or only in a batched product, doesn't."""
+    ran: set = set()
+    for key in log.get("ops", {}):
+        op, shapes = split_key(key)[2:4]
+        try:
+            prods = tiles.products(op, json.loads(shapes))
+        except json.JSONDecodeError:
+            continue
+        ran |= {(m, K, n) for b, m, K, n in prods or () if b == 1}
+    runs: dict = {}
+    for r in rows:
+        if r["op"] in PLAIN_PRODUCTS:
+            s = (r["dims"]["m"], r["dims"]["k"], r["dims"]["n"])
+            runs[s] = runs.get(s, 0.0) + r["count"] * r["macs"]
+    miss = sorted((s for s in runs if s not in ran and s[::-1] not in ran), key=lambda s: (-runs[s], s))
+    if not miss:
+        return None
+    return {"shapes": len(runs), "unmatched": len(miss), "ran": len(ran), "largest": [list(s) for s in miss[:3]]}
+
+
+def traced_products(p: dict | None, block: dict | None, log: dict | None = None) -> dict | None:
     """Products ingest took from a trace's rows (`p`, `products_of_trace` of `block`) as this te_core takes them from
     the same rows over the same traced steps (their kinds' MACs over the rows' own), whatever te_core ingested the
     record, so the rows are read by this te_core's rules: an ingest before 4.12 kept no whole-making system, which
@@ -919,13 +959,16 @@ def traced_products(p: dict | None, block: dict | None) -> dict | None:
     which it never measures, and before 4.10 an upcast operand's product was an expansion. Taken again, rows captured
     before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`), rows captured before `ELEMENTWISE_FROM` that no
     capture looked at for products written elementwise say so (`FRESH_UNCHECKED`), and the rest are measured on their
-    system, at each k their trace keeps rows at. Products a record has of its own (no `kinds_macs`), and a block with
-    no trace rows, stand."""
+    system, at each k their trace keeps rows at. Given the record's op log (`log`, its ops), rows with a shape the log
+    never ran carry `other_program`, which `fresh_products` never prices (`FRESH_OTHER`). Products a record has of
+    its own (no `kinds_macs`), and a block with no trace rows, stand."""
     if p is None or block is None or "kinds_macs" not in p:
         return p
     per = sum(r["count"] * r["macs"] for r in block["rows"])
-    return products_of_trace(block, sum(p["kinds_macs"].values()) / per if per else 1.0) | {
+    got = products_of_trace(block, sum(p["kinds_macs"].values()) / per if per else 1.0) | {
         k: p[k] for k in ("stand_in",) if k in p}
+    other = other_program(block["rows"], log) if (log or {}).get("ops") else None
+    return got if other is None else got | {"other_program": other}
 
 
 def _subset(sub: dict | None) -> dict | None:
@@ -959,7 +1002,8 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     an embedding's rows before any op makes them token-specific, and `shared_prefix` what it trimmed at the sequences'
     first positions (`products_of_trace`). Products that come with a whole-making system are unmeasured where the step
     writes matrix products with elementwise ops (they are products, never elementwise work, and the system misses
-    their classes) or where its capture didn't look for them (`FRESH_UNCHECKED`)."""
+    their classes) or where its capture didn't look for them (`FRESH_UNCHECKED`). Products from a trace that isn't of
+    the run's own program, as the run's op log says (`other_program`), are never priced, at any k (`FRESH_OTHER`)."""
     p = m.products
     if p is None and m.ops is not None:
         p = products_of_ops(m.ops)
@@ -973,7 +1017,12 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     p = classified_at(p, k) or p
     order = p.get("order") or ORDER
     got = {"k_classified": p["k"], "order": order, "products": len(p["products"])} | {
-        x: p[x] for x in ("capture", "trace_order", "kinds_macs", "stand_in", "gathered", "shared_prefix") if x in p}
+        x: p[x] for x in ("capture", "trace_order", "kinds_macs", "stand_in", "gathered", "shared_prefix",
+                          "other_program") if x in p}
+    if "other_program" in p:
+        o = p["other_program"]
+        return None, FRESH_OTHER.format(unmatched=o["unmatched"], shapes=o["shapes"], ran=o["ran"], largest=", ".join(
+            f"{m}×{K} by {K}×{n}" for m, K, n in o["largest"])), got
     if not math.isclose(p["k"], k, rel_tol=1e-12):
         return None, (f"unmeasured: the products were classified at k = {p['k']:g}, not at this k, and keep none at "
                       f"it (a trace from {THE_CODE} {SYSTEM_FROM} on keeps them at each k of the console's dial); "
@@ -1414,8 +1463,8 @@ def _part(p: dict, labels: dict) -> Part:
 
 def complete(f: dict, row: dict, shape: dict) -> Measured:
     """`f`'s quantities (a `formalism` block, possibly partial), each missing one stubbed (`STUBS`) from the row and the
-    start's shape, and a trace's products this te_core's of its rows (`traced_products`); `labels` names every
-    quantity's source."""
+    start's shape, and a trace's products this te_core's of its rows, checked against the row's op log
+    (`traced_products`, `other_program`); `labels` names every quantity's source."""
     labels = dict(f.get("labels", {}))
     if f.get("parts"):
         parts = tuple(_part(p, labels) for p in f["parts"])
@@ -1468,7 +1517,7 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
     if ops is None and log.get("ops"):
         ops = tiles.of_log(log)
         labels.setdefault("ops", OPS)
-    products = traced_products(f.get("products"), (f.get("trace") or {}).get("products"))
+    products = traced_products(f.get("products"), (f.get("trace") or {}).get("products"), log)
     if products is not None:
         labels.setdefault("products", PRODUCTS)
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["u_in"], out["delta_bits"],
