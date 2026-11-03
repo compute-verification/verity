@@ -2594,7 +2594,7 @@ def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     kept_run = make(schedule="deferred-a")
     kept_run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    kept_run._retained = lambda cur, mm, m, flags, xa, tree: kept.append(tree.data_ptr())
+    kept_run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     kept_run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -2669,7 +2669,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     run = make()
     run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    run._retained = lambda cur, mm, m, flags, xa, tree: kept.append(tree.data_ptr())
+    run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
