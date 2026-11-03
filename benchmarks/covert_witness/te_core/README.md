@@ -47,8 +47,10 @@ other quantity bits.
   stored directly); a row with none of these has d unmeasured, and Fit refused (`formalism.decoder`). **Δ_t**: the
   weights in the form the update rule reads and writes, a straight-through run's fp32 latents at 32 bits a value
   (`delta_t_bits`, which only `rescore --quantities analysis` gives so far), else Δ.
-- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut at
-  32 bits or more an element, plus the carried state the token ops don't read.
+- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut, each
+  value at the width the step passes it (a message coded inside the step, a bool plane or a packed word, at its code's;
+  its encode, decode and sum are ops of C), a reduction over the tokens (a dW product, a loss) at 32 bits or more an
+  element, plus the carried state the token ops don't read.
 - **(c, k)**: a block's gates and the bits it imports; `policy.cells` gives each start's grid in decades, from one
   token's inference block to the start's server block, and its reference shapes at their exact (c, k): the inference
   block, the reference policy (c = 4096 w, k = 10 kB) and the server block.
@@ -66,6 +68,17 @@ other quantity bits.
   serving position p holds p + 1 cuts; s\* becomes the harmonic mean over positions of the most such a block can do
   (`formalism.context_s_star`, the formula and the choices favourable to the block in `formalism`'s docstring).
 - **ρ (slowdown)**: c/(c − d) where Fit holds for the training, else max(1, Slowdown's).
+- **The one bound** (`formalism.bound`, and `formalism.at` with a `reading`; opt-in, `at`'s default is Slowdown's
+  token form): the counting lemma over kinds of block work, ρ ≥ max over the kinds (token, gradient reduction, update
+  application, decoding) of each kind's share of |C| over its cap a block, each term returned with its inputs and
+  labelled "te_core VERSION, reading A|B"; where Fit fails ρ is max(1, that max). The reduction and update kinds rest
+  on assumptions (R) and (U), which blocks split by layers or tensors rather than tokens break, so `kinds` names the
+  kinds the max is over. `rho_vectors.json` holds its test vectors, which the console's rho.ts runs.
+- **Reading A** (A1's approved reading): a block reads at least the update bits its work reads, once, plus
+  each token's computed state where its work on the token begins, the context it reads and doesn't compute included.
+  The trace's `entries` (one token's path in segments, what each run of them reads) are the default packer's
+  witness blocks, `capture.circuit.check` counts any set of the trace's ops the same way, and `formalism.packer`
+  gives the token and decoding kinds' terms. A row traced before 4.4 has no `entries`: reading A refuses it.
 - **Where the quantities come from**: each is measured on the record's traced step (`capture.circuit`, read through
   `ledger ingest --structures`; `frontier.measured` says whether a row's were), a, u_in, u, t and Δ_grad as upper
   bounds from that witness. A row without a trace gets labelled stubs (`formalism.STUBS`, and `formalism.V23` for a row
@@ -228,7 +241,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it; `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over kinds under reading A or B (`bound`, `packer`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 24 columns; `refused`), and one panel's PUT |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
@@ -236,10 +249,11 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`) |
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels |
 | `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s ρ at both dial points) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT |
+| `rho_vectors.py` | the one bound's test vectors (`rho_vectors.json`, `--write`): wildcard's grown adapter, a dense and a LoRA step on the tiny start at the dial's cells, under readings A and B |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
+| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`, reading A's checker `check` among them); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count
