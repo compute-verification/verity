@@ -7,7 +7,8 @@ this te_core and priced by te_core.formalism at the console's default and the re
 `--rows` (default `ROWS`, the island's rows.json) gives the stored traces (the island's trace.py output, chosen steps
 of the runs, refused unless traced by a te_core from `TRACED_SINCE` to this one) and a row per workload and measured
 dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
-them (`about`, and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
+them (`about`, and a `note`), `last_untraced` where the trace can't reach the run's last step (why, in its
+`input_status`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
 checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures
 (annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
 formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_default` and `rho_console` are both its ρ
@@ -218,9 +219,9 @@ def start(name: str) -> tuple[dict, dict]:
     return s["shape"], json.loads((fetch(s["art"], path) / path).read_text())["tensors"]
 
 
-def untraced(record: dict, structures: dict[str, dict]) -> list[str]:
+def untraced(record: dict, structures: dict[str, dict], last_why: str | None = None) -> list[str]:
     """The steps with tokens that te_core.annotate.with_structures gives none of the traced `structures` (by structure
-    id), so no Δ_grad, each with why."""
+    id), so no Δ_grad, each with why (and `last_why`, why the trace doesn't reach it, beside the program's last)."""
     got = annotate.with_structures(record, structures)
     last, out = record["steps"][-1]["step"], []
     for s, a in zip(record["steps"], got["steps"]):
@@ -230,7 +231,8 @@ def untraced(record: dict, structures: dict[str, dict]) -> list[str]:
         if sid in structures:
             why = IDLE
         elif s["step"] == last and sum(x["struct"] == sid for x in record["steps"]) == 1:
-            why = "the program's last, its structure having no other step, not traced"
+            why = "the program's last, its structure having no other step, not traced" + (
+                f", since {last_why}" if last_why else "")
         else:
             why = "no traced step shares its structure"
         out.append(f"step {s['step']}: {why}")
@@ -261,7 +263,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
         record["checkpoints"] = record["checkpoints"][-1:]
-        read["untraced"] = untraced(record, structures)
+        read["untraced"] = untraced(record, structures, row.get("last_untraced"))
     with tempfile.TemporaryDirectory(prefix="sw-ingest-") as tmp:
         d = Path(tmp) / "run"
         d.mkdir()

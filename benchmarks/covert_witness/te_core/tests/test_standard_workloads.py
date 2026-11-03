@@ -244,6 +244,7 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
     measured = {"first": {"updated": [], "formalism": f | {"delta_grad_bits": 0}},
                 "train": struct | {"formalism": f | {"delta_grad_bits": 10}}}
     assert SW.untraced(rec, measured) == gaps[1:]
+    assert SW.untraced(rec, measured, "why")[-1] == f"{gaps[-1]}, since why"
     idle = SW.untraced(rec, {"first": measured["first"]})
     assert [g.split(":")[0] for g in idle] == ["step 0", "step 1", "step 2", "step 4", "step 5"] and idle[0] == gaps[0]
     parts = (formalism.Part(3e12, 100, 2.4e12, 1e12, 3, 1e3), formalism.Part(1e12, 50, 0.8e12, 0, 3, None))
