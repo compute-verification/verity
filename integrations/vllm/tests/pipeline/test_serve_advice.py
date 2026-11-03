@@ -549,9 +549,9 @@ def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
 
 def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path, monkeypatch):
     """`serve_advice.register` writes B as `served_compiler.compiler_doc` makes it of serve.json, the verifier's formula, and its
-    information entry, a registration log whose builder is B's item (`advice.builder_item`: the window advice's format, ℓ_a)
-    and whose head names it. A second registration in the same serve dir is refused, and so is serving into one that holds
-    it."""
+    information entry, a registration log whose builder is B's item (`advice.builder_item`: the window advice's format, ℓ_a),
+    whose last entry declares B's digest as the day's program and whose head names it. A second registration in the same
+    serve dir is refused, and so is serving into one that holds it."""
     from verity.core.protocols import registration as REGLOG
     from verity_vllm.config import UsageError
     from verity_vllm.engine.served_seed import DEFAULT_SEED
@@ -566,9 +566,46 @@ def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration
     composite, log = REGLOG.log_of(body["registration"]["log"])
     view = REGLOG.check(REGLOG.Auditor(), composite, log).view()
     assert composite == "onsite" and view.builder == ADV.builder_item(compiler) and view.head == body["registration"]["head"]
+    assert body["day"] == 0 and len(log) == 2 and log[-1].declared() == {"blocks": [], "day": 0, "program": compiler.digest}
     with pytest.raises(UsageError, match="B is registered once a run"):
         SA.register(tmp_path, serve, 4096)
     opts = SimpleNamespace(commit=True, out=str(tmp_path), advising=SA.AdviceOptions(advice=True))
     assert "a run registers B once" in SA.refusal(opts)
     assert SA.refusal(SimpleNamespace(commit=False, out=str(tmp_path / "x"), advising=SA.AdviceOptions(advice=True))) \
         == "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
+    fresh = SimpleNamespace(commit=True, out=str(tmp_path / "x"))
+    assert SA.refusal(SimpleNamespace(**vars(fresh), advising=SA.AdviceOptions(advice=True, advice_day=-1))) \
+        == "--advice-day -1: a day is its index among the monitoring period's days, 0 or more"
+    assert SA.refusal(SimpleNamespace(**vars(fresh), advising=SA.AdviceOptions(advice=True, advice_log=str(tmp_path / "no")))) \
+        == f"--advice-log {tmp_path / 'no'}: no such file"
+
+
+def test_a_run_extends_the_deployments_log_with_its_days_declaration_and_a_day_declared_or_another_builder_is_refused(
+        tmp_path, monkeypatch):
+    """Given the deployment's log so far (`--advice-log`: a run's advice_registration.json), the next day's run appends only
+    its day's declaration of B, since the log registers B already; a run of a day the log declares is refused
+    (`duplicate-declaration`: one program a day), and so is a log whose builder is another B or another deployment's."""
+    from verity.core.protocols import registration as REGLOG
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    monkeypatch.setattr(SC, "served_identity", lambda: (ADV.COMPILER, "cd" * 64))
+    serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
+             "default_seed": DEFAULT_SEED}
+    (tmp_path / "d0").mkdir()
+    compiler, first = SA.register(tmp_path / "d0", serve, 4096, day=0)
+    so_far = SA.log_doc(json.loads((tmp_path / "d0" / SA.REGISTRATION).read_text()))
+    assert so_far == first["registration"]["log"] and SA.log_doc(so_far) is so_far
+    (tmp_path / "d1").mkdir()
+    _c, second = SA.register(tmp_path / "d1", serve, 4096, day=1, log=so_far)
+    _composite, log = REGLOG.log_of(second["registration"]["log"])
+    view = REGLOG.check(REGLOG.Auditor(), "onsite", log).view()
+    assert [e.to_json() for e in log[:2]] == first["registration"]["log"]["entries"]
+    assert len(log) == 3 and [d.declared() for d in view.declarations] == [
+        {"blocks": [], "day": d, "program": compiler.digest} for d in (0, 1)]
+    with pytest.raises(ValueError, match=r"refuses day 1's declaration of B \(duplicate-declaration\): a day has one program"):
+        SA.register(tmp_path / "d1b", serve, 4096, day=1, log=second["registration"]["log"])
+    with pytest.raises(ValueError, match="registers another builder than B"):
+        SA.register(tmp_path / "d2", serve, 8192, day=2, log=second["registration"]["log"])
+    with pytest.raises(ValueError, match="the registration log is onsite's, not remote's"):
+        SA.register(tmp_path / "d3", serve, 4096, "remote", day=3, log=second["registration"]["log"])
+    assert not any((tmp_path / d).exists() for d in ("d1b", "d2", "d3"))

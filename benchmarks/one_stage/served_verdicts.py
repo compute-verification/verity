@@ -424,8 +424,9 @@ ADVICE_REGISTRATION, ADVICE_LINES = "advice_registration.json", "advice.jsonl"
 
 def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins_after: float) -> tuple[bool, str]:
     """The ADVICE-LINE verdict on a serve-openai ``--advice`` run: B as the server registered it before its first window
-    (`ADVICE_REGISTRATION`) is ``compiler``, the one ``prove_path.py compiler`` recomputes from serve.json, and the builder
-    of the registration log it committed (B's inner digest, the window advice's format, ℓ_a); every closed window
+    (`ADVICE_REGISTRATION`) is ``compiler``, the one ``prove_path.py compiler`` recomputes from serve.json, the builder
+    of the registration log it committed (B's inner digest, the window advice's format, ℓ_a), and that log's last entry
+    the run's day's declaration, B's digest its program (`serve_advice.declared_log`: one program a day); every closed window
     (``windows.jsonl``) has its line (`ADVICE_LINES`), in window order, each under B with ℓ_a and the rows ℓ_a fixes as
     the advice's length and row count, written before ``coins_after`` (unix seconds: before sampled proofs and the network
     certifier draw any coin); and window ``window``'s registration, the one the records audit opens, is its line's root
@@ -443,12 +444,17 @@ def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins
         why.append("the server's B isn't the compiler prove_path.py recomputes from serve.json")
     if cap != b.get("cap_bits"):
         why.append("its ℓ_a isn't its compiler's cap")
+    day = reg.get("day")
     try:
         composite, log = REG.log_of(reg["registration"]["log"])
         view = REG.check(REG.Auditor(), composite, log).view()
         want = {"kind": "builder", "digest": (b.get("inner") or {}).get("digest"), "advice": reg.get("advice"), "cap": cap}
         if view.builder != want or view.head != reg["registration"].get("head"):
             why.append("its registration log's builder isn't B's (its inner digest, its advice's format and ℓ_a)")
+        last = log[-1] if log else None
+        if isinstance(day, bool) or not (isinstance(last, REG.Declaration) and last.day == day
+                                         and last.program == b.get("digest")):
+            why.append("its registration log's last entry isn't the run's day's declaration of B as the day's program")
     except (KeyError, TypeError, ValueError, REG.Refused) as e:
         why.append(f"its registration log doesn't check ({type(e).__name__})")
     closed = sorted({int(x["window"]) for x in _lines(serve_dir / "windows.jsonl")})
@@ -482,7 +488,8 @@ def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins
     ok = not why
     return ok, (f"ADVICE-LINE: B (compiler digest {str(b.get('digest'))[:16]}…, its advice {reg.get('advice')}, ℓ_a {cap} "
                 f"bits) registered by the server once, before its first window, the registration log's builder and the "
-                f"compiler prove_path.py recomputes from serve.json; every closed window's advice committed by the server "
+                f"compiler prove_path.py recomputes from serve.json, and declared day {day}'s one program; every closed "
+                f"window's advice committed by the server "
                 f"as it served, padded to ℓ_a, its line (the advice's root, ℓ_a and the rows ℓ_a fixes) out before sampled "
                 f"proofs' and the network certifier's first coin; "
                 f"the audited window's registration its line's root under B, at ℓ_a: {'PASS' if ok else 'FAIL'}"

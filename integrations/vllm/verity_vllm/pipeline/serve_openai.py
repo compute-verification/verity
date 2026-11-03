@@ -754,7 +754,8 @@ def main(opts: Options) -> int:
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     try:
         if advice is not None:                           # B, from serve.json as the verifier reads it, before the first window
-            advice.register(json.loads((out / "serve.json").read_text()), opts.advising.advice_cap, opts.advising.advice_composite)
+            advice.register(json.loads((out / "serve.json").read_text()), opts.advising.advice_cap, opts.advising.advice_composite,
+                            opts.advising.advice_day, opts.advising.advice_log)
         if mirror is not None:
             mirror()
         print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}"

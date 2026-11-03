@@ -124,16 +124,17 @@ B = {"name": "verity/prove-path/capped-compiler/v1", "digest": "b0" * 64, "cap_b
      "inner": {"name": "verity-vllm/i2-compile-steps/v0", "digest": "1a" * 64}}
 
 
-def _advised(d: Path, *, cap: int = 4096, t0: float = 10.0) -> Path:
-    """A serve-openai ``--advice`` serve dir: B registered at ``t0`` under a log whose builder is B's item at ``cap``; windows
-    0-2 closed, 1 empty, each with its advice line, 0's and 2's committed under B."""
+def _advised(d: Path, *, cap: int = 4096, t0: float = 10.0, day: int = 3, declared: tuple | None = (3, B["digest"])) -> Path:
+    """A serve-openai ``--advice`` serve dir of day ``day``: B registered at ``t0`` under a log whose builder is B's item at
+    ``cap`` and whose last entry, given ``declared`` (a day and a program), is that declaration; windows 0-2 closed, 1
+    empty, each with its advice line, 0's and 2's committed under B."""
     from verity.core.protocols import registration as REG
 
     item = REG.item_of({"kind": "builder", "digest": B["inner"]["digest"], "advice": "verity-vllm/window-advice/v1", "cap": cap})
-    log = REG.chain("onsite", [REG.Information((item,))])
+    log = REG.chain("onsite", [REG.Information((item,)), *([REG.Declaration(*declared)] if declared else [])])
     d.mkdir(parents=True)
     (d / S.ADVICE_REGISTRATION).write_text(json.dumps({
-        "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "row_bits": 256, "t": t0,
+        "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "row_bits": 256, "day": day, "t": t0,
         "registration": {"composite": "onsite", "head": REG.head("onsite", log), "log": json.loads(REG.committed("onsite", log))}}))
     _write(d, "windows.jsonl", [{"window": k} for k in range(3)])
     named = {"name": B["name"], "digest": B["digest"]}
@@ -156,13 +157,15 @@ def _window_registration(compiler: dict, root: str, bits: int = 4096, rows: int 
 
 def test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_first_coin(tmp_path, capsys):
     """ADVICE-LINE passes on a run whose server registered B, the compiler the verifier recomputes, as its log's builder at
-    ℓ_a, and wrote every closed window's line under B at ℓ_a and its rows after that and before the first coin, the audited
-    window's registration its line's root, its advice padded to ℓ_a; it names no window and states no advice's own length.
-    It fails, saying why, for another compiler, a log of another ℓ_a, a closed window with no line, a line of another length
-    or row count, a line after the coins or before B, an audited window whose registration roots other advice, states the
-    advice's own length or has no advice, and a run that registered no B."""
+    ℓ_a with the run's day's declaration of B as the log's last entry, and wrote every closed window's line under B at ℓ_a
+    and its rows after that and before the first coin, the audited window's registration its line's root, its advice padded
+    to ℓ_a; it names no window and states no advice's own length. It fails, saying why, for another compiler, a log of
+    another ℓ_a, a log that declares no day, another day or another program, a closed window with no line, a line of
+    another length or row count, a line after the coins or before B, an audited window whose registration roots other
+    advice, states the advice's own length or has no advice, and a run that registered no B."""
     ok, line = S.advice_line(_advised(tmp_path / "ok"), 2, B, coins_after=20.0)
     assert ok and line.endswith(": PASS") and S.public_line(line) == line and "4096 bits" in line
+    assert "declared day 3's one program" in line
     assert S.main(["advice-line", str(tmp_path / "ok"), "--window", "2", "--compiler", str(_dump(tmp_path, B)),
                    "--coins-after", "20"]) == 0 and capsys.readouterr().out.strip() == line
 
@@ -173,6 +176,9 @@ def test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_fi
 
     assert "isn't the compiler prove_path.py recomputes" in fails(_advised(tmp_path / "b"), compiler={**B, "digest": "00" * 64})
     assert "builder isn't B's" in fails(_advised(tmp_path / "cap", cap=8192))
+    for k, declared in enumerate((None, (4, B["digest"]), (3, "00" * 64))):
+        assert "isn't the run's day's declaration of B" in fails(_advised(tmp_path / f"day{k}", declared=declared))
+    assert "isn't the run's day's declaration of B" in fails(_advised(tmp_path / "day-b", day=True, declared=(1, B["digest"])))
     assert "after sampled proofs' or the network certifier's first coin" in fails(_advised(tmp_path / "late"), coins_after=12.5)
     assert "before B's registration" in fails(_advised(tmp_path / "early", t0=11.5))
     assert "has no committed advice" in fails(_advised(tmp_path / "empty"), window=1)

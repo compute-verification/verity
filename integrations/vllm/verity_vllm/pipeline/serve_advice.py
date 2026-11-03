@@ -3,9 +3,13 @@ window's advice committed by the server, its public line out before any coin of 
 
 * **Registration.** Before its engine loop runs, the server writes ``advice_registration.json`` (`register`, public): B as
   the verifier recomputes it from ``serve.json`` (`served_compiler.compiler_doc`: compile_steps capped at ℓ_a,
-  ``--advice-cap``), the advice's format (`window_advice.SCHEMA`) and B's information entry in the deployment's registration
-  log (`advice.builder_item`, `verity.core.protocols.registration`, under ``--advice-composite``), committed. A serve dir
-  that holds one is refused, and so is a second commit of its windows' advice by `verity-vllm advice`: a run registers B once.
+  ``--advice-cap``), the advice's format (`window_advice.SCHEMA`), and the deployment's registration log
+  (`verity.core.protocols.registration`, under ``--advice-composite``), committed: B's information entry
+  (`advice.builder_item`) and the day's declaration after it, B's digest as day ``--advice-day``'s program, so the day's
+  one program is B and every window's circuit is B's output on its advice (`declared_log`). ``--advice-log`` extends the
+  deployment's log so far, which registers B at most once and declares each day at most once (`duplicate-information`,
+  `duplicate-declaration`): another builder, or a day it already declares, is refused. A serve dir that holds a
+  registration is refused, and so is a second commit of its windows' advice by `verity-vllm advice`: a run registers B once.
 * **Commit.** Each closed Commit window's advice (`advice.from_trace`, a window carrying what the one before left) is
   committed as `advice.write_served` commits it, under ``advice/w<k>/`` (``registration.json``, ``private/``), once the window
   is whole: its close and its ``windows.jsonl`` line, every step it scheduled recorded, and the Commit record of every
@@ -59,6 +63,13 @@ class AdviceOptions:
                                   "committed and compiled, which B's digest covers (default 2^23)")
     advice_composite: str = option("--advice-composite", choices=COMPOSITES, default="onsite",
                                    help="the deployment whose registration log B's entry opens (default onsite)")
+    advice_day: int = option("--advice-day", type=int, default=0, metavar="DAY",
+                             help="the day this run serves, by its index among the monitoring period's days: the log declares "
+                                  "B as its one program (default 0)")
+    advice_log: str | None = option("--advice-log", default=None, metavar="JSON",
+                                    help="the deployment's registration log so far (a run's advice_registration.json, or its "
+                                         "committed log), which this run's extends; refused if it registers another builder "
+                                         "or already declares --advice-day (default: the log opens here)")
     advice_weights: str | None = option("--advice-weights", default=None, metavar="JSON",
                                         help="the committer's weights registration (prove_path.py weights-registration --out), "
                                              "whose roots each window's registration records once it exists (advice."
@@ -68,8 +79,8 @@ class AdviceOptions:
 
 
 def refusal(opts: Any) -> str | None:
-    """Why ``--advice`` can't hold (None: it can): it reads the Commit's windows, and ℓ_a is a whole number of bits, a multiple
-    of 8 and at least 8."""
+    """Why ``--advice`` can't hold (None: it can): it reads the Commit's windows, ℓ_a is a whole number of bits, a multiple
+    of 8 and at least 8, the day is a natural number, and a log it extends is a file."""
     a = opts.advising
     if not a.advice:
         return None
@@ -77,24 +88,61 @@ def refusal(opts: Any) -> str | None:
         return "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
     if isinstance(a.advice_cap, bool) or a.advice_cap < 8 or a.advice_cap % 8:
         return f"--advice-cap {a.advice_cap}: ℓ_a is a whole number of bits, a multiple of 8 and at least 8"
+    if isinstance(a.advice_day, bool) or a.advice_day < 0:
+        return f"--advice-day {a.advice_day}: a day is its index among the monitoring period's days, 0 or more"
+    if a.advice_log is not None and not Path(a.advice_log).is_file():
+        return f"--advice-log {a.advice_log}: no such file"
     if (Path(opts.out) / REGISTRATION).exists():
         return (f"{Path(opts.out) / REGISTRATION} exists: a run registers B once, so a server doesn't serve into another's serve "
                 "dir (give a fresh --out)")
     return None
 
 
-def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str = "onsite", *,
-             t: float | None = None) -> tuple[AW.Capped, dict[str, Any]]:
-    """B registered for the run whose ``serve.json`` is ``serve``: ``out/advice_registration.json``, written once (an existing one
-    is a `UsageError`), at ``t`` (unix seconds, default now). -> B and the document."""
+def log_doc(doc: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The committed registration log in ``doc``: a run's ``advice_registration.json`` (its ``registration.log``) or the log."""
+    return doc["registration"]["log"] if doc.get("schema") == SCHEMA else doc
+
+
+def declared_log(composite: str, compiler: AW.Capped, day: int, log: Mapping[str, Any] | None = None) -> list[REG.Entry]:
+    """The deployment's registration log for a run of day ``day`` under B: ``log``, the log so far as committed (None: it
+    opens here), then B's information entry unless the log registers B already, then the day's declaration, whose program
+    is B's digest: the day's one program is B, and each window's circuit is B's output on the window's advice. ValueError
+    naming why when ``log`` is another deployment's or doesn't check, registers another builder, or declares the day."""
+    entries: list[REG.Entry] = []
+    if log is not None:
+        theirs, entries = REG.log_of(log)
+        if theirs != composite:
+            raise ValueError(f"the registration log is {theirs}'s, not {composite}'s")
+    try:
+        builder = REG.check(REG.Auditor(), composite, entries).view().builder
+    except REG.Refused as e:
+        raise ValueError(f"the registration log so far doesn't check: {e}") from None
+    item = ADV.builder_item(compiler)
+    if builder not in (None, item):
+        raise ValueError("the registration log registers another builder than B, and a deployment registers its builder once")
+    full = REG.chain(composite, [*entries, *([] if builder else [REG.Information((item,))]),
+                                 REG.Declaration(int(day), compiler.digest)])
+    try:
+        REG.check(REG.Auditor(), composite, full)
+    except REG.Refused as e:
+        raise ValueError(f"the registration log refuses day {day}'s declaration of B ({e.name}): a day has one program, "
+                         "declared once") from None
+    return full
+
+
+def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str = "onsite", *, day: int = 0,
+             log: Mapping[str, Any] | None = None, t: float | None = None) -> tuple[AW.Capped, dict[str, Any]]:
+    """B registered for the run whose ``serve.json`` is ``serve``, serving day ``day``: ``out/advice_registration.json``,
+    written once (an existing one is a `UsageError`), at ``t`` (unix seconds, default now), its log `declared_log` of
+    ``log``. -> B and the document."""
     doc = SC.compiler_doc(serve, cap_bits=cap_bits)
     compiler = ADV.registered_compiler(doc["inner"]["name"], doc["inner"]["digest"], cap_bits)
     if compiler.digest != doc["digest"]:
         raise ValueError(f"B's digest {compiler.digest[:16]}… is not the formula's {doc['digest'][:16]}…")
-    log = REG.chain(composite, [REG.Information((ADV.builder_item(compiler),))])
+    entries = declared_log(composite, compiler, day, log)
     body = {"schema": SCHEMA, "compiler": doc, "advice": WA.SCHEMA, "cap_bits": int(cap_bits), "row_bits": AW.ROW_BITS,
-            "registration": {"composite": composite, "head": REG.head(composite, log),
-                             "log": json.loads(REG.committed(composite, log))},
+            "day": int(day), "registration": {"composite": composite, "head": REG.head(composite, entries),
+                                              "log": json.loads(REG.committed(composite, entries))},
             "t": time.time() if t is None else float(t)}
     try:
         with open(Path(out) / REGISTRATION, "x") as fh:
@@ -139,10 +187,13 @@ class ServedAdvice:
         self._stopping = False
         self._thread: threading.Thread | None = None
 
-    def register(self, serve: Mapping[str, Any], cap_bits: int, composite: str) -> dict[str, Any]:
-        """B registered (`register`) from the run's ``serve.json``, and the committer started under it (`start`)."""
+    def register(self, serve: Mapping[str, Any], cap_bits: int, composite: str, day: int = 0,
+                 log: str | None = None) -> dict[str, Any]:
+        """B registered (`register`) from the run's ``serve.json`` for day ``day``, extending the log in the file ``log``
+        (`log_doc`), and the committer started under it (`start`)."""
         self.serve = serve
-        compiler, body = register(self.out, serve, cap_bits, composite, t=self.wall())
+        so_far = log_doc(json.loads(Path(log).read_text())) if log else None
+        compiler, body = register(self.out, serve, cap_bits, composite, day=day, log=so_far, t=self.wall())
         self.start(compiler)
         return body
 
