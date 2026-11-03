@@ -20,7 +20,7 @@ v2.3 harness's, labelled `v2.3-pilot` where its records are scored). It measures
 sandboxed training job; a separate evaluation job rebuilds and scores the model on a fresh slice of the search pool;
 promotions are decided on a sealed set and the final set is sealed until the scorer's final scoring; one pinned commit,
 `pinned.json`, measures every candidate, taking only its island from the candidate's commit). It drops the classes and
-scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
+scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its `pilot`.
 
 ## Policy and score
 
@@ -173,7 +173,9 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
   record of any other commit than it and the earlier commits of its version (`same_version`) (`other-version`), and
-  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`).
+  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`). `pilot` names
+  an earlier version's commits, whose records only `te_core.panels` shows beside the pin's, each curve labelled by its
+  data.
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets (checked against `prepare.SET_SHA256`, left
   read-only) and registered the sealed start; on a prepared node it only checks. vy-nebius-1, -2 and -3 are listed.
