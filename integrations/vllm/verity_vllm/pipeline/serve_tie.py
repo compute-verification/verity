@@ -135,7 +135,8 @@ class WindowTie:
         """After window ``window``'s close: R logged as the log's last record once `pouw_h1_commit.bind` bound it."""
         with self._cv:
             named = self._named.pop(window, None)
-        if named is not None and (run.details.get("commit_record") or {}).get("named"):
+        record = run.details.get("commit_record")
+        if named is not None and isinstance(record, Mapping) and record.get("named"):
             self.last = self._logged(window, "record", *named)
 
     def _logged(self, window: int, kind: str, path: Path, digest: str) -> str:
