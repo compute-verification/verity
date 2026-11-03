@@ -45,7 +45,7 @@ Keep at most two candidates of this island in flight, so the islands share the n
 - Budget: train.py runs inside the harness (`te_core.run --script`, `te_core/README.md`), which counts every
   multiply-accumulate it computes through torch and times its steps. 2x its MACs ≤ `prepare.TRAIN_FLOP_BUDGET` x
   `prepare.HARNESS_FLOP_SLACK` (9e16 x 1.1: the count includes the elementwise and optimizer work `prepare.train_flops`
-  leaves out, 1.06-1.09x of it on the reference seed), and its steps' wall seconds ≤ `prepare.GPU_SECONDS_CAP` (3000: the
+  leaves out, whose matmuls and attention are the count's own), and its steps' wall seconds ≤ `prepare.GPU_SECONDS_CAP` (3000: the
   harness runs eager and counted, about 2.4x a compiled run, and stops a run at 1.2x the cap). A step is the work from one
   `prepare.TrainData.next` call to the next. Your step log is still priced (the witness record's `train`) but doesn't
   decide the budget.
