@@ -668,14 +668,14 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
           subst hf
           have hpj := hpj trivial
           by_cases h4 : (j + 1 == 4) = true
-          · rw [ite_eq_left h4, ite_eq_left h4]
+          · rw [ite_eq_left h4]
             refine lk_lsampleKPAny coin N hLj hpj fun t₁ t₁' hp₁ l₁ l₁' hL₁ => ?_
             rw [modify_bind_run, modify_bind_run, get_bind_run, get_bind_run, modify_bind_run, modify_bind_run,
               get_bind_run, get_bind_run]
             refine lk_send fun t₂ t₂' hp₂ => ?_
             exact lk_lpure hL₁ (fun _ => hp₂ (by simp only [htabj, hwj]) hp₁)
               ⟨_, _, rfl, rfl, by simp only [htabj], by simp only [htabj], by simp only [hwj]⟩
-          · rw [ite_eq_right h4, ite_eq_right h4]
+          · rw [ite_eq_right h4]
             exact lk_challenge coin N hLj hpj htabj hwj fun _ s₁ s₁' t₁ t₁' l₁ l₁' hL₁ hp₁ htab₁ hw₁ =>
               lk_lpure hL₁ (fun _ => hp₁) ⟨_, _, rfl, rfl, rfl, htab₁, hw₁⟩
         case after =>
