@@ -14,7 +14,7 @@ A period is one window of one node's run, over one circuit (`Verity.Circuit`, co
 * PoUB, the bandwidth audit, on bandwidth: the bandwidth account read at least `Q` bits from device memory;
 * the network certifier, on communication: what the network certifiers saw the node move is within `K` bits.
 
-The period's coins are one space, `(i : I) → Ω i`, uniform (`Claims.Pr`, as `Accounting.Joint`'s), and each audit draws
+The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit draws
 its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed transcript are
 functions of all of them, and so is each verdict.
 
@@ -119,7 +119,7 @@ audits' coins, the probability over the audit's own coins that it accepts while 
 most `δ`. -/
 def Sound (c : Certificates) (p : Price) (a : Audit) (δ : ℝ) : Prop :=
   ∀ ξ : (i : I) → Ω i,
-    Claims.Pr (fun x : Ω (r.own a) =>
+    Pouw.pr (fun x : Ω (r.own a) =>
       r.accepts a (Function.update ξ (r.own a) x) ∧ ¬ r.Holds c p a (Function.update ξ (r.own a) x)) ≤ δ
 
 end PeriodRun

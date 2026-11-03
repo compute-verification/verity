@@ -1,5 +1,5 @@
 import Definitions.Pouw.PearlC.Defs
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
@@ -22,8 +22,6 @@ peel) are `Pouw.PearlC.Defs`'; here the protocol's reference functions are field
                 cap (units above the cap are rejected, so they enter neither sum); A wins if T / (1 − γ) < ∑_{u ∈ K} W_ref(u).
 ~~~
 -/
-
-open Claims renaming Pr → pr
 
 namespace Pouw.PearlC
 

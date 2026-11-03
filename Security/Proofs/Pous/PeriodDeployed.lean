@@ -181,7 +181,7 @@ theorem εMax_toReal : Params.εMax.toReal = (2⁻¹ : ℝ) ^ 128 := by
 
 theorem periodHeldNontrivial : PeriodHeldNontrivial := by
   refine ⟨fun P o hb h => ?_, fun P o x ⟨_, _, hh⟩ => ?_⟩
-  · have h1 : Claims.Pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+  · have h1 : Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
         True ∧ ¬ P.Break (o.1, o.2, x) ∧
           (emptyRun.held (o.1, o.2, x) : ℝ) < HONEST_S * (emptyRun.win .capacity).len) = 1 := by
       refine Pouw.pr_eq_one fun x => ⟨trivial, hb x, ?_⟩

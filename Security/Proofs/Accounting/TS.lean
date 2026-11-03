@@ -30,8 +30,6 @@ All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `p
 is `ε_luck` at `d̄ = Λ·ln(1/δ′)/S`, off `budget_tail`'s event at `t = ln(1/δ′)`.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

@@ -21,8 +21,6 @@ import Proofs.Accounting.Headline.Luck
   (`workAt_of`).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.Compose.WorkProof
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

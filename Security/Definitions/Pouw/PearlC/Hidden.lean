@@ -1,5 +1,6 @@
 import Definitions.Pouw.PearlC.Tile
 import Definitions.Core.Game
+import Definitions.Core.Interaction
 
 /-!
 # The hidden audit (trusted)

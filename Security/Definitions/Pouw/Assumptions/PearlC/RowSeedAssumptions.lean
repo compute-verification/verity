@@ -12,8 +12,6 @@ The corollary's other conditions stay definitions in `TTOutRowSeed.lean`, taken 
 resistance.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC.Assumptions
 
 open Pouw.PearlC Pouw.Fp8Atom

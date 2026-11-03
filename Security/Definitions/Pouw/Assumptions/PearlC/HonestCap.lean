@@ -52,8 +52,6 @@ whatever the table's number. How the rate is measured and cited:
 Until that art id lands with `Served`, `m` and the per-input bounds, no table or ledger cites a completeness number.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC.Assumptions
 
 open Pouw.PearlC

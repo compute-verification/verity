@@ -9,11 +9,9 @@ charge is at most `B` on every one of its own coins, it accepts with `B` below t
 `ε`. Taking `B` the largest charge over its own coins bounds, over both, the probability that it accepts and its
 account is short of the certificate on every one of its own coins.
 
-PoUS's and the bandwidth audit's probability (`Pous.pr`, in `ℝ≥0∞`) is the same fraction as PoUW's (`Claims.Pr`, in `ℝ`):
+PoUS's and the bandwidth audit's probability (`Pous.pr`, in `ℝ≥0∞`) is the same fraction as PoUW's (`Pouw.pr`, in `ℝ`):
 `pr_eq_toReal`.
 -/
-
-open Claims renaming Pr → pr
 
 namespace Accounting
 
@@ -22,7 +20,7 @@ open Pouw
 variable {X O : Type} [Fintype X] [Fintype O]
 
 theorem pr_eq_toReal (P : X → Prop) : pr P = (Pous.pr P).toReal := by
-  unfold Claims.Pr Pous.pr
+  unfold Pouw.pr Pous.pr
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem pr_short_le [Nonempty X] [Nonempty O] (acc : X → O → Prop) (m : X → O → ℕ) (c ε : ℝ)

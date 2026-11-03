@@ -124,20 +124,20 @@ variable [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS]
 audits' coins, the probability over the compute coins that the compute audit accepts and the compute account's work on
 that run is below `W` is at most `ε`. -/
 def ComputeSoundPerRun (p : Price) (W ε : ℝ) : Prop :=
-  ∀ o : ΩQ × ΩS, Claims.Pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) < W) ≤ ε
+  ∀ o : ΩQ × ΩS, Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) < W) ≤ ε
 
 /-- **The bandwidth audit's per-run guarantee, at certificate `Q` and error `ε`**: at any value of the other audits'
 coins, the probability over the bandwidth coins that the bandwidth audit accepts and the bandwidth account read fewer
 than `Q` bits from device memory on that run is at most `ε`. -/
 def BandwidthSoundPerRun (Q ε : ℝ) : Prop :=
-  ∀ (x : ΩW) (s : ΩS), Claims.Pr (fun q : ΩQ => r.accepts .bandwidth (x, q, s) ∧ (r.read (x, q, s) : ℝ) < Q) ≤ ε
+  ∀ (x : ΩW) (s : ΩS), Pouw.pr (fun q : ΩQ => r.accepts .bandwidth (x, q, s) ∧ (r.read (x, q, s) : ℝ) < Q) ≤ ε
 
 /-- **The capacity audit's per-run guarantee, at certificate `S` bits on average and error `ε`**: at any value of the
 other audits' coins, the probability over the capacity coins that the capacity audit accepts and the capacity account
 held fewer than `S * len` bit-ticks of device memory over its window on that run is at most `ε`. -/
 def CapacitySoundPerRun (S ε : ℝ) : Prop :=
   ∀ (x : ΩW) (q : ΩQ),
-    Claims.Pr (fun s : ΩS => r.accepts .capacity (x, q, s) ∧ (r.held (x, q, s) : ℝ) < S * (r.win .capacity).len) ≤ ε
+    Pouw.pr (fun s : ΩS => r.accepts .capacity (x, q, s) ∧ (r.held (x, q, s) : ℝ) < S * (r.win .capacity).len) ≤ ε
 
 /-- **The compute audit's per-run guarantee on the priced sum, at price `p`, read price `pRead`, certificate `W` and
 error `ε`**: at any value of the other audits' coins, the probability over the compute coins that the compute audit
@@ -146,7 +146,7 @@ memory (its bandwidth charge) is below `W` is at most `ε`. `pRead` is the devic
 `p` counts work in. Tables cite the work and the bits separately; what is certified is their priced sum. -/
 def ComputeSoundPerRunPriced (p : Price) (pRead W ε : ℝ) : Prop :=
   ∀ o : ΩQ × ΩS,
-    Claims.Pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) + pRead * r.pouwRead (x, o) < W) ≤ ε
+    Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) + pRead * r.pouwRead (x, o) < W) ≤ ε
 
 end Run
 

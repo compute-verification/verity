@@ -12,8 +12,6 @@ import Proofs.Pouw.RelativeSecurity
 and the fixed words follow (`RightFixed`).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

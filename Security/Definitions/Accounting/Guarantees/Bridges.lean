@@ -58,7 +58,7 @@ def pouwRow : Prop :=
     B1 Q R S 𝓕 V tₛ t_d ℓ read hash π P D γ₀ ε →
     ∀ U : Pouw.Workload, U.InDomain D → ∀ A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π),
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      Claims.Pr (fun x : (Q → R) × S × (Fin t → Pouw.Ticket (P.Wref U.layout) U.layout.N) =>
+      Pouw.pr (fun x : (Q → R) × S × (Fin t → Pouw.Ticket (P.Wref U.layout) U.layout.N) =>
           Pouw.AuditAccepts (Pouw.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - Pouw.reductionGamma γ₀ Ωmax) * (1 - εs) * Pouw.totalWref P U.layout)
         ≤ (1 - εs) ^ t + ε q U.layout.N

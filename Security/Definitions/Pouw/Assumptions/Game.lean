@@ -6,8 +6,6 @@ import Definitions.Pouw.Game.Defs
 Each is a `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.Assumptions
 
 open Finset

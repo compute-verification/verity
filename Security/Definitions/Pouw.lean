@@ -1,7 +1,7 @@
 import Definitions.Pouw.Barrier.Defs
 import Definitions.Pouw.Barrier.Pinned
 import Definitions.Pouw.Basic.Mat
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
 import Definitions.Pouw.D1
 import Definitions.Pouw.Dither

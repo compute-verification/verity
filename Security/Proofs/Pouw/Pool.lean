@@ -25,7 +25,7 @@ paid `ln(N/δ_coin)` of luck a replica; convexity pays `ln(N/(s δ_coin))` on `s
   pointwise in the other replicas' dithers.
 -/
 
-open Claims renaming Pr → prob, Ex → expect, Ex → avg
+open Claims renaming Ex → expect, Ex → avg
 
 namespace Pouw.SecurityProofs.Pool
 

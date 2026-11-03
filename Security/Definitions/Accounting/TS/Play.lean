@@ -19,8 +19,6 @@ fresh coins on `Ω`, each round one live σ (and, when sampling, the round's dra
 * `RoundGame.deficientRounds`: the rounds with a positive share along the realized coins.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

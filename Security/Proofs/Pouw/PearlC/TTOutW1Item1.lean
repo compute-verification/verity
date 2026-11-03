@@ -41,8 +41,6 @@ At the H100 (`devH100`, a 14-bit adder) the general forms apply, with the repres
 `ttOutPearlCDevW1_of_old`: the refuted form implies the narrowed one, so the narrowing only weakens the assumption.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC.TTOutW1Item1
 
 open Finset Pouw.Fp8Atom Pouw.PearlC.Assumptions

@@ -21,8 +21,6 @@ credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is 
 atomic or a reduction writes costs an `alu` lane, L2 writes are priced, and an MMA pays at least one product an output.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither

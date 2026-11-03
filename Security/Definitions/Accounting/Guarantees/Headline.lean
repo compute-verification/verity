@@ -131,8 +131,6 @@ sm_80 has no headline: FOLD-OPT is false at its ALU-pipe certificate, which does
 route on the FMA pipe.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity

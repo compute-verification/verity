@@ -6,8 +6,6 @@ import Definitions.Pouw.Guarantees.Game
 # (b) Theorem 1, (d) end to end, (d″) at the milestone
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.Proofs
 
 open Finset

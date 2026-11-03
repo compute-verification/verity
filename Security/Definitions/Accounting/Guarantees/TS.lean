@@ -35,8 +35,6 @@ Probability statements put acceptance in the event: the probability that the win
 at most `δ`.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

@@ -28,8 +28,6 @@ priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run'
 most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Properties.Accounting.JointBridge
 
 open Properties.Pouw.Period PouwCheck

@@ -48,8 +48,6 @@ call's product, one whose products each serve several rows or columns, is charge
 call's one-sided scope (charging purity at `jFrame`): K1 is not claimed there, as it isn't per unit.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Finset

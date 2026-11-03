@@ -21,7 +21,7 @@ own stage's (`Stages.skipped_of_le`, `Stages.passes_of_le`), so conditioning on 
 draw probability prices the share at `r` (`Stages.prob_comp`).
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 

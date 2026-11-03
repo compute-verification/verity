@@ -38,8 +38,6 @@ all-`true` path its fixed words are `(1 − 1/S)·N_w < N_w`, the bound `ProofsS
 restated statement bounds this cheater; it doesn't exclude it.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS.Keyed
 
 open Finset Accounting.TS Pouw.RelativeSecurity

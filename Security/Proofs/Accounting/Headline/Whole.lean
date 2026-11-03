@@ -20,8 +20,6 @@ PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game
   `δ′ ≥ 2^-41`, and the headline's last step, a bound below both branches' floors.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS.Whole
 
 open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS Pouw.RelativeSecurity

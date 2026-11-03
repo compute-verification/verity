@@ -28,13 +28,11 @@ The run's cycles are a ceiling, not honest's measured time: the witness shows th
 honest play, not where honest's own kernel reads against the bound.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS.HeadlineDcMeets
 
 open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
 
-theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
+theorem prob_none {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   have hp : p = fun _ => False := funext fun ω => propext ⟨h ω, False.elim⟩
   subst hp
   unfold prob

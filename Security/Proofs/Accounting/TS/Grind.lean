@@ -20,7 +20,7 @@ is Fubini over the private coins (`Grind.sum_exp_pi`). `TileLuck` takes both AM-
   mean of its units' `n`th powers (the power mean), each of which is `f^n` off its dead event and `e^{n·rθw}` on it.
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 

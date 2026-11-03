@@ -33,8 +33,6 @@ then carries two more events on its coins:
   (the keyed rounds' share).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity Pouw.Receipt

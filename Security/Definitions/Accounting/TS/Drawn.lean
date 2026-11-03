@@ -49,8 +49,6 @@ and the modes are the run's (a unit is paid only if the run computed it, from th
 noise).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

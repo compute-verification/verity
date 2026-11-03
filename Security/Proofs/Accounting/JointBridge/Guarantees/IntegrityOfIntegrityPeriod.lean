@@ -46,7 +46,7 @@ structure RealizesIntegrityOfIntegrityPeriod {ι : Type} {d : Device ι} {α : T
   record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
   /-- the sampled audit's own coins drive the period's game at the strategy -/
   law : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
-    ENNReal.ofReal (Claims.Pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
+    ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
   /-- the sampled audit accepts exactly when flock-verify accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted

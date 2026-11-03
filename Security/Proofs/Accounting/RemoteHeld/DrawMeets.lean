@@ -290,8 +290,8 @@ theorem toy_error (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 U
 
 theorem not_holds_acceptAll {ε : ℝ} (hε : ε < 1) {P : Coins 1 1 Unit → Prop} (hP : ∀ ω, ¬ P ω) :
     ¬ acceptAll.Holds ε P := fun h => by
-  have h1 : Claims.Pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) = 1 := Pouw.pr_eq_one fun ω => ⟨trivial, hP ω⟩
-  have h2 : Claims.Pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) ≤ ε := h
+  have h1 : Pouw.pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) = 1 := Pouw.pr_eq_one fun ω => ⟨trivial, hP ω⟩
+  have h2 : Pouw.pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) ≤ ε := h
   linarith
 
 /-- **`PooledDraw`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything has more

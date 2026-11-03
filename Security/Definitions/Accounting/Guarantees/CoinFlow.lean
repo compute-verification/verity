@@ -25,8 +25,6 @@ needs is checked for every view built from the rest of the Program. A view holdi
 determines the skipped value, as `Accounting.Guarantees.HMu` says.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.CoinFlow
 
 open Accounting.CoinFlow Accounting.HMu Pouw.RelativeSecurity

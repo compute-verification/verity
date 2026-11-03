@@ -282,7 +282,7 @@ theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0
     rw [abs_of_pos hXp, binade_nat_mul hn]
   have hmin : 1 ≤ min w 24 := le_min hw (by norm_num)
   have hdec : decide ((n : ℤ) < 0) = false := by simp
-  unfold Fp8Atom.normalize
+  unfold normalize
   simp only [hn0, ite_false, Int.natAbs_natCast, hbl, ← hm0, hdec]
   by_cases hsub : E + ((L + 1 : ℕ) : ℤ) - (w : ℤ) < -126
   · -- the subnormal branch
@@ -384,12 +384,12 @@ theorem negT_canon {T : Term} (h : HonestWords.Canon T) : HonestWords.Canon (neg
 /-- A negated sum normalizes to the negated term. -/
 theorem normalize_neg (w : ℕ) (E t : ℤ) : normalize w E (-t) = negT (normalize w E t) := by
   by_cases h : t = 0
-  · subst h; simp [Fp8Atom.normalize, negT, Term.zero]
+  · subst h; simp [normalize, negT, Term.zero]
   · have hd : decide (-t < 0) = !decide (t < 0) := by
       rcases lt_or_gt_of_ne h with h' | h'
       · simp [h', le_of_lt h']
       · simp [h', not_lt.2 h'.le]
-    unfold Fp8Atom.normalize
+    unfold normalize
     simp only [neg_eq_zero, h, ite_false, Int.natAbs_neg, hd]
     generalize fromAdder w _ = M
     unfold negT
@@ -401,13 +401,13 @@ theorem canon_normalize {w : ℕ} (hw : 1 ≤ w) (E t : ℤ) : HonestWords.Canon
   rcases le_total 0 t with ht | ht
   · obtain ⟨n, rfl⟩ := Int.eq_ofNat_of_zero_le ht
     rcases eq_or_ne n 0 with rfl | hn
-    · exact Or.inl (by simp [Fp8Atom.normalize, Term.zero])
+    · exact Or.inl (by simp [normalize, Term.zero])
     · exact (normalize_nat hw E hn).2.1
   · obtain ⟨n, hn'⟩ := Int.eq_ofNat_of_zero_le (neg_nonneg.2 ht)
     have : t = -(n : ℤ) := by omega
     rw [this, normalize_neg]
     rcases eq_or_ne n 0 with rfl | hn
-    · exact negT_canon (Or.inl (by simp [Fp8Atom.normalize, Term.zero]))
+    · exact negT_canon (Or.inl (by simp [normalize, Term.zero]))
     · exact negT_canon (normalize_nat hw E hn).2.1
 
 /-! ## The read -/
@@ -454,7 +454,7 @@ theorem readW_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) (n : ℕ) :
       else truncF (min w 24) ((n : ℚ) * 2 ^ (E - w + 1)) := by
   unfold readW
   rcases eq_or_ne n 0 with rfl | hn
-  · have h0 : normalize w E ((0 : ℕ) : ℤ) = Term.zero := by simp [Fp8Atom.normalize]
+  · have h0 : normalize w E ((0 : ℕ) : ℤ) = Term.zero := by simp [normalize]
     rw [h0, wordVal_ovfV (Or.inl rfl)]
     simp [Term.zero, Term.value, truncF]
   obtain ⟨hneg, hc, hv, hhi, hlo⟩ := normalize_nat hw E hn

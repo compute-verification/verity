@@ -18,8 +18,6 @@ is `1` at `e = 0`), above it by concavity of `y ↦ y^{64/e}` (the alive term's 
 `θ = 1/(4·max(64·r, n))`, with `r·θ = 1/(4·max(64, n/r))`.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Pouw.RelativeSecurity

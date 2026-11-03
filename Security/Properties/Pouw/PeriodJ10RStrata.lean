@@ -65,8 +65,6 @@ The proof is `Proofs.Pouw.PeriodJ10RStrata`'s: at each stratum, what `Proofs.Pou
 `TileServiceSound`, carried to the period's coins by `pathsAt`, then the union bound.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Properties.Pouw.PeriodJ10RStrata
 
 open Properties.Pouw.PeriodJ10R

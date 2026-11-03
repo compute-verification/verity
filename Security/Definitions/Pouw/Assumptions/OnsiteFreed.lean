@@ -20,8 +20,6 @@ P1, P2) and the period's dual price:
 on a model that charges those reductions.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither

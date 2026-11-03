@@ -346,7 +346,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
       (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u) δ
       (fun x w i => hCR x w i k) (hLaw k) (fun _ h => h) (fun x w i => hδ x w i k) hδ0
   have hUnwritten : ∀ k (w : Fin S) (i : Fin nπ),
-      Claims.Pr (fun x => ¬ (sess x w i k).Written (out x w i k)) ≤ 0 := fun k w i =>
+      Pouw.RelativeSecurity.prob (fun x => ¬ (sess x w i k).Written (out x w i k)) ≤ 0 := fun k w i =>
     (hLaw k w i fun s o => ¬ s.Written o).trans (avg_le _ le_rfl fun x => le_of_eq
       ((congrArg ENNReal.toReal (RowsSession.prob_unwritten (sess x w i k))).trans ENNReal.toReal_zero))
   intro w i
@@ -389,13 +389,13 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
       exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hSr k) (hacc k).2.2.1 vals),
         fun u => he u (by rw [(hfull k).1]; exact Finset.mem_univ u)⟩
     · exact Or.inr (Or.inl hc)
-  calc Claims.Pr (fun x => (leafLayer sess out known full want dq part pub receipt leaf right).Unsound x w i)
-      ≤ Claims.Pr (fun x => ∃ k ∈ (Finset.univ : Finset (Option (Fin 32))),
+  calc Pouw.RelativeSecurity.prob (fun x => (leafLayer sess out known full want dq part pub receipt leaf right).Unsound x w i)
+      ≤ Pouw.RelativeSecurity.prob (fun x => ∃ k ∈ (Finset.univ : Finset (Option (Fin 32))),
           (checkedOnLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
             (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).Unsound x w i ∨
             ¬ (sess x w i k).Written (out x w i k)) :=
         Pouw.RelativeSecurity.prob_mono hIn
-    _ ≤ ∑ k ∈ (Finset.univ : Finset (Option (Fin 32))), Claims.Pr (fun x =>
+    _ ≤ ∑ k ∈ (Finset.univ : Finset (Option (Fin 32))), Pouw.RelativeSecurity.prob (fun x =>
           (checkedOnLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
             (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).Unsound x w i ∨
             ¬ (sess x w i k).Written (out x w i k)) :=

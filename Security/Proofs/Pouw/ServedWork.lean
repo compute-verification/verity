@@ -15,8 +15,6 @@ import Proofs.Pouw.PeriodJ10R
   degenerate salts: `δ_s + n·(δ_bind + δ_ks)` plus `n·κ_deg(B)`.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Properties.Pouw.Served.SecurityProofs
 
 open Properties.Pouw.Served Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
@@ -24,11 +22,11 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-! ## A window's salt is uniform given what is fixed before it -/
 
-theorem prob_of_isEmpty {Ω : Type} [Fintype Ω] [IsEmpty Ω] (p : Ω → Prop) : prob p = 0 := by
+theorem prob_of_isEmpty {Ω : Type*} [Fintype Ω] [IsEmpty Ω] (p : Ω → Prop) : prob p = 0 := by
   unfold prob
   simp
 
-theorem prob_false_eq {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
+theorem prob_false_eq {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
   unfold prob
   simp
 

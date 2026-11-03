@@ -21,8 +21,6 @@ at the same numbers, and its accepted prefix depends on the coins: `0` windows w
 the second is, and all `n + 1` when none is, with `n` credited live words then, the dead window's counting none.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.ComposePeriod.Honest
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

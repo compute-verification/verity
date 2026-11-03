@@ -47,8 +47,6 @@ a model where a register word that an atomic or a reduction writes costs an `alu
 The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Properties.Pouw.Served
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

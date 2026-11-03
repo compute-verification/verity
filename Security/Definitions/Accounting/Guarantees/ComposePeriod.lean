@@ -46,8 +46,6 @@ at it (`PeriodTailMax`).
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.ComposePeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

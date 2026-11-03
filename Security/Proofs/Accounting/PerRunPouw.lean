@@ -14,8 +14,6 @@ wherever `A` costs at most `b` (`Accounting.Adversary.abort`). Truncation (`Acco
 per-run guarantee, because the compute account's work covers the adversary's cost at every coin.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Accounting
 
 open Pouw

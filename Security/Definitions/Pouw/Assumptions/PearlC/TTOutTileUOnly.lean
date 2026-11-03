@@ -11,8 +11,6 @@ It asserts **more** than the (C̃, U) tile row: every tile good under both bindi
 (`TileUOnlyGamma.ttOutTilePearlCDevRev1_of_uOnly`). It is a new conjecture, not a weakening.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}

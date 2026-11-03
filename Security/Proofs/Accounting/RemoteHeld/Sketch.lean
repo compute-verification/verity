@@ -358,11 +358,11 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_mono)
 
-/-- `Claims.Pr` is monotone (`Accounting.PouwWork.pr_mono`, restated to keep this file's imports). -/
+/-- `Pouw.pr` is monotone (`Accounting.PouwWork.pr_mono`, restated to keep this file's imports). -/
 private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) :
-    Claims.Pr E ≤ Claims.Pr F := by
+    Pouw.pr E ≤ Pouw.pr F := by
   classical
-  unfold Claims.Pr
+  unfold Pouw.pr
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (Finset.univ.filter E) ⊆ Finset.univ.filter F := fun x hx => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
@@ -411,16 +411,16 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
   have hδ' : (δ + ENNReal.ofReal εro).toReal =
       ((∑ j, G j : ℕ) : ℝ) * (ε + N / 2 ^ h) + ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ (8 * r) + εro := by
     rw [ENNReal.toReal_add hfin ENNReal.ofReal_ne_top, hδ, ENNReal.toReal_ofReal hεro]
-  have hmono : Claims.Pr (fun ω => T.accepts ω ∧ ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
+  have hmono : Pouw.pr (fun ω => T.accepts ω ∧ ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
       ∃ τ, T.tick ω p ≤ τ ∧ τ < T.tick ω (p + 1) ∧ b ∈ T.present ω τ) ≤
-      Claims.Pr (fun ω : Outcome β Hs N m =>
+      Pouw.pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) :=
     pouw_pr_mono fun ω hω => miss_of_fails A T hP hrec hpres ω hω.1 hω.2
-  have hpr : Claims.Pr (fun ω : Outcome β Hs N m =>
+  have hpr : Pouw.pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
       (pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
-    unfold Claims.Pr Pous.pr
+    unfold Pouw.pr Pous.pr
     rw [ENNReal.toReal_div]
     simp
   unfold SketchBound Trace.Holds

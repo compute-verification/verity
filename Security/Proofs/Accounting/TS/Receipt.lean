@@ -25,7 +25,7 @@ The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned o
 round's error is a nonzero degree-2 function, which vanishes at uniform bits with probability at most ¾ (`luck_quad`).
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 

@@ -1,4 +1,4 @@
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 import Definitions.Accounting.Assumptions.RemoteHeld
 import Definitions.Accounting.Assumptions.RemoteOutside
 import Definitions.Accounting.Assumptions.RemoteDraw
@@ -170,7 +170,7 @@ def LineHeld : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Claims.Pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
+    Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
@@ -192,7 +192,7 @@ def LineHeldIdentity : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Claims.Pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 0) ≤
+    Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 0) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +

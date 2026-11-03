@@ -20,13 +20,13 @@ variable {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Ver
 accepts with fewer than `Nmin` blocks right at the coin with probability at most `δ`. For one exact live-coin opening it
 is a theorem in the converged model (`detection_exact`, at `δ = (Nmin − 1)/N`), not yet ported. -/
 def PouwDetection (Nmin : ℕ) (δ : ℝ) : Prop :=
-  Claims.Pr (fun r => Accepts S P r ∧ good S P r < Nmin) ≤ δ
+  Pouw.pr (fun r => Accepts S P r ∧ good S P r < Nmin) ≤ δ
 
 /-- **A2b Luck** (the targets' unpredictability): the verifier accepts with `Nmin` blocks right at the coin but fewer
 than `Nmin` right at every coin with probability at most `δ`. A computation right only at some coins is right there by
 luck. -/
 def PouwLuck (Nmin : ℕ) (δ : ℝ) : Prop :=
-  Claims.Pr (fun r => Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin) ≤ δ
+  Pouw.pr (fun r => Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin) ≤ δ
 
 /-- **A5 HelpBound** (the network certifiers' signed ingress for the window, under `trusted-host`): at every coin
 the verifier accepts, the node took in at most `H` bits of help in `[ts, td)` (`help`). At `H = 0` the node is isolated:

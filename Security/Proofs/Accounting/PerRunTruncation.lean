@@ -10,8 +10,6 @@ cost below `c` with probability at most `ε`: the coins are finite, so the costs
 the adversary truncated at `b` is accepted on every such run.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Accounting
 
 open Pouw

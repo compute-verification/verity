@@ -20,8 +20,6 @@ The NCP instance of the word model (`Pouw.NCP.Word`): `N` units of `m` rows shar
 block-major order. The inputs `A u`, `B u` are arbitrary.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.NCP.Relation
 
 open Finset

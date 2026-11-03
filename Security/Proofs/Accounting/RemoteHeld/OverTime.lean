@@ -312,8 +312,8 @@ theorem heldOverLinks_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β 
       simp [and_comm]
     rw [Trace.entered, this, card_filter]
   have hin : ∑ τ ∈ Ico (rel 0) (rel C + L), T.entered ω τ ≤
-      «over» T.rebuilt ω (rel 0) (rel C + L) + «over» T.disk ω (rel 0) (rel C + L) +
-        «over» T.link ω (rel 0) (rel C + L) := by
+      over T.rebuilt ω (rel 0) (rel C + L) + over T.disk ω (rel 0) (rel C + L) +
+        over T.link ω (rel 0) (rel C + L) := by
     have h := sum_le_sum fun τ (_ : τ ∈ Ico (rel 0) (rel C + L)) => hr ω τ
     simp only [sum_add_distrib] at h
     exact h
@@ -416,14 +416,14 @@ theorem heldOverLinks_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β 
     exact_mod_cast hheld
   have hA : ((∑ t ∈ Ico (en 0) (rel C), (univ \ T.present ω t).card : ℕ) : ℝ) ≤
       ((∑ g ∈ range C, nw g * (rel (g + 1) - rel g) + nw C * L : ℕ) : ℝ) +
-        2 * L * ((«over» T.rebuilt ω (rel 0) (rel C + L) : ℝ) + «over» T.disk ω (rel 0) (rel C + L) +
-          «over» T.link ω (rel 0) (rel C + L)) := by
+        2 * L * ((over T.rebuilt ω (rel 0) (rel C + L) : ℝ) + over T.disk ω (rel 0) (rel C + L) +
+          over T.link ω (rel 0) (rel C + L)) := by
     have h := habs.trans (hsum.trans (Nat.add_le_add_left (Nat.mul_le_mul_left _ hin) _))
     exact_mod_cast h
   have hX : 0 ≤ s / E + β + βl := add_nonneg (add_nonneg (div_nonneg hs hE.le) hβ) hβl
   have hL0 : (0 : ℝ) ≤ 2 * L := by positivity
-  have hO : («over» T.rebuilt ω (rel 0) (rel C + L) : ℝ) + «over» T.disk ω (rel 0) (rel C + L) +
-      «over» T.link ω (rel 0) (rel C + L) ≤
+  have hO : (over T.rebuilt ω (rel 0) (rel C + L) : ℝ) + over T.disk ω (rel 0) (rel C + L) +
+      over T.link ω (rel 0) (rel C + L) ≤
       (s / E + β + βl) * (((rel C - en 0 : ℕ) : ℝ) + 2 * L) + (Br + Bd + Bl) := by
     have := mul_le_mul_of_nonneg_left hlen hX
     nlinarith

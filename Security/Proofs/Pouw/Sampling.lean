@@ -11,8 +11,6 @@ import Definitions.Pouw.Guarantees.Game
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.Proofs
 
 open Finset

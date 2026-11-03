@@ -41,7 +41,7 @@ window contains every round boundary, so `S` is then about `S₀/T` bits on aver
 def CapacityOfStateBound : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype ι] [Fintype α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
     (r : Run d α ΩW ΩQ ΩS) (G : StateGame ΩS) (round S₀ : ℕ) (S ε : ℝ),
-    0 ≤ ε → (∀ n ≤ S₀, ∀ A : G.Server n, Claims.Pr (G.Passes A) ≤ ε) → RealizesState G r round →
+    0 ≤ ε → (∀ n ≤ S₀, ∀ A : G.Server n, Pouw.pr (G.Passes A) ≤ ε) → RealizesState G r round →
     S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ S₀ →
       r.CapacitySound S ε
 
@@ -57,6 +57,6 @@ def DerivedStateResidual : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
     [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (w : α) (S εS : ℝ),
     w ≠ r.acct .capacity → r.CapacitySound S εS →
-      Claims.Pr (fun ω => r.accepts .capacity ω ∧ r.CapacityCovertBut w S ω) ≤ εS
+      Pouw.pr (fun ω => r.accepts .capacity ω ∧ r.CapacityCovertBut w S ω) ≤ εS
 
 end Accounting.Guarantees

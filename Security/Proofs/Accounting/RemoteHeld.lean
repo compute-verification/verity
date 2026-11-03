@@ -106,13 +106,13 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (
       sum_passes _ _ hm] at this
     exact this
   have hin : ∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ ≤
-      «over» T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + «over» T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
+      over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + over T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
     have h := sum_le_sum fun τ (_ : τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes)) => hr ω τ
     simp only [sum_add_distrib, hI ω, sum_const_zero, add_zero] at h
     exact h
-  have hreb : («over» T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
+  have hreb : (over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
       s / E * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) + Br := hsq ω _ _ huv
-  have hdisk : («over» T.disk ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
+  have hdisk : (over T.disk ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
       β * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) + Bd := hd ω _ _ huv
   have hspan : ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) ≤ (e : ℝ) - s₀ := by
     have h0' : (s₀ : ℝ) ≤ T.tick ω 0 := by exact_mod_cast h0
@@ -129,7 +129,7 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (
       ((∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ : ℕ) : ℝ) := by
     exact_mod_cast hsum
   have hinR : ((∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ : ℕ) : ℝ) ≤
-      «over» T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + «over» T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
+      over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + over T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
     exact_mod_cast hin
   linarith
 
@@ -142,7 +142,7 @@ theorem Held : Accounting.Guarantees.Remote.Held := by
 
 /-- Identity is the links' ceiling at rate 0 and burst 0. -/
 theorem links_of_identity (hI : Identity T) : Links T 0 0 := fun ω u v _ => by
-  have h0 : «over» T.link ω u v = 0 := Finset.sum_eq_zero fun t _ => hI ω t
+  have h0 : over T.link ω u v = 0 := Finset.sum_eq_zero fun t _ => hI ω t
   rw [h0, Nat.cast_zero, zero_mul, add_zero]
 
 /-- **The time-held line under Identity is the link-charged one at links of rate 0 and burst 0**: `HeldOverTime`

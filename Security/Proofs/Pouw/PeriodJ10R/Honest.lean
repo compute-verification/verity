@@ -35,8 +35,6 @@ The conclusion then speaks of the whole period: its accepted prefix is all `n` w
 words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound at `N·n` live words, not at none.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs

@@ -14,8 +14,6 @@ of them, because each account's charge and every other account's are, together, 
 (`Run.computeShort_of_covert` and the two beside it), so the residual follows from the joint guarantee.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Accounting
 
 open Pouw

@@ -1,11 +1,11 @@
 import Definitions.Accounting.Remote.Node
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 
 /-!
 # A remote audit's run, and the routes its guarantees compose (trusted)
 
 A run of the remote audit on node `N` with parameters `a`, over the audit's coins `Ω` (the verifier's seeds σ_t, its
-samples and the oracle), uniform (`Claims.Pr`). Each field is a quantity of the actual-circuit model at each outcome, over
+samples and the oracle), uniform (`Pouw.pr`). Each field is a quantity of the actual-circuit model at each outcome, over
 the audited interval `I = [t_0, t_P)`, where `t_j` is the tick of pass `j`'s oracle query `H(σ_t, root_{j−1})`, so that
 by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, t_{j+1})`:
 
@@ -105,7 +105,7 @@ noncomputable def paidNode (ω : Ω) : ℝ :=
 variable [Fintype Ω]
 
 /-- The run meets `P` except with probability at most `δ` over the coins on which the audit accepts. -/
-def Holds (δ : ℝ) (P : Ω → Prop) : Prop := Claims.Pr (fun ω => r.accepts ω ∧ ¬ P ω) ≤ δ
+def Holds (δ : ℝ) (P : Ω → Prop) : Prop := Pouw.pr (fun ω => r.accepts ω ∧ ¬ P ω) ≤ δ
 
 /-- **Sampled** (μ_sample): the correct receipts cover `(1 − ε) · C`. -/
 def Sampled (ε δ : ℝ) : Prop := r.Holds δ fun ω => (1 - ε) * N.declared a.T ≤ (r.correct ω * a.b : ℝ)

@@ -12,8 +12,6 @@ import Proofs.Accounting.HMu.Luck
   a unit needs a fibre bound at the start state, which injectivity alone doesn't give.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.HMuProofs
 
 open Accounting.HMu Pouw.RelativeSecurity Finset

@@ -45,8 +45,6 @@ Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guara
 `Proofs.Accounting.PerRunStop`).
 -/
 
-open Claims renaming Pr → pr
-
 namespace Accounting.Guarantees
 
 open Accounting Pouw

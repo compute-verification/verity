@@ -28,8 +28,6 @@ J10's guarantees: H1 + fx1's noise derived from one seed a call (`Definitions.Ac
   every number of row blocks: banded, one seed a call costs the seeded premium nothing.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Pouw.RelativeSecurity

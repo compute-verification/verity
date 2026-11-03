@@ -14,8 +14,6 @@ every activation input. `CompleteSampled` therefore names its population `Served
 and bounds the audit's rejection by `t·ε` over `t` draws: `ε` per draw, by the union bound.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC
 
 variable {Q R S : Type}

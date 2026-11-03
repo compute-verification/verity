@@ -1,5 +1,5 @@
 import Definitions.Pouw.Assumptions.Pinned
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.Assumptions.Game
@@ -12,8 +12,6 @@ hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.G
 of `Pouw.Assumptions.Pinned`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
 text, the docstring and the `open`s of the statement it was in its source module.
 -/
-
-open Claims renaming Pr → pr
 
 namespace Pouw.Guarantees
 

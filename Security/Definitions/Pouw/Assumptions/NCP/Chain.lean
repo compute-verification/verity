@@ -17,8 +17,6 @@ running sum is at most `3k·64²`) and for int7 inputs for `k ≤ 2^16` (`Int7In
 `LeadIndWitness` is `LeadWitness` with `IsLeadInd` in place of `IsLead`.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.NCP.Chain
 
 open Finset Pouw.NCP.Relation

@@ -16,7 +16,7 @@ import Proofs.Core.Game.Prob
   instance lands.
 -/
 
-open Claims renaming Pr → pr, Ex → ex
+open Claims renaming Ex → ex
 
 namespace Pouw.PearlC
 

@@ -83,7 +83,7 @@ def PeriodHeldDeployed : Prop :=
         DeviceModel r P τ RING_D RING_Q RING_L round → Instantiates P τ →
           S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
             ∀ o : ΩW × ΩQ,
-              Claims.Pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+              Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
                   P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
                     (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
                 (Params.δ : ℝ) + Params.εMax.toReal
@@ -156,7 +156,7 @@ break needs SHA-512 on each of the table's `2^20` strings, so the first conjunct
 def PeriodHeldNontrivial : Prop :=
   (∀ (P : Audits Unit Unit) (o : Unit × Unit),
       (∀ x, ¬ P.Break (o.1, o.2, x)) →
-        ¬ Claims.Pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+        ¬ Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
             True ∧ ¬ P.Break (o.1, o.2, x) ∧
               (emptyRun.held (o.1, o.2, x) : ℝ) < HONEST_S * (emptyRun.win .capacity).len) ≤
           (Params.δ : ℝ) + Params.εMax.toReal) ∧

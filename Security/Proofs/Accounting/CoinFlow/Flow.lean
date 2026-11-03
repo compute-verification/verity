@@ -13,8 +13,6 @@ keeps the uniform measure (`prob_comp_equiv`). The view is then a function of `Î
 `Accounting.HMuProofs.coinPointMass` applies.
 -/
 
-open Claims renaming Pr â†’ prob
-
 namespace Accounting.CoinFlowProofs
 
 open Accounting.CoinFlow Accounting.HMu Pouw.RelativeSecurity Finset

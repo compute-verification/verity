@@ -26,8 +26,6 @@ draw law with rational weights, and the round passes when every drawn unit's pro
   closure fails every steered unit drawn (`hit`: the drawn unit saves work, skipped or steered).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

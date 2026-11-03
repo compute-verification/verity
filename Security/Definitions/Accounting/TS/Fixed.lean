@@ -37,8 +37,6 @@ unit's words are fixed only when every unit steering it was computed too. `Drawn
 late cone, so a good unit that is `Fixed` has fixed words.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

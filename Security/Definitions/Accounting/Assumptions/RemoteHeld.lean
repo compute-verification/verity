@@ -55,17 +55,17 @@ def Identity (T : Trace Ω) : Prop := ∀ ω t, T.link ω t = 0
 
 /-- **The links' ceiling**: on every outcome, over every interval `[u, v)`, the node's boundary links bring in at most
 `β · (v − u) + B` blocks: `β` a tick and a burst of `B`, one link window. -/
-def Links (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → («over» T.link ω u v : ℝ) ≤ β * (v - u : ℕ) + B
+def Links (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.link ω u v : ℝ) ≤ β * (v - u : ℕ) + B
 
 /-- **The squaring ceiling**: on every outcome, over every interval `[u, v)`, the node's compute re-encodes at most
 `s / E · (v − u) + B` blocks: at most `s` squarings a tick at the codec's width, at least `E` a block, and a burst of
 `B`, one maximal rebuild batch. -/
 def SquaringCeiling (T : Trace Ω) (s E B : ℝ) : Prop :=
-  ∀ ω u v, u ≤ v → («over» T.rebuilt ω u v : ℝ) ≤ s / E * (v - u : ℕ) + B
+  ∀ ω u v, u ≤ v → (over T.rebuilt ω u v : ℝ) ≤ s / E * (v - u : ℕ) + B
 
 /-- **The disks' ceiling**: on every outcome, over every interval `[u, v)`, the node's disks bring back at most
 `β · (v − u) + B` blocks: `β` a tick and a burst of `B`, one maximal disk read. -/
-def Disks (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → («over» T.disk ω u v : ℝ) ≤ β * (v - u : ℕ) + B
+def Disks (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.disk ω u v : ℝ) ≤ β * (v - u : ℕ) + B
 
 /-- **The chips' ceiling** (the Memory row): on every outcome, at most `S` registered blocks are on the node's chips at
 any tick. -/

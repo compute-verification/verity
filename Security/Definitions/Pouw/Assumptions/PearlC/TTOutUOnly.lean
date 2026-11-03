@@ -17,8 +17,6 @@ At W1 (`TTOutUW1`, `TTOutPearlCDevUOnlyW1`) the cost model is the term `W1.w1Pri
 device forms; they are stated here, not in `Definitions`, because `correctSetU` is.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom

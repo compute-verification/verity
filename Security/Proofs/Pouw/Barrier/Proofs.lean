@@ -11,8 +11,6 @@ import Definitions.Pouw.Guarantees.Barrier
   `H_ref` plans for class (a) at `2·W_mm` and `3·W_mm` and for class (b) at `t·W_mm`.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.Barrier.Proofs
 
 open Finset Pouw.Proofs

@@ -31,8 +31,6 @@ At no windows its device runs nothing, so a work certificate `W = 1` fails on ev
 there at any error below one (`WorkOfH1CheckedCreditPeriodH200_nontrivial`).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
@@ -343,7 +341,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_nontrivial :
     show ¬ (1 : ℝ) ≤ ((acceptAll 0).work _ _ : ℝ)
     rw [work_acceptAll]
     norm_num
-  have hpr : Claims.Pr (fun x : Paths HonestH1.Ω1 0 =>
+  have hpr : Pouw.pr (fun x : Paths HonestH1.Ω1 0 =>
       (acceptAll 0).accepts .pouw (Function.update (fun _ => ()) ((acceptAll 0).own .pouw) x) ∧
         ¬ (acceptAll 0).Holds ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .pouw
           (Function.update (fun _ => ()) ((acceptAll 0).own .pouw) x)) = 1 :=

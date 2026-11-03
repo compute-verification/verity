@@ -1,4 +1,4 @@
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 import Mathlib.Algebra.Order.Field.Basic
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Logic.Equiv.Prod
@@ -9,10 +9,8 @@ import Mathlib.Tactic.Ring
 import Mathlib.Data.Fintype.BigOperators
 
 /-!
-# Lemmas about `pr`, core's uniform probability `Claims.Pr`
+# Lemmas about `pr`
 -/
-
-open Claims renaming Pr → pr
 
 namespace Pouw
 

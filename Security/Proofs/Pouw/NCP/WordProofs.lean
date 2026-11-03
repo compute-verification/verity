@@ -5,8 +5,6 @@ import Proofs.Pouw.Copy
 # R_word-NCP: the bound under NzNCP, the floor, and the witnesses
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.NCP.WordProofs
 
 open Finset Pouw.NCP.Word Pouw.Proofs

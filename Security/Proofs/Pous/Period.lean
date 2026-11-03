@@ -156,7 +156,7 @@ theorem periodHeld : PeriodHeld := by
       exact Nat.le_sub_one_of_lt (Nat.lt_ceil.2 ((Nat.cast_le.2 (r.mem_le_held ht)).trans_lt hh))
     · have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
         ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
-      calc Claims.Pr (Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L))
+      calc Pouw.pr (Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L))
           = (Pous.pr (Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L))).toReal := Accounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
           ENNReal.toReal_mono hfin

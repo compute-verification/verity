@@ -22,8 +22,6 @@ and namespace and comes just before them, as in its source: `GammaFromTTNCP_U_C2
 for its `3 : ℝ` (`Pouw.NCP.RouteU.GammaFromTTNCP_U._proof_1`), and the audit reads that proof by name.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.Guarantees.NCP
 
 /-! ## The lead's algebra (`Definitions.Pouw.NCP.Pinned`) -/

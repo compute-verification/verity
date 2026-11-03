@@ -28,7 +28,7 @@ and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2
   (`n = 1`), closed at that one instance.
 -/
 
-open Claims renaming Pr → prob, Ex → avg
+open Claims renaming Ex → avg
 
 namespace Pouw.SecurityProofs.DitherWitness
 

@@ -103,8 +103,6 @@ one, `Proofs.Pouw.PeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fai
 window, against the prover that fixes no word).
 -/
 
-open Claims renaming Pr → prob
-
 namespace Properties.Pouw.PeriodJ10R
 
 open Lean (Json)

@@ -33,7 +33,7 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * the error (`epsWorkSound`, `ε_skip`).
 -/
 
-open Claims renaming Pr → prob, Ex → avg
+open Claims renaming Ex → avg
 
 namespace Pouw.Dither
 

@@ -3,7 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # (H-μ⁺): the receipt-luck premise, and the rounds whose coins give it (trusted)
 
-The vocabulary of `Definitions.Accounting.Guarantees.HMu`, over core's uniform probability (`Claims.Pr`).
+The vocabulary of `Definitions.Accounting.Guarantees.HMu`, over PoUW's uniform probability (`Pouw.RelativeSecurity.prob`).
 (H-μ⁺): each skipped value's point mass is at most `μ` given the cheater's view, with Lemma B′ for correlated skips and
 persistent patterns. This is that premise in the form Lemma B consumes it, and the rounds on which the noise's coins
 give it.
@@ -33,8 +33,6 @@ give it.
   `w` with the skipped value `X` added at every position of `P`, as one skipped product shifts every later prefix word
   of its entry (Lemma B′'s persistent pattern).
 -/
-
-open Claims renaming Pr → prob
 
 namespace Accounting.HMu
 

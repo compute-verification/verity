@@ -15,8 +15,6 @@ hypotheses are at least as strong as `Joint`'s, and an ideal audit has its per-r
 (`Run.computeSoundPerRun_ideal` and the two beside it): the hypotheses hold together on any run.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Accounting
 
 open Pouw

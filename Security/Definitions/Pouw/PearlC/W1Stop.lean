@@ -16,8 +16,6 @@ cost is at most `T`, and wins there. The γ-gap property over `CM.withStop` is e
 (`Proofs.Pouw.PearlC.W1Stop.gγ_withStop_iff`).
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC
 
 variable {Q R S : Type}

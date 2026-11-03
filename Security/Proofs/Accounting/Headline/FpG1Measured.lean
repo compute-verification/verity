@@ -34,8 +34,6 @@ The witness isn't a served window, for `FpG1`'s reasons: its relation checks H1'
 honest one, and its time is exactly the credit, so it shows only that every premise can hold at once.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.FpG1
 
 open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1

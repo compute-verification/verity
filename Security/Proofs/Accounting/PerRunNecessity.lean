@@ -12,8 +12,6 @@ on every coin, so the probability of acceptance with realized cost below `(1 −
 cannot branch on, so the class has no aborted program and `BudgetAbort` fails (`not_budgetAbort`).
 -/
 
-open Claims renaming Pr → pr
-
 namespace Accounting.PerRunNecessity
 
 open Pouw Finset

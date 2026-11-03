@@ -29,7 +29,7 @@ headline's slack, and the rate condition is a theorem about the check. Nothing h
 `SAKResidual` is a proof-only definition, a hypothesis of these lemmas.
 -/
 
-open Claims renaming Pr → prob, Ex → avg
+open Claims renaming Ex → avg
 
 namespace Pouw.SakLb
 
@@ -37,17 +37,17 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
 
 section Averaging
 
-theorem prob_eq_card_subtype {Ω : Type} [Fintype Ω] (p : Ω → Prop) [Fintype {x // p x}] :
+theorem prob_eq_card_subtype {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [Fintype {x // p x}] :
     prob p = (Fintype.card {x // p x} : ℝ) / Fintype.card Ω := by
   classical
   unfold prob
   congr 2
   rw [Fintype.card_subtype]
 
-theorem prob_nonneg {Ω : Type} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
+theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
   unfold prob; positivity
 
-theorem prob_le_one {Ω : Type} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
+theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
   classical
   unfold prob
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h | h

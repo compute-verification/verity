@@ -35,8 +35,6 @@ What the coins can't give, and so what stays a premise:
   none, and an all-state no-kernel statement isn't one.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.HMu
 
 open Accounting.HMu Pouw.RelativeSecurity

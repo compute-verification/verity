@@ -87,8 +87,6 @@ selected answers run within it (`AnswersFit`, from `Assumptions.AnswerAfterWork`
 the budget logs them in the last segment.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.MerkleExtract

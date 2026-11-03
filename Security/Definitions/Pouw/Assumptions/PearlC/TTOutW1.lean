@@ -53,8 +53,6 @@ fails at decode. No reader of these assumptions takes `AdmitsRef`: it is complet
 The rest (the credit, debit and cap, the second hole carried, the falsifiers) is `TTOut`'s and `TTOutPearlCDevRev1`'s.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC.Assumptions
 
 open Finset

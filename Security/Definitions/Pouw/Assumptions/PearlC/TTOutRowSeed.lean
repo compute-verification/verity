@@ -45,8 +45,6 @@ Three additions, also definitions only:
   its tile twin) alone, with no named assumption; the corollary is a supporting line, and it takes no TT_OUT.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom

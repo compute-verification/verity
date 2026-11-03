@@ -8,8 +8,6 @@ import Definitions.Pouw.PearlC.Device
 `Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC.Assumptions
 
 open Finset

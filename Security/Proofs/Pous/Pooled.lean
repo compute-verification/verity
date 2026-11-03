@@ -33,8 +33,8 @@ open scoped ENNReal
 
 set_option exponentiation.threshold 20000
 
-/-- A per-window bound in `ℝ` (`Claims.Pr`) is one on `prCoin`. -/
-theorem prCoin_le_ofReal {X : Type} [Fintype X] [Nonempty X] (E : X → Prop) {b : ℝ} (h : Claims.Pr E ≤ b) :
+/-- A per-window bound in `ℝ` (`Pouw.pr`) is one on `prCoin`. -/
+theorem prCoin_le_ofReal {X : Type} [Fintype X] [Nonempty X] (E : X → Prop) {b : ℝ} (h : Pouw.pr E ≤ b) :
     prCoin E ≤ ENNReal.ofReal b := by
   have hE : prCoin E ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top
     ((prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans_eq (by simp [prCoin, avg_const]))

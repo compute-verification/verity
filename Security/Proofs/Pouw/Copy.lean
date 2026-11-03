@@ -5,8 +5,6 @@ import Proofs.Pouw.Prob
 # R_copy (tt-attacks §6): the bound under Nz, and Nz for independent uniform bits
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.Proofs
 
 open Finset

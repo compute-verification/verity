@@ -12,8 +12,6 @@ proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS`:
   floor.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

@@ -49,7 +49,7 @@ theorem periodHeldAt : PeriodHeldAt := by
         (certified_ofAt P pt ha hb)
     · have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
         ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
-      calc Claims.Pr (PassesAt N P.sid (P.pub o).root (P.W o) A)
+      calc Pouw.pr (PassesAt N P.sid (P.pub o).root (P.W o) A)
           = (Pous.pr (PassesAt N P.sid (P.pub o).root (P.W o) A)).toReal := Accounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
           ENNReal.toReal_mono hfin (Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide p ε₀ D Q L hnum hW N

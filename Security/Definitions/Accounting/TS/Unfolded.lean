@@ -14,8 +14,6 @@ that no word of the unit determines, so the round's check passes only if it gues
   B′ at a unit whose fold the run skips.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

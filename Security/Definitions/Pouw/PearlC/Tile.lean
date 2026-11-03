@@ -32,8 +32,6 @@ file states both; `TileGamma` proves γ from them.
   so its source must be fixed only after the transcript's commitment.
 -/
 
-open Claims renaming Pr → pr
-
 namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom

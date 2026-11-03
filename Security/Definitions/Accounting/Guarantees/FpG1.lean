@@ -50,8 +50,6 @@ The statements:
 * `Sm120FpG1MeasuredHeadline`, `Sm120W4a8G1MeasuredHeadline`: the same two on the measured vector, at `1 − 0.591%`.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.Guarantees.FpG1
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1

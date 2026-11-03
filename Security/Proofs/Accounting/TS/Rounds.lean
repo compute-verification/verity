@@ -10,7 +10,7 @@ The plays' tail bounds: one bet a round under (L), the deficiency against the de
 `expect_weight_le` does, and `budget_tail` is `prob_accepts_le` at `c = 1/Λ`.
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 
@@ -25,7 +25,7 @@ theorem expect_add {Ω : Type} [Fintype Ω] (f g : Ω → ℝ) :
   unfold expect
   rw [Finset.sum_add_distrib, add_div]
 
-theorem prob_false {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
+theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
   unfold prob
   simp
 

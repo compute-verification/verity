@@ -13,7 +13,7 @@ A pinned receipt's draw passes with probability at most one less its wrong share
 (`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.FillerLuck
 

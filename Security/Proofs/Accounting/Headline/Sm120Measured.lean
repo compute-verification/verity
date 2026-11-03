@@ -26,8 +26,6 @@ The argument is `sm120MeasuredHeadline_bind`, with binding at `δ_bind` (`ProofL
 `sm120SheetHeadline_bind`.
 -/
 
-open Claims renaming Pr → prob
-
 namespace Accounting.SecurityProofs.TS.Headline
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS

@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Audit.StratifiedProj
   `s_T`'s exact risk (`Law.stratified_proj_escape_eq_exp`).
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 

@@ -155,7 +155,7 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   `certifiedFraction120θ_reEncodedExact_40`).
 -/
 
-open Claims renaming Pr → prob, Ex → expect
+open Claims renaming Ex → expect
 
 namespace Pouw.RelativeSecurity
 
@@ -163,11 +163,11 @@ open Finset hiding expect
 
 section Probability
 
-theorem prob_nonneg {Ω : Type} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
+theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
   unfold prob
   positivity
 
-theorem prob_le_one {Ω : Type} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
+theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
   classical
   unfold prob
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h | h
@@ -175,7 +175,7 @@ theorem prob_le_one {Ω : Type} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 :=
   · rw [div_le_one (by exact_mod_cast h)]
     exact_mod_cast card_filter_le _ _
 
-theorem prob_mono {Ω : Type} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω → q ω) : prob p ≤ prob q := by
+theorem prob_mono {Ω : Type*} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω → q ω) : prob p ≤ prob q := by
   classical
   unfold prob
   apply div_le_div_of_nonneg_right _ (by positivity)
@@ -186,7 +186,7 @@ theorem prob_mono {Ω : Type} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω
 theorem mem_filter_univ_iff {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (inst : DecidablePred p) (ω : Ω) :
     ω ∈ @Finset.filter _ p inst univ ↔ p ω := by simp
 
-theorem prob_or_le {Ω : Type} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω => p ω ∨ q ω) ≤ prob p + prob q := by
+theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω => p ω ∨ q ω) ≤ prob p + prob q := by
   classical
   unfold prob
   rw [← add_div]
@@ -268,7 +268,7 @@ theorem prob_prod_eq_sum {α β : Type} [Fintype α] [Fintype β] (E : α × β 
   exact Finset.sum_congr rfl fun b _ => by rw [prob_eq_expect (fun a => E (a, b))]
 
 /-- Probabilities are invariant under a relabelling of the sample space. -/
-theorem prob_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
+theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
     prob p = prob fun b => p (e.symm b) := by
   classical
   unfold prob
@@ -277,7 +277,7 @@ theorem prob_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p :
   exact Finset.card_equiv e fun a => by simp
 
 /-- The union bound over a finite family of events. -/
-theorem prob_exists_le {Ω ι : Type} [Fintype Ω] (s : Finset ι) (B : ι → Ω → Prop) :
+theorem prob_exists_le {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (B : ι → Ω → Prop) :
     prob (fun ω => ∃ w ∈ s, B w ω) ≤ ∑ w ∈ s, prob (B w) := by
   classical
   induction s using Finset.induction_on with
@@ -298,7 +298,7 @@ theorem one_sub_mul_exp_le (u : ℝ) : (1 - u) * Real.exp u ≤ 1 := by
   have h2 : Real.exp (-u) * Real.exp u = 1 := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
   nlinarith [Real.exp_pos u]
 
-theorem prob_add_not {Ω : Type} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
+theorem prob_add_not {Ω : Type*} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
     prob q + prob (fun ω => ¬q ω) = 1 := by
   classical
   unfold prob
@@ -310,7 +310,7 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
   rw [← add_div, div_eq_one_iff_eq hC]
   convert h'
 
-theorem prob_add_not_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q + prob (fun ω => ¬q ω) ≤ 1 := by
+theorem prob_add_not_le {Ω : Type*} [Fintype Ω] (q : Ω → Prop) : prob q + prob (fun ω => ¬q ω) ≤ 1 := by
   rcases isEmpty_or_nonempty Ω with hΩ | hΩ
   · have h0 : ∀ q : Ω → Prop, prob q = 0 := fun q => by
       unfold prob

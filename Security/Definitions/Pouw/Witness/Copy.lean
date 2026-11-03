@@ -1,4 +1,4 @@
-import Definitions.Core.Interaction
+import Definitions.Pouw.Basic.Prob
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
@@ -14,8 +14,6 @@ R_copy captures tt-attacks §2's floor and its route 1 (copies) and nothing else
 fixed before the salt), not the FP32 route (8 units per word), not shared tables. It is a witness that a TT-shaped
 bound can hold because of the noise, not evidence for TT.
 -/
-
-open Claims renaming Pr → pr
 
 namespace Pouw.Copy
 

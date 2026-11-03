@@ -104,7 +104,7 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
   certifier's records (`trusted`) give. It is a field until it is derived from `PeriodLeakAccepted` at the deployed
   period (the follow-up). -/
-  window_le : ∀ ξ i, Claims.Pr (fun x : Ω (r.own .network) =>
+  window_le : ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
       r.accepts .network (Function.update ξ (r.own .network) x) ∧
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt (Function.update ξ (r.own .network) x) i)
           (wit (Function.update ξ (r.own .network) x) i) (obs (Function.update ξ (r.own .network) x) i)) ≤
