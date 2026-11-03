@@ -3,7 +3,8 @@ directory or by a declared witness name, a witness piece raw or as hex at any of
 archive the guard can't read, and with ``--public`` a file of a path the record doesn't declare public) is moved to the
 quarantine outside the run dir, and the report names it by path alone; the gate's public files, their JSON written
 again and a witness file equal to a public one are no finds, and a declared allowlist entry excuses its piece (with
-``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to
+``*``, any piece of its witness file; with ``keys``, only the pieces inside the witness file's values at those key
+paths) only in the records it names. chain_record.sh moves a gate sent under inputs/ to
 the quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/
 and the logs whole on a signal or when the guard can't run."""
 from __future__ import annotations
@@ -202,16 +203,62 @@ def test_a_wildcard_entry_excuses_every_piece_of_its_witness_file_in_its_records
     assert [p["witness"] for p in held["found"][0]["pieces_found"]] == [f"{GATE}/witness/cells.salts"]
 
 
+def test_a_keyed_entry_excuses_only_the_pieces_inside_its_values(tmp_path):
+    """An entry's keys narrow it to the pieces cut wholly inside the witness file's values at those key paths: the
+    certifier's indented CPU list, which a verifier outcome's indented proved units repeat at the same depth, is
+    excused there, while a piece of the same witness file outside those values (a connection's head) is still a find,
+    and so is the CPU list under an entry whose key path the witness file doesn't have."""
+    g = _gate(tmp_path / "G" / "g1")
+    rnd = random.Random(5)
+    warden = {"connections": [{"ordinal": i, "head": rnd.randbytes(32).hex()} for i in range(2)],
+              "usage": {"cpu_s": 1.5, "cpus": list(range(32))}}
+    (g / "witness" / "warden.json").write_text(json.dumps(warden, indent=1))
+    entry = {"sha256": "*", "witness": "warden.json", "keys": ["usage/cpus"], "records": ["*"], "why": "its own CPUs"}
+    declared = json.loads(LG.DECLARED.read_text())
+    (tmp_path / "keyed.json").write_text(json.dumps({**declared, "allow": [entry]}))
+    (tmp_path / "other.json").write_text(json.dumps({**declared, "allow": [{**entry, "keys": ["usage/nice"]}]}))
+    run = tmp_path / "run"
+    outcome = {"audit": {"proved_units": list(range(32)), "verdict": "accept"}}
+    _put(run, {"out/tie/verifier/w000-outcome.json": json.dumps(outcome, indent=1).encode(),
+               "out/heads.json": json.dumps({"h": warden["connections"][1]["head"]}).encode()})
+    rc, report, _ = _guard(tmp_path, run, "--declared", str(tmp_path / "keyed.json"), "--dry")
+    assert rc == 3 and [d["path"] for d in report["found"]] == ["out/heads.json"]
+    assert [(e["entry"], e["records"]) for e in report["excused"]] == [(0, ["out/tie/verifier/w000-outcome.json"])]
+    assert report["excused"][0]["pieces"] >= 4
+    rc, report, _ = _guard(tmp_path, run, "--declared", str(tmp_path / "other.json"), "--dry")
+    assert sorted(d["path"] for d in report["found"]) == ["out/heads.json", "out/tie/verifier/w000-outcome.json"]
+    assert rc == 3 and report["excused"] == []
+
+
+def test_value_span_is_the_bytes_of_the_value_at_a_key_path():
+    """`value_span` finds a nested key's value by its byte offsets, past a non-ASCII string, in compact and indented
+    JSON alike, None for a key path the document doesn't have or a document that isn't an object there, and raises
+    where the value on the path isn't JSON, so the guard fails closed."""
+    doc = {"a": {"b": [1, 2], "c": "\u00e9t\u00e9"}, "d": {"b": 3}}
+    for indent in (None, 1, 2):
+        b = json.dumps(doc, indent=indent, ensure_ascii=False).encode()
+        s, e = LG.value_span(b, "a/b")
+        assert json.loads(b[s:e]) == [1, 2]
+        s, e = LG.value_span(b, "d/b")
+        assert b[s:e] == b"3"
+        assert LG.value_span(b, "a/x") is None and LG.value_span(b, "a/b/c") is None
+    assert LG.value_span(b"[1]", "a") is None and LG.value_span(b"{not json", "a") is None
+    with pytest.raises(ValueError):
+        LG.value_span(b'{"a": {"b": nope}}', "a/b")
+
+
 def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
-    """A quarantine inside the run dir, a missing gates directory, or a declared entry without its reason or with a
-    sha256 that is neither a digest nor ``*`` refuses the guard before it moves anything."""
+    """A quarantine inside the run dir, a missing gates directory, or a declared entry without its reason, with a
+    sha256 that is neither a digest nor ``*``, or with keys that aren't a list of key paths refuses the guard before it
+    moves anything."""
     run = tmp_path / "run"
     _put(run, {"out/n2/certified.jsonl": b"{}"})
     assert LG.main([str(run), str(run / "out" / "q")]) == 2
     assert LG.main([str(run), str(tmp_path / "q"), "--gates", str(tmp_path / "none")]) == 2
     assert (run / "out" / "n2" / "certified.jsonl").is_file()
     ok = {"sha256": "0" * 64, "witness": "x", "records": ["*"], "why": "y"}
-    for bad in ({**ok, "why": ""}, {**ok, "sha256": "A" * 64}, {**ok, "sha256": "**"}):
+    for bad in ({**ok, "why": ""}, {**ok, "sha256": "A" * 64}, {**ok, "sha256": "**"}, {**ok, "keys": []},
+                {**ok, "keys": "usage/cpus"}, {**ok, "keys": ["usage//cpus"]}):
         (tmp_path / "bad.json").write_text(json.dumps({"schema": LG.DECLARED_SCHEMA, "names": [], "allow": [ok, bad]}))
         with pytest.raises(SystemExit, match="entry 1 needs"):
             LG.main([str(run), str(tmp_path / "q"), "--declared", str(tmp_path / "bad.json")])

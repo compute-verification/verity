@@ -38,7 +38,7 @@ With ``served`` (the compile slice's statics, `served_statics`) each close also 
 (`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
-close and so before any draw over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
+close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
 """
 from __future__ import annotations
 

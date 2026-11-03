@@ -32,7 +32,7 @@ programs that use them.
   `ADA_E4M3_M16N8K32` (not formalized here), at 64 per checked FP32 word.
 * **The consequence.** The cheapest price per register written in `M4090` stays 16 (int8 m16n8k16, legacy m8n8k4 and
   `int`), and 8 on the FP32 pipe. A dimension bound in `M4090` therefore gives at most 16 per independent target
-  word, and that is attained (`Ceiling4090`): on FP8 atom words, whose honest cost is 64, at most 16/64 = 25%.
+  word: on FP8 atom words, whose honest cost is 64, at most 16/64 = 25%.
 -/
 
 namespace Pouw.Dimension.Fp8Mma
@@ -104,15 +104,5 @@ def ShapeTable4090 : Prop :=
 theorems cover programs that use the FP8 classes. -/
 def ShapeWF4090 : Prop :=
   ∀ (N m n k : ℕ) (s : Shape4090) (outs : List (Noise N m n k → ℚ)), (mmaOp s outs).WF
-
-/-- **No bound in `M4090` exceeds 16 per target word** (draft semantics, pending review): for
-every FP32 semantics and every finite set `W` of functions of the noise, a lower bound `b` on the cost of every
-`M4090` program that outputs all of `W` satisfies `b ≤ 16·|W|`. On FP8 atom words, whose honest cost is 64 each,
-that is at most a quarter: `4·b ≤ 64·|W|`. -/
-def Ceiling4090 : Prop :=
-  ∀ (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (W : Finset (Noise N m n k → ℚ)) (b : ℝ),
-    (∀ q : (m4090 N m n k fpSem).Prog, (∀ w ∈ W, w ∈ (m4090 N m n k fpSem).outputs q) →
-      b ≤ (m4090 N m n k fpSem).cost q) →
-    b ≤ 16 * W.card ∧ 4 * b ≤ Shape4090.e4m3F32.regPrice * W.card
 
 end Pouw.Dimension.Fp8Mma
