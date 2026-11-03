@@ -145,12 +145,19 @@ def call(s: socket.socket, f: bytes) -> bytes | None:
     return _read(s)
 
 
+def answer(s: socket.socket, f: bytes) -> bytes | None | OSError:
+    """`f`'s answer on `s`: its bytes, `None` when the connection closed after reading it, or the error a send to a
+    connection the loop already closed raises."""
+    try:
+        return call(s, f)
+    except (BrokenPipeError, ConnectionResetError) as e:
+        return e
+
+
 def closed(s: socket.socket, f: bytes) -> bool:
     """Whether the loop has ended the session on `s`: `f` gets no answer, the connection closed."""
-    try:
-        return call(s, f) is None
-    except (BrokenPipeError, ConnectionResetError):
-        return True
+    a = answer(s, f)
+    return a is None or isinstance(a, (BrokenPipeError, ConnectionResetError))
 
 
 def plain(f: bytes) -> bytes:
