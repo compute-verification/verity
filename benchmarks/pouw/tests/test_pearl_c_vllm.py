@@ -929,17 +929,18 @@ def honest_pass(tmp_path, request):
     return proved_pass(tmp_path, request.param)
 
 
-def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1)):
+def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
-    audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
-    (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
+    audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
+    keys (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
     salt coin), as passes of one install are."""
-    key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
+    if key is None:
+        key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
     wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
@@ -1204,6 +1205,67 @@ def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_p
         path.write_text(json.dumps(man))
         r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
         assert not r["accepted"] and r["refused"][0] == code and r["line"].startswith("REJECT") and code in r["line"], r
+
+
+def _replay_every_tile(p) -> dict[int, str]:
+    """Every tile of pass `p` through the verifier's check (`verify_run.replay`): the failing tiles' reasons by tile id."""
+    got, _ = VR.replay([p], [(0, ref.matmul, ref.id) for ref in p.verifier.refs], 1)
+    return {tid: reason for _, tid, ok, reason, _ in got if not ok}
+
+
+def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_passes(tmp_path):
+    """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
+    own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
+    gives the row up, and rewrites the records and their root alone: the commitment, A's roots and the files are the pass's,
+    every tile then passes the verifier's check, and a second run changes nothing."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins, before = published(path), json.loads(path.read_text())
+    p = VR.load(path, coins)
+    failed = _replay_every_tile(p)
+    assert failed and all("replayed debit" in r and "the row cap" in r for r in failed.values()), failed
+    out = VP.volunteer(path, coins, 1)
+    after = json.loads(path.read_text())
+    assert {x["tile_id"] for x in out["over"]} == set(failed)
+    assert out["ok"] and not out["left"] and out["voluntary_a"] and 0 < out["credit_kept"] < 1, out["line"]
+    assert after["records_root"] == out["records_root"]["after"] != before["records_root"]
+    assert {k: v for k, v in after.items() if k not in ("records_root", "matmuls", "weights")} == \
+        {k: v for k, v in before.items() if k not in ("records_root", "matmuls", "weights")}
+    for side in ("matmuls", "weights"):
+        strip = lambda xs: [{k: v for k, v in x.items() if not k.startswith("voluntary_")}  # noqa: E731
+                            for x in (xs.values() if isinstance(xs, dict) else xs)]
+        assert strip(after[side]) == strip(before[side])
+    assert [u.get("voluntary_a", []) for u in after["matmuls"]] == [out["voluntary_a"].get(str(u["index"]), []) for u in after["matmuls"]]
+    assert _replay_every_tile(VR.load(path, coins)) == {}
+    again = VP.volunteer(path, coins, 1)
+    assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
+
+
+def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
+    """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
+    given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the
+    other tile finds the weight's ⌈n/64⌉ = 1 B row taken, and `over_words` names its tile as left over."""
+    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    rec = PW.UnitRecord(Matmul(7, Shape(16, 128, 32), 2), 16, 128)
+    assert len(s.tiles(rec.matmul.shape)) == 2
+
+    def counts(*flags):
+        out = {(0, t): (np.zeros((16, 16), np.int64), np.zeros((16, 16), np.int64)) for t in range(2)}
+        for t, i, j, n in flags:
+            out[(0, t)][0][i, j] = n
+        return out
+
+    two = counts((0, 0, 3, 2), (0, 1, 5, 1))
+    assert {x["tile"]: [r[0] for r in x["rows"]] for x in CW.over_words(s, [rec], two)} == {0: [0, 1]}
+    va, vb = CW.volunteer_words(s, [rec], two)
+    assert (va, vb) == ({7: [0]}, {2: [5]})
+    given = [PW.UnitRecord(rec.matmul, 16, 128, voluntary_a=tuple(va[7]), voluntary_b=tuple(vb[2]))]
+    assert CW.over_words(s, given, two) == []
+    three = counts((0, 0, 3, 2), (0, 1, 5, 1), (1, 2, 7, 1))
+    va, vb = CW.volunteer_words(s, [rec], three)
+    assert (va, vb) == ({7: [0]}, {2: [5]})
+    given = [PW.UnitRecord(rec.matmul, 16, 128, voluntary_a=tuple(va[7]), voluntary_b=tuple(vb[2]))]
+    assert [(x["tile"], [r[0] for r in x["rows"]]) for x in CW.over_words(s, given, three)] == [(1, [2])]
 
 
 @pytest.mark.slow
@@ -1753,6 +1815,22 @@ def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejec
         CW.D.chain_debit(a, b, s.device)
     with pytest.raises(type(want.value), match=str(want.value)):
         FT.chain_debit(a, b, s.device)
+
+
+def test_the_batch_debit_word_by_word_is_each_words_scalar_debit():
+    """`fast_tile.word_debits` is `pearl_c_debit.word_debit` on every word, and its sums `chain_debit`'s on any rows and
+    columns, so the remedy's row and column debits are the verifier's."""
+    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    rng = np.random.default_rng(3)
+    for trial in range(4):
+        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
+        atoms, zeros = FT.word_debits(a, b, s.device)
+        assert atoms.shape == zeros.shape == (3, 4) and atoms.sum() > 0
+        for i, x in enumerate(a):
+            for j, y in enumerate(b):
+                flags, z = CW.D.word_debit(x, y, s.device)
+                assert (atoms[i, j], zeros[i, j]) == (sum(flags), z)
+        assert (atoms[[0, 2]][:, [1, 3]].sum(), zeros[[0, 2]][:, [1, 3]].sum()) == CW.D.chain_debit([a[0], a[2]], [b[1], b[3]], s.device)
 
 
 def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
