@@ -1,19 +1,19 @@
 import Definitions.Nci.Formalism.Training
 
 /-!
-# The training formalism v1: runs, losses and the honest cost
+# The training formalism v2: runs, losses and the honest cost
 
 A **run** (`Run`) is a declaration, an annotation of its training and the inputs it runs on. Its trained model is the
 values `θ'` takes on those inputs, and the **loss it reaches** (`Run.loss`) is the evaluator `ℓ` on their bits in gate
 order: `ℓ` maps trained weights to the loss of the model `θ` updated by them, so `ℓ₀`, the loss of `θ`, is `ℓ` of no
-update.
+update, and `ℓ*` is the target loss.
 
 A circuit alone does not say which method produced it: any run's `θ'` can be output by gates that compute constants, a
 circuit about as large as `θ'` that reaches the same loss. The least compute of any method to reach `ℓ*` is therefore
 taken over a class of runs, `methods`, the runs of the methods considered (algorithms that start from `θ` and the data,
 not from the answer): `H(ℓ*)` is `honestCost methods ℓ ℓ*`, and a run's inefficiency `p = |C| / H(ℓ*)` is
-`Run.inefficiency`. A run's update **stays within** `D` bits (`Run.Within`) when its total update `Δ` is at most `D`,
-the bins of `Δ` along which A2's floor is measured.
+`Run.inefficiency`. A run's update **stays within** `D` bits (`Run.Within`) when its total update `Δ` is at most `D`:
+the bins of `Δ`, the update profiles along which A2's floor is measured.
 -/
 
 namespace Nci.Formalism
