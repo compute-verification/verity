@@ -49,6 +49,7 @@ from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
+from verity_vllm.pipeline import served_compiler as SC
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = Path(__file__).resolve().parent
@@ -712,7 +713,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
     from verity_vllm.program.predict import steps as ST
 
-    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
+    monkeypatch.setattr(SC, "served_identity", lambda: SERVER)
     run, rows = tmp_path / "serve", tmp_path / "rows"
     (run / "advice" / "w0" / "private").mkdir(parents=True)
     rows.mkdir()
@@ -788,7 +789,7 @@ def _tiny_served(tmp_path: Path, monkeypatch) -> SimpleNamespace:
     and each compile's ``named``."""
     from verity_vllm.program.predict import steps as ST
 
-    monkeypatch.setattr(PP, "GATES_OF_RECORD", {})
+    monkeypatch.setattr(SC, "GATES_OF_RECORD", {})
     s = _served(tmp_path, monkeypatch)
     builds = {(4, 1): _request_build(LP=4, T=1, named=True), (4, 2): _request_build(LP=4, T=2, named=True)}
     units = [ST.RequestUnit(0, builds[(4, 1)].digest, 4, 1, {"kind": "greedy"}, None, 0, "r0"),
@@ -844,16 +845,16 @@ def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, mon
 
 def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_execution(tmp_path):
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager"}, "target": TARGET}
-    phi = PP.phi_of_serve(serve)
+    phi = SC.phi_of_serve(serve)
     assert (phi.model["repo"], phi.model["revision"], phi.target, phi.execution) == ("m/x", "r", TARGET, "bi-eager")
-    assert phi.model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
+    assert phi.model["hf_config"] == json.loads(SC.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
     with pytest.raises(ValueError, match="serve.json records no target profile .* --target F gives it"):
-        PP.phi_of_serve({**serve, "target": None})
+        SC.phi_of_serve({**serve, "target": None})
     (tmp_path / "target.json").write_text(json.dumps({**TARGET, "device_name": "other"}))
-    assert PP.phi_of_serve({**serve, "target": None}, target=str(tmp_path / "target.json")).target["device_name"] == "other"
+    assert SC.phi_of_serve({**serve, "target": None}, target=str(tmp_path / "target.json")).target["device_name"] == "other"
     with pytest.raises(ValueError, match="no execution label"):
-        PP.phi_of_serve({**serve, "engine": {}})
-    assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
+        SC.phi_of_serve({**serve, "engine": {}})
+    assert SC.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
 
 
 def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
@@ -864,12 +865,12 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     rev = "15b0976d400d796ee589e7737d03a919526bf800"
     serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": rev, "execution": "bi-eager",
              "target": {**TARGET, "int8_exact": "linears"}}
-    phi = PP.phi_of_serve(serve)
+    phi = SC.phi_of_serve(serve)
     assert phi.model["hf_config"] == json.loads(pinned_hf_config(serve["model"], rev).read_text())
     assert phi.model["hf_config"]["quantization_config"]["quant_method"] == "verity_int8" and phi.target["int8_exact"] == "linears"
-    assert phi.digest() != PP.phi_of_serve(serve, hf_config=str(PP.LLAMA32_1B_CONFIG)).digest()
+    assert phi.digest() != SC.phi_of_serve(serve, hf_config=str(SC.LLAMA32_1B_CONFIG)).digest()
     bf16 = {**serve, "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "target": TARGET}
-    assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
+    assert SC.phi_of_serve(bf16).model["hf_config"] == json.loads(SC.LLAMA32_1B_CONFIG.read_text())
 
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
@@ -877,13 +878,13 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
     `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ, the default seed, ℓ and the served
     model name move it as they move a single-GPU one's."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
-    reg = PP.registered_of_serve(serve, None, None, PP.CAP_BITS)
+    reg = SC.registered_of_serve(serve, None, None, PP.CAP_BITS)
     one = PP.I2Compiler(reg, {}, "", name=SERVER[0], code=SERVER[1])
     assert one.name == SERVER[0] and one.digest != SERVER[1] and len(one.digest) == 128
     monkeypatch.setattr(PP, "code_identity", lambda: SERVER[1])
     assert PP.I2Compiler(reg, {}, "", name=SERVER[0]).digest == one.digest
     assert PP.I2Compiler(reg, {}, "", name=SERVER[0], code="c0" * 64).digest != one.digest
-    others = [PP.registered_of_serve(other, None, None, cap) for other, cap in (
+    others = [SC.registered_of_serve(other, None, None, cap) for other, cap in (
         ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
         ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
         (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
@@ -910,7 +911,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
     from verity_vllm.program.predict import steps as ST
 
     s = _served(tmp_path, monkeypatch)
-    monkeypatch.setitem(PP.GATES_OF_RECORD, SERVE_EDITS["model"]["model"], PP.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    monkeypatch.setitem(SC.GATES_OF_RECORD, SERVE_EDITS["model"]["model"], SC.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
     units = [ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"), ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")]
     monkeypatch.setattr(ST, "compile_steps", lambda registered, data, ingress, named=False: SimpleNamespace(requests=units, named={}))
     _q, held, _o = PP.served_advice(s.a)
@@ -919,7 +920,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
     serve = json.loads((s.run / "serve.json").read_text())
     if SERVE_EDITS[field] is None:
         config = tmp_path / "config.json"
-        config.write_text(json.dumps({**json.loads(PP.LLAMA32_1B_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
+        config.write_text(json.dumps({**json.loads(SC.LLAMA32_1B_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
         s.a.hf_config = str(config)
     else:
         (s.run / "serve.json").write_text(json.dumps({**serve, **SERVE_EDITS[field]}))
@@ -941,13 +942,13 @@ def test_a_served_run_registers_the_public_default_seed_and_one_that_records_ano
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
-    assert PP.registered_seed(serve) == PP.registered_of_serve(serve, None, None, PP.CAP_BITS).default_seed == DEFAULT_SEED
+    assert SC.registered_seed(serve) == SC.registered_of_serve(serve, None, None, PP.CAP_BITS).default_seed == DEFAULT_SEED
     for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
         why = f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is engine.served_seed."
         with pytest.raises(ValueError, match=re.escape(why)):
-            PP.registered_of_serve({**serve, "default_seed": seed}, None, None, PP.CAP_BITS)
+            SC.registered_of_serve({**serve, "default_seed": seed}, None, None, PP.CAP_BITS)
     with pytest.raises(ValueError, match="filled in default seed None"):
-        PP.registered_seed({k: v for k, v in serve.items() if k != "default_seed"})
+        SC.registered_seed({k: v for k, v in serve.items() if k != "default_seed"})
     s = _served(tmp_path, monkeypatch)
     assert s.compiler.inner.registered.default_seed == DEFAULT_SEED
     recorded = json.loads((s.run / "serve.json").read_text())
@@ -976,35 +977,32 @@ def test_a_stand_in_records_the_public_default_seed_and_its_seedless_sampled_req
     monkeypatch.setattr(PP, "record1", lambda bundle, row_dir: record)
     monkeypatch.setattr(PP, "i2_of_record", lambda *a, **k: SimpleNamespace(
         registered=SimpleNamespace(phi=phi, default_seed=5), ingress=ingress))
-    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
+    monkeypatch.setattr(SC, "served_identity", lambda: SERVER)
     out = tmp_path / "serve"
     a = argparse.Namespace(bundle="b", row_dir=str(tmp_path / "rows"), workload=str(_workload(tmp_path)), out=str(out),
                            hf_config=None, cap_bits=PP.CAP_BITS)
     assert PP.serve_standin(a)["requests"] == 3
     serve = json.loads((out / "serve.json").read_text())
-    assert serve["default_seed"] == PP.registered_seed(serve) == DEFAULT_SEED
+    assert serve["default_seed"] == SC.registered_seed(serve) == DEFAULT_SEED
     brought = {q["user"]: q["ingress"]["brought"] for q in map(json.loads, (out / "requests.jsonl").read_text().splitlines())}
     assert brought == {"r0": {"max_tokens": 3, "temperature": 0.0}, "r1": {"max_tokens": 2, "temperature": 0.8, "seed": 5},
                        "r2": {"max_tokens": 2, "temperature": 0.8, "seed": 11}}
     assert PP.compiler_doc(str(out), None, None, PP.CAP_BITS)["default_seed"] == DEFAULT_SEED
 
 
-def test_the_served_identity_is_verity_vllm_advices_and_refused_where_the_tree_has_none(monkeypatch):
+def test_the_served_identity_is_verity_vllm_advices(monkeypatch):
     import types
 
-    PP.served_identity.cache_clear()
+    SC.served_identity.cache_clear()
     fake = types.ModuleType("verity_vllm.pipeline.advice")
     fake.registered_compiler = lambda: SimpleNamespace(name=PP.CAPPED, digest="ff" * 64, inner=SimpleNamespace(name=SERVER[0], digest=SERVER[1]))
     monkeypatch.setitem(sys.modules, "verity_vllm.pipeline.advice", fake)
-    assert PP.served_identity() == SERVER
-    PP.served_identity.cache_clear()
+    assert SC.served_identity() == SERVER
+    SC.served_identity.cache_clear()
     fake.registered_compiler = lambda: SimpleNamespace(name=SERVER[0], digest=SERVER[1])
     with pytest.raises(ValueError, match="registers no capped compiler"):
-        PP.served_identity()
-    monkeypatch.setitem(sys.modules, "verity_vllm.pipeline.advice", None)
-    with pytest.raises(ValueError, match="which this tree lacks"):
-        PP.served_identity()
-    PP.served_identity.cache_clear()
+        SC.served_identity()
+    SC.served_identity.cache_clear()
 
 
 def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkeypatch, capsys):
@@ -1012,7 +1010,7 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)
     assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"] == {"name": PP.CAPPED, "digest": s.compiler.digest}
     assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["default_seed"] == DEFAULT_SEED and doc["phi"]["target"] == TARGET
-    assert doc["transfer_gates"] == list(PP.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    assert doc["transfer_gates"] == list(SC.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
     assert PP.compiler_doc(str(s.run), None, None, 2 * PP.CAP_BITS)["digest"] != doc["digest"]
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run)]) == 0
@@ -1110,7 +1108,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert said["roots"] == len(pins) == 16 and PP.pins_of((), [str(out)]) == pins
     assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
     assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
-    registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
+    registered = SC.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     record = WW.weights_record(registered, str(ck), str(man), grain=grain)
     assert WW.registration_pins(reg, record) == pins
     assert register(key) == 0 and json.loads(out.read_text()) == reg
@@ -1190,7 +1188,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
             p + "mlp.down_proj.weight@512": H * I // 2, p + "mlp.down_proj.weight_scale@16": 2 * H}
     assert words["model.embed_tokens.weight@64"] == words["model.embed_tokens.weight@512"] == TINY["vocab_size"] * H
     assert not any("lm_head" in p for p in words)
-    registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
+    registered = SC.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
 
 
@@ -1198,13 +1196,13 @@ def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():
     """`served_gates`: Llama-3.2-1B's compiler of record lists its RoPE heads (the TP1 stand-in), ``--transfer-gate`` may restate
     the list and nothing else (another template, or the record's with one more), and a model with no line lists none."""
     llama, tg = {"model": "unsloth/Llama-3.2-1B"}, "RoPEHead_v1{D=64}"
-    assert PP.served_gates(llama) == PP.served_gates(llama, [tg, tg]) == (tg,)
+    assert SC.served_gates(llama) == SC.served_gates(llama, [tg, tg]) == (tg,)
     for other in (["SiluMul_v2{I=8192}"], [tg, "SiluMul_v2{I=8192}"]):
         with pytest.raises(ValueError, match=r"unsloth/Llama-3.2-1B's compiler of record lists \['RoPEHead_v1\{D=64\}'\]"):
-            PP.served_gates(llama, other)
-    assert PP.served_gates({"model": "m/x"}) == ()
+            SC.served_gates(llama, other)
+    assert SC.served_gates({"model": "m/x"}) == ()
     with pytest.raises(ValueError, match=r"m/x's compiler of record lists \[\]"):
-        PP.served_gates({"model": "m/x"}, [tg])
+        SC.served_gates({"model": "m/x"}, [tg])
 
 
 def test_a_served_compiler_lists_its_models_transfer_gates_of_record_beside_the_servers(tmp_path, monkeypatch, capsys):

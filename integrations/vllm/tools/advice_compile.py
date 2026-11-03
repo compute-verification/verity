@@ -5,7 +5,7 @@ Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prove
 sampling parameters, which advice v0 doesn't carry: they come with the request's certified I/O; a stand-in, see the TODO in
 `main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
-model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it), on
+model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `served_compiler.phi_of_serve` reads it), on
 that target at that execution, without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose
 server says it filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 

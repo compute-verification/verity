@@ -42,7 +42,7 @@ def test_shipped_config_sha_is_the_manifest_bytes():
 
 def test_a_pin_reads_its_config_of_record_and_an_unpinned_model_none(monkeypatch):
     """`pinned_hf_config`, the one config.json a served pin's φ reads on the prover's side (`advice_compile`) and the verifier's
-    (`prove_path.phi_of_serve`): the int8 pin's is its own, with its quantization config, never the bf16 one's."""
+    (`served_compiler.phi_of_serve`): the int8 pin's is its own, with its quantization config, never the bf16 one's."""
     int8 = dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800")
     assert int8 == dg.HF_CONFIG_DIR / "LLAMA32_1B_INT8.config.json"
     assert json.loads(int8.read_text())["quantization_config"]["quant_method"] == "verity_int8"
