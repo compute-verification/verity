@@ -101,11 +101,6 @@ HM96_HOME = "verity/ml/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
-    "the PoUW window's keyed draw takes A4 and A5": "Flock's ASSUMPTIONS.md: a queued PR rewrites the next line; renamed after it lands",
-    "the verifier's coin server wrote": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
-    "the coin server reads": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
-    "the coin server's OS randomness": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
-    "as the coin server's `os` coins": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
     "the client's request commitment, the randomness source": "a line of GLOSSARY.md that a queued PR rewrites; renamed "
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
@@ -193,6 +188,9 @@ PENDING: dict[str, str] = {
                                                                             "the coin server; the rename follows it",
     "Security/Proofs/Flock/C3/README.md": "a queued PR on next rewrites the lines that name the coin server; the rename "
                                           "follows it",
+    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md": "queued PRs on next rewrite and add lines that name the coin server, "
+                                                      "and the line beside the PoUW window's keyed draw; the rename follows "
+                                                      "them",
     "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/pouw/fp_exact/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
