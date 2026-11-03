@@ -8,18 +8,20 @@ import Properties.SampledProofs
 /-!
 # Remote's acceptance and the inference-only policy
 
-`Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.sameB` over three subprotocols, in the order of their
-ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's window check
-(`PouwCheck.protocol`) and sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`,
-`verity/sampled-proofs/one-stage/v1`). Each one's commitment is
-the run's registration record, and the composite rejects unless all three decode to one digest
-(`Core.Composition.strays`). The policy's check (`NciCheck.Protocol.check`) refuses a record whose `program` is not the
+`Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
+their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
+(`PouwCheck.Period.protocol`) and sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`,
+`verity/sampled-proofs/one-stage/v1`). The policy's commitment and the one-stage audit's are the run's registration
+record, and the composite rejects unless both decode to one digest (`Core.Composition.strays` over `Core.Remote.tied`);
+the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
+record its windows name (`Core.Remote.windowRecords`) has that digest too. The policy's check
+(`NciCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
 the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
 (`NciCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
-* `AcceptInferenceOnly`: on every input remote's check accepts, the three subprotocols' records have one digest, the
-  record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
+* `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and the one-stage audit's records have
+  one digest, which every Commit record the period's windows name has, the record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
   registers (`NciCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
   (`NciCheck.Properties.Expands`), has a parse, a declaration the registered circuit lays out with θ and a division its
   owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters (`VerifierOwn`), and
@@ -106,8 +108,10 @@ def StageHeld (k : Case) : Prop :=
     SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.verifier
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
-policy's `kI`, PoUW's `kW` and the one-stage audit's `kS`; the three commitments decode, each under its own
-subprotocol's decoder, to one digest `r`, the run's record's; the policy's case is `CaseHeld`: the record names the
+policy's `kI`, PoUW's period's `kW` and the one-stage audit's `kS`; the policy's and the one-stage audit's commitments
+decode, each under its own subprotocol's decoder, to one digest `r`, the run's record's; every Commit record the
+period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
+refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
 and every declaration the registered circuit lays out, with the declared division, meets the policy; and the one-stage
@@ -115,7 +119,7 @@ audit's case is `StageHeld`: its record names, by its SHA-512, the program the a
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
-    Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some r ∧
+    (∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
     Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment = some r ∧
     CaseHeld kI ∧ StageHeld kS
 

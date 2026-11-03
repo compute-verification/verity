@@ -5,8 +5,8 @@ import CoreComposition.Tie
 
 The properties of `Core.Protocol.answer`, the whole of what a caller of any core protocol runs, of
 `Core.Composition.check`, the check of `Core.Composition.product`, of `Core.Composition.checkSame`, the check of
-`Core.Composition.same` (remote Verity's, and onsite's under its ties), whose components `ss` must commit to one record,
-and of `Core.Composition.holdTies`, which `Core.Composition.tiedSame` (onsite Verity's) runs over `checkSame`'s outcome,
+`Core.Composition.same` (under their ties, onsite Verity's and remote Verity's), whose components `ss` must commit to one
+record, and of `Core.Composition.holdTies`, which `Core.Composition.tiedSame` runs over `checkSame`'s outcome,
 stated against the functions as they run, each in one shape: for every input, if the function accepts, its named
 conclusion holds. `Proofs.Properties.Composition` proves them.
 
@@ -80,23 +80,22 @@ def SameAccepted (id : String) (ss : List String) (cs : List Protocol) (ps : Lis
 
 /-- **An accepted `same` composition is `SameAccepted`**: what `checkSame` accepts is an accepted composition of its
 components (`AcceptMeans`'s conclusion), and the components `ss` committed to one record. At remote
-(`Core.Remote.protocol`, `checkSame "verity/remote/v0"` over all three of its subprotocols) the policy, PoUW's window and
-the one-stage audit committed to one record; at onsite (`Core.Onsite.protocol`, under its ties) the policy and the
-one-stage audit (`Core.Onsite.tied`). -/
+(`Core.Remote.protocol`, under its ties) and at onsite (`Core.Onsite.protocol`, under its ties) the policy and the
+one-stage audit committed to one record (`Core.Remote.tied`, `Core.Onsite.tied`). -/
 def AcceptSame : Prop :=
   ∀ (id : String) (ss : List String) (cs : List Protocol) (ps : List Named) (c : ByteArray) (ev : List Case)
     (pub prof : Keyed),
     checkSame id ss cs ps c ev = .accept pub prof → SameAccepted id ss cs ps c ev pub prof
 
-/-- The value the component `n.1` of a tie names on the cases `ev`, read by `n.2` off the commitment of its case (the
-first case under its id); `none` when it has no case or names nothing. -/
-def named (ev : List Case) (n : String × (ByteArray → Option ByteArray)) : Option ByteArray :=
-  (ev.find? fun k => k.id == n.1).bind fun k => n.2 k.commitment
+/-- The values the component `n.1` of a tie names on the cases `ev`, read by `n.2` off its case (the first case under
+its id); `none` when it has no case or its case doesn't decode. -/
+def named (ev : List Case) (n : String × (Case → Option (List ByteArray))) : Option (List ByteArray) :=
+  (ev.find? fun k => k.id == n.1).bind n.2
 
-/-- **The components of the tie `t` named one value** on the cases `ev`: each that names a value names the same one,
-`d`; or one of them names none, its case missing or its commitment not decoding, so that it rejects as a component. -/
+/-- **The components of the tie `t` named one value** on the cases `ev`: every value each names is the same one, `d`;
+or one of them names none, its case missing or not decoding, so that it rejects as a component. -/
 def Tied (t : Tie) (ev : List Case) : Prop :=
-  (∃ n ∈ t.names, named ev n = none) ∨ ∃ d, ∀ n ∈ t.names, named ev n = some d
+  (∃ n ∈ t.names, named ev n = none) ∨ ∃ d, ∀ n ∈ t.names, ∃ ds, named ev n = some ds ∧ ∀ x ∈ ds, x = d
 
 /-- The outcome `o` held by the ties `ties` on the cases `ev`, accepted: `o` itself accepted with these public outputs
 and profile, and every tie's components named one value. -/
@@ -105,7 +104,8 @@ def TiedAccepted (ties : List Tie) (ev : List Case) (o : Outcome Keyed Keyed) (p
 
 /-- **What `holdTies` accepts is `TiedAccepted`**: the outcome it holds accepted, unchanged, and every tie's components
 named one value. At onsite (`Core.Onsite.protocol`, `holdTies [Core.Onsite.store]` over its `checkSame`) PoUS and the
-remote bandwidth audit's P2 session are on one store. -/
+remote bandwidth audit's P2 session are on one store; at remote (`Core.Remote.protocol`, `holdTies [Core.Remote.windows]`)
+every window of PoUW's period names the policy's record as its Commit record. -/
 def AcceptTied : Prop :=
   ∀ (ties : List Tie) (ev : List Case) (o : Outcome Keyed Keyed) (pub prof : Keyed),
     holdTies ties ev o = .accept pub prof → TiedAccepted ties ev o pub prof
