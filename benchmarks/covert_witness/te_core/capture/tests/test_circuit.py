@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from te_core.capture import script
-from te_core.capture.circuit import StepCircuit, measure, vertex_cut
+from te_core.capture.circuit import StepCircuit, check, measure, path, run_ops, vertex_cut
 from te_core.formalism import READ_BACKS
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
@@ -111,6 +111,24 @@ def test_reading_a_enters_an_adapter_at_its_code():
     assert e["frontier_bits"][best][head - best] <= 48 and e["u_bits"][best][head - best] == 16 * 64 * 192
     assert all(e["u_bits"][i][head - i] >= 16 * 64 * 192 for i in range(head + 1))
     assert max(e["frontier_bits"][i][0] for i in range(1, head)) < 16 * 192
+
+
+def test_the_checker_counts_each_run_of_segments_as_the_entries_do():
+    """Reading A's checker counts any set of the trace's ops on its own; on each run of the adapter's segments (the
+    default packer's blocks, `run_ops`) its gates and reads are the entries'. A block of the grown block's w_down alone
+    reads its whole cast."""
+    c = StepCircuit.load(Path(__file__).parent / "fixtures" / "wildcard_adapter.npz")
+    e, preds = measure(c)["entries"], c.preds()
+    order, tokens = path(c, preds)
+    assert tokens == e["tokens"] and len(e["first_ops"]) == e["segments"]
+    for i in range(e["segments"]):
+        for j in range(i, e["segments"]):
+            got = check(c, run_ops(order, e, i, j), tokens, preds)
+            assert got["gates"] == pytest.approx(sum(e["gates"][i:j + 1]))
+            assert [got[k] for k in ("frontier_bits", "ids", "u_bits")] == pytest.approx(
+                [e["frontier_bits"][i][j - i], e["ids"][i][j - i], e["u_bits"][i][j - i]])
+    down = [o for o in order if check(c, [o], tokens, preds)["u_bits"] == 16 * 64 * 192]
+    assert down and check(c, down, tokens, preds)["gates"] > 0
 
 
 def test_a_partial_is_one_groups_gradient_at_its_code(starts):

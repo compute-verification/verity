@@ -51,7 +51,7 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   compute included). One token's path (its group's affected ops in program order, as for u_in) is cut into at most
   `segments` runs: one starts at the forward's end, about half at the forward's narrowest boundaries (where the charged
   bits the rest of the forward reads drop, so an entry lands inside a code), and the rest at about equal gates. For
-  each run of segments [i, j), what a block doing that work for one of the group's `tokens` reads beyond θ:
+  each run of segments i through j, what a block doing that work for one of the group's `tokens` reads beyond θ:
   `frontier_bits[i][j - i]`, per token, the computed values its ops read and don't make (the token's state at the
   entry, a skip connection, a statistic; values computed from θ and token data alone are free, the block computing
   them from the token's id; an op none of whose values is read, such as a slice only a zeros_like reads, reads
@@ -61,7 +61,10 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   token, its `phase` (the least of its ops'), and, from a trace whose variant halves the context (`positions` its
   length; None otherwise), `context_fwd_bits` and `context_bwd_bits`: the bits per other position of the sequence
   that its token-mixing ops read (an op reading or making a value quadratic in the context, at the least per-position
-  bits of its affected token-indexed operands), earlier positions in the forward and later ones in the backward.
+  bits of its affected token-indexed operands), earlier positions in the forward and later ones in the backward; and its
+  first op (`first_ops`), so a run's ops on the path (`path`) are `run_ops`'s. Reading A's checker, `check`, counts the
+  gates and reads of any set of the trace's ops by the same rule: a witness block, of which the runs are the default
+  packer's (te_core.formalism.packer).
 - `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
   (te_core.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
   listed them for, which te_core.formalism refuses as unchecked.
@@ -280,6 +283,123 @@ def _profile(cuts: list[tuple[float, int]]) -> list[list[float]]:
     return pts
 
 
+def _op_gates(c: StepCircuit) -> np.ndarray:
+    node = c.node.astype(np.int64)
+    ops = int(node.max()) + 1 if len(c) and node.max() >= 0 else 0
+    return np.bincount(node[node >= 0], weights=c.gates[node >= 0], minlength=ops)
+
+
+def _update(c: StepCircuit, preds: list[list[int]]) -> tuple[set[int], dict[int, int], list[int]]:
+    """The update values (affected and free of the step's tokens), their bits, and the carried ones among them."""
+    U = set(np.nonzero(c.dep.astype(bool) & ~c.tokdep.astype(bool))[0].tolist())
+    return U, {v: int(c.bits[v]) for v in U}, [v for v in U if c.kind[v] == CARRIED and (c.outside[v] or not preds[v])]
+
+
+def _ops_reads(c: StepCircuit, preds: list[list[int]], ops) -> tuple[dict[int, list[int]], dict[int, set[int]]]:
+    """Each op of `ops`'s values, and the values it reads: none for an op none of whose values is read."""
+    by_op: dict[int, list[int]] = {}
+    for v in np.nonzero(np.isin(c.node, list(ops)))[0].tolist():
+        by_op.setdefault(int(c.node[v]), []).append(v)
+    used = c.read_next.astype(bool).copy()
+    used[c.indices] = True
+    return by_op, {o: {p for v in by_op.get(o, []) for p in preds[v]} if any(used[v] for v in by_op.get(o, []))
+                   else set() for o in ops}
+
+
+def _charger(c: StepCircuit, U: set[int], tokens: int):
+    """What reading a value costs a block beyond θ (module docstring), memoised: ("u", 0) an update value, ("seed", its
+    op) a random one, ("bits", its bits over `tokens`) another input or a computed value that depends on θ', ("data", 0)
+    one computed from θ and token data alone, ("", 0) θ and the token inputs."""
+    dep, tokdep = c.dep.astype(bool), c.tokdep.astype(bool)
+    charges: dict[int, tuple[str, float]] = {}
+
+    def charge(p: int) -> tuple[str, float]:
+        k = c.kind[p]
+        if p in U:
+            return "u", 0.0
+        if k == TOKEN_INPUT:
+            return "", 0.0
+        if k == RANDOM:
+            return "seed", float(c.node[p])
+        if k == OTHER_INPUT or (k == COMPUTED and dep[p]):
+            return "bits", int(c.bits[p]) / tokens
+        if k == COMPUTED and tokdep[p]:
+            return "data", 0.0
+        return "", 0.0
+
+    def charged(p: int) -> tuple[str, float]:
+        return charges[p] if p in charges else charges.setdefault(p, charge(p))
+
+    return charged
+
+
+def path(c: StepCircuit, preds: list[list[int]] | None = None) -> tuple[list[int], int]:
+    """One token's traced path (module docstring): the ops that depend on θ' and make or read a value its group's
+    token-indexed values reach, in program order, and the group's tokens (the first token-index read's batch)."""
+    preds = c.preds() if preds is None else preds
+    n, node = len(c), c.node.astype(np.int64)
+    ops = int(node.max()) + 1 if n and node.max() >= 0 else 0
+    index = [i for i in range(len(c.tr_op)) if c.tr_index[i]]
+    index = [i for i in index if c.token_key[c.tr_key[i]]] or index
+    if not index:
+        return [], 0
+    first = min(index, key=lambda i: int(c.tr_op[i]))
+    key, fp = int(c.tr_key[first]), c.positions(first)
+    seed_ops = {int(c.tr_op[i]) for i in range(len(c.tr_op)) if int(c.tr_key[i]) == key
+                and len(np.intersect1d(c.positions(i), fp, assume_unique=True))}
+    tok_l, node_l = c.tok.astype(bool).tolist(), node.tolist()
+    inside = [False] * n
+    for v in range(n):
+        if tok_l[v] and (node_l[v] in seed_ops or any(inside[p] for p in preds[v])):
+            inside[v] = True
+    touched = np.array([inside[v] or any(inside[p] for p in preds[v]) for v in range(n)], dtype=bool)
+    on = node >= 0
+    op_group = np.bincount(node[on], weights=touched[on].astype(float), minlength=ops) > 0
+    op_dep = np.bincount(node[on], weights=c.dep.astype(bool)[on].astype(float), minlength=ops) > 0
+    return np.nonzero(op_group & op_dep)[0].tolist(), len(np.unique(fp))
+
+
+def check(c: StepCircuit, ops, tokens: int = 1, preds: list[list[int]] | None = None) -> dict:
+    """A witness block's count (reading A, module docstring): the gates of the ops `ops`, as traced, and what they read
+    beyond θ, each over `tokens` (a block doing that work for one of the tokens the ops process): `frontier_bits`, the
+    values they read and don't make, charged as `_charger` charges them; `ids`, the token-input positions they read (1,
+    the token's id, where they read only state computed from token data); `u_bits`, the narrowest cut from the carried
+    values to the update values they read, plus 64 bits a random op they read, once. The default packer's blocks are
+    such witnesses (a run of `entries`' segments, `run_ops`), and a block any other set of the trace's ops gives is
+    counted by the same rule."""
+    preds = c.preds() if preds is None else preds
+    ops = sorted({int(o) for o in ops})
+    U, ucap, carried = _update(c, preds)
+    by_op, reads_of = _ops_reads(c, preds, ops)
+    charged = _charger(c, U, tokens)
+    made = {v for o in ops for v in by_op.get(o, [])}
+    bits, targets, seeds, data = 0.0, set(), set(), False
+    for p in set().union(*reads_of.values()) - made:
+        kind, x = charged(p)
+        if kind == "u":
+            targets.add(p)
+        elif kind == "seed":
+            seeds.add(x)
+        elif kind == "bits":
+            bits += x
+        elif kind == "data":
+            data = True
+    on = set(ops)
+    direct = _union_size(c, [r for r in range(len(c.tr_op))
+                             if c.token_key[c.tr_key[r]] and int(c.tr_op[r]) in on]) / tokens
+    g = _op_gates(c)
+    return {"ops": len(ops), "gates": float(g[[o for o in ops if o < len(g)]].sum()) / tokens, "frontier_bits": bits,
+            "ids": direct if direct or not data else 1.0,
+            "u_bits": (vertex_cut(preds, ucap, carried, targets)[0] or 0) + SEED_BITS * len(seeds)}
+
+
+def run_ops(order: list[int], entries: dict, i: int, j: int) -> list[int]:
+    """The ops of `entries`' segments i through j on the path `order` (`path`)."""
+    first = entries["first_ops"]
+    hi = first[j + 1] if j + 1 < len(first) else math.inf
+    return [o for o in order if first[i] <= o < hi]
+
+
 def _cut_path(order: list[int], op_gates: np.ndarray, op_phase: np.ndarray, by_op: dict[int, list[int]],
               reads_of: dict[int, set[int]], charged, segments: int) -> dict[int, int]:
     """Each op of the path `order`'s segment, at most `segments` of them: one starts at the forward's end, about half at
@@ -317,38 +437,14 @@ def _cut_path(order: list[int], op_gates: np.ndarray, op_phase: np.ndarray, by_o
 def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates: np.ndarray, op_phase: np.ndarray,
              U: set[int], ucap: dict[int, int], carried: list[int], tokens: int, segments: int) -> dict | None:
     """Reading A's inputs on one token's traced path (module docstring): its ops in program order cut into runs
-    (`_cut_path`), and for each run [i, j) of them what a block doing that work for one of the group's tokens reads."""
+    (`_cut_path`), and for each run of them, i through j at `[i][j - i]`, what a block doing that work for one of the
+    group's tokens reads."""
     if not order or not tokens:
         return None
-    tok, dep, tokdep = c.tok.astype(bool), c.dep.astype(bool), c.tokdep.astype(bool)
+    tok, dep = c.tok.astype(bool), c.dep.astype(bool)
     mix = c.mix.astype(bool) if c.mix is not None else None
-    by_op: dict[int, list[int]] = {}
-    for v in np.nonzero(np.isin(c.node, order))[0].tolist():
-        by_op.setdefault(int(c.node[v]), []).append(v)
-    used = c.read_next.astype(bool).copy()
-    used[c.indices] = True
-    reads_of = {o: {p for v in by_op.get(o, []) for p in preds[v]} if any(used[v] for v in by_op.get(o, [])) else set()
-                for o in order}
-
-    def charge(p: int) -> tuple[str, float]:
-        k = c.kind[p]
-        if p in U:
-            return "u", 0.0
-        if k == TOKEN_INPUT:
-            return "", 0.0
-        if k == RANDOM:
-            return "seed", float(c.node[p])
-        if k == OTHER_INPUT or (k == COMPUTED and dep[p]):
-            return "bits", int(c.bits[p]) / tokens
-        if k == COMPUTED and tokdep[p]:
-            return "data", 0.0
-        return "", 0.0
-
-    charges: dict[int, tuple[str, float]] = {}
-
-    def charged(p: int) -> tuple[str, float]:
-        return charges[p] if p in charges else charges.setdefault(p, charge(p))
-
+    by_op, reads_of = _ops_reads(c, preds, order)
+    charged = _charger(c, U, tokens)
     seg_of = _cut_path(order, op_gates, op_phase, by_op, reads_of, charged, segments)
     n_seg = int(max(seg_of.values())) + 1
     made = [set() for _ in range(n_seg)]
@@ -402,7 +498,11 @@ def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates:
         frontier.append(row_f)
         ids.append(row_i)
         u_bits.append(row_u)
-    return {"segments": n_seg, "gates": gates, "phase": phase, "frontier_bits": frontier, "ids": ids, "u_bits": u_bits,
+    first = [0] * n_seg
+    for o in reversed(order):
+        first[seg_of[o]] = o
+    return {"segments": n_seg, "first_ops": first, "gates": gates, "phase": phase, "frontier_bits": frontier, "ids": ids,
+            "u_bits": u_bits,
             "context_fwd_bits": ctx[FORWARD] if mix is not None else None,
             "context_bwd_bits": ctx[BACKWARD] if mix is not None else None,
             "positions": c.ctx or None, "tokens": tokens}
@@ -475,31 +575,17 @@ def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
     cap = {v: (None if v in ends else int(c.bits[v])) for v in dvals if v not in both}
     a_cut, a_set = vertex_cut(preds, cap, entries - both, ends - both)
 
-    # one token: the first token-index read's batch, and the ops its token-indexed values reach
-    group, group_tokens = [], 0
-    if index:
-        first = min(index, key=lambda i: int(c.tr_op[i]))
-        key, fp = int(c.tr_key[first]), c.positions(first)
-        group_tokens = len(np.unique(fp))
-        group = [i for i in range(len(c.tr_op)) if int(c.tr_key[i]) == key
-                 and len(np.intersect1d(c.positions(i), fp, assume_unique=True))]
-    seed_ops = {int(c.tr_op[i]) for i in group}
-    inside_l = [False] * n
-    for v in range(n):
-        if tok_l[v] and (node_l[v] in seed_ops or any(inside_l[p] for p in preds[v])):
-            inside_l[v] = True
-    inside = np.array(inside_l, dtype=bool)
-    op_group = per_op(inside | any_pred(inside)) & op_dep
+    # one token: the first token-index read's batch, and the ops its token-indexed values reach (`path`)
+    order, group_tokens = path(c, preds)
+    op_group = np.zeros(ops, dtype=bool)
+    op_group[order] = True
 
     # the update values, and the cut to the ones read so far
-    U = set(np.nonzero(upd)[0].tolist())
-    ucap = {v: int(c.bits[v]) for v in U}
-    carried = [v for v in U if c.kind[v] == CARRIED and (c.outside[v] or not preds[v])]
+    U, ucap, carried = _update(c, preds)
     sources = set(carried)
     targets_of: dict[int, set[int]] = {}
     for v in np.nonzero((node >= 0) & op_group[np.maximum(node, 0)])[0].tolist():
         targets_of.setdefault(int(node[v]), set()).update(p for p in preds[v] if p in U)
-    order = np.nonzero(op_group)[0].tolist()
     g_total = float(op_gates[op_group].sum())
     x_before, x_after, acc, seen, events = {}, {}, 0.0, set(), []
     for o in order:
