@@ -35,11 +35,12 @@ ROUND_LOG = [CODED, ["fwd", "act", "mm", json.dumps([[8, U], [U, 8]]), 1, 8 * U 
              ["fwd", "theta", "mm", json.dumps([[8, U], [U, 2 * U]]), 1, 8 * U * 2 * U],
              ["fwd", "updated", "mul", json.dumps([[8, U], [U]]), 1, 8 * U]]
 #: a traced step's product of two fresh operands at the console's k, its operands made whole by its own chain class
-#: (`fed`, `P`: te_core.capture.products' whole-making system), whose fixed point the console's k reaches
+#: (`fed`, `P`: te_core.capture.products' whole-making system), whose fixed point the console's k reaches, and neither
+#: reading an embedding's rows (`gathered`)
 PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 1024, "n": 8},
            "token_dims": ["m"], "macs": 32768, "outputs": 32, "affected": [True, True], "widths": [16, 16],
            "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 1024,
-           "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0}
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0, "gathered": [False, False]}
 
 
 def products_rows(*rows, steps: float = 1.0, p_match: tuple = ()) -> dict:
@@ -267,10 +268,10 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     """`products`, the fresh-products kind's input: measured where te_core prices a trace's product rows at the
     console's default, with its reason where the serving block's k leaves them unmeasured (they were classified at
     the console's); assumed where the dominant traced step's stand in for steps of another shape, or with te_core's
-    reason where unmeasured (an op log's, a round untraced, rows captured before te_core 4.12 that don't give the
-    step's whole-making system, a step that breaks P-match, and a void: a system with no fixed point at the k, which
-    voids every subset of the products, never a measured 0); and assumed where untraced steps that update count
-    none."""
+    reason where unmeasured (an op log's, a round untraced, rows captured before te_core 4.12.1 that don't give all
+    the term reads, the step's whole-making system and which operands read an embedding's rows, a step that breaks
+    P-match, and a void: a system with no fixed point at the k, which voids every subset of the products, never a
+    measured 0); and assumed where untraced steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
 
@@ -286,9 +287,10 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     assert "fresh_products" not in b["console"]["unmeasured"]
     assert off.startswith(f"unmeasured: the products were classified at k = {policy.CONSOLE[1]:g}")
     assert SW.products(b) == f"measured at the console's default; at the serving block, {off}"
-    old = {x: v for x, v in PRODUCT.items() if x not in ("fed", "P")}
-    assert unmeasured(products_rows(old)) == formalism.FRESH_RETRACE
-    assert SW.products(bounds(products_rows(old))) == f"assumed: {formalism.FRESH_RETRACE}"
+    for since in (("gathered",), ("fed", "P", "gathered")):
+        old = {x: v for x, v in PRODUCT.items() if x not in since}
+        assert unmeasured(products_rows(old)) == formalism.FRESH_RETRACE
+        assert SW.products(bounds(products_rows(old))) == f"assumed: {formalism.FRESH_RETRACE}"
     gather = {"op": "aten.embedding.default", "fan_out": 4.0, "count": 1}
     broken = unmeasured(products_rows(PRODUCT, p_match=[gather]))
     assert broken.startswith("unmeasured: the traced step breaks P-match") and "aten.embedding.default" in broken
