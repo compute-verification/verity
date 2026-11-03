@@ -2,6 +2,7 @@ import Proofs.Properties.Verity.Sampled
 import Proofs.Properties.Challenger
 import Proofs.Core.Game.Tape
 import Proofs.Properties.Challenger.Break
+import Proofs.Properties.Challenger.Drawn
 
 /-!
 # The log the sampled check read is the device's, or a break: the read finder and the forger
@@ -23,6 +24,10 @@ collision, or the forger outputs a forgery of the device's LMS signature.
 * **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`ids_nodup`), so
   on parameters naming the one-stage form, the case the sampled component accepts is v2's (`caseOf`), its record is one
   of `records` under `keyOf`'s key, and `drawCoins` reads from it the coins v2's check read.
+* **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLines` reads
+  from the lines of a run of the device that the device's ledger opens withheld on the draw's window, with the run's
+  released coins as the draw's (`Challenger.Drawn.drawn_log`), or one of the records under `keyOf`'s key carries a
+  break.
 * **The constructions** at a strategy, on a uniform tape of its play (`Verity.Game.Tape`), at the device's history at
   each play (`dev`). The read finder (`readFinder`) outputs the first collision `findBreak` finds in a record, and the
   forger (`forger`) the first forgery `findBreak` finds in a record under the parameters' key. Each outputs only what
@@ -298,6 +303,123 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
       · unfold keyAt at hsome
         rw [ite_eq_right hid] at hsome
         cases hsome
+
+/-! ## An accepted read is a run's log -/
+
+/-- v2's case names v2's parameters in the parameters sent. -/
+theorem caseOf_params {s : Sent} {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStageZk.Evidence} (h : caseOf s = .ok (p, c, e)) : ParamsAt s.params p := by
+  unfold caseOf at h
+  cases hps : (_root_.Core.canonicalJson s.params >>= Core.Composition.decodeParams) with
+  | error _ => rw [hps] at h; cases h
+  | ok ps =>
+    rw [hps, ok_bind] at h
+    cases hx : ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
+    | none => rw [hx] at h; cases h
+    | some x =>
+      rw [hx] at h
+      dsimp only at h
+      cases hev : Core.Composition.decodeEvidence s.evidence with
+      | error _ => rw [hev] at h; cases h
+      | ok ev =>
+        rw [hev, ok_bind] at h
+        cases hy : ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
+        | none => rw [hy] at h; cases h
+        | some y =>
+          rw [hy] at h
+          dsimp only at h
+          cases hnp : (_root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) with
+          | error _ => rw [hnp] at h; cases h
+          | ok q =>
+            rw [hnp, ok_bind] at h
+            rcases q with p' | q
+            · dsimp only at h
+              cases hc : SampledProofs.OneStage.commitmentOf y.commitment with
+              | error _ => rw [hc] at h; cases h
+              | ok c' =>
+                rw [hc, ok_bind] at h
+                cases he : VStar.Recursive.Sampled.evidenceOf y.evidence with
+                | error _ => rw [he] at h; cases h
+                | ok r =>
+                  rw [he, ok_bind] at h
+                  rcases r with e' | _
+                  · obtain rfl : p' = p := congrArg Prod.fst (Except.ok.inj h)
+                    have hid := List.find?_some hx
+                    exact ⟨ps, hps, x, List.mem_of_find?_eq_some hx, beq_iff_eq.1 hid, hnp⟩
+                  · cases h
+            · cases h
+
+/-- A list of strings' JSON strings read back by a reader of strings is the list. -/
+theorem mapM_map_str {f : Json → Flock.V String} (hf : ∀ x, f (.str x) = .ok x) :
+    ∀ l : List String, (l.map Json.str).mapM f = .ok l
+  | [] => rfl
+  | x :: l => by
+    rw [List.map_cons, List.mapM_cons, hf, mapM_map_str hf l]
+    rfl
+
+/-- v2's evidence's log, read as lines (`Verity.Sampled.linesOf`), is the lines the session's log holds. -/
+theorem linesOf_eq {e : SampledProofs.OneStageZk.Evidence} {ls : Array Json} {l : List String}
+    (h : _root_.SampledProofs.getD (_root_.SampledProofs.getD e.base.coins "session") "log" = .arr ls)
+    (hl : ls.toList = l.map Json.str) : Verity.Sampled.linesOf e = .ok l := by
+  unfold Verity.Sampled.linesOf
+  rw [h]
+  show ls.toList.mapM _ = _
+  rw [hl]
+  exact mapM_map_str (fun _ => rfl) l
+
+/-- **An accepted read is `readLines` over a run of the device**: at a composite that reads sampled proofs at v2, on a
+run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
+(`Verity.Sampled.coinsRead`), that log is what `readLines` reads from the lines of a run of the device under the
+challenger's key, a run the device's own ledger opens withheld on the draw's window, with that run's released coins as
+the draw's, on the records the evidence names; or one of the run's v2 records under the parameters' key carries a
+break. -/
+theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev : History) {s : Sent}
+    (hs : SameAccepts k s) (ha : ComponentAccepts k .sampled s) {l : List Release}
+    (hl : Verity.Sampled.coinsRead s = some l) :
+    (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ Break dev x.1.key x.1.label x.2) ∨
+      ∃ (d : Draws) (e : SampledProofs.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
+        OpensOn dev d.key.pub d.window r.id ∧ Verity.Sampled.recordsOf s e = some recs ∧
+        Verity.Sampled.readLines d.label d.after recs r.log.tail [] none (r.released d.label d.after) = some l := by
+  unfold Verity.Sampled.coinsRead at hl
+  cases hcase : caseOf s with
+  | error _ => simp [hcase, Except.toOption] at hl
+  | ok pce =>
+    obtain ⟨p, c, e⟩ := pce
+    cases hch : p.base.challenger with
+    | none => simp [hcase, hch, Except.toOption] at hl
+    | some kl =>
+      obtain ⟨kk, label⟩ := kl
+      cases hξ : SampledProofs.OneStageZk.coinsOf p c e with
+      | error _ => simp [hcase, hch, hξ, Except.toOption] at hl
+      | ok ξ =>
+        cases hlines : Verity.Sampled.linesOf e with
+        | error _ => simp [hcase, hch, hξ, hlines, Except.toOption] at hl
+        | ok lines =>
+          cases hrecs : Verity.Sampled.recordsOf s e with
+          | none => simp [hcase, hch, hξ, hlines, hrecs, Except.toOption] at hl
+          | some recs =>
+            simp [hcase, hch, hξ, hlines, hrecs, Except.toOption] at hl
+            obtain ⟨c', e', d, ξ', hcase', hd, hrec, hkey, hξ', hdraw⟩ := accepted_case hk (caseOf_params hcase) hs ha
+            rw [hcase] at hcase'
+            have hpce := Except.ok.inj hcase'
+            simp only [Prod.mk.injEq] at hpce
+            have e1 : c' = c := hpce.2.1.symm
+            have e2 : e' = e := hpce.2.2.symm
+            subst c' e'
+            have e3 : ξ' = ξ := Except.ok.inj (hξ'.symm.trans hξ)
+            subst ξ'
+            obtain ⟨hdl, hda⟩ : d.label = label ∧ d.after = c.digest := by
+              unfold oneStageZkSource oneStageSource at hd
+              rw [hch] at hd
+              cases hw : p.base.verifier.windowRoot with
+              | none => rw [hw] at hd; cases hd
+              | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl⟩
+            rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, ls, hlog, hls⟩ | b
+            · have hlr : lines = r.log := Except.ok.inj (hlines.symm.trans (linesOf_eq hlog hls))
+              refine .inr ⟨d, e, recs, r, hr, ho, hrecs, ?_⟩
+              rw [← hξr, ← hlr, hdl, hda]
+              exact hl
+            · exact .inl ⟨(d, e.base.coins), hrec, hkey, b⟩
 
 /-! ## The read finder and the forger -/
 
