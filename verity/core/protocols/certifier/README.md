@@ -13,12 +13,12 @@ A spec-level reference for network accounting's timing channel:
   against the digest its certificate signs), with a host-side verifier of record (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
-  is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
-  `benchmarks/network_sim`, is retired, superseded by the step-indexed scan, `ingress_scan` and `egress`, outside this
-  protocol). The network verdict of record is
+  is at the profile. On a network certifier link the egress tie (`scan_service`, below) holds the frames, the rest of
+  the egress grid, to the committed trace (N3, the content check prototyped in `benchmarks/network_sim`, is retired,
+  superseded by it). The network verdict of record is
   `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
-  egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
-  rejects the link;
+  egress profile registered in order with an accepted outcome and, on a network certifier link, its egress tie accepted
+  (`network_verdict(egress=…)`), and a rejected, late, missing, untied or out-of-order window rejects the link;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
@@ -63,13 +63,22 @@ A spec-level reference for network accounting's timing channel:
   `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
   Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
 - the capacity counts;
-- the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one proof block a link and
+- the egress side of the step-indexed scan (`egress`, N2): one proof block a link and
   bucket t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of
   cells from it with every switch computed and none witness (the generator form): its outputs are a u16, `ACCEPT`
   exactly when the state renders a row, the one public output, and the row, committed as a registered read of the
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
+- the egress tie through the proof system (`scan_service`): `EgressTie`, a link-window's step-indexed scan as one
+  registration of the proof service with every bucket proved, its 2T proof blocks in three statements (``first``,
+  bucket 0's `IngressScanFirst`; ``ingress``, the T − 1 `IngressScanBucket` units batched; ``egress``, the T
+  `EgressBucket` units), every port a registered read of the network certifier's rows, the committed trace's
+  `SCAN_STATE` and slot entries, or the prover's ``scan/view`` and ``scan/next``; decided by the verifier of record
+  (`EgressTie.verify`: C-Flock's Lean verifier on its own registered reads, and the ingress statement's commitment
+  chain, `chained`), and `EgressTie.tie`, which builds `EgressTieVerdict` from the stream's outcomes of record alone.
+  `Scans`, the tie and its stream, is the verifier's own source that `network_verdict(egress=…)` reads.
+  `benchmarks/network_traces/scan_tie.py` proves a link-window through it on C-Flock's prover;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -316,10 +325,11 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 
-Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
+Every protocol is to be zero-knowledge. N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (provisional). N3, the content check,
-is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
+the declared sync), beside the proved timing bound (provisional); on a network certifier link the egress tie
+(`scan_service`) holds the egress rows to the committed trace, and the network verdict of record counts only the
+windows it tied. N3, the content check, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
