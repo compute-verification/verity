@@ -284,7 +284,7 @@ Inside a selected block, its proof block p is drawn with probability W_p/W_b.
 - `work:K` and `stratified:K` draw a fixed-size subset per template stratum once, over the whole registration. Dither
   has no strata, a random count, and a draw interleaved with serving.
 
-It needs a law object beside `draw.parse_law`'s and the Lean verifier's `Flock.Draw`. Its acceptance probability bound
+It needs a sampling-design object beside `draw.parse_law`'s and the Lean verifier's `Flock.Draw`. Its acceptance probability bound
 is `WorkSound`'s sampling term, a moment bound at rate ηq/W_reg a unit of cost, rather than `work_escape_le`. The
 integrity profile has no field for a cost-weighted moment bound; that field is sampled proofs', which produce the
 profile.
@@ -545,4 +545,4 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   stay bounds until a calibration moves them to a current vector.
 - **Perplexity** isn't run for V4, or for 70B at 8K.
 - **Not written yet:** the proof block's Definition and its sidecar, the within-block weighting in Lean, the
-  `poisson:Q` law, and D6 v2's prices of the operand roots' hashing.
+  `poisson:Q` sampling design, and D6 v2's prices of the operand roots' hashing.
