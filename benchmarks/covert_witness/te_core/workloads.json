@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.6",
+ "te_core": "4.7",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at e4fc638622",
@@ -1703,7 +1703,7 @@
         "decoding_form": 1.008226,
         "per_gate": null,
         "fresh_chain": 3643.056,
-        "fresh_cell": 14288.72
+        "fresh_cell": 52201.17
        },
        "token_A": "unmodelled",
        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
@@ -1947,7 +1947,7 @@
          "decoding_form": 0.08645909,
          "per_gate": null,
          "fresh_chain": 11282.94,
-         "fresh_cell": 39358.39
+         "fresh_cell": 112097.4
         },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
@@ -1961,7 +1961,7 @@
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
         "target": {"rho": 408.5118, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_chain": 11014.51, "fresh_cell": 38422.02},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_chain": 11014.51, "fresh_cell": 109430.5},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
@@ -2835,8 +2835,8 @@
         "token_form": 18.74757,
         "decoding_form": 1.004553,
         "per_gate": null,
-        "fresh_chain": 1139.376,
-        "fresh_cell": 3255.89
+        "fresh_chain": 1150.109,
+        "fresh_cell": 21689.69
        },
        "token_A": "unmodelled",
        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
@@ -3356,8 +3356,8 @@
          "token_form": 401.303,
          "decoding_form": 0.999972,
          "per_gate": null,
-         "fresh_chain": 107.2875,
-         "fresh_cell": 240.3553
+         "fresh_chain": 158.7236,
+         "fresh_cell": 2993.34
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
@@ -3377,8 +3377,8 @@
          "token_form": 5.802122,
          "decoding_form": 1.000444,
          "per_gate": null,
-         "fresh_chain": 107.947,
-         "fresh_cell": 241.8328
+         "fresh_chain": 159.6993,
+         "fresh_cell": 3011.74
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
@@ -3474,7 +3474,7 @@
          "decoding_form": 0.9991275,
          "per_gate": null,
          "fresh_chain": 2247.565,
-         "fresh_cell": 10950.53
+         "fresh_cell": 42076.06
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
@@ -3495,7 +3495,7 @@
          "decoding_form": 1.002669,
          "per_gate": null,
          "fresh_chain": 2249.881,
-         "fresh_cell": 10961.82
+         "fresh_cell": 42119.41
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
@@ -3591,7 +3591,7 @@
          "decoding_form": 1.004688,
          "per_gate": null,
          "fresh_chain": 3622.611,
-         "fresh_cell": 15013.95
+         "fresh_cell": 57415.96
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
@@ -3612,7 +3612,7 @@
          "decoding_form": 1.008223,
          "per_gate": null,
          "fresh_chain": 3628.65,
-         "fresh_cell": 15038.98
+         "fresh_cell": 57511.67
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
