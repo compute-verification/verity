@@ -317,7 +317,7 @@ theorem ratio_extend (S : Widening) (p : A.vb.Pos) :
   have hc : Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (A.extend S).L p) =
       Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p) * Fintype.card S.T :=
     (Fintype.card_congr (Equiv.prodSubtypeFstEquivSubtypeProd (β := S.T)
-      (p := fun ω => ReadsDrawZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p ω))).trans
+      (p := fun ω : A.L.Ω => ReadsDrawZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb p ω))).trans
       (Fintype.card_prod _ _)
   have hΩ : Fintype.card (A.extend S).L.Ω = Fintype.card A.L.Ω * Fintype.card S.T := Fintype.card_prod A.Ω S.T
   rw [hc, hΩ]
