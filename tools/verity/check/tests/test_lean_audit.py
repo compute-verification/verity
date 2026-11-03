@@ -332,61 +332,129 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     assert LA.build_key("pkg/a", root) != ka
 
 
-def _built(pkg: Path, mod: str, outputs: dict[str, str]) -> None:
-    """A module of ``pkg``'s build as Lake leaves it: each output beside its `<file>.hash`, and the trace naming them."""
+def _built(pkg: Path, mod: str, outputs: dict[str, str], imports: tuple[str, ...] = ()) -> None:
+    """A module of ``pkg``'s build as Lake leaves it: each output beside its `<file>.hash`, the trace naming them, and its
+    `setup.json`, whose `importArts` hold the `.olean` of each module it imports, transitively (``imports``)."""
     build = pkg / ".lake" / "build"
     for ext, h in outputs.items():
         f = build / ("ir" if ext == "c" else "lib/lean") / f"{mod}.{ext}"
         f.parent.mkdir(parents=True, exist_ok=True)
+        f.unlink(missing_ok=True)    # a rebuild replaces its outputs: `put` left these read-only, linked into the cache
         f.write_text(f"{mod}.{ext} {h}")
         (f.parent / f"{f.name}.hash").write_text(h)
     trace = build / "lib/lean" / f"{mod}.trace"
     trace.write_text(json.dumps({"depHash": hashlib.sha256(mod.encode()).hexdigest()[:16], "outputs": {
         "o": [f"{outputs['olean']}.olean"], "m": False, "i": f"{outputs['ilean']}.ilean", "c": f"{outputs['c']}.c"}}))
+    setup = build / "ir" / f"{mod}.setup.json"
+    setup.parent.mkdir(parents=True, exist_ok=True)
+    setup.write_text(json.dumps({"name": mod.replace("/", "."), "package": "p", "importArts": {
+        i: {"olean": str(build / "lib/lean" / f"{i.replace('.', '/')}.olean")} for i in imports}}))
 
 
-def test_the_artifact_cache_takes_a_module_only_with_every_output_it_names(tmp_path):
-    """Lake restores a module from the cache by its input hash; an entry naming an output the cache lacks is a miss. A module
-    whose build holds an output under another hash than its trace names (an edit after the build) stays out."""
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
+#: check.py's report on a build in the sandbox, the only kind `LakeArtifacts.put` indexes
+SANDBOXED = {"sandbox": True}
+
+
+def _package(tmp: Path) -> Path:
+    """Package `p`, library `P` (its default target): `P.A`, `P.B` importing it, and `P` importing both, all built."""
+    pkg = tmp / "pkg"
+    (pkg / "P").mkdir(parents=True)
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
     (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "P.lean").write_text("import P.A\nimport P.B\n")
+    (pkg / "P" / "A.lean").write_text("theorem a : True := trivial\n")
+    (pkg / "P" / "B.lean").write_text("import P.A\n")
     _built(pkg, "P/A", {"olean": "a" * 16, "ilean": "b" * 16, "c": "c" * 16})
-    _built(pkg, "P/B", {"olean": "d" * 16, "ilean": "e" * 16, "c": "f" * 16})
-    (pkg / ".lake/build/lib/lean/P/B.olean.hash").write_text("0" * 16)
-    arts = LA.LakeArtifacts(tmp_path / "store")
-    assert arts.put({pkg}) == 1 and arts.put({pkg}) == 0
-    store = tmp_path / "store"
-    assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c"]
-    entry, = (store / "outputs" / "p").iterdir()
-    assert entry.name == hashlib.sha256(b"P/A").hexdigest()[:16] + ".json"
-    assert json.loads(entry.read_text())["o"] == ["a" * 16 + ".olean"]
-    assert (store / "artifacts" / ("a" * 16 + ".olean")).read_text() == "P/A.olean " + "a" * 16
+    _built(pkg, "P/B", {"olean": "d" * 16, "ilean": "e" * 16, "c": "f" * 16}, ("P.A",))
+    _built(pkg, "P", {"olean": "1" * 16, "ilean": "2" * 16, "c": "3" * 16}, ("P.A", "P.B"))
+    return pkg
+
+
+def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_imports(tmp_path):
+    """Lake's input hash is 64 bits of a hash that isn't cryptographic, so the cache indexes a module under its sha256 key
+    (`module_keys`), with the sha256 of each artifact. A module whose build holds an output under another hash than its
+    trace names (an edit after the build) stays out, and so does everything importing it."""
+    pkg = _package(tmp_path)
+    keyed, lib, store = LA.MK.keys(pkg), pkg / ".lake/build/lib/lean", tmp_path / "store"
+    (lib / "P/B.olean.hash").write_text("0" * 16)
+    arts = LA.LakeArtifacts(store)
+    assert arts.put({pkg: SANDBOXED}) == 1 and [e for e, _ in arts.added] == [f"keys/{keyed['P.A'].key}.json"]
+    names = ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c"]
+    assert json.loads((store / "keys" / f"{keyed['P.A'].key}.json").read_text()) == {
+        "module": "P.A", "scope": "p", "hash": hashlib.sha256(b"P/A").hexdigest()[:16],
+        "outputs": json.loads((lib / "P/A.trace").read_text())["outputs"],
+        "sha256": {n: hashlib.sha256(f"P/A.{n.split('.', 1)[1]} {n.split('.')[0]}".encode()).hexdigest() for n in names}}
+    assert sorted(f.name for f in (store / "artifacts").iterdir()) == sorted(names)
+    (lib / "P/B.olean.hash").write_text("d" * 16)
+    assert arts.put({pkg: SANDBOXED}) == 2 and arts.put({pkg: SANDBOXED}) == 0, "P.B, then P, which imports it"
+    assert sorted(f.name for f in (store / "keys").iterdir()) == sorted(f"{k.key}.json" for k in keyed.values())
+    _built(pkg, "P/A", {"olean": "7" * 16, "ilean": "8" * 16, "c": "9" * 16})
+    assert arts.put({pkg: SANDBOXED}) == 0 and arts.added[-1][0] == f"keys/{keyed['P.A'].key}.json"
+    assert json.loads((store / "keys" / f"{keyed['P.A'].key}.json").read_text())["outputs"]["o"] == ["7" * 16 + ".olean"], \
+        "a newer build of a module replaces its entry"
+
+
+def test_only_a_module_the_run_compiled_goes_into_the_artifact_cache(tmp_path):
+    """A kept build holds modules an earlier run compiled from other sources that Lake's input hash took for these: indexed
+    under these sources' key, they would be restored for them elsewhere. Nor does a module Lake restored go in again, or one
+    whose artifact the cache holds with other bytes."""
+    pkg = _package(tmp_path)
+    lib = pkg / ".lake/build/lib/lean"
+    for t in lib.rglob("*.trace"):
+        os.utime(t, (1000, 1000))
+    assert LA.LakeArtifacts(tmp_path / "s1").put({pkg: SANDBOXED}, since=1000) == 0
+    os.utime(lib / "P/A.trace", (1001, 1001))
+    assert LA.LakeArtifacts(tmp_path / "s1").put({pkg: SANDBOXED}, since=1000) == 1
+    trace = json.loads((lib / "P/A.trace").read_text())
+    (lib / "P/A.trace").write_text(json.dumps(trace | {"synthetic": True}))
+    assert LA.LakeArtifacts(tmp_path / "s2").put({pkg: SANDBOXED}) == 0, "P.A restored: it, and P.B and P after it, stay out"
+    (lib / "P/A.trace").write_text(json.dumps(trace))
+    (tmp_path / "s3" / "artifacts").mkdir(parents=True)
+    (tmp_path / "s3" / "artifacts" / ("a" * 16 + ".olean")).write_text("other bytes under P.A's artifact's name")
+    assert LA.LakeArtifacts(tmp_path / "s3").put({pkg: SANDBOXED}) == 0
+
+
+def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
+    """Where `unshare` is missing, check.py builds without the sandbox, and compile-time code runs as the user: it could
+    leave in the build any outputs, traces and `setup.json` it chose, which `put` would index under a module's key for
+    every later build on the node to restore. Only a build whose check.py report says it ran in the sandbox goes in."""
+    pkg, store, said = _package(tmp_path), tmp_path / "store", []
+    arts = LA.LakeArtifacts(store)
+    for rep in ({"sandbox": False}, {}, {"sandbox": "true"}, None):
+        assert arts.put({pkg: rep}, log=said.append) == 0 and arts.added == [], rep
+    assert not (store / "keys").exists() and not (store / "artifacts").exists()
+    assert len(said) == 4 and all(s.endswith("none of its modules go into the artifact cache") for s in said)
+    assert arts.put({pkg: SANDBOXED}, log=said.append) == 3 and len(said) == 4
 
 
 def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_alone_holds(tmp_path):
     store = tmp_path / "store"
     (store / "artifacts").mkdir(parents=True)
+    (store / "keys").mkdir(parents=True)
     (store / "outputs" / "p").mkdir(parents=True)
     kept = tmp_path / "kept.olean"
     kept.write_bytes(b"k" * 100)
     os.link(kept, store / "artifacts" / "shared.olean")              # a kept build holds it too: no disk of the cache's own
     for i in range(4):
-        f, e = store / "artifacts" / f"{i}.olean", store / "outputs" / "p" / f"{i}.json"
+        f, e = store / "artifacts" / f"{i}.olean", store / "keys" / f"{i}.json"
         f.write_bytes(b"x" * 10)
         e.write_text("{}")
         os.utime(f, (i + 10, i + 10))
         os.utime(e, (i + 10, i + 10))
+    legacy = store / "outputs" / "p" / "0.json"                     # Lake's own layout, which no build reads any more
+    legacy.write_text("{}")
+    os.utime(legacy, (5, 5))
     os.utime(store / "artifacts" / "shared.olean", (1, 1))
     assert LA.LakeArtifacts(store, cap=40).prune() == 0
     assert LA.LakeArtifacts(store, cap=30).prune() == 3               # 40 > 30: the shared one goes first, then 0 and 1
     assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["2.olean", "3.olean"] and kept.is_file()
-    assert sorted(f.name for f in (store / "outputs" / "p").iterdir()) == ["2.json", "3.json"]
+    assert sorted(f.name for f in (store / "keys").iterdir()) == ["2.json", "3.json"] and not legacy.exists()
 
 
 def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
-    arts.put({pkg})
+    arts.put({pkg: SANDBOXED})
     dest = tmp / "lean-artifacts.tar.gz"
     assert arts.bundle(dest) == len(arts.added) > 0
     return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
@@ -396,26 +464,28 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     """Kept builds and the artifact cache are per node, and the trains spread over several machines, which share the cache
     rather than pin to one. A node takes a recorded check's bundle once, checked against its sha256, and never replaces a
     file."""
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
-    _built(pkg, "P/A", {"olean": "a" * 16, "ilean": "b" * 16, "c": "c" * 16})
-    _built(pkg, "P/B", {"olean": "d" * 16, "ilean": "b" * 16, "c": "f" * 16})
+    pkg = _package(tmp_path)
+    keyed = LA.MK.keys(pkg)
     dest, h = _bundle_of(tmp_path, pkg)
+    with tarfile.open(dest) as t:
+        names = t.getnames()
+    assert [n.split("/")[0] for n in names] == ["keys"] * 3 + ["artifacts"] * 9, "entries before the artifacts they name"
     b = LA.LakeArtifacts(tmp_path / "node-b")
     (tmp_path / "node-b" / "artifacts").mkdir(parents=True)
     (tmp_path / "node-b" / "artifacts" / ("a" * 16 + ".olean")).write_text("node b's own")
     logged = []
-    assert b.take({LA.SHARED + h: dest.as_uri(), LA.SHARED + "0" * 64: dest.as_uri(), "k": "https://deps"}, logged.append) == 2
+    assert b.take({LA.SHARED + h: dest.as_uri(), LA.SHARED + "0" * 64: dest.as_uri(), "k": "https://deps"}, logged.append) == 3
     assert any("is not the one named" in ln for ln in logged)
     got = tmp_path / "node-b"
     assert sorted(f.relative_to(got).as_posix() for f in got.rglob("*") if f.is_file() and f.parent.name != "taken"
-                  and f.name != "lock") == sorted(f"artifacts/{n}" for n in
-                  ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c", "d" * 16 + ".olean", "f" * 16 + ".c"]) + sorted(
-                  f"outputs/p/{hashlib.sha256(m.encode()).hexdigest()[:16]}.json" for m in ("P/A", "P/B"))
+                  and f.name != "lock") == sorted([*(n for n in names if n.startswith("artifacts/")),
+                                                   *(f"keys/{k.key}.json" for k in keyed.values())])
     assert (got / "artifacts" / ("a" * 16 + ".olean")).read_text() == "node b's own"
     assert not os.stat(got / "artifacts" / ("d" * 16 + ".olean")).st_mode & 0o222
-    assert b.take({LA.SHARED + h: dest.as_uri()}, logged.append) == 0 and logged[-1].startswith("lean-audit: 2 module")
+    hashes = {m: hashlib.sha256(m.replace(".", "/").encode()).hexdigest()[:16] for m in keyed}
+    assert LA.MK.stage(got, pkg, [], tmp_path / "cache")[0] == {("p", hashes["P.B"]): "P.B", ("p", hashes["P"]): "P"}, \
+        "P.A's artifact there is not the one its entry names: built, not restored"
+    assert b.take({LA.SHARED + h: dest.as_uri()}, logged.append) == 0 and logged[-1].startswith("lean-audit: 3 module")
     junk = tmp_path / "junk.tar.gz"
     junk.write_bytes(b"not a tar")
     j = hashlib.sha256(junk.read_bytes()).hexdigest()
@@ -425,15 +495,26 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
 
 
-def test_a_bundle_member_outside_lake_s_layout_or_an_entry_without_its_outputs_is_left_out(tmp_path):
+def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_artifacts_is_left_out(tmp_path):
+    """An artifact goes in only as one an entry before it names, with the sha256 it names; an entry once every artifact it
+    names is here. A bundle of Lake's own layout (`outputs/`), which no build reads any more, adds nothing."""
+    ok = hashlib.sha256(b"ok").hexdigest()
+
+    def entry(art, sha):
+        return json.dumps({"module": "P.A", "scope": "p", "hash": "1" * 16, "outputs": {"o": [art]},
+                           "sha256": {art: sha}}).encode()
+
     bad = tmp_path / "bad.tar.gz"
     with tarfile.open(bad, "w:gz") as t:
-        for name, data in [("../escape", b"x"), ("artifacts/../../x.olean", b"x"), ("artifacts/" + "e" * 16 + ".olean", b"ok"),
-                           ("outputs/p/" + "1" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
-                           ("outputs/p/" + "2" * 16 + ".json", json.dumps({"o": ["9" * 16 + ".olean"]}).encode()),
-                           ("outputs/p/" + "3" * 16 + ".json", b"not json"),
-                           ("outputs/../" + "4" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
-                           ("outputs/./" + "5" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode())]:
+        for name, data in [("keys/" + "1" * 64 + ".json", entry("e" * 16 + ".olean", ok)),
+                           ("keys/" + "2" * 64 + ".json", entry("9" * 16 + ".olean", ok)),          # its artifact isn't here
+                           ("keys/" + "3" * 64 + ".json", b"not json"),
+                           ("keys/" + "4" * 64 + ".json", entry("8" * 16 + ".olean", "0" * 64)),    # not its artifact's bytes
+                           ("keys/../" + "5" * 64 + ".json", entry("e" * 16 + ".olean", ok)),
+                           ("outputs/p/" + "6" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
+                           ("../escape", b"x"), ("artifacts/../../x.olean", b"x"),
+                           ("artifacts/" + "e" * 16 + ".olean", b"ok"), ("artifacts/" + "8" * 16 + ".olean", b"ok"),
+                           ("artifacts/" + "7" * 16 + ".olean", b"ok")]:                            # no entry names it
             info = tarfile.TarInfo(name)
             info.size = len(data)
             t.addfile(info, io.BytesIO(data))
@@ -441,7 +522,7 @@ def test_a_bundle_member_outside_lake_s_layout_or_an_entry_without_its_outputs_i
     store = tmp_path / "node"
     assert LA.LakeArtifacts(store).take({LA.SHARED + h: bad.as_uri()}, lambda s: None) == 1
     assert sorted(f.relative_to(store).as_posix() for f in store.rglob("*") if f.is_file() and f.name != "lock"
-                  and f.parent.name != "taken") == ["artifacts/" + "e" * 16 + ".olean", "outputs/p/" + "1" * 16 + ".json"]
+                  and f.parent.name != "taken") == ["artifacts/" + "e" * 16 + ".olean", "keys/" + "1" * 64 + ".json"]
     assert not (tmp_path / "escape").exists() and not (tmp_path / "x.olean").exists()
 
 
@@ -497,8 +578,11 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
     _tree(tmp_path, monkeypatch)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
 
-    def put(self, pkgs):
-        self.added = [(f"outputs/p/{'1' * 16}.json", ["e" * 16 + ".olean"])]
+    put_with = []
+
+    def put(self, reports, since=None, log=print):
+        put_with.append({p.name: rep for p, rep in reports.items()})
+        self.added = [(f"keys/{'1' * 64}.json", ["e" * 16 + ".olean"])]
         return 1
 
     monkeypatch.setattr(LA.LakeArtifacts, "put", put)
@@ -508,6 +592,8 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                       log=lambda s: None, bundle=bundle) == 1
         assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
+        assert put_with[-1] == {"a": json.loads((tmp_path / f"out{n}" / "audit.json").read_text())["packages"][0]}, \
+            "the passing package, with check.py's report on it, which says whether it was built in the sandbox"
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     def step():

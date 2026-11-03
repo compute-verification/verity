@@ -64,11 +64,11 @@ its registration's seconds a step (``registered_s``), the part of them inside `p
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
-serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `receipts_producer`): h1u.cu's proof-block kernel of
-the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
-registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
+serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units
+(``benchmarks/pouw/served_h1/producer.py``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
+``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
 window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
+(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``pouw_cuda/noise.cu``'s) computes
 them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
 J10-R's tile proof block (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
 and they are held to `h1tile.j10r_reference`; v1's proof block is the default. ``--ks K[,K...]`` is the pouw setting ``ks``:
@@ -1287,15 +1287,16 @@ def producer() -> Any:
 
 
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
-    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
-    `h1`, h1u.cu's proof-block kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
-    on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
-    layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
-    v1's or J10-R's (``--j10r``)."""
-    P = producer()
-    kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
-    made = P.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
-                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
+    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`pouw_h1_receipts.Receipts`) for the
+    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (`producer().Units`) over each linear's int8 weight in
+    `layers` in place (no second copy on the GPU), or with a ``.cubin`` SO (noise.cu's) the torch chain over noise.cu's
+    noise, keeping the first layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the
+    window Program's form, v1's or J10-R's (``--j10r``)."""
+    from verity_vllm.protocols.pouw.h1 import receipts as RC
+
+    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer().Units(so)}
+    made = RC.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
+                       keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
@@ -1556,7 +1557,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
                          "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
-                         "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+                         "(pouw_cuda/noise.cu's, receipts.noise_cubin) takes receipts.py's torch chain over its noise")
     ap.add_argument("--arch", help="fill with --served: the H1 device record (h1device.DEVICES: sm_90, the H200; sm_120, "
                                    "the RTX PRO 6000) whose domain bounds each K's tile unit (default: the serving card's, "
                                    "pouw_h1_served.card_arch)")
