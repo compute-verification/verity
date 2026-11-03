@@ -1,9 +1,11 @@
 """te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's three
 policies: workloads.json (the console's tests read it) is the module's output; every row carries each kind's term,
-their max, the binding kind and what it rests on; the console's dial formula on a point's columns alone gives
-formalism.at's rho (the token kind with Fit) at every policy; the shapes, Delta_grad and a training token's gates are
-what the 45M pilot's traces measure; the full-training records are within 1% of the model, and the LoRA record above
-it by under 30% (the model's even u_in is A1''s conservative form; the trace's front-loads); the fresh-products kind
+their max, the binding kind and what it rests on, and each input's source; the console's dial formula on a point's
+columns alone gives formalism.at's rho (the token kind with Fit) at every policy; the shapes, u(1), Delta, Delta_grad
+and a training token's gates are what the 45M pilot's traces and the standard-workloads island's distillation measure;
+the full-training records are within 1% of the model, the LoRA record above it by under 30% (the model's even u_in is
+A1''s conservative form; the trace's front-loads) and the island's student below it by its measured t, every other
+kind within 2% on each record; the fresh-products kind
 is the amortized Loomis-Whitney cap with its entry term, over exactly the products of two fresh operands; the
 reduction kind is a maximum, not 1 plus; and the readings the spec quotes hold: DiLoCo is standard training's bound
 until a phase and every sync fit a block, a teacher lowers rho by the student's share and leaves the blocks, RL's
@@ -101,6 +103,7 @@ def test_shape_and_traced_quantities():
     assert math.isclose(sh.d_model, 512, abs_tol=1e-9) and math.isclose(sh.n_layer, 6, abs_tol=1e-9)
     st20 = W.dense(35_658_240, vocab=32_000)
     assert math.isclose(st20.d_model, 512, abs_tol=1e-9) and st20.tau == 15
+    assert W.dense(35_658_240, vocab=32_000, d_model=512).n_layer == 6
     # the pilot's traces: gradient cut plus state, r20261102-140347-a1c2 (AdamW) and r20261102-134356-ee8f (Muon)
     assert W.delta_grad(sh, "adamw") == 4_322_869_248
     assert W.delta_grad(sh, "muon") == 3_706_306_560
@@ -121,14 +124,66 @@ def test_dials_are_the_functions_parameters():
 
 
 def test_checks_are_near_their_records(ref):
+    island = W.island_checks("distill")[0].name
     for name, w in ref["workloads"].items():
         for cname, ck in w["checks"].items():
             for q in POLICIES:
                 record, model = ck["rho"][q]["record"], ck["rho"][q]["model"]
                 if name == "standard":
                     assert math.isclose(model, record, rel_tol=0.01), (cname, q)
+                elif cname == island:
+                    # the model's t, the 45M trace's, against the student's measured 0.781: the token form goes as 1/t
+                    assert math.isclose(model / record, 0.780834 / W.T_DENSE, rel_tol=2e-3), (cname, q)
                 else:
                     assert 0.7 * record < model <= record, (cname, q)
+                kinds = ck["rho"][q]["kinds"]
+                assert kinds["record"]["binding_kind"] == kinds["model"]["binding_kind"] == "fresh_products"
+                for kind in ("fresh_products", "reduction", "update"):
+                    assert math.isclose(*(kinds[side]["terms"][kind] for side in ("record", "model")), rel_tol=0.02), \
+                        (cname, q, kind)
+
+
+def test_the_model_is_calibrated_on_the_records():
+    pilot, student = W.dense(W.REFERENCE_PARAMS), W.dense(13_012_224, vocab=32_000, d_model=256)
+    assert student.n_layer == 6 and student.tau == 15
+    # u(1): the matrices in bf16, the embedding and norms in fp32, exactly the pilot's and the island's student's
+    assert math.isclose(pilot.weight_bits("bf16"), 1_132_675_072, rel_tol=1e-12)
+    assert student.weight_bits("bf16") == 339_320_832
+    # Delta: theta' in fp32, the records' code less its header (1,440,996,608 and 416,431,792 bits)
+    for sh, code in ((pilot, 1_440_996_608), (student, 416_431_792)):
+        assert 0 < code - W.model("standard", n_params=sh.params, vocab=sh.vocab).measured.delta_bits < 50_000
+    # Delta_grad: the island's trace, 96 N_s, and its partial gradient 32 N_s (the gradient cut less the state)
+    assert W.delta_grad(student, "adamw") == 1_249_173_504
+    (ck,) = W.island_checks("distill")
+    assert ck.menu["delta_g_bits"] == 32 * 13_012_224 == W.model("distill", **ck.dials).steps[0].delta_g
+
+
+def test_the_island_row_is_its_panels(ref):
+    (ck,) = W.island_checks("distill")
+    row = json.loads(W.RECORDS.read_text())["rows"][0]
+    # page_rho on the row's columns gives the island's own rho at the console default, our default policy
+    assert math.isclose(AP.page_rho(ck.columns, *W.CONSOLE)[0], row["rho_console"], rel_tol=1e-5)
+    assert ck.dials["vocab"] == 32_000 and ck.dials["student_d_model"] == 256
+    assert set(ck.dials) - {"vocab", "student_d_model"} == set(row["dials"])
+    got = ref["workloads"]["distill"]["checks"][ck.name]
+    assert all(v == "measured" for v in got["record_status"].values())
+    measured = {key for key, v in got["model_status"].items() if v.startswith("measured: ")}
+    assert measured == {"C_gates", "w_gates", "tau_bits", "a_bits", "delta_bits", "delta_t_bits", "d_gates",
+                        "delta_grad_bits", "w_fit_gates", "alpha_ratio"}
+    assert all(got["model_status"][key].startswith("measured: " + ck.record) for key in measured)
+
+
+def test_every_input_says_where_it_comes_from(ref):
+    for name, pname, p in points(ref):
+        assert set(p["input_status"]) == set(W.KEYS), (name, pname)
+        assert all(v.startswith(("measured: ", "assumed: ")) for v in p["input_status"].values()), (name, pname)
+    assert set(ref["menu_status"]) == {"fresh", "widths", "steps", "delta_g_bits"}
+    # the default dense point is the 45M pilot's AdamW record wherever the record measures the model's value
+    st = ref["workloads"]["standard"]["points"]["default"]["input_status"]
+    measured = {key for key, v in st.items() if v.startswith("measured: ")}
+    assert measured == {"tau_bits", "a_bits", "u_points", "delta_bits", "delta_t_bits", "d_gates", "delta_grad_bits"}
+    assert st["w_gates"].startswith("assumed: ") and W.PILOT_ADAMW in st["w_gates"]
+    assert all(v.startswith("assumed: ") for v in ref["workloads"]["standard"]["points"]["7B"]["input_status"].values())
 
 
 def test_policies_and_their_attention():
