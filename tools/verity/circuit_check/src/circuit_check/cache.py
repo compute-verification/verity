@@ -10,7 +10,8 @@ the task list's build, nor an earlier target's check):
   `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
   that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
   `verity.ml.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
-  loaded it);
+  loaded it), and of every one its process, or one it was forked from, called before it ended (`_CALLED`): a process-wide memo
+  of a model's result, filled by another target's check or a binding's build, hands it the result without a call;
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
   and every module it imported, already loaded or not (``__import__`` and ``importlib.import_module``: what a module registered
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
@@ -97,9 +98,11 @@ which the interpreter, platform, distribution list and ``sys.path`` stand for (t
 among it: ``$CXX``, and whether the library a build directory holds is the one its sources compile to, which `_jit.stale`
 judges by their times); a file a module read while it was imported before
 tracing began (the checker's own imports, ``verity.ml.circuits`` and ``verity.ml.circuits.evaluation`` among them: their sources are inputs, data
-they opened at import is not); what a function read or imported in its body when it did not run in the recording (a value a
-process-wide cache, ``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own
-module and its closure); an edit to a binding that does not reach the target, even if it changes which object of the same id
+they opened at import is not), and a C++ model called before then (`cli.prebuild` builds them in a process of its own); what
+a function read or imported in its body when it did not run in the recording (a value a process-wide cache,
+``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own module and its
+closure and the C++ models any call ran, `_CALLED`); an edit to a binding that does not reach the target, even if it changes
+which object of the same id
 the catalog builds (the registry refuses two Definitions of one id); what a binding ran that changes, keeping its
 id, what a Definition it did not make does at check time without changing its descriptor: a value it computed (from a module
 only it imported) and left in a module's state, or closed over, where an evaluator reads it; a value a module only the
@@ -159,6 +162,9 @@ UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os
 #: the audit event each call of a C++ model raises with the files its library is built from
 #: (`verity.ml.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
 MODEL = "verity.numerics.model"
+#: the sources in the tree of every C++ model this process, or one it was forked from, called while tracing (`MODEL`): a
+#: process-wide memo of a model's result hands it to a later check or build without a call, so every recording holds them all
+_CALLED: set[str] = set()
 _UNTRACED: list[str] = []
 _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
@@ -495,7 +501,9 @@ def _hook(event: str, args: tuple) -> None:
     elif event == "ctypes.dlopen" and args and args[0] and (rel := _rel(args[0])) is not None:
         _FRAMES[-1].libs.add(rel)                      # a library built in the tree: an input by its bytes (`_digests`)
     elif event == MODEL and args:
-        _FRAMES[-1].files.update(rel for s in args[0] if (rel := _rel(s)) is not None)
+        called = [rel for s in args[0] if (rel := _rel(s)) is not None]
+        _FRAMES[-1].files.update(called)
+        _CALLED.update(called)
 
 
 def _probing(fn):
@@ -578,7 +586,8 @@ def internal() -> Iterator[None]:
 def recording(merge: bool = True) -> Iterator[Frame]:
     """Record what runs inside: a new frame on top, which its enclosing recording (not the process's own) also holds when it
     ends, with ``merge``.  Every code object starts afresh in it (`sys.monitoring.restart_events`), so a function an earlier
-    recording ran is seen again."""
+    recording ran is seen again.  It ends holding every model called so far (`_CALLED`): what it read from a memo may be one's
+    result."""
     fr = Frame()
     if not _ROOT:
         yield fr
@@ -591,6 +600,7 @@ def recording(merge: bool = True) -> Iterator[Frame]:
         yield fr
     finally:
         _FRAMES.pop()
+        fr.files |= _CALLED
         _EPOCH[0] += 1
         if merge and len(_FRAMES) > 1:
             _FRAMES[-1].merge(fr)

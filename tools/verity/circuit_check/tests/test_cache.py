@@ -494,7 +494,8 @@ NATIVE = HARNESS.replace("CC.trace(root)", "import syn.native\nsyn.native.answer
 def test_editing_a_cpp_models_source_reruns_the_check_that_called_it_whatever_its_build_directory(tmp_path):
     """SynTop's check calls a C++ model whose library was built in ``VERITY_NUMERICS_BUILD_DIR`` and loaded before the check, so
     no read of its source picks the library or happens in the check: the call itself says the source (`_jit.Model`,
-    `cache.MODEL`).  Its entry holds the source by content, SynOther's doesn't, and an edit reruns SynTop alone."""
+    `cache.MODEL`).  Its entry holds the source by content, SynOther's (checked before it) doesn't, and an edit reruns SynTop
+    alone."""
     from circuit_check import cache as CC
 
     assert CC.MODEL == _jit.CALLED
@@ -513,6 +514,43 @@ def test_editing_a_cpp_models_source_reruns_the_check_that_called_it_whatever_it
     _edit(root, "cpp/m.cpp", "return 7", "return 8")
     out = _run(root, NATIVE, env=env)
     assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1 and _values(root, "SynTop_v1", "native") == [7, 8]
+
+
+#: `syn.native` with the model's answer memoized process-wide, as `functools.cache` does: a check it serves calls no model
+MEMO_PY = NATIVE_PY.replace("from pathlib import Path", "import functools\nfrom pathlib import Path") + """
+
+@functools.cache
+def remembered():
+    return answer()
+"""
+
+
+@pytest.mark.skipif(shutil.which(_jit.cxx()) is None, reason="no C++ compiler")
+@pytest.mark.parametrize("forked", [False, True], ids=["one-process", "forked-after-a-build"])
+def test_editing_a_cpp_models_source_reruns_every_check_a_memo_of_its_result_served(tmp_path, forked):
+    """Both checks read the model's answer from a process-wide memo, filled by the process's first call: SynOther's check, the
+    first of the two in the process that checks both, or SynOther's binding's build, in the process each target's own is forked
+    from (as `circuit-check` runs).  SynTop's check is served from it and calls no model, so no call in its check says the source;
+    it holds it all the same (`cache._CALLED`), and an edit of the source reruns both checks with the model's new answer."""
+    root = _tree(tmp_path / "tree")
+    (root / "cpp").mkdir()
+    (root / "cpp" / "m.cpp").write_text('extern "C" int answer() { return 7; }\n')
+    (root / "syn" / "native.py").write_text(MEMO_PY.lstrip("\n"))
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import native, reg")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}', '"kind": reg.KINDS.get(fn.id), "native": native.remembered()}')
+    harness = NATIVE
+    if forked:
+        _edit(root, "syn/catalog.py", "    from syn import other\n", "    from syn import native, other\n    native.remembered()\n")
+        harness = NATIVE.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
+        assert harness != NATIVE
+    env = {"VERITY_NUMERICS_BUILD_DIR": str(tmp_path / "libs")}
+    assert _run(root, harness, env=env)["hits"] == []
+    assert _run(root, harness, env=env)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "cpp/m.cpp", "return 7", "return 8")
+    out = _run(root, harness, env=env)
+    assert out["hits"] == [], f"reused with the model's old answer: {out['hits']}"
+    assert out["stats"]["stored"] == 2
+    assert {t: _values(root, t, "native") for t in ("SynOther_v1", "SynTop_v1")} == {"SynOther_v1": [7, 8], "SynTop_v1": [7, 8]}
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
