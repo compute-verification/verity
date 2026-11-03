@@ -194,11 +194,12 @@ theorem drawn_full {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
 /-- **The files set the inner statement up as one hidden-output table at no draw** (`RecCoins.Files.stmt`). -/
 theorem files_stmt {f : RecCoins.Files} {spec : SessionSpec} {st : Stmt}
     (h : f.stmt "the inner session" = .ok (spec, st)) :
-    Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st ∧
+    Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st ∧
       spec = st.spec := by
   unfold RecCoins.Files.stmt at h
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
-  cases hs : Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  cases hs : Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+      (program := f.program) with
   | error e => simp [hs, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | ok q =>
     obtain ⟨spec0, sts0⟩ := q
@@ -234,7 +235,7 @@ theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     | none => simp [filesOf, hq] at hheld
     | some p => exact ⟨p, rfl⟩
   have hfs : filesOf r = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none,
-      some (innerFormOf r.innerRaw)⟩) := by rw [filesOf, hp]; rfl
+      some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
   obtain ⟨hst', hspec'⟩ := files_stmt hstm

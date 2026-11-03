@@ -1,5 +1,5 @@
 /-
-The proof service's run of one registration, from its public check through its verdict, as `service.Stream` makes it on a Spec
+The proof system's run of one registration, from its public check through its verdict, as `service.Stream` makes it on a Spec
 whose selection rule `Select.Rule` reads: what the challenger holds once a delivered proof's outcome is decided, and every
 check the stream ran on it, in the stream's order.
 

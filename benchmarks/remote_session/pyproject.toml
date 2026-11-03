@@ -25,7 +25,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the challenger's coins name their claim instance (sampled_proofs/challenger.py's `coin_claim`)
           "verity/core/claims/__init__.py",
-          # the Lean verifier the sessions run beside audit.Session, which computes auditor_line.py's line
+          # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
           # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
           # path requires
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
