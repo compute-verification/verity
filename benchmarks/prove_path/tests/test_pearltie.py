@@ -357,7 +357,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
     params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
                            registered=tied["registered"], scheme=CS.SCHEME, outputs=tied["outputs"], schemas=tied["schemas"])
-    params |= {"window_root": RUN, "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]}
+    params |= {"window_root": RUN}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),
             "params": json.loads(json.dumps(params))}
 
