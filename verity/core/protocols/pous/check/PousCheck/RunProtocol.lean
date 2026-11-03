@@ -155,7 +155,7 @@ def WIDE320_CLAIMS : List String := WIDE_CLAIMS ++ ["prf/sha-512"]
 any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
 state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
 beside `2^eps_log2 = 2^-128`. `certificate` doesn't take it. -/
-def wide320Certificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+def wide320Certificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
            theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (1, 2 ^ 20), epsLog2 := -127,
@@ -164,7 +164,7 @@ def wide320Certificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
 
 /-- `period.certificate`: P2's registered certificate (`Certificate.p2`) when the store is its point, segment count and
 all, else P2's proved family's (`familyCertificate`), else the per-period guarantee's (`wideCertificate`), else none. -/
-def certificate (q : Run.Point) : Option Certificate.Certificate :=
+def certificate (q : Run.Point) : Option Certificate.CapacityBound :=
   let p := q.params
   let rest := (familyCertificate p.w p.c0 p.blocks).orElse fun _ => wideCertificate p.w p.c0 p.blocks
   match Certificate.p2 p.w p.c0 p.blocksPerSegment with
