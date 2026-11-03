@@ -11,9 +11,9 @@ import Proofs.Flock.SessionLoop.RoundLigFrame
 /-!
 # A rep's Ligerito rounds past level 0
 
-`LiveSched`'s equation at rep stream `2j + r`'s Ligerito rounds after level 0's closing round (`Masked.repSlot`
-`k0 + 4`) and before the inner proof (`Masked.repSlot` `k0 + 7 + 11R`, `R` the levels past level 0): the levels ≥ 1
-(each a fold, its commitment at the tape's salts, its sumcheck) and the queries. Past the algebraic phase passing is
+`LiveSched`'s equation at rep stream `2j + r`'s Ligerito rounds from level 0's closing round (`Masked.repSlot`
+`k0 + 4`) to the last before the inner proof (`Masked.repSlot` `k0 + 7 + 11R`, `R` the levels past level 0): level 0's
+close, the levels ≥ 1 (each a fold, its commitment at the tape's salts, its sumcheck) and the queries. Past the algebraic phase passing is
 byte equality, so the release is the frame's scheduled round, which the opening's feed computes from the frame's table,
 the levels' salts and the coins; the switched session sends the same round from its table (`Masked.swSrcE`).
 
@@ -125,8 +125,8 @@ namespace LeanRelease
 
 set_option maxHeartbeats 2000000 in
 /-- **Ligerito past level 0**: at rep stream `2j + r`'s round `i` past its PIOP (`Masked.repSlot` `i`), from
-`k0 + 5` to the last before the inner proof, the release of the worker's round is the switched session's message
-without its leading domain frame. -/
+`k0 + 4` (level 0's close) to the last before the inner proof, the release of the worker's round is the switched
+session's message without its leading domain frame. -/
 theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -140,7 +140,7 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
     (hok : ((allOk (Loop.finS.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval CoinOpen.shaH).1 = true)
     (href : (ofLoopLink L₀ src real).refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false)
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false)) (j : Fin (Masked.jOf x)) (r : Fin 2) {i : ℕ}
-    (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i) (h1 : (Masked.zkTab x j).sch.k0 + 5 ≤ i)
+    (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i) (h1 : (Masked.zkTab x j).sch.k0 + 4 ≤ i)
     (h2 : i < (Masked.zkTab x j).sch.k0 + 7 + 11 * ((Masked.zkTab x j).sch.levels.size - 1)) :
     (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
       dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) := by
@@ -225,10 +225,8 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       (by rw [List.take_length, hsz]; exact he)
     rw [List.take_length] at h
     exact h
-  have hG' := (congrArg (FlockComplete.LigCoin.Good
-    (fun p k => (Loop.wordsAt x (ops.map fun q => CoinLayer.rd q.2) p)[k]!)
-    (Masked.ligCoin (Loop.finCoins x ops)) ops.length l₂.size) hLf).mpr hG
-  have hcoin := FlockComplete.LigCoin.ligeritoPZk_go_coin (hn := hn62) (hq := hq63) (hG := hG')
+  rw [← hLf] at hG
+  have hcoin := FlockComplete.LigCoin.ligeritoPZk_go_coin (hn := hn62) (hq := hq63) (hG := hG)
   have hLf' := (congrArg Prod.snd hcoin).symm.trans hLf
   -- from `ligP0 + k0 + 4` on, the frame's log is the session's
   have hsz : l₃.size = l₂.size := hl₃.trans (hbase.symm.trans hl₂.symm)
@@ -264,9 +262,10 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
   have hB : l₃.size + (Masked.zkTab x j).sch.k0 + 4 ≤ ops.length := by
     rw [hl₃]
     omega
-  have hg : Ls[ops.length]? = Lf[ops.length]? :=
-    (congrArg (fun z => z.2[ops.length]?) hLs).symm.trans
-      ((hk.log.get ops.length hB).trans (congrArg (fun z => z[ops.length]?) hLf'))
+  have hg : Ls[ops.length]? = Lf[ops.length]? := by
+    have e := hk.log.get ops.length hB
+    rw [hLs, hLf'] at e
+    exact e
   have hLL : Ls[ops.length]! = Lf[ops.length]! := by
     simp only [Array.getElem!_eq_getD, Array.getD_eq_getD_getElem?, hg]
   rw [hrel, hLL, hdd]
