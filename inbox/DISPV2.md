@@ -11,3 +11,9 @@
   Note it in the body.
 - **The recursive audit's inner live check still runs v1:** list it in the body as known and out of this PR's scope; I'll staff it.
 - Then open the PR (`research queue open ... --by proofs`), commit the kept records lock-only, recheck vs a fresh next.
+
+## 10:40Z Tue 3 Nov: soundness confirmed StageHeld
+
+Soundness (09:53Z): StageHeld's one-stage clause over `OneStageZk.Params` with R2 against `p.base.verifier` is the ruling's direct
+consequence; R2 is still required, nothing is added. **Mark it** once your runs pass and #7037's head is merged; the Properties record
+change shows in Daniel's landing DM. Keep a test that refuses v1 by name (you have one; name it in the body).
