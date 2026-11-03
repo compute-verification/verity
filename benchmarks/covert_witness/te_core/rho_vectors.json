@@ -535,6 +535,7 @@
     "delta_bits": "the trace's update cut, theta' as the step reads it (the grown block's four tensors)",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
     "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
+    "products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
@@ -1247,7 +1248,20 @@
      "tokens": 2048
     }
    ],
-   "products": null,
+   "products": {
+    "capture": "4.8",
+    "k": 65536.0,
+    "kinds_macs": {
+     "attention": 0.0,
+     "expansion": 226492416.0,
+     "fresh": 0.0,
+     "self": 0.0,
+     "theta": 13186891776.0,
+     "unaffected": 1056964608.0
+    },
+    "order": "unknown",
+    "products": []
+   },
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -1810,6 +1824,7 @@
     "delta_bits": "stated: an E of the live entries alone (w_gate's and w_up's 8 live rows and w_down's 8 live columns at bf16, mlp_norm at fp32; wildcard's 05:46Z LOOPHOLE)",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
     "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
+    "products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
@@ -2522,7 +2537,20 @@
      "tokens": 2048
     }
    ],
-   "products": null,
+   "products": {
+    "capture": "4.8",
+    "k": 65536.0,
+    "kinds_macs": {
+     "attention": 0.0,
+     "expansion": 226492416.0,
+     "fresh": 0.0,
+     "self": 0.0,
+     "theta": 13186891776.0,
+     "unaffected": 1056964608.0
+    },
+    "order": "unknown",
+    "products": []
+   },
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -3395,6 +3423,7 @@
     "delta_bits": "the trace's update cut, theta' as the step reads it (every block tensor)",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
     "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
+    "products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
@@ -4506,7 +4535,65 @@
      "tokens": 2048
     }
    ],
-   "products": null,
+   "products": {
+    "capture": "4.8",
+    "k": 65536.0,
+    "kinds_macs": {
+     "attention": 1610612736.0,
+     "expansion": 511705088.0,
+     "fresh": 142606336.0,
+     "self": 0.0,
+     "theta": 13186891776.0,
+     "unaffected": 0.0
+    },
+    "order": "unknown",
+    "products": [
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 64,
+      "k_whole": null,
+      "macs": 50331648.0,
+      "outputs": 786432.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 64,
+      "k_whole": 1024.0,
+      "macs": 16777216.0,
+      "outputs": 262144.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 64,
+      "k_whole": null,
+      "macs": 25165824.0,
+      "outputs": 393216.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 192,
+      "k_whole": 64.0,
+      "macs": 50331648.0,
+      "outputs": 262144.0
+     }
+    ]
+   },
    "tail_share": 0.9839505013150606,
    "tau_bits": 16.015625,
    "u": [
@@ -5491,6 +5578,7 @@
     "delta_bits": "the trace's update cut, the factors and gains as the step reads them",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
     "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
+    "products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
@@ -7932,7 +8020,76 @@
      "tokens": 2048
     }
    ],
-   "products": null,
+   "products": {
+    "capture": "4.8",
+    "k": 65536.0,
+    "kinds_macs": {
+     "attention": 1610612736.0,
+     "expansion": 48758784.0,
+     "fresh": 14155776.0,
+     "self": 0.0,
+     "theta": 13623099392.0,
+     "unaffected": 0.0
+    },
+    "order": "unknown",
+    "products": [
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 4,
+      "k_whole": 64.0,
+      "macs": 3145728.0,
+      "outputs": 786432.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 4,
+      "k_whole": 192.0,
+      "macs": 2097152.0,
+      "outputs": 524288.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 64,
+      "k_whole": null,
+      "macs": 3670016.0,
+      "outputs": 57344.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 4,
+      "k_whole": 64.0,
+      "macs": 4194304.0,
+      "outputs": 1048576.0
+     },
+     {
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "cell_gates": 23682.0,
+      "gates_per_mac": 1480.125,
+      "k_dim": 64,
+      "k_whole": 1024.0,
+      "macs": 1048576.0,
+      "outputs": 16384.0
+     }
+    ]
+   },
    "tail_share": 0.9981917317164438,
    "tau_bits": 16.015625,
    "u": [
@@ -8855,15 +9012,18 @@
      "x0": 8.333582376964214e-05
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -8916,7 +9076,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 11.065531262155444,
    "rho": 11.065531262155444,
    "rho_fit": 1.0,
@@ -8934,7 +9094,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -8963,15 +9123,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9024,7 +9187,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9042,7 +9205,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9071,15 +9234,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9132,7 +9298,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9150,7 +9316,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9179,15 +9345,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9240,7 +9409,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9258,7 +9427,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9287,15 +9456,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9348,7 +9520,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9366,7 +9538,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9395,15 +9567,18 @@
      "x0": 8.333582376964214e-05
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9456,7 +9631,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9474,7 +9649,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9503,15 +9678,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9564,7 +9742,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9582,7 +9760,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9611,15 +9789,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9672,7 +9853,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9690,7 +9871,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9719,15 +9900,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9780,7 +9964,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9798,7 +9982,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9827,15 +10011,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 7658799104.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 0.0,
+      "expansion": 226492416.0,
+      "fresh": 0.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 1056964608.0
      },
      "order": "unknown",
-     "rows": 35,
-     "source": "op log",
-     "unknown_share": 0.5292753623188405
+     "products": 0
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9888,7 +10075,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9906,7 +10093,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -9935,15 +10122,18 @@
      "x0": 0.00034364702383247125
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6593445888.0,
-      "unknown": 8858370048.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 511705088.0,
+      "fresh": 142606336.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 56,
-     "source": "op log",
-     "unknown_share": 0.5732899022801303
+     "products": 4
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9996,7 +10186,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 8.35335685982954,
    "rho": 8.35335685982954,
    "rho_fit": 1.0,
@@ -10014,7 +10204,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10043,15 +10233,18 @@
      "x0": 0.08627081452593345
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6593445888.0,
-      "unknown": 8858370048.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 511705088.0,
+      "fresh": 142606336.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 56,
-     "source": "op log",
-     "unknown_share": 0.5732899022801303
+     "products": 4
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10104,7 +10297,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10122,7 +10315,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10151,15 +10344,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6593445888.0,
-      "unknown": 8858370048.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 511705088.0,
+      "fresh": 142606336.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 56,
-     "source": "op log",
-     "unknown_share": 0.5732899022801303
+     "products": 4
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10212,7 +10408,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10230,7 +10426,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10259,15 +10455,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6593445888.0,
-      "unknown": 8858370048.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 511705088.0,
+      "fresh": 142606336.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 56,
-     "source": "op log",
-     "unknown_share": 0.5732899022801303
+     "products": 4
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10320,7 +10519,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.9996631800490919,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10338,7 +10537,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10367,15 +10566,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6593445888.0,
-      "unknown": 8858370048.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 511705088.0,
+      "fresh": 142606336.0,
+      "self": 0.0,
+      "theta": 13186891776.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 56,
-     "source": "op log",
-     "unknown_share": 0.5732899022801303
+     "products": 4
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10428,7 +10630,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10446,7 +10648,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10475,15 +10677,18 @@
      "x0": 0.08805491470908546
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 8485076992.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 48758784.0,
+      "fresh": 14155776.0,
+      "self": 0.0,
+      "theta": 13623099392.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 126,
-     "source": "op log",
-     "unknown_share": 0.5547024952015355
+     "products": 5
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10536,7 +10741,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 2.7344655410785834,
    "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
@@ -10554,7 +10759,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10583,15 +10788,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 8485076992.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 48758784.0,
+      "fresh": 14155776.0,
+      "self": 0.0,
+      "theta": 13623099392.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 126,
-     "source": "op log",
-     "unknown_share": 0.5547024952015355
+     "products": 5
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10644,7 +10852,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
@@ -10662,7 +10870,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10691,15 +10899,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 8485076992.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 48758784.0,
+      "fresh": 14155776.0,
+      "self": 0.0,
+      "theta": 13623099392.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 126,
-     "source": "op log",
-     "unknown_share": 0.5547024952015355
+     "products": 5
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10752,7 +10963,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.9999300519868622,
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
@@ -10770,7 +10981,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10799,15 +11010,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 8485076992.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 48758784.0,
+      "fresh": 14155776.0,
+      "self": 0.0,
+      "theta": 13623099392.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 126,
-     "source": "op log",
-     "unknown_share": 0.5547024952015355
+     "products": 5
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10860,7 +11074,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
@@ -10878,7 +11092,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
   {
@@ -10907,15 +11121,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "macs": {
-      "attention": 0,
-      "theta": 6811549696.0,
-      "unknown": 8485076992.0
+     "capture": "4.8",
+     "k_classified": 65536.0,
+     "kinds_macs": {
+      "attention": 1610612736.0,
+      "expansion": 48758784.0,
+      "fresh": 14155776.0,
+      "self": 0.0,
+      "theta": 13623099392.0,
+      "unaffected": 0.0
      },
      "order": "unknown",
-     "rows": 126,
-     "source": "op log",
-     "unknown_share": 0.5547024952015355
+     "products": 5
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10968,7 +11185,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.7, reading A",
+   "label": "te_core 4.8, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": "inf",
@@ -10986,10 +11203,10 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
+    "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   }
  ],
- "version": "4.7",
+ "version": "4.8",
  "w_fwd_gates": 4925098176.0
 }

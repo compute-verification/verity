@@ -73,11 +73,13 @@ other quantity bits.
   kinds (fresh products, token, decoding) of each kind's share of |C| over its cap a block. It returns each kind's
   term (None, with the reason, where unmeasured), the max, the kind it binds on and what each kind rests on: fresh
   products Loomis-Whitney's cap (a theorem under `io_bound`'s premises, P-width among them, an assumption on a
-  reference circuit: `io_bound`'s bound on the products `formalism.products_of` takes from captured steps, measured
+  reference circuit: `io_bound`'s bound on the products `formalism.products_of` takes from captured steps, or
+  `formalism.products_of_trace` from the product rows a trace keeps from te_core 4.8 on (`capture.products`), measured
   where the capture says they're summed in a chain, since `io_bound` has the chain constant only and the tree
-  constant applies where the trace doesn't give the order; a record with only an op log, every ledger row so far, has
-  its log's product rows, `formalism.products_of_ops`, but no operand's freshness, so the term is unmeasured there
-  with the share of MACs it leaves unknown), token A1 under reading A with its witness family, decoding assumption
+  constant applies where the trace doesn't give the order, as no trace does; a record with only an op log, a ledger
+  row traced before 4.8, has its log's product rows, `formalism.products_of_ops`, but no operand's freshness, so the
+  term is unmeasured there with the share of MACs it leaves unknown), token A1 under reading A with its witness
+  family, decoding assumption
   (D). Where Fit fails ρ is max(1, that max). Gradient reduction, update application, reading B's token form and the
   per-gate token term come out beside it as labelled sensitivities, never in the max: (R) and (U) hold only for
   partitions split by tokens, and per_gate only for blocks that are no union of witnesses. `rho_vectors.json` holds
@@ -266,7 +268,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key; the console's policy (`CONSOLE`), one full session of the 45M reference in gates (`session_gates`, `session`: the matrices, the LM head and attention's score and value products over the session's context, at the shape `SHAPES` states for each size), which every producer reads |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`) and from a trace's product rows (`products_of_trace`, `product_kind`, `PRODUCTS_FROM`, `TRACED_PRODUCTS`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
@@ -283,7 +285,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`, reading A's checker `check` among them); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
+| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`, reading A's checker `check` among them), with the step's matrix products as `io_bound` reads them (`capture.products`: dims, each operand's θ′-dependence, passed widths and rates keyed by the capture's values, the order unknown); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count
