@@ -33,7 +33,7 @@ namespace LeanRelease
 /-- **The frame at a rep's Ligerito rounds past level 0**: at rep stream `2j + r`'s round `i` past its PIOP
 (`Masked.repSlot` `i`), from `k0 + 5` to the last before the inner proof, the rep's real table is `tb` with salts
 `hi`, and the history's coins from round `base` on are `cs`, the rep's opening's (its ring switch's, `γ`'s and
-Ligerito's), after its algebraic phase's `algC`. For every coin function that is `cs` from `base` on, `ligeritoPZk`'s
+Ligerito's), after its algebraic phase's `algC`, the coins from the rep's first round (`Masked.repBase`). For every coin function that is `cs` from `base` on, `ligeritoPZk`'s
 cut run at it, cut at the round and started past the ring switch (at Ligerito's first round, `Masked.repSlot` `0`),
 at the switch's target `T` and basis, the table's `cm0`, `g`, extras, lane pads and salts, zero pads and no nonces,
 logs `L`, where:
@@ -62,6 +62,7 @@ theorem release_lig_frame (L₀ : LeanRelease Flock.Wit Loop.Tp)
         (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[j.val]!
           (Loop.wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) ∧
       algC.size ≤ base ∧
+      Masked.repBase x (2 * j.val + r.val) + algC.size = base ∧
       (∀ a (ha : a < algC.size),
         algC[a] = Loop.wordsAt x (ops.map fun p => CoinLayer.rd p.2) (base - algC.size + a)) ∧
       base + cs.length = ops.length ∧
