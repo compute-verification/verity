@@ -25,7 +25,11 @@ decoder can carry) or with a list index, and single entries with an entropy-code
 - `entries`: single entries of the candidate matrices and of the gains `--norms` names, the ones with the most selection
   energy (each tensor's scaled by its learning rate squared, so a sign step's first-order gain ranks them), as many as
   CWSPAR1 (varint index gaps, `--entry-dtype` values) holds in `--cap` bytes and at most `--values`; a matrix's entries
-  are added to its weight in its forward (no extra matmul), a gain's train under a gradient mask.
+  are added to its weight in its forward (no extra matmul), a gain's train under a gradient mask;
+- `bitfit`: a bias vector on the `--bias` matrices of every block (the `lf` model's `bias` extension, zero at θ, so the
+  start's function), trained in fp32 with the gains `--norms` names; E is a model format (CWMODL1) of θ's config plus
+  `bias`, holding the biases in `--entry-dtype` and the trained gains in θ's dtype. Every block's biases are E's (θ has
+  none), so all of them train: `--layers` stays `all`.
 
 The gains (`--norms`) can ride along with every mechanism: in bf16 with the CWLORA1 ones, as `--norm-bits` deltas with
 the CWQUAN1 ones (θ is fp32, so a gain carried in full would cost 4 bytes). `--layers top:N` keeps every touched tensor
@@ -56,6 +60,7 @@ harness's checkpoints scores the most training its 5% holds.
     python launch.py START --island sparse --note "MECHANISM: ..." -- --cap BYTES --mech qlora [--embed-rank R] [--lr 1e-3]
     python launch.py START --island sparse --note "entries: ..." -- --cap BYTES --mech entries [--values N] [--opt sign]
     python launch.py START --island sparse --note "vote: ..." -- --cap BYTES --mech entries --grad-code vote [--targets none]
+    python launch.py START --island sparse --note "bitfit: ..." -- --cap BYTES --mech bitfit [--bias all] --probe 0
 """
 from __future__ import annotations
 
@@ -631,13 +636,14 @@ def main() -> int:
     ap.add_argument("--klass", required=bool(classes), choices=("reference", "e1mb", "e100kb") if classes else None)
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows", "entries"))
+    ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows", "entries", "bitfit"))
     ap.add_argument("--cap", type=int, default=0,
                     help="E's byte bin, at most the class's cap (0: the class's); required on a pin without classes")
     ap.add_argument("--bits", type=int, default=1, help="qlora: the factors' bits; signrows: the rows' code bits")
     ap.add_argument("--norm-bits", type=int, default=4, help="qlora, signrows: the gains' delta code bits")
     ap.add_argument("--norm-group", type=int, default=64, help="qlora, signrows: gain entries per f16 scale")
     ap.add_argument("--targets", default="all", help="`all`, `out`, `mlp`, `attn` or leaf names: the candidate matrices")
+    ap.add_argument("--bias", default="all", help="bitfit: `all`, `out`, `mlp`, `attn` or leaf names: the biased matrices")
     ap.add_argument("--layers", default="all", help="`all` or `top:N`: touch only the top N blocks (and the final norm)")
     ap.add_argument("--norms", default="all",
                     help="`all`, `none`, `final`, `top:N` or leaf names (`mlp_norm,norm`): the gains trained in full")
@@ -657,7 +663,8 @@ def main() -> int:
                     help="lora: the tied embedding's LoRA rank, placed before the block matrices' allocation; -1: the "
                          "embedding joins the gradient's allocation as one more candidate")
     ap.add_argument("--values", type=int, default=0, help="entries: at most this many entries (0: as many as fit --cap)")
-    ap.add_argument("--entry-dtype", default="f16", choices=("f16", "bf16"), help="entries: CWSPAR1's value dtype")
+    ap.add_argument("--entry-dtype", default="f16", choices=("f16", "bf16"),
+                    help="entries: CWSPAR1's value dtype; bitfit: the biases' dtype in E")
     ap.add_argument("--grad-code", default="none", choices=("none", "vote"),
                     help="entries: `vote` passes each sequence's gradient as one bit a value (its sign, a bool), summed "
                          "as int16 votes; the values train in --entry-dtype, no latents and no optimizer state")
@@ -681,6 +688,18 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     t_start = time.perf_counter()
     net, rec, theta = prepare.load_start(a.start)
+    biased, biases = None, []
+    if a.mech == "bitfit":
+        leaves = TARGETS.get(a.bias) or set(a.bias.split(","))
+        if leaves - set(LF_MATS) or a.layers != "all" or a.embed_rank:
+            raise SystemExit(f"sparse: --mech bitfit takes --bias of {', '.join(LF_MATS)}, --layers all, no --embed-rank")
+        biased = {**rec["config"], "bias": [n for n in LF_MATS if n in leaves]}
+        zeros = {k: torch.zeros(s) for k, s in prepare.architecture(biased).items() if k not in theta}
+        biases = sorted(zeros)
+        with torch.device(prepare.DEVICE):
+            net = prepare.Net(biased)
+        net.load(theta | zeros)
+        rec = prepare.model_record(rec, biased, theta | zeros)
     params = net.params()
     L = rec["config"]["n_layer"]
     if classes:
@@ -715,7 +734,7 @@ def main() -> int:
     if need_g and not a.probe:
         raise SystemExit("sparse: --mech lora|qlora and a gradient selection need --probe > 0")
     norms = norm_names(theta, a.norms, a.layers, L)
-    cands = matrices(theta, a.targets, a.layers, L) if a.mech != "norms" else []
+    cands = matrices(theta, a.targets, a.layers, L) if a.mech not in ("norms", "bitfit") else []
     if entries:
         cands, norms = cands + norms, []
     if a.probe and (need_g or a.analyse):
@@ -734,7 +753,14 @@ def main() -> int:
         raise SystemExit(f"sparse: --norm-group {a.norm_group} doesn't divide every gain")
     sizer = torch.Generator().manual_seed(1)
 
+    def encode_b() -> bytes:
+        dt = prepare.DTYPES[a.entry_dtype]
+        return prepare.encode_model(biased, {n: params[n].detach().to(dt).cpu() for n in biases}
+                                    | {n: params[n].detach().to(theta[n].dtype).cpu() for n in norms})
+
     def size_of(plan) -> int:
+        if biased:
+            return len(encode_b())
         if quant:
             return quant_size(random_entries(theta, a.mech, plan, norms, a.bits, a.norm_bits, a.norm_group, sizer), theta)
         if entries:
@@ -817,6 +843,9 @@ def main() -> int:
     train_vals: dict = {}
     hooks_params: list[torch.nn.Parameter] = []
     adapters: dict[str, int] = {}
+    for n in biases:
+        params[n].requires_grad_(True)
+        hooks_params.append(params[n])
     if a.mech == "lines":
         for n, (rows, cols) in plan.items():
             d_out, d_in = theta[n].shape
@@ -932,6 +961,11 @@ def main() -> int:
                 ri, V = v
                 entries[n] = rows_entry(tuple(theta[n].shape), ri, V.detach(), a.bits)
         return prepare.encode_quant(entries, theta)
+
+    def encode_any() -> bytes:
+        if biased:
+            return encode_b()
+        return encode_q() if quant else encode_e() if entries else encode(a.mech, theta, params, norms, plan, train_vals)
     if vote:
         opt = None
     elif a.opt == "adamw":
@@ -947,7 +981,7 @@ def main() -> int:
     elif entries:
         trainable = {"full": sorted(plan), "adapters": {}}
     else:
-        trainable = {"full": norms, "adapters": adapters}
+        trainable = {"full": norms + biases, "adapters": adapters}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
@@ -971,6 +1005,9 @@ def main() -> int:
         notes["mask"] = {n: {"rows": r, "cols": c} for n, (r, c) in plan.items()}
     elif a.mech in ("lora", "qlora"):
         notes["plan"] = plan
+    elif biased:
+        summary["biases"] = sum(params[n].numel() for n in biases)
+        notes["plan"] = {"bias": biased["bias"], "tensors": len(biases)}
     elif a.mech == "signrows":
         summary["rows"] = sum(len(r) for r in plan.values())
         notes["plan"] = {n: len(r) for n, r in plan.items()}
@@ -1063,10 +1100,10 @@ def main() -> int:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if calls in marks:
-            encode_q() if quant else encode_e() if entries else encode(a.mech, theta, params, norms, plan, train_vals)
-    blob = encode_q() if quant else encode_e() if entries else encode(a.mech, theta, params, norms, plan, train_vals)
+            encode_any()
+    blob = encode_any()
     model = prepare.decode(theta, blob)
-    changed = sorted(plan) if entries else sorted(set(norms) | set(adapters))
+    changed = sorted(plan) if entries else sorted(set(norms) | set(adapters) | set(biases))
     if vote:
         width = math.ceil(math.log2(a.batch + 1))
         notes["delta_grad"] = {
@@ -1086,7 +1123,8 @@ def main() -> int:
                                "what": "the fp32 gradient of every trained tensor (a masked gain's whole) and AdamW's m "
                                        "and v where AdamW trains (fp32 latents for codes apart)",
                                "trainable": n_train, "grad_bits": 32 * grads, "adam_bits": state, "muon_bits": 0,
-                               "latent_bits": 32 * grads if quant else 0, "bits": 32 * grads + state,
+                               "latent_bits": 32 * grads if quant else 32 * summary.get("biases", 0),
+                               "bits": 32 * grads + state,
                                "bytes": (32 * grads + state) // 8}
     notes["E_bytes"] = {"planned": size, "encoded": len(blob), "format": prepare.format_of(blob)}
     notes["E_bytes"]["over_cap"] = len(blob) > cap
