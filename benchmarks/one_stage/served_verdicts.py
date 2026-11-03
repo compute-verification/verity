@@ -15,6 +15,7 @@ sampled proofs, and the one record of every verdict (the block record).
                                  [--main FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
+                              [--sampled-lean [--sampled-exe PATH]]
     served_verdicts.py witness < PATHS
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
@@ -130,7 +131,11 @@ the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6
 memory, or its compose hand-off), which composes the final record on another host, the record's node still ``--node``.
 ``--steps LO,HI`` gives the window's engine steps, which the record otherwise picks from the serve dir's seals, windows
 and requests (`pick`): a compose follow-on holds no requests file. ``--off-node`` composes from the served node's compose
-hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the record's node itself.
+hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the record's node itself. ``--sampled-lean``
+takes sampled proofs' row from this host's own run of its Lean verifier on the records audit's v2 case, its proofs and
+public files (`lean_sampled_row`, ``--sampled-exe`` or built here), not from the summary and audit record the served node
+wrote, so an edit to those leaves the row as it is. Each row with an answer says where it came from (its
+``answer_from``, and the line's ``answers``): `LEAN_HERE`, or `AS_WRITTEN` and the files it was read from.
 
 ``witness``: each path of stdin (relative to a serve dir) that is a served run's witness (`witness`: a committed value,
 a prover's instance, private or salts file, the advice, a key, a sealed row dir, the requests and their traces), one ``WITNESS
@@ -240,10 +245,17 @@ COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the 
 COPIED_FROM = ("a prover-side copy of each piece's answer file as the served node wrote it, not the party that produced it: "
                "an edit to that file on the node or to its copy changes its row")
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
-HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote: each piece's answer file and sampled "
-               "proofs' summary as the served node wrote them, and the verifier-side files the composite reads (cases, "
-               "proof transcripts, registration records), never a witness; not the parties that produced them: an edit "
-               "to a file on the node before its hand-off changes its row")
+HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
+               "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
+               "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
+               "that produced it: an edit to such a file on the node before its hand-off changes its row")
+#: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
+AS_WRITTEN = "as the served node wrote it"
+#: ... sampled proofs' under ``record --sampled-lean`` (`lean_sampled_row`)
+LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
+             "files of the window's sampled proofs case, not the served node's answer")
+#: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
+WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
                 "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
@@ -1149,6 +1161,30 @@ def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
+def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
+                     run: str | None = None) -> dict[str, Any]:
+    """Sampled proofs' row from this host's own run of remote's sampled proofs Lean (`served_cases.sampled_case`: the
+    records audit's v2 case, its blobs the proofs and public files, in the form ``one-stage``; ``exe`` default built here)
+    on files in a 0700 directory under ``scratch``, its answer tied to the window's registration record (`LEAN_HERE`),
+    whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
+    no proofs to recompute from: its row is `sampled_proofs_row`'s, its ``answer_from`` saying so. A case the Lean
+    doesn't make or answer, or an answer about another record, is the row's error."""
+    import served_cases as SC
+
+    if not (audit_dir / "window" / "case-v2.json").is_file():
+        return {**sampled_proofs_row(audit_dir, run),
+                "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): the records audit wrote no v2 case "
+                               "(window/case-v2.json), so there are no proofs to recompute it from"}
+    try:
+        case = SC.sampled_case(audit_dir)
+        answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
+        SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
+        return {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+    except (SC.Refused, OSError, ValueError) as e:
+        return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000],
+                "answer_from": LEAN_HERE}
+
+
 def _json(path: Path) -> Any:
     """``path``'s JSON, None where there's no such file; one that isn't JSON raises ValueError."""
     return json.loads(path.read_text()) if path.exists() else None
@@ -1312,6 +1348,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    for k, r in rows.items():
+        if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
+            r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -1333,8 +1372,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                       if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
+    answers = {NAMES[k]: r["answer_from"] for k, r in rows.items() if "answer_from" in r}
     named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
-             **left, **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+             "answers": answers, **left, **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
@@ -1438,6 +1478,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
     r.add_argument("--steps", help="LO,HI: the window's engine steps, in place of picking them from the serve dir")
     r.add_argument("--off-node", action="store_true", help="composed from the served node's compose hand-off, off it")
+    r.add_argument("--sampled-lean", action="store_true",
+                   help="sampled proofs' row from this host's run of its Lean on the case's proofs (lean_sampled_row)")
+    r.add_argument("--sampled-exe", help="vstar-recursive, with --sampled-lean (default: built here)")
     sub.add_parser("witness")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
@@ -1577,7 +1620,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
+    if a.sampled_exe is not None and not a.sampled_lean:
+        ap.error("--sampled-exe is sampled proofs' Lean, which only --sampled-lean runs")
+    integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
+                 if a.sampled_lean else sampled_proofs_row(a.sampled_proofs, run))
+    rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node)

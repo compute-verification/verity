@@ -696,6 +696,135 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
+#: remote's sampled proofs Lean (`vstar-recursive`) as `record --sampled-lean` runs it: its arguments and the case files
+#: it was handed in $SEEN, and $ANSWER as its answer line (none when empty)
+FAKE_SAMPLED_LEAN = f'''#!{sys.executable}
+import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+json.dump({{"argv": a, "files": {{Path(f).name: Path(f).read_text() for f in a[2:5]}}}}, open(os.environ["SEEN"], "w"))
+print("checking")
+print(os.environ["ANSWER"])
+'''
+#: the toy registration record the hand-off's cases commit to
+LEAN_RECORD = {"format": "toy-registration", "window": 7}
+
+
+def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
+    """A compose host's copy of a hand-off, off the served node vy-dc-h200: sampled proofs' records audit with the
+    summary the served node wrote (a refusal of its own), v1's case and v2's naming one proof blob, PoUW's piece's
+    accepted answer, and a `FAKE_SAMPLED_LEAN`; then `record --off-node --sampled-lean` on it, remote's product. Its argv
+    and the stand-in."""
+    from verity.ml.circuits import codec
+
+    d = tmp_path / "serve"
+    w = d / "sampled-proofs-served" / "window"
+    (w / "m0").mkdir(parents=True)
+    (w / "m0" / "p0.bin").write_bytes(b"proof")
+    v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),
+          "evidence": codec.canonical_json({"draw": [0, 3]}).hex()}
+    (w / "case.json").write_text(json.dumps(v1))
+    (w / "case-v2.json").write_text(json.dumps({**v1, "params": {"verifier": "toy", "proofs": {}},
+                                                "blobs": [str(w / "m0" / "p0.bin")]}))
+    (d / "sampled-proofs-served" / "summary.json").write_text(json.dumps({"refused": "the node's own verdict"}))
+    (p := tmp_path / "pieces" / "pouw").mkdir(parents=True)
+    (p / "answer.json").write_text(json.dumps({"verdict": "accept", "reason": None, "commitment": "ef" * 64,
+                                               **ACCEPTS["pouw"]}))
+    (p / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    exe = tmp_path / "vstar-recursive"
+    exe.write_text(FAKE_SAMPLED_LEAN)
+    exe.chmod(0o755)
+    return (["record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"),
+             "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+             "--product", "remote", "--steps", "0,3", "--off-node", "--sampled-lean", "--sampled-exe", str(exe)], exe)
+
+
+def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]:
+    rc = S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    return rc, line, json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]
+
+
+@pytest.mark.parametrize("edit", [
+    {"summary.json": json.dumps({"refused": "another verdict of the node's"})},
+    {"summary.json": json.dumps({"audit": {"accepted": True}})},
+    {"summary.json": "{}", "window/audit.json": json.dumps({"accepted": False, "checks": {"proved": {"ok": False}}})},
+    {"summary.json": None},
+])
+def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomputed_here_unchanged(
+        tmp_path, monkeypatch, capsys, edit):
+    """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
+    hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
+    record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
+    them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
+    source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, _exe = _lean_handed(tmp_path)
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    monkeypatch.setenv("ANSWER", json.dumps(answer))
+    rc, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rc == 0 and line["composed"] == "accept" and rows["integrity"]["answer"] == answer, line
+    pouw_from = f"{S.AS_WRITTEN} (its piece files in pouw/)"
+    assert line["answers"] == {"sampled proofs": S.LEAN_HERE, "PoUW": pouw_from}
+    assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE, pouw_from)
+    seen = json.loads((tmp_path / "seen.json").read_text())
+    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
+    assert json.loads(seen["files"]["params.json"]) == {"form": "one-stage", "proofs": {}, "verifier": "toy"}
+    assert json.loads(seen["files"]["commitment.bin"]) == LEAN_RECORD
+    plain = [x for x in argv if x not in ("--sampled-lean", "--sampled-exe", argv[-1])]
+    _rc, _line, node_rows = _recorded(tmp_path, plain, capsys)
+    for name, body in edit.items():
+        target = tmp_path / "serve" / "sampled-proofs-served" / name
+        if body is None:
+            target.unlink()
+        else:
+            target.write_text(body)
+    _rc, line, edited = _recorded(tmp_path, argv, capsys)
+    assert edited["integrity"] == rows["integrity"] and line["composed"] == "accept"
+    _rc, _line, node_edited = _recorded(tmp_path, plain, capsys)
+    assert node_edited["integrity"] != node_rows["integrity"]
+    assert node_rows["integrity"]["answer_from"] == f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']})"
+    (tmp_path / "pieces" / "pouw" / "answer.json").write_text(json.dumps({
+        "verdict": "reject", "reason": "the node says so", "commitment": "ef" * 64, "protocol": "verity/pouw/v1",
+        "public": None, "profile": None}))
+    _rc, line, edited = _recorded(tmp_path, argv, capsys)
+    assert edited["integrity"] == rows["integrity"] and edited["work"]["verdict"] == "reject"
+
+
+@pytest.mark.parametrize("change, verdict, said", [
+    ("no-v2", "reject", "refused: \"the node's own verdict\""),
+    ("another-record", "error", "commits to"),
+    ("no-blob", "error", "blob(s) that aren't files"),
+    ("no-line", "error", "answered no line"),
+])
+def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
+        tmp_path, monkeypatch, capsys, change, verdict, said):
+    """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
+    saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
+    row's error, recomputed here, never the node's verdict."""
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, _exe = _lean_handed(tmp_path)
+    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    other = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": "00" * 64}
+    monkeypatch.setenv("ANSWER", "" if change == "no-line" else json.dumps(other))
+    if change == "no-v2":
+        (w / "case-v2.json").unlink()
+    if change == "no-blob":
+        (w / "m0" / "p0.bin").unlink()
+    _rc, line, rows = _recorded(tmp_path, argv, capsys)
+    row = rows["integrity"]
+    assert row["verdict"] == verdict and said in row["reason"], row
+    assert row["answer_from"] == (S.LEAN_HERE if change != "no-v2" else (
+        f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): the records audit wrote no v2 case (window/case-v2.json), so "
+        "there are no proofs to recompute it from"))
+    assert line["answers"]["sampled proofs"] == row["answer_from"]
+
+
 SID = "s20261026T221500Z-ab12"
 GATE = "ssh -i KEY -o BatchMode=yes research@gate"
 
@@ -2453,7 +2582,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert json.loads((tmp_path / "order.record").read_text()) == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
-        "vy-dc-h200", "--steps", "0,3", "--off-node"]
+        "vy-dc-h200", "--steps", "0,3", "--off-node", "--sampled-lean"]
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)

@@ -141,7 +141,9 @@
 # copy compose`), and there `served_verdicts.sh compose` with D alone holds the copy to its sums,
 # runs at the served node's tree (another only with FOLLOW_ANY_TREE=1), refuses the served node itself and a serve dir
 # holding any witness, needs no row dir, vLLM venv, card or gpu-lease, and composes the final record (`record --off-node
-# --steps`: composed_on the host it ran on, served_node false, from the hand-off) and the composite (`served_composite.sh`,
+# --steps --sampled-lean`: composed_on the host it ran on, served_node false, from the hand-off, sampled proofs' row this
+# host's own run of its Lean verifier on the case's proofs, each other row's answer as the served node wrote it, and each
+# row naming which in its answer_from) and the composite (`served_composite.sh`,
 # SERVED_NODE the served node, COMPOSE_HANDOFF set); its $OUT is published as every run's is. PRODUCT=onsite's composite
 # reads PoUS's and the wipe's cases, which only the served node's card writes, so under COMPOSE_OFF_NODE=1 the preflight
 # refuses it unless COMPOSITE is set empty. `served_verdicts.sh handoff`, in TREE with D, K and OUT, writes the hand-off
@@ -960,7 +962,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
-    --off-node 2>&1 | publish_lines
+    --off-node --sampled-lean 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
     || comp=1
