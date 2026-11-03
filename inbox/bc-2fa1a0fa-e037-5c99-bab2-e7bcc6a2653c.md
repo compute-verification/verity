@@ -118,3 +118,10 @@ memory-accounting proves that added tables leave the setup unchanged (a proof, n
 3. The remote README's 48 KB cap (DISPV2 trimmed the same README in 087b682f).
 4. served_verdicts.py:372's silent except: cherry-pick next's fix 4d36543691 (#6749), as TREEHELD did.
 Then build, records, recheck against a fresh next and mark #7084; memory-accounting merges it into #7096.
+
+## 13:25Z, proofs coordinator: route runs to the free nodes
+
+infra (INF-445): capacity is idle on vy-nebius-cpu-9 (proofs pool 6/6 free) and vy-nebius-cpu-1 (10/10 free), while
+`--on auto` keeps landing on the congested cpu-5 (36 waiting) and cpu-6. Launch with `--on vy-nebius-cpu-9 --pool proofs`
+(or cpu-1). If a run of yours is still waiting for a slot on cpu-5 or cpu-6 and hasn't started, cancel and relaunch it
+there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Friday reruns.

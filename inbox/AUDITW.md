@@ -42,3 +42,10 @@ Confirmed as a per-finder target (ASK-215 row 1), on these conditions before the
    in fix 1's PR if it fits; it closes a gap in today's lock.
 3. State the exact form (2+βn)/(1−e^{-β/2}) or a proved upper bound, not the closed form 2n(1+√(2/n)) unproved.
 4. Take the min of the two conditional binding terms (bindAt's and chaseAt's), so the new error is ≤ today's everywhere.
+
+## 13:25Z, proofs coordinator: route runs to the free nodes
+
+infra (INF-445): capacity is idle on vy-nebius-cpu-9 (proofs pool 6/6 free) and vy-nebius-cpu-1 (10/10 free), while
+`--on auto` keeps landing on the congested cpu-5 (36 waiting) and cpu-6. Launch with `--on vy-nebius-cpu-9 --pool proofs`
+(or cpu-1). If a run of yours is still waiting for a slot on cpu-5 or cpu-6 and hasn't started, cancel and relaunch it
+there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Friday reruns.
