@@ -59,7 +59,8 @@ from pathlib import Path
 
 import torch
 
-from .flops import plain
+from .flops import forward_macs_per_token, plain
+from .gates import per_mac
 from .run import theta_sha256
 
 ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant")
@@ -340,18 +341,35 @@ def accounted_over(counted_flops: float, analytic_flops: float, saved_macs: int)
     return counted_flops / rest if rest > 0 else None
 
 
+def forward_cost(net, ctx: int, vocab: int) -> dict:
+    """A model's own forward per token at `ctx`, as the counter sees it (`flops.forward_macs_per_token`: what runs, so an
+    MoE's active experts), in MACs and in gates at the bf16 GEMM price (as the policy prices a forward)."""
+    macs = forward_macs_per_token(net, ctx, vocab)
+    return {"forward_macs_per_token": macs, "forward_gates_per_token": macs * per_mac("gemm/bf16")}
+
+
 def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor], start: dict,
               device: str) -> dict:
     """The evaluation job's side of a training job's record: θ's whole-set score, then each checkpoint's E, read from
-    `run_dir` and checked against the digest the harness recorded, decoded from θ with the fixed decoder, hashed, and
-    scored and sealed through `prepare.Scorer`. Returns the record with the start's `val_bpb` and each checkpoint's
-    `output_sha256`, `val_bpb` and `score`; a checkpoint whose E isn't the recorded one is left unscored and named in
-    `scored.problems`."""
+    `run_dir` and checked against the digest the harness recorded, decoded from θ with the fixed decoder (in θ's
+    architecture or its own, `prepare.model_config`), hashed, and scored and sealed through `prepare.Scorer`. Returns the
+    record with the start's `val_bpb` and each checkpoint's `output_sha256`, `val_bpb`, `score` and its model's forward
+    MACs and gates per token (`forward_cost`); a checkpoint whose E isn't the recorded one is left unscored and named in
+    `scored.problems`. Nothing caps the model's cost: scoring reads it."""
     if rec["start"].get("digest") != start["digest"]:
         raise SystemExit(f"te_core: the run's start digest is not {start['name']}'s registered one")
     scorer = prepare.Scorer(start, theta, device)
+    costs: dict[str, dict] = {}
+
+    def cost(net, config: dict) -> dict:
+        key = json.dumps(config, sort_keys=True)
+        if key not in costs:
+            costs[key] = forward_cost(net, int(config.get("ctx", prepare.EVAL_CTX)), int(config.get("vocab", 50304)))
+        return costs[key]
+
     rec["start"] |= {"val_bpb": float(scorer.start_bpb),
-                     "val_bpb_source": f"θ on the whole {scorer.split} set, measured by the evaluation job"}
+                     "val_bpb_source": f"θ on the whole {scorer.split} set, measured by the evaluation job",
+                     **cost(scorer.base, start["config"])}
     problems = []
     for cp in rec["checkpoints"]:
         path = Path(run_dir) / cp.get("path", "")
@@ -359,13 +377,17 @@ def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor],
         if blob is None or blob_sha256(blob) != cp["e_sha256"]:
             problems.append(f"step {cp['step']}: its E file is missing or not the recorded {cp['e_sha256'][:12]}")
             continue
+        config = prepare.model_config(start, blob) if hasattr(prepare, "model_config") else start["config"]
         state = {k: v for k, v in prepare.decode(theta, blob, device=device).items() if not k.startswith("buffer/")}
         digest = theta_sha256(state)
-        score = scorer.search(state, digest)
-        scorer.seal(digest, state, score)
+        score = scorer.search(state, digest, config)
+        scorer.seal(digest, state, score, config)
         cp |= {"output_sha256": digest, "val_bpb": float(score["bpb"]),
                "score": {k: v for k, v in score.items() if k != "rule"},
-               "rebuild_macs": prepare.rebuild_macs(theta, blob) if hasattr(prepare, "rebuild_macs") else None}
+               "rebuild_macs": prepare.rebuild_macs(theta, blob) if hasattr(prepare, "rebuild_macs") else None,
+               "parameters": int(sum(v.numel() for v in state.values())),
+               "config": None if config == start["config"] else config,
+               **cost(scorer.model(state, config), config)}
     rec["scored"] = {"split": scorer.split, "final_mode": bool(getattr(prepare, "FINAL_MODE", False)),
                      "problems": problems}
     return rec
