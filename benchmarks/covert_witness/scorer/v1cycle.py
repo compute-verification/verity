@@ -12,8 +12,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    later, or RESCORE_AHEAD holding it (merged with it when it doesn't, if they merge cleanly). Its pinned.json names
    the records scored (PINS: the pin, same_version and the pilot, trace40.pins). TE40_WT's capture traces while the
    integrator's te_core VERSION captures alike (CAPTURES). A new capture (`next_capture`) traces into its own cache,
-   and until its traces cover the v3 runs in scope (`covered`), the refresh scores on LAST's re-score commit and
-   TE40_WT's traces; then TE40_WT moves to it.
+   and until it has traced as many runs in scope as TE40_WT's and as many of v3's (`replaces`), the refresh scores
+   on LAST's re-score commit and TE40_WT's traces; then TE40_WT moves to it.
 2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too with TE_TRACE_PILOT=1) traced, measured
    and ingested again in shards of TRACE_SHARD runs over the CPU pool (`research run --on auto`),
    the runs traced at earlier refreshes kept.
@@ -23,11 +23,11 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    tail always charged (Daniel, 22:00Z), H and W* over every checkpoint of every valid record (19:50Z), S = W*/H;
    frontier.md/json, formalism.jsonl and compare.md/json; then `--tail frozen` and `--quantities analysis`, which go
    to the evidence store only (01:22Z).
-4. Runs its `python -m te_core.panels frontier-branches --publish` on the same ledger: the console's one training
-   panel (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), PUT. A refused PUT is reported, not fatal.
-   Its plot is retired, its data kept PUT until algorithm-policy's rows carry gain, gain_target and
-   start_effective_gates (04:53Z). Once the builder's v2 is on that te_core (`policy_panels`), its training/
-   algorithm-policy and the frontier-fit panel too, each `--publish`. te_core's five old panels stay in the re-score's
+4. Once the builder's v2 is on that te_core (`policy_panels`), runs its `python -m te_core.algorithm_policy
+   --publish` on the same ledger, which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
+   te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), PUT until
+   algorithm-policy is PUT with gain, gain_target and start_effective_gates on its rows (`fb_retired`; 05:22Z,
+   07:48Z), then stored only. A refused PUT is reported, not fatal. te_core's five old panels stay in the re-score's
    directory, unpublished (23:56Z).
 5. Publishes the tables and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
    PANELS_DIR, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
@@ -75,13 +75,11 @@ TRACE_SHARD = 6
 #: how long a refresh waits for its node runs; one still tracing is taken at the next refresh
 TRACE_WAIT_S = 1080
 #: the integrator's te_core whose capture TE40_WT's isn't (`next_capture`), checked out with no files: its runs traced
-#: into its own cache while the refresh scores on LAST's re-score commit and TE40_WT's traces, until they cover those
+#: into its own cache while the refresh scores on LAST's re-score commit and TE40_WT's traces, until they replace those
+#: (`replaces`)
 NEXT_WT = Path(os.environ.get("TE_NEXT_WT", "/tmp/scorer/te-next"))
 #: the re-score commit of the last refresh scored with TE40_WT's capture
 LAST = trace40.STATE / "trace40" / "rescored.json"
-#: a new capture replaces TE40_WT's once every v3 run in scope is done under it and this share of them traced (a
-#: capture that fails every run covers them all)
-COVER_TRACED = 0.5
 #: what 4.0's rescore also writes, to the evidence store only (coordinator 01:22Z): t as the frozen tail, and the analysis
 VARIANTS = {"frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analysis"]}
 #: the measurement commits scored: the re-score commit's pin, same_version and pilot (trace40.pins), set by `main`
@@ -194,6 +192,20 @@ def covered(te: Path) -> tuple[int, int, int]:
     return len(want), len(want & trace40.done(c)), sum(not (new.get(k) or {"error": 1}).get("error") for k in want)
 
 
+def traced_runs(te: Path) -> tuple[int, int]:
+    """(the runs in scope `te`'s capture traced, those of v3's)."""
+    f = trace40.cache(te) / "traced.json"
+    ok = {k for k, v in (json.loads(f.read_text()) if f.exists() else {}).items() if not v.get("error")}
+    return len(ok & {r["run_id"] for r in trace40.scope()}), len(ok & v3_scope())
+
+
+def replaces(new: Path) -> bool:
+    """Whether the capture `new` replaces TE40_WT's: it traced at least as many of the runs in scope and of v3's, so
+    neither the pilot nor v3 loses a row by the switch (every row traced before a capture is refused under its
+    te_core). A v3 scope that grows with each launch never waits on its last run."""
+    return all(a >= b for a, b in zip(traced_runs(new), traced_runs(trace40.TE40_WT)))
+
+
 def to_trace(te: Path, busy: set[str]) -> list[str]:
     """The runs in scope with no trace in `te`'s cache and no node run tracing them, v3's first, then the pilot's
     when TE_TRACE_PILOT is set."""
@@ -222,9 +234,10 @@ def node_state(run: str) -> str:
 
 def trace_resources(runs: int) -> tuple[int, int]:
     """Workers (CPUs) and GB to ask TRACE_NODE for a shard of `runs` runs: 24 workers peaked at 70 GB PSS (88 GB RSS) on
-    r20261103-024017-a670's m100-heavy bulk."""
+    r20261103-024017-a670's m100-heavy bulk, so 4 GB a worker; a shard of 6 asks 36 GB, under a research pool slot's
+    40 (vy-nebius-cpu-1's), which `--on auto` needs to place it."""
     workers = max(1, min(24, runs))
-    return workers, min(200, 12 + 6 * workers)
+    return workers, min(200, 12 + 4 * workers)
 
 
 def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, build: bool = True) -> dict:
@@ -373,6 +386,20 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     return res
 
 
+#: what training/algorithm-policy's console copy carries once frontier-branches is no longer PUT, only stored
+#: (coordinator 05:22Z and 07:48Z)
+FB_SUCCESSOR = ("gain", "gain_target", "start_effective_gates")
+FB_RETIRED = ("training/algorithm-policy is PUT with " + ", ".join(FB_SUCCESSOR)
+              + " on its rows; frontier-branches is in the evidence store only")
+
+
+def fb_retired(out: Path, policy: dict) -> bool:
+    """Whether this refresh PUT training/algorithm-policy with FB_SUCCESSOR among its console copy's columns."""
+    f = out / "algorithm-policy" / "console" / "algorithm-policy.json"
+    return (str(policy.get("algorithm-policy", ""))[:1] == "2" and f.exists()
+            and set(FB_SUCCESSOR) <= set(json.loads(f.read_text())["columns"]))
+
+
 def coverage(d: Path, stdout: str) -> list[str]:
     """The builder's coverage table (gain size by decade of rho) as one line a row: a `coverage.md` it wrote under `d`,
     else the Markdown table under a line naming coverage in its output; [] when it has none."""
@@ -434,19 +461,18 @@ def main() -> int:
     nxt, retrace = (None, None) if final else (next_capture(newest), None)
     if nxt:
         # every row traced before a new capture is refused under its te_core, so the refresh scores on the last
-        # capture until the new one's traces cover it
+        # capture until the new one's traces replace it
         retrace = measured_ledger(out / "next-capture", not args.no_trace, nxt, build=False)
         retrace |= dict(zip(("of", "covered", "traced"), covered(nxt)), te_core=te_version(newest),
                         commit=git("rev-parse", "HEAD", cwd=nxt))
-        if (retrace["covered"] >= retrace["of"] and retrace["traced"] >= COVER_TRACED * retrace["of"]) \
-                or not LAST.exists():
+        if replaces(nxt) or not LAST.exists():
             git("checkout", "-q", "--detach", retrace["commit"], cwd=trace40.TE40_WT)
             nxt, retrace = None, None
         else:
             commit = json.loads(LAST.read_text())["commit"]
             git("checkout", "-q", "--detach", commit)
             chosen = (f"the last re-score on te_core {capture_version(trace40.TE40_WT)}'s capture, until te_core "
-                      f"{te_version(newest)}'s traces cover it")
+                      f"{te_version(newest)}'s traces replace it")
             os.environ["TE_PIN_REV"] = commit
             PINS[:] = trace40.pins(commit)
     if not nxt and not final:
@@ -456,8 +482,11 @@ def main() -> int:
     traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace and not nxt),
                                                trace40.MEASURED)
     last = rescore(rs, args.gates, final, root)
-    put = "not PUT (final values)" if final else branches(rs, not args.no_put, root)
     policy = {} if final else policy_panels(out, commit, not args.no_put, root)
+    retired = not final and fb_retired(out, policy)
+    put = "not PUT (final values)" if final else branches(rs, not args.no_put and not retired, root)
+    if retired:
+        put = f"not PUT ({FB_RETIRED})"
     variants = {}
     for name, extra in ({} if final else VARIANTS).items():
         try:
@@ -486,6 +515,12 @@ def main() -> int:
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
         meta["algorithm_policy"] = {k: v for k, v in policy.items() if k != "coverage"}
+        apc = out / "algorithm-policy" / "console" / "algorithm-policy.json"
+        if apc.exists():
+            q = json.loads(apc.read_text())
+            meta["algorithm_policy_cells"] = {c: sorted({str(r[q["columns"].index(c)]) for r in q["rows"]})
+                                              for c in ("reading", "te_core") if c in q["columns"]}
+            meta["algorithm_policy_cells"]["rho_console"] = "rho_console" in q["columns"]
     if retrace:
         meta["next_capture"] = retrace
     if traced:
@@ -648,18 +683,28 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                 f"{REFERENCE}: " + "; ".join(parts) + f". {fb}; nothing else PUT. art: {arts}.")
     tr = meta["trace"]
     tracing = sum(tr["tracing"].values())
+    where = "the CPU pool" if TRACE_NODE == "auto" else TRACE_NODE
     refused = tr["ledger"].get("refused_runs") or []
     nx = meta.get("next_capture")
+    nx_refused = len(nx.get("launch_refused") or []) if nx else 0
     nx_said = (f" (te_core {nx['te_core']} refuses every row traced before 4.2's capture ({nx['commit'][:11]}), which "
                f"is tracing v3's runs over the CPU pool: {nx['covered']} of the {nx['of']} done so far, "
-               f"{nx['traced']} traced; "
-               f"this refresh scores on te_core {meta['te_core_version']} until they're covered)" if nx else "")
+               f"{nx['traced']} traced"
+               + (f", {nx_refused} of {len(nx.get('launch') or [])} shard launches refused, packed again at the next "
+                  "refresh" if nx_refused else "") + "; "
+               f"this refresh scores on te_core {meta['te_core_version']} until they trace as many runs, and as many of "
+               "v3's)" if nx else "")
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
     v3_said = ", ".join(f"{s} {x['records']} ({x['checkpoints']} checkpoints)" for s, x in meta["v3"].items()
                         if x["records"]) or "none measured yet"
-    ap = meta.get("algorithm_policy") or {}
-    ap_said = "; ".join(f"training/{k} {'PUT ' if v[:1].isdigit() else ''}{v}" for k, v in ap.items())
+    ap, cells = meta.get("algorithm_policy") or {}, meta.get("algorithm_policy_cells") or {}
+    cells_said = (f" (every row: reading {'/'.join(cells.get('reading') or ['–'])}, te_core "
+                  f"{'/'.join(cells.get('te_core') or ['–'])}"
+                  + (", rho_console at c = 5,120 x 2 x 45e6 x 740 gates, k = 65,536 bits" if cells.get("rho_console")
+                     else "") + ", rho_default)" if cells else "")
+    ap_said = "; ".join(f"training/{k} {'PUT ' if v[:1].isdigit() else ''}{v}"
+                        + (cells_said if k == "algorithm-policy" else "") for k, v in ap.items())
     return (f"{head}te_core {meta['te_core'][:10]} ({meta['te_core_version']}){nx_said}, formalism v2's quantities "
             f"measured on each record's traced step, t literal, the frozen tail always charged{dt}: {meta['records']} valid "
             f"records measured at the pin's commits and the pilot's, {meta['night2_records']} from night 2, "
@@ -667,9 +712,9 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
             + (f"; {meta['pilot_start']} v3 checkpoints from a pilot start left out (pilot-start)"
                if meta.get("pilot_start") else "")
             + f"; {meta['not_measured']} valid checkpoints not measured yet"
-            + (f" ({tracing} runs tracing on {TRACE_NODE})" if tracing else "")
-            + (f" ({tr['packed']} runs' trace refused on {TRACE_NODE}, packed again at the next refresh)"
-               if "launch_refused" in tr else "")
+            + (f" ({tracing} runs tracing on {where})" if tracing else "")
+            + (f" ({tr['packed']} runs' trace refused on {where}, packed again at the next refresh)"
+               if tr.get("launch_refused") else "")
             + (f", {tr['untraced_runs']} runs whose trace failed (trace40-traced.json)" if tr["untraced_runs"] else "")
             + (f"; {len(refused)} run{'s' * (len(refused) != 1)} refused, not scored, a trace showing an affected "
                f"share of 0 or u(1) = 0 beside a nonzero E (04:40Z): {', '.join(refused)}" if refused else "")
