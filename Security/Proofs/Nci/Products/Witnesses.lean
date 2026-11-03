@@ -5,12 +5,13 @@ import Mathlib.Tactic.NormNum
 /-!
 # Products of two fresh operands: honest and nontrivial lemmas
 
-The proofs of `Security/Definitions/Nci/Guarantees/Products/Witnesses.lean`, at `Single`
-(`Security/Definitions/Nci/Products/Instances.lean`). Its gates, reads and cones are small finite sets, which `decide`
-computes. Every inference block of `Single` is empty or gate 2 (`gates_cases`), so widths as passed is two counts at
-gate 2's block: with the operands fresh it reads both, and with them registered it reads neither beyond `θ`. Each bound
-is compared with its price in `ℝ` or `ℝ≥0∞`. The `example`s at the end apply each guarantee to its lemmas, so the
-lemmas are the premises as the guarantee states them.
+The proofs of `Security/Definitions/Nci/Guarantees/Products/Witnesses.lean`, at `Single` and `Pair`
+(`Security/Definitions/Nci/Products/Instances.lean`). Their gates, reads and cones are small finite sets, which
+`decide` computes. Every inference block of `Single` is empty or gate 2, and of `Pair` one of the four sets of gates 4
+and 5 (`gates_cases`), so widths as passed is a few counts at each: with the operands fresh a block reads every operand
+bit its MACs read, and with them registered none beyond `θ`. Each bound is compared with its price in `ℝ` or `ℝ≥0∞`.
+The `example`s at the end apply each guarantee to its lemmas, so the lemmas are the premises as the guarantee states
+them.
 -/
 
 namespace Nci.Products.SecurityProofs
@@ -109,6 +110,100 @@ theorem not_partitionBound : ¬ PartitionBound registered 1 0 (registeredProduct
 
 end Single
 
+namespace Pair
+
+/-- Each MAC of `Pair` is one gate, so connected, whatever is registered. -/
+theorem connected (θ : Finset (Fin Pair.C.N)) (hθ : ∀ g ∈ θ, Pair.C.isInput g = true) (i : Fin 1) (l : Fin 2)
+    (j : Fin 1) (X : Finset (Fin Pair.C.N)) (hX : X ⊆ (Pair.product θ hθ).mac i l j) (hne : X.Nonempty)
+    (hX' : X ≠ (Pair.product θ hθ).mac i l j) :
+    ∃ h ∈ (Pair.product θ hθ).mac i l j, ∃ g ∈ (Pair.product θ hθ).mac i l j, h ∈ Pair.C.reads g ∧
+      (h ∈ X ↔ g ∉ X) := by
+  obtain ⟨a, ha⟩ : ∃ a, (Pair.product θ hθ).mac i l j = {a} := by
+    fin_cases l
+    · exact ⟨4, rfl⟩
+    · exact ⟨5, rfl⟩
+  rw [ha] at hX hX'
+  rcases subset_singleton_iff.1 hX with rfl | rfl
+  · exact absurd hne not_nonempty_empty
+  · exact absurd rfl hX'
+
+/-- **The product is by the standard algorithm** with its operands fresh: its MACs are gates 4 and 5, each reading
+its operands' bits, and gate 5 reads gate 4. -/
+theorem algorithm_fresh : Pair.freshProduct.Algorithm :=
+  ⟨by decide, by decide, by decide, connected _ _, by decide, by decide, by decide, by decide, by decide, by decide,
+    by decide⟩
+
+/-- **The product is by the standard algorithm** with its operands registered, as with them fresh. -/
+theorem algorithm_registered : Pair.registeredProduct.Algorithm :=
+  ⟨by decide, by decide, by decide, connected _ _, by decide, by decide, by decide, by decide, by decide, by decide,
+    by decide⟩
+
+/-- Every block of computed gates is one of four. -/
+theorem gates_cases {I : Finset (Fin Pair.C.N)} (hI : I ⊆ Pair.C.computed) :
+    I = ∅ ∨ I = {4} ∨ I = {5} ∨ I = {4, 5} := by
+  have h : I ∈ Pair.C.computed.powerset := mem_powerset.2 hI
+  rw [show Pair.C.computed.powerset = {∅, {4}, {5}, {4, 5}} by decide] at h
+  simpa using h
+
+/-- **Widths as passed hold with the operands fresh**: a block that holds gate 4 reads `a₀` and `b₀` and hands its
+partial sum to gate 5, and one that holds gate 5 reads `a₁` and `b₁` and holds `C`'s final bit. -/
+theorem passed_fresh : Pair.freshProduct.Passed 1 3 1 1 1 where
+  operandA I hI := by
+    rcases gates_cases hI.1 with rfl | rfl | rfl | rfl <;> decide
+  operandB I hI := by
+    rcases gates_cases hI.1 with rfl | rfl | rfl | rfl <;> decide
+  partialSum I hI := by
+    rcases gates_cases hI.1 with rfl | rfl | rfl | rfl <;> decide
+
+/-- **Widths as passed fail with the operands registered**, at any `k`: gate 4's block reads `a₀` free. -/
+theorem not_passed_registered (k : ℕ) : ¬ Pair.registeredProduct.Passed 1 k 1 1 1 := fun h => by
+  have h0 : (Pair.registered.unregistered {4}).card = 0 := by decide
+  have hI : InferenceBlock Pair.registered 1 k {4} :=
+    ⟨(by decide : ({4} : Finset (Fin Pair.C.N)) ⊆ Pair.C.computed), by decide, by rw [h0]; exact Nat.zero_le k⟩
+  exact absurd (h.operandA {4} hI 0 0 (by decide)) (by decide)
+
+/-- **The partial sum runs along the chain**: gate 5 reads gate 4, `b_C = 1` bit. -/
+theorem chained_fresh : Pair.freshProduct.Chained 1 := by
+  unfold Standard.Chained
+  decide
+
+theorem chained_registered : Pair.registeredProduct.Chained 1 := by
+  unfold Standard.Chained
+  decide
+
+theorem boolean : Pair.C.Boolean := ⟨fun _ => rfl, by decide⟩
+
+theorem isCK_fresh : Pair.P.IsCK Pair.fresh 1 3 := ⟨boolean, by decide, by decide⟩
+
+theorem isCK_registered : Pair.P.IsCK Pair.registered 1 1 := ⟨boolean, by decide, by decide⟩
+
+theorem unsplit_fresh : Pair.freshProduct.Unsplit Pair.P := by
+  unfold Standard.Unsplit
+  decide
+
+theorem unsplit_registered : Pair.registeredProduct.Unsplit Pair.P := by
+  unfold Standard.Unsplit
+  decide
+
+theorem not_chainCap :
+    ¬ ((1 * 2 * 1 : ℕ) : ℝ) ≤
+      (2 : ℕ) * (((1 : ℕ) : ℝ) / 3 * √(((1 : ℕ) : ℝ) / 3) / √(((1 : ℕ) : ℝ) * (1 : ℕ) * (1 : ℕ))) +
+        ((1 : ℕ) : ℝ) / 2 / √(((1 : ℕ) : ℝ) * (1 : ℕ)) * √(((2 : ℕ) : ℝ) * (1 * 1 : ℕ)) := by
+  have h3 : √(((1 : ℕ) : ℝ) / 3) ≤ 1 := by
+    rw [Real.sqrt_le_left zero_le_one]
+    norm_num
+  have h2 : √(((2 : ℕ) : ℝ) * (1 * 1 : ℕ)) ≤ 3 / 2 := by
+    rw [Real.sqrt_le_left (by norm_num)]
+    norm_num
+  have e1 : √(((1 : ℕ) : ℝ) * (1 : ℕ) * (1 : ℕ)) = 1 := by norm_num
+  have e2 : √(((1 : ℕ) : ℝ) * (1 : ℕ)) = 1 := by norm_num
+  rw [e1, e2]
+  intro h
+  push_cast at h h2 h3
+  linarith
+
+end Pair
+
 theorem Cap_honest : Guarantees.Cap_honest :=
   ⟨Single.algorithm_fresh, Single.passed_fresh, Single.isCK_fresh, Nat.one_pos, by norm_num⟩
 
@@ -122,6 +217,13 @@ theorem WordCap_honest : Guarantees.WordCap_honest :=
 theorem WordCap_nontrivial : Guarantees.WordCap_nontrivial :=
   ⟨Single.algorithm_registered, Single.not_passed_registered 1, Single.isCK_registered 1, Single.unsplit _ _,
     Nat.one_pos, Single.not_wordCap⟩
+
+theorem ChainCap_honest : Guarantees.ChainCap_honest :=
+  ⟨Pair.algorithm_fresh, Pair.passed_fresh, Pair.chained_fresh, Pair.isCK_fresh, Pair.unsplit_fresh, Nat.one_pos⟩
+
+theorem ChainCap_nontrivial : Guarantees.ChainCap_nontrivial :=
+  ⟨Pair.algorithm_registered, Pair.not_passed_registered 1, Pair.chained_registered, Pair.isCK_registered,
+    Pair.unsplit_registered, Nat.one_pos, Pair.not_chainCap⟩
 
 theorem Bound_honest : Guarantees.Bound_honest :=
   ⟨Single.algorithm_fresh, Single.passed_fresh, Single.isCK_fresh, Nat.one_pos, by norm_num⟩
@@ -147,6 +249,17 @@ example (h : registeredProduct.Passed 1 1 1 1 1) : False :=
   let n := WordCap_nontrivial
   n.2.2.2.2.2 (WordCap _ _ _ _ _ 1 1 1 1 1 1 P n.1 h n.2.2.1 n.2.2.2.1 n.2.2.2.2.1 n.2.2.2.2.1 n.2.2.2.2.1
     n.2.2.2.2.1)
+
+example : ((1 * 2 * 1 : ℕ) : ℝ) ≤
+    (2 : ℕ) * (((3 : ℕ) : ℝ) / 3 * √(((3 : ℕ) : ℝ) / 3) / √(((1 : ℕ) : ℝ) * (1 : ℕ) * (1 : ℕ))) +
+      ((3 : ℕ) : ℝ) / 2 / √(((1 : ℕ) : ℝ) * (1 : ℕ)) * √(((2 : ℕ) : ℝ) * (1 * 1 : ℕ)) :=
+  let h := ChainCap_honest
+  ChainCap _ _ _ _ _ 1 3 1 1 1 2 Pair.P h.1 h.2.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2 h.2.2.2.2.2 h.2.2.2.2.2
+
+example (h : Pair.registeredProduct.Passed 1 1 1 1 1) : False :=
+  let n := ChainCap_nontrivial
+  n.2.2.2.2.2.2 (ChainCap _ _ _ _ _ 1 1 1 1 1 2 Pair.P n.1 h n.2.2.1 n.2.2.2.1 n.2.2.2.2.1 n.2.2.2.2.2.1
+    n.2.2.2.2.2.1 n.2.2.2.2.2.1)
 
 example : freshProduct.bound 1 2 1 1 1 (1 / 2) ≤ partitionSlowdown fresh 1 1 :=
   let h := Bound_honest
