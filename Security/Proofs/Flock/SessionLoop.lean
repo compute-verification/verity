@@ -37,6 +37,8 @@ import Proofs.Flock.SessionLoop.InnerUnrefused
 import Proofs.Flock.SessionLoop.LiveInnerAt
 import Proofs.Flock.SessionLoop.SchedAt
 import Proofs.Flock.SessionLoop.PcsRank
+import Proofs.Flock.SessionLoop.RhoUnrefused
+import Proofs.Flock.SessionLoop.RhoKeepRep
 import Proofs.Flock.SessionLoop.SchedUnrefused
 import Proofs.Flock.SessionLoop.RoundSwitchFrame
 import Proofs.Flock.SessionLoop.RoundSwitchCut
