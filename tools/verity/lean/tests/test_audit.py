@@ -1637,7 +1637,7 @@ def excepted_toy(tmp_path, module: str, source: str, proof: str, guarantee: str,
     """The control package with the proofs-tree module ``module`` (``source``) under `trees`' `except` and outside
     `meaning`, ``proof`` (a theorem of its statement, in namespace `Control`) in a module of its own, that theorem listed
     as the guarantee ``guarantee``, and ``defs`` added to `Control.Defs`: the package, its build, its audit (``update`` or
-    not) and its lock."""
+    not, under ``moved``) and its lock."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     if defs:
@@ -1657,8 +1657,8 @@ def excepted_toy(tmp_path, module: str, source: str, proof: str, guarantee: str,
     def build():
         return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
 
-    def audit(update):
-        return A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
+    def audit(update, moved=None):
+        return A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None, moved=moved)
 
     def lock():
         return json.loads((pkg / A.POLICY).read_text())
@@ -1720,6 +1720,7 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
 
 VERIFY = ("import Control.Defs\nnamespace Control\ndef verifyDouble (n : Nat) : Prop := double n = n + n\n"
           "namespace Guarantees\ndef Doubled : Prop := ∀ n : Nat, Control.verifyDouble n\nend Guarantees\nend Control\n")
+DOUBLED = "theorem doubled : Guarantees.Doubled := by\n  unfold Guarantees.Doubled\n  intros\n  unfold verifyDouble double\n  omega\n"
 
 
 @pytest.mark.slow
@@ -1731,10 +1732,7 @@ def test_a_verifier_read_only_in_an_excepted_module_holds_its_statement_to_witne
     witnesses as it would one read under `meaning`, and `--update`, which records it, lists it under no `unwitnessed`.
     An entry there at its record's type hash exempts it, and `--update` keeps that entry. A rule that read only what the
     walk under `meaning` reaches saw no read at all, and held the guarantee to nothing."""
-    pkg, build, audit, lock = excepted_toy(
-        tmp_path, "Control.Verify", VERIFY,
-        "theorem doubled : Guarantees.Doubled := by\n  unfold Guarantees.Doubled\n  intros\n  unfold verifyDouble double\n"
-        "  omega\n", "Control.doubled")
+    pkg, build, audit, lock = excepted_toy(tmp_path, "Control.Verify", VERIFY, DOUBLED, "Control.doubled")
     build()
     fails = unshaped(audit(True))
     assert [f.code for f in fails] == ["witnesses.missing"], fails
@@ -1747,6 +1745,31 @@ def test_a_verifier_read_only_in_an_excepted_module_holds_its_statement_to_witne
     A.dump(pkg, rec | {"unwitnessed": entry})
     assert unshaped(audit(False)) == []
     assert unshaped(audit(True)) == [] and lock()["unwitnessed"] == entry
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_renamed_unwitnessed_guarantee_passes_under_moved_and_its_entry_is_re_keyed(tmp_path):
+    """On a real build: a guarantee `unwitnessed` lists, renamed with the statement it is (`Control.doubled :
+    Guarantees.Doubled` to `Control.twofold : Guarantees.Twofold`, as #6969 renames the remote audit's `Component`), says
+    the same, but its type hash reads names. Under `--update --moved` its entry, at the hash of its text under the old
+    names, passes, and the lock lists it under the new name at the hash as built, which passes without `--moved`. The
+    unit test hands the rule a moved hash; this one checks that `Facts.lean`'s is the one the record and its entry hold."""
+    pkg, build, audit, lock = excepted_toy(tmp_path, "Control.Verify", VERIFY, DOUBLED, "Control.doubled")
+    build()
+    audit(True)
+    was = lock()["guarantees"]["Control.doubled"]["type_hash"]
+    A.dump(pkg, lock() | {"unwitnessed": {"Control.doubled": was}})
+    assert unshaped(audit(False)) == []
+    for path in (pkg / "Control" / "Verify.lean", pkg / "Control" / "VerifyThm.lean"):
+        path.write_text(path.read_text().replace("Doubled", "Twofold").replace("doubled", "twofold"))
+    build()
+    rep = audit(True, {"Control.doubled": "Control.twofold", "Control.Guarantees.Doubled": "Control.Guarantees.Twofold"})
+    assert unshaped(rep) == [], unshaped(rep)
+    rec = lock()
+    now = rec["guarantees"]["Control.twofold"]["type_hash"]
+    assert now != was and rec["unwitnessed"] == {"Control.twofold": now} and "Control.doubled" not in rec["guarantees"]
+    assert unshaped(audit(False)) == []
 
 
 def test_a_statement_whose_premises_could_not_be_read_fails():
@@ -2076,8 +2099,9 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     """The guarantees in scope when the rule came are listed under `unwitnessed` with their statements' hashes: one whose
     statement changed carries its witnesses (the hash no longer matches); an entry of one out of scope fails, and one beside
     the witnesses it would exempt, or of a witness, does nothing, the witnesses checked as ever. An entry may exempt one
-    half (`missing`) of a guarantee listing the other. `--update` keeps an entry while it matches (re-keyed when the
-    guarantee moved), drops every other, and adds none, so a new guarantee in scope fails until it has witnesses."""
+    half (`missing`) of a guarantee listing the other. Under `--moved`, an entry at its text under the old names matches
+    when its record has that hash too. `--update` keeps an entry while it matches (re-keyed when the guarantee moved),
+    drops every other, and adds none, so a new guarantee in scope fails until it has witnesses."""
     pol, f = witnessed()
     h = f["pins"]["P.sound"]["type_sha256"]
     bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}, "unwitnessed": {"P.sound": h}}
@@ -2126,9 +2150,12 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     old = sha("before the move")
     moved = facts(pins={"P.sound": f["pins"]["P.sound"] | {"moved": {"sha256": old}}}, own_modules=sorted(WOWN))
     was = {**bare, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": old}}, "unwitnessed": {"P.sound": old}}
-    assert witness_codes(was, moved) == ["witnesses.unwitnessed-changed"]
+    assert witness_codes(was, moved) == []
     assert A.unwitnessed_kept(was, moved, {}) == {"P.sound": h}
-    assert A.unwitnessed_kept({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved, {}) == {}
+    stale = {**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}
+    assert witness_codes(stale, moved) == ["witnesses.unwitnessed-changed"]
+    assert A.unwitnessed_kept(stale, moved, {}) == {}
+    assert witness_codes({**was, "unwitnessed": {"P.sound": sha("other")}}, moved) == ["witnesses.unwitnessed-changed"]
 
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {

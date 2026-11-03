@@ -1786,8 +1786,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
       ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails.
 
     A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
-    guarantees in scope when the rule came) lists it with the hash of its statement as built: a new guarantee, and one
-    whose statement changed, carry both. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
+    guarantees in scope when the rule came) lists it with the hash of its statement as built, or, under `--moved`, with that
+    of its text under the old names when its record has that hash too (renamed, it says the same, and `--update` re-keys
+    the entry): a new guarantee, and one whose statement changed, carry both. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
     witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
@@ -1822,7 +1823,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                 fails.append(Failure("witnesses.unwitnessed-half", g, f"witnesses: `unwitnessed` exempts only {g}'s "
                                      f"{half} witness, and `witnesses` lists none of its: list the other half there"))
                 continue
-            if h != pin.get("type_sha256"):
+            mv, rec = pin.get("moved") or {}, guarantees.get(g) or {}
+            if h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash")):
                 fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
                                      + (f"exempted its {half} witness, so it carries that witness now" if half else
                                         f"listed it, and the rule holds it to witnesses ({why}), so it carries them now")
