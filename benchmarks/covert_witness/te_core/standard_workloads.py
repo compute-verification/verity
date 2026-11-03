@@ -55,7 +55,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import VERSION, algorithm_policy, console, formalism, panels, policy
+from . import VERSION, algorithm_policy, annotate, console, formalism, panels, policy
 from .gates import of_log
 from .ledger import Ledger, ingest
 
@@ -206,24 +206,20 @@ def start(name: str) -> tuple[dict, dict]:
     return s["shape"], json.loads((fetch(s["art"], path) / path).read_text())["tensors"]
 
 
-def untraced(record: dict, traced: dict[int, dict]) -> list[str]:
-    """The steps with tokens that take no traced structure, so no Δ_grad (te_core.annotate.with_structures gives one
-    only to a step whose structure a traced step shares and updates something), each with why."""
-    by = {s["step"]: s["struct"] for s in record["steps"]}
-    have = {by[step]: t for step, t in traced.items()}
+def untraced(record: dict, structures: dict[str, dict]) -> list[str]:
+    """The steps with tokens that te_core.annotate.with_structures gives none of the traced `structures` (by structure
+    id), so no Δ_grad, each with why."""
+    got = annotate.with_structures(record, structures)
     last, out = record["steps"][-1]["step"], []
-    for s in record["steps"]:
+    for s, a in zip(record["steps"], got["steps"]):
         sid = s["struct"]
-        if not s.get("tokens") or (sid in have and record["structures"][sid].get("updated")):
+        if not s.get("tokens") or a["struct"] != sid:
             continue
-        if sid in have:
-            dg = have[sid].get("measured", {}).get("delta_grad_bits")
-            why = ("before the run's first update: its structure updates nothing, so te_core.annotate leaves out its "
-                   "trace" + (f", which measures {algorithm_policy.num(dg)} bits" if dg is not None else ""))
-        elif s["step"] == last:
-            alone = sum(x["struct"] == sid for x in record["steps"]) == 1
-            why = (f"the program's last{', its structure having no other step' if alone else ''}, which "
-                   f"te_core.capture refuses to trace, the program ending before the step does")
+        if sid in structures:
+            why = ("its structure updates nothing, and te_core.annotate takes such a step's trace only where it "
+                   "measures the step and a traced step of the run updates something")
+        elif s["step"] == last and sum(x["struct"] == sid for x in record["steps"]) == 1:
+            why = "the program's last, its structure having no other step, not traced"
         else:
             why = "no traced step shares its structure"
         out.append(f"step {s['step']}: {why}")
@@ -254,7 +250,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
         record["checkpoints"] = record["checkpoints"][-1:]
-        read["untraced"] = untraced(record, traced)
+        read["untraced"] = untraced(record, structures)
     with tempfile.TemporaryDirectory(prefix="sw-ingest-") as tmp:
         d = Path(tmp) / "run"
         d.mkdir()
@@ -295,8 +291,9 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
         if key == "delta_grad_bits" and m.fit_delta_grad_bits is None:
             n = sum(p.steps for p in m.parts if p.tokens and p.delta_grad_bits is None)
             if gaps is not None and len(gaps) != n:
-                raise ValueError(f"te_core has no Delta_grad for {n} steps, `untraced` names {len(gaps)}: bring "
-                                 f"untraced() to te_core.annotate.with_structures' rule")
+                raise ValueError(f"te_core has no Delta_grad for {n} steps, `untraced` names {len(gaps)}: a step "
+                                 f"te_core.annotate gives a trace without a measured Delta_grad, which untraced() "
+                                 f"doesn't name")
             where = (f"{n} of {read['steps']} steps ({'; '.join(gaps[:3])}{f'; and {n - 3} more' if n > 3 else ''})"
                      if gaps else f"{n} of {sum(p.steps for p in m.parts)} steps in structures with no traced "
                                   f"Delta_grad")
