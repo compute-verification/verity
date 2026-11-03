@@ -48,8 +48,7 @@ theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : C
   refine Finset.sum_congr rfl fun r₀ _ => ?_
   congr 1
   by_cases h : (run H τ.1 V (stmt S R) () r₀).out = .acc
-  · simp only [h, eq_self_iff_true, decide_true, ↓reduceIte, mul_one, Finset.sum_const, Finset.card_univ,
-      nsmul_eq_mul]
+  · simp only [h, decide_true, ↓reduceIte, mul_one, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
     exact ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
   · simp only [h, decide_false, Bool.false_eq_true, ↓reduceIte, mul_zero, Finset.sum_const_zero]
 
