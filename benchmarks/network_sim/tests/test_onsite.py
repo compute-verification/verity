@@ -86,7 +86,8 @@ def zone(out: Path, b: str, params: dict, *, answer: dict | None, refused: str |
     if answer is not None:
         (piece / "answer.json").write_text(json.dumps(answer))
         (piece / "chain" / "report" / "report.json").write_text(json.dumps({
-            "verdict": "accepted", "path": "warden", "scope": None,
+            "verdict": "accepted", "path": "warden", "scope": None, "stubbed": ["the weights' load isn't certified"],
+            "negatives_refused": {"scan/tampered": True, "n2/tampered": b != "b2"},
             "steps": {"scan": {"verdict": "accepted", "eps_at_delta": "2^-20"}, "tie": {"verdict": "accepted"}}}))
     if refused is not None:
         (piece / "refused.txt").write_text(refused + "\n")
@@ -142,6 +143,8 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert md.startswith("# The onsite network path on the mock datacenter: SIMULATED, never served")
     assert "| b0 | accepted, 4 requests in 1 link-window(s) | accepted (scan accepted, tie accepted) | reject: " in md
     assert "| b1 | accepted, 4 requests in 1 link-window(s) | not run | refused: the chain wrote no report" in md
+    assert "- the weights' load isn't certified\n" in md
+    assert "Its tampered negatives refused: n2/tampered, scan/tampered; NOT refused: b2: n2/tampered." in md
     assert "K is established for b2 here" in md
     assert "**b0** (not established: the period check answered reject)" in md and "**b2** (established)" in md
     assert "| week | zone b0 | 1 | no |" in md and "| week | zone b2 | 1 | yes |" in md

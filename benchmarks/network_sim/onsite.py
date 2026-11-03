@@ -265,6 +265,7 @@ def chain_outcome(d: Path) -> dict | None:
     if (r := _json(d / "chain" / "report" / "report.json")) is None:
         return None
     return {"verdict": r.get("verdict"), "path": r.get("path"), "scope": r.get("scope"),
+            "stubbed": r.get("stubbed") or [], "negatives_refused": r.get("negatives_refused") or {},
             "steps": {k: {"verdict": s.get("verdict"), **({"eps_at_delta": s["eps_at_delta"]}
                                                            if "eps_at_delta" in s else {})}
                       for k, s in (r.get("steps") or {}).items()}}
@@ -411,18 +412,29 @@ def markdown(doc: dict) -> str:
                                                                           for k, s in c["steps"].items()) + ")"
         period = "not run" if p is None else f"{p['verdict']}: {short(p.get('reason') or '')}"
         lines.append(f"| {b} | {gate} | {chain} | {period} |")
+    chains = [z["chain"] for z in zones.values() if z["chain"]]
+    stubbed = list(dict.fromkeys(s for c in chains for s in c["stubbed"]))
+    negatives = sorted({k for c in chains for k, v in c["negatives_refused"].items() if v})
+    missed = sorted({f"{b}: {k}" for b, z in zones.items() if z["chain"]
+                     for k, v in z["chain"]["negatives_refused"].items() if not v})
+    if chains:
+        lines += ["", "What the chain's path stubs, by its report:", "", *(f"- {s}" for s in stubbed or ["nothing"]), "",
+                  f"Its tampered negatives refused: {', '.join(negatives) or 'none'}"
+                  + (f"; NOT refused: {', '.join(missed)}" if missed else "") + "."]
     accepted = [b for b, z in zones.items() if z["K"] and z["K"]["established"]]
     lines += ["", "## K, the bits a zone's server can send beyond its committed program", "",
               f"`{LB.STATEMENTS['per_period']}`: {BOUND}, in the registered reading, shares of one copy of the weights "
               f"({LB.WEIGHTS.label}). It bounds a zone only over a period its period check accepted: K is established "
-              f"for {', '.join(accepted) or 'no zone'} here. Every other zone's figures are the bound its run's load "
-              "would have had, had its period check accepted.", ""]
+              f"for {', '.join(accepted) or 'no zone'} here. A zone's figures without that accept are the bound its "
+              "run's load would have had, had its period check accepted.", ""]
     for b, z in zones.items():
         if not z["K"]:
             lines.append(f"{b}: no K (the gate's check didn't accept)")
             continue
         k, w = z["K"], z["K"]["per_window"]
-        status = "established" if k["established"] else f"not established: the period check answered {z['verdict']}"
+        why = {"not run": "the period check didn't run", "refused": "the piece refused to run"}.get(
+            z["verdict"], f"the period check answered {z['verdict']}")
+        status = "established" if k["established"] else f"not established: {why}"
         lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, T = {w['k_i']}, "
                   f"{k['run']['requests_per_link_window']:g} "
                   f"requests a link-window: a window's ell_a = {w['ell_a']:,}, k_skip = 0, k_i log2 d_jit = "
