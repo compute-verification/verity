@@ -154,7 +154,7 @@ end Machine
 
 section Service
 
-/-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
+/-- The proof system's layer of a protocol (AGENTS.md's one proof system): live coins, messages and the verifier.
 A protocol is a service with a problem (`correct`) and an honest Solve. -/
 structure Service where
   Seed : Type
