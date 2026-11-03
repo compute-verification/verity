@@ -13,8 +13,9 @@ is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
 names them or not. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
-accepted session under another population is rejected (`population_why`): by `verify` handed that population's strata, and
-by the v2 audit, which derives them from a registration whose partition queries the program for another population.
+accepted session under another population is rejected (`population_why`). A registration whose partition object queries
+the program for another population is rejected at setup, by the v2 audit and by `verify` alike: the circuit file binds the
+digest of its own partition object.
 
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
@@ -308,11 +309,11 @@ def test_an_accepted_session_of_another_population_is_rejected(fx):
 @pytest.mark.slow
 def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
     """A registration whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
-    heads' calls, rather than its template's 32 instances: the v2 audit derives that population from the registration
-    itself (`FilePart.check`, last in `verdictOf`) and rejects the honest session, whose circuit file holds the 32, with
-    `population_why`'s reason; `verify`, handed the strata Python derives from the same program and query
-    (`partition.strata`), agrees. `test_an_accepted_session_of_another_population_is_rejected` hands Python its strata;
-    this is the one run of the Lean's own derivation on a population other than the file's."""
+    heads' calls (2048 of them, `partition.strata`), rather than the 32 template instances the circuit file holds: the
+    v2 audit's own run rejects the honest session at setup, since the circuit file binds another partition object's
+    digest (`Flock.checkPartitionWith`), before any verdict reaches `FilePart.check`; `verify`, handed that
+    registration's strata, rejects it the same way. The other tests here run the v2 audit only on the circuit file's own
+    partition object."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as PA
     from verity.ml.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load
@@ -326,7 +327,8 @@ def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refus
     mine, refused = _v2(fx, fx / "session", partition=part)
     assert refused is None, refused
     (f,) = mine
-    assert (f.accepted, f.why, f.units) == (False, why, ()), f
+    assert (f.accepted, f.why, f.units) == (
+        False, "setup: partition: the circuit's partition digest is not the verifier's partition object's", ()), f
     got, refused = _verify(fx, fx / "session", strata=strata, partition=part)
     assert refused is None, refused
     _same(got, mine)
