@@ -679,13 +679,19 @@ SHARED_PREFIX = 1
 #: the first te_core whose capture checks a step for matrix products written with elementwise ops (te_core.capture.
 #: products' `elementwise_products`): a multiplication that broadcasts both its operands (an outer product, or a matrix
 #: product once summed), or a gather, a multiplication and a sum by index, which no product row is, so the whole-making
-#: system misses their classes
-ELEMENTWISE_FROM = "4.12.7"
+#: system misses their classes. 4.12.7's check lost a broadcast at any op but a view, so a map, a copy or a
+#: multiplication by a value outside the update hid it, and it took an embedding's rows for a broadcast
+ELEMENTWISE_FROM = "4.12.9"
+
+
+def _release(v) -> tuple[int, ...]:
+    """A te_core version as a tuple (none: (0,))."""
+    return tuple(int(x) for x in str(v).split(".")) if v else (0,)
 #: why the fresh-products kind is unmeasured on a trace captured before `ELEMENTWISE_FROM`
-FRESH_UNCHECKED = (f"unmeasured: the trace was captured before {THE_CODE} checked a step for matrix products "
-                   "written as elementwise steps (a multiplication that broadcasts both its operands, or gathered rows "
-                   "multiplied and added by index), so it may hold products the bound can't see; retrace the run with "
-                   f"{THE_CODE} {ELEMENTWISE_FROM} or later")
+FRESH_UNCHECKED = (f"unmeasured: the trace was captured before {THE_CODE} {ELEMENTWISE_FROM}'s check for matrix "
+                   "products written as elementwise steps (a multiplication that broadcasts both its operands, "
+                   "whatever the broadcast passes through first, or gathered rows multiplied and added by index), so it "
+                   "may hold products the bound can't see; retrace the run with it or later")
 #: why the fresh-products kind is unmeasured on a trace captured before `SYSTEM_FROM`
 FRESH_RETRACE = (f"unmeasured: the trace's product rows predate {THE_CODE} {SYSTEM_FROM}, so they don't say which "
                  "chains make each operand whole or which products read an embedding's rows before any op makes them "
@@ -806,7 +812,7 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
     `shared_prefix` says so (None: no such product, so no position reads another's tokens and a repeated token is
     `gathered`'s). Each product keeps its operands' `fed`,
     which `fresh_products` reads to give each subset its own whole-making factor, and `elementwise_products` is the
-    trace's (None: captured before `ELEMENTWISE_FROM`)."""
+    trace's (None: captured before `ELEMENTWISE_FROM`, whose check an earlier list may not have passed)."""
     out, kinds = [], dict.fromkeys(io_bound.KINDS, 0.0)
     flagged = all("gathered" in r for r in block["rows"])
     seq = max((r["dims"][d] for r in block["rows"] if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
@@ -837,7 +843,9 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
               "trimmed_macs_share": trimmed / macs if macs else 0.0} if seq else None
     got = {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
            "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match"),
-           "gathered": gathered, "shared_prefix": shared, "elementwise_products": block.get("elementwise_products")}
+           "gathered": gathered, "shared_prefix": shared,
+           "elementwise_products": block.get("elementwise_products") if _release(block.get("capture")) >=
+           _release(ELEMENTWISE_FROM) else None}
     if "at" in block:
         rest = {x: v for x, v in block.items() if x != "at"}
         got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
