@@ -70,17 +70,6 @@ theorem repCons_eqC (io : Asks M) (st : Setup) (hm : st.merkle = MerkleScheme.hm
   all_goals try simp only [bind_assoc]
   all_goals refine bind_congr fun ⟨lp, lc⟩ => ?_
   all_goals try simp only [pure_bind, bind_assoc]
-  all_goals refine bind_congr fun ⟨ss, T, sws⟩ => ?_
-  all_goals try simp only [bind_assoc]
-  all_goals refine bind_congr fun ⟨lg, zl, rec⟩ => ?_
-  all_goals try simp only [pure_bind, bind_assoc]
-  all_goals refine bind_congr fun tr' => ?_
-  all_goals refine bind_congr fun ⟨rp, _⟩ => ?_
-  all_goals try simp only [bind_assoc]
-  all_goals refine bind_congr fun lgc => ?_
-  all_goals try simp only [pure_bind]
-  all_goals try dsimp only
-  all_goals try rfl
 
 end
 
@@ -154,7 +143,7 @@ theorem asksPad_round_size (C : Array (Array F128)) (c : ByteArray) {k : ℕ} {c
   rw [hk] at h
   dsimp only at h
   split at h
-  · first | cases h | (rw [StateT.run_bind] at h; cases h)
+  · cases h
   · rename_i hne
     simpa using hne
 
@@ -334,7 +323,8 @@ open FlockSoundness.Refine (fOf gOf)
 namespace Masked
 
 /-- **A deployed rep's constraints from the firewall's run**: where `repConsC` on table `j`'s rep `r`, answered by the
-opened coins from the rep's base at the packed table of the witness's trace (`hg`), returns, and below `zp 64` the passed
+opened coins from the rep's base at the packed table of the witness's trace (`hg`) with an extra claim per link point
+and region (`hxs`), returns, and below `zp 64` the passed
 values plus the pads are the switched source's masked values (`hmk`), its constraints are the worker's view's first seven
 rows at the clear values `v` (`SwRows`), wherever table `j`'s rows hold at its base there (`hrows`): `fwTau_at`'s reading
 of the run up to its inner proof (`tauFw_at_coef`, `swRows_coef`). -/
@@ -345,7 +335,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
-    (xs : Array _root_.Flock.Claim)
+    (xs : Array _root_.Flock.Claim) (hxs : xs.size = spec.points * (stAt x j).regions.size)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
     (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit)

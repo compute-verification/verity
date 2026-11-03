@@ -858,6 +858,43 @@ theorem innerReq_coins (x : Msg) (w : Flock.Wit)
   show ((ops.map fun p => CoinLayer.rd p.2).getD (Masked.repBase x k + k') default).at i = _
   rw [List.getD_eq_getElem _ _ (by simpa using hQ), List.getElem_map]
 
+/-- **The request's extra claims**: one per link point and region of rep stream `2j + r`'s table, the link points the
+`Commit`'s coin carries (`repInOf`, `sizesOk`). -/
+theorem innerReq_xs {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {ops : List (Msg × Msg)} (hpos : 0 < ops.length)
+    {s0 : FlockDeploy.Ins} {spec : SessionSpec} (hs : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
+    (j : Fin (Masked.jOf x)) (r : Fin 2) {m₀ ρ₀ : Msg} {dr : ByteArray} {hi : Array ByteArray} {q₀ : RepIn}
+    (hq : repInOf x ((m₀, ρ₀) :: ops) spec (Masked.stsOf x) (2 * j.val + r.val) dr hi = .ok q₀) :
+    q₀.xs.size = spec.points * (Masked.stAt x j).regions.size := by
+  have hjs := Masked.lt_of_jOf j
+  have hr2 := r.isLt
+  obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs
+  have hrsz : spec.repStreams.size = 2 * (Masked.stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec]
+  have hkk : 2 * j.val + r.val < spec.repStreams.size := by omega
+  unfold repInOf at hq
+  obtain ⟨⟨lay, ms⟩, -, hq⟩ := v_bind_ok hq
+  have hqx : q₀.xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+        (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) := by
+    cases hq
+    rfl
+  obtain ⟨⟨hmp, hmp0, hpc⟩, -, -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hs) hkk
+  have hls : (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0).size =
+      min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+    obtain ⟨p0, rest, hpr⟩ : ∃ p0 rest, ops = p0 :: rest := by
+      cases ops with
+      | nil => simp at hpos
+      | cons p0 rest => exact ⟨p0, rest, rfl⟩
+    rw [hpr]
+    simp [wordsAt, FlockDeploy.Coin.vals]
+  have hl0 : loopNr x 0 = spec.points * spec.mPts := by
+    show (reqOf x 0).2 = _
+    rw [reqOf_eq hs]
+    rfl
+  have hpts : (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0).size /
+      (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.mPts = spec.points := by
+    rw [hls, hl0, Nat.min_eq_left hpc, hmp, Nat.mul_div_cancel _ hmp0]
+  rw [hqx, Count.extras_size, Count.linkPoints_size, hpts, Nat.mul_comm, Masked.stsOf_half x j r]
+
 /-- **`finInner` returns the request's `final_c` under its pad**: the masked `final_c` its round 0 absorbs is
 `repCons`'s zerocheck proof's, the PIOP's masked value at `final_c`'s pad. -/
 theorem finInner_fc {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn} {fc' : F128} {tc : ByteArray}
@@ -1326,7 +1363,11 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
   have hsw : Masked.SwRows x (finS.pad (ops.map fun p => finS.decOf p.2)) w
       (vs x w ν (finS.pad (ops.map fun p => finS.decOf p.2))) t j r cons := by
     refine Masked.repConsC_rows x hx w hR t (finS.pad (ops.map fun p => finS.decOf p.2)) ops.length hnr s0 spec hs j r
-      (vs x w ν (finS.pad (ops.map fun p => finS.decOf p.2))) hrowsAt _ tr.st htst tr.tPad _ tr.g hg _ _ _ Q.vals
+      (vs x w ν (finS.pad (ops.map fun p => finS.decOf p.2))) hrowsAt _
+      (by
+        simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+        rw [hQx]
+        exact innerReq_xs hx hSv h0 hs j r hq) tr.st htst tr.tPad _ tr.g hg _ _ _ Q.vals
       tr.extra tr.lanePad _ (by rfl) (by simp) hgo ?_
     intro k hk
     have hk' : k < (Masked.layE x j).zp 64 := hk
