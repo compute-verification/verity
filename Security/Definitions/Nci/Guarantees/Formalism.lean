@@ -1,28 +1,40 @@
 import Definitions.Nci.Assumptions.Formalism
 
 /-!
-# The training formalism v1: its theorems
+# The training formalism v2: its theorems
 
-The three theorems of Daniel's training formalism v1 (`Definitions.Nci.Formalism`), Fit, Slowdown and Security, proved in
+The theorems of Daniel's training formalism v2 (`Definitions.Nci.Formalism`), §5, proved in
 `Nci.Formalism.SecurityProofs`. Its two lemmas, reconstruction (§1) and the three kinds of a block's inputs (§2), are
 `Nci.Formalism.reconstruction` and `Nci.Formalism.reads_split` in `Security/Proofs/Nci/Formalism/Reconstruction.lean`.
 
-* **Fit** (§5): full blocks that read within `k` give `ρ = 1`. Serving (`FitServing`): `Δ + s τ ≤ k`, and with `Δ = 0`
-  honest serving is free, one block per session (`FitHonestServing`). Training reduced by a tree (`FitTraining`):
-  `Δ + 2 Δ_grad + s τ ≤ k` for each tree block; Daniel's `2 Δ_grad + s τ ≤ k` is its case `Δ = 0`, a step whose tokens
-  run on the registered weights, and a tree block that runs its tokens on the updated model reads its description too.
-  Fit counts tokens `s` as a block reads them; `s = c / w` holds when the update's decoder takes no gates of the block,
-  and a decoder of `d` gates leaves room for `(c - d) / w`;
-* **Slowdown** (§5): under A1, `ρ ≥ φ (1 - x₀ - ε) s a / M`, for any `M ≥ max_x x (k - u(x))`, any `x₀` at least the
-  bottom share and tokens linked up to a share `ε`; the constant is `1`, and `ε = 0` is Daniel's bound. Evenly spread,
-  `u(x) = x u(1)` with `u(1) ≥ k` (`SlowdownEven`): `ρ ≥ 4 φ s a (u(1) - k - ε u(1)) / k²`, Daniel's `4 φ s a u(1) / k²`
-  with the factor `1 - k / u(1) - ε`. A frozen tail of share `t` (`SlowdownFrozenTail`): `ρ ≥ φ (1 - t - ε) s a / (k t)`,
-  Daniel's `φ s a / (k t)` with the factor `1 - t - ε`, which is near `1` for a short tail;
-* **Security** (§5): under A1 and A2, a run of the methods considered that reaches `ℓ*` in `N` periods of `n` blocks of
-  `c` gates has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound for it and `p` A2's floor.
+A lower bound on `ρ` is stated, as each is proved, for every partition `𝓘` of `C` into inference blocks:
+`X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`Nci.Formalism.le_slowdown_iff`). The slowdown is one counting bound over kinds
+of work, its factors explicit, and it reads the upper bounds A1 gives, never best-known values:
 
-Slowdown, its two cases and Security each have an honest and a nontrivial lemma, their premises holding together and
-each bound failing without A1 (`Definitions.Nci.Guarantees.Formalism.Witnesses`).
+* **The counting lemma over kinds** (`Counting`, no assumption): for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K`
+  on the gates of `B_K` an inference block holds (`Caps`), `ρ ≥ max_K (|B_K| / |C|) / (cap_K / c)`. It reads nothing of
+  the circuit beyond the caps. te_core's kinds are the unreachable token work, gradient reductions, update application
+  and decoding; the token kind's cap is a theorem here, and the others' caps are premises. The bound is a maximum: kinds
+  whose work shares blocks are not added, which would need a joint cap, `Σ_K |I ∩ B_K| / cap_K ≤ 1` for every block;
+* **the token kind's cap from A1** (`TokenCap`): under A1, an inference block holds at most `cap` gates of a set `X` of
+  token gates, for any `cap` that bounds the token work within A1's budget (`TokenCapAt`): a block with update reads `u`
+  whose work on the tokens begins at the entries `e_T` holds at most the token work reachable from them, and
+  `u + Σ_T a_T(e_T) ≤ k`. Its clean form (`TokenCapClean`): with at most `r(ν)` gates of token work a bit of state,
+  `cap = max_ν (k - ν) r(ν)`, the bound `(k - u) max (W / a)`;
+* **Slowdown** (`Slowdown`), the one bound: under A1,
+  `ρ ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c))`, the counting lemma over the kinds with the
+  token kind's cap from A1;
+* **Fit**: a partition whose every block holds at least `c - d` gates and reads within `k` gives `ρ ≤ c / (c - d)`.
+  Running `θ'` (`FitServing`), session blocks with `Δ + s τ ≤ k`; honest serving, `Δ = 0` and no decoder, has exactly
+  `ρ = 1`, one block per session (`FitHonestServing`). Training (`FitTraining`), compute blocks with `Δ + s τ ≤ k`,
+  reduction blocks with `2 Δ_grad ≤ k` and update application blocks with `Δ + Δ_grad ≤ k`. Fit counts the blocks'
+  gates in `C`: `c / (c - d)` is `ρ` against a circuit whose blocks each leave `d` of their `c` gates to a decoder;
+* **Security** (`Security`), under A1 and A2: a run of the methods considered that reaches `ℓ*` through a partition
+  into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound for it and
+  `p` A2's floor: reaching `ℓ*` covertly costs at least `ρ̲ p H(ℓ*)`, with at most `n c` available per period.
+
+The counting lemma, Slowdown, Fit's bounds and Security each have an honest and a nontrivial lemma
+(`Definitions.Nci.Guarantees.Formalism.Witnesses`).
 -/
 
 namespace Nci.Formalism.Guarantees
@@ -32,48 +44,69 @@ open Verity (Declaration Partition)
 open Nci.Formalism Nci.Formalism.Assumptions
 open scoped NNReal ENNReal
 
-/-- **Fit, serving**: session blocks that read within `k`, `Δ + s τ ≤ k`, give `ρ = 1`. -/
-def FitServing : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k Δ s τ : ℕ), SessionBlocks d P c Δ s τ → 0 < B → 0 < c →
-    ServingFits Δ s τ k → slowdown d c k = 1
+/-- **The counting lemma over kinds**: for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K` on the gates of `B_K`
+an inference block holds, every partition `𝓘` into inference blocks has
+`|𝓘| c / |C| ≥ max_K (|B_K| / |C|) / (cap_K / c)`. -/
+def Counting : Prop :=
+  ∀ (d : Declaration) (c k : ℕ) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (m : ℕ) (P : Partition d.D m),
+    Caps d c k B cap → P.IsCK d c k → (⨆ K, kindBound d c (B K) (cap K)) ≤ partitionSlowdown d m c
 
-/-- **Fit, honest serving**: with `Δ = 0`, session blocks that read `s τ ≤ k` give `ρ = 1`, one block per session. -/
-def FitHonestServing : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k s τ : ℕ), SessionBlocks d P c 0 s τ → 0 < B → 0 < c →
-    ServingFits 0 s τ k → slowdown d c k = 1
+/-- **The token kind's cap from A1**: under A1, every inference block holds at most `cap` gates of `X`, for any `cap`
+that bounds the token work within A1's budget. -/
+def TokenCap : Prop :=
+  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
+    (cap : ℝ≥0),
+    CutCost d c k e a u → A.TokenCapAt c k e a u X cap → ∀ I, InferenceBlock d c k I → ((I ∩ X).card : ℝ≥0) ≤ cap
 
-/-- **Fit, training**: tree blocks that read within `k`, `Δ + 2 Δ_grad + s τ ≤ k`, give `ρ = 1`. -/
-def FitTraining : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k Δ Δgrad s τ : ℕ), TreeBlocks d P c Δ Δgrad s τ → 0 < B →
-    0 < c → TreeFits Δ Δgrad s τ k → slowdown d c k = 1
+/-- **The token cap's clean form**: with at most `r(ν)` gates of token work a bit of state, `max_ν (k - ν) r(ν)` bounds
+the token work within A1's budget, the bound `(k - u) max (W / a)`. -/
+def TokenCapClean : Prop :=
+  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
+    (r : ℝ≥0 → ℝ≥0) (M : ℝ≥0),
+    A.WorkPerBit c k e a u X r → PeakAtMost k r M → A.TokenCapAt c k e a u X M
 
-/-- **Slowdown**: under A1, `ρ ≥ φ (1 - x₀ - ε) s a / M`. -/
+/-- **Slowdown**, the one bound: under A1, for kinds `K` of work with caps `cap_K` and a set `X` of token gates with a
+cap `cap_X` within A1's budget, every partition `𝓘` into inference blocks has
+`|𝓘| c / |C| ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c))`. -/
 def Slowdown : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (u : ℝ≥0 → ℝ) (a x₀ ε M : ℝ),
-    A.Valid → CutCost d A c u a → A.TokensLinked ε → PeakBound u k M → BottomShare u k x₀ → 0 ≤ a →
-    ENNReal.ofReal (A.depShare * (1 - x₀ - ε) * A.tokensPerBlock c * a / M) ≤ slowdown d c k
+  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
+    (capX : ℝ≥0) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (m : ℕ) (P : Partition d.D m),
+    A.Valid → CutCost d c k e a u → A.TokenCapAt c k e a u X capX → Caps d c k B cap → P.IsCK d c k →
+    max (kindBound d c X capX) (⨆ K, kindBound d c (B K) (cap K)) ≤ partitionSlowdown d m c
 
-/-- **Slowdown, evenly spread update** `u(x) = x u(1)` with `u(1) ≥ k > 0`: `ρ ≥ 4 φ s a (u(1) - k - ε u(1)) / k²`. -/
-def SlowdownEven : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (u₁ a ε : ℝ),
-    A.Valid → CutCost d A c (fun x => (x : ℝ) * u₁) a → A.TokensLinked ε → 0 < k → (k : ℝ) ≤ u₁ → 0 ≤ a →
-    ENNReal.ofReal (4 * A.depShare * A.tokensPerBlock c * a * (u₁ - k - ε * u₁) / (k : ℝ) ^ 2) ≤ slowdown d c k
+/-- **Fit, running `θ'`**: session blocks of at least `c - d` gates that read within `k`, `Δ + s τ ≤ k`, give
+`ρ ≤ c / (c - d)`. -/
+def FitServing : Prop :=
+  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k dg Δ s τ : ℕ), d.D.Boolean → SessionBlocks d P c dg Δ s τ →
+    ServingFits Δ s τ k → slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 
-/-- **Slowdown, a single updated layer with a frozen tail** of share `t`: `ρ ≥ φ (1 - t - ε) s a / (t k)`. -/
-def SlowdownFrozenTail : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (u : ℝ≥0 → ℝ) (a t ε : ℝ),
-    A.Valid → CutCost d A c u a → A.TokensLinked ε → FrozenTail u k t → 0 ≤ t → 0 ≤ a →
-    ENNReal.ofReal (A.depShare * (1 - t - ε) * A.tokensPerBlock c * a / (t * k)) ≤ slowdown d c k
+/-- **Fit, honest serving**: with `Δ = 0` and no decoder, session blocks that read `s τ ≤ k` give exactly `ρ = 1`, one
+block per session. -/
+def FitHonestServing : Prop :=
+  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k s τ : ℕ), d.D.Boolean → SessionBlocks d P c 0 0 s τ →
+    ServingFits 0 s τ k → 0 < B → 0 < c → slowdown d c k = 1
+
+/-- **Fit, training**: compute, reduction and update application blocks of at least `c - d` gates that each read
+within `k` give `ρ ≤ c / (c - d)`. -/
+def FitTraining : Prop :=
+  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k dg Δ Δgrad s τ : ℕ), d.D.Boolean →
+    TrainingBlocks d P c dg Δ Δgrad s τ → TrainingFits Δ Δgrad s τ k →
+    slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 
 /-- **Security**: under A1 and A2, a run of `methods` whose update stays within `D` bits and that reaches `ℓ*` through a
-`(c, k)`-partition whose blocks fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound. -/
+partition into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound. -/
 def Security : Prop :=
   ∀ (methods : Set Run) (dec : Verity.Decoder (List Bool)) (ℓ : List Bool → ℝ) (ℓstar : ℝ) (D : ℕ∞) (p : ℝ) (r : Run)
-    (c k n N B : ℕ) (P : Partition r.d.D B) (u : ℝ≥0 → ℝ) (a x₀ ε M : ℝ),
+    (c k n N : ℕ) (E : Type) (e : Finset (Fin r.d.D.N) → Fin r.numTokens → E) (a : Fin r.numTokens → E → ℝ≥0)
+    (u : Finset (Fin r.d.D.N) → ℝ≥0) (X : Finset (Fin r.d.D.N)) (capX : ℝ≥0) (κ : Type)
+    (B : κ → Finset (Fin r.d.D.N)) (cap : κ → ℝ≥0) (m : ℕ) (P : Partition r.d.D m),
     EfficiencyFloor methods dec c ℓ ℓstar D p → r.Among methods → r.A.Valid → r.Within dec c D → r.Reaches ℓ ℓstar →
-    CutCost r.d r.A c u a → r.A.TokensLinked ε → PeakBound u k M → BottomShare u k x₀ → 0 ≤ a → 0 ≤ p →
-    IsCKPartition r.d P c k → InPeriods B N n →
-    ENNReal.ofReal (r.A.depShare * (1 - x₀ - ε) * r.A.tokensPerBlock c * a / M * p) * honestCost methods ℓ ℓstar ≤
-      ((N * n * c : ℕ) : ℝ≥0∞)
+    CutCost r.d c k e a u → r.A.TokenCapAt c k e a u X capX → Caps r.d c k B cap → P.IsCK r.d c k →
+    InPeriods m N n →
+    max (kindBound r.d c X capX) (⨆ K, kindBound r.d c (B K) (cap K)) * ENNReal.ofReal p *
+      honestCost methods ℓ ℓstar ≤ ((N * n * c : ℕ) : ℝ≥0∞)
 
 end Nci.Formalism.Guarantees

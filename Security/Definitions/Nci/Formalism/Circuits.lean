@@ -1,9 +1,9 @@
 import Definitions.Core.Formalism
 
 /-!
-# The training formalism v1, §1: circuits
+# The training formalism v2, §1: circuits
 
-Section 1 of Daniel's training formalism v1, on core's one circuit type `Verity.Circuit` and its one declaration
+Section 1 of Daniel's training formalism v2, on core's one circuit type `Verity.Circuit` and its one declaration
 `Verity.Declaration`, which say it as written:
 
 * a **circuit** of §1 is a `Verity.Circuit` that is `Wellformed`: every value is a bit (`Circuit.Boolean`) and every gate
@@ -12,17 +12,15 @@ Section 1 of Daniel's training formalism v1, on core's one circuit type `Verity.
 * a gate **depends on** a value (`DependsOn`) if it reads it, or reads a value computed by a gate that depends on it.
   No gate depends on the value it computes: a gate reads only earlier positions (`Circuit.reads_lt`);
 * for a set of gates `S` (`GateSet`), `in(S)` is `C.into S`, the values outside `S` that gates of `S` read, which are
-  the values read by gates of `S` that no gate of `S` computes; `|S|` is `S.card`. `in(C)` is `C.into C.computed`, the
-  inputs some gate reads;
-* the registered inputs `θ ⊆ in(C)` are a declaration's `θ`, a set of its inputs;
+  the values read by gates of `S` that no gate of `S` computes; `|S|` is `S.card`. `in(C)` is `C`'s inputs (`inputs`),
+  so the computed values `S` reads are `in(S) \ in(C)`;
 * the **reconstruction** of `S` from `x` (`reconstruct`) evaluates `S`'s gates once each, in increasing order, reading
   every other value from `x`; the reconstruction lemma (`Nci.Formalism.reconstruction`, in
   `Security/Proofs/Nci/Formalism/Reconstruction.lean`) says it recovers every value `S` computes from the values of
   `in(S)`, so `S` itself is the witness.
 
 Core's circuits are more general than §1's: values of any width, output gates, gates in topological order. A circuit of
-§1 is the `Wellformed` case, and nothing in this formalism reads the rest. An input no gate reads is in no `in(S)`, so
-`θ` may hold one to no effect.
+§1 is the `Wellformed` case, and nothing in this formalism reads the rest.
 -/
 
 namespace Nci.Formalism
@@ -37,6 +35,9 @@ structure Wellformed (C : Circuit) : Prop where
 
 /-- **`S` is a set of gates**: it holds no input. -/
 def GateSet (C : Circuit) (S : Finset (Fin C.N)) : Prop := S ⊆ C.computed
+
+/-- `in(C)`: `C`'s inputs. -/
+def inputs (C : Circuit) : Finset (Fin C.N) := univ.filter fun v => C.isInput v = true
 
 /-- `x` agrees with `y` on the values `T`. -/
 def AgreesOn (C : Circuit) (x y : C.Transcript) (T : Finset (Fin C.N)) : Prop := ∀ v ∈ T, x v = y v
