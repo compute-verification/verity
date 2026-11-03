@@ -133,8 +133,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
   `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
   reads another run's directory. Each start's manifest entry has its `shape` (`starts_store.shape`), which the policy
-  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 ladder
-  (`islands/ref-optim/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
+  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 starts ladder's
+  (`islands/ladder-v3/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
   parameter with C0 counted), which join the store with tokenizer `bpe32k` in their `shape` when it publishes, each
   batch in a commit that changes only `starts_store.json` on the pin, pinned with it as `same_version`. At v3 a branch
   starts only from v3's starts: launch.py refuses a pilot start, and scoring leaves out a v3 record from one

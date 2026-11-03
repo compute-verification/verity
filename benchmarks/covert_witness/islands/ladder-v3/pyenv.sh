@@ -5,7 +5,7 @@ P=${LADDER_PYTHON:-/workspace/jobs/venv312/bin/python}
 [ -x "$P" ] || { echo "no python at $P; set LADDER_PYTHON to one with torch" >&2; exit 2; }
 need=$("$P" - <<'EOF'
 import importlib.util
-mods = [("pyarrow", "pyarrow"), ("tiktoken", "tiktoken==0.14.0"), ("regex", "regex"), ("safetensors", "safetensors"),
+mods = [("tiktoken", "tiktoken==0.14.0"), ("regex", "regex"), ("safetensors", "safetensors"),
         ("huggingface_hub", "huggingface_hub<1"), ("requests", "requests"), ("urllib3", "urllib3"), ("idna", "idna"),
         ("certifi", "certifi"), ("charset_normalizer", "charset-normalizer"), ("filelock", "filelock"),
         ("fsspec", "fsspec"), ("packaging", "packaging"), ("yaml", "pyyaml"), ("tqdm", "tqdm"),
