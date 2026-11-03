@@ -131,8 +131,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
   `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
   reads another run's directory. Each start's manifest entry has its `shape` (`starts_store.shape`), which the policy
-  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are ref-optim's ladder
-  (`islands/ref-optim/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
+  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 starts ladder's
+  (`islands/ladder-v3/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
   parameter with C0 counted), which join the store with tokenizer `bpe32k` when it publishes.
 - **Evaluator** (`evaluate.py`, `prepare.evaluate_bpb`): bits per byte at context 1024 of decode(θ, E). The model has
   θ's tensors, shapes and dtypes, or with E in the model format (`prepare.encode_model`, CWMODL1) its own lf

@@ -1,36 +1,43 @@
-"""The starts ladder (E1 of note:training-20261102T1715Z-draft-training-efficiency-experiments): one warmup-stable-decay
-run per size, with cooldown branches that each decay the rate linearly to zero at a saturation (tokens per non-embedding
-parameter), so each branch's end is a fully annealed start, registered in covert_witness's start format.
+"""The starts ladder on data v3 (E1 of note:training-20261102T1715Z-draft-training-efficiency-experiments): one
+warmup-stable-decay run per size, with cooldown branches that each decay the rate linearly to zero at a saturation (tokens
+per non-embedding parameter), so each branch's end is a fully annealed start, registered in covert_witness's start format.
 
-The model is covert_witness's `lf` family (model.py, what `prepare.Net` rebuilds), sized `s`, `m` or `l16`. Block matrices
-train with Muon (train.py's), the tied embedding and the norm gains with AdamW. A branch at saturation t has
-N = t * non-embedding parameters / tokens per step steps, the last `--cool` of them its cooldown: it forks from the main
-run at N - cooldown and, when done, the main run resumes from the weights and optimizer state it forked from, so every
-branch is exactly one standalone warmup-stable-decay run of N steps on the same stream prefix. The top branch is the main
-run's own end. `--extra` saturations are branches that only add points to the from-scratch curve F (`--extra-cool`).
+The model is covert_witness's `lf` family (model.py, what `prepare.Net` rebuilds) with data v3's tokenizer, bpe32k: 32,000
+tokens, the embedding tied. Sizes `s`, `m` and `l16`. Block matrices train with Muon, the tied embedding and the norm gains
+with AdamW. A branch at saturation t has N = t * non-embedding parameters / tokens per step steps, the last `--cool` of them
+its cooldown: it forks from the main run at N - cooldown and, when done, the main run resumes from the weights and
+optimizer state it forked from, so every branch is exactly one standalone warmup-stable-decay run of N steps on the same
+stream prefix. The top branch is the main run's own end. `--extra` saturations are branches that only add points to the
+from-scratch curve F (`--extra-cool`).
 
-The stream is ladder_data.py's: blocks of `--group` parts, each block's windows (ctx + 1 tokens at stride ctx, inside a part)
-permuted by (`--seed`, block); step k reads the stream's windows [k S, (k + 1) S), S sequences a step, so every size and
-branch reads a prefix of one order. Evaluation (`--eval search`) is covert_witness's: bits per byte over the whole search
-pool (`prepare.window_nats`, the windows split over the ranks; a registered start's own score is `prepare.evaluate_bpb` on
-its registered θ). `--eval pilot` scores the stream's val.bin instead and registers nothing, for choosing hyperparameters.
+The stream is data_v3.py's training stream (OLMo 2's stage-1 mix, bpe32k tokens; its manifest.json is written last, so every
+part is there): blocks of `--group` parts, the last block shorter, each block's windows (ctx + 1 tokens at stride ctx,
+inside a part) permuted by (`--seed`, block); step k reads the stream's windows [k S, (k + 1) S), S sequences a step, so
+every size and branch reads a prefix of one order. Evaluation (`--eval search`) is covert_witness's: bits per byte over the
+whole search pool's bpe32k tokens (`prepare.window_nats`, the windows split over the ranks; a registered start's own score
+is `prepare.evaluate_bpb` on its registered θ). `--eval pilot` scores the stream's val.bin instead and registers nothing,
+for choosing hyperparameters.
 
     bash ladder.sh SIZE BATCH WORK [FLAGS...]   # under gpu-lease: count, then train on every leased GPU
 
-    python ladder.py count --size l16 --batch 512 --micro 32 --out OUT      # one step's MACs under te_core's Counter
-    torchrun --nproc_per_node G ladder.py train --size l16 --batch 512 --data DIR --work DIR --out OUT --count OUT/count.json
+    python ladder.py count --size l16 --batch 384 --micro 32 --out OUT      # one step's MACs under te_core's Counter
+    torchrun --nproc_per_node G ladder.py train --size l16 --batch 384 --work DIR --out OUT --count OUT/count.json
 
 C0 of a branch is its steps times one step's MACs as `count` measures them: the single-process step (the global batch's
 micro-batches, accumulated, then the optimizers' step), eager, under te_core's Counter. A rank's redundant Muon work and the
-evaluation passes are not training and are not in it.
+evaluation passes are not training and are not in it. `--yield-free K` ends a phase early, checkpointed, once K GPUs of
+the node stay free (`gpu-lease status`), so a wider phase can take them (ladder.sh's caller chains the phases).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
+import re
 import shutil
+import subprocess
 import sys
 import time
 from contextlib import nullcontext
@@ -43,14 +50,14 @@ import torch.nn.functional as F
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
-sys.path.insert(0, str(HERE))
 
+import data_v3  # noqa: E402
 import prepare  # noqa: E402
 from model import CTX, LM, Size  # noqa: E402
-from train import Muon  # noqa: E402
 
 SIZES = {s.name: s for s in (Size("s", 512, 6, 8, 1408), Size("m", 768, 8, 12, 2048), Size("l16", 1024, 16, 16, 2816))}
 RECIPE = "te-ladder/v1"
+TOKENIZER, VOCAB = data_v3.TOKENIZER, data_v3.VOCAB
 
 
 def log(**kw) -> None:
@@ -60,10 +67,48 @@ def log(**kw) -> None:
 
 # ---- the model and its optimizers ----------------------------------------------------------------------------------------
 
+def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
+    a, b, c = 3.4445, -4.7750, 2.0315
+    x = g.bfloat16()
+    tall = x.shape[0] > x.shape[1]
+    if tall:
+        x = x.T
+    x = x / (x.norm() + 1e-7)
+    for _ in range(steps):
+        s = x @ x.T
+        x = a * x + (b * s + c * s @ s) @ x
+    return (x.T if tall else x).to(g.dtype)
+
+
+class Muon(torch.optim.Optimizer):
+    """Muon: momentum, Newton-Schulz orthogonalized (islands/ref-optim/train.py's, as the FineWeb ladder ran it). `scale`
+    "shape" is sqrt(max(1, rows/cols)); "rms" is 0.2 sqrt(max(rows, cols))."""
+
+    def __init__(self, params, lr: float, momentum: float = 0.95, nesterov: bool = True, wd: float = 0.0,
+                 scale: str = "shape", ns_steps: int = 5):
+        super().__init__(params, {"lr": lr, "momentum": momentum, "nesterov": nesterov, "wd": wd, "scale": scale,
+                                  "ns_steps": ns_steps})
+
+    @torch.no_grad()
+    def step(self):
+        for g in self.param_groups:
+            for p in g["params"]:
+                if p.grad is None:
+                    continue
+                st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
+                buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
+                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]) if g["nesterov"] else buf, g["ns_steps"])
+                rows, cols = p.shape
+                s = max(1.0, rows / cols) ** 0.5 if g["scale"] == "shape" else 0.2 * max(rows, cols) ** 0.5
+                if g["wd"]:
+                    p.mul_(1 - g["lr"] * g["wd"])
+                p.add_(u, alpha=-g["lr"] * s)
+
+
 def build(size: Size, device) -> LM:
     torch.manual_seed(0)
     with torch.device(device):
-        return LM(size)
+        return LM(size, vocab=VOCAB)
 
 
 def non_embedding(model: LM) -> int:
@@ -110,26 +155,30 @@ def opt_card(a) -> dict:
 # ---- the stream ------------------------------------------------------------------------------------------------------------
 
 class Stream:
-    """ladder_data.py's parts as blocks of `group`, each block's windows permuted by (seed, block)."""
+    """data_v3.py's parts as blocks of `group` (the last one shorter), each block's windows permuted by (seed, block)."""
 
     def __init__(self, root: Path, group: int, seed: int, ctx: int = CTX):
         self.root, self.group, self.seed, self.ctx = root, group, seed, ctx
+        man_path = root / "manifest.json"
+        if not man_path.is_file():
+            raise SystemExit(f"ladder: {man_path} is missing (data_v3.py writes it after every part)")
+        self.manifest_sha256 = hashlib.sha256(man_path.read_bytes()).hexdigest()
+        self.man = json.loads(man_path.read_text())
+        if (self.man.get("tokenizer"), self.man.get("vocab")) != (TOKENIZER, VOCAB):
+            raise SystemExit(f"ladder: {root} is {self.man.get('tokenizer')} ({self.man.get('vocab')} tokens), "
+                             f"not {TOKENIZER} ({VOCAB})")
+        self.n_parts = len(self.man["parts"])
+        self.windows = sum((p["tokens"] - 1) // ctx for p in self.man["parts"])
         self.blocks: list[tuple[list[np.memmap], np.ndarray, np.ndarray]] = []
         self.bounds = [0]
         self.recs: dict[int, dict] = {}
 
     def part(self, i: int) -> np.memmap:
-        rec_path = self.root / f"parts/{i:03d}.json"
-        waited = False
-        while not rec_path.is_file():
-            if not waited:
-                log(waiting_for=str(rec_path))
-                waited = True
-            time.sleep(30)
-        rec = json.loads(rec_path.read_text())
+        rec = json.loads((self.root / f"parts/{i:03d}.json").read_text())
         mm = np.memmap(self.root / f"parts/{i:03d}.bin", dtype=np.uint16, mode="r")
-        if len(mm) != rec["tokens"]:
-            raise SystemExit(f"ladder: part {i} has {len(mm)} tokens, its record {rec['tokens']}")
+        if not len(mm) == rec["tokens"] == self.man["parts"][i]["tokens"]:
+            raise SystemExit(f"ladder: part {i} has {len(mm)} tokens, its record {rec['tokens']}, the manifest "
+                             f"{self.man['parts'][i]['tokens']}")
         self.recs[i] = {k: rec[k] for k in ("index", "file", "file_sha256", "sha256", "tokens", "documents")} | {
             "dropped": len(rec["dropped"])}
         return mm
@@ -139,11 +188,14 @@ class Stream:
         while self.bounds[-1] < n:
             self.extend()
         k = int(np.searchsorted(self.bounds, n - 1, side="right"))
-        return [self.recs[i] for i in range(k * self.group)]
+        return [self.recs[i] for i in range(min(k * self.group, self.n_parts))]
 
     def extend(self) -> None:
         k = len(self.blocks)
-        mms = [self.part(i) for i in range(k * self.group, (k + 1) * self.group)]
+        ids = range(k * self.group, min((k + 1) * self.group, self.n_parts))
+        if not ids:
+            raise SystemExit(f"ladder: the stream ends at window {self.bounds[-1]:,} ({self.n_parts} parts)")
+        mms = [self.part(i) for i in ids]
         counts = np.array([(len(m) - 1) // self.ctx for m in mms], dtype=np.int64)
         perm = np.random.default_rng([self.seed, k]).permutation(int(counts.sum()))
         self.blocks.append((mms, np.concatenate([[0], np.cumsum(counts)]), perm))
@@ -169,6 +221,15 @@ def pilot_windows(root: Path, ctx: int = CTX) -> np.ndarray:
     toks = np.fromfile(root / "val.bin", dtype=np.uint16).astype(np.int64)
     n = (len(toks) - 1) // ctx
     return np.stack([toks[i * ctx: i * ctx + ctx + 1] for i in range(n)])
+
+
+def free_gpus() -> int:
+    """GPUs `gpu-lease status` lists as free on this node (0 when it can't tell)."""
+    try:
+        out = subprocess.run(["gpu-lease", "status"], capture_output=True, text=True, timeout=120).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    return sum(1 for line in out.splitlines() if re.match(r"^\d+ free\b", line))
 
 
 # ---- evaluation ------------------------------------------------------------------------------------------------------------
@@ -214,7 +275,7 @@ def eval_pilot(model: LM, rows: np.ndarray, rank: int, world: int, device) -> di
 # ---- one step's MACs -------------------------------------------------------------------------------------------------------
 
 def count(a) -> int:
-    from te_core.flops import Counter
+    from te_core.flops import Counter, forward_macs_per_token
 
     size = SIZES[a.size]
     dev = torch.device("cuda")
@@ -223,7 +284,7 @@ def count(a) -> int:
     opts = optimizers(model, a)
     params = list(model.parameters())
     gen = torch.Generator(device="cpu").manual_seed(0)
-    batch = torch.randint(0, 50257, (a.batch, CTX + 1), generator=gen).to(dev)
+    batch = torch.randint(0, VOCAB, (a.batch, CTX + 1), generator=gen).to(dev)
     c = Counter(digests=False)
     with c:
         for step in range(2):
@@ -242,19 +303,23 @@ def count(a) -> int:
     rec = c.record()
     steps = rec["steps"]
     tensors = {n: [str(p.dtype), list(p.shape)] for n, p in model.named_parameters()}
-    analytic = prepare.train_flops({"config": size.config(), "tensors": tensors}, {"full": sorted(tensors)},
+    analytic = prepare.train_flops({"config": size.config(VOCAB), "tensors": tensors}, {"full": sorted(tensors)},
                                    [{"op": "train", "tokens": a.batch * CTX}])["flops"]
-    out = {"schema": "te-ladder/count/v1", "size": size.config(), "batch": a.batch, "micro": a.micro, "ctx": CTX,
+    with torch.device(dev):
+        net = prepare.Net(size.config(VOCAB))
+    per_token = forward_macs_per_token(net, CTX, VOCAB, dev)
+    out = {"schema": "te-ladder/count/v1", "size": size.config(VOCAB), "batch": a.batch, "micro": a.micro, "ctx": CTX,
            "tokens_per_step": a.batch * CTX, "macs_per_step": steps[1]["macs"],
            "steps": [{k: s[k] for k in ("macs", "matmul_macs", "elementwise_macs", "approx_macs", "tokens", "gpu_s")}
                      for s in steps],
            "unknown_ops": rec["unknown_ops"], "foreign_ops": rec["foreign_ops"],
            "analytic_train_flops_per_step": analytic, "two_macs_over_analytic": 2 * steps[1]["macs"] / analytic,
            "non_embedding_params": non_embedding(model), "parameters": sum(p.numel() for p in params),
-           "optimizer": opt_card(a),
+           "forward_macs_per_token": per_token, "optimizer": opt_card(a),
            "rule": "one training step of the single-process equivalent (the global batch's micro-batches accumulated, "
                    "clip, Muon and AdamW), eager, under te_core.flops.Counter; the second step, once the optimizers' "
-                   "state exists"}
+                   "state exists. forward_macs_per_token: te_core.flops.forward_macs_per_token of prepare.Net at full "
+                   "context, as starts_store.py's shape counts a start's"}
     if out["unknown_ops"] or out["foreign_ops"]:
         raise SystemExit(f"ladder count: ops the counter can't price: {out['unknown_ops']} {out['foreign_ops']}")
     a.out.mkdir(parents=True, exist_ok=True)
@@ -338,12 +403,11 @@ def train(a) -> int:
     pl = plan(a, n_ne, a.batch)
     top = pl["top"]
     stream = Stream(a.data, a.group, a.seed)
-    man = json.loads((a.data / "manifest.json").read_text()) if (a.data / "manifest.json").is_file() else None
     count_rec = json.loads(a.count.read_text()) if a.count else None
-    if count_rec and (count_rec["batch"] != a.batch or count_rec["size"]["name"] != a.size):
-        raise SystemExit("ladder: --count measured another size or batch")
+    if count_rec and (count_rec["batch"] != a.batch or count_rec["size"] != size.config(VOCAB)):
+        raise SystemExit("ladder: --count measured another size, vocabulary or batch")
     macs_step = count_rec["macs_per_step"] if count_rec else None
-    pool = prepare.held_out(prepare.SEARCH_POOL, "gpt2") if a.eval == "search" else None
+    pool = prepare.held_out(prepare.SEARCH_POOL, TOKENIZER) if a.eval == "search" else None
     pilot = pilot_windows(a.data) if a.eval == "pilot" else None
     a.work.mkdir(parents=True, exist_ok=True)
     a.out.mkdir(parents=True, exist_ok=True)
@@ -421,18 +485,22 @@ def train(a) -> int:
         if rank == 0:
             theta = {n: p.detach().float().cpu().clone() for n, p in model.named_parameters()}
             with torch.device(dev):
-                net = prepare.Net(size.config())
+                net = prepare.Net(size.config(VOCAB))
             net.load(theta)
-            official = prepare.evaluate_bpb(net, prepare.SEARCH_POOL, "gpt2", device=str(dev))
+            official = prepare.evaluate_bpb(net, prepare.SEARCH_POOL, TOKENIZER, device=str(dev))
             del net
-            prov = {"recipe": RECIPE, "size": size.config(), "non_embedding_params": n_ne,
+            prov = {"recipe": RECIPE, "size": size.config(VOCAB), "non_embedding_params": n_ne,
                     "tokens_per_param": b["tpp"], "steps": b["steps"], "fork_step": b["fork"],
                     "cooldown_steps": b["cool"], "warmup_steps": a.warmup, "batch_seqs": a.batch, "ctx": CTX,
                     "tokens": b["steps"] * pl["tokens_per_step"],
                     "schedule": f"linear warmup {a.warmup} steps, constant, linear to zero over the last {b['cool']} steps",
                     "optimizer": opt_card(a),
-                    "data": {"stream": "ladder_data.py: FineWeb-Edu sample-100BT, GPT-2 tokens, sample-10BT 010/011/013's "
-                                       "documents left out", "group": a.group, "seed": a.seed,
+                    "data": {"version": data_v3.DATA,
+                             "stream": f"data_v3.py's training stream: {data_v3.REPO} at {data_v3.REVISION}, "
+                                       f"{data_v3.FRACTION:.2%} of each source, {TOKENIZER} tokens; held-out unit 0 "
+                                       "is not in it",
+                             "manifest": {"path": str(a.data / "manifest.json"), "sha256": stream.manifest_sha256},
+                             "tokenizer": stream.man["tokenizer_json"], "group": a.group, "seed": a.seed,
                              "windows": [0, b["steps"] * a.batch], "rule": "step k reads the stream's windows [k S, (k+1) S)",
                              "held_out": json.loads((a.data / "held-out.json").read_text()),
                              "parts": stream.parts_read(b["steps"] * a.batch)},
@@ -440,7 +508,7 @@ def train(a) -> int:
                            "counter": "te_core.flops.Counter (ladder.py count)"},
                     "search_pool": official, "run": os.environ.get("RESEARCH_RUN_ID", ""),
                     "commit": os.environ.get("LADDER_COMMIT") or os.environ.get("RESEARCH_SOURCE_SHA", "")}
-            reg = prepare.register_start(name, theta, size.config(), "gpt2", prov, root=a.work / "starts")
+            reg = prepare.register_start(name, theta, size.config(VOCAB), TOKENIZER, prov, root=a.work / "starts")
             log(registered=name, digest=reg["digest"], bpb=official["bpb"])
         if world > 1:
             dist.barrier()
@@ -468,14 +536,14 @@ def train(a) -> int:
         if b is not top:
             forks.setdefault(b["fork"], []).append(b)
     log(plan=pl, non_embedding=n_ne, world=world, per_rank=per_rank, micro=a.micro, macs_per_step=macs_step,
-        stream_tokens=man["tokens"] if man else None)
-    if man and man["tokens"] < top["steps"] * pl["tokens_per_step"] * (1 + 1 / CTX):
-        raise SystemExit(f"ladder: the stream has {man['tokens']} tokens, the top branch reads "
-                         f"{top['steps'] * pl['tokens_per_step']}")
+        stream_tokens=stream.man["tokens"], stream_windows=stream.windows)
+    if stream.windows < top["steps"] * a.batch:
+        raise SystemExit(f"ladder: the stream has {stream.windows:,} windows, the top branch reads {top['steps'] * a.batch:,}")
     if step == 0 and a.eval != "none":
         evaluate({"phase": "init", "step": 0, "lineage_steps": 0})
-    t0 = last = ck_at = time.perf_counter()
+    t0 = last = ck_at = free_at = time.perf_counter()
     stop = min(a.stop_at or top["steps"], top["steps"])
+    seen_free = 0
     while step < stop:
         for b in forks.get(step, []):
             if name_of(a.size, b["tpp"]) not in done:
@@ -487,20 +555,29 @@ def train(a) -> int:
         step += 1
         if step % 200 == 0:
             resync()
+        yielding = False
         if step % 50 == 0:
             torch.cuda.synchronize()
             now = time.perf_counter()
             log(step=step, loss=round(float(loss), 4), lr=round(lr_mult(step - 1, a.warmup, top["fork"], top["steps"]), 4),
                 tok_s=round(50 * pl["tokens_per_step"] / (now - last)), s=round(now - t0, 1))
             last = now
-            flag = torch.tensor(float(now - ck_at > a.ckpt_min * 60), device=dev)
+            flags = torch.tensor([float(now - ck_at > a.ckpt_min * 60), 0.0], device=dev)
+            if a.yield_free and rank == 0 and now - free_at > 60:
+                free_at = now
+                seen_free = seen_free + 1 if free_gpus() >= a.yield_free else 0
+                flags[1] = float(seen_free >= 2)
             if world > 1:
-                dist.broadcast(flag, 0)
-            if flag.item() and step < top["steps"]:
+                dist.broadcast(flags, 0)
+            yielding = bool(flags[1].item()) and step < top["steps"]
+            if flags[0].item() and step < top["steps"] and not yielding:
                 save(step)
                 ck_at = last = time.perf_counter()
         if step in grid and a.eval != "none" and step < top["steps"]:
             evaluate({"phase": "stable" if step <= top["fork"] else "main-decay", "step": step, "lineage_steps": step})
+        if yielding:
+            log(yielded=step, free_at_least=a.yield_free)
+            break
     if step < top["steps"]:
         save(step)
     if step >= top["steps"] and name_of(a.size, top["tpp"]) not in done:
@@ -512,7 +589,7 @@ def train(a) -> int:
         done.add(name_of(a.size, top["tpp"]))
         save(step)
     if rank == 0:
-        summary = {"schema": "te-ladder/run/v1", "size": size.config(), "plan": pl, "non_embedding_params": n_ne,
+        summary = {"schema": "te-ladder/run/v1", "size": size.config(VOCAB), "plan": pl, "non_embedding_params": n_ne,
                    "macs_per_step": macs_step, "optimizer": opt_card(a), "args": {k: str(v) for k, v in vars(a).items()},
                    "evals": evals, "done": sorted(done), "world": world, "wall_s": time.perf_counter() - t0}
         (a.out / "ladder.json").write_text(json.dumps(summary, indent=1) + "\n")
@@ -543,7 +620,7 @@ def main(argv=None) -> int:
     ap.add_argument("--beta1", type=float, default=0.9)
     ap.add_argument("--beta2", type=float, default=0.95)
     ap.add_argument("--clip", type=float, default=1.0)
-    ap.add_argument("--data", type=Path, default=None, help="ladder_data.py's directory (train)")
+    ap.add_argument("--data", type=Path, default=data_v3.TRAIN, help="data_v3.py's training stream (train)")
     ap.add_argument("--work", type=Path, default=None, help="checkpoint and registered starts, persistent (train)")
     ap.add_argument("--count", type=Path, default=None, help="count's count.json (C0)")
     ap.add_argument("--branches", default="20,200", help="registered saturations (tokens per non-embedding parameter)")
@@ -556,12 +633,13 @@ def main(argv=None) -> int:
     ap.add_argument("--eval", choices=("search", "pilot", "none"), default="search")
     ap.add_argument("--ckpt-min", type=float, default=30.0)
     ap.add_argument("--stop-at", type=int, default=0, help="stop after this many main-run steps, checkpointed (a throughput check, or a phase on fewer GPUs: the checkpoint resumes on any number of ranks)")
+    ap.add_argument("--yield-free", type=int, default=0, help="end this phase, checkpointed, once this many of the node's GPUs are free on two checks a minute apart (gpu-lease status), for a wider phase to take")
     ap.add_argument("--no-compile", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "count":
         return count(a)
-    if a.data is None or a.work is None:
-        ap.error("train needs --data and --work")
+    if a.work is None:
+        ap.error("train needs --work")
     return train(a)
 
 
