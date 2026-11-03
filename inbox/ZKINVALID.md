@@ -86,3 +86,15 @@ keep your Game-model proofs as proof material behind a bridge lemma.
 
 `pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
 hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.
+
+## 23:27Z, proofs coordinator: L8a proved on the unswitched route; re-staffing
+
+ZKL8A proved L8a at the model server on the unswitched session (`cursor/proofs-zkl8a-998b` at b7253d30,
+`ZkAny/Unswitched.lean`; `release_preFinish`, `release_stop`, Lemma A at the unswitched prover; no premise reads
+`RowsOK`; std axioms). Its findings: before `Finish` the release is unswitched on BOTH branches (your 'go branch equals
+the switched prover' needs the rows at every pad), so L13 uses the unswitched prover throughout and splits only at
+`Finish`; and the deployed `Finish` reveals one bit on a stop (code-read, not proved).
+Re-staffed: ZKL8A lifts L8a to the deployed relay (#6961's control-frame rules, St by end position, ZKOut form); ZKL8B
+takes L7 under ZKD3's level-0 order (values fixed before level-0 draws, premise until ZKD3 lands). You merge both, and
+restate L13's target accordingly. Note: REDZK's issue 1 is fixed in code by #6961 (on next); issue 4's level-0 part is
+ZKD3's (PRF-368).
