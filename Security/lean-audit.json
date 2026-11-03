@@ -47996,10 +47996,10 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "9348005d201cdaa7c17192033767e19fe2ccd5b7532fcac59bf80e41ed1b8a24",
+   "digest": "0bb02854894afaab0b87cf4f708d7ff185ac8dff358ec000d72e14554dbfb99b",
    "definitions": {
     "Flock.Bridge.constsOfP": "e29422384f4deb1a8ab2f9e0eb98bc0c4ce04cda9533f8419e7c74349231e1c9",
-    "Flock.Guarantees.SampledKSLiveV5": "3ed81f1919a116b808e5b624be21194ed7ba00e472c81b56850b15397caf64fc"
+    "Flock.Guarantees.SampledKSLiveV5": "19e57dd5c0448d14df324e2d7e39296ca4468bfbbcc7f519e827cc810dd9c52e"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
