@@ -1500,7 +1500,7 @@
   },
   "Nci.Products.Standard.Algorithm": {
    "owner": "@training",
-   "digest": "9d4f1c66392a1ec467c2639f37f73730f0a6f33872d24d8576561bc7123c17fa"
+   "digest": "b2b1269f578e446e41908eac1acb5b57c9cb4c1a480a2ef42894b54d12b7b28c"
   },
   "Nci.Products.Standard.Chained": {
    "owner": "@training",
@@ -1509,6 +1509,10 @@
   "Nci.Products.Standard.Passed": {
    "owner": "@training",
    "digest": "e091b3c484c0707c735b6b3d3e4dd632f2f2fa2c792d9e9dc8d07e0a2bf1f953"
+  },
+  "Nci.Products.Standard.Received": {
+   "owner": "@training",
+   "digest": "083f288d0d72d59d273d43b0c7b47054a8f60150ee0cb724a4d293f24e0a0512"
   },
   "Nci.Products.Standard.Unsplit": {
    "owner": "@training",
@@ -2242,9 +2246,41 @@
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   },
-  "Nci.Products.Standard.Received": {
+  "Nci.Products.Standard.Cells": {
    "owner": "@training",
-   "digest": "8aa903eb410e5eed87b1da7d442faee5af2d2571f509a492f223a85cc432be29"
+   "digest": "88cea31bb74f7dc5d934ce75f8df7a9532f49cfc5574b079c457296907674e08"
+  },
+  "Nci.Products.Standard.Wiring": {
+   "owner": "@training",
+   "digest": "ba5f96822f00db1e211abc917b926cc22d5bc87d53600f1adf3540a6e25c419d"
+  },
+  "Nci.Products.System.Apart": {
+   "owner": "@training",
+   "digest": "f4f57dcaba93f0d609d3dc26b6085acc7b1f0e0f23795f40a45f45067bc5bd42"
+  },
+  "Nci.Products.System.Matched": {
+   "owner": "@training",
+   "digest": "7a46b972417331fc8a5eda909b7f487aabe5175028c3876fdd9d9b19619501d1"
+  },
+  "Nci.Products.System.PostFixed": {
+   "owner": "@training",
+   "digest": "3bc21e3390df026f7e32940d14b090ab7b1a83d6948b3e7d5444c492b53f2d0c"
+  },
+  "Nci.Products.System.Shared": {
+   "owner": "@training",
+   "digest": "93f886f68876ff0215b665a45ceaf5502fd4d6e5bc6bfadaafae9903b92508d4"
+  },
+  "Nci.Products.System.SharedOn": {
+   "owner": "@training",
+   "digest": "9e31f07082ef419b15c2249516589da2e30fd84ac82f5c5add1d0bf375c84938"
+  },
+  "Nci.Products.System.Values": {
+   "owner": "@training",
+   "digest": "63cc3131732755b97b4a8252b31f6ebb4e3e8025a387657b72bfb41223a7b787"
+  },
+  "Nci.Products.System.WidthExtended": {
+   "owner": "@training",
+   "digest": "c85c92fbc5678b2564e8c6e1cbe21013244bbd505be0a37b5859a1421676ae9b"
   }
  },
  "meaning": [
@@ -9249,13 +9285,22 @@
    "type_hash": "12892bc2a15725cd543a126548a6c60e9e122dd8289a85f846be4e6e67937ee8"
   },
   "Nci.Products.SecurityProofs.ClassBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.ClassBound : Nci.Products.Guarantees.ClassBound"],
+   "assumptions": [],
+   "type_hash": "b77ffb698375464d11121211d62f90883342871ede32e20d5e975460ed39931a"
   },
   "Nci.Products.SecurityProofs.ClassBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.ClassBound_honest : Nci.Products.Guarantees.ClassBound_honest"],
+   "assumptions": [],
+   "type_hash": "c709481102cf550387381e8eb3ceab50fad83864bf8f55968eee78c77a124d1e"
   },
   "Nci.Products.SecurityProofs.ClassBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.ClassBound_nontrivial : Nci.Products.Guarantees.ClassBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "9c05f52eee09f4c3ce9042e62fe1b55a503f9fe41de39ade8f000ce194f0fd60"
   },
   "Nci.Products.SecurityProofs.NoCellBound": {
    "owner": "@training",
@@ -9294,40 +9339,76 @@
    "type_hash": "785bba7b61bac83edc955fea04335b4afba1b81ffb506b0ed0deff50707c42c1"
   },
   "Nci.Products.SecurityProofs.SumBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumBound : Nci.Products.Guarantees.SumBound"],
+   "assumptions": [],
+   "type_hash": "ed9c93880e94441a908759d96fb84b4606d52d49baa2b3dfa18daffd9ab0942b"
   },
   "Nci.Products.SecurityProofs.SumBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumBound_honest : Nci.Products.Guarantees.SumBound_honest"],
+   "assumptions": [],
+   "type_hash": "3307999c39bb5d2fd759756eef26dc2f10388319effa16a8cb637de3a278dda7"
   },
   "Nci.Products.SecurityProofs.SumBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumBound_nontrivial : Nci.Products.Guarantees.SumBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "ce893d203c8dae0e62bbffa2bfbc0ab8d593fe77eb085d80239257d2c62347ef"
   },
   "Nci.Products.SecurityProofs.SumCap": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCap : Nci.Products.Guarantees.SumCap"],
+   "assumptions": [],
+   "type_hash": "81b19a2b8fd0d9c92ee909bb9a2e8f8a4ce399d95466300573aecba10627d33e"
   },
   "Nci.Products.SecurityProofs.SumCap_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCap_honest : Nci.Products.Guarantees.SumCap_honest"],
+   "assumptions": [],
+   "type_hash": "e958d02743d3b2817bc4ec3918384b06c2a26fede9c1102e5c4fd3c14a13829f"
   },
   "Nci.Products.SecurityProofs.SumCap_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCap_nontrivial : Nci.Products.Guarantees.SumCap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "666a85b779c1d6aa137cedbd9c4ae691be37ec1f093dd2f1e8fd80ff0e584aec"
   },
   "Nci.Products.SecurityProofs.WholeBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WholeBound : Nci.Products.Guarantees.WholeBound"],
+   "assumptions": [],
+   "type_hash": "a6d5726a05d4655257aed72d7a711d28c9c07053fecf493a5efdae7849110baf"
   },
   "Nci.Products.SecurityProofs.WholeBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WholeBound_honest : Nci.Products.Guarantees.WholeBound_honest"],
+   "assumptions": [],
+   "type_hash": "4dc179f47c3edd73c177c0c81efd7d16e76399d06259a4754341296e0edc5c0e"
   },
   "Nci.Products.SecurityProofs.WholeBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WholeBound_nontrivial : Nci.Products.Guarantees.WholeBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "b64d4a8aa51ba4c2c40cb51e4a891f474bd6f331a4be3fcede9f377a0ba658cb"
   },
   "Nci.Products.SecurityProofs.WholeCap": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WholeCap : Nci.Products.Guarantees.WholeCap"],
+   "assumptions": [],
+   "type_hash": "8b77dde7d5eb91af07f7e7e766771bf4377c3ff0ed069bd862ff102ce6cf5b04"
   },
   "Nci.Products.SecurityProofs.WholeCap_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WholeCap_honest : Nci.Products.Guarantees.WholeCap_honest"],
+   "assumptions": [],
+   "type_hash": "7b7682fe2ea114314ebb9f00cd58ccfaa0e56cc63ad6e4a91e8104d50739e2cc"
   },
   "Nci.Products.SecurityProofs.WholeCap_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WholeCap_nontrivial : Nci.Products.Guarantees.WholeCap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "dd958a4cbc607f63e0883382979eddd53fdffd409b92009c59715188a91ef161"
   },
   "Nci.Products.SecurityProofs.WordCap": {
    "owner": "@training",
@@ -22871,12 +22952,27 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -23040,12 +23136,27 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -23311,12 +23422,27 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -24228,6 +24354,18 @@
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -27718,12 +27856,27 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
@@ -27775,12 +27928,27 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
@@ -28205,26 +28373,81 @@
    ]
   },
   "Definitions.Nci.Guarantees.Products.NoCell": {
-   "digest": "11aa5b81a2ecaf905393d1e37d82a354b4859210f24d0038d424a5333a9b8fb1",
+   "digest": "d4da03e426fc3f6e8d09d48d2c069c12566ae586a8dda0a7850f94dc0a22d220",
    "definitions": {
-    "Nci.Products.Guarantees.NoCellBound": "ea1cb614181b501ed0f8fd8c1f81939284492577d5b8496b5e2782457ee444e4",
-    "Nci.Products.Guarantees.NoCellCap": "b7ee981955e955ce9506f28a01100ae99e105cf466cf0e5e67ce51b812315c3d"
+    "Nci.Products.Guarantees.NoCellBound": "ad5648524003f8ea4c0cec3ef2ab15b21365a54f11a6054176de9398a32144c9",
+    "Nci.Products.Guarantees.NoCellCap": "f7062cc4d3d7a8e60ab047c228be9c57250d48b60cf15b41ef8aede7a15ddebc"
    },
    "guarantees": ["Nci.Products.SecurityProofs.NoCellBound", "Nci.Products.SecurityProofs.NoCellCap"]
   },
   "Definitions.Nci.Guarantees.Products.NoCellWitnesses": {
-   "digest": "6a1b41f296d739ce5d403af273685df89c52c5191b70da7aca1bbe149af6d2b7",
+   "digest": "063d63cd15be82458baa147f5f1d2de6287ea55fde9c88e9d57b38615df1f589",
    "definitions": {
-    "Nci.Products.Guarantees.NoCellBound_honest": "2c5fd79ff7340b3359a2abbd9e893b2e0482e6303f1f304e3be884e9a239811d",
-    "Nci.Products.Guarantees.NoCellBound_nontrivial": "98cb26a1a9807a8830bfe2ddce3b631e6af15ba75f295eedfb166d1bc9d0c35b",
-    "Nci.Products.Guarantees.NoCellCap_honest": "930e8b04690767426c1d087aec9bac4d9d985ee6de95c42c5105c3973e665687",
-    "Nci.Products.Guarantees.NoCellCap_nontrivial": "31158bb9b403e9da71df6509f0dbd13f4e8194bbabafd41b762ee02a370bc07c"
+    "Nci.Products.Guarantees.NoCellBound_honest": "9db9803cba62dfcb0ea59b961da0371fa67c7faf8ec8e43a88dacf9b44ece68b",
+    "Nci.Products.Guarantees.NoCellBound_nontrivial": "956c1a789c802595b4f0335fe3fbaa8bb3a214a5ed257a795a0bd2b0e7158bbe",
+    "Nci.Products.Guarantees.NoCellCap_honest": "643c7b6a08e6c37420d4fce5cbcb5c05652930c28235f94178538d767f54b16b",
+    "Nci.Products.Guarantees.NoCellCap_nontrivial": "795114db2e58af4b82aa182629db52becd14923fd09e1fe2d19c25ebf56bae05"
    },
    "guarantees": [
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Guarantees.Products.Sum": {
+   "digest": "eed7d3091f3217767689f2ffa852ec547fb9d84db6f9b3136c9e9253626988bb",
+   "definitions": {
+    "Nci.Products.Guarantees.SumBound": "0dc7bb96619eea2e42b9d1d8ad469735ff1e242ec92109d63be9fe33badaa6e4",
+    "Nci.Products.Guarantees.SumCap": "8b34b6a3832ee5f22543a7d017a85bd621d5c208682a3a080b3240391aaf204c"
+   },
+   "guarantees": ["Nci.Products.SecurityProofs.SumBound", "Nci.Products.SecurityProofs.SumCap"]
+  },
+  "Definitions.Nci.Guarantees.Products.SumWitnesses": {
+   "digest": "1c4cfaae245e19c918f4567409be2e8d7e04c1e11ecf16aa634a803b38511f03",
+   "definitions": {
+    "Nci.Products.Guarantees.SumBound_honest": "a34ef1388bdf64134d7766533fe8a6682070720126bffc7ebe4febe01829662f",
+    "Nci.Products.Guarantees.SumBound_nontrivial": "88f3b751ce54ccc09f6facb6fe39dee35fcc8a85ae88c2ef8682fd50be658475",
+    "Nci.Products.Guarantees.SumCap_honest": "ab5234d05501e938953b7ebb7daf8cbd6168edfb54fa81f86da03f53f4e5e80d",
+    "Nci.Products.Guarantees.SumCap_nontrivial": "8c558f6d373e6e63717036cd5082b4c18c5d5e4b6e046a8c22f10e43a40a3722"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Guarantees.Products.Whole": {
+   "digest": "c6db936d93dc6053befb7ddb62ed8a7b24e1d082407d9dffdc933ebc0a20565e",
+   "definitions": {
+    "Nci.Products.Guarantees.ClassBound": "206faadd322bf4383fe0a0c8cd87e425107949059dd82e86213613f11b707f62",
+    "Nci.Products.Guarantees.WholeBound": "a0b3dd94c9484826bcc533f6fbab4f13b27511a8d8a81308415f18380061d04e",
+    "Nci.Products.Guarantees.WholeCap": "e88eda9c7d2a02588a54ff4b19b9a4d09cea077d9e268670b8d40afddf8f3013"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeCap"
+   ]
+  },
+  "Definitions.Nci.Guarantees.Products.WholeWitnesses": {
+   "digest": "ced48eaf88aad783a912da2955b755089b7bc0c3965771767cda9ad1e42c8519",
+   "definitions": {
+    "Nci.Products.Guarantees.ClassBound_honest": "10a83d535e53e7a42ec5a6b1cd0fa3f1721f7b86e275adf4cbd592871cc6ebf8",
+    "Nci.Products.Guarantees.ClassBound_nontrivial": "830802e2e9a73209c62ad0bf0ee593ee82daf30576b9c75f23a17b73cc62e410",
+    "Nci.Products.Guarantees.WholeBound_honest": "e05e00d3f43658b7ff244687c6561b0daa371d27ef0bf01839583f8458a16c68",
+    "Nci.Products.Guarantees.WholeBound_nontrivial": "fe4aa8eb68bf32c31a7abfc93f1545f59a496f9a8ea24c73f8186c0efadb4dc1",
+    "Nci.Products.Guarantees.WholeCap_honest": "d55fc128955b65c029118fbb4e9d4b66750ca7a20d5bddb762b7db5bb1532e8a",
+    "Nci.Products.Guarantees.WholeCap_nontrivial": "6218901382de458b14aaa28f1be15197f0b6df3eb322c7b9251831a436b51d23"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial"
    ]
   },
   "Definitions.Nci.Guarantees.Products.Witnesses": {
@@ -28444,13 +28667,14 @@
    ]
   },
   "Definitions.Nci.Products": {
-   "digest": "6033467968768a7d5416c66848723579f58081df64cac6ae293860e06fe361ef",
+   "digest": "3beec94e04b14cb1034cc93c4a51fb75336bf2d2ba60dd6fb88a25fa3355c6f8",
    "definitions": {
     "Nci.Products.Standard": "ceabbc516980d388d8172c9be42708b18208429fff809c79ba30e76dc473f281",
-    "Nci.Products.Standard.Algorithm": "9d4f1c66392a1ec467c2639f37f73730f0a6f33872d24d8576561bc7123c17fa",
+    "Nci.Products.Standard.Algorithm": "b2b1269f578e446e41908eac1acb5b57c9cb4c1a480a2ef42894b54d12b7b28c",
     "Nci.Products.Standard.Chained": "f1c559f1a7ed29d2bea09eab7b2560881448bcc2e5b07c20c2e44bd177b928da",
     "Nci.Products.Standard.Passed": "e091b3c484c0707c735b6b3d3e4dd632f2f2fa2c792d9e9dc8d07e0a2bf1f953",
     "Nci.Products.Standard.Unsplit": "4f85d64a194b810cb5e0d4253454e15bcc8437807c363b74a688b7b9933a4d50",
+    "Nci.Products.Standard.Wiring": "ba5f96822f00db1e211abc917b926cc22d5bc87d53600f1adf3540a6e25c419d",
     "Nci.Products.Standard.bound": "663f46ef89b5012d3c12152e745a92f72cbfc7671a390b86b620c19ecaa64b47",
     "Nci.Products.Standard.coneA": "a322cc06b270080daee387940617fa3febb1b4309fc7dc8b97ca062bcfa57304",
     "Nci.Products.Standard.coneB": "af7b95e7f44373a8c870d9035bd95581ab291afafd24a96179670e20deeced49",
@@ -28475,12 +28699,27 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
@@ -28511,27 +28750,53 @@
     "Nci.Products.SecurityProofs.Cap_nontrivial",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellBound_honest",
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
     "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
    ]
   },
   "Definitions.Nci.Products.NoCellInstances": {
-   "digest": "a5016510d1277f09b3a425f30551a0e9eadc62e46fd6ee42c1318cada0cb18e5",
+   "digest": "aea6cbeca7b7799c73365ac500d0e56b4f7cfed238377c72b34d86b6f20ee049",
    "definitions": {
-    "Nci.Products.Pair.P1": "12054976c9c2596ca15b50b49377943755e85351259eac5b105ec58f9e2c5f5d"
+    "Nci.Products.Pair.P1": "12054976c9c2596ca15b50b49377943755e85351259eac5b105ec58f9e2c5f5d",
+    "Nci.Products.Pair.cell": "5166c6ac13c8f74a31a959b7cf76b39f29c64397b325fea54b5bcbe8e6868e3e"
    },
-   "guarantees": ["Nci.Products.SecurityProofs.NoCellCap_nontrivial"]
+   "guarantees": [
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial"
+   ]
   },
   "Definitions.Nci.Products.Received": {
-   "digest": "f5df8bb53b0da9dce1872baa2a6e27805a1d48807b1037ef5c4c1085a86ab3c8",
+   "digest": "d3c0483266ee4afc20e19743df823c7961e766f0873a765a5495046a9e3538ea",
    "definitions": {
-    "Nci.Products.Standard.Received": "8aa903eb410e5eed87b1da7d442faee5af2d2571f509a492f223a85cc432be29",
+    "Nci.Products.Standard.Cells": "88cea31bb74f7dc5d934ce75f8df7a9532f49cfc5574b079c457296907674e08",
+    "Nci.Products.Standard.Received": "083f288d0d72d59d273d43b0c7b47054a8f60150ee0cb724a4d293f24e0a0512",
+    "Nci.Products.Standard.cellGates": "54b158c823aa5ee5da3ac89c333956c5522d4e3b0488f3bb13ecc84965d0636c",
     "Nci.Products.chainBlocks": "0704dad3f0ae1d596fd600f962d093a24b7e65db1e643e9e7ef4ecc0310c155d",
-    "Nci.Products.noCellBound": "f07f711ba2db385a93dc2689e1cf4f2871ab47ebd275664b946feb7c2e56ba7d"
+    "Nci.Products.noCellBound": "68862fe5e9bd3da6212087addae8eb41ca4e501993fd9eb240bc4f936f5a616d"
    },
    "guarantees": [
     "Nci.Products.SecurityProofs.NoCellBound",
@@ -28539,7 +28804,99 @@
     "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
     "Nci.Products.SecurityProofs.NoCellCap",
     "Nci.Products.SecurityProofs.NoCellCap_honest",
-    "Nci.Products.SecurityProofs.NoCellCap_nontrivial"
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Products.Sum": {
+   "digest": "2a10c236c2d15b1d0c73fc472acac1e08dca7f94d6e7f25bcd5d658a27106494",
+   "definitions": {
+    "Nci.Products.System.Apart": "f4f57dcaba93f0d609d3dc26b6085acc7b1f0e0f23795f40a45f45067bc5bd42",
+    "Nci.Products.System.SharedOn": "9e31f07082ef419b15c2249516589da2e30fd84ac82f5c5add1d0bf375c84938",
+    "Nci.Products.sumBound": "1a3e2e2ef425960d98b1ce78a066b5aad895cf42ba6bb07bd27ca3e4a700e924"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Products.System": {
+   "digest": "56161cf930bd9793d3f396e43b1d189da1af731472c2905180c55d63ee348dd8",
+   "definitions": {
+    "Nci.Products.Standard.hadA": "b70e5ac73a513db0de81cd686b467370fb0501591f367915d0db933891905734",
+    "Nci.Products.Standard.hadB": "4273ecca3dec9b342185fd9fb9db18e2bc9aa6aa1fd65af6127731720e6a96ad",
+    "Nci.Products.Standard.hadCones": "ccbf8acf84f31bbf6b5fb7f55b54649e543c86f3fbc64e79abceaf05fcb1746e",
+    "Nci.Products.Standard.values": "c12ca919df5e3fa0096279b72f9397e926eda67e35831847f7f91d170cd5d778",
+    "Nci.Products.Standard.wholeOut": "80767e4fe99c9e75bcdcce398b2fe4611b15b534b53893b4fd97fee402da42e4",
+    "Nci.Products.System": "cee041cc67b2da7b42711df1be3ef64bc5f3117b3d884f8f5c04ecb534b83df2",
+    "Nci.Products.System.K": "3fe4e3a8da6742817c1c0e1a00fee2a65ea1bf04ebe8226cd343cf54e5625bd1",
+    "Nci.Products.System.Matched": "7a46b972417331fc8a5eda909b7f487aabe5175028c3876fdd9d9b19619501d1",
+    "Nci.Products.System.PostFixed": "3bc21e3390df026f7e32940d14b090ab7b1a83d6948b3e7d5444c492b53f2d0c",
+    "Nci.Products.System.Shared": "93f886f68876ff0215b665a45ceaf5502fd4d6e5bc6bfadaafae9903b92508d4",
+    "Nci.Products.System.Values": "63cc3131732755b97b4a8252b31f6ebb4e3e8025a387657b72bfb41223a7b787",
+    "Nci.Products.System.WidthExtended": "c85c92fbc5678b2564e8c6e1cbe21013244bbd505be0a37b5859a1421676ae9b",
+    "Nci.Products.System.classValues": "3da472c188b006127af04646cde92e13babf1098a0049ec1cb62c22bdc7fe339",
+    "Nci.Products.System.cls": "017968202a1f2bf9c81a725ac57aca17152a5d4a2f1914e690bacf112a5bb0da",
+    "Nci.Products.System.depth": "0c2c402c5363ca3dfa5c6fc4ed2bcc7b2cdbd4279148342a62c473ee7ef5251c",
+    "Nci.Products.System.hadValues": "812ef761db1e4d6268d3a0e606a3d46dc18ff089275583eea22d7148bfb6b46e",
+    "Nci.Products.System.ni": "5e8f925ab872121c3f2b23348c4f3246e2a6ca14d2289faf2ddcf763439f2375",
+    "Nci.Products.System.nj": "a34c0a6877ca1c89b88c9d1b0bb85b22806e28f1eab25654e26c2abf2ee6901d",
+    "Nci.Products.System.prod": "fdf2617116a3f24c4ce6966e8dfa13209982f2cdfc6e5126e0cbfcca615549c7",
+    "Nci.Products.System.src": "908bf5d808c76ff6385bc8daff0a55e6584896b35902997cb2e08f41373074f0",
+    "Nci.Products.wholeBound": "07c11d22b9ca8c0fc58df907b6ecbbc693c2d73cb2af7f6f156b902c65d70598",
+    "Nci.Products.wholeFactor": "11c94ff2c4097e01af8741b8edadbf0cdd8ddc72c38445a054c19006f920d8a7"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.ClassBound",
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Products.WholeInstances": {
+   "digest": "8d60930c1ed251dccb8aee15312f682406b84c1e23bda8cbc0d60e074807caa9",
+   "definitions": {
+    "Nci.Products.Pair.freshSystem": "9425983fc4ab48618673ee303d5f87f8d52010b8ade18065bfda833138e70d64",
+    "Nci.Products.Pair.registeredSystem": "14a3a93ee6f9561064751a4afe2503e1d46d6797b8b52e22c0bec55b1da06bb5",
+    "Nci.Products.Pair.system": "e2b75ca7b52e8caaef9ef1fa79e59f71582c11542f216629fd259544f307f0f3"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.ClassBound_honest",
+    "Nci.Products.SecurityProofs.ClassBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumBound_honest",
+    "Nci.Products.SecurityProofs.SumBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCap_honest",
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.WholeBound_honest",
+    "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+    "Nci.Products.SecurityProofs.WholeCap_honest",
+    "Nci.Products.SecurityProofs.WholeCap_nontrivial"
    ]
   },
   "Definitions.Nci.Reads": {
