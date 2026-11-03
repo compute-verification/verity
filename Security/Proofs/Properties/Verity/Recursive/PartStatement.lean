@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Complete.Encode
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Properties.Verity.Recursive.Names
 public import VStarRecursive
+import all Init.Data.String.Defs
 
 /-!
 # A step of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
@@ -463,7 +464,7 @@ theorem metaRead_end {b : ByteArray} {i : Nat} (h : b.size ≤ i) (n : Nat) :
       simp only [metaLine]
       have hu : String.fromUTF8? ⟨(([] : List UInt8)).toArray⟩ = some "" := by decide
       rw [hu]
-      simp only [show ("".startsWith "META ") = false by decide, Bool.false_eq_true, if_false]
+      simp only [show ("".startsWith "META ") = false by simp, Bool.false_eq_true, if_false]
       exact metaRead_nil n
   · rw [if_neg hi]
     exact metaRead_nil n

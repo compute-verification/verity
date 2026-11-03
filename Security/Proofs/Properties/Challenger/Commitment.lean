@@ -4,6 +4,7 @@ public import Proofs.Core.QSort
 public import Proofs.Properties.Pouw.LiveSalt.Canon
 public import Proofs.Properties.NetworkRecords.Bytes
 import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # A coin commitment's identity bytes name it

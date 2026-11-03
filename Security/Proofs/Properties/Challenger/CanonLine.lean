@@ -4,6 +4,7 @@ public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Properties.Composition
 public import Proofs.Flock.Claims.CanonEq
 public import SampledProofs.ChallengerSession
+import all Lean.Data.Json.Basic
 
 /-!
 # A release log line reads back
