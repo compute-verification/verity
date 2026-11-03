@@ -1,7 +1,9 @@
 """te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's policy,
 te_core.policy's CONSOLE, one full session of the 45M reference (the dashboard's 10:23Z ruling): workloads.json (the
-console's tests read it) is the module's output; rho takes only the kinds valid on their own (te_core 4.5's
-formalism.KINDS: the fresh products, the token kind under reading A and decoding), Fit where it holds, else the
+console's tests read it) is the module's output, with each workload's default point at the registered serving block
+beside the rows; rho is formalism.published's on the model's products, read as is, and takes only the kinds valid on
+their own (te_core 4.5's formalism.KINDS: the fresh products, the token kind under reading A and decoding), Fit where
+it holds, else the
 measured terms' max where it exceeds 1, with its binding kind and partial where a valid kind is unmeasured, else null,
 never 1, where a valid kind is unmeasured, else 1, binding none (the coordinator's 09:46Z and 12:20Z rulings);
 reduction, update, reading B's forms and the fresh products' figure under P-cell are sensitivities beside it, never in
@@ -27,7 +29,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import formalism, io_bound, policy
+from te_core import formalism, io_bound, panels, policy
 from te_core import workloads as W
 
 #: the console's c before the dashboard's 10:23Z ruling, 5,120 session tokens of the 45M reference at 2N FLOPs and 740
@@ -90,9 +92,10 @@ def test_reference_json_is_current(ref):
 
 
 def test_rho_takes_only_the_kinds_valid_on_their_own(ref):
-    """Coordinator 08:26Z, 10:21Z and 12:20Z: Fit's c/(c - d) where Fit holds; else the valid kinds' measured max
-    where it exceeds 1, binding that kind, partial where a valid kind is unmeasured; else null where a valid kind is
-    unmeasured; else 1, binding none, every valid kind measured and none above 1."""
+    """Coordinator 08:26Z, 10:21Z and 12:20Z, formalism.published's rule on every published rho: Fit's c/(c - d) where
+    Fit holds (no valid kind's term above it); else the valid kinds' measured max where it exceeds 1, binding that
+    kind, partial where a valid kind is unmeasured; else null where a valid kind is unmeasured; else 1, binding none,
+    every valid kind measured and none above 1."""
     assert ref["valid"] == list(W.VALID) == list(formalism.KINDS) == ["fresh_products", "token", "decoding"]
     assert ref["reading"] == "A" and set(ref["rests_on"]) == {*W.VALID, "fit", "none", "unmeasured"}
     assert ref["rests_on"]["fresh_products"].startswith("P-width and P-chain, reference circuit; no A1")
@@ -104,7 +107,7 @@ def test_rho_takes_only_the_kinds_valid_on_their_own(ref):
         top = max(priced, key=priced.get) if priced else None
         binding = top if top is not None and priced[top] > 1 else None
         whole = len(priced) == len(r["terms"])
-        assert r["binding_kind"] == binding, at
+        assert r["binding_kind"] == (None if r["basis"] == "fit" else binding), at
         if r["basis"] == "fit":
             assert not r["fit_fails"] and (binding is None or priced[binding] <= r["rho"] * (1 + 1e-9)), at
         elif binding:
@@ -132,7 +135,7 @@ def test_rho_is_one_only_where_every_valid_kind_is_measured(monkeypatch):
     monkeypatch.setattr(formalism, "bound", traced)
     c, k = policy.CONSOLE
     one = W.rho(W.model("lora", **settings("lora", "rank 1 on W_q, one layer")), c, k)
-    assert one["rho"] == one["bound"] == 1 and one["basis"] == "none" and one["binding_kind"] is None
+    assert one["rho"] == 1 and one["basis"] == "none" and one["binding_kind"] is None
     assert not one["partial"] and not one["why"] and one["terms"]["fresh_products"] == 0
     std = W.rho(W.model("standard", **settings("standard", "default")), c, k)
     assert std["basis"] == std["binding_kind"] == "fresh_products" and not std["partial"] and std["rho"] > 1
@@ -148,7 +151,7 @@ def test_a_row_with_no_measured_kind_is_null_never_one(monkeypatch):
     c, k = policy.CONSOLE
     for workload, point in (("standard", "default"), ("lora", "rank 1 on W_q, one layer")):
         r = W.rho(W.model(workload, **settings(workload, point)), c, k)
-        assert r["rho"] is None and r["basis"] == "unmeasured" and r["bound"] is None, (workload, point)
+        assert r["rho"] is None and r["basis"] == "unmeasured", (workload, point)
         assert r["binding_kind"] is None and not r["partial"] and r["fit_fails"], (workload, point)
         assert set(r["why"]) == set(W.VALID) <= set(r["unmeasured"]), (workload, point)
         assert "summed in a tree" in r["why"]["fresh_products"], (workload, point)
@@ -226,12 +229,12 @@ def test_the_sensitivities_and_the_target_are_te_cores(ref):
 
 def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
     """The fresh-products kind is te_core.formalism.fresh_products on the model's products as `Measured.products`, at
-    the console's k and summed in a chain (`ORDER`, the standard algorithm's: coordinator 12:09Z), where formalism
-    measures it; the term is io_bound's figure without P-cell (`FRESH_FIGURE`, which needs no premise on the
-    partition: coordinator 06:57Z obligation 1 and 12:09Z), formalism's term too (`formalism.P_CELL` off), and the
-    figure under P-cell is beside it as fresh_cell, formalism's, never below."""
-    assert ref["io_bound"] == W.IO_BOUND and W.ORDER == "chain"
-    assert (W.FRESH_FIGURE, W.FRESH_CELL) == ("rho_no_cell", "rho")
+    the console's k and summed in a chain (`ORDER`, formalism's, the standard algorithm's: coordinator 12:09Z), where
+    formalism measures it; the term is formalism's as is, io_bound's figure without P-cell (`formalism.P_CELL` off,
+    which needs no premise on the partition: coordinator 06:57Z obligation 1 and 12:09Z), and the figure under P-cell
+    is beside it as fresh_cell, formalism's sensitivity, never below."""
+    assert ref["io_bound"] == W.IO_BOUND and W.ORDER == formalism.ORDER == "chain" and not formalism.P_CELL
+    assert W.SENSITIVITIES is formalism.SENSITIVITIES and "fresh_cell" in formalism.CELL_SENSITIVITIES
     c, k = policy.CONSOLE
     for w in W.WORKLOADS.values():
         for pname, s in w.points:
@@ -247,6 +250,46 @@ def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
             assert b["rho"] >= b["rho_no_cell"], (w.name, pname)
             direct = io_bound.bound(W.products(m, c, k), c, k, m.measured.gates)["proved"]
             assert direct["rho_no_cell"] == b["rho_no_cell"], (w.name, pname)
+
+
+def test_rho_is_formalisms_published_as_is(ref):
+    """Coordinator 12:20Z: the rule lives in formalism.published only, and nothing downstream relabels it, so every
+    point's rho, basis and partial mark are published's under reading A on the model's products, and the reduction,
+    update and fresh_cell beside them are published's too; on a record made a model, formalism's Fit is the one
+    page_rho's target reads on the record's columns."""
+    c, k = policy.CONSOLE
+    for w in W.WORKLOADS.values():
+        for pname, s in w.points:
+            pub, r = formalism.published(W.with_products(W.model(w.name, **s), c, k), c, k, "A"), rhos(ref, w.name, pname)
+            assert (r["rho"], r["basis"], r["partial"]) == (finite(pub["rho"]), pub["binding_kind"], pub["partial"])
+            assert r["terms"] == {kind: finite(x) for kind, x in pub["terms"].items()}, (w.name, pname)
+            for name in formalism.CELL_SENSITIVITIES:
+                assert close(r["sensitivities"][name], finite(pub["sensitivities"][name]), 1e-12), (w.name, pname)
+    for w in ref["workloads"].values():
+        for cname, ck in w["checks"].items():
+            r = ck["rho"]["default"]["record"]
+            assert (r["basis"] == "fit") == (r["target"]["basis"] == "fit"), cname
+
+
+def test_the_serving_block_is_a_headline_beside_the_rows(ref):
+    """Each workload's default point at the registered serving block, rehearsal 2's measured session (te_core.panels'
+    SERVED: c = 3.009e13 gates, k = 145,568 bits), is a headline beside the rows, which stay at the console's policy:
+    the same rule on the same model, lower than the console's on every default, a block there holding 17.8 times
+    less work and reading 2.2 times the bits. Standard pretraining reads 6.39e3 there, with 8.22e4 under P-cell,
+    against 2.66e5 and 5.01e6 at the console's policy."""
+    s = ref["serving_block"]
+    assert W.SERVED == panels.SERVED == (30_087_822_237_972, 145_568) and (s["c"], s["k"]) == W.SERVED
+    assert W.POLICIES == {"default": policy.CONSOLE} and set(ref["policies"]) == {"default"}
+    assert s["block"] == W.SERVED_NOTE and set(s["defaults"]) == set(W.WORKLOADS)
+    for name, got in s["defaults"].items():
+        r = W.rho(W.model(name, **settings(name, "default")), *W.SERVED)
+        assert close(got, json.loads(json.dumps({key: r[key] for key in W.CHECKED})), 1e-12), name
+        console = rhos(ref, name, "default")
+        assert got["basis"] == console["basis"] == "fresh_products" and got["partial"], name
+        assert got["rho"] < console["rho"], name
+        assert got["sensitivities"]["fresh_cell"] < console["sensitivities"]["fresh_cell"], name
+    standard = s["defaults"]["standard"]
+    assert 6.3e3 < standard["rho"] < 6.5e3 and 8.1e4 < standard["sensitivities"]["fresh_cell"] < 8.3e4
 
 
 @pytest.mark.slow
