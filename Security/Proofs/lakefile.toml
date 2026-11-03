@@ -68,4 +68,5 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Verity.Sampled.Binding", "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest", "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger",
   "Proofs.Properties.Challenger.Session",
-  "Proofs.Properties.Challenger.CanonRead"]
+  "Proofs.Properties.Challenger.CanonRead",
+  "Proofs.Properties.Challenger.Window"]
