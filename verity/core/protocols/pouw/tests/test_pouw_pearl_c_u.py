@@ -70,7 +70,7 @@ def test_pin_is_the_reference():
         pb = [C.P.f32_to_bf16(rng.uniform(-8, 8)) for _ in range(U.PEEL_K)]
         assert U.u(c, pa, pb) == C.peel(c, pa, pb)
     for forming, make in (("v0", CV.rows), ("v1", CV.rows_f32)):
-        s = C.PearlC(k_min=32, tile=(16, 16), forming=forming)
+        s = C.PearlC(k_min=32, tile=(16, 16), forming=forming, hashing="h0")
         ctx = CV.ctx_of("pin", (16, 128, 16), 3, 9)
         noise = s.noise(ctx)
         a, e_a = s._side(make("pin", "A", 4, 128), range(4), 0, noise.seed_a, noise.seed_b, 128)

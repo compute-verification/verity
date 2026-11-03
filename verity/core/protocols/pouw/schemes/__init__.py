@@ -21,7 +21,7 @@ def _pearl(**config: Any) -> PoUWScheme:
     return PearlKW(**config)
 
 
-def _pearl_c(forming: str, device: str = "h100", hashing: str = "h0") -> Callable[..., PoUWScheme]:
+def _pearl_c(forming: str, device: str = "h100", *, hashing: str) -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
         from .pearl_c import PearlC
         from .pearl_c_device import DEVICES
@@ -29,10 +29,10 @@ def _pearl_c(forming: str, device: str = "h100", hashing: str = "h0") -> Callabl
     return make
 
 
-def _pearl_c4(fmt: str) -> Callable[..., PoUWScheme]:
+def _pearl_c4(fmt: str, *, hashing: str) -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
         from .pearl_c4 import PearlC4
-        return PearlC4(fmt, **config)
+        return PearlC4(fmt, hashing=hashing, **config)
     return make
 
 
@@ -41,12 +41,12 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "ncp-v1": _ncp("word"),
     "ncp-v1-shift24": _ncp("shift24"),
     "pearl-fp8-v4": _pearl,
-    "pearl-c-h100-v0": _pearl_c("v0"),
-    "pearl-c-h100-v1": _pearl_c("v1"),
+    "pearl-c-h100-v0": _pearl_c("v0", hashing="h0"),
+    "pearl-c-h100-v1": _pearl_c("v1", hashing="h0"),
     "pearl-c-h100-v1-h3": _pearl_c("v1", hashing="h3"),
-    "pearl-c-sm120-v1": _pearl_c("v1", "sm120"),
+    "pearl-c-sm120-v1": _pearl_c("v1", "sm120", hashing="h0"),
     "pearl-c-sm120-v1-h3": _pearl_c("v1", "sm120", hashing="h3"),
-    "pearl-c-nvfp4-v0": _pearl_c4("nvfp4"),
+    "pearl-c-nvfp4-v0": _pearl_c4("nvfp4", hashing="h0"),
 }
 
 

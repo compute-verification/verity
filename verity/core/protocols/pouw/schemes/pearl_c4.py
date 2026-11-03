@@ -1101,12 +1101,12 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
 class PearlC4:
     """Pearl-C on sm_120's FP4: ``k_min`` = 1024, 64 x 64 tiles and ``n_min`` = 128 (`B_OVF_MIN_N`); smaller bounds make a
     test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
-    tickets, and each row of A sampling its E_A line from its own seed (`row_seeds`); h0 is the default."""
+    tickets, and each row of A sampling its E_A line from its own seed (`row_seeds`); h3 is the default, and h0 is named."""
 
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h0"):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3"):
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         if hashing not in HASHINGS:

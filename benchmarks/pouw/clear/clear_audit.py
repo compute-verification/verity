@@ -20,8 +20,8 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
 
 The protocol owns every outer coin (the salt and the sample), and both are the challenger's live coins.  A scheme's noise is
 its own derivation from the salt and the prover's roots, Fiat-Shamir inside the scheme.  The row and tile trees are core's
-(`audit.commit_rows`, `rows_domain`, `transcript_domain`), framed SHA-256 unless the scheme names another frame hash in
-``commitment_hash`` (`commitment_hash`), and an opening's value under ``"hm96-sha512"`` carries its salt, which
+(`audit.commit_rows`, `rows_domain`, `transcript_domain`) under the frame hash the scheme names in ``commitment_hash``
+(`commitment_hash`), ``"hm96-sha512"`` when it names none, and an opening's value under ``"hm96-sha512"`` carries its salt, which
 `audit.opened_value` strips before the scheme reads the value.
 """
 
@@ -48,8 +48,8 @@ AUDIT_DOMAIN = "verity/pouw/audit/v1"
 
 
 def commitment_hash(scheme: PoUWScheme) -> str:
-    """The frame hash of a scheme's row and tile trees: its ``commitment_hash``, SHA-256 by default."""
-    return getattr(scheme, "commitment_hash", "sha256")
+    """The frame hash of a scheme's row and tile trees: its ``commitment_hash``, `HM96` (hashing format h3's) by default."""
+    return getattr(scheme, "commitment_hash", HM96)
 
 
 def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:

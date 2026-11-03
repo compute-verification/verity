@@ -53,7 +53,7 @@ def bf16_rows(rng: np.random.Generator, n: int, k: int, scale: float) -> np.ndar
 @pytest.mark.parametrize("fmt", ["nvfp4", "mxfp4"])
 def test_tile_equals_the_scalar_reference(fmt):
     k, n = 128, 16
-    s = F.PearlC4(fmt, k_min=128, tile=(n, n))
+    s = F.PearlC4(fmt, k_min=128, tile=(n, n), hashing="h0")
     rng = np.random.default_rng(3 if fmt == "nvfp4" else 4)
     a, b = bf16_rows(rng, n, k, 1.0), bf16_rows(rng, n, k, 0.02)
     ctx = Context(b"s" * 32, Matmul(1, Shape(n, k, n), 2), b"a" * 32, b"b" * 32)

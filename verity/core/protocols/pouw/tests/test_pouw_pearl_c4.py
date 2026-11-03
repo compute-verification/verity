@@ -187,7 +187,7 @@ def test_domain_and_registry():
     assert isinstance(s, F.PearlC4) and s.fmt is F.NVFP4 and not s.contrast and "tt-out/fp4-sm120" in s.certificate.claims
     with pytest.raises(KeyError):
         get("pearl-c-mxfp4-v0")
-    mx = F.PearlC4("mxfp4")
+    mx = F.PearlC4("mxfp4", hashing="h0")
     assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
     s.check(Matmul(0, Shape(64, 1024, 128), 0))
     s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
@@ -344,7 +344,7 @@ def test_dead_screen_is_90_rho_squared(fmt):
         x = [P.f32_bits(1.0) if p % 8 == 0 else 0 for p in range(1024)]
         x[1] = P.f32_bits(v)
         return x
-    assert F.DEAD_RHO_SQ == 90 and ("dead_rho_sq", 90) in F.PearlC4(fmt).certificate.parameters
+    assert F.DEAD_RHO_SQ == 90 and ("dead_rho_sq", 90) in F.PearlC4(fmt, hashing="h0").certificate.parameters
     assert [F.dead_blocks(f, row(v))[0] for v in (9.4375, 9.5, 10.0)] == [False, True, True]
     assert not any(F.dead_blocks(f, row(10.0))[1:])
 
@@ -581,7 +581,7 @@ def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
     a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
     b, e_b = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "B", 4, k)], F.ROLE_EB, F.ROLE_FB, k)
     d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b)
-    cap = F.CAP * Fraction(F.PearlC4().credit_of(Shape(1, k, n)), n) * 16
+    cap = F.CAP * Fraction(F.PearlC4(hashing="h0").credit_of(Shape(1, k, n)), n) * 16
     assert d.split > 50 * cap
     gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k, b.scales[j]) for j in range(4)]
     assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) < Fraction(1, 10 ** 4)
@@ -769,7 +769,7 @@ def test_b_ovf_discounts_credit_by_its_pinned_table():
                    2047: Fraction(50, 10_000), 2048: Fraction(18, 10_000), 3584: Fraction(18, 10_000), 4096: 0,
                    1 << 18: 0}
     assert [b for _, b in F.B_OVF] == sorted((b for _, b in F.B_OVF), reverse=True)
-    s = F.PearlC4()
+    s = F.PearlC4(hashing="h0")
     for m, k, n in ((64, 1024, 128), (2048, 3584, 512), (64, 8192, 896), (1, 1024, 1024), (64, 1024, 4096)):
         shape = Shape(m, k, n)
         plain = s.wref(shape) - F.FORMING_UNCREDITED * m * k
@@ -1039,7 +1039,7 @@ def test_h3_row_seeds_are_pearl_cs_layout_under_pearl_c4s_label():
         assert got.hex() == seed and got == F.unit_seed_a(salt, leaf, root_b, unit << 32 | row) != C.row_seed(salt, leaf, root_b, unit, row)
         assert got == _h(b"pearl-c4/v1/seed-A", salt + leaf + root_b + (unit << 32 | row).to_bytes(8, "little"))
     ctx = V.ctx_of("seeds", (16, K, 16), 3, 9)
-    noise = F.PearlC4().noise(ctx)
+    noise = F.PearlC4(hashing="h0").noise(ctx)
     assert noise.seed_a == _h(F.LABELS["seed-A"], ctx.salt + ctx.root_a + ctx.root_b + (3).to_bytes(8, "little"))
     assert noise.seed_b == _h(b"pearl-c4/v1/seed-B", ctx.salt + ctx.root_b)
     for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
@@ -1072,7 +1072,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     assert ops.e_a == [F.line(x, F.ROLE_EA, 0) for x in seeds] != ops0.e_a
     assert ops.e_b == ops0.e_b and ops.b.codes == ops0.b.codes and ops.pb == ops0.pb
     checked = s.checked(ctx, ops)
-    assert s.digest(ctx, noise, checked) == C.leaf(checked, "h3") != C.leaf(checked)
+    assert s.digest(ctx, noise, checked) == C.leaf(checked, "h3") != C.leaf(checked, hashing="h0")
     assert s.tickets(noise, checked) == C.PearlC(hashing="h3").tickets(noise, checked) == h0.tickets(noise, checked)
     other = list(a)
     other[5] = a[6]

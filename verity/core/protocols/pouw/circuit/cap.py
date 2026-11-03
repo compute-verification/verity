@@ -373,7 +373,7 @@ def _cap_constants(k: int, tm: int, tn: int, n: int, rho: int, dev: str) -> tupl
     if not (0 < tn <= n and n % tn == 0 and tm > 0 and rho > 0):
         raise DomainError(f"Pearl-C's cap circuit needs TN | N and ρ = 1/RHO: TM={tm}, TN={tn}, N={n}, RHO={rho}")
     p, g_ = d.prices, d.g
-    big_p = g_ * C.PearlC(forming="v1", device=d).credit_of(Shape(1, k, n))
+    big_p = g_ * C.PearlC(forming="v1", device=d, hashing="h0").credit_of(Shape(1, k, n))
     atom, zero, elem = SLICE * g_ + p.fadd, g_ * p.fadd, g_ * p.forming_credited * tn
     gg = gcd(n, elem)
     table = tuple(int(Fraction(rows * tn * big_p, rho * gg)) for rows in range(tm + 1))
