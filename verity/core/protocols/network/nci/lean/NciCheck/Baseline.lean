@@ -1,4 +1,5 @@
 import NciCheck.Desc
+import Flock.WindowRecord
 
 /-!
 # θ's provenance: the baseline is registered (CMP-66)
@@ -11,7 +12,7 @@ of a deployment and essentially never changes). One registration log is one depl
 record registers (compute-accounting, 21 Oct): the first run's θ cites its own record, which opens the log, and every
 later run's cites that same record, so new public data takes a new log, a new deployment the auditor sees as such.
 `evaluate` checks it: the policy check (`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance
-against what the proof service holds.
+against what the proof system holds.
 
 ## The instance and the trusted input
 
@@ -95,14 +96,9 @@ def lastWith (j : Json) (f k v : String) : Option Json :=
 
 /-! ## The log -/
 
-def FORMAT : String := "verity/registration/v1"
-def FORMAT_V2 : String := "verity/registration/v2"
-
-/-- A registration record's digest, `SHA-512(format || 0 || canon(record))` with its own format (v1 or v2) as the tag
-(`registration.digest`, `SampledProofs.Registration.digest`), as lowercase hex. -/
-def digest (rec : Json) : Except String String := do
-  let tag := if strAt rec "format" == some FORMAT_V2 then FORMAT_V2 else FORMAT
-  return Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ (← Flock.canon rec).toUTF8))
+/-- A registration record's digest, the window record's (`Flock.WindowRecord.digest`: `SHA-512(format || 0 ||
+canon(record))` with its own format, v1 or v2, as the tag), as lowercase hex. -/
+def digest (rec : Json) : Except String String := Flock.WindowRecord.digestHex rec
 
 /-! ## The parameters, lowered onto the input nodes (§5.1, as `SampledProofs.Registered.lower`) -/
 

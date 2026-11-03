@@ -5,13 +5,13 @@ import Definitions.Claims
 /-!
 # A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
 
-Soundness's rulings on the one theorem's form (26 Oct, LEAN-62 and LEAN-64):
+The one theorem's form:
 
-* **R5, a causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
+* **A causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
   commitment: each device release is a `coin` drawn after the bytes it answers (a `send`), in the device's order, and
   the evidence is the last `send`. The game ends in the run `O`, what the verifier of record reads. A prover's strategy
   (`Verity.Game.Strategy`) sees each coin only once it is drawn.
-* **R4′, Daniel's form.** For every prover `τ`,
+* **One adversary form.** For every prover `τ`,
   $$\Pr[\text{accept} \wedge \text{the claim fails on } E^\tau\text{'s values}] \le
     \delta + f(\Pr[B^\tau \text{ finds a SHA-512 collision}]),$$
   with the extractor `E` and the finder `B` fixed constructions. The sampled-proofs claim reads the transcript the

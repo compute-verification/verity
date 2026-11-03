@@ -6,8 +6,8 @@ import Proofs.Pouw.Dimension.Proofs
 
 * `span1_slots_le`: the slots lie in the span of the inputs, `B`'s outputs and `R`'s outputs.
 * `mixingLemma`: `cost ≥ 16·|B| + c_s·|R|`, `|B| ≥ D − dim W`, `|R| ≥ L(W)`.
-* `algBound4090`: with A1, `cost ≥ 16·(1 − γ₁)·D`; `ttNCPOfA1A2` and its W1 instance `ttNCPOfA1A2W1`.
-* `alg4090Witness`, `a2Witness4090`: the new hypotheses are satisfiable.
+* `algBound4090`: with A1, `cost ≥ 16·(1 − γ₁)·D`.
+* `alg4090Witness`: the new hypotheses are satisfiable.
 -/
 
 namespace Pouw.Dimension
@@ -156,49 +156,6 @@ theorem algBound4090 : AlgBound4090 := by
   have h3 : γ₁ * Module.finrank ℚ W ≤ γ₁ * D := mul_le_mul_of_nonneg_left hWD hγ0
   linarith
 
-/-- **`TT_NCP_of_A1_A2`.** -/
-theorem ttNCPOfA1A2 : TTNCPOfA1A2 := by
-  intro k m n N R A B U M q cs c γ₀ γ₁ γ₂ h16 hk hind hU hA2 hA1 hc hout hγ10 hγ11 hγ₂ hγ₀ hγ hev
-  obtain ⟨L, P, hL, hH, hPout, hcost⟩ := hA2 q
-  have hb := algBound4090 k m n N R A B U L P cs c γ₁ hind hU hL hH
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩) hA1 hc hγ10 hγ11
-  obtain ⟨k', rfl⟩ := h16
-  have hk' : 1 ≤ k' := by omega
-  have h3 : 3 * (16 * k') / 16 - 1 = 3 * k' - 1 := by omega
-  rw [h3] at hb
-  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hb
-  rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
-  rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have hk'R : (0 : ℝ) < k' := by exact_mod_cast hk'
-  have hid : (1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')) = 16 * (3 * k' - 1) := by
-    field_simp
-  have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
-  set g := (1 - γ₂) * (1 - γ₁) with hg
-  have step1 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (1 - γ₀) ≤
-      (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) :=
-    mul_le_mul_of_nonneg_left hγ (by positivity)
-  have step2 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      g * (16 * (U.card * (m * n) * (3 * k' - 1))) := by
-    rw [show (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      g * (U.card * (m * n) * ((1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')))) by ring, hid]
-    ring
-  have step3 : g * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ (1 - γ₂) * cost P := by
-    have h4 : (1 - γ₁) * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ cost P := by linarith
-    calc g * (16 * (U.card * (m * n) * (3 * k' - 1)))
-        = (1 - γ₂) * ((1 - γ₁) * (16 * (U.card * (m * n) * (3 * k' - 1)))) := by rw [hg]; ring
-      _ ≤ (1 - γ₂) * cost P := mul_le_mul_of_nonneg_left h4 (by linarith)
-  have e1 : (U.card : ℝ) * (3 * (m * (16 * k') * n)) = U.card * (m * n) * (3 * (16 * (k' : ℝ))) := by ring
-  rw [e1] at hev
-  linarith
-
-/-- **`TT_NCP_of_A1_A2` at W1's constants.** -/
-theorem ttNCPOfA1A2W1 : TTNCPOfA1A2W1 := by
-  intro k m n N R A B U M q γ₀ γ₁ γ₂ h16 hk hind hMR hU hA2 hA1 hout hγ10 hγ11 hγ₂ hγ₀ hγ
-  exact ttNCPOfA1A2 k m n N R A B U M q 8 2 γ₀ γ₁ γ₂ h16 hk hind hU hA2 (hA1 hind hMR) (by norm_num) hout hγ10
-    hγ11 hγ₂ hγ₀ hγ
-
 /-! ## Witnesses -/
 
 theorem one_mem_V0 {N m n k : ℕ} : (1 : Noise N m n k → ℚ) ∈ V0 N m n k :=
@@ -243,11 +200,6 @@ theorem alg4090Witness : Alg4090Witness := by
     simp [prodOuts]
   · rw [cost_append, honest_cost]
     simp [cost, Instr.price]
-
-/-- **A2's witness into AlgM_4090** (a trivial model). -/
-theorem a2Witness4090 : A2Witness4090 := by
-  intro N m n k cs W q
-  exact ⟨coords N m n k, q.1, coords_V0, q.2, fun φ hφ _ => hφ, by simp [alg4090Machine]⟩
 
 /-- **`A1_W1`'s witness.** -/
 theorem a1W1Witness : A1W1Witness := fun k R γ₁ h hind _ => a1Witness k R 2 γ₁ hind (by linarith)

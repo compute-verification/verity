@@ -33,8 +33,8 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP setupOf)
 
 /-- **V\*'s parts are named for their groups**: a statement `.inner j nm _` of the verifier's list is named
-`rec-residuals/m<m>-k<k>-c<c>-p<j>` at the inner shape (V\*'s levels, then its parts so named, then candidate 3's and
-the caps, none of them `.inner`). -/
+`rec-residuals/m<m>-k<k>-c<c>-p<j>` at the inner shape (V\*'s levels, then its parts so named, then candidate 3's, the
+caps and the link table's part, none of them `.inner`). -/
 theorem inner_named {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) {s j : ℕ}
     {nm : String} {pt : VStar.Part} (hs : ss[s]? = some (.inner j nm pt)) :
     nm = RecResiduals.unitName i.m i.kLog i.claims j := by
@@ -49,8 +49,7 @@ theorem inner_named {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.s
   · rcases Array.mem_append.1 (Array.mem_of_getElem? hs) with hm | hm
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
-    · obtain ⟨_, _, he⟩ := hKs _ hm
-      cases he
+    · rcases hKs _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
 /-- **A piece's owner is its group's part**: where `ownRD` gives `s`, V\*'s statement `s` is `.inner q.key.1 …`. -/
 theorem ownRD_some {x : Msg} {q : ResPiece} {s : ℕ} (ho : ownRD x q = some s) :

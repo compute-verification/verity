@@ -6,8 +6,8 @@
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
-#      SC_CLASS=w63|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G (`prove
-#      --group G`: link-windows 0 … G − 1 in one registration)
+#      SC_CLASS=w63|w63k4|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G
+#      (`prove --group G`: link-windows 0 … G − 1 in one registration)
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
 #      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
