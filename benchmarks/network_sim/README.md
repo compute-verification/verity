@@ -190,7 +190,9 @@ the class the front's gate ran (w63k4 by default). With no compute audit of the 
 the honest case at the wiring. `record` writes `record.json` and `record.md`: each zone's verdicts (the gate's check,
 the chain's, the period check's) and its K in `PeriodLeakAccepted`'s terms (k_sched, k_fail, ell_a, k_skip and the
 jitter, over m windows), with δ_net, per week, month and year, for each zone, the lab's zones summed, the census's
-datacenter and the world, each marked with what it rests on (`onsite.BASIS`).
+datacenter and the world, each marked with what it rests on (`onsite.BASIS`). K is established only for a zone whose
+period check accepted, since `PeriodLeakAccepted` bounds only such a period; every other zone's figures are the bound
+its run's load would have had.
 
 As two recorded runs on the lab host: the front with the lab up and idle (it needs sudo), then the piece from a clone in
 the network slots (its chain needs hidden_zk's builds), given the front's published outputs (`--front`, the front run's
