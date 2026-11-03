@@ -25,7 +25,8 @@ between steps and `--grad-dtype bf16` rounds the accumulated gradient to bf16 af
 Muon heavy-ball momentum with each micro-batch's gradient summed straight into that buffer. Each arm's report
 records |E|, its trainable parameters and the state training carries (`v1`: the gradient, the optimizer's state, the fp32
 weights), the submitted arm's Δ_grad goes in `notes.delta_grad`, and, for `qB`, the code's relative error on the delta. `--fresh` trains only on windows the start never read (its provenance
-names its order: default_rng(data_seed), step x batch). `--ema D` submits an exponential average of the full tensors.
+names its order: default_rng(data_seed), step x batch). `--ema D` submits an exponential average of the full tensors;
+with `--schedule constant` (no decay after warmup) every checkpoint is then an averaged, near-annealed model.
 The submitted model is always decode(θ, E).
 
 Checkpoints: the harness scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so E is encoded at
@@ -189,7 +190,7 @@ ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": f
             "data_seed": int, "seed": int, "share": float, "full": str, "store": str, "mom_dtype": str,
             "grad_dtype": str, "mom_fold": lambda v: v.lower() in ("1", "true", "on", "yes"), "gain_opt": str,
             "gain_momentum": float}
-ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd"), "mom_dtype": ("fp32", "bf16"),
+ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd", "constant"), "mom_dtype": ("fp32", "bf16"),
                "grad_dtype": ("fp32", "bf16"), "gain_opt": ("adamw", "sgd")}
 DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16}
 BITS = {"fp32": 32, "bf16": 16}
@@ -246,7 +247,7 @@ def main() -> int:
     ap.add_argument("--max-e-bytes", type=int, default=None, help="uB: widen the step until |E| fits")
     ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False)
     ap.add_argument("--ema", type=float, default=0.0)
-    ap.add_argument("--schedule", choices=("linear", "cosine", "wsd"), default="linear")
+    ap.add_argument("--schedule", choices=ARM_CHOICES["schedule"], default="linear")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
@@ -454,6 +455,8 @@ def decay(schedule: str, step: int, n: int) -> float:
         return 0.5 * (1 + math.cos(math.pi * t))
     if schedule == "wsd":
         return min(1.0, (1 - t) / 0.2)
+    if schedule == "constant":
+        return 1.0
     return 1 - t
 
 
