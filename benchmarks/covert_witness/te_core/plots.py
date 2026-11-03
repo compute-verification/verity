@@ -1,7 +1,6 @@
-"""The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments) and the A2 curve, from
-the ledger, as five panels in the panels route's body (note:dashboard-20261102T1934Z-draft-training-plots-contract,
-columns per note:training-20261102T1938Z-draft-training-plots-contract-reply), each with a PNG drawn from its rows. They
-are off the console, whose one training panel is `training/frontier-branches` (te_core.panels).
+"""The headline plots P1-P4 and the A2 curve, from the ledger, as five panels in the panels route's body, each with a
+PNG drawn from its rows. They are off the console, whose training panels are `training/frontier-branches`
+(te_core.panels) and `training/algorithm-policy` (te_core.algorithm_policy).
 
     python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy reference|inference|server|c1e14/k1e4]
                             [--drop 0.01] [--g 1] [--from-scratch F.json]
@@ -58,10 +57,10 @@ NAMES = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-dec
 
 # ---- the data ----------------------------------------------------------------------------------------------------------
 
-def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None) -> tuple[list[dict], dict]:
-    """The valid rows `keep` keeps (default all) scored by the formalism, and the stubs, assumptions and bounds they
-    rest on."""
-    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes)
+def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None, ladder=None) -> tuple[list[dict], dict]:
+    """The valid rows `keep` keeps (default all) scored by the formalism (the scoring cap under the ladder's fit `ladder`),
+    and the stubs, assumptions and bounds they rest on."""
+    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes, ladder)
     stubs: dict[str, int] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():

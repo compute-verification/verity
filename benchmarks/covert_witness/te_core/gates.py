@@ -1,5 +1,5 @@
 """Boolean gates per counted operation: the conversion from the harness's multiply-accumulates (MACs) to the gates
-the training formalism counts |C|, c and w in (note:training-20261102T1817Z-report-training-formalism-v1, section 1).
+the training formalism counts |C|, c and w in.
 
     python -m te_core.gates           # the table
     python -m te_core.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference

@@ -184,7 +184,7 @@ def check(sub: Path, timing: Path, run: Path, tree: Path, island: Path, scored: 
                      "source": cp.get("source")} for cp in r.get("checkpoints", [])]
     failed = {k: v for k, v in c.items() if v is not True}
     r["evaluation"] = {"by": "covert_witness/evaluate.py", "measurement_commit": out["measurement_commit"],
-                       "version": prepare.VERSION, "data": prepare.DATA,
+                       "version": prepare.VERSION, "data": prepare.DATA, "budget": out["budget"],
                        "island": {k: v for k, v in (isl or {}).items() if k != "files"}, "tree": out["tree"],
                        "witness_valid": out["valid"], "witness_checks": failed}
     r["invalid"] = [*r.get("invalid", []), *(f"witness {k}: {v}" for k, v in failed.items())]
