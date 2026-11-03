@@ -343,7 +343,7 @@ HF_MATS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down
 def lora_targets(rec: dict, params: dict, spec: str) -> list[str]:
     lf = rec["config"]["family"] == "lf"
     want = (set(LF_MATS if lf else HF_MATS) if spec == "all" else {"wo", "w_down", "o_proj", "down_proj"} if spec == "out"
-            else set(spec.split(",")))
+            else set(re.split(r"[,+]", spec)))
     out = []
     for n, p in params.items():
         if p.ndim != 2 or n in ("embed", "model.embed_tokens.weight"):
@@ -548,7 +548,7 @@ def main() -> int:
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mode", choices=("ptq", "qat", "qlora"), default="ptq")
-    ap.add_argument("--targets", default="all", help="qlora: all | out | leaf names")
+    ap.add_argument("--targets", default="all", help="qlora: all | out | leaf names, separated by , or + (an arm's: +)")
     ap.add_argument("--rank", type=int, default=16, help="qlora")
     ap.add_argument("--qbits", type=int, default=4, help="qlora: the factors' bits")
     ap.add_argument("--pow2", action="store_true", help="qlora: power-of-two scales (exact in the bf16 lora format)")
