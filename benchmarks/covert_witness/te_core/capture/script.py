@@ -5,8 +5,9 @@ a run the runtime counter measured.
         [--out FILE] -- TRAIN_ARGS...
 
 The program runs as te_core.run runs it (cw.py: prepare from the nearest directory above the script, the script as
-``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends, or
-to its end, where its last step ends as te_core.run's `close` ends it (so A may be its last step, which no step follows:
+``__main__`` with its arguments, CW_TIER at the tier the record was scored at, `tier_of`), with every tensor a fake (a
+shape and a dtype, no values), until step A + 1 ends, or to its end, where its last step ends as te_core.run's `close`
+ends it (so A may be its last step, which no step follows:
 its Δ_grad ends where its update meets the carried values, and te_core.capture.structure's cut, to the values a next
 step's forward reads, is 0). Each ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase
 (``backward`` inside `torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`,
@@ -21,6 +22,8 @@ and output calls are stubbed:
 - the encoders run on the fakes unrecorded (E is the run's output, which its steps don't read back), so a program that
   sizes E by encoding it (a rank or a width to fit its class's cap) sees the length it saw for a format that stores its
   tensors raw; a compressed format's zeros compress further, and an encoder that can't run on fakes returns a stub;
+  `prepare._quant_array` (CWQUAN1's arrays, which a program calls to size E without an encode) runs unrecorded too,
+  with no stub (`_E_PARTS`);
 - `decode`, `same_bits`, `submit` and `declare_step`: no tensor work besides decode's copy of θ;
 - devices: prepare.DEVICE stays ``cuda``, so the program takes its GPU branches, and every tensor, generator and
   autocast region is the CPU's; `torch.compile` returns its function; attention runs on its math backend;
@@ -86,6 +89,9 @@ __all__ = ["Scalar", "record"]
 aten = torch.ops.aten
 _ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant",
              "encode_model")
+#: prepare's serialization of E's parts, which a program calls to size E without encoding it (an encode in the steps
+#: is a checkpoint under te_core.run): its checks and bytes are E's, unrecorded as the encoders' are
+_E_PARTS = ("_quant_array",)
 #: the stubbed data stream's length (the corpus's order of magnitude, so a program's windows never run out)
 STREAM_TOKENS = 3 * 10 ** 9
 _NP = {torch.float32: np.float32, torch.float64: np.float64, torch.float16: np.float16, torch.int64: np.int64,
@@ -723,6 +729,16 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
     for name in _ENCODERS:
         if hasattr(prepare, name):
             put(prepare, name, encoder(getattr(prepare, name), name))
+
+    def unrecorded(f):
+        def run(*a, **k):
+            with rec.suspended():
+                return f(*a, **k)
+        return run
+
+    for name in _E_PARTS:
+        if hasattr(prepare, name):
+            put(prepare, name, unrecorded(getattr(prepare, name)))
     put(prepare, "decode", lambda theta, blob, device=None: {n: v.detach().clone() for n, v in theta.items()})
     put(prepare, "same_bits", lambda a, b: True)
     put(prepare, "submit", lambda *a, **k: None)
@@ -815,23 +831,49 @@ class _Graph(torch.nn.Module):
             self.__dict__[name] = getattr(rec.root, name)
 
 
+def tier_of(run: dict) -> str | None:
+    """The budget tier a run's record was scored at (evaluate.py's `evaluation.budget.tier`; te_core.run's top-level
+    `tier` is the promotion tier, not this), None for a record no evaluation scored."""
+    return ((run.get("evaluation") or {}).get("budget") or {}).get("tier")
+
+
+@contextlib.contextmanager
+def _tier(tier: str | None):
+    """CW_TIER at `tier` while the program and the prepare it re-executes run (prepare reads it at import), restored
+    after; None leaves the environment's."""
+    if tier is None:
+        yield
+        return
+    old = os.environ.get("CW_TIER")
+    os.environ["CW_TIER"] = tier
+    try:
+        yield
+    finally:
+        if old is None:
+            os.environ.pop("CW_TIER", None)
+        else:
+            os.environ["CW_TIER"] = old
+
+
 def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list[float], step_tokens: int,
-           log=None, name: str | None = None) -> StepGraph:
+           log=None, name: str | None = None, tier: str | None = None) -> StepGraph:
     """Step `step` of the program `script` run with `args` (module docstring), as a `StepGraph` whose tokens are
-    `step_tokens` (the record's count for that step)."""
+    `step_tokens` (the record's count for that step), at the budget tier `tier` (`tier_of` the record: a program that
+    plans from prepare.budget plans the run's own steps only at the run's tier)."""
     log = log if log is not None else open(os.devnull, "w")
     name = name or Path(script).parent.name
     listed: dict[str, list[dict]] = {k: [] for k in READ_BACKS}
 
     def trace(scale, windows_only=False):
-        rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
+        with _tier(tier):
+            rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
         for k, have in listed.items():
             seen = {(e["kind"], e["where"]) for e in have}
             have += [e for e in rec.listed(k) if (e["kind"], e["where"]) not in seen]
         return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
 
     def flagged(g: StepGraph) -> StepGraph:
-        rows = products.rows(g) if g.formalism is not None else None
+        rows = products.rows_on_dial(g) if g.formalism is not None else None
         if g.circuit is not None:
             g.circuit.read_backs = {k: list(v) for k, v in listed.items()}
             g.circuit.products = rows
@@ -883,12 +925,13 @@ def main(argv=None) -> int:
     run = json.loads(a.run.read_text())
     steps = run["steps"]
     wall = [float(s.get("wall_s") or 0.0) for s in steps]
+    tier = tier_of(run)
     t0 = time.perf_counter()
     with (open(a.log, "w") if a.log else open(os.devnull, "w")) as log:
         g = record(a.script, argv[split + 1:], step=a.step, starts=a.starts, wall=wall,
-                   step_tokens=int(steps[a.step]["tokens"]), log=log)
+                   step_tokens=int(steps[a.step]["tokens"]), log=log, tier=tier)
     by = steps[a.step].get("by") or {}
-    out = {"step": a.step, "structure": g.structure(), "gemm_macs": gemm_macs(g),
+    out = {"step": a.step, "tier": tier, "structure": g.structure(), "gemm_macs": gemm_macs(g),
            "recorded_gemm_macs": int(steps[a.step]["matmul_macs"]),
            "forward_gemm_macs": g.phase_macs().get("forward", 0),
            "recorded_forward_macs": sum(v for k, v in by.items() if k.startswith("fwd/")), "tokens": g.tokens, "axes": g.axes,

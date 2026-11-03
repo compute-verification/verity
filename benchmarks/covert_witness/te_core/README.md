@@ -76,7 +76,8 @@ other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x i
   products Loomis-Whitney's cap (a theorem under `io_bound`'s premises P-width and P-chain, each true of the
   reference circuit as `gates` prices it, every output entry summed along one chain of whole dot cells
   (`formalism.ORDER`): `io_bound`'s bound on the products `formalism.products_of` takes from captured steps or a
-  model, or `formalism.products_of_trace` from the product rows a trace keeps from te_core 4.8 on (`capture.products`),
+  model, or `formalism.products_of_trace` from the product rows a trace keeps from te_core 4.8 on (`capture.products`,
+  and from 4.12.1 on at each k of the console's dial too, `formalism.classified_at`),
   measured whether or not the trace gives the order, and unmeasured only for a circuit that declares another; the
   term is the figure without P-cell, a premise on the partition, which the attacker chooses (`formalism.P_CELL`, one
   constant), with the whole-cell figure beside it as the sensitivity `fresh_cell`; Λ proved is taken on the best
@@ -136,9 +137,6 @@ other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x i
   is one whose read-outs `cw.readout_leaks` lists (`read-out-leak`) (`frontier.status`; a row ingested before 3.13 gets
   its read-outs from `frontier --facts`). The scorer's tied-lookup rule (13:32Z) is retired: a tied embedding's update
   is affected from its lookup on.
-- **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
-  GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
-  seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
 
 `frontier` gives, per start, target and cell, W\*, H and S with W\*'s route and its x₀ and s\* bounds and best-known
 values; `plots` writes five panels (P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each
@@ -166,7 +164,9 @@ on the same data reaching g, every run's pooled; a lower bound on a "no" row's p
 `formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
 and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
 console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
-ᾱ/α_max among them, u_in exact at the dial's k and the console's); `build` refuses a row whose cells miss
+ᾱ/α_max among them, u_in exact at the dial's k and the console's, and the fresh-products term over c at each k of
+the dial, `formalism.fresh_per_c`, which the dial's port of `io_bound`'s term reads as c times it; the vectors'
+`dial` checks a port); `build` refuses a row whose cells miss
 `formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
 where the row's trace has entries and an op log: Fit's c/(c − d) where it holds, else the measured max where it
 exceeds 1, partial where a kind is unmeasured, else null where a kind is unmeasured, else 1, binding none; else
@@ -218,8 +218,6 @@ read (`run.no_bytecode`). From `benchmarks/covert_witness/`:
 ~~~text
 python -m te_core.run --script islands/NAME/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
     -- --start NAME --out SUB [--budget-fraction F] [TRAIN_ARGS...]
-python -m te_core.launch --script islands/NAME/train.py --tier 0 --agent A --direction D --mechanism M \
-    [--nodes FILE] [-- TRAIN_ARGS...]        # FILE: `vy-nebius-2 pool=gpu`
 python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--reference]
 python -m te_core.frontier [--json OUT]              # W*, honest and S per target and (c, k) cell
 python -m te_core.rescore --out DIR [--quantities measured|analysis|stubs]  # v2.3's records, one command
@@ -256,7 +254,7 @@ A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`;
    Tokens computed outside a step make the run invalid. A program naming the harness's internals or a route around the
    dispatcher (`run.FORBIDDEN`) is refused.
 4. **A run**: `python -m te_core.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --evaluator
-   MODULE:FUNCTION --out OUT`, or `python -m te_core.launch ...` to put it on a node. Either one writes `OUT/run.json`.
+   MODULE:FUNCTION --out OUT`, which writes `OUT/run.json`. covert_witness's `launch.py` puts a run on a node.
 5. **Ingest**: `python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M --parent ID --run-id R`
    writes one submission record per checkpoint, with the program's arguments; `--structures TRACED.json` (structure
    id -> traced structure, `capture.script`) gives its steps their U, D and the formalism's measured quantities
@@ -277,14 +275,14 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `counterexample.py` | `Family` (the program's writer), `check` (the sampled bit-for-bit rebuild), `coverage` |
 | `score.py` | `checkpoints` (a run's prefixes), `block_c` and `C_PER_FORWARD_TOKEN` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
-| `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
+| `nodes.py` | the node list (`nodes.txt`) that covert_witness's `launch.py` and `promote.py` read: `Node` (its gpu and CPU pools), `nodes`, `vy-dc-h200*` refused |
 | `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
 | `frontier.py` | the valid rows (`status`, `measured`), W\*, honest and S per target and cell with W\*'s x₀ and s\* bounds and best-known values, promotion candidates |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key; the console's policy (`CONSOLE`), one full session of the 45M reference in gates (`session_gates`, `session`: the matrices, the LM head and attention's score and value products over the session's context, at the shape `SHAPES` states for each size), which every producer reads |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`, `ORDER`) and from a trace's product rows (`products_of_trace`, `product_kind`, `PRODUCTS_FROM`, `TRACED_PRODUCTS`, `STAND_IN`), its figure with or without P-cell (`P_CELL`), what its best subset dropped (`fresh_products`' `subset`, `published`'s `fresh_subset`) or why no subset has a proved bound (`FRESH_VOID`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`, `ORDER`) and from a trace's product rows (`products_of_trace`, `product_kind`, `PRODUCTS_FROM`, `TRACED_PRODUCTS`, `STAND_IN`; at each k of the console's dial, `classified_at`, and as the dial reads it, `fresh_per_c`), its figure with or without P-cell (`P_CELL`), what its best subset dropped (`fresh_products`' `subset`, `published`'s `fresh_subset`) or why no subset has a proved bound (`FRESH_VOID`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, a 120-character title, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
