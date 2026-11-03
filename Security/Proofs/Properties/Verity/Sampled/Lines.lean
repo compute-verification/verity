@@ -176,6 +176,90 @@ theorem coinBytes_bits (z : ByteArray) : coinBytes (bitsOfBytes z) = z := by
     rw [e1, e2]
     simp only [ByteArray.get!, getElem!_pos z.data i h2]
 
+theorem lsb_bits : ∀ b0 b1 b2 b3 b4 b5 b6 b7 : Bool, ∀ j < 8,
+    (List.range 8).foldr (fun b acc => 2 * acc + ([b0, b1, b2, b3, b4, b5, b6, b7].getD b false).toNat) 0 < 256 ∧
+      (((List.range 8).foldr (fun b acc => 2 * acc + ([b0, b1, b2, b3, b4, b5, b6, b7].getD b false).toNat) 0
+        >>> j) % 2 == 1) = [b0, b1, b2, b3, b4, b5, b6, b7].getD j false := by
+  decide +kernel
+
+/-- A byte of eight bits, least significant first, is below 256 and reads them back. -/
+theorem byte_bits (f : ℕ → Bool) (k : ℕ) {j : ℕ} (hj : j < 8) :
+    (List.range 8).foldr (fun b acc => 2 * acc + (f (k + b)).toNat) 0 < 256 ∧
+      (((List.range 8).foldr (fun b acc => 2 * acc + (f (k + b)).toNat) 0 >>> j) % 2 == 1) = f (k + j) := by
+  have hl : ∀ b < 8, [f k, f (k + 1), f (k + 2), f (k + 3), f (k + 4), f (k + 5), f (k + 6), f (k + 7)].getD b false =
+      f (k + b) := by
+    intro b hb
+    match b, hb with
+    | 0, _ => rfl
+    | 1, _ => rfl
+    | 2, _ => rfl
+    | 3, _ => rfl
+    | 4, _ => rfl
+    | 5, _ => rfl
+    | 6, _ => rfl
+    | 7, _ => rfl
+    | _ + 8, h => exact absurd h (by omega)
+  have h := lsb_bits (f k) (f (k + 1)) (f (k + 2)) (f (k + 3)) (f (k + 4)) (f (k + 5)) (f (k + 6)) (f (k + 7)) j hj
+  rw [foldr_congr (g := fun b acc => 2 * acc + (f (k + b)).toNat) ?_, hl j hj] at h
+  · exact h
+  · intro b hb acc
+    rw [hl b (List.mem_range.1 hb)]
+
+theorem toNat_toUInt8 {n : ℕ} (h : n < 256) : n.toUInt8.toNat = n := by
+  simp [Nat.toUInt8, Nat.mod_eq_of_lt h]
+
+theorem coinBytes_size (bs : List Bool) : (coinBytes bs).size = bs.length / 8 := by
+  unfold coinBytes bytesOfBits
+  exact Array.size_ofFn
+
+/-- **The bits of whole bytes' worth of bits' bytes are the bits** (`coinBytes_bits`'s converse). -/
+theorem bits_coinBytes {bs : List Bool} (h : bs.length % 8 = 0) : bitsOfBytes (coinBytes bs) = bs := by
+  have hn : 8 * (coinBytes bs).size = bs.length := by
+    rw [coinBytes_size]
+    omega
+  apply List.ext_getElem?
+  intro t
+  rw [bitsOfBytes, List.getElem?_map]
+  by_cases ht : t < bs.length
+  · rw [List.getElem?_range (show t < 8 * (coinBytes bs).size by omega), Option.map_some,
+      List.getElem?_eq_getElem ht, Flock.Hm96.bit]
+    have hb : t / 8 < bs.length / 8 := by omega
+    obtain ⟨hlt, hbit⟩ := byte_bits (fun t => bs.getD t false) (8 * (t / 8)) (Nat.mod_lt t (by decide : 0 < 8))
+    rw [Nat.div_add_mod t 8] at hbit
+    have hget : ((coinBytes bs).get! (t / 8)).toNat =
+        (List.range 8).foldr (fun b acc => 2 * acc + (bs.getD (8 * (t / 8) + b) false).toNat) 0 := by
+      simp only [ByteArray.get!]
+      unfold coinBytes bytesOfBits
+      rw [getElem!_pos _ (t / 8) ?_, Array.getElem_ofFn]
+      · exact toNat_toUInt8 hlt
+      · simpa only [Array.size_ofFn] using hb
+    rw [hget, hbit, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem ht, Option.getD_some]
+  · have e1 : (List.range (8 * (coinBytes bs).size))[t]? = none :=
+      List.getElem?_eq_none (by rw [List.length_range]; omega)
+    have e2 : bs[t]? = none := List.getElem?_eq_none (by omega)
+    simp [e1, e2]
+
+/-- **A fresh coin of the game is `COIN_BYTES` bytes' bits**: the 512 bits it flips, as the device releases them. -/
+theorem fresh_bytes (x : Fin 512 → Bool) :
+    (coinBytes (List.ofFn x)).size = COIN_BYTES ∧ bitsOfBytes (coinBytes (List.ofFn x)) = List.ofFn x :=
+  ⟨by rw [coinBytes_size, List.length_ofFn]; rfl, bits_coinBytes (by rw [List.length_ofFn])⟩
+
+theorem flatten_length : ∀ {L : List (List Bool)}, (∀ l ∈ L, l.length = 128) → L.flatten.length % 8 = 0
+  | [], _ => rfl
+  | l :: L, h => by
+    have := flatten_length fun l' hl' => h l' (List.mem_cons_of_mem _ hl')
+    rw [List.flatten_cons, List.length_append, h l List.mem_cons_self]
+    omega
+
+/-- **A round opened's coins are bytes' bits**: its first `n` coins, 128 bits each, as the device releases them. -/
+theorem opened_bytes {block : ℕ} (d : TreeDraw block) (n : ℕ) :
+    bitsOfBytes (coinBytes (TreeDraw.opened d n)) = TreeDraw.opened d n := by
+  refine bits_coinBytes (flatten_length fun l hl => ?_)
+  have hl' := List.mem_of_mem_take hl
+  simp only [List.mem_ofFn] at hl'
+  obtain ⟨i, rfl⟩ := hl'
+  simp only [List.length_ofFn]
+
 theorem hash_of_hex {a b : ByteArray} (h : sha512Hex a = sha512Hex b) :
     Flock.Sha512.hash a = Flock.Sha512.hash b := by
   have e := FlockComplete.JsonRT.unhex_hexOf (Flock.Sha512.hash b)
