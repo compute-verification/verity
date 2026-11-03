@@ -2238,6 +2238,7 @@
   "PouwCommit.Draws",
   "SampledProofs",
   "Proofs.Pouw.OnsiteFreed",
+  "Firewall.PyJson",
   "Firewall.Record",
   "Firewall.Release"
  ],
