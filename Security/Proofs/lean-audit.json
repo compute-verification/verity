@@ -73,6 +73,7 @@
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
   "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Chase",
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Verity.Recursive.BindDeployed"
