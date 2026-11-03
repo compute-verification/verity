@@ -926,6 +926,10 @@
    "owner": "@proofs",
    "digest": "b9cbf6587cb35e5151f1c47cb7598dafeac9d55fa8712a904be256c7456184c1"
   },
+  "Flock.Guarantees.ReleaseReadsNoStop": {
+   "owner": "@proofs",
+   "digest": "beb42286ace4ef831930a6346eed8d12fc77898c673352ed42997feddd117ce5"
+  },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
    "digest": "ab28d1707da3d17764910d77bb753fff4d819a925426b03e90595154924c080d"
@@ -1153,6 +1157,14 @@
   "FlockSoundness.Discharge.Recursion.InnerSound": {
    "owner": "@proofs",
    "digest": "cfdcc51712a29f61d501055b6849788cb2e30c68987149be33bbd83e032e5254"
+  },
+  "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest": {
+   "owner": "@proofs",
+   "digest": "62a1930d4329d25f835d3cace74d4d81222eefb98a132bb95c4c252a58e68018"
+  },
+  "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized": {
+   "owner": "@proofs",
+   "digest": "2ddda9c4bf75f10eac65725c2b7a071112fda8fa7ee678112126630d403601d9"
   },
   "FlockSoundness.Discharge.Recursion.StackedTopAt": {
    "owner": "@proofs",
@@ -2149,18 +2161,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Flock.Guarantees.ReleaseReadsNoStop": {
-   "owner": "@proofs",
-   "digest": "beb42286ace4ef831930a6346eed8d12fc77898c673352ed42997feddd117ce5"
-  },
-  "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest": {
-   "owner": "@proofs",
-   "digest": "62a1930d4329d25f835d3cace74d4d81222eefb98a132bb95c4c252a58e68018"
-  },
-  "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized": {
-   "owner": "@proofs",
-   "digest": "2ddda9c4bf75f10eac65725c2b7a071112fda8fa7ee678112126630d403601d9"
   }
  },
  "meaning": [
