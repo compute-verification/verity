@@ -3,7 +3,7 @@ circuit (te_core.capture, `with_structures`), never from the program.
 
 - multiplication blocks: MACs, as counted;
 - token blocks: one token's computation in one step;
-- updated blocks U (te_core 4.0, Daniel's smell check of 2 Nov): the forward pass's MACs with a token-indexed result and
+- updated blocks U (te_core 4.0, after Daniel's smell check): the forward pass's MACs with a token-indexed result and
   an update-dependent operand, one that depends, through any path of the traced step graph, on a value the run produced
   that persists across steps (the slow weights, optimizer state, any buffer carried from one step to the next that
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only

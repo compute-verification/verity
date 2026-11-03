@@ -1,5 +1,4 @@
-"""The training formalism v2's quantities measured on one traced step
-(note:training-20261102T2215Z-report-training-formalism-v2), in Boolean gates (te_core.gates) and bits. No torch: a `StepCircuit` saved by ``python -m te_core.capture.script --circuit F.npz`` is measured again with
+"""The training formalism v2's quantities measured on one traced step, in Boolean gates (te_core.gates) and bits. No torch: a `StepCircuit` saved by ``python -m te_core.capture.script --circuit F.npz`` is measured again with
 ``python -m te_core.capture.circuit F.npz``.
 
 `StepCircuit` is te_core.capture.structure's dataflow of a program recorded from its start, restricted to its measured

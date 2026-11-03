@@ -1,6 +1,5 @@
-"""A record's slowdown ρ at a policy (c, k), by the training formalism v2 (Daniel, 2 Nov 2026, 2:09 and 2:12 PM PST;
-note:training-20261102T2215Z-report-training-formalism-v2): its theorems Fit and Slowdown per record, the attack side
-beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
+"""A record's slowdown ρ at a policy (c, k), by the training formalism v2: its
+theorems Fit and Slowdown per record, the attack side beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
 (te_core.gates), every other quantity bits.
 
 Measured per record (`Measured`), each with its source in `labels` ("measured: ...", "counted: ...", "stub: ...",
@@ -158,6 +157,24 @@ class Measured:
     def u1_bits(self) -> float:
         """u(1), the per-token update: Slowdown's, a field of its own beside Fit's Δ."""
         return self.u[-1][1]
+
+    @property
+    def alpha_ratio(self) -> float:
+        """ᾱ/α_max, Slowdown's token-form factor (0 where nothing is affected)."""
+        return self.alpha_mean / self.alpha_max if self.alpha_max else 0.0
+
+    @property
+    def w_fit(self) -> float:
+        """The least w of a part with token blocks, the one Fit's compute block binds on (inf: none has any)."""
+        return min((p.token_gates / p.tokens for p in self.parts if p.tokens), default=math.inf)
+
+    @property
+    def fit_delta_grad_bits(self) -> float | None:
+        """The Δ_grad Fit's reduction and update blocks bind on: the largest of the parts that have them (None where a
+        part with token blocks measures none, so Fit fails at every k; 0 where no part has them)."""
+        if any(p.tokens and p.delta_grad_bits is None for p in self.parts):
+            return None
+        return max((p.delta_grad_bits for p in self.parts if p.delta_grad_bits is not None), default=0.0)
 
     @property
     def delta_grad_bits(self) -> float | None:
@@ -322,7 +339,7 @@ def at(m: Measured, c: float, k: float) -> dict:
         fits.append(all(kinds.values()))
         parts.append({"w": w, "s": s, "fit": kinds, "fit_training": fits[-1]})
     sigma, s = m.sigma, c / m.w
-    ratio = m.alpha_mean / m.alpha_max if m.alpha_max else 0.0
+    ratio = m.alpha_ratio
     x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
     charged = {}
     if m.context is not None:

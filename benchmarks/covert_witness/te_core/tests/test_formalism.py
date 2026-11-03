@@ -1,5 +1,6 @@
 """te_core.formalism and te_core.policy: Fit and Slowdown as the formalism v2 states them (a frozen tail always
 charged), the attack side beside them, the stubs, assumptions and upper bounds labelled, the grid."""
+import dataclasses
 import math
 from dataclasses import replace
 
@@ -128,7 +129,7 @@ def test_update_application_reads_delta_t_where_the_run_has_latents():
     Δ_t + Δ_grad ≤ k, while compute still reads Δ; a run with no Δ_t reads Δ there."""
     c, k = 1e13, 1e6
     code = measured(u1=1e5, dgrad=1e5)
-    latent = replace(code, delta_t_bits=k)
+    latent = dataclasses.replace(code, delta_t_bits=k)
     assert F.at(code, c, k)["fit"] and code.delta_t == code.delta_bits
     assert F.at(latent, c, k)["parts"][0]["fit"] == {"compute": True, "reduction": True, "update": False}
     assert F.fit_k(latent, c, 2e8)[1] == pytest.approx(k + 1e5)

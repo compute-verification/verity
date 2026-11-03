@@ -349,10 +349,12 @@ def lf_theta(config: dict) -> dict[str, torch.Tensor]:
     return {k: torch.randn(s, generator=g).to(torch.bfloat16) for k, s in prepare.architecture(config).items()}
 
 
-def test_a_model_format_is_its_own_architecture_with_thetas_tensors_where_e_gives_none():
+def test_a_model_format_is_its_own_architecture_with_thetas_tensors_where_e_gives_none(monkeypatch):
+    import evaluate
+
     small, big = lf(1), lf(2)
     th = lf_theta(small)
-    rec = {"config": small}
+    rec = {"config": small, "tokenizer": prepare.data_v3.TOKENIZER}
     new = {k: torch.ones(s, dtype=torch.bfloat16) for k, s in prepare.architecture(big).items() if k not in th}
     assert new
     blob = prepare.encode_model(big, new)
@@ -364,6 +366,11 @@ def test_a_model_format_is_its_own_architecture_with_thetas_tensors_where_e_give
     m = prepare.model_record(rec, big, out)
     assert m["config"] == big and m["parameters"] == sum(v.numel() for v in out.values())
     assert prepare.model_record(rec, small, th) is rec
+    # the evaluation job's cost record reads the grown model's record, scored in the start's tokens
+    monkeypatch.setattr(prepare, "held_out", lambda split, tok: (np.zeros(2049, dtype=np.uint16), {"bytes": 8000}))
+    monkeypatch.setattr(evaluate, "prepare", prepare)
+    cost = evaluate.eval_cost(prepare.SEARCH_POOL, m)
+    assert cost["parameters"] == m["parameters"] and cost["set"] == prepare.SEARCH_POOL
     with torch.device("cpu"):
         net = prepare.Net(big).load(out)
     assert net.logits(torch.zeros(1, 4, dtype=torch.long)).shape == (1, 4, 32000)

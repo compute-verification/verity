@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""The per-record quantities of the v2.3 search's valid records under the training formalism v2
-(note:training-20261102T2215Z-report-training-formalism-v2), which te_core.rescore scores: this file holds no formula of
-its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
+"""The per-record quantities of the v2.3 search's valid records under the training formalism v2,
+which te_core.rescore scores: this file holds no formula of its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
 
 It reads the night's state as the scorer left it: `submissions.json` (the regimes in `REGIMES`, the current one and
 v2.3's pin: the valid records' checkpoints on the starts `starts.json` has), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's

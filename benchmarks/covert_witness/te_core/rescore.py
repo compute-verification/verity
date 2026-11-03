@@ -15,7 +15,8 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
   W*'s route and its x0 and s* bounds and best-known values (te_core.frontier's `formalism_report`);
 - the five panels, each `<name>.json` (a panels-route body) and `<name>.png` drawn from it (te_core.plots), and
   `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT
-  (its one training panel is te_core.panels', which reads the ledger and the quantities through `arguments` and `load`);
+  (its training panels, te_core.panels' and te_core.algorithm_policy's, read the ledger and the quantities through
+  `arguments` and `load`);
 - `formalism.jsonl`: each scored row's block and its source;
 - with the measured quantities and the analysis in the checkout, `compare.json` and `compare.md`: each scored row's
   quantities beside the analysis's for the same checkpoint (their ratios), the policy's S and route per start and
@@ -76,11 +77,12 @@ LABELS = {
     "tau_bits": f"stub: one token id per token block, ceil(log2 V) bits ({SOURCE})",
     "a_bits": f"upper bound (witness): d_model x 16, one token's bf16 residual stream ({SOURCE})",
     "delta_bits": "upper bound (witness): 8 |E|, the submitted update code",
+    "delta_t_bits": f"{SOURCE}: a straight-through run's fp32 latents, 32 bits a value as its record counts them; "
+                    "every other run's is Delta",
     "u1_bits": f"upper bound (witness): u(1) = Delta, every token's path reads the whole update ({SOURCE})",
     "decoder_gates": "stub: the decoder's gates d unmeasured, taken as 0 (rho 1 where Fit holds)",
 }
-LATENTS = (f"{SOURCE}: a straight-through run's fp32 latents, 32 bits a value as its record counts them; every other "
-           "run's is Delta")
+LATENTS = LABELS["delta_t_bits"]
 EVEN = {"u": f"assumption (A1): evenly spread, u(x) = x * u(1) ({SOURCE})",
         "u_in": f"assumption (A1'): evenly spread, u_in = u ({SOURCE})"}
 TAIL = {"u": f"assumption (A1): frozen layers above the run's highest update, their share t of a token's affected work "
@@ -116,7 +118,7 @@ def block(c: dict, r: dict, tau: float) -> dict:
                        "affected_gates": c["affected_gates"], "steps": 1, "delta_grad_bits": r["delta_grad"]}],
             "tau_bits": tau, "a_bits": r["a"], "delta_bits": c["delta"], "delta_t_bits": r.get("delta_t"),
             "u1_bits": c["delta"], "u": c["u"], "u_in": c["u_in"], "tail_share": t, "decoder_gates": None,
-            "labels": LABELS | {"delta_t_bits": LATENTS} | (TAIL if t else EVEN)}
+            "labels": LABELS | (TAIL if t else EVEN)}
 
 
 def analysed(path: Path, scorer: Path, ledger: Path, cache: Path) -> dict[tuple, tuple[dict, str | None]]:
@@ -315,6 +317,9 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
     ap.add_argument("--stubs", action="store_true", help="--quantities stubs")
     ap.add_argument("--source", default=None, help="the panels' `source` (default this command and the pin)")
     ap.add_argument("--manifest", type=Path, default=policy.MANIFEST)
+    ap.add_argument("--ladder-fit", type=Path, default=None,
+                    help="the ladder's fit the scoring cap reads (te_core.policy's `ladder_fit`; default none: twice "
+                         "the start's forward caps every checkpoint's)")
     return ap
 
 
@@ -322,8 +327,9 @@ def load(a) -> dict:
     """The ledger's rows with their quantities (`--quantities`: the measured ones, t by `--tail`; the analysis's blocks
     attached, `attach`; or the stubs), the analysis's blocks wherever the checkout has it (`blocks`, the gate factors
     cached in `a.out`), the pin, the starts' shapes, which rows to score (`keep`: those with the quantities, None for
-    every row), each row's `source`, how the quantities were got (`how`, and `quantities` in a word or two) and the
-    list in `frontier.json` the valid rows without them go in (`left`)."""
+    every row), each row's `source`, how the quantities were got (`how`, and `quantities` in a word or two), the
+    list in `frontier.json` the valid rows without them go in (`left`) and the ladder's fit the scoring cap reads
+    (`ladder`, None without `--ladder-fit`)."""
     ledger = Ledger(a.root)
     rows = ledger.index()
     if a.facts:
@@ -351,7 +357,8 @@ def load(a) -> dict:
         rows, how, word = with_context(rows, shapes), f"{how}; context charged", f"{word}, context charged"
     return {"rows": rows, "blocks": blocks, "mode": mode, "pin": tuple(a.pin) if a.pin else frontier.pinned(),
             "shapes": shapes, "source": source, "keep": keep, "use": mode != STUBS, "how": how,
-            "quantities": word, "left": {MEASURED: "not_measured", ANALYSED: "not_analysed"}.get(mode)}
+            "quantities": word, "left": {MEASURED: "not_measured", ANALYSED: "not_analysed"}.get(mode),
+            "ladder": policy.ladder_fit(a.ladder_fit) if a.ladder_fit else None}
 
 
 def main(argv=None) -> int:
@@ -362,9 +369,9 @@ def main(argv=None) -> int:
     ap.add_argument("--from-scratch", type=Path, default=None)
     a = ap.parse_args(argv)
     d = load(a)
-    rows, blocks, mode, pin, shapes, source, keep, how, left = (
-        d[k] for k in ("rows", "blocks", "mode", "pin", "shapes", "source", "keep", "how", "left"))
-    rep = frontier.formalism_report(rows, pin, shapes, keep)
+    rows, blocks, mode, pin, shapes, source, keep, how, left, ladder = (
+        d[k] for k in ("rows", "blocks", "mode", "pin", "shapes", "source", "keep", "how", "left", "ladder"))
+    rep = frontier.formalism_report(rows, pin, shapes, keep, ladder)
     left_out = frontier.status(rows, pin)
     valid = [r for r in rows if r["id"] not in left_out]
     kept = [r for r in valid if keep is None or keep(r)]
@@ -382,11 +389,11 @@ def main(argv=None) -> int:
     if mode == MEASURED and blocks:
         arows, asource = attach(rows, blocks)
         arows = with_context(arows, shapes) if a.charge_context else arows
-        rep_a = frontier.formalism_report(arows, pin, shapes, lambda r: asource[r["id"]] == ANALYSED)
+        rep_a = frontier.formalism_report(arows, pin, shapes, lambda r: asource[r["id"]] == ANALYSED, ladder)
         c = compare(kept, [r for r in arows if asource[r["id"]] == ANALYSED], shapes, rep, rep_a, a.policy)
         (a.out / "compare.json").write_text(json.dumps(c, indent=1, default=str) + "\n")
         (a.out / "compare.md").write_text(compare_markdown(c) + "\n")
-    scored, stubs = plots.load(rows, pin, shapes, keep)
+    scored, stubs = plots.load(rows, pin, shapes, keep, ladder)
     fs = json.loads(a.from_scratch.read_text()) if a.from_scratch else {}
     what = a.source or (f"python -m te_core.rescore (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
                         f"{len(kept)} valid checkpoints, quantities {how})")

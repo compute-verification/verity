@@ -11,9 +11,8 @@ multiplications), dense linear algebra at n³ per matrix (`approx_macs`), and an
 activation with a parameter that differs from θ (a norm with a trained gain, an add then ``exp``) at one MAC per element
 of its largest operand or result (only its indices and result, for a gather), as te_core.flops counts it.
 
-Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology), with T2 read as Daniel's
-smell check set it (2 Nov, 8:23-8:29 AM PST): deep use is about activations that depend on the run's own persistent
-values, however the circuit is written.
+Terms are the training ontology's, with T2 read as Daniel's smell check set it: deep use is about activations that
+depend on the run's own persistent values, however the circuit is written.
 
 - A value is **token-indexed** when one of its dims changes with a token axis (a GEMM's result when its batch, m or n
   dim does), else **parameter-indexed** (a weight-shaped sum over tokens, as dW).
