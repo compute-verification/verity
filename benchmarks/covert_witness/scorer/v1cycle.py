@@ -52,10 +52,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+# research from this tree: pool_room sends this tree's slot.py, and an older research.auto reads a slot without mem= as 0 GB
+sys.path.insert(0, str(HERE.parents[2] / "tools" / "research" / "src"))
+
 import scorer as S
 import trace40
 
-HERE = Path(__file__).resolve().parent
 RESCORE_WT = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 #: what a re-score reads from its checkout: te_core, the analysis, and the pin and starts te_core reads (pin.py's
 #: pinned.json, te_core.policy's starts_store.json)
@@ -399,6 +402,8 @@ def pool_room() -> tuple[list[tuple[str, str]], dict[str, str]]:
     past its waiters (auto.py's read of `slot.py --status --json` over the ssh `research run --on` uses), at most its
     cap less the shards in flight there (`on_pool`); a pool that can't be read takes none. Also what each pool said."""
     from research import auto
+    if not Path(auto.__file__).resolve().is_relative_to(HERE.parents[2]):
+        return [], {m: f"not read: research.auto is {auto.__file__}, not {HERE.parents[2]}'s" for m, _, _ in TRACE_POOLS}
     workers, gb = trace_resources(TRACE_SHARD)
     flying = collections.Counter(on_pool().values())
 
