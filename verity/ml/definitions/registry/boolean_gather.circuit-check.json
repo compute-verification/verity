@@ -7,6 +7,18 @@
   "Embedding_v2{V=64,H=16}": {
    "and": 22784,
    "type": "89b83f7b58b81847ca014c5acd12ce78eeda9d228f5cbf0d41d1ab0476cc4608e893fbff1d7d009ec6e123cf4e0c8a31e14f21cacb2c8dba4c822c80afd78401"
+  },
+  "GatherChunkSplit_v1{V=100,W=40}": {
+   "and": 122,
+   "type": "028c036083aa17efd2f78593276918100a80677482955d31f8e74b529ba910dfe74fb34109b11392d1fc7db638b31c6b7de0f82daece353c03b1277673680b79"
+  },
+  "GatherChunkSplit_v1{V=50304,W=47163}": {
+   "and": 50,
+   "type": "f2e435e2ea6d9fc4537fc200523ccf59dcc08a8a8f0eafd5f26685a3ce0d3ac544e20109c501143fadcfe7eedd83675d3de4952dedf014a8ae74b86311382d0c"
+  },
+  "GatherF32Chunked_v1{V=100,W=40}": {
+   "and": 6266,
+   "type": "d2699d95b7549744452971c6eeb9b60ef98cf89e9ca547fd5f8cf6d977c8471698b693e1ef92275598cb0ef4cf6a169b8851fd6202b1af55f0ba76399565acd6"
   }
  }
 }
