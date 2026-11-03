@@ -10,10 +10,10 @@ registration). The committed trace (`Trace`), registered by the compute audit be
 `SCAN_STATE` (`ingress_scan.window_state`, T leaves, leaf t the scan's S_{t−1} and leaf 0 the empty state), which the
 anchored Programs read, and each lane j's slot entries (nb = T / EVERY leaves, leaf b slot j's entry at boundary b),
 which they write; each a tree at that registration's root and domain. And the prover's own, before any coin: the
-scan's views (``scan/view``, T leaves, leaf t S_t's egress view) and S_{T−1} (``scan/last``, one leaf), which no state
-leaf of the window holds, each a hiding tree whose domain binds the registered Program and the ingress root
-(`EgressTie.view_tree`, `EgressTie.last_tree`). The registration (`EgressTie.registration`) names every root:
-``rows/ingress``, ``rows/egress``, ``scan/state``, ``scan/prog<j>``, ``scan/view`` and ``scan/last``. Its `window`
+scan's views (``scan/view``, T leaves, leaf t S_t's egress view) and its next states (``scan/next``, T − 1 leaves, leaf
+t − 1 S_t, the ingress units' outputs), each a hiding tree whose domain binds the registered Program and the ingress
+root (`EgressTie.view_tree`, `EgressTie.next_tree`). The registration (`EgressTie.registration`) names every root:
+``rows/ingress``, ``rows/egress``, ``scan/state``, ``scan/prog<j>``, ``scan/view`` and ``scan/next``. Its `window`
 provenance is `{"kind": "served", "window": w}`, held to the registration's order (`EgressTie.register`).
 
 **The check** is one Program of three templates in the generator form (`scan_root`, the form `NetworkCheck.Period`'s
@@ -23,32 +23,39 @@ template one batch with its row, state or view inputs its own and every ingress 
 lane j's slot entries. Selection is `All`: every proof block is proved, every bucket of every window. The stream's
 population program is the window's (`service.Stream(program=…)`).
 
-**The statement.** A window's proof is four statements (`members`): ``first`` (unit 0), ``ingress`` (units 1 … T − 2),
-``last`` (unit T − 1) and ``egress`` (units T … 2T − 1), each one Flock proof whose every port is one of the verifier's
-own registered reads (`EgressTie.registered`; C-Flock's `Registered.checkComplete`), so no row a unit reads or outputs
-is committed afresh: ingress unit t's ``row`` reads the network certifier's ingress row t, ``sin`` state leaf t
-(S_{t−1}), ``prog<j>`` lane j's leaf ⌊t / EVERY⌋ (one table row a boundary), ``o1`` (S_t) state leaf t + 1 (the last
-unit's ``scan/last`` leaf 0) and ``o2`` view leaf t; egress unit t's ``state`` reads view leaf t and ``o1``, the row it
-renders, the network certifier's egress row t; and every unit's ``o0``, its ok bit, reads a value the verifier
-registers at known content (`EgressTie.known_tree`), row u the word 1 under a public salt. So S_t is the state leaf one
-unit computes and the next reads, and the trace's, the view the leaf ingress t computes and egress t reads, and the
-egress row the one the network certifier signed: the chains are wires through the registered roots, and an output 0
-fails its read.
+**The statement.** An execution phase is 2T proof blocks in three statements (`members`), each one Flock proof batching
+its template's units: ``first`` (unit 0), ``ingress`` (units 1 … T − 1, the phase's T − 1 `IngressScanBucket` units,
+most of its ANDs) and ``egress`` (units T … 2T − 1). Every port is one of the verifier's own registered reads
+(`EgressTie.registered`; C-Flock's `Registered.checkComplete`), so no row a unit reads or outputs is committed afresh:
+ingress unit t's ``row`` reads the network certifier's ingress row t, ``sin`` state leaf t (S_{t−1}), ``prog<j>`` lane
+j's leaf ⌊t / EVERY⌋ (one table row a boundary), ``o1`` (S_t) ``scan/next`` leaf t − 1 and ``o2`` view leaf t; the
+first unit's ``o1`` (S_0) state leaf 1; egress unit t's ``state`` reads view leaf t and ``o1``, the row it renders, the
+network certifier's egress row t; and every unit's ``o0``, its ok bit, reads a value the verifier registers at known
+content (`EgressTie.known_tree`), row u the word 1 under a public salt. So S_0 is the state leaf the first unit computes
+and unit 1 reads, the view the leaf ingress t computes and egress t reads, and the egress row the one the network
+certifier signed: those chains are wires through the registered roots, and an output 0 fails its read. S_t for
+0 < t < T − 1 is the commitment chain (`chained`): in the ingress statement's public file, unit t's ``o1`` commitment
+is unit t + 1's ``sin`` commitment, which opens state leaf t + 1, so the S_t unit t computes is the trace's S_t that unit
+t + 1 reads, under the same binding as a registered read. S_{T−1}, which no state leaf of the window holds, is
+``scan/next``'s last leaf, read by no unit: the trace's ``SCAN_STATE`` has T leaves, and Lean holds every instance of a
+registered port to a read, so the ingress units' ``o1`` reads the prover's tree, whose leaf t − 1 an honest prover
+commits under state leaf t + 1's salt.
 
 **The verifier of record** is `EgressTie.verify(…, heads=…, trace=…)`, which decides on the delivered proofs and public
 inputs alone. It accepts the window when the registration's roots are the heads' and the trace's, every proof block is
-drawn, and the verifier's own run of C-Flock's Lean verifier, with its own registered reads, accepts every session of
-every member, on the circuit file the auditor built of the member's template, naming the registered Program and proving
-the member's units. Its public output is `verdict`.
+drawn, the verifier's own run of C-Flock's Lean verifier, with its own registered reads, accepts every session of every
+member, on the circuit file the auditor built of the member's template, naming the registered Program and proving the
+member's units, and the ingress statement's commitments chain. Its public output is `verdict`.
 
 **The tie** (`EgressTie.tie`) is `EgressTieVerdict(link, registrations, accepted)`: window w accepted when the stream's
 w-th registration is window w's and its outcome of record accepted, decided on the proof. The verifier reads it only
 from its own source (`Scans`: the tie and its stream), never from what the prover delivers. `service.LinkWindows.
-network_verdict` counts a warden link's window only where it is accepted, so a run whose egress differs from the
+network_verdict` counts a network certifier link's window only where it is accepted, so a run whose egress differs from the
 committed trace by one token is refused.
 
 **What it doesn't establish.** Each registration's scan starts from the empty state, so a link-window whose first
-bucket finds a connection live from the window before is refused (fail closed): S isn't carried across registrations.
+bucket finds a connection live from the window before is refused (fail closed): S isn't carried across registrations,
+and the trace's state leaf 0, the empty state the compute audit's boundary 0 reads, is read by no unit of the scan.
 That the slot entries are the anchored Programs' outputs on the `SCAN_STATE` they read is the compute audit's, whose
 registration the trace's roots are read off. That the network certifier's rows are the link's bytes is the device's
 (`trusted-host`).
@@ -56,6 +63,7 @@ registration the trace's roots are read off. That the network certifier's rows a
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -66,6 +74,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, coll_concat
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, warden_rows as WR
@@ -88,9 +97,11 @@ TEMPLATES = ("first", "ingress", "egress")
 FIXED = {"first": 1, "ingress": 2, "egress": 1}
 #: the registration's ports of the network certifier's roots, by direction
 ROWS = {Direction.INGRESS: "rows/ingress", Direction.EGRESS: "rows/egress"}
-STATE, VIEW, LAST = "scan/state", "scan/view", "scan/last"
+STATE, VIEW, NEXT = "scan/state", "scan/view", "scan/next"
 #: a ``--registered`` port's known content (Flock's `Registered.KNOWN_KEY`)
 KNOWN_KEY = "known"
+#: a row's b‖c in a statement's public file
+BC_BYTES = hm96.SHA512.proven_bytes
 
 
 def prog(j: int) -> str:
@@ -99,7 +110,7 @@ def prog(j: int) -> str:
 
 
 def value(kind: str) -> str:
-    """A scan tree's value: ``state`` (`ingress_scan.SCAN_STATE`), ``view`` or ``last``."""
+    """A scan tree's value: ``state`` (`ingress_scan.SCAN_STATE`), ``view`` or ``next``."""
     return f"verity/certifier/scan-{kind}/v1"
 
 
@@ -108,6 +119,46 @@ def words(bits: Sequence[int]) -> list[int]:
     if len(bits) % 16:
         raise ValueError(f"a row of {len(bits)} bits is no whole number of u16 words")
     return [sum(int(b) << i for i, b in enumerate(bits[w:w + 16])) for w in range(0, len(bits), 16)]
+
+
+def commitments(circuit: Path, public: Path) -> dict[str, list[bytes]]:
+    """Each port's b‖c of each instance in a shared-row public file: its table row by the instance's ref, the tables
+    port-major in the circuit's port order (its META ``ports``, the order Lean reads them in), each row `BC_BYTES`, then
+    each instance's refs (u32 little-endian, instance-major). `ValueError` on a file not of that layout."""
+    with open(circuit, "rb") as f:
+        f.readline()
+        meta = f.readline().decode()
+    if not meta.startswith("META "):
+        raise ValueError("the circuit file has no META line naming its ports")
+    names = [p[0] for p in json.loads(meta[len("META "):])["ports"]]
+    head, body = Path(public).read_bytes().split(b"\n", 1)
+    header = json.loads(head)
+    n, rows = int(header["instances"]), [int(header["shared_rows"][p]) for p in names]
+    starts = [sum(rows[:q]) for q in range(len(names))]
+    at = sum(rows) * BC_BYTES
+    if len(body) < at + 4 * n * len(names):
+        raise ValueError("the public file is shorter than its tables and refs")
+    out = {}
+    for q, p in enumerate(names):
+        refs = [int.from_bytes(body[at + 4 * (i * len(names) + q):at + 4 * (i * len(names) + q + 1)], "little")
+                for i in range(n)]
+        if any(r >= rows[q] for r in refs):
+            raise ValueError(f"an instance's ref names no row of port {p}'s table")
+        out[p] = [body[(starts[q] + r) * BC_BYTES:(starts[q] + r + 1) * BC_BYTES] for r in refs]
+    return out
+
+
+def chained(proof: PF.Proof) -> str | None:
+    """Why the ingress statement's S_t aren't one chain, or None when they are: instance i's ``o1`` commitment (S_t, unit
+    t = base + i) is instance i + 1's ``sin`` commitment, which its registered read opens at state leaf t + 1, for every
+    instance but the last."""
+    try:
+        got = commitments(proof.circuit, proof.public)
+        o1, sin = got["o1"], got["sin"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return f"chain: the statement's commitments can't be read ({type(e).__name__}: {e})"
+    bad = next((i for i in range(len(o1) - 1) if o1[i] != sin[i + 1]), None)
+    return None if bad is None else f"chain: instance {bad}'s o1 commitment isn't instance {bad + 1}'s sin commitment"
 
 
 def templates(cls: IS.Class) -> dict[str, Any]:
@@ -262,8 +313,8 @@ class EgressTie:
             raise ValueError("an egress tie is on a named link, of a warden.WardenParams, an ingress_scan.Class and a "
                              "session")
         self.cls.serves(self.params)
-        if self.T < 3:
-            raise ValueError(f"a window of the scan is three or more buckets (first, ingress, last), not {self.T}")
+        if self.T < 2:
+            raise ValueError(f"a window of the scan is two or more buckets (first and ingress), not {self.T}")
 
     @property
     def T(self) -> int:
@@ -289,8 +340,8 @@ class EgressTie:
     @cached_property
     def members(self) -> tuple[Member, ...]:
         T = self.T
-        return (Member("first", "first", 0, (0,)), Member("ingress", "ingress", 1, tuple(range(1, T - 1))),
-                Member("last", "ingress", T - 1, (T - 1,)), Member("egress", "egress", T, tuple(range(T))))
+        return (Member("first", "first", 0, (0,)), Member("ingress", "ingress", 1, tuple(range(1, T))),
+                Member("egress", "egress", T, tuple(range(T))))
 
     @cached_property
     def query(self) -> dict[str, Any]:
@@ -320,7 +371,7 @@ class EgressTie:
 
     @cached_property
     def values(self) -> tuple[str, ...]:
-        return (ROWS[Direction.INGRESS], ROWS[Direction.EGRESS], STATE, *(prog(j) for j in self.lanes), VIEW, LAST)
+        return (ROWS[Direction.INGRESS], ROWS[Direction.EGRESS], STATE, *(prog(j) for j in self.lanes), VIEW, NEXT)
 
     @cached_property
     def public(self) -> tuple[S.Public, ...]:
@@ -331,9 +382,10 @@ class EgressTie:
                STATE: "the committed trace's SCAN_STATE, the compute audit's salted root",
                **{prog(j): f"lane {j}'s slot entries, the compute audit's salted root" for j in self.lanes},
                VIEW: "the prover's salted root over the scan's egress views, registered before any coin",
-               LAST: "the prover's salted root over S_{T-1}, registered before any coin"}
-        return (S.Public("population", "structure", "2T proof units per registration: unit t ingress bucket t (unit 0 "
-                                                    "from the empty state), unit T + t egress bucket t"),
+               NEXT: "the prover's salted root over the ingress units' S_1 ... S_{T-1}, registered before any coin"}
+        return (S.Public("population", "structure", "2T proof units per registration in three statements: unit t "
+                                                    "ingress bucket t (unit 0 from the empty state, units 1 ... T-1 one "
+                                                    "statement), unit T + t egress bucket t"),
                 S.Public("window", "structure", "provenance: the execution phase's index, held to the registration's "
                                                 "order"),
                 *(S.Public(f"{x}:{v}", "structure", f"the {v} tree's layout") for v in self.values
@@ -385,7 +437,7 @@ class EgressTie:
                              f"nb = {self.nb}")
 
     def _domain(self, heads: Heads, kind: str) -> CommitmentDomain:
-        bits, leaves = (IS.view_bits(self.cls), self.T) if kind == "view" else (IS.state_bits(self.cls), 1)
+        bits, leaves = (IS.view_bits(self.cls), self.T) if kind == "view" else (IS.state_bits(self.cls), self.T - 1)
         return G.domain(self._partition["program"], value(kind), bits // 16, leaves,
                         window=heads.ingress.root.hex())
 
@@ -403,11 +455,14 @@ class EgressTie:
             raise ValueError(f"the views are T = {self.T} rows of {IS.view_bits(self.cls)} bits")
         return self._commit(heads, "view", views, salts)
 
-    def last_tree(self, heads: Heads, state: Sequence[int], salts: Sequence[bytes] | None = None) -> G.Registered:
-        """The prover's ``scan/last``: S_{T−1}, the window's last unit's o1, which no state leaf holds."""
-        if len(state) != IS.state_bits(self.cls):
-            raise ValueError(f"S_(T-1) is a row of {IS.state_bits(self.cls)} bits")
-        return self._commit(heads, "last", [state], salts)
+    def next_tree(self, heads: Heads, states: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None
+                  ) -> G.Registered:
+        """The prover's ``scan/next``: row t − 1 S_t (its bits), the ingress units' o1, for t = 1 … T − 1, under `salts`
+        (fresh by default). Its rows chain (`chained`) only where row t − 1 is under the salt of the trace's state leaf
+        t + 1, which commits the same S_t; S_{T−1}, which no state leaf holds, under one of its own."""
+        if len(states) != self.T - 1 or any(len(s) != IS.state_bits(self.cls) for s in states):
+            raise ValueError(f"the next states are T - 1 = {self.T - 1} rows of {IS.state_bits(self.cls)} bits")
+        return self._commit(heads, "next", states, salts)
 
     def known_tree(self, heads: Heads) -> G.Registered:
         """The value the verifier registers at known content on the window: row u unit u's ``o0``, the word 1, under its
@@ -423,7 +478,8 @@ class EgressTie:
         return {ROWS[Direction.INGRESS]: (self.T, heads.ingress.domain), ROWS[Direction.EGRESS]: (self.T, heads.egress.domain),
                 STATE: (trace.state.leaves, trace.state.domain),
                 **{prog(j): (p.leaves, p.domain) for j, p in enumerate(trace.progs)},
-                VIEW: (self.T, self._domain(heads, "view").domain_id), LAST: (1, self._domain(heads, "last").domain_id)}
+                VIEW: (self.T, self._domain(heads, "view").domain_id),
+                NEXT: (self.T - 1, self._domain(heads, "next").domain_id)}
 
     def ports(self, heads: Heads, trace: Trace) -> dict[str, dict[str, Any]]:
         """`stream.register`'s ports: each registered port's leaves and domain, the verifier's own."""
@@ -436,14 +492,14 @@ class EgressTie:
 
     # the challenger
 
-    def registration(self, heads: Heads, trace: Trace, view: bytes, last: bytes,
+    def registration(self, heads: Heads, trace: Trace, view: bytes, next_: bytes,
                      previous: str | None = None) -> dict[str, Any]:
         """One-stage's record of the execution phase: the network certifier's roots (from `heads`), the trace's and the
-        prover's ``view`` and ``last`` roots, and nothing of the rows. Raises `ValueError` on heads of another link,
+        prover's ``view`` and ``next`` roots, and nothing of the rows. Raises `ValueError` on heads of another link,
         schedule or session, or a trace of another shape."""
         w = self._held(heads)
         self._traced(trace)
-        roots = {**self._fixed(heads, trace), VIEW: view, LAST: last}
+        roots = {**self._fixed(heads, trace), VIEW: view, NEXT: next_}
         layout = self._layout(heads, trace)
         return R.record(self._program, self.query, {"law": "subset", "k": self.N}, S.SCHEME,
                         [{"port": p, "root": roots[p].hex(), "leaves": layout[p][0], "domain": layout[p][1].hex()}
@@ -472,10 +528,10 @@ class EgressTie:
 
     # the verifier of record
 
-    def registered(self, member: Member, heads: Heads, trace: Trace, view: bytes, last: bytes) -> dict[str, Any]:
+    def registered(self, member: Member, heads: Heads, trace: Trace, view: bytes, next_: bytes) -> dict[str, Any]:
         """Member `member`'s `--registered` file, the verifier's own, which names every port of its statement
         (C-Flock's `Registered.checkComplete`): the module docstring's reads, at the network certifier's roots of
-        `heads`, the trace's, the prover's registered ``view`` and ``last`` roots and the known ``o0`` words."""
+        `heads`, the trace's, the prover's registered ``view`` and ``next`` roots and the known ``o0`` words."""
         base, bs, every = member.base, list(member.buckets), self.cls.EVERY
         layout, known = self._layout(heads, trace), self.known_tree(heads)
         at = {} if not base else {G.READS_FROM: base}
@@ -501,7 +557,7 @@ class EgressTie:
         for j, p in enumerate(trace.progs):
             ports[f"prog{j}"] = tree(prog(j), p.value, p.root, eb, [b // every for b in bs])
         ports["o0"] = o0
-        ports["o1"] = tree(LAST, value("last"), last, sb, [0]) if member.name == "last" else \
+        ports["o1"] = tree(NEXT, value("next"), next_, sb, [b - 1 for b in bs]) if member.template == "ingress" else \
             tree(STATE, state.value, state.root, sb, [b + 1 for b in bs])
         ports["o2"] = views
         return WR.reads_file(ports)
@@ -549,7 +605,9 @@ class EgressTie:
         else:
             for m in self.members:
                 why = self._proved(m, delivered.proofs.get(m.name), circuits.get(m.template),
-                                   self.registered(m, heads, trace, roots[VIEW], roots[LAST]))
+                                   self.registered(m, heads, trace, roots[VIEW], roots[NEXT]))
+                if why is None and m.template == "ingress":
+                    why = chained(delivered.proofs[m.name])
                 if why is not None:
                     refused[m.name] = why
         accepted = not refused
@@ -612,6 +670,6 @@ class Scans:
         return self.egress.tie(self.stream)
 
 
-__all__ = ["Delivered", "EgressTie", "EgressTieVerdict", "FIXED", "Heads", "KNOWN_KEY", "LAST", "Member", "OUTPUTS",
-           "ROWS", "STATE", "Scans", "TEMPLATES", "Trace", "Tree", "VERIFIER", "VIEW", "prog", "scan_root", "templates",
-           "value", "words"]
+__all__ = ["BC_BYTES", "Delivered", "EgressTie", "EgressTieVerdict", "FIXED", "Heads", "KNOWN_KEY", "Member", "NEXT",
+           "OUTPUTS", "ROWS", "STATE", "Scans", "TEMPLATES", "Trace", "Tree", "VERIFIER", "VIEW", "chained",
+           "commitments", "prog", "scan_root", "templates", "value", "words"]
