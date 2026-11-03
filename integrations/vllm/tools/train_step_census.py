@@ -6,8 +6,8 @@
   each primitive at its Boolean version's counts (`definitions.boolean.boolean_version`, `evaluation.bits.compile`), since the
   reference composites (`LinearRef`, `DotRef`, ...) have no Boolean version of their own; primitives with none are listed;
 - te_core's count of the same step: `te_core.flops.Counter`'s MAC rules applied to the step's graph (matmuls m·k·n, one MAC per
-  output element of mul, div, addcmul, addcdiv, lerp and a scaled add), priced as `te_core.gates` prices an f32 op
-  (F32Fma_v4, 12,637 gates).
+  output element of mul, div, addcmul, addcdiv, lerp and a scaled add, and an embedding lookup at its gather's multiplexers per
+  word, `gather_selects`), priced as `te_core.gates` prices an f32 op (F32Fma_v4, 12,637 gates).
 
     python tools/train_step_census.py --size s --batch 2 --out OUT    # from integrations/vllm
 """
@@ -37,6 +37,26 @@ ELEMENTWISE = {"mul", "div", "addcmul", "addcdiv", "lerp"}
 SCALED = {"add", "sub"}
 #: te_core.gates's price of an f32 MAC (F32Fma_v4: AND, XOR, NOT)
 F32FMA_V4 = (4485, 7863, 289)
+#: te_core.flops's gather: a 32-bit token, chunks of 1024 words by its low 10 bits
+GATHER_INDEX_BITS, GATHER_CHUNK_BITS = 32, 10
+
+
+def _mux_tree(n: int, k: int) -> int:
+    out = 0
+    for _ in range(k):
+        n = (n + n % 2) // 2
+        out += n
+    return out
+
+
+def gather_selects(n: int) -> int:
+    """te_core.flops.gather_selects: the multiplexers per word a gather over n words spends."""
+    chunk = 1 << GATHER_CHUNK_BITS
+    if n <= chunk:
+        return _mux_tree(n, GATHER_INDEX_BITS)
+    full, r = divmod(n, chunk)
+    return (full * _mux_tree(chunk, GATHER_CHUNK_BITS) + (_mux_tree(r, GATHER_CHUNK_BITS) if r else 0)
+            + _mux_tree(full + (1 if r else 0), GATHER_INDEX_BITS - GATHER_CHUNK_BITS))
 
 
 def survey(gm_ex, model, batch, opt, rules, label: str) -> tuple[dict, object]:
@@ -138,6 +158,8 @@ def te_core_count(gm) -> dict:
             by["matmul " + name] += b * m * k * nn
         elif p in flop_counter.flop_registry:
             by["matmul " + name] += int(flop_counter.flop_registry[p](*args, **n.kwargs, out_val=out)) // 2
+        elif name == "embedding":
+            by["gather embedding"] += gather_selects(args[0].shape[0]) * out.numel()
         elif name in ELEMENTWISE or (name in SCALED and n.kwargs.get("alpha", 1) != 1):
             by["elementwise " + name] += out.numel()
     per = sum(F32FMA_V4)
