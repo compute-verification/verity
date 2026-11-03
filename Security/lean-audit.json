@@ -9863,6 +9863,12 @@
    "assumptions": [],
    "type_hash": "f734dbf1781cd0675eafa3674cda7f5ab1421c60c79c903e57e0c6159ab37f4d"
   },
+  "Pouw.Salt.keyed_leaf_binds_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.Salt.keyed_leaf_binds_nontrivial": {
+   "owner": "@compute-research"
+  },
   "Pouw.Salt.keyed_leaf_hides": {
    "owner": "@compute-research",
    "signature": ["Pouw.Salt.keyed_leaf_hides : Pouw.Guarantees.KeyedLeaf.Hides"],
@@ -64406,6 +64412,10 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Pouw.Salt.keyed_leaf_binds": {
+   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
+   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
   }
  },
  "unwitnessed": {
