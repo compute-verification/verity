@@ -54,7 +54,8 @@
 #      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
-# The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`.
+# The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
+# and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
 # wrote the piece.
 set -uo pipefail
@@ -64,7 +65,9 @@ TREE=$PWD TPY=$PWD/.venv/bin/python
 [ -x "$TPY" ] || TPY=${PY:-python3}
 Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
 FAST=${PEARLPLUS_FAST-1}
-rm -rf "$Q" && (umask 077; mkdir -p "$Q") || exit 1
+# every file the piece writes is its owner's alone, the passes' files a step rewrites too: a manifest holds the salt key
+umask 077
+rm -rf "$Q" && mkdir -p "$Q" || exit 1
 say() { echo "POUW $*"; }
 took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-${VENV:-/workspace/cp/venv312}}
