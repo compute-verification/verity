@@ -453,7 +453,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
-    row = S.sampled_proofs_row(tmp_path)
+    row = S.sampled_proofs_row(tmp_path, None, tmp_path / "registration.json")
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
@@ -461,7 +461,7 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
 
 def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_given(tmp_path, monkeypatch):
     """V3c's audit dir holds no registration of its own until it stages its members; ``--registration`` (the window
-    commit's) is the one its row commits to, which run.sh's layout under the audit dir otherwise gives."""
+    commit's) is the one its row commits to, and a registration file that isn't there commits it to none."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
     audit, reg = tmp_path / "v3c" / "audit", {"format": R.FORMAT, "window": {"circuit": "cd" * 64}}
@@ -470,7 +470,7 @@ def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_gi
     (tmp_path / "v3c" / "registration.json").write_text(json.dumps(reg))
     row = S.sampled_proofs_row(audit, None, tmp_path / "v3c" / "registration.json")
     assert (row["verdict"], row["commitment"]) == ("reject", R.digest(reg)) and "refused" in row["reason"]
-    assert S.sampled_proofs_row(audit)["commitment"] is None
+    assert S.sampled_proofs_row(audit, None, audit / "registration.json")["commitment"] is None
     seen = []
     monkeypatch.setattr(S, "sampled_proofs_row", lambda d, _run=None, r=None: seen.append((d, r)) or _accepted())
     (tmp_path / "serve").mkdir()
@@ -506,8 +506,8 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
             (wipe / "served.json").write_text(json.dumps({"server": "vy-dc-h200-2" if case == "elsewhere" else "vy-dc-h200"}))
     (tmp_path / "serve").mkdir()
     rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
-                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
-                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
+                 "--sampled-proofs", str(tmp_path / "audit"), "--registration", str(tmp_path / "registration.json"),
+                 "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     if case == "reject":
         assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the wipe"], None)
@@ -575,8 +575,8 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
             (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     (tmp_path / "serve").mkdir()
     rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
-                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"),
-                 "--node", "vy-dc-h200"])
+                 "--sampled-proofs", str(tmp_path / "audit"), "--registration", str(tmp_path / "registration.json"),
+                 "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
     name = S.NAMES[runner[piece]] if piece else None
@@ -634,8 +634,8 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     (pieces / "wipe" / S.SERVED).write_text(json.dumps({"server": "vy-dc-h200"}))
     (tmp_path / "serve").mkdir()
     argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
-            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
-            "--product", "remote"]
+            str(tmp_path / "audit"), "--registration", str(tmp_path / "registration.json"), "--pieces", str(pieces),
+            "--out", str(tmp_path / "record"), "--node", "vy-dc-h200", "--product", "remote"]
     rc = S.main(argv)
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
@@ -1148,9 +1148,9 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
     and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
-    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
-    audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
-    case."""
+    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir holding
+    run.sh's records audit, which opened the advice (SERVE_DIR/sampled-proofs-served), and no V3c audit still hands
+    served_cases.py the serve dir alone, whose V3c audit is the only one it reads."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -1169,7 +1169,7 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     v2 = d / "private" / "sampled-proofs-v2"
     (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
 from pathlib import Path
-assert sys.argv[1:3] in (["--serve-dir", "{d}"], ["--audit", "{d}/sampled-proofs-served"]), sys.argv
+assert sys.argv[1:3] == ["--serve-dir", "{d}"], sys.argv
 assert sys.argv[3:] == ["--private", "{d}/private", "--from-division"], sys.argv
 Path("{tmp_path}", "served_cases.argv").write_text(json.dumps(sys.argv[1:3]))
 Path("{v2}").mkdir(parents=True)
@@ -1228,7 +1228,7 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
     assert run().returncode == 0
-    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--audit", str(d / "sampled-proofs-served")]
+    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
 
 
 DIGEST = "5e" * 64

@@ -11,7 +11,7 @@ sampled proofs, and the one record of every verdict (the block record).
                               [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
-    served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR [--registration FILE] --pieces DIR --out DIR
+    served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --registration FILE --pieces DIR --out DIR
                               [--node NAME] [--product P]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py front-line SESSION
@@ -86,10 +86,10 @@ window meets the two premises of `Security`'s that no check here discharges, ``A
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
 ``record``: sampled proofs' answer from the records audit kept under ``--sampled-proofs`` (``summary.json``,
-``window/audit.json``) on the registration ``--registration`` (default ``windows/rank0/registration.json`` under it), read
-as `served_integrity.answer` reads it: `served_verdicts.sh` passes V3c's audit of the window committed as its class
-circuit's units (``$D/v3c-w<K>-<class>/audit``, on the window commit's ``window/registration.json``), which reads no
-advice opening; the default is `prove_path/run.sh`'s layout (``PP_RECORDS=1``, its ``NAME`` dir); each other
+``window/audit.json``) on the registration ``--registration``, read as `served_integrity.answer` reads it:
+`served_verdicts.sh` passes V3c's audit of the window committed as its class circuit's units
+(``$D/v3c-w<K>-<class>/audit``, on the window commit's ``window/registration.json``), which reads no advice opening, and an
+audit that opened the advice (`prove_path/run.sh`'s ``PP_RECORDS=1``, a development check) is an ``error`` row; each other
 subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
@@ -792,14 +792,12 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
 
 
-def sampled_proofs_row(audit_dir: Path, run: str | None = None, registration: Path | None = None) -> dict[str, Any]:
-    """Sampled proofs' row from the records audit kept under ``audit_dir``, on ``registration`` (default the one run.sh
-    keeps beside it, ``windows/rank0/registration.json``; module docstring)."""
+def sampled_proofs_row(audit_dir: Path, run: str | None, registration: Path) -> dict[str, Any]:
+    """Sampled proofs' row from the records audit kept under ``audit_dir``, on ``registration`` (module docstring)."""
     import served_integrity as SI
 
-    reg = registration or audit_dir / "windows" / "rank0" / "registration.json"
     try:
-        a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
+        a = SI.answer(audit_dir, json.loads(registration.read_text()) if registration.exists() else None)
         return row_of(INTEGRITY_OWNER, a, audit_dir, run)
     except (RuntimeError, ValueError) as e:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
@@ -1043,7 +1041,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
     p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
     r.add_argument("--sampled-proofs", type=Path, required=True)
-    r.add_argument("--registration", type=Path)
+    r.add_argument("--registration", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):

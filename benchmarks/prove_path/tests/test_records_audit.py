@@ -545,7 +545,8 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
     Refused by name: a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
-    Program or another than the registration names, and an answer committing to another registration."""
+    Program or another than the registration names, an answer committing to another registration, and an audit that
+    opened the advice (``--opening``, a development check)."""
     got = _registered(tmp_path / "w", name=RA.TIED, own=True)
     audit = _audited(got.dir, tmp_path / "a")
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
@@ -584,6 +585,12 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
              "commits to another registration than the window's")]:
         with pytest.raises(ValueError, match=why):
             RA.period(window, audited_by, {})
+    opened = tmp_path / "op"
+    shutil.copytree(audit, opened)
+    (opened / "summary.json").write_text(json.dumps({**json.loads((audit / "summary.json").read_text()),
+                                                     "compile": {"ok": True}}))
+    with pytest.raises(RuntimeError, match=r"opened the advice \(records_audit.py audit --opening\)"):
+        RA.period(got.dir, opened, {})
     assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json")]) == 1
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
 
