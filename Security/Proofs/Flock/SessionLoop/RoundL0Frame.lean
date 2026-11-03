@@ -310,7 +310,8 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hXS : XS.size = P := by
     rw [hXSd, Count.extras_size, Count.linkPoints_size, hW0, hmp', Nat.mul_div_cancel _ hmp0, hPd]
     exact Nat.mul_comm _ _
-  obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  obtain ⟨-, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  rw [hst] at hxr
   have hXb : XS.size + 2 < 2 ^ 64 := by
     rw [hXSd, Count.extras_size]
     have := Nat.mul_le_mul_left (Masked.stAt x j).regions.size
