@@ -2,10 +2,12 @@
 certifier's certificates. A rows-form period (`period_case`'s accept, its registrations' provenance the scan's and V3c's
 committed window's, as `scan_zk` and `prove_path.py window-commit` write them) and its answer with the piece's placement
 scan clean as DIR/case.json and as the hold's three period files. A field no declaration names is a finding wherever it
-lies: the window's own number in V3c's provenance, a count of requests in an answer, an unpadded advice length beside
-the parameters, and a file DIR doesn't declare; the logs aren't read. An advice binding's length is structure only at
-the registered width ℓ_a: the realized length, or any with no ℓ_a given, is a finding whose text never holds the
-length. On a finding the piece refuses, releasing nothing, its findings (file and key path) in its hold."""
+lies: the window's own number in V3c's provenance, a count of requests in an answer, an advice length beside the
+parameters, and a file DIR doesn't declare; the logs aren't read. What either development check would feed the record
+is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
+opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
+the active-warden path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
+in its hold."""
 from __future__ import annotations
 
 import importlib.util
@@ -111,19 +113,40 @@ def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, pe
     assert KS.main([str(tmp_path / "dir")]) == 1
 
 
-def test_an_advice_length_is_structure_only_at_its_registered_width(tmp_path, period):
-    """An advice binding (`interface.advice_binding`) in V3c's provenance: its length at ℓ_a is structure, given ℓ_a;
-    the realized length, or any length with no ℓ_a given, is a finding naming neither."""
-    def found(bits: int, widths: dict | None, name: str) -> list[KS.Finding]:
+def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_length(tmp_path, period):
+    """An advice binding (`interface.advice_binding`: the compiler and the advice's root and length) in an audit's
+    registration is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding at the padded width ℓ_a
+    as at the realized length, in either layout, the finding's text holding neither length."""
+    for bits in (L_A, REALIZED):
         v3c = V3C_WINDOW | {"compiler": {"name": "i2", "digest": "04" * 64, "commit": "05" * 20},
                             "advice": {"root": "06" * 64, "bits": bits}}
-        return KS.scan(_dir(tmp_path / name, *_case(period, v3c)), widths)[0]
-    assert found(L_A, {KS.WIDTH.name: L_A}, "padded") == []
-    for bits, widths, name in ((REALIZED, {KS.WIDTH.name: L_A}, "realized"), (L_A, None, "unstated")):
-        (f,) = found(bits, widths, name)
-        assert (f.file, f.path) == ("case.json", "commitment.audits[].window.advice.bits")
-        assert f.why.startswith(KS.WIDTH_WHY) and str(REALIZED) not in str(f) and str(L_A) not in str(f)
-    assert KS.main([str(tmp_path / "realized"), "--advice-bits", str(L_A)]) == 1
+        case, answer = _case(period, v3c)
+        for hold, at in ((False, "case.json"), (True, "period/commitment.bin")):
+            found = KS.scan(_dir(tmp_path / f"{bits}-{hold}", case, answer, hold))[0]
+            pre = "commitment." if not hold else ""
+            assert sorted(_paths(found)) == [(at, f"{pre}audits[].window.advice"), (at, f"{pre}audits[].window.compiler")]
+            assert all(f.why == KS.OPENING.why and str(bits) not in str(f) for f in found)
+    assert KS.main([str(tmp_path / f"{L_A}-False")]) == 1
+
+
+def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, period):
+    """The report's steps are the active-warden path's (`STEPS`, the five `chain_record.report` writes there, which
+    test_certifier_piece holds a published report to): with them it is clean; the endpoint step (CR_ENDPOINT's rebuild,
+    and its tie negatives beside it) is `ENDPOINT`'s finding, and a step of no other name is one of no declared kind."""
+    def found(steps: dict, name: str) -> list[tuple[str, str, str]]:
+        d = _dir(tmp_path / name, *_case(period))
+        (d / "chain" / "report").mkdir(parents=True)
+        (d / "chain" / "report" / "report.json").write_text(json.dumps({
+            "schema": "s", "verdict": "accepted", "path": "warden", "scope": None, "stubbed": ["x"],
+            "negatives_refused": {"n2/tampered": True, "scan/forged": True}, "steps": steps}))
+        return [(f.file, f.path, f.why) for f in KS.scan(d)[0]]
+    step = {"verdict": "accepted", "in_the_clear": "the certificates", "eps_at_delta": None}
+    assert found(dict.fromkeys(KS.STEPS, step), "warden") == []
+    rel = "chain/report/report.json"
+    assert found({**dict.fromkeys(KS.STEPS, step), "endpoint": step}, "endpoint") == [
+        (rel, "steps.endpoint", KS.ENDPOINT.why)]
+    assert found({**dict.fromkeys(KS.STEPS, step), "other": {"verdict": "accepted"}}, "other") == [
+        (rel, "steps.other.verdict", "a str of no declared kind")]
 
 
 def test_a_file_dir_doesnt_declare_is_a_finding_and_the_logs_arent_read(tmp_path, period):

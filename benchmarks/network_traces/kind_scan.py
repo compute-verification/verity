@@ -4,22 +4,27 @@ hiding commitments) or what the network certifier signed (`CERTIFICATE`: its cer
 clear from the auditor's device, a provisional exception to the four kinds, not a fifth). A field of no declared kind is
 a finding.
 
-    python benchmarks/network_traces/kind_scan.py DIR [--advice-bits L]
+    python benchmarks/network_traces/kind_scan.py DIR
 
-DIR is a piece's DIR, or its hold before the leak guard releases it (`certifier_piece.settle` runs the scan there and
-refuses on a finding, releasing nothing): `DOCS`' files, the case as DIR/case.json (its commitment and evidence hex,
-`certifier_piece.write_case`) or as the three files ``network-period`` reads (DIR/period). Each file's JSON is walked to
-its leaves, the commitment's and evidence's bytes decoded as JSON, and each leaf's key path (a list's items ``[]``) must
-match one its file declares: ``*`` is any one key (a Definition's, a port's, a stratum's, a δ's), and ``**``, only under a
-Program's descriptor (`DESCRIPTOR`), everything below, the circuit, which is structure. A list's length and an object's
-keys are the shape of the leaves they hold. So a field no declaration names, one a change adds included, is a finding
-until its kind is declared here: a window's own number, a count of its requests, the advice's realized length.
+DIR is a piece's DIR, or its hold before the leak guard releases it (`certifier_piece.settle` runs the scan there on
+every served run and refuses on a finding, releasing nothing): `DOCS`' files, the case as DIR/case.json (its commitment
+and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as the three files ``network-period`` reads
+(DIR/period). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
+leaf's key path (a list's items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's,
+a stratum's, a δ's), and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
+or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
+no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number, a
+count of its requests, the advice's length.
 
-An advice binding's length (`WIDTH`, ``window.advice.bits`` in a registration) is structure only at the registered width
-ℓ_a (``--advice-bits``), the length the served path pads the advice to: any other is the realized length |a_j|, a value,
-and with no ℓ_a given every advice length is a finding. A text field (a verdict's reason, a step's account of what ran
-in the clear) is declared by its key, its text not read. The logs (`LOGS`) are the run's account, published in its
-public form (`served_verdicts.publish`), not the verifier's input, and aren't read; any other file is a finding.
+The record path's two development checks are findings wherever they reach the verifier (`Development`, each naming its
+check): an advice binding in a registration (``window.compiler``, ``window.advice``: the compiler and the advice's root and
+length an audit opens, `records_audit.py audit --opening`), since the window commit's proofs read the advice under its
+hiding root and no registration of the record path binds it to be opened; and the chain's endpoint rebuild (the report's
+``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in the clear), which the
+active-warden path refuses. The report's steps are the active-warden path's (`STEPS`). A text field (a verdict's reason, a
+step's account of what ran in the clear) is declared by its key, its text not read. The logs (`LOGS`) are the run's
+account, published in its public form (`served_verdicts.publish`), not the verifier's input, and aren't read; any other
+file is a finding.
 
 Prints each finding (its file, key path and the value's type, never the value) and a count of leaves by kind; exit 0
 with no finding, 1 with one.
@@ -44,16 +49,19 @@ S, O, C, M, X = (*KINDS,)
 
 
 @dataclasses.dataclass(frozen=True)
-class Width:
-    """A length that is structure only at the registered width `scan` is given by ``name``."""
+class Development:
+    """A field only a development check writes: a finding wherever it is, ``why`` naming the check."""
 
-    name: str
+    why: str
 
 
-WIDTH = Width("advice")
-#: what the leaf's value must be at a `Width`: the registered width ℓ_a, the realized |a_j| being a value
-WIDTH_WHY = ("the advice's realized length is a value: only its registered width ℓ_a may be public (the served path pads "
-             "the advice to it)")
+OPENING = Development("an advice binding, which an audit opens (records_audit.py audit --opening, a development check): "
+                      "on the record path the window commit's proofs read the advice under its hiding root, its length "
+                      "included, and nothing opens it")
+ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
+                       "development check the active-warden path refuses")
+#: the chain's steps on the active-warden path (`chain_record.report`)
+STEPS = ("custody", "certificates", "n2", "scan", "lean")
 
 
 def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
@@ -67,9 +75,8 @@ ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain
 #: a one-stage registration (`one_stage.registration.record`): the digests and population of the Program and query, the
 #: law the verifier's sampling design over them, the roots and registered values hiding commitments under domains of
 #: their structure; its window the provenance: a scan round's account and members, or a committed window's run root,
-#: circuit record, class, per-window values, registered roots, index leaf, and the advice's binding (`interface.
-#: advice_binding`: the compiler and the advice's root and length, which is `WIDTH`). The window's own number is none
-#: of them.
+#: circuit record, class, per-window values, registered roots and index leaf. The window's own number is none of them,
+#: and the advice's binding (`interface.advice_binding`) is `OPENING`'s.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -81,8 +88,7 @@ REGISTRATION = {
     "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
     "window.window_circuit.class[]": S, "window.activations.program": S,
     **under("window.activations.values.*", ENTRY),
-    "window.compiler.name": S, "window.compiler.digest": S, "window.compiler.commit": S,
-    "window.advice.root": M, "window.advice.bits": WIDTH,
+    "window.compiler.**": OPENING, "window.advice.**": OPENING,
 }
 #: a one-stage answer (`served_integrity.answer`, `Answer.toJson`): its verdict and bound the protocol's outputs, its
 #: profile the integrity profile's structure, and the units drawn and proved the verifier's draws
@@ -130,13 +136,16 @@ ANSWER = {
        for k in ("delta", "drawn", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter", "units",
                  "wrong_units")},
 }
-#: the chain's report less what `certifier_piece.PUBLIC` drops: its and each step's verdict, the draw's law, population
-#: and size with its bound at each δ, what each step ran in the clear and what the path stubs
+#: a step of the chain's report: its verdict, the draw's law, population and size with its bound at each δ, and what
+#: it ran in the clear
+STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
+        **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
+        "eps_at_delta.incorrect_at_delta.*": O}
+#: the chain's report less what `certifier_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
     "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
-    "steps.*.verdict": O, "steps.*.in_the_clear": S, "steps.*.eps_at_delta": O,
-    **{f"steps.*.eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
-    "steps.*.eps_at_delta.incorrect_at_delta.*": O,
+    **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
+    "steps.endpoint.**": ENDPOINT,
 }
 #: the scan's answers (`scan_zk.answers`) less what `certifier_piece.PUBLIC` drops: each link-window's answer and the
 #: registrations it is checked against
@@ -210,7 +219,7 @@ def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = ()) -> Iterat
         yield path, [n[_KIND] for n in nodes if _KIND in n], value
 
 
-def scan_doc(rel: str, doc: Any, widths: Mapping[str, int], kinds: Counter) -> list[Finding]:
+def scan_doc(rel: str, doc: Any, kinds: Counter) -> list[Finding]:
     """``doc``'s findings, as DIR's file ``rel`` (`DOCS`), each leaf counted in ``kinds`` by its kind."""
     for k in HEX.get(rel, ()):
         if isinstance(doc, dict) and isinstance(doc.get(k), str):
@@ -224,20 +233,16 @@ def scan_doc(rel: str, doc: Any, widths: Mapping[str, int], kinds: Counter) -> l
             out.append(Finding(rel, _name(path), f"a {type(value).__name__} of no declared kind"))
         elif len(set(declared)) > 1:
             out.append(Finding(rel, _name(path), f"declared as {sorted(map(str, declared))}, not one kind"))
-        elif isinstance(declared[0], Width):
-            if type(value) is not int or value != widths.get(declared[0].name):
-                out.append(Finding(rel, _name(path), WIDTH_WHY + ("" if declared[0].name in widths else
-                                                                  ": none was given")))
-            else:
-                kinds[S] += 1
+        elif isinstance(declared[0], Development):
+            out.append(Finding(rel, _name(path), declared[0].why))
         else:
             kinds[declared[0]] += 1
     return out
 
 
-def scan(d: Path, widths: Mapping[str, int] | None = None) -> tuple[list[Finding], Counter]:
+def scan(d: Path) -> tuple[list[Finding], Counter]:
     """Every file under ``d`` scanned (module docstring): the findings, and the leaves counted by kind."""
-    widths, kinds, out = dict(widths or {}), Counter(), []
+    kinds, out = Counter(), []
     for p in sorted(x for x in d.rglob("*") if x.is_file() or x.is_symlink()):
         rel = p.relative_to(d).as_posix()
         if rel in LOGS:
@@ -250,17 +255,15 @@ def scan(d: Path, widths: Mapping[str, int] | None = None) -> tuple[list[Finding
         except ValueError as e:
             out.append(Finding(rel, "", f"isn't JSON ({type(e).__name__})"))
             continue
-        out += scan_doc(rel, doc, widths, kinds)
+        out += scan_doc(rel, doc, kinds)
     return out, kinds
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="kind_scan.py", description=__doc__.splitlines()[0])
     ap.add_argument("dir", type=Path)
-    ap.add_argument("--advice-bits", type=int, metavar="L",
-                    help="ℓ_a, the advice's registered width in bits: the one advice length that is structure")
     a = ap.parse_args(argv)
-    found, kinds = scan(a.dir, {} if a.advice_bits is None else {WIDTH.name: a.advice_bits})
+    found, kinds = scan(a.dir)
     for f in found:
         print(f"KIND-SCAN finding: {f}")
     print(f"KIND-SCAN {'clean' if not found else f'{len(found)} findings'}: "

@@ -115,8 +115,9 @@ stays beside the fetch but what `PUBLIC` names (the report's verdicts and ε at 
 other keys and the steps' summaries count the window's certified requests and outputs. The kind scan (`kind_scan.py`)
 then holds every field the piece would release, the case's commitment and evidence decoded, to one of the four public
 kinds or the network certifier's certificates, and refuses the piece on any other field (a window's own number, a count
-of its requests, the advice's realized length: an advice binding's length is structure only at the registered width
-ℓ_a, `--advice-bits`). The leak guard (`--public`) moves
+of its requests, the advice's length), naming the check where a development check fed it: an audit that opened the
+advice (an advice binding in its registration, `records_audit.py audit --opening`) or the chain's endpoint rebuild (an
+`endpoint` step, `CR_ENDPOINT`). The leak guard (`--public`) moves
 any file the piece doesn't declare out of its directory. Split in two around V3c (`CERTIFIER_CHAIN_CMD` and
 `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window (`scan_zk.py --v3c`: its
 scan state and slot entries are the scan's state and prog trees), and its `period` runs the consistency check on the

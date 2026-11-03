@@ -9,8 +9,9 @@
 #   custody  each gate run's files against its end.json (chain_record.py custody)
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified, and the run's
 #            certified records held by the Lean's audit, network-records (chain_record.py certs)
-#   endpoint with CR_ENDPOINT, off the active-warden path: the endpoint's own advice bound to the run and the I/O tie on it,
-#            both in the clear (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
+#   endpoint with CR_ENDPOINT (unset by default), off the active-warden path: a development check, the endpoint's own
+#            advice bound to the run and the I/O tie on it, both in the clear (network-e2e's e2e.py --no-prove:
+#            chain.served_advice and chain.tie); the certifier piece's kind scan refuses a report holding its step
 #   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
 #            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
 #            N2 unit holds, not run

@@ -168,7 +168,7 @@ def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None
     out = pieces.parent / "record"
     capsys.readouterr()
     S.main(["record", "--serve-run", str(serve), "--window", str(K), "--sampled-proofs", str(out / "sampled-proofs"),
-            "--pieces", str(pieces), "--out", str(out)])
+            "--registration", str(out / "registration.json"), "--pieces", str(pieces), "--out", str(out)])
     (line,) = [x.removeprefix("RECORD ") for x in capsys.readouterr().out.splitlines() if x.startswith("RECORD ")]
     rec = out / "block-record.json"
     return (json.loads(rec.read_text()) if rec.exists() else None), json.loads(line)
@@ -498,7 +498,7 @@ def test_the_piece_publishes_no_count_of_the_window_and_the_guard_moves_out_what
     assert {rel: _numbers(p) & PRIVATE for rel, p in published.items()} == dict.fromkeys(published, set())
     assert KS.scan(hold)[0] == []
     report = json.loads(published["chain/report/report.json"].read_text())
-    assert report["verdict"] == "accepted" and set(report["steps"]) == {"custody", "certificates", "n2", "scan", "lean"}
+    assert report["verdict"] == "accepted" and set(report["steps"]) == set(KS.STEPS)
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
     assert report["stubbed"] == list(CR.WARDEN_STUBBED)
     assert json.loads(published["chain/scan/answers.json"].read_text()) == json.loads(
