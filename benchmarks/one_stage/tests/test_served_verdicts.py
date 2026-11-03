@@ -1033,8 +1033,8 @@ if os.environ.get("IO_FAIL"):
     print("inference_only.py: no torch", file=sys.stderr)
     sys.exit(2)
 print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions" if sys.argv[1] == "policy" else
-      "INFERENCE-ONLY accept: 16 blocks (padded) of session abab… (the registered one), 7 gates and 3 fresh bits a block, "
-      "against c 7, k 3, n 16")
+      "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
+      "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
 NCI_CHECK = "verity/core/protocols/network/nci/lean/.lake/build/bin/nci-check"
 
@@ -1088,8 +1088,9 @@ def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_
     runs `nci-check --count` only where the build built it. $OUT names no window."""
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
-    assert rc == 0 and lines == ["INFERENCE-ONLY accept: 16 blocks (padded) of session abab… (the registered one), 7 gates "
-                                 "and 3 fresh bits a block, against c 7, k 3, n 16"]
+    assert rc == 0 and lines == ["INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a "
+                                 "block, against c 7, k 3, n 16 (no count published: n is judged on the blocks' exact "
+                                 "count, held on the node)"]
     assert calls == [["verdict", "--policy", str(out / "inference-only-policy.json"), "--serve-run", str(d), "--circuit",
                       str(d / "window-circuit-w7-4-32-4.json"), "--registration", str(d / "advice" / "w7" / "registration.json"),
                       "--pins", str(d / "weights_registration.json"),
@@ -1798,7 +1799,7 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     """The inference-only verdict the served node judged goes with the deferral, listed and hashed with the follow-on's
     inputs, and into the follow-on's record as the served node wrote it, said before the record: the follow-on judges it
     no second time."""
-    verdict = {"format": "verity-bench/inference-only-verdict/v1", "verdict": "accept", "blocks": [["ab", 7, 3, 16]]}
+    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept", "classes": [["ab", 7, 3]]}
     (tmp_path / "served-out" / "record").mkdir(parents=True)
     (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
     assert _deferred(tmp_path).returncode == 0
