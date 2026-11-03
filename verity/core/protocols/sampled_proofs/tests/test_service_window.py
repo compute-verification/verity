@@ -17,6 +17,8 @@ from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcom
 from test_remote import signer  # noqa: F401  (the challenger key's signer fixture)
 from test_service import DELTA, PAIR, RECORD_ITEMS, RUN, SCHEMA, SESSION, VALUES, XOR8, Clock, _lean, _refused
 
+import fake_challenger as FC
+
 TRIPLE = bind(CompositeDefinition("ServiceTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
                                   lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 WINDOW = (PAIR, TRIPLE)
@@ -36,9 +38,9 @@ def _spec(check=None, selection=LAW) -> S.Spec:
     return S.Spec(VALUES, selection, check or _check(), PUBLIC, b"service-window-test")
 
 
-def _stream(spec=None, coins=b"\x07", window=WINDOW, sampler=None) -> S.Stream:
-    return S.Stream(spec or _spec(), window, budget=2, delta=DELTA, challenger="challenger-test",
-                    coins=(lambda n: coins * n) if isinstance(coins, bytes) else coins, clock=Clock(), sampler=sampler)
+def _stream(spec=None, coins=None, window=WINDOW, sampler=None) -> S.Stream:
+    return FC.Stream(spec or _spec(), window, budget=2, delta=DELTA, challenger="challenger-test", coins=coins,
+                     clock=Clock(), sampler=sampler)
 
 
 def _program(counts=COUNTS, window=WINDOW):
@@ -74,7 +76,7 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
         with pytest.raises(ValueError, match="window's"):
             _check(program)
     one = S.Check((P.program_digest(Program(PAIR)),), P.template_instances_query([PAIR]), proof_deadline=60.0)
-    assert S.Stream(_spec(one), [PAIR], budget=2, delta=DELTA, challenger="c").templates == (PAIR,)
+    assert FC.Stream(_spec(one), [PAIR], budget=2, delta=DELTA, challenger="c").templates == (PAIR,)
     assert _check().to_json()["program"] == [P.program_digest(Program(t)) for t in WINDOW]
 
 
