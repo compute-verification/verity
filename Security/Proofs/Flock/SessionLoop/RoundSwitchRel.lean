@@ -49,6 +49,8 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       FlockComplete.LigLock.Fed.PtsAt tr.st.m tr.st.fold.kLog
         (fun p e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]!) (Masked.repBase x (2 * j.val + r.val))
         zc lc ∧
+      k ≤ (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+        (Masked.stAt x j) (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0))).size + 2 ∧
       (ofLoop Masked.dataE L₁ real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
         0 :: Switch.rsBody (fun i => _root_.Flock.Firewall.Finish.switchVec tr.g
           (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf
@@ -264,7 +266,7 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (show k ≤ (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size + 2 by rw [hXS]; omega)
     (by omega) hXb (fun _ => by simp [_root_.Flock.Firewall.Finish.switchVec]) hcoins hck
-  refine ⟨tr, hir, zc, lc, hre', hT1.trans hts', ?_, ?_⟩
+  refine ⟨tr, hir, zc, lc, hre', hT1.trans hts', ?_, by rw [hXS]; omega, ?_⟩
   · exact pts_raw (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2)) (R := Masked.repBase x (2 * j.val + r.val))
       (by rw [hAA', htrm, htrk, hAd]; omega) (by rw [hAA']; omega) hptsR
   · rw [hrel, hout]
