@@ -29,7 +29,9 @@ k = Σ k_P has Σ g_P·α_P(k_P) ≤ max_P g_P·α_P(k) (α grows as k^{3/2}), �
     G = Σ g_P·M_P ≤ Λ·(N·Γ₀ + (k/2)·√(N·Q)),    G ≤ Λ·(N·Γ₀ + L),
     Γ₀ = max_P g_P·α_P,    Q = Σ_P g_P²·|O_P|/(b_A·b_B),    L = Σ_P g_P·μ_P·b_C·|O_P|.
 
-N is at least the larger of ((√(B² + 4ΓG) − B)/(2Γ))² and (G − Λ·L)/Γ, with Γ = Λ·Γ₀ and B = Λ·(k/2)·√Q (`blocks`),
+Both hold on any subset of the products, with Γ₀ and Λ at most the whole set's. The linear form's best subset keeps
+the products whose work exceeds their chain starts' allowance, G_P > Λ·L_P (chains longer than Λ·μ·b_C), so N is at
+least the larger of ((√(B² + 4ΓG) − B)/(2Γ))² and Σ_P (G_P − Λ·L_P)⁺/Γ, with Γ = Λ·Γ₀ and B = Λ·(k/2)·√Q (`blocks`),
 and ρ = N·c/|C| at the best partition is at least that times c/|C| (`bound`). The linear form binds where blocks start
 few chains each (long chains: a dense step's), the root form where they start many (a rank-16 adapter's). Dropping
 both gives ρ ≥ σ·c/Γ, σ = G/|C| the counted share (`rho_main`).
@@ -131,11 +133,13 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
     """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
     each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
     no chain makes an operand whole by itself): the cap's terms, Λ proved and numerical, and for each the blocks and ρ
-    with P-cell (the larger of the root form's, `blocks_root`, and the linear form's, `blocks_linear`), without the
-    chain-start terms (`rho_main`) and without P-cell. A void Λ (`whole_chain` past r = 1/4) is None, its blocks and ρ
-    0."""
+    with P-cell (the larger of the root form's, `blocks_root`, and the linear form's on its best subset,
+    `blocks_linear`), without the chain-start terms (`rho_main`) and without P-cell. A void Λ (`whole_chain` past
+    r = 1/4) is None, its blocks and ρ 0."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
+    lin = [(p["gates_per_mac"] * p["macs"], p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] *
+            p["outputs"]) for p in ps]
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
     zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks_root": 0.0, "blocks_linear": 0.0, "blocks": 0.0, "rho": 0.0,
             "rho_main": 0.0, "blocks_no_cell": 0.0, "rho_no_cell": 0.0}
@@ -144,7 +148,7 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
                       "numerical": zero}
     gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
     Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
-    L = sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps)
+    L = sum(x for _, x in lin)
     fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
     whole = [p["k_whole"] for p in ps if p.get("k_whole")]
     wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
@@ -155,9 +159,10 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
             out[name] = zero | {"lam": None, "gamma": None, "B": None}
             continue
         gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
-        root, linear = blocks(G, gamma, B), max(0.0, (G - lam * L) / gamma)
+        net = sum(max(0.0, g - lam * x) for g, x in lin)
+        root, linear = blocks(G, gamma, B), net / gamma
         n = max(root, linear)
-        n_cell = max(blocks(G, gamma + k * cell, B), (G - lam * L) / (gamma + k * cell))
+        n_cell = max(blocks(G, gamma + k * cell, B), net / (gamma + k * cell))
         out[name] = {"lam": lam, "gamma": gamma, "B": B, "blocks_root": root, "blocks_linear": linear, "blocks": n,
                      "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell,
                      "rho_no_cell": n_cell * c / C}
@@ -711,6 +716,8 @@ def vectors() -> dict:
         ("one product, square, panel", (2.545e14, PANEL_K), 1e18, [square]),
         ("short chains, K = 16, none whole by itself", CONSOLE, 1e17,
          [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16, "k_whole": None} | bf16]),
+        ("short and long chains: the linear form keeps the long", CONSOLE, 1e18,
+         [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16, "k_whole": None} | bf16, square]),
         ("operands made whole from K = 128 chains", CONSOLE, 1e18, [square | {"k_whole": 128}]),
         ("operands made whole from K = 64 chains: proved bound void", CONSOLE, 1e18, [square | {"k_whole": 64}]),
         ("mixed widths", CONSOLE, 1e18, [{"macs": 4e14, "outputs": 4e14 / 512, "k_dim": 512, "k_whole": 512} | bf16,

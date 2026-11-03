@@ -164,6 +164,74 @@
    }
   },
   {
+   "name": "short and long chains: the linear form keeps the long",
+   "inputs": {
+    "c": 341000000000000.0,
+    "k": 65536,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 50000000000000.0,
+      "outputs": 3125000000000.0,
+      "k_dim": 16,
+      "k_whole": null,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     },
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 512,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295,
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0,
+     2048.0
+    ],
+    "mu": [
+     0.9185586535436917,
+     0.9185586535436917
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 3.509992243051529e+16,
+    "L": 1.784450885537718e+17,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.0079053348372358,
+    "lam_proved": 1.645902519586836,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 2999535807.525105,
+    "proved_blocks_linear": 7711086295.950316,
+    "proved_blocks": 7711086295.950316,
+    "proved_rho": 2629480.426919058,
+    "proved_rho_main": 3194257.450056825,
+    "proved_rho_no_cell": 139429.74270207796,
+    "numerical_blocks_root": 5071847954.505181,
+    "numerical_blocks_linear": 11333629666.669708,
+    "numerical_blocks": 11333629666.669708,
+    "numerical_rho": 3864767.716334371,
+    "numerical_rho_main": 4553073.46841367,
+    "numerical_rho_no_cell": 146083.70454586914,
+    "share": 0.81406875
+   }
+  },
+  {
    "name": "operands made whole from K = 128 chains",
    "inputs": {
     "c": 341000000000000.0,
