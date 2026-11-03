@@ -12,7 +12,7 @@ all-protocols leg's parameters (`Accept.h1Params`), and which meets every premis
 (`h1_meets`).
 
 The leg's check takes these numbers: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
-all 24 drawn tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this
+all 24 drawn tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
 witness use are the leg's actual check's.
 
 * The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
@@ -24,7 +24,7 @@ witness use are the leg's actual check's.
 * The windows (`windows`): every window registers the loop's honest registration (`Accept.h1Reg`) and the service
   answers it with the units of the model's draw at the window's draw coin, ascending (`unitsOf`), so the check accepts
   every window on every path (`accepted_all`, from `Accept.check_h1`), publishes `N = 144`, `K′ = 24` and exactly
-  those units (`drawIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeDraw`).
+  those units (`sampleIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeSample`).
 * The salt is the window's round coin (`SaltIsLiveCoin` by definition), every tile is live and paid with its words
   right, and the openings are in `Unit`, so binding holds at `δ_bind = 0`, the service's soundness at `δ_ks = 0`, and
   the staged and flat relations are `True` (`StagedPins`).
@@ -249,7 +249,7 @@ theorem acceptedUpTo_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) : (windows n).A
   fun w' _ => accepted_all n x w'
 
 /-- **The check's draw is the period's draw coin**: it publishes `N = 144`, `K′ = 24` and the draw's units. -/
-theorem drawIsCoin (n : ℕ) : DrawIsCoin hK24 prm (windows n) := by
+theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (windows n) := by
   intro x w pub prof hc
   have he := hc.symm.trans (check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _))
   injection he with hp
@@ -348,7 +348,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows n) ∧ DrawIsCoin hK24 prm (windows n) ∧
+    RegisteredBeforeSample (windows n) ∧ SampleIsCoin hK24 prm (windows n) ∧
     ServiceSound prm (windows n) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := n)) enc ∧ StagedPins staged flat ∧
     (period n).EveryWindow
@@ -364,7 +364,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     ∀ x, checkedLive Honest.scheme circuit (period n) prm (windows n) x = 128 * n := by
   refine ⟨by decide, rfl, scope hδs, fun t => ?_, fun j => ?_, fun t ht => ?_, rfl,
     period_every (P := fun live _ => DeadConeDead Honest.scheme circuit 144 live) (fun _ _ ht _ => by simp at ht) n,
-    fun x j _ => acceptsUpTo_period _ _ _ n j x, fun w => ?_, fun _ _ _ => rfl, drawIsCoin n, serviceSound n,
+    fun x j _ => acceptsUpTo_period _ _ _ n j x, fun w => ?_, fun _ _ _ => rfl, sampleIsCoin n, serviceSound n,
     fun _ _ => rfl, fun _ _ _ h => h,
     every_perLiveTile (P := fun k G _ => OperandHMu (Honest.scheme.mu k) G)
       (fun k t => Honest.operandHMu_of_zero _ _ _ _ _ (paid_share .folded (by decide) t)) n,

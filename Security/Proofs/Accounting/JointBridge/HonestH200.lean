@@ -223,7 +223,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer n) (checkedPlay n).game ∧
     (∀ w, prob (fun x => (HonestH1.layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows n) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
+    RegisteredBeforeSample (HonestH1.windows n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
     ServiceSound HonestH1.prm (HonestH1.windows n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := n)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period n).EveryWindow
@@ -309,7 +309,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_honest :
     (HonestH1.period 1).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer 1) (checkedPlay 1).game ∧
     (∀ w, prob (fun x => (HonestH1.layer 1).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows 1) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
+    RegisteredBeforeSample (HonestH1.windows 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
     ServiceSound HonestH1.prm (HonestH1.windows 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := 1)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period 1).EveryWindow

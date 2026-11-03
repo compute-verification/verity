@@ -37,8 +37,8 @@ which adds SAK to H1.
 * `RightValues`: except with H1's probability, an accepted period's right blocks have total size at least
   `(1 − ε_skip)₊·S`.
 
-*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileDrawIsCoin` (the draw),
-`TileServiceSound` (the proof service's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
+*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileSampleIsCoin` (the draw),
+`TileServiceSound` (the proof service's soundness, open), `RegisteredBeforeSample`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
 `δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
 proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
@@ -128,7 +128,7 @@ refusal (`creditedSize`) and `ε_skip = σ·ε(j)·N_live/S` (`epsSkip`, at H1's
 E1(c) (`accounting-ts-unit-fixed`) reads that as its words being its own right values.
 
 It is a statement about values, not a compute claim: right values aren't work. It needs no
-algorithmic premise, only H1's. `TileDrawIsCoin`, `TileServiceSound`, `RegisteredBeforeDraw` and `SaltIsLiveCoin` are
+algorithmic premise, only H1's. `TileSampleIsCoin`, `TileServiceSound`, `RegisteredBeforeSample` and `SaltIsLiveCoin` are
 about the draw, the service and the salt. `SharedNoiseLucks` is the one computational premise: the fold receipts'
 detection, which is to be proved or designed away by the no-fold receipt. -/
 def RightValues : Prop :=
@@ -155,7 +155,7 @@ def RightValues : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeSample ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     prob (fun x => Pl.accepts x ∧
