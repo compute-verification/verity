@@ -17,7 +17,10 @@ import Definitions.Nci.Formalism.Circuits
   `X ≤ |𝓘| c / |C|` for each of them (`Nci.Formalism.le_slowdown_iff`), and the theorems state it so.
 * **Kinds of work**: a kind `K` is a set of gates `B_K ⊆ C` with a cap `cap_K` on the gates of `B_K` that any inference
   block holds (`Caps`, the caps of a family of kinds), and its bound is `(|B_K| / |C|) / (cap_K / c)` (`kindBound`), the
-  blocks its work alone needs, priced at `c` a block, against `|C|`.
+  blocks its work alone needs, priced at `c` a block, against `|C|`. A kind whose work is amortized over the partition,
+  its pieces paid by whichever block reads them, has no cap a block at a time, and gives its bound `Λ` for the whole
+  partition (`PartitionBound`): `Λ ≤ |𝓘| c / |C|` for every partition `𝓘` into inference blocks, which is `Λ ≤ ρ`. A
+  kind with a cap a block gives its bound so (`Nci.Formalism.partitionBound_kindBound`).
 * A block's inputs split three ways: registered values `in(I) ∩ θ` (`registeredReads`), which are free; other inputs
   `in(I) ∩ (in(C) \ θ)` (`dataReads`), which are data; computed values `in(I) \ in(C)` (`computedReads`), which come from
   other blocks. `k` bounds the last two together, `in(I) \ θ` (`Nci.Formalism.reads_split`).
@@ -61,6 +64,11 @@ def Caps (d : Declaration) (c k : ℕ) {κ : Type} (B : κ → Finset (Fin d.D.N
 priced at `c` a block, against `|C|`. -/
 noncomputable def kindBound (d : Declaration) (c : ℕ) (S : Finset (Fin d.D.N)) (cap : ℝ≥0) : ℝ≥0∞ :=
   ((S.card : ℝ≥0∞) / (d.D.computed.card : ℝ≥0∞)) / ((cap : ℝ≥0∞) / (c : ℝ≥0∞))
+
+/-- **A partition-level bound** `Λ`: every partition `𝓘` of `d` into inference blocks has `|𝓘| c / |C| ≥ Λ`, the form
+the bound of a kind whose work is amortized over the partition takes. -/
+def PartitionBound (d : Declaration) (c k : ℕ) (Λ : ℝ≥0∞) : Prop :=
+  ∀ (m : ℕ) (P : Partition d.D m), P.IsCK d c k → Λ ≤ partitionSlowdown d m c
 
 /-- `in(I) ∩ θ`: the registered values `I` reads, which are free. -/
 def registeredReads (d : Declaration) (I : Finset (Fin d.D.N)) : Finset (Fin d.D.N) := d.D.into I ∩ d.θ

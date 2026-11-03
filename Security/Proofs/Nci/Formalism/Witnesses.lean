@@ -170,16 +170,29 @@ theorem honestCost_eq : honestCost methods (fun _ => 0) 0 = ((4 : ℕ) : ℝ≥0
     obtain rfl := Set.mem_singleton_iff.1 hr'
     rw [show r.d.D.computed.card = 4 from computed_card]
 
+/-- Every partition into blocks of one gate has at least `|C| = 4` blocks, so `1` is a partition-level bound. -/
+theorem partitionBound_one : PartitionBound d 1 1 1 := by
+  intro m P hP
+  rw [partitionSlowdown, ENNReal.le_div_iff_mul_le (Or.inl (by rw [computed_card]; norm_num))
+    (Or.inl (ENNReal.natCast_ne_top _)), one_mul]
+  exact_mod_cast card_computed_le P hP.card
+
 /-- The bound of the kind `{3, 4}` with the cap `1`, `1/2`, is above `whole`'s price `1/4`. -/
-theorem not_counting : ¬ (⨆ _K : Unit, kindBound d 1 {3, 4} 1) ≤ partitionSlowdown d 1 1 := by
+theorem not_kind_whole : ¬ (⨆ _K : Unit, kindBound d 1 {3, 4} 1) ≤ partitionSlowdown d 1 1 := by
   rw [iSup_const, kindBound_one _ one_ne_zero, (by decide : ({3, 4} : Finset (Fin d.D.N)).card = 2), price_eq,
     ENNReal.coe_le_coe, ← NNReal.coe_le_coe]
   push_cast
   norm_num
 
+/-- So is the bound `max(1/2, 1)` with the partition-level bound `1` beside it. -/
+theorem not_counting :
+    ¬ max (⨆ _K : Unit, kindBound d 1 {3, 4} 1) (⨆ _J : Unit, (1 : ℝ≥0∞)) ≤ partitionSlowdown d 1 1 :=
+  fun h => not_kind_whole ((le_max_left _ _).trans h)
+
 /-- With the token kind's cap `0`, the bound is `⊤`, above `blocks`' price `1`. -/
 theorem not_slowdown :
-    ¬ max (kindBound d 1 {3, 4} 0) (⨆ _K : Unit, kindBound d 1 {1} 1) ≤ partitionSlowdown d 4 1 := by
+    ¬ max (kindBound d 1 {3, 4} 0) (max (⨆ _K : Unit, kindBound d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) ≤
+      partitionSlowdown d 4 1 := by
   rw [kindBound_zero ⟨3, by decide⟩, max_eq_left le_top, top_le_iff, price_eq]
   exact ENNReal.coe_ne_top
 
@@ -224,25 +237,26 @@ theorem not_bound : ¬ slowdown d 1 1 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : �
 
 end Honest
 
-theorem Counting_honest : Guarantees.Counting_honest := ⟨Chain.caps_token, Chain.blocks_isCK⟩
+theorem Counting_honest : Guarantees.Counting_honest :=
+  ⟨Chain.caps_token, Chain.partitionBound_one, Chain.blocks_isCK⟩
 
 theorem Counting_nontrivial : Guarantees.Counting_nontrivial :=
-  ⟨Chain.caps_token, Chain.not_whole_isCK, Chain.not_counting⟩
+  ⟨Chain.caps_token, Chain.partitionBound_one, Chain.not_whole_isCK, Chain.not_counting⟩
 
 theorem Slowdown_honest : Guarantees.Slowdown_honest :=
-  ⟨Chain.valid, Chain.cutCost, Chain.tokenCapAt_one, Chain.caps_weight, Chain.blocks_isCK⟩
+  ⟨Chain.valid, Chain.cutCost, Chain.tokenCapAt_one, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK⟩
 
 theorem Slowdown_nontrivial : Guarantees.Slowdown_nontrivial :=
-  ⟨Chain.valid, Chain.not_cutCost_two, Chain.tokenCapAt_zero, Chain.caps_weight, Chain.blocks_isCK,
-    Chain.not_slowdown⟩
+  ⟨Chain.valid, Chain.not_cutCost_two, Chain.tokenCapAt_zero, Chain.caps_weight, Chain.partitionBound_one,
+    Chain.blocks_isCK, Chain.not_slowdown⟩
 
 theorem Security_honest : Guarantees.Security_honest :=
   ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.cutCost, Chain.tokenCapAt_one,
-    Chain.caps_weight, Chain.blocks_isCK, le_rfl⟩
+    Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl⟩
 
 theorem Security_nontrivial : Guarantees.Security_nontrivial := by
   refine ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.not_cutCost_two, Chain.tokenCapAt_zero,
-    Chain.caps_weight, Chain.blocks_isCK, le_rfl, ?_⟩
+    Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl, ?_⟩
   rw [show kindBound Chain.r.d 1 {3, 4} 0 = ⊤ from Chain.kindBound_zero ⟨3, by decide⟩, max_eq_left le_top,
     ENNReal.ofReal_one, mul_one, Chain.honestCost_eq, ENNReal.top_mul (by norm_num), top_le_iff]
   exact ENNReal.natCast_ne_top _
@@ -261,36 +275,41 @@ theorem FitTraining_nontrivial : Guarantees.FitTraining_nontrivial :=
 /-! Each lemma is its guarantee's premises as the guarantee states them: the guarantee applies at the honest instance,
 and at the nontrivial one the dropped premise would give the bound its last conjunct negates. -/
 
-example : (⨆ _K : Unit, kindBound Chain.d 1 {3, 4} 1) ≤ partitionSlowdown Chain.d 4 1 :=
-  Counting Chain.d 1 1 Unit (fun _ => {3, 4}) (fun _ => 1) 4 Chain.blocks Counting_honest.1 Counting_honest.2
-
-example (h : Chain.whole.IsCK Chain.d 1 1) : False :=
-  Counting_nontrivial.2.2
-    (Counting Chain.d 1 1 Unit (fun _ => {3, 4}) (fun _ => 1) 1 Chain.whole Counting_nontrivial.1 h)
-
-example : max (kindBound Chain.d 1 {3, 4} 1) (⨆ _K : Unit, kindBound Chain.d 1 {1} 1) ≤
+example : max (⨆ _K : Unit, kindBound Chain.d 1 {3, 4} 1) (⨆ _J : Unit, (1 : ℝ≥0∞)) ≤
     partitionSlowdown Chain.d 4 1 := by
-  obtain ⟨h1, h2, h3, h4, h5⟩ := Slowdown_honest
+  obtain ⟨h1, h2, h3⟩ := Counting_honest
+  exact Counting Chain.d 1 1 Unit (fun _ => {3, 4}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 (fun _ => h2) h3
+
+example (h3 : Chain.whole.IsCK Chain.d 1 1) : False := by
+  obtain ⟨h1, h2, -, hlt⟩ := Counting_nontrivial
+  exact hlt (Counting Chain.d 1 1 Unit (fun _ => {3, 4}) (fun _ => 1) Unit (fun _ => 1) 1 Chain.whole h1 (fun _ => h2)
+    h3)
+
+example : max (kindBound Chain.d 1 {3, 4} 1) (max (⨆ _K : Unit, kindBound Chain.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) ≤
+    partitionSlowdown Chain.d 4 1 := by
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := Slowdown_honest
   exact Slowdown Chain.d (Fin 1) Chain.A 1 1 (Finset (Fin Chain.d.D.N)) Chain.entry Chain.state Chain.update {3, 4} 1
-    Unit (fun _ => {1}) (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 h5
+    Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 (fun _ => h5) h6
 
 example (h2 : CutCost Chain.d 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update) : False := by
-  obtain ⟨h1, -, h3, h4, h5, hlt⟩ := Slowdown_nontrivial
+  obtain ⟨h1, -, h3, h4, h5, h6, hlt⟩ := Slowdown_nontrivial
   exact hlt (Slowdown Chain.d (Fin 1) Chain.A 1 1 (Finset (Fin Chain.d.D.N)) Chain.entry
-    (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 Unit (fun _ => {1}) (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4
-    h5)
+    (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4
+    Chain.blocks h1 h2 h3 h4 (fun _ => h5) h6)
 
-example : max (kindBound Chain.r.d 1 {3, 4} 1) (⨆ _K : Unit, kindBound Chain.r.d 1 {1} 1) * ENNReal.ofReal 1 *
-    honestCost Chain.methods (fun _ => 0) 0 ≤ ((1 * 4 * 1 : ℕ) : ℝ≥0∞) := by
-  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩ := Security_honest
+example : max (kindBound Chain.r.d 1 {3, 4} 1)
+    (max (⨆ _K : Unit, kindBound Chain.r.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) * ENNReal.ofReal 1 *
+      honestCost Chain.methods (fun _ => 0) 0 ≤ ((1 * 4 * 1 : ℕ) : ℝ≥0∞) := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩ := Security_honest
   exact Security Chain.methods silent (fun _ => 0) 0 ⊤ 1 Chain.r 1 1 4 1 (Finset (Fin Chain.d.D.N)) Chain.entry
-    Chain.state Chain.update {3, 4} 1 Unit (fun _ => {1}) (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
+    Chain.state Chain.update {3, 4} 1 Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 h5
+    h6 h7 h8 (fun _ => h9) h10 h11
 
 example (h6 : CutCost Chain.r.d 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update) : False := by
-  obtain ⟨h1, h2, h3, h4, h5, -, h7, h8, h9, h10, hlt⟩ := Security_nontrivial
+  obtain ⟨h1, h2, h3, h4, h5, -, h7, h8, h9, h10, h11, hlt⟩ := Security_nontrivial
   exact hlt (Security Chain.methods silent (fun _ => 0) 0 ⊤ 1 Chain.r 1 1 4 1 (Finset (Fin Chain.d.D.N)) Chain.entry
-    (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 Unit (fun _ => {1}) (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4
-    h5 h6 h7 h8 h9 h10)
+    (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4
+    Chain.blocks h1 h2 h3 h4 h5 h6 h7 h8 (fun _ => h9) h10 h11)
 
 example : slowdown Honest.d 1 2 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞) := by
   obtain ⟨h1, h2, h3⟩ := FitServing_honest

@@ -12,14 +12,16 @@ Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` i
 (`le_slowdown_iff`):
 
 1. **Counting.** `P`'s blocks split each kind's work `B_K` (`sum_card_inter_gates`) and each holds at most `cap_K` of
-   it, so `|B_K| ≤ m cap_K`, which puts the kind's bound at most `m c / |C|` (`kindBound_le`).
+   it, so `|B_K| ≤ m cap_K`, which puts the kind's bound at most `m c / |C|` (`kindBound_le`): a cap a block gives a
+   partition-level bound (`partitionBound_kindBound`), and a kind with a partition-level bound gives it at `P`.
 2. **The token kind's cap.** By A1 an inference block `I` reads `u_I + Σ_T a_T(e_T(I)) ≤ |in(I) \ θ| ≤ k`, so its entry
    profile `e_T(I)` with update reads `u_I` is within A1's budget, where the cap bounds `Σ_T W_T(e_T(I), u_I)`. `X` lies
    in the token blocks, so `|I ∩ X| ≤ Σ_T |I ∩ T ∩ X|` (`card_inter_le_sum`), and each term is at most
    `W_T(e_T(I), u_I)`, the most a block entering `T` there holds (`card_le_entryWork`). The clean form:
    `Σ_T W_T(f_T, ν) ≤ r(ν) Σ_T a_T(f_T) ≤ r(ν) (k - ν)`.
 3. **Slowdown** is the counting lemma at the kinds and at the token kind, whose work is a set of gates since the token
-   blocks are (`tokenGates_subset`); **Security** is it with A2: `ρ̲ p H(ℓ*) ≤ ρ̲ |C| ≤ m c ≤ N n c`.
+   blocks are (`tokenGates_subset`), with its cap a block; **Security** is it with A2:
+   `ρ̲ p H(ℓ*) ≤ ρ̲ |C| ≤ m c ≤ N n c`.
 -/
 
 namespace Nci.Formalism
@@ -88,6 +90,18 @@ theorem kindBound_le {m c : ℕ} {S : Finset (Fin d.D.N)} {cap : ℝ≥0} (h : (
     mul_div_cancel₀ _ hc']
   exact h
 
+/-- **A cap a block is the special case of a partition-level bound**: a kind whose every inference block holds at most
+`cap_K` of its work `B_K` has `|B_K| ≤ m cap_K` for every partition into `m` inference blocks, which split `B_K`. -/
+theorem partitionBound_kindBound {c k : ℕ} {κ : Type} {B : κ → Finset (Fin d.D.N)} {cap : κ → ℝ≥0}
+    (hcaps : Caps d c k B cap) (K : κ) : PartitionBound d c k (kindBound d c (B K) (cap K)) := by
+  intro m P hP
+  obtain ⟨hS, hcap⟩ := hcaps K
+  refine kindBound_le ?_ (card_le_card hS)
+  calc ((B K).card : ℝ≥0) = ∑ v, ((P.gates v ∩ B K).card : ℝ≥0) := by
+        exact_mod_cast (sum_card_inter_gates P hS).symm
+    _ ≤ ∑ _v : Fin m, cap K := sum_le_sum fun v _ => hcap _ (inferenceBlock_gates hP v)
+    _ = m * cap K := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+
 /-- The token blocks of a valid annotation are sets of gates. -/
 theorem tokenGates_subset (A : Annotation d L) (hA : A.Valid) : A.tokenGates ⊆ d.D.computed :=
   biUnion_subset.2 fun T _ => hA.tokens_computed T
@@ -117,14 +131,8 @@ theorem card_le_entryWork (A : Annotation d L) {c k : ℕ} {E : Type} (e : Finse
 namespace SecurityProofs
 
 theorem Counting : Guarantees.Counting := by
-  intro d c k κ B cap m P hcaps hP
-  refine iSup_le fun K => ?_
-  obtain ⟨hS, hcap⟩ := hcaps K
-  refine kindBound_le ?_ (card_le_card hS)
-  calc ((B K).card : ℝ≥0) = ∑ v, ((P.gates v ∩ B K).card : ℝ≥0) := by
-        exact_mod_cast (sum_card_inter_gates P hS).symm
-    _ ≤ ∑ _v : Fin m, cap K := sum_le_sum fun v _ => hcap _ (inferenceBlock_gates hP v)
-    _ = m * cap K := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+  intro d c k κ B cap ι Λ m P hcaps hΛ hP
+  exact max_le (iSup_le fun K => partitionBound_kindBound hcaps K m P hP) (iSup_le fun J => hΛ J m P hP)
 
 theorem TokenCap : Guarantees.TokenCap := by
   intro d L _ A c k E e a u X cap hcut hcap I hI
@@ -149,19 +157,18 @@ theorem TokenCapClean : Guarantees.TokenCapClean := by
     _ ≤ M := hpeak ν
 
 theorem Slowdown : Guarantees.Slowdown := by
-  intro d L _ A c k E e a u X capX κ B cap m P hA hcut hcap hcaps hP
-  refine max_le ?_ (Counting d c k κ B cap m P hcaps hP)
+  intro d L _ A c k E e a u X capX κ B cap ι Λ m P hA hcut hcap hcaps hΛ hP
+  refine max_le ?_ (Counting d c k κ B cap ι Λ m P hcaps hΛ hP)
   have hcapsX : Caps d c k (fun _ : Unit => X) (fun _ => capX) := fun _ =>
     ⟨hcap.1.trans (tokenGates_subset A hA), TokenCap d L A c k E e a u X capX hcut hcap⟩
-  exact (le_iSup (fun _ : Unit => kindBound d c X capX) ()).trans
-    (Counting d c k Unit (fun _ => X) (fun _ => capX) m P hcapsX hP)
+  exact partitionBound_kindBound hcapsX () m P hP
 
 theorem Security : Guarantees.Security := by
-  intro methods dec ℓ ℓstar D p r c k n N E e a u X capX κ B cap m P hfloor hamong hA hwithin hreach hcut hcap hcaps
-    hP hm
-  have hbound := Slowdown r.d (Fin r.numTokens) r.A c k E e a u X capX κ B cap m P hA hcut hcap hcaps hP
+  intro methods dec ℓ ℓstar D p r c k n N E e a u X capX κ B cap ι Λ m P hfloor hamong hA hwithin hreach hcut hcap
+    hcaps hΛ hP hm
+  have hbound := Slowdown r.d (Fin r.numTokens) r.A c k E e a u X capX κ B cap ι Λ m P hA hcut hcap hcaps hΛ hP
   unfold partitionSlowdown at hbound
-  set ρ := max (kindBound r.d c X capX) (⨆ K, kindBound r.d c (B K) (cap K))
+  set ρ := max (kindBound r.d c X capX) (max (⨆ K, kindBound r.d c (B K) (cap K)) (⨆ J, Λ J))
   have hρC : ρ * (r.d.D.computed.card : ℝ≥0∞) ≤ ((m * c : ℕ) : ℝ≥0∞) := by
     by_cases hC : (r.d.D.computed.card : ℝ≥0∞) = 0
     · rw [hC, mul_zero]

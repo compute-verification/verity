@@ -12,8 +12,8 @@ Daniel's training formalism v2, the one statement of the training slowdown, in L
   `Circuit.into`, `in(C)` is `inputs`, `θ` is a `Verity.Declaration`'s registered inputs, and `reconstruct` is the
   reconstruction;
 * §2, inference (`Definitions.Nci.Formalism.Inference`): the policy `(θ, c, k, n)`, inference blocks, the slowdown `ρ`
-  over core's `(c, k)`-partitions, kinds of work `K` with their work `B_K`, caps `cap_K` and bounds, a block's three
-  kinds of input, and Fit's three kinds of block;
+  over core's `(c, k)`-partitions, kinds of work `K` with their work `B_K`, caps `cap_K` and bounds, the partition-level
+  bounds of kinds amortized over the partition, a block's three kinds of input, and Fit's three kinds of block;
 * §3, training (`Definitions.Nci.Formalism.Training`): the annotation `(θ', 𝒯)`, its token gates and total update `Δ`,
   and the token kind A1 caps: the token work `W_T(x, ν)` reachable from an entry, and the caps it gives;
 * runs, losses and the honest cost (`Definitions.Nci.Formalism.Runs`), which A2 and Security read.
