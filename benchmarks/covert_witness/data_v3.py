@@ -93,6 +93,12 @@ def text_hash(text: str) -> int:
     return int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "little")
 
 
+def read_only(*paths: Path) -> None:
+    """Each output file is read-only once written, so its copies on other nodes are too (rsync keeps the mode)."""
+    for p in paths:
+        p.chmod(0o444)
+
+
 # ---- the sample ---------------------------------------------------------------------------------------------------------
 
 def select(tree: list[dict]) -> dict:
@@ -275,6 +281,7 @@ def train_tokenizer(docs, out: Path) -> str:
     out.parent.mkdir(parents=True, exist_ok=True)
     tok.save(str(out.with_name(out.name + ".part")))
     out.with_name(out.name + ".part").rename(out)
+    read_only(out)
     return sha256(out)
 
 
@@ -364,12 +371,14 @@ def tokenize_part(u: int, rec: dict, tb_path: str, cap: int | None) -> dict:
     if int(np.load(tb_path)[arr].sum()) != nbytes:
         raise SystemExit(f"data_v3: part {u - 1}'s tokens' bytes are not its documents' bytes")
     out = TRAIN / "parts" / f"{u - 1:03d}.bin"
+    (TRAIN / "parts" / f"{u - 1:03d}.json").unlink(missing_ok=True)
     arr.tofile(out.with_name(out.name + ".part"))
     out.with_name(out.name + ".part").rename(out)
     part = {"index": u - 1, "unit": u, "file": rec["file"], "file_sha256": rec["file_sha256"], "documents": len(docs),
             "dclm_documents": n_dclm, "dropped": [], "tokens": int(len(arr)), "text_bytes": nbytes,
             "sha256": sha256(out), "seconds": round(time.time() - t0, 1)}
     (TRAIN / "parts" / f"{u - 1:03d}.json").write_text(json.dumps(part) + "\n")
+    read_only(out, TRAIN / "parts" / f"{u - 1:03d}.json")
     Path(rec["local"]).unlink(missing_ok=True)
     return part
 
@@ -420,6 +429,7 @@ def held_out(rec0: dict, train_hashes: np.ndarray, sizes: dict[str, int], cap: i
             ids = [x for _, x in take] if w == TOKENIZER else enc.ids(w, texts_)
             arr = stream(ids, EOT[w])
             fname = "val.bin" if name == "val" else f"{w}.bin"
+            (d / fname).unlink(missing_ok=True)
             arr.tofile(d / fname)
             if w == TOKENIZER and int(tb[arr].sum()) != rec["bytes"]:
                 raise SystemExit(f"data_v3: the {name} set's bpe32k tokens' bytes are not its documents' bytes")
@@ -429,9 +439,13 @@ def held_out(rec0: dict, train_hashes: np.ndarray, sizes: dict[str, int], cap: i
             rec = {"index": -1, "file": rec0["file"], "file_sha256": rec0["file_sha256"], "documents": rec["documents"],
                    "dropped": [], "tokens": v["tokens"], "text_bytes": rec["bytes"], "sha256": v["sha256"],
                    "rule": "unit 0's kept documents after the three sets', whole, until VAL_TOKENS"}
+            (TRAIN / "val.json").unlink(missing_ok=True)
             (TRAIN / "val.json").write_text(json.dumps(rec) + "\n")
+            read_only(TRAIN / "val.bin", TRAIN / "val.json")
         else:
+            (d / "manifest.json").unlink(missing_ok=True)
             (d / "manifest.json").write_text(json.dumps(rec) + "\n")
+            read_only(d / "manifest.json", *(d / f"{w}.bin" for w in which))
         sets[name] = {k: v for k, v in rec.items() if k not in ("doc_bytes", "tokenizers")} | {
             "dir": str(d), "tokenizers": {t: {k: v for k, v in r.items() if k != "doc_tokens"}
                                          for t, r in rec.get("tokenizers", {}).items()}}
@@ -559,7 +573,7 @@ def build(a: argparse.Namespace) -> int:
             train_hashes = np.unique(np.concatenate(
                 [np.load(BUILD / "index" / f"{u:04d}.npy") for u in range(1, P)]
                 + [(lambda x: x[1][x[0] != 0])(np.load(BUILD / "small" / f"{j:03d}.npy")) for j in range(len(small))]))
-            if not (DATA_JSON.is_file() and (TRAIN / "val.json").is_file()):
+            if not (TRAIN / "held-out.json").is_file():
                 enc = Encoders((TOKENIZER, "gpt2", "pythia"))
                 ho = held_out(units[0], train_hashes, sizes, cap, enc, tb)
                 ho["pythia_tokenizer"] = {"repo": PYTHIA_REPO, "revision": enc.pythia_revision}
