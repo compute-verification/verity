@@ -737,7 +737,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                   "refresh" if nx_refused else "") + "; "
                f"this refresh scores on te_core {meta['te_core_version']} over {meta.get('capture', '?')}'s capture"
                + (f", with the new capture's traces of its {nx['traced_runs']} traced runs over it (their rows reading "
-                  "A)" if meta.get("over") else "")
+                  "B, as every row's until te_core 4.5's packer proposes matrix-product tiles, 09:02Z)"
+                  if meta.get("over") else "")
                + " until it traces as many runs, and as many of v3's)" if nx else "")
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
