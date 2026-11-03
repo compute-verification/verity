@@ -7,14 +7,16 @@ this checkout's te_core and measured (te_core.capture.circuit.measure), as the s
 PLAN.json is a list of {"run": RUN, "art": ART, "steps": [STEP, ...]}: each record's `run/run.json`, `island.tar` and
 `candidate.json` come from the evidence store, its measurement commit's covert_witness tree (without te_core) and its
 start's `start.json` (the pin's starts_store.json) with them, and this checkout's te_core beside. The node writes
-DIR/traces/RUN-STEP.json for each step: the capture's output (te_core.capture.script's CLI fields) and `measured`, the
-circuit's quantities.
+DIR/traces/RUN-STEP.json for each step: the capture's output (te_core.capture.script's CLI fields), `measured`, the
+circuit's quantities, and `maxrss_gb`, the capture's peak resident memory (each trace in a worker of its own), which
+sizes a node's shards.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import resource
 import shutil
 import subprocess
 import sys
@@ -128,10 +130,11 @@ def one(root: str, r: dict, step: int, out: str) -> dict:
     except Exception:  # noqa: BLE001 - every trace's failure is recorded with the others
         res["error"] = traceback.format_exc()[-3000:]
     res["wall_s"] = round(time.time() - t0, 1)
+    res["maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2**20, 2)
     (out / "traces").mkdir(parents=True, exist_ok=True)
     (out / "traces" / f"{name}.json").write_text(json.dumps(res, indent=1, default=str))
     circ.unlink(missing_ok=True)
-    return {k: res.get(k) for k in ("run", "step", "wall_s")} | {"error": (res.get("error") or "")[-300:]}
+    return {k: res.get(k) for k in ("run", "step", "wall_s", "maxrss_gb")} | {"error": (res.get("error") or "")[-300:]}
 
 
 def node(pack_tar: Path, out: Path, workers: int) -> int:
@@ -145,7 +148,8 @@ def node(pack_tar: Path, out: Path, workers: int) -> int:
         for r in man["runs"]:
             workdir(root, r)
         jobs = [(r, s) for r in man["runs"] for s in r["steps"]]
-        with ProcessPoolExecutor(max_workers=min(workers, len(jobs))) as ex:
+        # one trace per worker process, so RUSAGE_CHILDREN's peak is that trace's alone
+        with ProcessPoolExecutor(max_workers=min(workers, len(jobs)), max_tasks_per_child=1) as ex:
             futs = [ex.submit(one, str(root), r, s, str(out)) for r, s in jobs]
             for fut in as_completed(futs):
                 print(json.dumps(fut.result()), flush=True)
