@@ -33,7 +33,13 @@ decoded from the play's output on the tape.
 
 namespace Verity.Game
 
-variable {α V ι : Type} [Nonempty V]
+open scoped ENNReal
+
+variable {α V ι : Type}
+
+section Readings
+
+variable [Nonempty V]
 
 namespace DigestCut
 
@@ -89,6 +95,8 @@ theorem modes_eq {Ks₀ : ι → DigestCut V g} {p q : Pos g σ V ι} (h : p.Inv
     exact DigestCut.modeHere_of_isHere_false _ hi
 
 end Pos
+
+end Readings
 
 end Verity.Game
 

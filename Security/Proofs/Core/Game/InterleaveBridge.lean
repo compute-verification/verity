@@ -14,7 +14,12 @@ any family of cuts and any rewriting of the tape:
   the whole play through the node (`Pos.back`, a tape from there put back in place).
 * **The walk** (`Pos.toStop`): along the tape, through the prover's messages and the tape's coins, to the first node at
   which a cut is fixed, or to the play's end (`Pos.toStop_stops`). `Pos.consume` marks the cuts fixed at a stop as
-  past, and `Pos.rewrite` rewrites the tape from the position.
+  past, `Pos.rewrite` rewrites the tape from the position and `Pos.withTape` replaces it.
+* **The walk resamples** (`Pos.avg_toStop`): over a uniform tape from a position, the tape from the next stop is
+  uniform and independent of the walk to it, so any reading of the stop has the mean of its average over the tapes
+  from there (`Pos.resample`). It rests on the coin a play reads picking out a uniform, independent value of the tape's
+  dependent function (`avg_pick`, from `avg_update_pi`), beside means over products (`avg_prod`, `avg_comm`,
+  `avg_equiv`). The walk keeps the whole tape at any cuts (`Pos.toStop_tape`).
 * **What the walk keeps** (`Pos.Inv`, `Pos.Le`): the play of a tape through the position is the play from the position
   (`Pos.Inv.run`); each cut not yet past reads, on such a tape, what its descent at the position reads, at every
   reading that descends through the prover's messages and the tape's coins (`CutReading`: the miss, the revealed and
@@ -108,6 +113,57 @@ theorem atCoin_eq {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game 
 
 end CutReading
 
+/-! ## Averages over products and dependent functions -/
+
+theorem avg_equiv {C D : Type} [Fintype C] [Fintype D] (e : C ≃ D) (f : D → ℝ≥0∞) :
+    avg (fun c => f (e c)) = avg f := by
+  unfold avg
+  rw [Fintype.card_congr e]
+  exact Fintype.sum_equiv e _ _ (fun _ => rfl)
+
+theorem avg_prod {C D : Type} [Fintype C] [Fintype D] (f : C × D → ℝ≥0∞) :
+    avg f = avg fun c => avg fun d => f (c, d) := by
+  unfold avg
+  rw [Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul,
+    ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
+  refine Finset.sum_congr rfl fun c _ => ?_
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun d _ => ?_
+  ring
+
+theorem avg_comm {C D : Type} [Fintype C] [Fintype D] (f : C → D → ℝ≥0∞) :
+    (avg fun c => avg fun d => f c d) = avg fun d => avg fun c => f c d := by
+  rw [← avg_prod (fun p : C × D => f p.1 p.2), ← avg_prod (fun p : D × C => f p.2 p.1),
+    ← avg_equiv (Equiv.prodComm C D) (fun p : D × C => f p.2 p.1)]
+  rfl
+
+/-- **Resampling one value of a uniform dependent function** leaves its average unchanged. -/
+theorem avg_update_pi {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [∀ c, Fintype (T c)]
+    [∀ c, Nonempty (T c)] (c : C) (F : ((c : C) → T c) → ℝ≥0∞) :
+    avg (fun f => avg fun a : T c => F (Function.update f c a)) = avg F := by
+  let e : ((c : C) → T c) × T c ≃ ((c : C) → T c) × T c :=
+    { toFun := fun p => (Function.update p.1 c p.2, p.1 c)
+      invFun := fun p => (Function.update p.1 c p.2, p.1 c)
+      left_inv := fun p => by simp
+      right_inv := fun p => by simp }
+  calc avg (fun f => avg fun a : T c => F (Function.update f c a))
+      = avg (fun p : ((c : C) → T c) × T c => F (Function.update p.1 c p.2)) :=
+        (avg_prod (fun p : ((c : C) → T c) × T c => F (Function.update p.1 c p.2))).symm
+    _ = avg (fun p : ((c : C) → T c) × T c => F p.1) := avg_equiv e fun p => F p.1
+    _ = avg F := by rw [avg_prod]; simp only [avg_const]
+
+/-- **The value a uniform coin picks out of a uniform dependent function is uniform and independent of the others**:
+averaged over the coin `c` and the function `f`, a reading of `c`, `f c` and `f` with `f c` replaced is its average over
+`f c`'s replacements. -/
+theorem avg_pick {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [∀ c, Fintype (T c)]
+    [∀ c, Nonempty (T c)] (F : (c : C) → T c → (T c → (c : C) → T c) → ℝ≥0∞) :
+    avg (fun z : C × ((c : C) → T c) => F z.1 (z.2 z.1) fun y => Function.update z.2 z.1 y) =
+      avg fun z : C × ((c : C) → T c) => avg fun a : T z.1 => F z.1 a fun y => Function.update z.2 z.1 y := by
+  rw [avg_prod, avg_prod]
+  refine congrArg avg (funext fun c => ?_)
+  refine (Eq.trans ?_ (avg_update_pi c fun f => F c (f c) fun y => Function.update f c y)).symm
+  simp only [Function.update_self, Function.update_idem]
+
 /-- **A position of a play of `σ` in `g`**: a node `g'` with `σ`'s strategy there (`s'`), the cuts there (`Ks`), the tape
 from there (`x`), and the tapes of the whole play through the node (`back`: a tape from the node, put back in place). -/
 structure Pos (g : Game α) (σ : Strategy g) (V ι : Type) : Type 1 where
@@ -153,6 +209,13 @@ def consume (p : Pos g σ V ι) : Pos g σ V ι where
 def rewrite (p : Pos g σ V ι) (f : CoinTape p.g' p.s' → CoinTape p.g' p.s') : Pos g σ V ι where
   __ := p
   x := f p.x
+
+/-- **The position with the tape from it replaced by `z`.** -/
+def withTape (p : Pos g σ V ι) (z : CoinTape p.g' p.s') : Pos g σ V ι := p.rewrite fun _ => z
+
+/-- **The resampled reading at a position**: `G`'s average over the tapes from the position. -/
+noncomputable def resample (G : Pos g σ V ι → ℝ≥0∞) (q : Pos g σ V ι) : ℝ≥0∞ :=
+  avg fun z : CoinTape q.g' q.s' => G (q.withTape z)
 
 /-- **The most likely message each cut fixed at the position fixes there**; `none` at every other cut. -/
 noncomputable def modes [Nonempty V] (p : Pos g σ V ι) (i : ι) : Option V := (p.Ks i).modeHere p.s'
@@ -253,6 +316,84 @@ theorem walk_spec (Ks₀ : ι → DigestCut V g) :
       show back (x.1, Function.update x.2 x.1 (x.2 x.1)) = back x
       rw [Function.update_eq_self]
       rfl
+
+/-- **The walk keeps the tape**, at any cuts. -/
+theorem walk_tape : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
+    (back : CoinTape g' s' → CoinTape g σ), (walk g' s' Ks x back).tape = back x
+  | .ret _, _, _, _, _ => rfl
+  | .send M k, s', Ks, x, back => by
+    by_cases hf : ∃ i, (Ks i).isHere
+    · rw [walk, ite_eq_left_of_eq_true _ _ (eq_true hf)]
+      rfl
+    · rw [walk, ite_eq_right_of_eq_false _ _ (eq_false hf)]
+      exact walk_tape (k s'.1) s'.2 _ x back
+  | @Game.coin _ C iF iN k, s', Ks, x, back => by
+    classical
+    by_cases hf : ∃ i, (Ks i).isHere
+    · rw [walk, ite_eq_left_of_eq_true _ _ (eq_true hf)]
+      rfl
+    · rw [walk, ite_eq_right_of_eq_false _ _ (eq_false hf), walk_tape (k x.1) (s' x.1) _ (x.2 x.1) _]
+      show back (x.1, Function.update x.2 x.1 (x.2 x.1)) = back x
+      rw [Function.update_eq_self]
+      rfl
+
+theorem toStop_tape (p : Pos g σ V ι) : p.toStop.tape = p.tape := walk_tape p.g' p.s' p.Ks p.x p.back
+
+theorem avg_resample_lit (G : Pos g σ V ι → ℝ≥0∞) (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g')
+    (back : CoinTape g' s' → CoinTape g σ) :
+    avg (fun z : CoinTape g' s' => G ⟨g', s', Ks, z, back⟩) =
+      avg fun z : CoinTape g' s' => resample G ⟨g', s', Ks, z, back⟩ :=
+  (avg_const (C := CoinTape g' s') _).symm
+
+open Classical in
+theorem avg_walk_coin (H : Pos g σ V ι → ℝ≥0∞) {C : Type} [iF : Fintype C] [iN : Nonempty C] {k : C → Game α}
+    (s' : Strategy (@Game.coin _ C iF iN k)) (Ks : ι → DigestCut V (@Game.coin _ C iF iN k))
+    (back : CoinTape (@Game.coin _ C iF iN k) s' → CoinTape g σ) :
+    avg (fun z : CoinTape (@Game.coin _ C iF iN k) s' => H (walk (k z.1) (s' z.1) (fun i => (Ks i).atCoin z.1)
+      (z.2 z.1) fun y => back (z.1, Function.update z.2 z.1 y))) =
+      avg fun z : CoinTape (@Game.coin _ C iF iN k) s' => avg fun a : CoinTape (k z.1) (s' z.1) =>
+        H (walk (k z.1) (s' z.1) (fun i => (Ks i).atCoin z.1) a fun y => back (z.1, Function.update z.2 z.1 y)) :=
+  letI : ∀ c, Fintype (CoinTape (k c) (s' c)) := fun c => CoinTape.fintype (k c) (s' c)
+  haveI : ∀ c, Nonempty (CoinTape (k c) (s' c)) := fun c => CoinTape.nonempty (k c) (s' c)
+  avg_pick (T := fun c => CoinTape (k c) (s' c)) fun c a u =>
+    H (walk (k c) (s' c) (fun i => (Ks i).atCoin c) a fun y => back (c, u y))
+
+/-- **The tape from the next stop is uniform and independent of the walk to it**: averaged over the tape from a
+node, any reading of the walk's stop is its average over the tapes from the stop. -/
+theorem avg_walk (G : Pos g σ V ι → ℝ≥0∞) : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g')
+    (back : CoinTape g' s' → CoinTape g σ),
+    avg (fun z : CoinTape g' s' => G (walk g' s' Ks z back)) =
+      avg fun z : CoinTape g' s' => resample G (walk g' s' Ks z back)
+  | .ret a, s', Ks, back => avg_resample_lit G (.ret a) s' Ks back
+  | .send M k, s', Ks, back => by
+    by_cases hf : ∃ i, (Ks i).isHere
+    · have e : ∀ z, walk (.send M k) s' Ks z back = ⟨.send M k, s', Ks, z, back⟩ := fun z => by
+        rw [walk, ite_eq_left_of_eq_true _ _ (eq_true hf)]
+      simp only [e]
+      exact avg_resample_lit G _ s' Ks back
+    · have e : ∀ z, walk (.send M k) s' Ks z back = walk (k s'.1) s'.2 (fun i => (Ks i).atSend s'.1) z back :=
+        fun z => by rw [walk, ite_eq_right_of_eq_false _ _ (eq_false hf)]
+      simp only [e]
+      exact avg_walk G (k s'.1) s'.2 _ back
+  | @Game.coin _ C iF iN k, s', Ks, back => by
+    classical
+    by_cases hf : ∃ i, (Ks i).isHere
+    · have e : ∀ z, walk (@Game.coin _ C iF iN k) s' Ks z back = ⟨@Game.coin _ C iF iN k, s', Ks, z, back⟩ :=
+        fun z => by rw [walk, ite_eq_left_of_eq_true _ _ (eq_true hf)]
+      simp only [e]
+      exact avg_resample_lit G _ s' Ks back
+    · have e : ∀ z, walk (@Game.coin _ C iF iN k) s' Ks z back = walk (k z.1) (s' z.1)
+          (fun i => (Ks i).atCoin z.1) (z.2 z.1) (fun y => back (z.1, Function.update z.2 z.1 y)) :=
+        fun z => by rw [walk, ite_eq_right_of_eq_false _ _ (eq_false hf)]
+      simp only [e]
+      rw [avg_walk_coin G, avg_walk_coin (resample G)]
+      exact congrArg avg (funext fun z => avg_walk G (k z.1) (s' z.1) _ _)
+
+/-- **The tape from the next stop is uniform and independent of the walk to it**, from a position. -/
+theorem avg_toStop (G : Pos g σ V ι → ℝ≥0∞) (p : Pos g σ V ι) :
+    avg (fun z : CoinTape p.g' p.s' => G (p.withTape z).toStop) =
+      avg fun z : CoinTape p.g' p.s' => resample G (p.withTape z).toStop :=
+  avg_walk G p.g' p.s' p.Ks p.back
 
 /-- **The next stop extends the position, keeps the tape and keeps the invariant.** -/
 theorem toStop_spec {Ks₀ : ι → DigestCut V g} {p : Pos g σ V ι} (h : p.Inv Ks₀) :
