@@ -16,6 +16,7 @@ and the switched vectors agree at every claim (`Loop.switch_sv`).
 * `Bind.sched_open`: the loop schedules the binding at the target of its zerocheck's and lincheck's claims.
 * `LeanRelease.unrefused_open`: the coins show no refusal by the round.
 * `Masked.runCut_openBody`, `Loop.enc_openBind`: the switched session sends the binding there, tagged `0`.
+* `Loop.rsTarget_raw`: the target at the schedule's coins past the algebraic phase is the one at the opened coins.
 * `LeanRelease.openBind_frame`: the frame releases the loop's binding as it came (`roundFree_openBind`).
 * **`LeanRelease.release_sched_openBind_pf`**: `release_sched_openBind`'s statement.
 -/
@@ -514,12 +515,28 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
   rw [enc_finS_of C h0 (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
     (by rw [← hsrc]; exact hrc.1), ← hsrc, hrc.2, hci, hcap', hlv]
 
+/-- **The ring switch's target at the schedule's coins past `A` is the one at the opened coins from `R + A`**
+(`coin_raw`). -/
+theorem rsTarget_raw (W : ℕ → Array F128) {R A C L N : ℕ} (sv : ℕ → Array F128) (hN : A + N < C)
+    (hL : L = R + A) :
+    FlockComplete.rsTarget (fun j i => ((((Array.range C).map fun q => W (R + q)).extract A
+        ((Array.range C).map fun q => W (R + q)).size).toList.getD j #[])[i]!) 0 sv N =
+      FlockComplete.rsTarget (fun p e => (W p)[e]!) L sv N := by
+  subst hL
+  refine FlockComplete.rsTarget_congr (fun e _ => ?_) (fun k hk e _ => ?_) (fun _ _ => rfl)
+  · simp only [Nat.zero_add]
+    rw [coin_raw W (R := R) (show A + N < C by omega)]
+    exact congrArg (fun q => (W q)[e]!) (Nat.add_assoc R A N).symm
+  · simp only [Nat.zero_add]
+    rw [coin_raw W (R := R) (show A + k < C by omega)]
+    exact congrArg (fun q => (W q)[e]!) (Nat.add_assoc R A k).symm
+
 end Loop
 
 namespace LeanRelease
 
 open Loop in
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 4000000 in
 /-- **The frame releases the opening's binding as the loop schedules it**: at a live history whose next round is rep
 stream `2j + r`'s round after its PIOP (`Masked.repSlot` `0`), on the rep's own tables where `real` answers the loop's,
 the loop's table there is of the rep's setup and the rep's schedule, its zerocheck's and lincheck's claims are at the
@@ -688,7 +705,7 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [hc']
     exact Claims.ZKServer.ofDraws_order _ _ _
   have hAA : alg.size = A := by
-    rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
+    rw [(Ranked.alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
   -- past the ring switch the frame is outside every masked phase, the algebraic phase done
   have hA'' := hA'
   rw [show a + 1 = alg.size + (xs.size + 2) + 1 by rw [hxs, hXS]; omega] at hA''
@@ -734,7 +751,7 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmT : 14 ≤ tr.st.m := by rw [htrm]; omega
   have hmT' : tr.st.m < 2 ^ 64 := by rw [htrm]; exact lt_of_le_of_lt hm35 (by norm_num)
   have hAA' : alg'.size = A := by
-    rw [(alg_cnt hmT (by rw [htrk]; omega) hmT' hal').1, htrm, htrk, hAd]
+    rw [(Ranked.alg_cnt hmT (by rw [htrk]; omega) hmT' hal').1, htrm, htrk, hAd]
   have hsch : tb.sch = (Masked.zkTab x j).sch := (Prod.mk.inj (Except.ok.inj (htp.symm.trans hz))).1
   have htrz : tr.sch = (Masked.zkTab x j).sch := hT2.trans hsch
   have hn0r : tr.sch.n ≠ 0 := by
@@ -765,17 +782,8 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     pts_raw (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2)) (R := Masked.repBase x (2 * j.val + r.val))
       (by rw [hAA', htrm, htrk, hAd]; omega) (by rw [hAA']; omega) hptsR, ?_, by rw [hrel, ho]⟩
   rw [hTe]
-  refine FlockComplete.rsTarget_congr (fun e he => ?_) (fun k' hk' e he => ?_) (fun _ _ => rfl)
-  · simp only [Nat.zero_add]
-    rw [coin_raw (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2)) (R := Masked.repBase x (2 * j.val + r.val))
-      (A := alg'.size) (C := A + k) ?_]
-    · exact congrArg (fun q => (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) q)[e]!) (by omega)
-    · omega
-  · simp only [Nat.zero_add]
-    rw [coin_raw (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2)) (R := Masked.repBase x (2 * j.val + r.val))
-      (A := alg'.size) (C := A + k) ?_]
-    · exact congrArg (fun q => (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) q)[e]!) (by omega)
-    · omega
+  exact rsTarget_raw (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2)) (R := Masked.repBase x (2 * j.val + r.val))
+    (A := alg'.size) (C := A + k) _ (by omega) (by omega)
 
 open Loop in
 set_option maxHeartbeats 2000000 in
