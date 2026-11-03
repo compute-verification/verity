@@ -219,7 +219,9 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/a
 # quoted lowercase token (a record key or a key path, a reason code, a role, a run's output file, a line of a server's
 # protocol: `"draws"`, `"public.draw.units"`, `"draw-outside-the-partition"`, `"firewall"`, `"draw.json"`, `b"draw\n"`;
 # a capitalized one is a Lean name and follows it, and so do a path, a dotted Python module, a tracked source file's
-# name and an f-string's code), a coin's label (`"pouw/draw"`), an upper-case snake-case name (an environment variable
+# name, an f-string's code and an attribute set by name or a keyword passed as a dict, which follow their Python names),
+# the recursion runs' mode and the deployment's party `firewall` where shell, a flag's value or a message spells it
+# bare (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`), a coin's label (`"pouw/draw"`), an upper-case snake-case name (an environment variable
 # or a constant: `FC_FIREWALL`, `CR_N2_DRAW`, `FLOCK_DRAW_LAW`), a run's output file after a path, the systemd slice
 # `firewall.slice`, a kebab-case name or a CLI flag (`--draw`, `--firewall-state`, `flock-firewall`, `core-firewall`,
 # `verity-core-firewall`, `drawn-unit-bundle`) and the attribute argparse makes of a flag (`a.draw`; not the profile's
@@ -230,7 +232,7 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/a
 # where it touches a name (GLOSSARY.md keeps `law` identifiers), the other senses of law and draw (a power law, the law
 # of large numbers, nvidia-smi's `power.draw`), the `round_digest` strings and the label `replay_set=warden/re-verify`
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
-            '(?<![\w\\])(?<!getattr\(coins, )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
+            '(?<![\w\\])(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
             '[\x22\x27][a-z_]+/(?:draw|drawn|draws|law|firewall)[\x22\x27]',
             '\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)*\b|\b(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)+\b',
             '(?<=[/.])(?:draw|drawn|draws|firewall|law)\.(?:json|jsonl|log|bin|lock|txt|npz)\b', '\bfirewall\.slice\b',
@@ -243,7 +245,8 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '(?<!import Definitions\.Accounting\.)\bRemote\.Draw\b', '\bDrawnLayer\b',
             '(?<=[\w.:/`-])[Ll]aws?\b|\b[Ll]aws?(?=[\w:/(`-]|\.\w)',
             '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
-            "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify']
+            "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify',
+            '\bMODES\W{1,8}firewall\b', '(?<=,)firewall(?=,)', '--modes [\w,]+', '\(firewall\)', 'dials firewall']
 strings = []
 
 [keep_in]
