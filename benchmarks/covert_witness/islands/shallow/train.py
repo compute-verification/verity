@@ -16,7 +16,8 @@ bf16-autocast forward already multiplies at bf16); `svd:R` each full matrix's de
 `qB` or `qB:G` each tensor's delta from θ as a CWQUAN1 delta (`prepare.encode_quant`): B-bit round-to-nearest codes into
 a symmetric codebook, an f16 scale per G entries (default 128), xz-coded; `uB` or `uB:S` the same format on a uniform
 step of S (default 1) times each 128 entries' RMS, zero a level, so xz's entropy coding sets the rate (`uniform_code`),
-and `--max-e-bytes N` fits the step so every checkpoint's |E| is just under N; `auto` is bf16 with adapters, else
+and `--max-e-bytes N` fits the step so every checkpoint's |E| is just under N (or under it at the finest step whose
+levels span 6 RMS, `UNIFORM_COVER`); `auto` is bf16 with adapters, else
 fp32. An
 arm's `store=` codes its own E (`svd:R` only as the global store). `--mom-dtype bf16` keeps Muon's momentum in bf16
 between steps and `--grad-dtype bf16` rounds the accumulated gradient to bf16 after each micro-batch; `--mom-fold` makes
@@ -521,6 +522,8 @@ def uniform_code(theta, cur, bits: int, step: float) -> tuple[dict, float]:
 
 
 UNIFORM_TRIES, UNIFORM_FILL = 8, 0.98
+# a fitted step never goes below UNIFORM_COVER / 2**(bits-1): finer, the outer levels clip the delta's tails
+UNIFORM_COVER = 6.0
 
 
 @torch.no_grad()
@@ -554,15 +557,16 @@ def encode_update(store, theta, cur, factors, mats, gains, params, steps, info, 
         tries = 0
         if max_bytes is not None:
             # the step is in RMS units, so the last checkpoint's fitted step starts the search
-            s, best = info.get("step", s), None
+            floor = UNIFORM_COVER / 2 ** (bits - 1)
+            s, best = max(floor, info.get("step", s)), None
             for tries in range(1, UNIFORM_TRIES + 1):
                 size = quant_size(uniform_code(theta, cur, bits, s)[0], theta)
                 if size <= max_bytes and (best is None or size > best[0]):
                     best = (size, s)
-                if UNIFORM_FILL * max_bytes <= size <= max_bytes:
+                if UNIFORM_FILL * max_bytes <= size <= max_bytes or (size <= max_bytes and s <= floor):
                     break
                 # each doubling of the step takes about a bit a value off an entropy-coded uniform code
-                s *= 2 ** (8 * (size - (1 + UNIFORM_FILL) / 2 * max_bytes) / numel)
+                s = max(floor, s * 2 ** (8 * (size - (1 + UNIFORM_FILL) / 2 * max_bytes) / numel))
             if best is None:
                 raise SystemExit(f"shallow: {store} fits no step in --max-e-bytes {max_bytes} ({size} B at {s:.3g})")
             s = best[1]
