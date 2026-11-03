@@ -2,8 +2,8 @@
 
     python -m te_core.console DIR    # DIR: te_core.plots' panels; writes DIR/console/
 
-A body is at most `BODY_MAX` bytes (compact JSON, no NaN), a note at most `NOTE_MAX` characters and the columns at most
-`COLUMNS_MAX` distinct names (`refused` has the rest of what the route refuses). Each panel keeps
+A body is at most `BODY_MAX` bytes (compact JSON, no NaN), a note at most `NOTE_MAX` characters, a title at most
+`TITLE_MAX` and the columns at most `COLUMNS_MAX` distinct names (`refused` has the rest of what the route refuses). Each panel keeps
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
 it. The console's training panels are `training/algorithm-policy` and `training/frontier-fit` (te_core.algorithm_policy
@@ -28,7 +28,7 @@ BODY_MAX = 65536
 NOTE_MAX = 500
 #: the route's cell limit, live since the dashboard's 05:05Z change
 CELL_MAX = 4096
-COLUMNS_MAX, NAME_MAX, SOURCE_MAX = 24, 60, 300
+COLUMNS_MAX, NAME_MAX, SOURCE_MAX, TITLE_MAX = 24, 60, 300, 120
 REF_TARGET = -1.0
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LOSSES = ("loss", "loss_lo", "loss_hi", "l0")
@@ -54,13 +54,15 @@ def body(p: dict) -> bytes:
 
 
 def refused(p: dict) -> list[str]:
-    """What the route refuses in `p`: its source is 1 to `SOURCE_MAX` characters, its columns are 1 to `COLUMNS_MAX`
-    distinct names of at most `NAME_MAX` characters, and a row has one cell per column, each a number, a string of at
-    most `CELL_MAX` characters, or null (a boolean is none of them)."""
+    """What the route refuses in `p`: its title is 1 to `TITLE_MAX` characters and its source 1 to `SOURCE_MAX`, its
+    columns are 1 to `COLUMNS_MAX` distinct names of at most `NAME_MAX` characters, and a row has one cell per column,
+    each a number, a string of at most `CELL_MAX` characters, or null (a boolean is none of them)."""
     def ok(v):
         return v is None or isinstance(v, (int, float)) and not isinstance(v, bool) or \
             isinstance(v, str) and len(v) <= CELL_MAX
-    cols, out, source = p["columns"], [], p.get("source") or ""
+    cols, out, source, title = p["columns"], [], p.get("source") or "", p.get("title") or ""
+    if not 1 <= len(title) <= TITLE_MAX:
+        out.append(f"its title is {len(title)} characters, not 1 to {TITLE_MAX}")
     if not 1 <= len(source) <= SOURCE_MAX:
         out.append(f"its source is {len(source)} characters, not 1 to {SOURCE_MAX}")
     if not 1 <= len(cols) <= COLUMNS_MAX or len(set(cols)) < len(cols) or any(len(c) > NAME_MAX for c in cols):

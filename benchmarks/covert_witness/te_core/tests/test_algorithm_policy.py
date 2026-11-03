@@ -1,6 +1,6 @@
 """te_core.algorithm_policy builds `training/algorithm-policy`: a row per run, start and gain target, at its first
-checkpoint whose gain (effective compute under te_core.frontier_fit's fit, over C0) reaches the target, else at its
-last; H the least compute from the start reaching it, every checkpoint pooled, and p = C/H; the dial's formula on a
+checkpoint whose gain (C(L1)/C(L0) under te_core.frontier_fit's fit, from the start's loss) reaches the target, else at
+its last; H the least compute from the start reaching it, every checkpoint pooled, and p = C/H; the dial's formula on a
 row's columns alone is te_core.formalism.at's at every cell; the coverage per gain target, data and decade of ρ; and
 the console's cut, which keeps the coverage's rows and each group's (p, ρ) front, naming the stored tables' art id."""
 import json
@@ -11,7 +11,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import console, formalism, panels, plots, policy, rescore
+from te_core import console, formalism, gates, panels, plots, policy, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
 from test_plots import SHAPE
@@ -49,13 +49,15 @@ def law(c: float, f: dict = LAW) -> float:
 
 
 def block(gates, delta, dgrad, delta_t=None, tail=0.0, sigma=0.8) -> dict:
-    """One part whose token blocks are `W` gates each, labelled as te_core.rescore labels the analysis's blocks."""
+    """One part whose token blocks are `W` gates each, labelled as te_core.rescore labels the analysis's blocks but
+    with tau_bits as a trace measures it (the analysis's is a stub, which would mark every row `STUB`)."""
     u, u_in = formalism.tail(delta, tail)
     return {"parts": [{"gates": gates, "tokens": sigma * gates / W, "token_gates": sigma * gates,
                        "affected_gates": 0.5 * sigma * gates, "steps": 1, "delta_grad_bits": dgrad}],
             "tau_bits": 16, "a_bits": 8192, "delta_bits": delta, "delta_t_bits": delta_t, "u1_bits": delta,
             "u": [list(x) for x in u], "u_in": [list(x) for x in u_in], "tail_share": tail,
-            "labels": rescore.LABELS | (rescore.TAIL if tail else rescore.EVEN)}
+            "labels": rescore.LABELS | {"tau_bits": formalism.TRACED["tau_bits"]}
+            | (rescore.TAIL if tail else rescore.EVEN)}
 
 
 def ledger_rows(runs=RUNS) -> list[dict]:
@@ -152,9 +154,9 @@ def dial(d: dict, c: float, k: float) -> tuple[float, str]:
 
 def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reaching_it_else_at_its_last(tmp_path,
                                                                                                     monkeypatch):
-    """At gain g a start's target loss is the fit's at g·C0; each run from the start has one row there: reached at its
-    first checkpoint at or below it, else not at its last, with C its |C|, the gain C_eff(loss)/C0, H the least |C| of
-    any checkpoint from the start reaching it and p = C/H (null without H)."""
+    """At gain g a start's target loss is E + (l0 − E)·g^(−γ) on the fit; each run from the start has one row there:
+    reached at its first checkpoint at or below it, else not at its last, with C its |C|, the gain C(L1)/C(l0) on the
+    fit, H the least |C| of any checkpoint from the start reaching it and p = C/H (null without H)."""
     code, got = run(tmp_path, monkeypatch)
     assert code == 0 and (got["out"] / f"{AP.NAME}.png").stat().st_size > 10_000
     p, f = got["panel"], fitted(got["fit"])
@@ -171,7 +173,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):
         c0, mine = panels.c0(shape, RATE), [r for r in rows if r["start"] == start]
         for g in AP.GAINS:
-            target = FF.loss_at(f, g * c0)
+            target = FF.target(f, L0[start], g)
             at = {d["record"].split("@")[0]: d for d in ds
                   if (d["start"], d["gain_target"]) == (plots.start_label(shape), g)}
             assert set(at) == {r["run_id"] for r in mine}
@@ -184,7 +186,8 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
                 assert (d["start_loss"], d["end_loss"]) == (L0[start], r["val_bpb"])
                 assert (d["start_compute_gates"], d["C_gates"]) == pytest.approx((c0, r["formalism"]["parts"][0]["gates"]))
                 assert d["start_effective_gates"] == pytest.approx(FF.c_eff(f, L0[start]))
-                assert d["gain"] == pytest.approx(FF.c_eff(f, r["val_bpb"]) / c0) and (d["gain"] >= g) == bool(hit)
+                assert d["gain"] == pytest.approx(FF.c_eff(f, r["val_bpb"]) / FF.c_eff(f, L0[start]))
+                assert (d["gain"] >= g) == bool(hit) and target < L0[start]
                 assert d["H_gates"] == (h and pytest.approx(h))
                 assert d["p"] == (h and pytest.approx(d["C_gates"] / h))
                 assert d["family"] == next(x[3] for x in RUNS if x[1] == run_id)
@@ -195,24 +198,30 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert s1[("mezo@2", 1.1)][0] == s1[("lora@2", 2)][0] == s1[("ref@3", 11)][0] == "no"
     assert s1[("ref@3", 11)][1] is None and s1[("mezo@2", 2)][1] == pytest.approx(1.2 / 1.5)
     q = got["console"]
-    assert q["columns"] == AP.CONSOLE_COLUMNS and {"reading", "te_core", "rho_console", "rho_default"} <= set(q["columns"])
+    assert q["columns"] == AP.CONSOLE_COLUMNS and len(q["columns"]) <= console.COLUMNS_MAX
+    assert {"reading", "te_core", "rho_console", "rho_default", "rho_served"} <= set(q["columns"])
+    assert [d["rho_default"] for d in ds] == [None if v == "inf" else v for v in cell["rho_console"]]
     assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
+    assert q["title"] == p["title"] and all(x["title"].endswith(f"{gates.UNIT})") for x in (p, got["fit"]))
 
 
 def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, monkeypatch):
-    """rho_default and basis_default are the dial's formula on the published columns, and te_core.panels' dial on them
-    gives formalism.at's ρ and basis at every cell; Fit's update application reads delta_t (qat's latents fail it where
+    """rho_default and basis_default are the dial's formula on the published columns at the console's default, and at
+    the registered serving block rho_served is, so u_in is exact at both k; te_core.panels' dial on them gives
+    formalism.at's ρ and basis at every cell; Fit's update application reads delta_t (qat's latents fail it where
     mezo, the same but for them, fits)."""
     _, got = run(tmp_path, monkeypatch)
     by = {r["id"]: r for r in ledger_rows()}
     ds = plots.frame(got["console"])
+    assert {AP.CONSOLE[1], panels.SERVED[1]} <= set(panels.K_LEVELS)
     for d in ds:
         page = panels.page_inputs(d)
         assert not set(AP.SPLIT) & set(d) and set(AP.SPLIT) <= set(page)
-        rho, basis = dial(page, *AP.default(page["w_fwd_gates"]))
+        rho, basis = dial(page, *AP.CONSOLE)
         assert basis == d["basis_default"] and rho == pytest.approx(d["rho_default"], rel=1e-3)
+        assert dial(page, *panels.SERVED)[0] == pytest.approx(d["rho_served"], rel=1e-3)
         r = by[d["record"].replace("@", "-")]
         m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
         w = page["w_fwd_gates"]
@@ -259,7 +268,7 @@ def test_a_profile_capped_at_delta_loses_its_redundant_points_and_nothing_else()
 
 
 def test_estimated_names_the_inputs_that_arent_measured():
-    m = formalism.from_json(block(1e15, 1e6, 3e6, None, 0.3))
+    m = formalism.from_json(block(1e15, 1e6, 3e6, None, 0.3) | {"labels": rescore.LABELS | rescore.TAIL})
     text = AP.estimated(m)
     assert text == ("w_gates:est tau_bits:stub a_bits:bound u_points:A1 u_in_points:A1' delta_bits:bound "
                     "delta_t_bits:bound d_gates:est delta_grad_bits:est")
@@ -283,26 +292,37 @@ def test_profiles_are_compact_strings():
     assert AP.num(1.234567e-7) == "1.23457e-7"
 
 
-def test_a_target_the_start_already_meets_has_no_rows_and_a_data_without_a_fit_none():
+def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_below_e_none():
+    """Gain is C(L1)/C(L0) on the fit (Daniel, TRN-40; coordinator 11:16Z): a start the fit puts ahead of the frontier
+    (its own gain C_eff(l0)/C0 1.5) has rows at every target, each below its l0, so a run that only holds l0 reaches
+    none (ref-data's 11:09Z LOOPHOLE); a start at or below the fit's E has no rows, and a data without a fit none."""
     rich = LAW | {"A": LAW["A"] * 1.5 ** 0.3}
     assert FF.gain(rich, 1.2, C0) == pytest.approx(1.5)
-    ds = plots.frame(AP.build(info(rich), "test"))
-    assert {d["gain_target"] for d in ds if d["start"] == plots.start_label(SHAPE)} == {2, 11}
+    ds = [d for d in plots.frame(AP.build(info(rich), "test")) if d["start"] == plots.start_label(SHAPE)]
+    assert {d["gain_target"] for d in ds} == set(AP.GAINS)
+    for d in ds:
+        target = FF.target(rich, 1.2, d["gain_target"])
+        assert target < 1.2 and (d["reached"] == "yes") == (d["end_loss"] <= target)
+        assert d["gain"] == pytest.approx(FF.gain_from(rich, 1.2, d["end_loss"]))
+    assert {d["start"] for d in plots.frame(AP.build(info(LAW | {"E": 1.25}), "test"))} == {plots.start_label(SHAPE2)}
     assert AP.build(info(None), "test")["rows"] == []
 
 
-def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0) -> list:
+def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0, basis=None, served=None) -> list:
     d = dict.fromkeys(AP.COLUMNS) | {"start": start, "gain_target": g, "family": family, "reached": reached, "p": p,
-                                    "rho_default": rho, "gain": gain, "record": rec, "data": data, "C_gates": gates}
+                                    "rho_default": rho, "gain": gain, "record": rec, "data": data, "C_gates": gates,
+                                    "basis_default": basis, "rho_served": served}
     return [d[c] for c in AP.COLUMNS]
 
 
 def test_the_coverage_is_the_least_p_reached_row_else_the_best_failed_attempt_else_empty():
     """Per gain target, data and decade of ρ (an infinite ρ in the last): the reached row with the least p, else the
-    failed attempt with the greatest gain, else EMPTY, which the table and the board line both say."""
-    rows = [row("s", 2, "adapter", "yes", 3.0, 50.0, 2.1, "a"), row("s", 2, "full", "yes", 1.0, 20.0, 2.0, "b"),
+    failed attempt with the greatest gain, else EMPTY, which the table and the board line both say, with the reached
+    cells' ρ at the registered serving block beside the console's default."""
+    rows = [row("s", 2, "adapter", "yes", 3.0, 50.0, 2.1, "a"),
+            row("s", 2, "full", "yes", 1.0, 20.0, 2.0, "b", served=1.5),
             row("s", 2, "adapter", "no", 0.5, 2.0, 1.5, "c"), row("s", 2, "adapter", "no", 0.2, 3.0, 1.7, "d"),
-            row("s", 2, "seed", "no", 0.9, None, 1.1, "e"), row("s", 2, "full", "yes", 2.0, 9.0, 2.5, "f"),
+            row("s", 2, "seed", "no", 0.9, None, 1.1, "e"), row("s", 2, "full", "yes", 2.0, 9.0, 2.5, "f", served=1.0),
             row("s", 11, "adapter", "no", None, 5e3, 1.9, "g")]
     cov = AP.coverage({"columns": AP.COLUMNS, "rows": rows})
     assert len(cov) == len(AP.GAINS) * len(panels.DATA) * len(AP.DECADES)
@@ -316,12 +336,110 @@ def test_the_coverage_is_the_least_p_reached_row_else_the_best_failed_attempt_el
     table = [line for line in md.splitlines() if line.startswith("| ") and "gain target" not in line]
     assert len(table) == len(AP.GAINS) * len(panels.DATA) and sum(t.count(f"**{AP.EMPTY}**") for t in table) == 32
     assert "| 2 | v3 (no fit) | " + " | ".join([f"**{AP.EMPTY}**"] * len(AP.DECADES)) + " |" in table
+    served = ("Reached cells' rho: v2.3-pilot 9 to 20 at the console's default, 1 to 1.5 at the registered serving "
+              "block (c 3.01e+13 gates, k 145,568 bits).")
     assert "| 2 | v2.3-pilot | yes p 1, rho 2.5" not in md and md.endswith("32 of 36 cells EMPTY; 2 hold only failed "
-                                                                          "attempts.\n")
-    assert "| 2 | v2.3-pilot | yes p 2, rho 9 (s, None, f) | yes p 1, rho 20 (s, None, b) | **EMPTY** |" in md
+                                                                          f"attempts.\n{served}\n")
+    assert "| 2 | v2.3-pilot | yes p 2, rho 9, served 1 (s, None, f) | yes p 1, rho 20, served 1.5 (s, None, b) | " in md
     line = AP.board_line(cov, fits, "T", "art:x")
     assert "g 2 v3: no fit, all 6 EMPTY" in line and "g 11 v2.3-pilot: EMPTY | EMPTY | EMPTY | no gain 1.9 | " in line
-    assert line.endswith("32 of 36 cells EMPTY.")
+    assert line.endswith(f"32 of 36 cells EMPTY. {served}")
+
+
+def test_an_unmeasured_rho_is_in_no_decade_and_an_infinite_one_in_the_last():
+    """Under reading A a row whose ρ no kind valid on its own measures has rho_default null with basis `unmeasured`:
+    the coverage puts it in no decade, never with reading B's null, an infinite ρ in the last, and the table and the
+    board line count it."""
+    rows = [row("s", 2, "adapter", "yes", 1.0, None, 2.1, "unmeasured", basis=AP.UNMEASURED),
+            row("s", 2, "full", "no", 0.5, None, 1.5, "inf", basis="target"),
+            row("s", 2, "full", "yes", 2.0, 37.5, 2.2, "decoding", basis="decoding")]
+    p = {"columns": AP.COLUMNS, "rows": rows}
+    cov = AP.coverage(p)
+    held = {c["record"]: (c["rho_decade"], c["rows"]) for c in cov if c["state"] != "empty"}
+    assert held == {"inf": ("1e5+", 1), "decoding": ("10", 1)} and AP.unmeasured_rows(p) == 1
+    assert [AP.decade(None), AP.decade(None, "target"), AP.decade(None, AP.UNMEASURED)] == [5, 5, None]
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert AP.coverage_md(cov, fits, "T", unmeasured=1).endswith(
+        "1 row with no measured rho under reading A (rho_default null, basis_default unmeasured), in no decade.\n")
+    assert "reading A" not in AP.coverage_md(cov, fits, "T") + AP.board_line(cov, fits, "T", None)
+    assert AP.board_line(cov, fits, "T", None, unmeasured=2).endswith(" 2 rows unmeasured under reading A, in no "
+                                                                     "decade.")
+
+
+def test_a_row_resting_on_a_stub_is_marked_and_kept_out_of_the_coverage_the_cuts_fronts_and_the_figure(tmp_path,
+                                                                                                    monkeypatch):
+    """A row whose ρ rests on a stub input (`estimated`'s stub tag; coordinator 08:09Z item 2) has basis_default
+    `stub`, whatever its ρ: no decade holds it, the cut's fronts leave it out at every tier and the figure doesn't plot
+    it, while the stored table keeps it and the table and board line count it."""
+    stub = {"tau_bits": "stub: no count of the update's token-side bits"}
+    rows = [r | {"formalism": r["formalism"] | {"labels": r["formalism"]["labels"] | stub}} if r["run_id"] == "lora"
+            else r for r in ledger_rows()]
+    shapes = {"s1": SHAPE, "s2": SHAPE2}
+    scored = plots.load(rows, ("pin",), shapes)[0]
+    p = AP.build({"starts": FF.starts(scored, shapes, RATE), "fits": {"v3": None, "v2.3-pilot": LAW}}, "test")
+    ds = plots.frame(p)
+    lora = [d for d in ds if d["record"].startswith("lora@")]
+    assert len(lora) == len(AP.GAINS) and all(d["rho_default"] is not None for d in lora)
+    assert all(d["basis_default"] == AP.STUB and "tau_bits:stub" in d["estimated"] for d in lora)
+    assert all(d["basis_default"] != AP.STUB for d in ds if d not in lora)
+    assert AP.decade(2.0, AP.STUB) is None and AP.unmeasured_rows(p, AP.STUB) == len(lora)
+    cov = AP.coverage(p)
+    assert sum(c["rows"] for c in cov) == len(ds) - len(lora)
+    assert not any((c.get("record") or "").startswith("lora@") for c in cov)
+    rec, held = AP.COLUMNS.index("record"), {c["row"] for c in cov if c["row"] is not None}
+    for tier in AP.TIERS:
+        assert not any(r[rec].startswith("lora@") for r in AP.kept(p["rows"], tier, held))
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert "3 rows rest on a stub input (basis_default stub), in no decade." in AP.coverage_md(cov, fits, "T", stubs=3)
+    assert AP.board_line(cov, fits, "T", None, stubs=3).endswith(" 3 rows rest on a stub, in no decade.")
+    plotted, real = set(), AP.plt.Axes.plot
+
+    def plot(ax, *a, **k):
+        if len(a) >= 2 and all(isinstance(x, float) for x in a[:2]):
+            plotted.add(a[:2])
+        return real(ax, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    AP.figure(p, tmp_path)
+    points = {(d["p"], d["rho_default"]) for d in ds if d["p"] is not None}
+    assert plotted and plotted <= points and not plotted & {(d["p"], d["rho_default"]) for d in lora}
+
+
+def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_and_follows_published_to_reading_a(
+        monkeypatch):
+    """rho_default and basis_default are te_core.formalism's `published` at the console's default (`AP.CONSOLE`), the
+    one rho_console is at, and rho_served is it at the registered serving block (te_core.panels' `SERVED`): reading
+    B's token form or Fit's until formalism.READING_A, then the one bound's max with its binding kind, null with basis
+    `unmeasured` where no kind valid on its own is measured. A stand-in `published` reads A on two runs: nothing
+    measured on lora's, decoding binding on never's."""
+    real, at = formalism.published, []
+
+    def published(m, c=None, k=None, reading=None):
+        at.append(AP.CONSOLE[1] if k is None else k)
+        one = {8e6: {"rho": None, "binding_kind": "none", "rests_on": "unmeasured"},
+               1e6: {"rho": 37.5, "binding_kind": "decoding", "rests_on": formalism.RESTS_ON_CELL["decoding"]}}
+        return real(m, c, k, reading) | ({"reading": "A"} | one[m.delta_bits] if m.delta_bits in one else {})
+
+    monkeypatch.setattr(formalism, "published", published)
+    p = AP.build(info(), "test")
+    ds, by = plots.frame(p), {r["id"]: r for r in ledger_rows()}
+    assert set(at) == {AP.CONSOLE[1], panels.SERVED[1]} and {"lora", "never"} <= {d["record"].split("@")[0] for d in ds}
+    for d in ds:
+        run = d["record"].split("@")[0]
+        got = (d["reading"], d["rho_default"], d["basis_default"], d["rho_served"])
+        if run == "lora":
+            assert got == ("A", None, AP.UNMEASURED, None) and d["rho_console"] is None
+        elif run == "never":
+            assert got == ("A", 37.5, "decoding", 37.5) and d["rho_console"] == 37.5
+        else:
+            r = by[d["record"].replace("@", "-")]
+            m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
+            v, s = formalism.at(m, *AP.CONSOLE), formalism.at(m, *panels.SERVED)
+            assert got == ("B", AP.finite(v["rho"]) and pytest.approx(v["rho"]), "fit" if v["fit"] else "target",
+                           AP.finite(s["rho"]) and pytest.approx(s["rho"]))
+    cov, lora = AP.coverage(p), sum(d["record"].startswith("lora@") for d in ds)
+    assert lora == len(AP.GAINS) == AP.unmeasured_rows(p) and sum(c["rows"] for c in cov) == len(ds) - lora
+    assert not any((c.get("record") or "").startswith("lora@") for c in cov)
 
 
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):
@@ -430,15 +548,21 @@ def served_as(p: dict, version: str | None, rows: list | None = None, source: st
 
 
 def test_a_version_switch_never_empties_a_populated_panel():
-    """A data's served rows stay where they are at a newer te_core, or at an older one whose coverage cells there this
-    build fills fewer of (coordinator 07:58Z); the same te_core's are replaced, and a data with no served rows takes
-    this build's. A panel from before the te_core cell is at the version its source names."""
+    """A data's served rows stay where they are at a newer te_core, or at an older one with a run there this build has
+    no row for (coordinator 07:58Z); the same te_core's are replaced, and an older one's where this build has every
+    run, though its coverage fills fewer cells (every rho 1 here, as reading A's partial rows read; coordinator 11:51Z).
+    A data with no served rows takes this build's. A panel from before the te_core cell is at the version its source
+    names."""
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
     mine = tuple(map(int, AP.VERSION.split(".")))
     newer, older = f"{mine[0] + 1}.0", f"{mine[0] - 1}.9"
     one = [r for r in p["rows"] if r[AP.COLUMNS.index("record")] == "never@1"][:1]
-    assert one and AP.filled(p, "v2.3-pilot") > AP.filled({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") > 0
+    assert one and AP.runs(p, "v2.3-pilot") > AP.runs({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") == {"never"}
     sparse = p | {"rows": one}
+    rho = AP.COLUMNS.index("rho_default")
+    flat = p | {"rows": [r[:rho] + [1.0] + r[rho + 1:] for r in p["rows"]]}
+    cells = [sum(c["state"] != "empty" for c in AP.coverage(q) if c["data"] == "v2.3-pilot") for q in (flat, p)]
+    assert cells[0] < cells[1] and AP.kept_data(flat, served_as(p, older)) == []
     assert AP.kept_data(p, None) == AP.kept_data(p, served_as(p, AP.VERSION)) == []
     assert AP.kept_data(sparse, served_as(p, AP.VERSION)) == []
     assert AP.kept_data(p, served_as(sparse, newer)) == ["v2.3-pilot"]
