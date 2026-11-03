@@ -5,8 +5,11 @@ fingerprints (the first 8 bytes of SHA-512), and the row each instance reads.
 The drawn cases stage one statement each with the stager's own code on a small consistent session (openings that climb to
 their tops, both reps' running sums on one chain, the inner prover's message rows registered as ``rec-c<i>``): a level
 (`rec_outer.stage` at the stager's `rec_vstage.coefficients` and `rec_outer.Chain.build`), a part of the algebra
-(`rec_vstage._stage_part`, reading what `rec_vstage.stage` hands it) and a cap (`rec_cap.stage`). The prover's fresh salts
-(a level's ``row`` and ``aux``) are the case's, handed to the stager through ``hm96``'s salt source. With
+(`rec_vstage._stage_part`, reading what `rec_vstage.stage` hands it) and a cap (`rec_cap.stage`). The link table's part
+(`rec_vstage.link_part`) is staged over drawn populations (`rec_vstage.drawn_rows`): links both ways between two units, its
+forgery, a unit reading its own output, and a table with a filler row. The prover's fresh salts (a level's ``row`` and
+``aux``, the link part's ``xyr``, ``raux``, ``xyw`` and ``waux``) are the case's, handed to the stager through ``hm96``'s
+salt source. With
 ``VERITY_VSTAR_IN_DEPLOYED=1`` two recorded sessions are staged with `rec_vstage.stage` and each statement held to Lean's:
 `rec-coins`' (16,16,8) session, whose leaves are plain, at every level, cap and part of the algebra; and rec-algebra's
 fixture session (the deployed algebra shape, m = 25, k_log = 22) at every part of the algebra and every level's cap (its
@@ -14,6 +17,7 @@ openings are hm96 leaves, whose levels the stager refuses to stage)."""
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -30,6 +34,9 @@ from hypothesis import strategies as st
 from verity_difftest import settings
 from verity_flock import rec_algebra as A
 from verity_flock import rec_cap as RC
+from verity_flock import rec_circuits as RCC
+from verity_flock import rec_link as LK
+from verity_flock import rec_links as RLK
 from verity_flock import rec_live as RL
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
@@ -245,6 +252,119 @@ def test_a_wrong_input_moves_the_fingerprints(server):
     def ports(v):
         return json.loads(server.call("part_in", v)[1])["ports"]
     assert [nm for (nm, a), (_, b) in zip(ports(honest), ports(bad), strict=True) if a != b] == ["aux"]
+
+
+# --- the link table's part ------------------------------------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def link_cache(tmp_path_factory):
+    """`rec_circuits`' cache, so a module lowers and composes each shape's `RecLink{UB, PB}` once."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv(RCC.ENV, str(tmp_path_factory.mktemp("rec-circuits")))
+        yield
+
+
+def link_src(rows: SimpleNamespace, links: list, salts: list[bytes], fresh: dict) -> dict:
+    """`VStar.In.Src` with the link table and no other part: per table row (`rec_links.table`) the row under its registered
+    salt, and the reader's and the writer's digest, salt and siblings in the input and output rows' trees (`rec_link.Tree`
+    over the rows' ``b || c``; a filler's unit 0's row 0 of each), then the two roots; ``fresh`` the part's fresh salts by
+    port."""
+    n_out = len(rows.ports) - rows.n_in
+    PB = LK.bits_for(max(rows.n_in, n_out))
+    D = LK.depth(LK.bits_for(rows.n), PB)
+
+    def tree(lo: int, k: int) -> LK.Tree:
+        return LK.Tree({LK.index(u, p, PB): LK.leaf(rows.bc[u][lo + p]) for u in range(rows.n) for p in range(k)}, D)
+
+    def side(t: LK.Tree, u: int, p: int, lo: int) -> tuple:
+        return rows.x[u][lo + p].hex(), rows.y[u][lo + p].hex(), [s.hex() for s in t.path(LK.index(u, p, PB))]
+    tin, tout = tree(0, rows.n_in), tree(rows.n_in, n_out)
+    table = []
+    for i, row in enumerate(RLK.table(links)):
+        lk = links[i] if i < len(links) else RLK.LinkEntry(0, 0, 0, 0)
+        xr, yr, rsibs = side(tin, lk.reader, lk.port, 0)
+        xw, yw, wsibs = side(tout, lk.writer, lk.out, rows.n_in)
+        table.append({"trow": [RLK.words(row), salts[i].hex()], "xr": xr, "yr": yr, "rsibs": rsibs, "xw": xw, "yw": yw,
+                      "wsibs": wsibs})
+    return {"msgs": [], "openings": [], "tops": [], "acc_salts": [], "kappa": [], "eq_a": [], "vs": [],
+            "fresh": {S.LINKS_DIR: {p: [x.hex() for x in xs] for p, xs in fresh.items()}},
+            "links": table, "link_roots": [tin.root.hex(), tout.root.hex()]}
+
+
+def staged_link(seed: int, units: int, n_in: int, n_out: int, links: list, forge: str | None = None) -> dict:
+    """The link table's part over a drawn population (`rec_vstage.drawn_rows`) staged with `rec_vstage.link_part`: the input
+    Lean reads (``src`` over the table the stager registered, forged or not, the part's program's SHA-512 and the
+    statement), the stager's ports kept under it for `stager`. The table's registered salts and the part's fresh salts are
+    the case's."""
+    rows = S.drawn_rows(seed, units, n_in, n_out, links)
+    g, N = random.Random(f"link-salts-{seed}"), RLK.grid(len(links))
+    salts = [g.randbytes(SALT) for _ in range(N)]
+    fresh = {p: [g.randbytes(SALT) for _ in range(N)] for p in LK.ROWS[1:]}
+    with tempfile.TemporaryDirectory() as t:
+        with _fresh([x for p in LK.ROWS[1:] for x in fresh[p]]):
+            res = S.link_part(rows, links, Path(t), forge, evaluate=False, salts=salts)
+        table, d = list(links), Path(t) / S.LINKS_DIR
+        if forge is not None:
+            table[0] = dataclasses.replace(table[0], writer=res["forged_link"]["forged_writer"])
+            d = Path(t) / f"forged-{forge}" / S.LINKS_DIR
+            assert table[0] != links[0] and res["holds"][0] is False
+        value = {"src": link_src(rows, table, salts, fresh), "prog": res["program_sha512"],
+                 "stmt": {"kind": "link", "UB": res["UB"], "PB": res["PB"], "N": res["instances"]}}
+        _STAGED[D.canonical(value)] = ports_of(d)
+    return value
+
+
+#: two units, each one's input row reading the other's output row: `RecLink{1, 1}` over two rows
+BOTH_WAYS = [RLK.LinkEntry(1, 0, 0, 0), RLK.LinkEntry(0, 1, 1, 0)]
+
+
+def _flip(h: str) -> str:
+    return f"{int(h[:2], 16) ^ 1:02x}" + h[2:]
+
+
+@pytest.mark.slow
+def test_link_in_agrees_with_the_stagers_inst_bin(server, link_cache):
+    """The link table's part (`VStar.In.linkIn`) on two drawn populations whose links run both ways and on the forgery
+    (``forge="link"``: the first row names a writer whose output is not its reader's row): Lean's port inputs are the
+    stager's ``inst.bin``, port for port; and one bit of a sibling, a salt or a root moves exactly the port that reads it.
+    About a minute: the stager writes ``inst.bin`` only through `RecLink{1, 1}`'s composed circuit."""
+    honest = [staged_link(seed, 2, 2, 1, BOTH_WAYS) for seed in (1, 2)]
+    for v in honest:
+        assert D.replay(PART_IN, v, server)[0] == "output"
+    assert D.replay(PART_IN, staged_link(3, 2, 2, 1, BOTH_WAYS, forge="link"), server)[0] == "output"
+
+    def ports(v):
+        return json.loads(server.call("part_in", v)[1])["ports"]
+
+    def moved(*path) -> list[str]:
+        """The ports whose fingerprints move when one bit of ``src`` at ``path`` flips."""
+        bad = json.loads(json.dumps(honest[0]))
+        *at, last = path
+        o = bad["src"]
+        for k in at:
+            o = o[k]
+        o[last] = _flip(o[last])
+        return [nm for (nm, a), (_, b) in zip(ports(honest[0]), ports(bad), strict=True) if a != b]
+    assert [nm for nm, _ in ports(honest[0])] == [*LK.ROWS, "rin", "rout"]
+    assert moved("links", 0, "trow", 1) == ["trow"]
+    assert moved("links", 0, "xr") == ["xyr"]
+    assert moved("links", 1, "rsibs", 0) == ["raux"]
+    assert moved("fresh", S.LINKS_DIR, "xyw", 1) == ["xyw"]
+    assert moved("link_roots", 1) == ["rout"]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("units, links, shape", [
+    (1, [RLK.LinkEntry(0, 0, 0, 0)], (0, 0, 1)),
+    (18, [RLK.LinkEntry(u + 1, 0, u, 0) for u in range(17)], (5, 0, 18))], ids=["self", "fillers"])
+def test_link_in_agrees_at_the_edges(server, link_cache, units, links, shape):
+    """The link table's part at its edges, Lean's port inputs the stager's ``inst.bin``: one unit reading its own output
+    (`RecLink{0, 0}`: trees of depth 0, so no siblings and ``raux`` and ``waux`` all padding), and seventeen links down a
+    chain of eighteen units (`RecLink{5, 0}`), the first table with a filler row (`rec_links.grid`), which opens unit 0's
+    row 0 of each tree. About a minute each: the stager writes ``inst.bin`` only through the shape's composed circuit."""
+    v = staged_link(len(links), units, 1, 1, links)
+    assert (v["stmt"]["UB"], v["stmt"]["PB"], v["stmt"]["N"]) == shape
+    assert D.replay(PART_IN, v, server)[0] == "output"
 
 
 def top_sizes(v: dict) -> dict:

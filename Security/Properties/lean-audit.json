@@ -419,6 +419,10 @@
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
+   "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
+   "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2578,6 +2582,59 @@
    "assumptions": [],
    "type_hash": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab"
   },
+  "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
+   "owner": "@proofs",
+   "signature": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses : Properties.Pouw.Credit.GroupedDrawMisses"],
+   "assumptions": [],
+   "type_hash": "da2f768e700e9964667fcfd3102973e9822b21487fdf0713729e3cfefb31f876"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest :",
+    "  Exists fun k' =>",
+    "    And (Eq (PouwCheck.Credit.strata Properties.Pouw.Credit.lanesLayout) (Except.ok Properties.Pouw.Credit.lanesStrata))",
+    "      (And",
+    "        (Eq",
+    "          (PouwCheck.Credit.law Properties.Pouw.Credit.lanesStrata",
+    "            (Lean.instToJsonNat.toJson Properties.Pouw.Credit.lanesK))",
+    "          (Except.ok Properties.Pouw.Credit.lanesLaw))",
+    "        (And",
+    "          (Eq",
+    "            (PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork Properties.Pouw.Credit.lanesStrata).cast",
+    "              (Flock.Draw.totalWork Properties.Pouw.Credit.lanesStrata).cast 1)",
+    "            (Except.ok k'))",
+    "          (And (instLENat.le k' Properties.Pouw.Credit.lanesK)",
+    "            (And",
+    "              (∀ (u : Nat),",
+    "                instLENat.le",
+    "                  ((Finset.filter (fun b => Eq (Properties.Pouw.Credit.lanesLeaf b) u)",
+    "                        Properties.Pouw.Credit.lanesBlocks).sum",
+    "                    fun b => Properties.Pouw.Credit.lanesWork b)",
+    "                  (Properties.Pouw.Strata.unitWork Properties.Pouw.Credit.lanesStrata u))",
+    "              (Rat.instLE.le (instHMul.hMul (1 / 2) (Flock.Draw.totalWork Properties.Pouw.Credit.lanesStrata).cast)",
+    "                (Properties.Pouw.Credit.lanesBlocks.sum fun b => Properties.Pouw.Credit.lanesWork b).cast)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "22c24168fd30050bfbd06947eda724b7bc57b675708e4e00bde4044b8ba75692"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Pouw.RelativeSecurity.prob fun g =>",
+    "        Exists fun d =>",
+    "          And (Eq (Properties.Pouw.Credit.drawnOn Properties.Pouw.Credit.idleLaw g) (Option.some d))",
+    "            (∀ (b : Nat),",
+    "              SetLike.instMembership.mem Properties.Pouw.Credit.lanesBlocks b →",
+    "                Not (Array.instMembership.mem d (Properties.Pouw.Credit.lanesLeaf b))))",
+    "      (1 / 256).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "80b0ef6fbe36cb228e5c931c991f496584a0ff4cce308960fc4e00f5fd0a8c0e"
+  },
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Credit.SecurityProofs.workDrawMisses : Properties.Pouw.Credit.WorkDrawMisses"],
@@ -4449,6 +4506,10 @@
    "Properties.NetworkPeriod.rowsStateTied": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
+   },
+   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
+    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -4513,7 +4574,9 @@
    "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod over a finite set S of the sampling block's tile strata, one a contraction K (16,384 and 65,536 in H1's served layout), each s in S with its own N_s = |stratum sigma s|, K_d = k s, declared circuit, rho s and Lambda_s = j10rRate (k s) (rho s), so its own eps_s(j); the fixed words and the credits are summed over S and the error is the union bound, the sum over S of each stratum's delta_s + n(delta_bind + delta_ks) (the strata's permutations are independent coordinates of the draw, but every stratum's game reads the window's one round coin and the prover adapts across strata, so no sharper bound is claimed). Not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, as the one-stratum statement's. Period-wide premises, on the period's coins (StrataCoin): RegisteredBeforeDraw and SaltIsLiveCoin, as the one-stratum statement's (one registration and one salt a window), and StrataDrawIsCoin, listed under assumptions, in place of TileDrawIsCoin: the window's drawn proof blocks are exactly the union over S of the strata's coordinates (TileDrawIsCoin read per stratum is false at a window over two non-empty strata), a code fact once the verifier draws the tiles inside the stratified draw, one stratum a K (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin). Per stratum, at stratum s's view (pathsAt): the one-stratum statement's other premises, TileServiceSound, SharedNoiseLucks and UnitFixed among them. Proved from CircuitCreditPeriod at each stratum's tileRun, as Proofs.Pouw.PeriodJ10R applies it, then the union bound (Proofs.Pouw.PeriodJ10RStrata). Honest: HonestStrata.strata_meets_period, strata_meets_stratum and strata_credit (HonestJ10R's instance at every stratum, every premise met); nontrivial: HonestStrata.strata_nontrivial (at the verdict that credits every window, the provers that fix no word break the bound once Lambda_s ln(1/delta_s) < n at each stratum) (Proofs.Pouw.PeriodJ10RStrata.Honest).",
    "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
-   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "lemma: WipeSigned with a check that accepts everything in place of the wipe's compiled check is false, at the session of wipeSigned_nontrivial"
+   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "lemma: WipeSigned with a check that accepts everything in place of the wipe's compiled check is false, at the session of wipeSigned_nontrivial",
+   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": "completeness: GroupedDrawMisses's honest lemma: its premises hold at the lanes window, sixteen 32 × 32 leaves at K = 2048 each proved as its 32 lanes and their combine: strata and law accept it at K = 8, kPrime answers K′ ≤ 8 at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more than the leaf, and the blocks do at least ε of the work, so GroupedDrawMisses is not vacuous",
+   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -8502,6 +8565,8 @@
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -9182,6 +9247,9 @@
     "Properties.Pouw.Commit.drawShape",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -12617,7 +12685,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "678c5fdabd992a9b89d604522c361fdeea7399a377e638a232c46c11f509cea0",
+   "digest": "525bfa9829d35dc789f0404fa9d4af8ff0d156085a37ac78f9f4ebb651ec4b2e",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -12690,7 +12758,7 @@
     "PouwCheck.Credit.OK_SALT_TAG": "8eb47397e24bc542430c73aaf5400898062d05f690a0f6671930669c4013cb08",
     "PouwCheck.Credit.OK_VALUE": "69e8812d7b1951b2e30edd8097611583f1ef36d3fbbcf9650097b8317d440ded",
     "PouwCheck.Credit.OTHER_WEIGHTS": "a30230fb307ac8e627a9995cbd6565e1be7889dd360687a12242f800140ee74e",
-    "PouwCheck.Credit.PINNED_MODELS": "fd3eb97af58b256d4f05059ad9de624584fe6b20b02162ee8f78f47bd60de89c",
+    "PouwCheck.Credit.PINNED_MODELS": "b808676e411f4d1b44a5c1c69f459d6c09396140c625c70e3f7fa9bece86a2d7",
     "PouwCheck.Credit.PROOFS_FORM": "a34c3d753408e12158333176c2b653925193f364e9db1ec632e5c020fdffdb95",
     "PouwCheck.Credit.PROOF_KEYS": "3b4668e1aed14a578d01d42565b991e0578fdf218d009bc7c54498faa3920569",
     "PouwCheck.Credit.RECORD": "1458245a2f327aefcb19f2de32306b24e47f7e6114e79f61cde7e548c4f4fee8",
@@ -12835,6 +12903,8 @@
    "guarantees": [
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -12992,6 +13062,8 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -13094,6 +13166,8 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
@@ -13428,6 +13502,8 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -13480,6 +13556,8 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -13533,6 +13611,8 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
@@ -14972,17 +15052,29 @@
    ]
   },
   "Properties.Pouw.Credit": {
-   "digest": "1aedaa0e6453c1fdcb9f8beed5d9efd94ae9268e72df335ad636976f309ba0bc",
+   "digest": "a28c312a25d5cff769c8291cdd4bbdbf6d3d5398046fd3b06c2e68b32b13b15c",
    "definitions": {
     "Properties.Pouw.Credit.EpsAtSound": "3caafbe985add6486d8909250ef51f8a50b8bcb8a8ac14694f9881c6cd0e1a6b",
     "Properties.Pouw.Credit.EstablishedSound": "1d815e5771c3fe064a93018caec486eb526d4fda385bdd49ea43b75494b3058f",
+    "Properties.Pouw.Credit.GroupedDrawMisses": "5ad34b1ad2d85830eb1bdce14e9d4c0a947a2240ecf67ea5510cab4ef70579f3",
     "Properties.Pouw.Credit.WorkDrawMisses": "e6c933f9295cb759719c165f019d895fea0a0ab121b8d17f518e3aaac425761f",
     "Properties.Pouw.Credit.creditedWork": "a22b8f2c576c22410c362913d19a734ee4731a5ec3d907535822c3c160ff9499",
-    "Properties.Pouw.Credit.drawnOn": "c780159f9e3c5c48a9a2c6a1d04ffa2e8908e5eb3096d128bdf3cae888d6c512"
+    "Properties.Pouw.Credit.drawnOn": "c780159f9e3c5c48a9a2c6a1d04ffa2e8908e5eb3096d128bdf3cae888d6c512",
+    "Properties.Pouw.Credit.idleLaw": "dda170ee95af6e71723ca95283f619f61231795a43e80e69e094a13b1ef72c25",
+    "Properties.Pouw.Credit.lanesBlocks": "206c82e3b26034623ad528528d1ac286785cd3cfe19318c1ee469c4fcd026e7f",
+    "Properties.Pouw.Credit.lanesK": "199ac437d5f60fd2b5d429f3ba0e41930aecfe1613922c21b5ec21fa15930258",
+    "Properties.Pouw.Credit.lanesLaw": "6697dcba627f6b9de6a25fe90a16d45c64ca29ca7ad5351fee2a82de65851ffa",
+    "Properties.Pouw.Credit.lanesLayout": "8ed3a3072dc6b7157b5aac92644f1432c49689237c244a593a0485a65bae84c8",
+    "Properties.Pouw.Credit.lanesLeaf": "2d70a62a1287a0ed591821ecddb04cbd0367612fb03bc4f72373a98ceb9a3764",
+    "Properties.Pouw.Credit.lanesStrata": "3f1fb25ac6a3ee92cd63371e2fff0a4e8793f9178b976820134a55789a97e58d",
+    "Properties.Pouw.Credit.lanesWork": "096d417fd4a08b7db5e9fa3f8a685f40c1d609c3eccbb317a5111a1860e01a36"
    },
    "guarantees": [
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses"
    ]
   },
@@ -15211,6 +15303,8 @@
    "guarantees": [
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Strata.strataTile"
    ]
@@ -15533,6 +15627,8 @@
    "guarantees": [
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
@@ -16497,7 +16593,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "6dfacbb9e12e457e42b6acdde13a89ec77fc865b49a078e03ce5c5f0e8f3ed67",
+   "digest": "36682fe529678d648400feff274fb99639831365449c2e2a381e084dd930b0c6",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.commitment": "468002e4d32fd36d92c016491502672fbffc8b638777f35e073eb3b379bd9b63",
@@ -16547,18 +16643,18 @@
     "SampledProofs.Challenger.MAX_LOG_LINES": "0abc5b493ab131beda1bf4cf4757905e94ae91b927b6c30c58a31585e4cf2849",
     "SampledProofs.Challenger.MAX_MINUTES": "87ffbb65e0a2f92cc0a1b5b4c9f93f07d47afaf6c708cbe87669055dbb28dcd1",
     "SampledProofs.Challenger.MAX_SESSION_ID": "8e70cd87d0c2190a7730d52b199138b0fdaa4aaf528f76a683704174db0a1310",
+    "SampledProofs.Challenger.MonitoringPeriod": "7de68704218c723e37bf48d4b8bd6676d5573da01b2d6fd66421213a9e20bf74",
+    "SampledProofs.Challenger.MonitoringPeriod.cap": "71cf18d1be537f87f4de644df91cf0fcb5be0d50bc66cb0661ded2076a44f8c7",
+    "SampledProofs.Challenger.MonitoringPeriod.circuit": "b04f1193cd8ff1827e80c38fb92bf29d9d5eb60a395771f3fa04a932a283c5c5",
+    "SampledProofs.Challenger.MonitoringPeriod.closed": "783d3c407369c7ea887d26790e1b5c9851d6a199bac14c83e6d8a141622c754b",
+    "SampledProofs.Challenger.MonitoringPeriod.lane": "57c65ddb528ac15615f0761a3de94f05c8602061e0d85f5960a55231766ee2f2",
+    "SampledProofs.Challenger.MonitoringPeriod.name": "98fcc7d4c12a0b484fe779e317a44a76b3a5ec41600629556ac88c12174b141b",
+    "SampledProofs.Challenger.MonitoringPeriod.windows": "a04265d82ad721052f607a36985017b1312d896d86e3fadf84b4d9cb65898388",
     "SampledProofs.Challenger.NO_AUDIT": "947817ec3b6ac37fe0c1a27c1be4093d246b638ff3e60fd7c5aeb42b1a74ec02",
     "SampledProofs.Challenger.NO_CLOSE": "5dfcc6bec5ea95c2f537eb34895b1e0248f4587257f127d840959f2a0c864cce",
     "SampledProofs.Challenger.NO_MAIN": "890770b3c31168ab379dc80eaa66784849e7f7d6402e360e4912d02eea1aa1b2",
     "SampledProofs.Challenger.NO_PINS": "fbcc969e9a95c01229806609181d5d5014758c97d08fc7683600a6b3c95cb15b",
     "SampledProofs.Challenger.PINS_FORM": "0856ff128adf4d02e0cc9a4a4b0125411b71e67502580551c7775fbea4855b19",
-    "SampledProofs.Challenger.Period": "d94c84ab6e651d546ad3096b9da8c30e391be81dbec935fa49c475f5590e66e5",
-    "SampledProofs.Challenger.Period.cap": "22ecd839f85f56953dc70adab22293fe2acd4e93784bd74795c7372ac92f72b7",
-    "SampledProofs.Challenger.Period.circuit": "86f2d2f3e1d075b2d3faf58c08f57bf961db7092f1c734a5eeb9a709d79c8aa2",
-    "SampledProofs.Challenger.Period.closed": "09c847a874faf7bd62b51adc1731828d81018cda3c641700a1c3f900cd3ea78f",
-    "SampledProofs.Challenger.Period.lane": "199a2acfc4214d9ab18ca97fc20c980987f3c02754ce36608ed25085afc1c7ed",
-    "SampledProofs.Challenger.Period.name": "62033cdcc48a96f7c218ee5ed31ee7e26f8d3a45c4bf0aca6d7ff33e6a931991",
-    "SampledProofs.Challenger.Period.windows": "022a38030f0ce02a0b6633cd581e30b9b10be3ca4346fb350810f1aa7f38ac55",
     "SampledProofs.Challenger.RECORD_FILE": "f4329e2bb6cf54fdd62465ab4ea3e60c735f91214149dbb6da675c9637739e25",
     "SampledProofs.Challenger.RESERVED": "c220171ba3a3fb898f8ec97fc04868d5d3876adcae3c4ddfaa41d28cf6f1d96e",
     "SampledProofs.Challenger.Reserve": "48ce0f2d849e3fb1661a3c6042c7c0345368e68ddf574855a6a841133aef7c44",
@@ -16575,9 +16671,9 @@
     "SampledProofs.Challenger.Win.opened": "702e6d338563166ebf5bf755e1f4eba982a8b27620b0f622a32fbdd439933f0a",
     "SampledProofs.Challenger.Win.root": "d145218c1794c4273308c84e088d74538a2b9f189a5bd47594d2e9464da9853c",
     "SampledProofs.Challenger.ZERO": "e7f51c66d4d20f842a81843feb761873e1190db918e1f77795db1bac168aa4f9",
-    "SampledProofs.Challenger.auditedOpen": "280c02bea47d3390683214a737e67a082d78fc6f6b7c75050d95dad9e42aa947",
+    "SampledProofs.Challenger.auditedOpen": "19c1083df2cef488fcc77f1f226806dbd0683acce77d6bd92c09c1ce313b203b",
     "SampledProofs.Challenger.auditedSession": "c11aee02c4ac7c235d8a00bb5c3eda93b5c80fc763aee3142b480db67a0434ac",
-    "SampledProofs.Challenger.checked": "dd3765be37fdd0b1fa5e3f18f9bce0299f256e053678aeb146dfdf89f01367e8",
+    "SampledProofs.Challenger.checked": "ca658666c658ef183cd11a6edaee4d8dead0f5b57c87c4d7dcaf20fe0f33dff7",
     "SampledProofs.Challenger.closeMessage": "46b75ba121839ec4361e3e2a0df14a4d0c7e0d95c1b8967ac1ac8e8def086188",
     "SampledProofs.Challenger.event": "be4476225052930e5213d68e407b034ada60824989e7e0e50bc61ec006d3d50f",
     "SampledProofs.Challenger.event._sparseCasesOn_1": "ff42de9044ae37b1abdc1c7990a9e1e2b9149f6c371720dc27a0117ee23afb4c",
@@ -16585,8 +16681,8 @@
     "SampledProofs.Challenger.firstParentReason._sparseCasesOn_1": "5a14a26a8c1be5defbd604e7e2d658918d769ec354bbbdc24e60e0c20671704a",
     "SampledProofs.Challenger.instInhabitedLedgerEntry": "e80cd9d4742cb6b57326602cddb1b02b3802ff5ad8b61b81d00f01a23d8d71cf",
     "SampledProofs.Challenger.instInhabitedLedgerEntry.default": "3848285ea2ab9d7a4e425a5fee117e2d67980ed4dea9b413c5dda27b2c750c8b",
-    "SampledProofs.Challenger.instInhabitedPeriod": "9d370f097ca12d5c8267395580a8065f6026c2113f4611c2e128d388cda68cc5",
-    "SampledProofs.Challenger.instInhabitedPeriod.default": "e5fe0f883570995063bc5da57aeec6f12f55a7bf810b5a120520d03e96d394d9",
+    "SampledProofs.Challenger.instInhabitedMonitoringPeriod": "f42253387f191b308802f848057d7783dff969cdf170d2295cd20b95ce5addc0",
+    "SampledProofs.Challenger.instInhabitedMonitoringPeriod.default": "b511d6be04fced5574b74a3f60c01e674e394d533b8e62ca28db4c3fe344827e",
     "SampledProofs.Challenger.instInhabitedWin": "69571b68c7814bbaf694f545cdc57f124c9c726250baeb07d52d8c47bac01d54",
     "SampledProofs.Challenger.instInhabitedWin.default": "e6a6f3962a2688c40ce9ef55c6d823564ad16a62e6ddb29186ad165c42ca5435",
     "SampledProofs.Challenger.isCap": "360903cb2a8b9b54b86115ff48886f0ee4ea99008c9fbb776663e91c298adbd0",
@@ -16611,7 +16707,7 @@
     "SampledProofs.Challenger.sessionOf": "d1ef2639d2ed7131fb69e54208c3f3d1a2f6b04e9be1421f1b19db9b9b112249",
     "SampledProofs.Challenger.sessionOf._sparseCasesOn_7": "08acc862549ea1df070ea969d8be299ba1ce6ddbfae9b8d95f5014e54e50eff4",
     "SampledProofs.Challenger.trustedSessionOf": "061ca5db8347e0b12d4a8260ee07f5c8d4ce78e16f8e3d55e115366be9d86b9f",
-    "SampledProofs.Challenger.verifyLedger": "3d6f23a5f63d38b06270537ca7ec2c4acac39a2298874acd9a4de15516637fd1",
+    "SampledProofs.Challenger.verifyLedger": "8ad6d343c0d585d91b4ef5bc07d3278928096d1234688a04bf066ab834b27740",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.daysIn": "f0bcae0f0bbe94665da1d282ba3c726220f54de0907083f1ead3417b065f7ad1",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.digitsAt": "639c715b425005b2035e12f8df883deb120633d444fee4addd4f286f5a13318f",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.escapesSurrogate": "c03ebd6b8cb57131028344cdce357e2e402b9ec485301eae29cbc0753465680a",
@@ -16627,7 +16723,7 @@
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isStr": "67a73006790aa215a39d7afaea6db6ef77dd5c8a8978f60b9663367110664380",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isTime": "2fd8997932490f464a3410ee2c8adb4441f549f674e5e33ec9c787abe579e314",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isV1Window": "98e997e81d47bf6ade1d826bc8ad526bbed61888f001e535c0b1d5fb129cdeed",
-    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.join": "e4de123c3c8c410ceaa1665798b056ddb9af94e0020e31419fe2bf581659ad68",
+    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.join": "1b6a15edfc3434e373047552c7c0a8ec3bb27daefe1f7f6f79e7e241346e73d9",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.jsonTrue": "fa2e8c82a13a440ed5c68c74e85fe72706e6406a7af5afa915cc666c18cf6945",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.jsonTrue._sparseCasesOn_1": "6f1b573b48250d1122cf3014a5da7d6b1b63c331505300848c3165ef52d21f35",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.jsonTrue._sparseCasesOn_2": "008470ccb522860c218ff27af05a0bb15d02cb8f6e13aff2bc8a82c8b7f5dbdb",
