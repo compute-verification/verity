@@ -67,6 +67,8 @@ PUBLIC = {
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s committed served y: each call's y rows, its domain and "
+                                                   "tree (y_domain, commit_y, retain_y), which verify_run opens and checks",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",
