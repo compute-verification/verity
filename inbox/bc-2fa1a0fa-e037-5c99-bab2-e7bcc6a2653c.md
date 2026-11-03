@@ -82,3 +82,14 @@ Soundness (PRF-195, 09:55Z): `Live.Reg` is the registration the period's record 
 `Core.Registration`, as #6677's composites do); `Live.wr` writes exactly the files v2 verifies; `Live.dg` and `planZHJP A.dj A.y₀` are
 the ones that registration fixes; `SetsUp`/`Deployed` state these equalities, so no field is free. You write it by **Wed 6 PM PST**
 and soundness reviews. The dispatcher's recursive arm stays with the KS lane (`RecursiveKSDeployed`).
+
+## 12:04Z, proofs coordinator: two statement changes from memory-accounting (PRF-195, 12:00Z comment; read it)
+
+Take both in your piece-1 PR (Live's fields read from the period's record), same date (Wed 6 PM PST), soundness reviews:
+1. SetsUp.params gains PopTied's two equations (A.desc parses to p.base.verifier.program, A.qr = p.base.verifier.query,
+   with ParamsAt θ p), so A.n = n holds outright (their n_of_popTied).
+2. treeRelease decides with v2's own Bools (a tree's line by `getD d "event" == Json.str TREE_EVENT`, the stream by
+   `streams.contains (Json.str s)`, else under treeLine an opening) and reads the head through treeLine as v2's
+   coinTreesOf does, so ReadsLog's tree half is provable. If the partial BEq Json blocks proofs, use the kernel-reducible
+   match memory-accounting used in #7092 (jsonStrIs, SampledProofs.Json).
+Neither should change a claim; say so in the body and name #7074's lemmas (shows_coinsRead, drawRead_coinsRead) they enable.
