@@ -58,13 +58,13 @@ DOC_TERMS = {
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
     "M0": "Flock's circuit prover",
+    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
-    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
     "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
                                                              "registered compiler turns into the execution block",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
