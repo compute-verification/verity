@@ -1102,6 +1102,64 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     assert F.complete(now | {"products": own}, out, SHAPE).products == own
 
 
+def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whatever_te_core_ingested_it(monkeypatch):
+    """The 45M dense step's 4.12.1 capture (`dense_45m.products.json`) as a ledger row's trace. Ingested at 4.11 (rows
+    with no `fed`, `P` or `gathered`, products with no system) the row published the one-class rule's number; read
+    now it publishes the fresh-products kind unmeasured with the retrace reason until it is traced again. Ingested at
+    4.12.1 (products at the console's k only, none at the dial's other k, no `fed` and no shared-prefix trim) it
+    publishes at the served block's 145,568 bits, and at every k of the dial, what a fresh ingest of the same record
+    does, where its stored products kept none there."""
+    from te_core.capture.products import DIAL_K
+
+    fixture = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
+
+    def row(block):
+        record = {"steps": [{"step": 0, "tokens": 512, "struct": "a", "by": {"fwd/theta": 80}}],
+                  "structures": {"a": {"updated": [], "log": log, "affected_share": 0.5, "sigma": 1.0,
+                                       "token_factor": 1.0, "delta_grad_bits": 1e9}},
+                  "formalism": {"trace": {"products": block, "data_dependent": [], "carried_scalars": [],
+                                          "affected_share": 0.5, "u1_bits": 1e6}}}
+        return {"formalism": F.of_record(record), "output": {"e_bytes": 1e8}}
+
+    def fresh(r, c, k):
+        b = F.bound(F.measure(r, SHAPE), c, k)
+        return b["terms"]["fresh_products"], b["unmeasured"].get("fresh_products")
+
+    def stored(r):
+        trace = {x: v for x, v in r["formalism"]["trace"].items() if x != "products"}
+        return r | {"formalism": r["formalism"] | {"trace": trace}}
+
+    c = policy.CONSOLE[0]
+    rows = [{x: v for x, v in r.items() if x not in ("fed", "P", "gathered")} for r in fixture["rows"]]
+    at_411 = row({x: v for x, v in fixture.items() if x not in ("at", "p_match")} | {"capture": "4.11", "rows": rows})
+    at_411["formalism"]["products"] = {x: v for x, v in at_411["formalism"]["products"].items()
+                                       if x not in ("system", "p_match", "gathered", "shared_prefix")}
+    one_class, why = fresh(stored(at_411), c, policy.CONSOLE[1])
+    assert one_class > 0 and why is None
+    assert fresh(at_411, c, policy.CONSOLE[1]) == (None, F.FRESH_RETRACE)
+    was = F.published(F.measure(stored(at_411), SHAPE), c, policy.CONSOLE[1], "A")
+    p = F.published(F.measure(at_411, SHAPE), c, policy.CONSOLE[1], "A")
+    assert was["terms"]["fresh_products"] == one_class and p["terms"]["fresh_products"] is None
+
+    now = row(fixture)
+    with monkeypatch.context() as mp:
+        mp.setattr(F, "SHARED_PREFIX", 0)
+        at_4121 = row(fixture)
+    at_4121["formalism"]["products"] = {x: v for x, v in at_4121["formalism"]["products"].items()
+                                        if x not in ("at", "shared_prefix")}
+    at_4121["formalism"]["products"]["products"] = [{x: v for x, v in q.items() if x != "fed"}
+                                                    for q in at_4121["formalism"]["products"]["products"]]
+    served = 145_568.0
+    assert "keep none at it" in fresh(stored(at_4121), c, served)[1]
+    assert F.measure(at_4121, SHAPE).products == F.measure(now, SHAPE).products
+    term, why = fresh(at_4121, c, served)
+    assert why is None and term == fresh(now, c, served)[0] > 0
+    for k in DIAL_K:
+        assert fresh(at_4121, c, k) == fresh(now, c, k)
+        assert F.published(F.measure(at_4121, SHAPE), c, k, "A") == F.published(F.measure(now, SHAPE), c, k, "A")
+
+
 def test_a_ledger_rows_log_puts_theta_and_attention_products_aside_and_the_rest_unknown():
     """On a macs_log (te_core.tiles.of_log): a product whose non-token operand is θ (its role theta) is θ's, a fused
     attention op's products are attention's, and an updated one's, whose operands the log says only depend on the
