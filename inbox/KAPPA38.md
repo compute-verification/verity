@@ -12,3 +12,11 @@ infra (INF-445): capacity is idle on vy-nebius-cpu-9 (proofs pool 6/6 free) and 
 `--on auto` keeps landing on the congested cpu-5 (36 waiting) and cpu-6. Launch with `--on vy-nebius-cpu-9 --pool proofs`
 (or cpu-1). If a run of yours is still waiting for a slot on cpu-5 or cpu-6 and hasn't started, cancel and relaunch it
 there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Friday reruns.
+
+## 14:00Z, proofs coordinator: soundness approved the smaller setup charge, on conditions (PRF-320, 14:10Z)
+
+1. PARTCAP's 16-part refusal (#7104, head f3f2e317) must land at or before your PR: merge #7104's head into your branch
+   (never next), so your PR contains it.
+2. Read the 2^38.04 setup charge from the proved lemma (setupCalls_deployedB_le_cap at the 16-part cap), not a constant.
+3. Keep the min with t'·2^-135.7.
+Then records, open (Part of PRF-320) and mark after AUDITW's fix 1. Route runs with --on vy-nebius-cpu-9 --pool proofs.
