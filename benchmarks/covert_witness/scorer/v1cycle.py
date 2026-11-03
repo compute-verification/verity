@@ -31,7 +31,7 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
    five old panels stay in the re-score's directory, unpublished (23:56Z).
 5. Publishes the tables and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
-   PANELS_DIR, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
+   PANELS_DIR, deletes its re-score and publish directories once both are in the store, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
    rho) as one more when algorithm-policy writes one; an S whose rho is Slowdown's bound carries loose-end-attention
    (01:22Z: A1 charges no read of earlier tokens' keys and values).
 
@@ -1080,6 +1080,11 @@ def main() -> int:
     line = digest(json.loads((rs / "p2-slowdown-vs-gain.json").read_text()),
                   meta | {"version_cell": bool(fb and "te_core_version" in fb["columns"])}, ids, put, fb_rows)
     (out / "digest.txt").write_text(line + "\n")
+    # this VM's disk is shared and a refresh's copies are about 5 GB; what later refreshes read of one (`retrace_order`)
+    # is its algorithm-policy directory, which stays
+    if ids.get("tables") and (fb is None or ids.get("fb")):
+        for d in (rs, out / "publish"):
+            shutil.rmtree(d, ignore_errors=True)
     said = policy.get("coverage") or []
     cov = (f"training/algorithm-policy (te_core {meta['te_core_version']}; tables art {ids.get('tables', '–')[:16]}) "
            + said[0] if said[:1] and said[0].startswith("coverage at ") else
