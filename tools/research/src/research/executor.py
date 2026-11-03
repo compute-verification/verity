@@ -55,8 +55,12 @@ SWITCH_STREAK = 3
 #: verdicts are still pending this long after is recorded with them pending
 SHADOW_WAIT_S = 6 * 3600
 #: what a check's step and suite records say, as a task's verdict: a step skipped by name, or a pass reused, is a pass
-OLD_PASS = ("passed", "skipped", "reused")
+OLD_PASS = ("passed", "skipped", "reused", "cached")
 OLD_FAIL = ("failed",)
+#: a suite's record that is no verdict of it: a step skips by name the suites another step runs (`pytest` skips the Lean suites)
+SUITE_NO_VERDICT = ("skipped",)
+#: a task of a suite split by test file (`pytest:SUITE:K/M`): compared through its suite when the run records it whole
+SPLIT_RE = re.compile(r":\d+/\d+$")
 #: a lean-audit log's verdict on one Lake package: its audit (`AUDIT PKG: PASS|FAIL`, PKG under the audit's scratch tree on a
 #: check's run) or a pass reused (`lean-audit: PKG: PASS reused`)
 AUDIT_RE = re.compile(r"^AUDIT (?:\S*?/lean-audit-scratch-[^/\s]+/)?(\S+?): (PASS|FAIL)\b", re.M)
@@ -241,8 +245,9 @@ def old_verdict(status: str | None) -> str | None:
 def old_verdicts(run_dirs: Iterable[Path]) -> dict[str, str]:
     """{part: pass | fail} of an after-landing run's records, over its shards: each step (steps.jsonl), each suite as its task
     id (`pytest:NAME`, `lean-suites:NAME`), each Lake package its lean-audit log names (`lean-audit:PKG`).  A part failed in any
-    shard fails; one stopped or never run is absent."""
-    from .drive import step_records, suite_rows
+    shard fails; one stopped or never run is absent, and so are the preflight steps, which no after-landing graph holds
+    (`tasks.py` runs a part without them), and a suite a step skipped by name (`SUITE_NO_VERDICT`)."""
+    from .drive import PREFLIGHT, step_records, suite_rows
 
     got: dict[str, set[str]] = {}
 
@@ -252,6 +257,8 @@ def old_verdicts(run_dirs: Iterable[Path]) -> dict[str, str]:
 
     for d in run_dirs:
         for st in step_records(d):
+            if st.get("step") in PREFLIGHT:
+                continue
             put(st.get("step") or "", old_verdict(st.get("status")))
             if st.get("step") == "lean-audit" and st.get("log"):
                 try:
@@ -263,7 +270,8 @@ def old_verdicts(run_dirs: Iterable[Path]) -> dict[str, str]:
                 for pkg in REUSED_RE.findall(log):
                     put(f"lean-audit:{pkg}", PASS)
         for name, s in suite_rows(d).items():
-            put(f"{s['step']}:{name}", old_verdict(s.get("status")))
+            if s.get("status") not in SUITE_NO_VERDICT:
+                put(f"{s['step']}:{name}", old_verdict(s.get("status")))
     return {p: fold(vs) for p, vs in got.items() if p}
 
 
@@ -274,6 +282,7 @@ def compare(ids: dict[str, str], old: dict[str, str], new: dict[str, str]) -> di
     - each task the run records on its own (`pytest:SUITE`, `lean-audit:PKG`, a job run whole): its verdict beside the task's;
     - each job the run records as a step: the step's verdict beside its tasks' folded (fail when one fails, pending when one
       is, else pass), so a task of a job the run records only whole (a circuit-check slice) is compared through it;
+    - each suite the run records whole that the graph splits by test file (`SPLIT_RE`): its verdict beside its parts' folded;
     - a part the run records that no task matches, by id or by job: "missing in executor" (`MISSING`), a disagreement;
     - a task the run has no counterpart of (its id unrecorded, and its job unrecorded or recorded part by part without it):
       "executor only", a disagreement whatever its verdict.
@@ -281,6 +290,7 @@ def compare(ids: dict[str, str], old: dict[str, str], new: dict[str, str]) -> di
     So a graph smaller than the run never agrees fully, nor one that ran something the run didn't."""
     units: dict[str, tuple[str, str]] = {}
     jobs: dict[str, list[str]] = {}
+    split: dict[str, list[str]] = {}
     only = []
     by_part = {p.partition(":")[0] for p in old if ":" in p}
     for tid, key in ids.items():
@@ -288,12 +298,19 @@ def compare(ids: dict[str, str], old: dict[str, str], new: dict[str, str]) -> di
         jobs.setdefault(job, []).append(v)
         if tid in old:
             units[tid] = (old[tid], v)
+        elif (whole := SPLIT_RE.sub("", tid)) != tid and whole != job and whole in old:
+            split.setdefault(whole, []).append(v)
         elif tid == job or job in by_part or job not in old:
             units[tid] = (NONE, v)
             only.append(tid)
+
+    def folded(vs: list[str]) -> str:
+        return FAIL if FAIL in vs else PENDING if PENDING in vs else PASS
+
     for job, vs in jobs.items():
         if job in old:
-            units[job] = (old[job], FAIL if FAIL in vs else PENDING if PENDING in vs else PASS)
+            units[job] = (old[job], folded(vs))
+    units.update({whole: (old[whole], folded(vs)) for whole, vs in split.items()})
     missing = sorted(p for p in old if p not in units)
     units.update({p: (old[p], MISSING) for p in missing})
     rows = sorted(units.items())
