@@ -144,10 +144,10 @@ REHEARSAL_ACCEPTS = ("honest", "token")
 SCAN_ACCEPTS = ("honest", "block")
 #: a proof block's outputs, at most 16 bits: an incorrect proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
+#: K's jitter term, 0 at d_jit = 1: `NetTiming.JitterBounded` assumes it, not met there until a run shows the written
 #: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
 #: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
-JITTER = "assumed (J)"
+JITTER = "assumed (JitterBounded)"
 #: what `pooled_k`'s K rests on until its two per-window inputs are discharged
 POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
@@ -595,8 +595,8 @@ def audit_of(d: Path) -> dict:
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
     `NetworkCheck.Period` counts them), the
     least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
-    within a bucket."""
+    (`free_inputs`); its jitter term 0 at d_jit = 1, `JITTER`: N2 holds the egress counts exactly, and `JitterBounded`
+    the offsets within a bucket."""
     reg = json.loads((d / "registration.json").read_text())
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
@@ -751,7 +751,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
                 "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
-                f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
+                f"the jitter term is 0 at d_jit = 1, {JITTER}, not met until a run shows the paced warden's written "
                 "buckets tell a receiver no more than an idle one",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",

@@ -157,7 +157,7 @@ guarantee above.
 - `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
-  `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
+  `NetTiming.Packed` and `NetTiming.Allocated`, and `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
 
