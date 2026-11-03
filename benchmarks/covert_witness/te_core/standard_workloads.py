@@ -14,8 +14,7 @@ formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_defaul
 at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
-has no bound, resting on "unmeasured"), a measured fresh-products term's premises, where it binds and in `kinds`,
-with the label `PROVISIONAL` gives this te_core; reading A's ρ is never infinite, so `build` refuses one. `kinds` is
+has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
 them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
 P-cell) and reading B's token and decoding forms. `rho_inputs` holds
@@ -93,10 +92,6 @@ READ = (formalism.STUBS["delta_bits"], formalism.DECODER["witness"])
 #: why `untraced` names a step of a traced structure that updates nothing, which has no fresh products
 IDLE = ("its structure updates nothing, and te_core.annotate takes such a step's trace only where it measures the step "
         "and a traced step of the run updates something")
-#: a measured fresh-products term's label beside its premises, by the te_core whose whole-making rule it reads: 4.11's
-#: single chain, which 4.12's chain classes replace
-PROVISIONAL = {"4.11": "provisional: whole-making under te_core 4.11's single-chain rule; 4.12 lowers dense rows by "
-                       "under 1% and voids rows with adapters"}
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
           "priced as NVFP4 (gemm/fp4)"
 _PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
@@ -373,21 +368,9 @@ def rho_cell(v: float | None) -> float | str | None:
 
 def kinds(one: dict, b: dict) -> str:
     """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
-    from the one bound `b` at its point, less any `one`'s max takes, a measured fresh-products term's premises with
-    this te_core's `PROVISIONAL` label."""
-    cell = algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
+    from the one bound `b` at its point, less any `one`'s max takes."""
+    return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
                                                            if s not in one["terms"]}})
-    head, sep, rests = cell.partition(',"rests_on":')
-    if not sep or not (prov := PROVISIONAL.get(VERSION)):
-        return cell
-    got = json.loads(rests[:-1])
-    return head + sep + json.dumps({k: f"{v}; {prov}" if k == "fresh_products" else v for k, v in got.items()}) + "}"
-
-
-def rests_on(one: dict) -> str:
-    """What formalism.published's `one` rests on, with this te_core's `PROVISIONAL` label where fresh products bind."""
-    prov = PROVISIONAL.get(VERSION) if one["binding_kind"] == "fresh_products" else None
-    return f"{one['rests_on']}; {prov}" if prov else one["rests_on"]
 
 
 def finite(x):
@@ -433,7 +416,7 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
         con = one["console"]
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
-                     con["binding_kind"], rests_on(con),
+                     con["binding_kind"], con["rests_on"],
                      kinds(con, bound["console"]),
                      rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
