@@ -348,6 +348,30 @@ def takeCoin (l : String) : List (String × ℕ) → Option (List (String × ℕ
 /-- The most coin-tree lines the device's log holds, each tree it sampled and each round it opened (`MAX_TREE_LINES`). -/
 def maxTreeLines : ℕ := 2 ^ 20
 
+/-- **The most coins a coin tree the device samples holds**, every stream's every round (`MAX_TREE_COINS`). -/
+def maxTreeCoins : ℕ := 2 ^ 26
+
+/-- A coin tree's coins: `2^roundsLog` rounds a stream, `block` coins a round. -/
+def treeCoins (spec : Flock.CoinTree.Spec) : ℕ := spec.streams.size * 2 ^ spec.roundsLog * spec.block
+
+/-- **The specs the device samples a coin tree of**: a coin or more a round, and at most `maxTreeCoins` coins. The
+deployed device refuses every other spec: `LiveChallenger.sample_tree`
+(`verity/core/protocols/sampled_proofs/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
+among them, and then a tree of more than `MAX_TREE_COINS` coins. So a tree the device samples holds at most
+`maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
+def TreeSpecOk (spec : Flock.CoinTree.Spec) : Prop := 1 ≤ spec.block ∧ treeCoins spec ≤ maxTreeCoins
+
+instance (spec : Flock.CoinTree.Spec) : Decidable (TreeSpecOk spec) := inferInstanceAs (Decidable (_ ∧ _))
+
+/-- **The coin-tree lines the device's log holds** with the coin trees `ts` open: one for each tree it sampled and one
+for each round it opened. The deployed device counts them (`LiveChallenger._tree_lines`) and refuses a tree or an
+opening once its log holds `MAX_TREE_LINES` of them (`LiveChallenger._tree_line`). -/
+def treeLines (ts : List OpenTree) : ℕ := (ts.map fun T => 1 + ∑ s, T.opened s).sum
+
+/-- **The most leaves the device's coin trees hold in a play**: at most `maxTreeLines` trees (`treeLines`), each of at
+most `maxTreeCoins` leaves (`TreeSpecOk`), `2^46`. -/
+def maxLeaves : ℕ := maxTreeLines * maxTreeCoins
+
 /-- **The most frames the device serves** under the coin commitment's families `fs`: each frame it serves releases one of
 their coins or writes one of its coin-tree lines. -/
 -- The literal comes first: `Nat.add` recurses on its second argument, so the kernel compares two plays' games at the
@@ -362,12 +386,15 @@ answers, or closes (`none`): the order, number and kind of the frames are the pr
 releases its root and key (`treeRoot`, `treeKey`) and holds it open. At an opening of the `i`-th tree it holds, the
 device draws the stream's next unopened round anew among the draws with the leaf the tree's `Hello` committed to there
 (`TreeOpenable`), releases its first `n` coins and counts the round opened (`OpenTree.next`, `OpenTree.bump`). A frame
-the device refuses (a family with no coin left, no `i`-th tree, or `OpenTree.next`'s refusal) ends its releases, as a
-refused frame ends the challenger's session, and so does the prover's close. The output is the device's log.
+the device refuses (a family with no coin left, a `Hello` whose spec it doesn't sample (`TreeSpecOk`), a tree frame once
+its log holds `maxTreeLines` coin-tree lines (`treeLines`), no `i`-th tree, or `OpenTree.next`'s refusal) ends its
+releases, as a refused frame ends the challenger's session, and so does the prover's close. The output is the device's
+log. The two caps are the deployed device's own refusals (`LiveChallenger.sample_tree` and `LiveChallenger._tree_line`
+in `verity/core/protocols/sampled_proofs/challenger.py`), so a play here samples at most `maxLeaves` leaves.
 
-The challenger refuses frames this device serves (a spec past its limits, a nonce or a root of another length, a tree's
-root or key sampled twice, a frame past its coin-tree lines), so each of its sessions, a refused frame read as the
-prover's close, is a play here with the same log, and the plays it refuses only add strategies. Each frame it serves
+The challenger refuses further frames this device serves (a spec past its other limits, a nonce or a root of another
+length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a
+play here with the same log, and the plays it refuses only add strategies. Each frame it serves
 releases one of the families' coins or writes one of its coin-tree lines, so it serves at most `frames fs`. A withheld
 session, the one a sampled-proofs window's draw reads, answers its hello with the families alone and each coin with its
 raw bytes, as the device here releases them, and its close with the commitment and every coin's salt and path, which
@@ -380,7 +407,8 @@ the deployed one does. A strategy sees every coin it's given, so the prover here
 leaf among it, and each opening's whole round, where the deployed device answers the root and the key at `Hello` and an
 opening's coins, the chain's link after them, the salt and the path: a deployed prover is a strategy that reads only
 those, and its plays have the same law here. What the leaves tell of a round's coins before it's opened is what the
-key's hm96 hiding gap bounds. -/
+key's hm96 hiding gap bounds, at every leaf the device's trees hold, since the prover sees each before it chooses what
+to open. -/
 def releases : ℕ → List (String × ℕ) → List OpenTree → Game (List Release)
   | 0, _, _ => .ret []
   | k + 1, fs, ts => .send (Option (Frame × ByteArray)) fun
@@ -389,19 +417,24 @@ def releases : ℕ → List (String × ℕ) → List OpenTree → Game (List Rel
       match takeCoin l fs with
       | none => .ret []
       | some fs' => .coin (Fin 512 → Bool) fun x => (releases k fs' ts).map fun log => ⟨.fresh l, b, List.ofFn x⟩ :: log
-    | some (.hello spec, ν) => .coin (TreeSample spec) fun t =>
-      (releases k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩])).map fun log =>
-        ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log
+    | some (.hello spec, ν) =>
+      if treeLines ts < maxTreeLines ∧ TreeSpecOk spec then
+        .coin (TreeSample spec) fun t =>
+          (releases k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩])).map fun log =>
+            ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log
+      else .ret []
     | some (.opening i s n, b) =>
-      match ts[i]? with
-      | none => .ret []
-      | some T =>
-        match T.next s n with
+      if treeLines ts < maxTreeLines then
+        match ts[i]? with
         | none => .ret []
-        | some (s', r) =>
-          haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample s' r) := ⟨⟨T.sample.2 s' r, rfl⟩⟩
-          .coin (TreeOpenable T.nonce T.spec T.sample s' r) fun d =>
-            (releases k fs (ts.set i (T.bump s'))).map fun log => ⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log
+        | some T =>
+          match T.next s n with
+          | none => .ret []
+          | some (s', r) =>
+            haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample s' r) := ⟨⟨T.sample.2 s' r, rfl⟩⟩
+            .coin (TreeOpenable T.nonce T.spec T.sample s' r) fun d =>
+              (releases k fs (ts.set i (T.bump s'))).map fun log => ⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log
+      else .ret []
 
 /-- **The device's signer** in a play: the messages it signs under its LMS key, in the order it signs them, and its
 signature on each. Before any coin it signs what the prover's request fixes (`first`: the ledger's reserve and open,
