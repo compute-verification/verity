@@ -386,7 +386,11 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
   rule (`partition.digest`).
 
 The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock/TemplateQuery.lean`), but no theorem
-states it. Pinned by core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`,
+states it. The guarantees read the partition of the circuit file, `Flock.Bridge.partOf` (one class, the population's
+proof blocks in the registration's strata, each with the input rows it owns); that the deployed record's partition is
+it is the hypothesis `RelDeployTarget` takes, which nothing discharges yet. A verifier check that computes `partOf`
+from the circuit file and refuses a registration whose slots differ from it in count, strata, order or owned inputs
+would. Pinned by core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`,
 which `tests/test_one_stage.py` replays (`test_the_partition_is_cores_on_the_pinned_q_word_vector`,
 `test_the_partition_is_cores_on_the_pinned_template_vectors`, `test_the_partition_refuses_what_core_refuses`,
 `test_a_malformed_query_has_no_units_and_no_digest`, `test_a_program_that_is_not_topological_has_no_units`,
