@@ -460,7 +460,7 @@ theorem chunksOf_length_sum {α : Type} (n : ℕ) :
     simp only [List.length_cons, List.length_take, List.length_drop]
     omega
 termination_by l => l.length
-decreasing_by simp; omega
+decreasing_by simp <;> omega
 
 theorem toChunks_length_sum {α : Type} (G : ℕ) (l : List α) : ((l.toChunks G).map List.length).sum = l.length := by
   rcases G with _ | n
