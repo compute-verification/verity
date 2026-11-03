@@ -53458,6 +53458,15 @@
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
+  "Proofs.Flock.Claims.Recursion.Serve": {
+   "digest": "9c5f9997953adb9d68883ac7406fd2ebcf7262029da8d8a16aa53c3edba039bd",
+   "definitions": {
+    "Claims.RP.rerunsAt": "cd8dc55d4557d842f1d54072153b1b7c01dbf9b173c08329e7295472a905fc58",
+    "Claims.RP.serve.match_1": "8c42b9fe2e320998dcc1787e5f9665a6c88e07f872c005058a1f4734ee36e9af",
+    "Claims.servedRun": "9b121c27871639f1c6540a7f61efbd6ae023672acea84a7219caa39dcabc49f4"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
   "Proofs.Flock.Claims.Recursion.SetupCount": {
    "digest": "0b18e096190e24cd983a7176131b64ec227438839bbfe455395618c46d6adbef",
    "definitions": {
@@ -53635,6 +53644,13 @@
     "Flock.SecurityProofs.RecursiveKS",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
+  },
+  "Proofs.Flock.Claims.Recursion.Wald": {
+   "digest": "929f8ae89adf337be820a841faca043426bc2183ccc27efccb088a0b9c2e1786",
+   "definitions": {
+    "Claims.erepProg": "fab8550b3b3c4aeffbf3244fafb51ffbef26eb36fd25eb91f6f1d9b56a31976c"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Claims.RootFindAlg": {
    "digest": "7e58df3a7f68488d650f0c34fa5db3d652da32909eb0a9a43cc0530469a9f406",
@@ -65916,26 +65932,20 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
   "Proofs.Properties.Verity.Recursive": {
-   "digest": "83033e01c1c04617b67523b6f9a5d65b8b93e8fa6a393dd60ddd1c4a59cfbc4e",
+   "digest": "a237fe0f990abe41a66950caefe853924e626b19afe0eefdbeb148a7d0308bed",
    "definitions": {
     "Verity.Recursive.Dep": "c3514fcc465eb6f95c65f836d9e46823a4f839810af5713e98d5f58c51f99fb0",
     "Verity.Recursive.Dep.Bd": "a8b0b26fffefc7fa2b053b6a4374ddc83b96ca0f3c7b84ab631cd759e28ea88d",
     "Verity.Recursive.Dep.D": "73fe111e487d718aa88a7e441d330e3d823fa451fb6a9c8faa3add201091b20c",
     "Verity.Recursive.Dep.E": "58e2cb0a9633884d0036d02329330ff7d62ba34d7234e2b71c7f2510b844070a",
-    "Verity.Recursive.Dep.FinderCR": "dacd94bbbf05db7803f4ca58ee38ef766a1aa5192df13c83eff16e0036e795fc",
     "Verity.Recursive.Dep.I": "7ee7c67f10a8cbee06d8eaa690f41509b664486bc1698a4d811a02139670ef30",
     "Verity.Recursive.Dep.R": "3e12178bb5d447e7bf49a949bdbf4198c89870029a33b2aa1523d2b5758ef5d6",
     "Verity.Recursive.Dep.Sample": "e0e36c21e9f74a39ce78a0d7ae183e353feef15379f695b1b414e1fd2ee13db2",
     "Verity.Recursive.Dep.SessionCR": "80c000734646aff9d405fb42fbd9997e23a78babd568e4d74aa28f2d52e27a89",
     "Verity.Recursive.Dep.aux": "2cdf6c6727087e540878108cbc1f82f473d0dcf1932c37d26f8bd55889961412",
     "Verity.Recursive.Dep.b": "15c06015f34915a2b4a394c107f0e4921b47c6d6b28b465e070d8a553901bd4a",
-    "Verity.Recursive.Dep.bindAt": "9214a6fc67e30f23934460be377bf8c0a15f857055c059e41087255907e1034e",
-    "Verity.Recursive.Dep.bindAt._sparseCasesOn_1": "989c9134baf233ee78e03c62198ad173ef27411b61c9d2b161294fdf2681a908",
-    "Verity.Recursive.Dep.bindBudget": "28160a87f3aae056314292a5c1f811fb44ad580a77cb0a2c80816dec9a34c766",
     "Verity.Recursive.Dep.decI": "d86429402280279461847452bfdee7d5bcf8fa280877e267e8ded7a2e0058330",
     "Verity.Recursive.Dep.decO": "53931dde0e211b122181e131e36d0fa0040ae6c93b94cde89bd085603c0005c0",
-    "Verity.Recursive.Dep.delta": "6f8491b1360a6ad32fc91639bd2013ab88ab3d55f4bd28b7ee3c2bd936cbd180",
-    "Verity.Recursive.Dep.errAt": "34223853720366262b4f1657cf2661bd7a8fcf3db71f666af7c1c106fd5f8bb9",
     "Verity.Recursive.Dep.extract": "4ffbaad485ef5c692b8d9857818da686418684c57248f15cb96e0be12581496e",
     "Verity.Recursive.Dep.hd": "529d85dc1d3bb163b10766391478000c87e1d4f5afd8634780e864efbb1d0254",
     "Verity.Recursive.Dep.nOf": "3f2c4c445cfca27b81857c7ce504f2a72edecda392a2e311310951c28279fa65",
@@ -65976,14 +65986,45 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Properties.Verity.Recursive.Audit": {
-   "digest": "5e94fc40ee27bba424e54244ab78e51787f446822fed4c2b141ea659a02490f2",
+   "digest": "14ed3b6d3e7563b39bde4015bcb24de6295f0b77bc6259c28ea3ed92200c38a2",
    "definitions": {
     "Flock.Guarantees.RecursiveAuditC3": "276606ee9b5ef51b7f47ab55c77f056669dca4d974e626a2d02ab33233974fce",
     "Verity.Recursive.Dep.deployed": "2a21d5fa32c8b67769272d621f88e0d54986c0073dcf05e76414eec499e43d90",
     "Verity.Recursive.SampledProofsRecursive": "68ba28f2d2d842d887a996e04352e4dec95bfaf4dbd662dc55a02d0fcd0b3a5f",
-    "Verity.Recursive.SampledProofsRecursiveAt": "a03bdd0337aa6cd505045c7ad133510368fe63690780c1f3e22d8dd8977cb8d3",
+    "Verity.Recursive.SampledProofsRecursiveAt": "0b4536ed00521be0c5cdb78c46df11ff9c6111dcbba82443959952fad1ab96d8",
     "Verity.Recursive.nI₀": "22f7bb249a856dc44878734b3697246fb55f5bba188167c468e37f33cd5b2b73",
     "Verity.Recursive.vS₀": "7598dc5a0114d2d82bf7d6a4793b5283831389070cab535a291af22a63c0f4af"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
+  "Proofs.Properties.Verity.Recursive.Finders": {
+   "digest": "1b3e183d2a9b950b4320f1d212da968785b63b5a43b6adc46ba0f2b3ecdc8fee",
+   "definitions": {
+    "Verity.Recursive.CollOf": "c3a2678089d0b505748a4b97e48330d858de295b9df693df4781547cce06564b",
+    "Verity.Recursive.Dep.ChaseCR": "de732eae94f14988900e8e6f18201a1efee483f639c2f5332f0bf69c99247bbf",
+    "Verity.Recursive.Dep.ChasePlays": "52a37814d3e4aec445b7ed4d68f102670850334c37531aba12a34e56228e0d56",
+    "Verity.Recursive.Dep.EO": "d4b1e241ebcdec7e4640c3760877d6b2738055e9bfaaab405b6382223fcab68a",
+    "Verity.Recursive.Dep.FinderCR": "ce15b0cdf0a8ed67cbdb39da7480359f47c911f40775b0488e7883bf97a19c8b",
+    "Verity.Recursive.Dep.Play": "42c06b1903d5831d479cdb71fa9ca4c1aab42b26bc03ac8eb2bf2016ab580a9a",
+    "Verity.Recursive.Dep.bindAt": "af1798a13d29e63379536e6a07f2e0f6bee44e45205abc60d2574788b09b4460",
+    "Verity.Recursive.Dep.bindBudget": "081ab00e227fa17e3417a2800d2503fd4a433060d3ad85937a3fea5fb2f1aa2a",
+    "Verity.Recursive.Dep.chaseAt": "84203a1b788efc31cb8b7e55e75b14f5d27591c73314ff0a2533cfb4b987bb94",
+    "Verity.Recursive.Dep.chaseBeta": "7a16099ae498ce4688897aebbf7e77d971f3c553a85813007046f93440103fb0",
+    "Verity.Recursive.Dep.chaseBudget": "1d693998d27d6791212d5c59deadf025d62923980e30696651616061fab98c1c",
+    "Verity.Recursive.Dep.chaseHit": "b10ec6ded35909ea3bb31fabaa852b142457c742f1f6099bf677983afbbd03d6",
+    "Verity.Recursive.Dep.chaseM": "37cfc3e91f5a83d23e1e66246941599e504519bc8969fda0a7b20fce5cbd5890",
+    "Verity.Recursive.Dep.chasePair": "7afda3bdff3be72a7fdd931b94e6dd16dcec2893b2906832358b42dc52789de6",
+    "Verity.Recursive.Dep.chaseSel": "8105e763932d3d60a0c6c2883a6bf2a7038f69e37bdc84935d26711b01cf9ef2",
+    "Verity.Recursive.Dep.delta": "9f3f27293b0ebd5d127486e034eec346a69b2155068236bf6063855113b5811d",
+    "Verity.Recursive.Dep.deltaChase": "9f657561fe10bd37fd3f988e6b483132dfe82a1a5489ce2b2e60cc611e9f0c91",
+    "Verity.Recursive.Dep.errAt": "97eb947a87422ed0dc4043da1b589da1cabf5fa45d45d72f17705dae61eba1f2",
+    "Verity.Recursive.Dep.ivCalls": "1a26734d0b9f00db4f21572030b11114f0c96d821005e6865cc0fcee7c081216",
+    "Verity.Recursive.Dep.ivCallsAt": "3e5021ad6e0356ad21e9640563181ba24d4421a4fa265095bcc901cfae785696",
+    "Verity.Recursive.Dep.playBudget": "a40bc0297c68ffdd0004876a7db2fdc30e464180816387c61c4ec48d18f6cf89",
+    "Verity.Recursive.Dep.playCost": "e3f4c1d6cb64975a5721030c0c06f27e0bc1c06591066a1ef111f40a5ab0231f",
+    "Verity.Recursive.Dep.playWit": "04cb36d8a130741ff1f841d359e18630fecd4619799480c6cbc170a47e7395ac",
+    "Verity.Recursive.collRun": "95d5285253f21ee8c69375d2af5539eca95f8efc484510beec65f173c04d9417",
+    "Verity.Recursive.unitBits": "04577be347dbd8329362d8e81f89b6e1e8efe8c6001d949e12befb957d67ee0a"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
