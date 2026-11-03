@@ -926,13 +926,14 @@ def test_a_records_trace_rows_are_its_traced_steps_products():
 
 
 def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does():
-    """A ledger row keeps the products its ingest took from its trace's rows, and the scorer's traces were ingested
-    before te_core 4.12 kept a whole-making system: at 4.8 with the trace's order unknown, which `fresh_products` never
-    measures, and an upcast operand's product an expansion; at 4.10 and 4.11 with no `system`, which it reads as products
-    of no trace, by the one-class rule (`ONE_CLASS`) that misses attention's chains. `complete` reads them as this
-    te_core's ingest of the same rows over the same traced steps (`traced_products`: their kinds' MACs over the rows'
-    own, 2.5 here with a stand-in), so rows captured before 4.12 say they need a retrace (`FRESH_RETRACE`) and rows
-    with `fed` are measured on their system, with no re-ingest; products a record has of its own stand."""
+    """A ledger row keeps the products its ingest took from its trace's rows, and the scorer's traces were ingested by
+    the te_core that captured them: at 4.8 with the trace's order unknown, which `fresh_products` never measures, and
+    an upcast operand's product an expansion; at 4.10 and 4.11 with no `system`, which it reads as products of no
+    trace, by the one-class rule (`ONE_CLASS`) that misses attention's chains; at 4.12 with a system that counts the
+    products reading gathered rows, which its rows can't name. `complete` reads them as this te_core's ingest of the
+    same rows over the same traced steps (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a
+    stand-in), so rows captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed`
+    and `gathered` are measured on their system, with no re-ingest; products a record has of its own stand."""
     row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
            "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
            "rates": [16.0, 16.0], "paid": [True, False], "self": False, "b_c": 32, "k_whole": 512,
@@ -958,7 +959,7 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
         return b["terms"]["fresh_products"], b["unmeasured"].get("fresh_products"), b["inputs"]["fresh_products"]
 
     def before_412(f):
-        return f | {"products": {x: v for x, v in f["products"].items() if x not in ("system", "p_match")}}
+        return f | {"products": {x: v for x, v in f["products"].items() if x not in ("system", "p_match", "gathered")}}
 
     now = F.of_record(record(block))
     assert now["products"]["products"][0]["macs"] == 2.5 * 2 * 16384 and "stand_in" in now["products"]
@@ -971,11 +972,18 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     assert stored.products == at_48["products"] and fresh(at_48 | {"trace": {}})[0] is None
     one_class = fresh(at_411 | {"trace": {}})
     assert one_class[0] > 0 and one_class[2]["whole_making"] == F.ONE_CLASS
-    for old in (at_48, at_411):
-        assert F.complete(old, out, SHAPE).products == now["products"]
+    fed = [r | {"fed": [], "P": 1.0} for r in block["rows"]]
+    now_412 = F.of_record(record(block | {"capture": "4.12", "p_match": [], "rows": fed}))
+    assert now_412["products"]["system"] is None
+    at_412 = before_412(now_412)
+    at_412["products"] |= {"system": F.system_of([r | {"gathered": [False, False]} for r in fed]), "p_match": []}
+    stale = fresh(at_412 | {"trace": {}})
+    assert stale[0] > 0 and stale[2]["whole_making"] != F.ONE_CLASS
+    for old, rows in ((at_48, now), (at_411, now), (at_412, now_412)):
+        assert F.complete(old, out, SHAPE).products == rows["products"]
         assert fresh(old)[:2] == (None, F.FRESH_RETRACE)
-    fed = block | {"capture": F.SYSTEM_FROM, "p_match": [], "rows": [r | {"fed": [], "P": 1.0} for r in block["rows"]]}
-    now = F.of_record(record(fed))
+    now = F.of_record(record(block | {"capture": F.SYSTEM_FROM, "p_match": [],
+                                      "rows": [r | {"gathered": [False, False]} for r in fed]}))
     assert now["products"]["system"] is not None
     term, why, got = fresh(before_412(now))
     assert (term, why) == fresh(now)[:2] and term > 0 and why is None and got["whole_making"] != F.ONE_CLASS
