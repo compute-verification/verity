@@ -170,7 +170,8 @@ def optimizer(rec: dict) -> str:
 def delta_grad(rec: dict, start: dict, trainable: dict) -> tuple[float, str]:
     """Gradient and optimizer state passed between blocks, in bits: AdamW 32 + 2·32 a trainable value; Muon 32 + 32 on
     the blocks' matrices (AdamW elsewhere); GaLore the full f32 gradient its projection refresh reads; a seed log's
-    projected scalar and seed, 64 bits."""
+    projected scalar and seed, 64 bits. A record whose notes state it (notes.delta_grad.bits) is priced at that
+    instead (`load`, `build`)."""
     opt, shapes = optimizer(rec), {n: s for n, (_, s) in start["tensors"].items()}
     full = {n: math.prod(shapes[n]) for n in trainable.get("full", [])}
     adapters = sum(int(r) * (shapes[n][0] + shapes[n][1]) for n, r in trainable.get("adapters", {}).items())
@@ -235,6 +236,8 @@ def load(scorer: Path, ledger: Path):
         meta = scorer / "records" / rid.split(":", 1)[-1] / "meta.json"
         notes = (json.loads(meta.read_text()).get("notes") or {}) if meta.exists() else {}
         launch[rid]["latent_bits"], launch[rid]["latent_from"] = latent_bits(notes)
+        stated = (notes.get("delta_grad") or {}).get("bits") if isinstance(notes.get("delta_grad"), dict) else None
+        launch[rid]["delta_grad_stated"] = float(stated) if isinstance(stated, (int, float)) and stated > 0 else None
     runs = {launch[x["id"]]["run"] for x in subs}
     counted = {}
     for line in (ledger / "index.jsonl").open():
@@ -254,12 +257,15 @@ def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
         forward_only = not tok.get("train") and bool(tok.get("forward"))
         pt = per_token(start, trainable, g, forward_only)
         dg, opt = delta_grad(rec, start, trainable)
+        dg_from = "notes.delta_grad.bits" if rec.get("delta_grad_stated") else f"inferred ({opt})"
+        dg = rec.get("delta_grad_stated") or dg
         cfg = start["config"]
         w_fwd = sum(n["macs"] for n in positions(start)) * g["mm"] + cfg["n_layer"] * 2 * cfg["d_model"] * cfg["ctx"] * \
             op_factor("_scaled_dot_product", g)
         records[rid] = {"id": rid, "start": rec["start"], "direction": rec["direction"], "mechanism": rec.get("mechanism"),
                         "class": rec.get("class"), "E_format": rec.get("E_format"), "note": rec.get("note", "")[:160],
                         "reference": rec["direction"] in REFS, "optimizer": opt, "delta_grad": dg,
+                        "delta_grad_from": dg_from,
                         "delta_t": rec.get("latent_bits"), "delta_t_from": rec.get("latent_from"),
                         "w_fwd": w_fwd, "a": cfg["d_model"] * ACT_BITS, **pt}
         records[rid]["family"] = family(records[rid])
