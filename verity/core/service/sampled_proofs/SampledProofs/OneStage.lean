@@ -2,8 +2,9 @@
 Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
-  (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
+  (the agreed rule: `{"law": "subset", "k"}` or `{"law": "stratified" | "work", "k"}`; `{"law": "bernoulli", "p":
+  "NUM/DEN"}` decodes, and the protocol refuses it, `paramsCovered`, as the sampled audit's soundness statement doesn't
+  cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
   `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
@@ -28,7 +29,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   drawn units' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
   against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
   absent), and `coins` when the parameters name a challenger: the evidence of the draw's coins
-  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`);
+  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); the protocol refuses a draw that carries a
+  `closure` (`evidenceCovered`), outside the sampled audit's soundness statement;
 * **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
@@ -390,6 +392,23 @@ def publicJson (x : Public) : Json :=
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
       | none => Json.null)]
 
+/-- **The parameters, refused outside the sampled audit's soundness statement**: `paramsOfJson`, and a `bernoulli` law
+refused (`Draw.bernoulli`), as the stream's run refuses it. -/
+def paramsCovered (j : Json) : V Params := do
+  let p ← paramsOfJson j
+  if Draw.bernoulli p.verifier.law then
+    throw "the law is bernoulli, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
+  return p
+
+/-- **The evidence, refused outside the sampled audit's soundness statement** (the stream's run refuses its closure map,
+`closure`): `evidenceOf`, and a draw that carries a closure refused. A work draw widened by a closure map proves a set
+whose size varies with the draw, which the statement doesn't cover. -/
+def evidenceCovered (b : ByteArray) : V Evidence := do
+  let e ← evidenceOf b
+  if (field? e.draw "closure").isSome then
+    throw "the draw carries a closure, which the sampled audit's soundness statement doesn't cover"
+  return e
+
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL
   Params := Params
@@ -397,9 +416,9 @@ def protocol : Core.Protocol where
   Evidence := Evidence
   Public := Public
   Profile := Core.Integrity
-  params := paramsOfJson
+  params := paramsCovered
   commitment := commitmentOf
-  evidence := evidenceOf
+  evidence := evidenceCovered
   digest c := c.digest
   check := checkLive
   publicJson := publicJson

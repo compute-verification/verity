@@ -91,7 +91,7 @@ def test_round_trip_register_select_deliver_outcome():
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     assert out.accepted and out.verdict.ok and out.verdict.codes == ()
-    assert out.profile is not None and out.profile.bound() == 4 and out.exhaustive is None and out.terms == S.Terms(DELTA)
+    assert out.profile is not None and out.profile.bound() == 4 and out.terms == S.Terms(DELTA)
     assert stream.symbols == ("accept",) and stream.failures == 0 and not stream.stopped
     body = stream.records[0]
     assert S._sha512(body) == out.record and body["sessions"] == [SESSION] and body["registration"] == reg.digest
@@ -135,14 +135,20 @@ def test_the_draw_is_the_challengers_coins_and_nothing_else():
     assert len({tuple(drawn(bytes([b]))) for b in range(16)}) > 1
 
 
-def test_all_proves_every_unit_and_gives_the_exhaustive_fact():
+def test_all_is_refused_and_rate_one_proves_every_unit():
+    """`All` proves every proof block without drawing from the coins, which the sampled audit's soundness statement
+    doesn't cover: `register` refuses it (`rule-all`) after R1-R7, and logs nothing. `rate:1/1` samples `subset:N` from
+    the coins, every proof block, and is accepted with its profile."""
     stream = _stream(_spec(S.All()))
-    reg = stream.register(_record(law={"law": "subset", "k": 6}), _ports(6))
-    draw = stream.select(reg)
+    assert _refused(lambda: stream.register(_record(law={"law": "subset", "k": 6}), _ports(6))) == ("rule-all",)
+    assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
+    assert stream.log == () and stream.records == ()
+    stream = _stream(_spec(S.Law("rate:1/1")))
+    draw = stream.select(stream.register(_record(law={"law": "subset", "k": 6}), _ports(6)))
     assert draw.units == list(range(6))
     stream.deliver(draw, [SESSION])
     out = stream.outcome(draw, _lean(), {})
-    assert out.accepted and out.exhaustive == S.Exhaustive(6) and out.profile is None and out.terms == S.Terms(None)
+    assert out.accepted and out.profile is not None and out.terms == S.Terms(DELTA)
 
 
 def test_the_rule_refuses_an_extra_field():
@@ -293,17 +299,14 @@ def test_one_stage_refusals_come_through_register():
     assert stream.register(_record(), _ports(6)).order == 0
 
 
-def test_a_law_whose_count_varies_is_refused_at_register():
-    """A Bernoulli sampling design at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
-    different shapes: `register` refuses it (`shapes`) after R1-R7, and logs nothing. At p = 0 or 1 it registers."""
-    for p in ("1/2", "2/3", "2/4"):
+def test_a_bernoulli_law_is_refused_at_register():
+    """A Bernoulli sampling design, at any p, is outside the sampled audit's soundness statement (its drawn count varies):
+    `register` refuses it (`bernoulli`) after R1-R7, and logs nothing."""
+    for p in ("1/2", "2/3", "2/4", "0/1", "1/1", "3/3"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
-        assert _refused(lambda: stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))) == ("shapes",)
+        assert _refused(lambda: stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))) == ("bernoulli",)
         assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
         assert stream.log == () and stream.records == ()
-    for p in ("0/1", "1/1", "3/3"):
-        stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
-        assert stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6)).order == 0
 
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
@@ -679,50 +682,36 @@ def _refused(call) -> tuple[str, ...]:
 
 WORK = {PAIR.id: 10}
 STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
-#: The challenger's closure map: each proof block is proved with the next.
+#: A closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 
 
-def test_a_work_draw_carries_its_closure_and_the_proof_proves_it():
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    draw = stream.select(reg, closure=NEXT)
-    assert draw.draw["closure"] == T.closure_of(NEXT, draw.units) and draw.draw["closure"]
-    assert D.check_draw(draw.draw, reg.record, draw.law).ok
-    assert draw.proved == sorted({*draw.units, *((u + 1) % 6 for u in draw.units)})
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {}, proved_units=draw.units)
-    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["proved"]
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    draw = stream.select(stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
-                                         work_table=WORK), closure=NEXT)
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {})
-    assert out.accepted and stream.records[0]["audit"]["proved_units"] == draw.proved
-
-
-def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
+def test_a_closure_map_is_refused_before_any_coin_is_read():
+    """A closure map widens a work sample to a set whose size varies with the sample, which the sampled audit's soundness
+    statement doesn't cover: `select` refuses any, empty or not, under any sampling design (`closure`), before any coin
+    is read. Without one the same registration's work sample is drawn and accepted."""
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
     reads: list[int] = []
     stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)), coins=lambda n: reads.append(n) or b"\x07" * n)
     reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    for bad in ({u: [6] for u in range(6)}, {6: [0]}, {u: [-1] for u in range(6)}, {u: ["1"] for u in range(6)},
-                [[1]] * 6):
+    for bad in (NEXT, {}, {u: [6] for u in range(6)}, {6: [0]}, [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
     assert reads == []
-    assert "closure" not in stream.select(reg, closure={}).draw and reads
+    draw = stream.select(reg)
+    assert "closure" not in draw.draw and reads and draw.proved == draw.units
+    stream.deliver(draw, [SESSION])
+    assert stream.outcome(draw, _lean(), {}).accepted
 
 
-@pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
+@pytest.mark.parametrize("text", ["subset:2", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same proof blocks; a work sample's closure is the same too."""
+    draws the same proof blocks."""
     table = WORK if text.startswith("work") else None
-    closure = NEXT if table else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*STEP0, STRATUM)), coins=random.Random(seed).randbytes)
         reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
-        draw = stream.select(reg, closure=closure)
-        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6, closure)
+        draw = stream.select(reg)
+        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

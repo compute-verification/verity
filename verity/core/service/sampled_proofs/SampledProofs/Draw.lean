@@ -31,6 +31,12 @@ def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option
 def derive (p : Program) (query law : Json) (table : Option Json) : V Json :=
   return ((← deriveLaw p query law table).map (·.toJson)).getD law
 
+/-- `service.uncovered`'s `bernoulli`: a `bernoulli` law at any `p`, which the sampled audit's soundness statement doesn't
+cover (it covers `subset`, `stratified` and `work` draws by `drawUnits`; a bernoulli draw's count varies, so one
+registration's sessions would set up tables of different shapes). The stream's run (`Run.run`) and the audit
+(`OneStage.paramsCovered`) refuse it. -/
+def bernoulli (law : Json) : Bool := jeq (getD law "law") "bernoulli"
+
 /-- `draw.same_law`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b
 

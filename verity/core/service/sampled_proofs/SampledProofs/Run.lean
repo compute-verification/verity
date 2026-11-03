@@ -6,10 +6,11 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
   (`Registration.check`) against the challenger's copies under the law the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`countVaries`: `shapes`), a
-  program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
-  the receipt (`registration.receipt`);
-* `select`: the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
+  (`Select.Rule.lawOver`, whatever law the copies carry), a rule or law the sampled audit's soundness statement doesn't
+  cover (`everyUnit`: `rule-all`; `Draw.bernoulli`: `bernoulli`), a program and query whose population is not the
+  registration's units in order (`Slots.popOk`: `population-order`), and the receipt (`registration.receipt`);
+* `select`: a closure map, refused before any coin is read (`closure`: a work draw widened by one is outside the
+  statement); the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
   population, `Select.resolve`); the coins are what the run's source says (`coinsHold`, code `coins`): from the
   verifier's own coins, no evidence; from the auditor's challenger, evidence (`coins`) that the bytes it read are
   exactly the coins the session the ledger opens for the registration's window (the verifier's `windowRoot`) released
@@ -77,15 +78,12 @@ def receipt (record : Json) (challenger received : String) : V Json := do
   return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
     ("verifier", Json.str challenger), ("received", Json.str received)]
 
-/-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
-up tables of different shapes: `bernoulli` at `0 < p < 1`. A work law's closure varies too, but the work draw with a
-producer closure is a planned design, so it is not refused. -/
-def countVaries (law : Json) : Bool :=
-  match getD law "law", getD law "p" with
-  | .str "bernoulli", .str p => match Draw.probability? p with
-    | some (num, den) => 0 < num && num < den
-    | none => false
-  | _, _ => false
+/-- `service.uncovered`'s `rule-all`: the `All` rule, which proves every unit without drawing from the coins. The sampled
+audit's soundness statement covers a draw by `Draw.drawUnits` on the challenger's coins, so the run refuses it; a Spec
+that proves every unit states the rate law `rate:1/1`, which draws `subset:N`. -/
+def everyUnit : Select.Rule → Bool
+  | .all => true
+  | .law _ => false
 
 /-- The draw's coins are what its source says: a draw from the verifier's own coins carries no evidence (`null`), and
 one from the auditor's challenger carries evidence that holds of the bytes it read (`Challenger.coinsReason`, after the
@@ -110,10 +108,12 @@ def run (i : Input) : V Json := do
   let v := { v with law }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
-  if countVaries law then return refused "register" #["shapes"]
+  if everyUnit rule then return refused "register" #["rule-all"]
+  if Draw.bernoulli law then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable
+  if i.closure.isSome then return refused "select" #["closure"]
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
   if !coinsHold i.fromChallenger i.coins i.record v.windowRoot (i.source.extract 0 read) then

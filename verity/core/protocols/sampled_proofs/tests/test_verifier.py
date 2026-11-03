@@ -151,14 +151,13 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     assert asked["rule"] == {"rule": "law", "law": "subset:2"} and asked["query"] == dict(QUERY)
     got = real("select", asked)
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
-    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
+    for rule, law in ((S.Law("rate:1/1"), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
         seen.clear()
         s = _stream(_spec(rule), coins=b"\x5a")
         d = s.select(s.register(_record(law=law), _ports(6)))
         (asked,) = seen
         got = real("select", asked)
-        assert d.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"]))
-        assert (got["read"] == 0) == isinstance(rule, S.All)
+        assert d.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
     _lean_answering(monkeypatch, "select", lambda got: {**got, "draw": {**got["draw"], "units": got["draw"]["units"][::-1]}})
     stream = _stream()
     with pytest.raises(S.Refused) as e:
