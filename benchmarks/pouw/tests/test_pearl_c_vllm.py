@@ -1573,21 +1573,34 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
-def test_the_window_record_the_install_writes_is_the_one_the_run_verdict_ties_to(tmp_path):
-    """W as the install writes it at the window's close (`pearl_c.window.write` over the run's ended passes): two passes of
-    one epoch with a pass without calls between them are rounds 0 and 1, and ``served_passes.py verify --tie W`` accepts
-    the run tied to W's digest on its 8 tables.  W's rounds counted over every pass, the empty one included, name calls the
-    run doesn't hold, and the run is rejected before the coin."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
-
-    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
-    wfile = tmp_path / "w.json"
-    w = PWR.write(wfile, [{"units": 2, "manifest": str(a)}, {"units": 0}, {"units": 2, "manifest": str(b)}])
-    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json", "--tie", str(wfile))
+def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
+    """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
+    warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
+    under their numbers, so ``verify --tie W`` accepts the run tied to W's digest on its 8 tables and credits the timed
+    passes alone.  The warm-up retained, W can't tie it (W registers none of round 0, and `pearl_c.window.write` refuses
+    to); once the coin is drawn ``retain`` refuses to write W again."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
+    d = _serve_dir(tmp_path, [warm, a, b])
+    served = json.loads((d / "served.json").read_text())
+    served["passes"] = [{**served["passes"][0], "timed": False}, {"pass": 1, "units": 0, "tiles": 0},
+                        *({**p, "pass": p["pass"] + 1, "timed": True} for p in served["passes"][1:])]
+    (d / "served.json").write_text(json.dumps(served))
+    wfile, coins = tmp_path / "w.json", published(warm)
+    assert SP.main(["retain", "--passes", str(d)]) == 0 and not wfile.exists()
+    assert json.loads((d / SP.RETENTION).read_text())["rounds"] == [0, 1, 2]
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 0
+    got = json.loads((d / SP.RETENTION).read_text())
+    assert got["rounds"] == [1, 2] and [(x["round"], x["why"]) for x in got["dropped"]] == [(0, SP.WARM_UP)]
+    w = json.loads(wfile.read_text())
+    assert sorted({e["value"].split("/")[1] for e in w["registered"]}) == ["1", "2"] and len(w["registered"]) == 8
+    r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w)
+    assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 8}, doc["line"]
-    every = {**w, "registered": [{**e, "value": e["value"].replace("/1/", "/2/")} for e in w["registered"]]}
-    r = VR.verify_passes([a, b], 3, 1, "test", published(a), b"verifier" * 4, window=every)
-    assert r["answer"]["verdict"] == "reject" and "W registers pearl-a/2/0, no call of the run's" in r["answer"]["reason"]
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
+    before = wfile.read_text()
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
 
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):

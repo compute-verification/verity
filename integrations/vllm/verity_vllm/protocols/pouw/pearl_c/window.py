@@ -1,16 +1,17 @@
-"""Pearl+'s window record W: a ``verity/registration/v2`` record of every call's A rows and y that the window's passes
-committed, written at the window's close, before the one-stage audit's sample, so a sampled proof block reads them as
-output values of W (`registration`'s reused values) under the roots Pearl+'s verdict credits.
+"""Pearl+'s window record W: a ``verity/registration/v2`` record of every call's A rows and y of the rounds the prover
+retains, written after the retention and before the verifier's coin and the one-stage audit's sample, so a sampled proof
+block reads them as output values of W (`registration`'s reused values) under the roots Pearl+'s verdict credits.
 
-Round s is the s-th pass with calls of the run, in the order its ended passes are recorded (``details["passes"]``, the
-order ``served.json`` lists them and the verdict reads them), a warm-up's included; call c is the c-th call of the pass's
-manifest. Each call registers its A rows ``pearl-a/<s>/<c>``: its m₁₆ committed rows of K FP32 words, at its ``root_a``,
-under `audit.activation_binding`'s domain; and its y ``pearl-y/<s>/<c>``: its real rows of N FP32 words, at its y root,
-under `served_y.y_domain`'s (`entries`). Both are hm96 rows of 32-bit words, the entries `verify_run.tie` holds to each
-call's root and recomputed domain.
+Round s is a pass's place among ``served.json``'s passes with calls (the verdict's numbering, `verify_run.tie`), so the
+warm-up's passes are rounds 0 and 1 and a dropped pass keeps its number; call c is the c-th call of the pass's manifest.
+W lists only the retained rounds the timed call made (`write`: a retained warm-up round is refused, since the verdict
+ties every retained round to W), each under its own number. Each call registers its A rows ``pearl-a/<s>/<c>``: its m₁₆
+committed rows of K FP32 words, at its ``root_a``, under `audit.activation_binding`'s domain; and its y
+``pearl-y/<s>/<c>``: its real rows of N FP32 words, at its y root, under `served_y.y_domain`'s (`entries`). Both are hm96
+rows of 32-bit words, the entries `verify_run.tie` holds to each call's root and recomputed domain.
 
-The pouw setting ``window_record`` (W's path) turns it on and needs ``transcript_dir``, whose manifests W reads: every pass
-of the window is retained. Unset, nothing is written and the run is unchanged (`at_close`).
+``served_passes.py retain --window-record W`` writes it: it drops the warm-up's rounds, writes the retention, then W over
+the rounds it retains.
 
 The audited window's registration, chained right after W, registers each value as W's (`reuse`): the rows the audited
 circuit's proof blocks make of it, committed as Pearl+ committed them, so its entry is W's, and one-stage's R7 takes it
@@ -32,8 +33,6 @@ from verity.ml.commitments.merkle import tree_levels
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
-#: the pouw setting naming W's path
-KEY = "window_record"
 #: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
 WORD_BITS = 32
 
@@ -67,48 +66,51 @@ def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
     return out
 
 
-def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None) -> dict[str, Any]:
-    """W over a run's passes with calls, their manifests in order, chained after ``previous`` (the digest of the prover's
-    last one-stage record, `registration.digest`; None for its first). ValueError for no pass, or passes of two salts."""
+def _rounds(manifests: Sequence[Mapping[str, Any]], rounds: Sequence[int] | None) -> list[int]:
+    got = list(range(len(manifests))) if rounds is None else list(rounds)
+    if len(got) != len(manifests) or not all(type(s) is int and s >= 0 for s in got) or got != sorted(set(got)):
+        raise ValueError(f"W's rounds {got} are not distinct rounds in order, one a pass ({len(manifests)} passes)")
+    return got
+
+
+def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
+           rounds: Sequence[int] | None = None) -> dict[str, Any]:
+    """W over passes' manifests in order, pass i round ``rounds[i]`` (default i), chained after ``previous`` (the digest of
+    the prover's last one-stage record, `registration.digest`; None for its first). ValueError for no pass, rounds that
+    aren't one a pass in order, or passes of two salts."""
     if not manifests:
-        raise ValueError("W registers the calls of a run's passes, and the run has no pass with calls")
+        raise ValueError("W registers the calls of a run's retained rounds, and it retains none")
     head = manifests[0]
     if other := next((m["salt"] for m in manifests if m["salt"] != head["salt"]), None):
         raise ValueError(f"W is one epoch's: its passes are under salts {head['salt'][:16]}… and {other[:16]}…")
     return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
             "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"]},
-            "registered": [e for s, m in enumerate(manifests) for e in entries(m, s)], "previous": previous}
+            "registered": [e for s, m in zip(_rounds(manifests, rounds), manifests) for e in entries(m, s)],
+            "previous": previous}
 
 
-def write(path: str | Path, passes: Sequence[Mapping[str, Any]], previous: str | None = None) -> dict[str, Any]:
-    """W over a run's ended passes (``details["passes"]``, each pass with calls read from its manifest) written to
-    ``path``, and returned. ValueError for a pass with calls that retained no manifest."""
+def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequence[int],
+          previous: str | None = None) -> dict[str, Any]:
+    """W over the retained ``rounds`` (places among ``passes``, ``served.json``'s, with calls: the retention's) written to
+    ``path``, and returned. ValueError for a round that is no pass with calls, a warm-up's round (``timed`` false: W
+    lists only the timed call's rounds, so a tied run drops the warm-up's), or a round that retained no manifest."""
+    held = [p for p in passes if p.get("units")]
     manifests = []
-    for i, p in enumerate(passes):
-        if not p.get("units"):
-            continue
-        if not p.get("manifest"):
-            raise ValueError(f"pass {i} has calls and retained no manifest, which W reads: set the pouw setting "
-                             "'transcript_dir'")
-        manifests.append(json.loads(Path(p["manifest"]).read_text()))
-    w = record(manifests, previous)
+    for s in rounds:
+        if not 0 <= s < len(held):
+            raise ValueError(f"no round {s} among the run's {len(held)} passes with calls")
+        if not held[s].get("timed", True):
+            raise ValueError(f"round {s} is the warm-up's (timed false) and retained: W lists only the timed call's rounds, "
+                             f"and the verdict ties every retained round to W, so drop it before the coin "
+                             f"(served_passes.py retain --drop {s}, or retain --window-record W)")
+        if not held[s].get("manifest"):
+            raise ValueError(f"round {s} retained no manifest, which W reads: serve with the pouw setting 'transcript_dir'")
+        manifests.append(json.loads(Path(held[s]["manifest"]).read_text()))
+    w = record(manifests, previous, rounds)
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(w, indent=1) + "\n")
     return w
-
-
-def at_close(release: Callable[[], None], run: Any, path: str | None) -> Callable[[], None]:
-    """``release``, then with ``path`` W over ``run``'s passes written there (`write`), its path, digest and value count
-    in ``run.details["window_record"]``; ``release`` itself without ``path``."""
-    if path is None:
-        return release
-
-    def close() -> None:
-        release()
-        w = write(path, run.details["passes"])
-        run.details[KEY] = {"path": str(path), "digest": REG.digest(w), "values": len(w["registered"])}
-    return close
 
 
 @dataclass(frozen=True)
@@ -125,17 +127,17 @@ class Committed(G.Registered):
 
 
 def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
-          rows_of: Callable[[str, int, np.ndarray], np.ndarray]) -> dict[str, Committed]:
-    """The values W registers (``w``, the window record of ``manifests``: `record`), each as the audited circuit's
-    registered value: the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an FP32 word's
-    two low first, every row no proof block makes ``empty``, zero), each salted with `audit.hm96_salt` under its pass's
-    ``hm96_salt_key`` at the call's index for A and `served_y.HM96_Y` past it for y. ValueError unless ``w`` is the record
-    of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or the key is
-    another."""
-    if dict(w) != record(manifests, w.get("previous")):
+          rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None) -> dict[str, Committed]:
+    """The values W registers (``w``, the window record of ``manifests`` at ``rounds``: `record`), each as the audited
+    circuit's registered value: the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an
+    FP32 word's two low first, every row no proof block makes ``empty``, zero), each salted with `audit.hm96_salt` under
+    its pass's ``hm96_salt_key`` at the call's index for A and `served_y.HM96_Y` past it for y. ValueError unless ``w`` is
+    the record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or
+    the key is another."""
+    if dict(w) != record(manifests, w.get("previous"), rounds):
         raise ValueError("W is not the window record of these passes (`record`), whose calls' values the audited window reads")
     out: dict[str, Committed] = {}
-    for s, man in enumerate(manifests):
+    for s, man in zip(_rounds(manifests, rounds), manifests):
         salt, key, want = bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]), iter(entries(man, s))
         for u in man["matmuls"]:
             i = u["index"]
@@ -156,16 +158,4 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
     return out
 
 
-def setting(raw: Mapping[str, Any]) -> str | None:
-    """The pouw setting ``window_record``: None, or W's path, which needs ``transcript_dir``. ValueError otherwise."""
-    path = raw.get(KEY)
-    if path is None:
-        return None
-    if not isinstance(path, str) or not path:
-        raise ValueError(f"pouw setting '{KEY}' is a path string, where W goes at the window's close")
-    if raw.get("transcript_dir") is None:
-        raise ValueError(f"pouw setting '{KEY}' needs 'transcript_dir': W reads each pass's retained manifest")
-    return path
-
-
-__all__ = ["KEY", "WORD_BITS", "Committed", "a_value", "at_close", "entries", "record", "reuse", "setting", "write", "y_value"]
+__all__ = ["WORD_BITS", "Committed", "a_value", "entries", "record", "reuse", "write", "y_value"]

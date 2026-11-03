@@ -56,7 +56,8 @@ have theirs pinned through ``--registered``, from the window's entries.
 A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
 H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
 first by an earlier record W (``--tie W``: PoUW H1's registration of the window, fixed before H1's sample coin, or Pearl+'s
-window record, written at the window's close), and the window's registration, chained right after W, registers each as
+window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
+registration, chained right after W, registers each as
 W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
 roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are

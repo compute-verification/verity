@@ -31,8 +31,8 @@
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one source of the verifier's
 coins, drawn once every pass's roots are read, keys t draws over all the passes' tickets together, and an accept credits
 the run's credited MACs at Pearl's Assumption 1, less what ε of the tickets' weight could hold at δ, in core's answer form.
-With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record at the window's close, whose values the
-one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
+With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
+retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
 (`window_class.PearlTables`), each with its call's root, the domain recomputed from the pass's salt and the call's index,
 and its rows, words and word bits, and W names no other Pearl+ value but a dropped round's; any mismatch rejects the run,
