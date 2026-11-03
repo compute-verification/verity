@@ -131,15 +131,16 @@ def _out(root: Path, *args: str) -> str | None:
 _BROKER_REFUSED: list[float] = []
 
 
-def notes_token() -> str | None:
+def notes_token(now: float | None = None) -> str | None:
     """RESEARCH_NOTES_TOKEN when it was set by hand (a laptop, the control pod); else, on a Cursor agent, an hour's token for the
     notes repository from the agents' GitHub broker (`GITHUB_BROKER`, scope `notes`), which this puts in the environment with its
     source and expiry, so git's credential helper and child processes read it, and mints again REFRESH_S before it expires.  None
     when there is neither; a broker that refused is asked again only after BROKER_RETRY_S."""
+    now = time.time() if now is None else now
     tok = os.environ.get(TOKEN_ENV)
-    if tok and (os.environ.get(SOURCE_ENV) != "broker" or float(os.environ.get(EXPIRES_ENV) or 0) > time.time() + REFRESH_S):
+    if tok and (os.environ.get(SOURCE_ENV) != "broker" or float(os.environ.get(EXPIRES_ENV) or 0) > now + REFRESH_S):
         return tok
-    if _BROKER_REFUSED and time.time() < _BROKER_REFUSED[-1] + BROKER_RETRY_S:
+    if _BROKER_REFUSED and now < _BROKER_REFUSED[-1] + BROKER_RETRY_S:
         return tok or None
     try:
         from .slack import _NoRedirect, oidc_token
@@ -153,7 +154,7 @@ def notes_token() -> str | None:
         if not isinstance(new, str) or not new or any(c.isspace() for c in new):
             raise ValueError("malformed token")
     except Exception:  # noqa: BLE001  (no Cursor identity, a refusal or an outage: the caller goes on without a token)
-        _BROKER_REFUSED.append(time.time())
+        _BROKER_REFUSED.append(now)
         return tok or None
     os.environ.update({TOKEN_ENV: new, SOURCE_ENV: "broker", EXPIRES_ENV: f"{expires:.0f}"})
     return new
