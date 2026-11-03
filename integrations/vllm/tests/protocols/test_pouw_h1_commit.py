@@ -560,6 +560,76 @@ def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_op
     assert PHC.manifest_reason(record) is None and CR.commit_of(c["commit"]) == (None, ("commit", CR.COMMIT_FORM))
 
 
+def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
+    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._a_rows`)."""
+    kept, a_rows = {}, SV.Served._a_rows
+
+    def spy(self, call, value, mine, codes, scales):
+        whole = a_rows(self, call, value, mine, codes, scales)
+        if whole is not None:
+            kept[value] = whole.copy()
+        return whole
+    monkeypatch.setattr(SV.Served, "_a_rows", spy)
+    return kept
+
+
+def test_the_audited_circuits_tables_are_the_windows_registration_of_them(tmp_path, monkeypatch):
+    """`reuse`: the audited circuit's tables, given as the rows its proof blocks make of each (here H1's own: each step's A
+    table as the window committed it, each round's input-ids table its served ids), are the window's registration W's
+    tables: each salted under H1's key at its nonce and W's entry's domain (round 0's input-ids binding the session), its
+    entry W's but in name, the Commit's (`credit.commit_rows`, `credit.commit_ids`), so a record registering them reuses
+    W's. Each is asked for at its rows, with its empty row (zero codes of scale 0, `EMPTY_ID`). Refused by name where a
+    table's rows aren't W's, H1's key is another, or W registers no such table."""
+    kept = _kept_tables(monkeypatch)
+    _record, run, _tap = _window(tmp_path, monkeypatch)
+    w, served = CT.registration(run), run.served
+    layout = {"calls": served.calls, "linears": served.linears, "m": served.m}
+    names = [(CR.commit_rows(s, K), f"{SV.PREFIX}a/{K}@{s}") for s in range(STEPS)]
+    names += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}") for s in range(STEPS)]
+    words = {**{CR.commit_rows(s, K): kept[f"{SV.PREFIX}a/{K}@{s}"] for s in range(STEPS)},
+             **{CR.commit_ids(s): served.ids_of(s) for s in range(STEPS)}}
+    asked = []
+
+    def rows_of(name, n, empty):
+        asked.append((name, n, list(empty)))
+        return words[name]
+    got = CT.reuse(w, layout, STEPS, run._key, rows_of)
+    theirs = {e["value"]: e for e in w["registered"]}
+    assert CT.shape(layout, STEPS) == (K, served.m, 2)
+    assert {n: r.entry() for n, r in got.items()} == {n: {**theirs[h], "value": n} for n, h in names}
+    with pytest.raises(ValueError, match="no binding to recompute it from"):
+        _ = got[CR.commit_ids(0)].domain
+    assert asked == [(n, 2 * served.m, [0] * (K // 2 + 2)) for n, _ in names[:STEPS]] + [
+        (n, served.m, [0xFFFF, 0xFFFF]) for n, _ in names[STEPS:]]
+    r = got[CR.commit_ids(0)]
+    assert r.salts[3] == served.ids[0].salts[3] and r.path(3) == served.ids[0].path(3)
+    with pytest.raises(ValueError, match=f"{CR.commit_rows(0, K)}: .* or H1's key is another"):
+        CT.reuse(w, layout, STEPS, bytes(32), rows_of)
+    with pytest.raises(ValueError, match=f"registers no {SV.PREFIX}ids@1, which the audited circuit reads as "
+                                         f"{CR.commit_ids(1)}"):
+        CT.reuse({**w, "registered": [e for e in w["registered"] if e["value"] != f"{SV.PREFIX}ids@1"]}, layout, STEPS,
+                 run._key, rows_of)
+    words[CR.commit_rows(1, K)] = words[CR.commit_rows(1, K)].copy()
+    words[CR.commit_rows(1, K)][3, 0] ^= 1
+    with pytest.raises(ValueError, match=f"{CR.commit_rows(1, K)}: the rows the audited circuit's proof blocks make of it "
+                                         f"are not the window's registration's {SV.PREFIX}a/{K}@1"):
+        CT.reuse(w, layout, STEPS, run._key, rows_of)
+
+
+@pytest.mark.parametrize("layout, steps, why", [
+    ({"calls": [["a", 0], ["b", 0]], "linears": [["a", 64, 8], ["b", 128, 8]], "m": 8}, 1, "not one K's"),
+    ({"calls": [["a", 0], ["b", 0]], "linears": [["a", 64, 8], ["b", 128, 8]], "m": 8}, 2,
+     r"\[\(0, 64, 1\), \(1, 128, 1\)\] \(round, K, calls\) over its 2 rounds are not one K's"),
+    ({"calls": [["a", 0]] * 3, "linears": [["a", 64, 8]], "m": 8}, 2, "over its 2 rounds are not one K's"),
+    ({"calls": [["d", 0]], "linears": [["d", 8192, 8]], "m": 8}, 1, r"K = 8192: an A row of \d+ leaves"),
+], ids=["two-ks-a-round", "k-differs-by-round", "rounds-dont-divide", "chunked"])
+def test_tables_the_audited_circuit_doesnt_read_are_refused(layout, steps, why):
+    """`shape` refuses H1's window Program unless each round's A tables are one K's, the same calls each round, a row one
+    leaf: the one form the audited circuit reads (`window_class.Tables`)."""
+    with pytest.raises(ValueError, match=why):
+        CT.shape(layout, steps)
+
+
 def test_commit_record_is_h1s_setting_a_callable_beside_served():
     """The setting ``commit_record`` is a callable, and only H1's with its served tables."""
     with pytest.raises(ValueError, match="'commit_record' is commit_record"):

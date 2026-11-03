@@ -32,7 +32,8 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
   reuses its tables, one-stage's registration of the window's audited circuit. At the close the window's registration
   W (`registration`), a v2 record of its own entries, goes into the prover's log, and the named record is chained right
   after W and registers each of the window's tables under the Commit's name with W's entry of it (`reused`), so ROOTS1
-  holds it as it holds the tap's.
+  holds it as it holds the tap's. The audited circuit's side (`reuse`): its tables are W's (`shape`: one K, the same
+  calls each round), each the rows its proof blocks make salted as H1 salted W's (`Reused`), refused unless W's root.
 * **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K and each round's
   input-ids table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
   prefill row's input id is its request's prompt token (`ids_reason`, until Served.lean's layer-0 tie holds it in core).
@@ -45,10 +46,12 @@ from typing import Any, Callable, Iterator, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.pouw import weights as Wt
+from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
+from verity_vllm.protocols.pouw.h1 import registered as NR
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
 SCHEME, ROOT_BYTES = step_rows.NAME, 64
@@ -341,6 +344,75 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class Reused(G.Registered):
+    """A table of the window's registration W as a registered value of the audited circuit (`reuse`): W's rows, salts and
+    tree of it, under W's entry's domain ``domain_id``, by the circuit's name of it, so its entry is W's entry but in name.
+    W's entry names its domain by id alone (round 0's input ids bind the window's session, which W doesn't hold), so it
+    has no `domain` to recompute."""
+
+    domain_id: bytes = b""
+
+    @property
+    def domain(self) -> Any:
+        raise ValueError(f"{self.value}: a table reused from the window's registration has W's domain id "
+                         f"{self.domain_id.hex()[:16]}… and no binding to recompute it from (`entry`)")
+
+    def entry(self) -> dict[str, Any]:
+        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
+                **G.width_entry(self.word_bits), "domain": self.domain_id.hex()}
+
+
+def shape(layout: Mapping[str, Any], steps: int) -> tuple[int, int, int]:
+    """The audited circuit's tables (`window_class.Tables`) of H1's window Program of ``layout`` (its meta's, `served.
+    write_program`) over its ``steps`` rounds: ``(K, M, calls)``, its one K, its M rows a call and its calls of K a round.
+    ValueError unless every round's A tables are one K's, the same calls a round, a row one leaf (`weights.chunks`)."""
+    got = CR.step_tables(dict(layout), steps)
+    if not got or len(got) != steps or len({(k, len(cs)) for _s, k, cs in got}) != 1:
+        raise ValueError(f"H1's window Program's A tables {[(s, k, len(cs)) for s, k, cs in got]} (round, K, calls) over its "
+                         f"{steps} rounds are not one K's with the same calls each round, the tables the audited circuit reads")
+    k, calls = got[0][1], len(got[0][2])
+    if Wt.chunks(k) != 1:
+        raise ValueError(f"K = {k}: an A row of {Wt.chunks(k)} leaves, and the audited circuit reads a quantizer's row as one")
+    return k, int(layout["m"]), calls
+
+
+def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key: bytes,
+          rows_of: Callable[[str, int, np.ndarray], np.ndarray]) -> dict[str, Reused]:
+    """The audited circuit's tables (`shape`) as its registered values, each W's table of it (``window``, the window's
+    registration, `registration`): round s's A table ``<prefix>a/<K>@<s>`` as `credit.commit_rows` of (s, K), and its
+    input-ids table ``<prefix>ids@<s>`` as `credit.commit_ids` of s. Each holds the rows ``rows_of(name, rows, empty)``
+    gives (the rows the circuit's proof blocks make of it, every other row ``empty``: zero codes of scale 0, an id
+    `served.EMPTY_ID`), salted as H1 salts W's (H1's ``key``, at the table's `served.nonce` or `served.IDS_NONCE` + s),
+    under W's entry's domain. ValueError unless each is W's entry of it in root, leaves and words: the proof blocks don't
+    make the table H1 committed, so the window's registration can't reuse it."""
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    k, m, _calls = shape(layout, steps)
+    theirs = {e.get("value"): e for e in window.get("registered") or () if isinstance(e, Mapping)}
+    tables = [(CR.commit_rows(s, k), f"{SV.PREFIX}a/{k}@{s}", SV.nonce(cs[0], "a"), m * len(cs),
+               np.zeros(k // 2 + 2, np.uint16)) for s, _k, cs in CR.step_tables(dict(layout), steps)]
+    tables += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}", SV.IDS_NONCE + s, m, SV.ids_words([], 1)[0]) for s in range(steps)]
+    out: dict[str, Reused] = {}
+    for name, h1, nonce, n, empty in tables:
+        e = theirs.get(h1)
+        if e is None or not isinstance(e.get("domain"), str):
+            raise ValueError(f"the window's registration registers no {h1}, which the audited circuit reads as {name}")
+        words = np.ascontiguousarray(rows_of(name, n, empty), dtype=np.uint16)
+        dom = bytes.fromhex(e["domain"])
+        bcs, levels = NR._numpy(words, key, nonce, None, dom)
+        got = out[name] = Reused(program=str(window.get("program")), value=name, words=int(words.shape[1]),
+                                 word_bits=G.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(key, nonce, n), bcs=bcs,
+                                 levels=levels, schema=G.SCHEMA_V2, domain_id=dom)
+        if (got.root.hex(), got.leaves, got.words, G.WORD_BITS) != (e.get("root"), e.get("leaves"), e.get("words"),
+                                                                     e.get(G.WIDTH_KEY, G.WORD_BITS)):
+            raise ValueError(f"{name}: the rows the audited circuit's proof blocks make of it are not the window's "
+                             f"registration's {h1} (root {got.root.hex()[:16]}… for {str(e.get('root'))[:16]}…, "
+                             f"{got.leaves} rows of {got.words} words for {e.get('leaves')} of {e.get('words')}): the model "
+                             "didn't make the table H1 committed, or H1's key is another")
+    return out
+
+
 def named(run: Any) -> tuple[str | None, dict[str, Any]]:
     """The Commit record ``run``'s ``commit_record`` names at the window's close (`pouw_h1.H1Run.finish`), its canonical
     JSON in hex as `credit.commit_of` reads it, and what the run records of it (``details.commit_record``): the digests
@@ -435,5 +507,6 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
     return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
 
 
-__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Sites", "UNTIED", "bind", "calls_root", "committed",
-           "digest", "ids_reason", "named", "record_of", "registration", "reused", "roots1", "site", "untied"]
+__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind", "calls_root",
+           "committed", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused", "roots1", "shape", "site",
+           "untied"]
