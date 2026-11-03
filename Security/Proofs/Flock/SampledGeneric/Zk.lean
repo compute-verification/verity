@@ -5,15 +5,17 @@ public import Proofs.Flock.SampledGeneric.Statements
 /-!
 # The sampled audit's zero knowledge, generic in the proof system (proved)
 
-Two hybrids: replace the session's view on each commitment by its simulator's (`close_coin`, at `ε_zk` because the
-proof system is zero knowledge at every commitment the prover's coins give), then replace the commitment to the trace by
-one to the fixed trace `X₀` (`Hider.Hiding`, at `ε_hide`, against the post-processing that samples and simulates).
-`Close.trans` adds the two.
+Two hybrids. First, on each commitment the prover's coins give, replace the session's honest view by its simulator's
+(`Close.coin`, at `ε_zk`, because the proof system is zero knowledge at every such statement): this is `auditSim` at the
+real trace `X`. Then replace the commitment to `X` by one to the fixed trace `X₀`: `auditSim` at a trace is the
+commitment to it post-processed by the verifier's sample and the simulator (`auditSim_eq_andThen`), so hiding (at
+`ε_hide`) moves it to `auditSim` at `X₀`. `Close.trans` adds the two.
 
 * `prob_map_strat`: relabelling the output with the strategy that plays the same moves relabels the event;
-* `pr_coin_map`, `Close.trans`, `close_coin`, `le_coin`;
-* `Flock.SecurityProofs.GenericSampledZK`, and `Flock.SecurityProofs.GenericSampledZKMul` for a proof system zero
-  knowledge with a factor (`Zk.ZKMul`, the ZK server's form), by the same two hybrids.
+* `Close.trans`, `Close.symm`, `Close.mono`: closeness is a pseudometric's ball, and grows with its radius;
+* `Close.coin`: closeness under a uniform coin drawn first;
+* `auditSimAfter`, `auditSim_eq_andThen`: the simulator as a post-processing of the commitment;
+* `Flock.SecurityProofs.GenericSampledZK`.
 -/
 
 @[expose] public section
@@ -31,80 +33,67 @@ theorem prob_map_strat {α β : Type} (p : β → Prop) (f : α → β) :
       show avg (fun c => prob p ((k c).map f) (Strategy.map f (k c) (s c))) = avg fun c => prob _ (k c) (s c)
       exact congrArg avg (funext fun c => prob_map_strat p f (k c) (s c))
 
-theorem Close.trans {V : Type} {a b c : Exp V} {ε₁ ε₂ : ℝ≥0∞} (h₁ : Close a b ε₁) (h₂ : Close b c ε₂) :
-    Close a c (ε₁ + ε₂) := fun E =>
+namespace Close
+
+variable {V : Type} {a b c : Exp V}
+
+theorem trans {ε₁ ε₂ : ℝ≥0∞} (h₁ : Close a b ε₁) (h₂ : Close b c ε₂) : Close a c (ε₁ + ε₂) := fun E =>
   ⟨(h₁ E).1.trans ((add_le_add (h₂ E).1 le_rfl).trans_eq (by rw [add_assoc, add_comm ε₂ ε₁])),
     (h₂ E).2.trans ((add_le_add (h₁ E).2 le_rfl).trans_eq (add_assoc _ _ _))⟩
 
-/-- An event's probability in the experiment that draws a uniform coin, runs the coin's experiment and relabels its view
-by the coin is the average over the coin. -/
-theorem pr_coin_map {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a : Rnd → Exp V) (f : Rnd → V → W)
-    (E : W → Prop) :
-    Exp.pr ⟨.coin Rnd fun r => (a r).g.map (f r), fun r => Strategy.map _ _ (a r).s⟩ E =
-      avg fun r => (a r).pr fun v => E (f r v) :=
-  congrArg avg (funext fun r => prob_map_strat E (f r) (a r).g (a r).s)
+theorem symm {ε : ℝ≥0∞} (h : Close a b ε) : Close b a ε := fun E => ⟨(h E).2, (h E).1⟩
+
+theorem mono {ε ε' : ℝ≥0∞} (h : Close a b ε) (hε : ε ≤ ε') : Close a b ε' := fun E =>
+  ⟨(h E).1.trans (add_le_add le_rfl hε), (h E).2.trans (add_le_add le_rfl hε)⟩
 
 /-- **Closeness under a uniform coin**: if each coin's two experiments are `ε`-close, so are the experiments that draw
 the coin first and relabel each view by the coin. -/
-theorem close_coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W)
-    {ε : ℝ≥0∞} (h : ∀ r, Close (a r) (b r) ε) :
+theorem coin {Rnd W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W) {ε : ℝ≥0∞}
+    (h : ∀ r, Close (a r) (b r) ε) :
     Close ⟨.coin Rnd fun r => (a r).g.map (f r), fun r => Strategy.map _ _ (a r).s⟩
       ⟨.coin Rnd fun r => (b r).g.map (f r), fun r => Strategy.map _ _ (b r).s⟩ ε := by
+  have key : ∀ c : Rnd → Exp V, ∀ E : W → Prop,
+      Exp.pr ⟨.coin Rnd fun r => (c r).g.map (f r), fun r => Strategy.map _ _ (c r).s⟩ E =
+        avg fun r => (c r).pr fun v => E (f r v) := fun c E =>
+    congrArg avg (funext fun r => prob_map_strat E (f r) (c r).g (c r).s)
   intro E
-  rw [pr_coin_map a f E, pr_coin_map b f E]
+  rw [key a, key b]
   constructor
   · rw [← avg_const (C := Rnd) ε, ← avg_add]
     exact avg_mono fun r => (h r fun v => E (f r v)).1
   · rw [← avg_const (C := Rnd) ε, ← avg_add]
     exact avg_mono fun r => (h r fun v => E (f r v)).2
 
-/-- **A bound with a factor under a uniform coin**: if each coin's first experiment is at most `c` times the second plus
-`ε r` on the relabelled event, the experiments that draw the coin first are within `c` times plus the average of `ε`. -/
-theorem le_coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W) (c : ℝ≥0∞)
-    (ε : Rnd → ℝ≥0∞) (E : W → Prop)
-    (h : ∀ r, (a r).pr (fun v => E (f r v)) ≤ c * (b r).pr (fun v => E (f r v)) + ε r) :
-    Exp.pr ⟨.coin Rnd fun r => (a r).g.map (f r), fun r => Strategy.map _ _ (a r).s⟩ E ≤
-      c * Exp.pr ⟨.coin Rnd fun r => (b r).g.map (f r), fun r => Strategy.map _ _ (b r).s⟩ E + avg ε := by
-  rw [pr_coin_map a f E, pr_coin_map b f E]
-  have hm : avg (fun r => c * (b r).pr fun v => E (f r v)) = c * avg fun r => (b r).pr fun v => E (f r v) := by
-    rw [mul_comm c, ← avg_mul_const]
-    exact congrArg avg (funext fun r => mul_comm _ _)
-  rw [← hm, ← avg_add]
-  exact avg_mono h
+end Close
+
+variable {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Nonempty Rnd]
+
+/-- **The simulator after the commitment `c`**: the verifier `v`'s sample on seeing `c`, and the proof system's
+simulator on that sample's statement, with the view relabelled to carry `c` and the sample. -/
+def auditSimAfter (Z : Zk (Com × Finset (Fin n)) Wit VS View) (samp : VS → Com → Finset (Fin n)) (v : VS) (c : Com) :
+    Exp (Com × Finset (Fin n) × View) :=
+  ⟨(Z.sim (c, samp v c) v).g.map fun w => (c, samp v c, w), Strategy.map _ _ (Z.sim (c, samp v c) v).s⟩
+
+/-- **The audit's simulator is a post-processing of the commitment**: at any trace `X`, `auditSim` is the commitment to
+`X` followed by `auditSimAfter`, which reads only the commitment. -/
+theorem auditSim_eq_andThen (H : Hider Tr Rnd Com) (Z : Zk (Com × Finset (Fin n)) Wit VS View)
+    (samp : VS → Com → Finset (Fin n)) (X : Tr) (v : VS) :
+    auditSim H Z samp X v = (H.exp X).andThen (auditSimAfter Z samp v) := rfl
 
 end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **The sampled audit's zero knowledge, generic in the proof system** (`Flock.Guarantees.GenericSampledZK`): the real
-view is `ε_zk`-close to the hybrid that simulates each session on the real commitment (`close_coin`), which is
-`ε_hide`-close to the simulator's, a commitment to `X₀` post-processed the same way (`Hider.Hiding`). -/
+view is `ε_zk`-close to `auditSim` at the real trace, which simulates each session on the real commitment
+(`Close.coin`), and that is `ε_hide`-close to `auditSim` at `X₀`, since both are a commitment post-processed by
+`auditSimAfter` (`auditSim_eq_andThen`, `Hider.Hiding`). -/
 theorem Flock.SecurityProofs.GenericSampledZK : Flock.Guarantees.GenericSampledZK := by
   intro n Tr Rnd Com Wit VS View _ _ H Z Rel εzk εh samp wit hZ hH X hX X₀ v
-  let F : Com → Exp (Com × Finset (Fin n) × View) := fun c =>
-    ⟨(Z.sim (c, samp v c) v).g.map fun w => (c, samp v c, w), Strategy.map _ _ (Z.sim (c, samp v c) v).s⟩
-  have h1 : Close (auditView H Z samp wit X v) ((H.exp X).andThen F) εzk :=
-    close_coin (fun r => Z.real (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v)
+  have h1 : Close (auditView H Z samp wit X v) (auditSim H Z samp X v) εzk :=
+    Close.coin (fun r => Z.real (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v)
       (fun r => Z.sim (H.commit X r, samp v (H.commit X r)) v) (fun r w => (H.commit X r, samp v (H.commit X r), w))
       fun r => hZ _ _ (hX r _) v
-  have h2 : Close ((H.exp X).andThen F) (auditSim H Z samp X₀ v) εh := hH _ X X₀ F
+  have h2 : Close (auditSim H Z samp X v) (auditSim H Z samp X₀ v) εh := by
+    rw [auditSim_eq_andThen, auditSim_eq_andThen]
+    exact hH _ X X₀ (auditSimAfter Z samp v)
   exact h1.trans h2
-
-open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
-/-- **The sampled audit's zero knowledge with a factor, generic in the proof system**
-(`Flock.Guarantees.GenericSampledZKMul`): the real view is at most `c` times the hybrid that simulates each session on
-the real commitment plus the average session error (`le_coin`), and the hybrid is within `ε_hide` of the simulator's
-(`Hider.Hiding`), which the factor multiplies. -/
-theorem Flock.SecurityProofs.GenericSampledZKMul : Flock.Guarantees.GenericSampledZKMul := by
-  intro n Tr Rnd Com Wit VS View _ _ H Z Rel c εzk εh samp wit hZ hH X hX X₀ v E
-  let F : Com → Exp (Com × Finset (Fin n) × View) := fun cm =>
-    ⟨(Z.sim (cm, samp v cm) v).g.map fun w => (cm, samp v cm, w), Strategy.map _ _ (Z.sim (cm, samp v cm) v).s⟩
-  have h1 : (auditView H Z samp wit X v).pr E ≤ c * ((H.exp X).andThen F).pr E +
-      avg fun r : Rnd => εzk (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v :=
-    le_coin (fun r => Z.real (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v)
-      (fun r => Z.sim (H.commit X r, samp v (H.commit X r)) v) (fun r w => (H.commit X r, samp v (H.commit X r), w)) c
-      (fun r => εzk (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v) E
-      fun r => hZ _ _ (hX r _) v _
-  have h2 : ((H.exp X).andThen F).pr E ≤ (auditSim H Z samp X₀ v).pr E + εh := (hH _ X X₀ F E).1
-  refine h1.trans ?_
-  rw [← mul_add]
-  gcongr

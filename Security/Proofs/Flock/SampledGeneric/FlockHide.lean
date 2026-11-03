@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.ZK.RealLeaves
 /-!
 # hm96's leaf commitment hides, in the generic interface (`Hider.Hiding`)
 
-`GenericSampledZK` and `GenericSampledZKMul` take the commitment's hiding against every post-processing
+`GenericSampledZK` and `audit_below` take the commitment's hiding against every post-processing
 (`Hider.Hiding`). Here hm96's leaf commitment to a vector of digests (leaf `i` is `H(x_i + M·y_i, c(y_i))` at its own
 salt `y_i`) is `2·N·δ₁`-hiding over `N` leaves, from `Claims.Hm96Hiding M c δ₁`:
 
