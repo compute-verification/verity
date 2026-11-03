@@ -135,6 +135,7 @@ def measured_ledger(out: Path, launch: bool = True) -> dict:
                    check=True, capture_output=True)
     cache = trace40.cache()
     cache.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     pf = cache / "pending.json"
     pending = json.loads(pf.read_text()) if pf.exists() else {}
     took, log, deadline = [], {}, time.monotonic() + TRACE_WAIT_S
