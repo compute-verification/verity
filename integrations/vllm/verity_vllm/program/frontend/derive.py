@@ -496,8 +496,11 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False, session: list | None = None, dead_free: bool = False) -> DeriveReport:
-    """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
+                  registered_values: bool = False, session: list | None = None, dead_free: bool = False,
+                  theta: Sequence[str] = ()) -> DeriveReport:
+    """`theta`: user inputs that are the model's weights (`Program.theta`), beside the `weights` record a module's parameters make;
+    a graph no module owns has none (`derive_graph.derive_graph`).
+    `registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
@@ -526,9 +529,10 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
-        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free,
+                             theta=tuple(theta))
         if session is not None:
-            session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
+            session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free, tuple(theta)))
         return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
@@ -542,7 +546,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool, dead_free: bool = False) -> DeriveReport:
+                   check_registry: bool, dead_free: bool = False, theta: tuple[str, ...] = ()) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -568,7 +572,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     corr_digest = correspondence_digest(corr_doc)
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
                            registered=ctx.registered_inputs.names if ctx.registered_values else (),
-                           theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + getattr(ctx.ep, "theta", ()))
+                           theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + theta)
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None

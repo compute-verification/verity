@@ -199,6 +199,8 @@ def test_derive_graph_names_inputs_and_theta() -> None:
     gm = make_fx(lambda w, x: (x * w,), tracing_mode="fake")(ROW, X)
     with pytest.raises(ValueError, match="theta names inputs"):
         derive_graph(gm, (ROW, X), mode="reference", rules=training_rules(), input_names=["w", "x"], theta=("v",))
+    with pytest.raises(ValueError, match="theta must name each input once"):
+        derive_graph(gm, (ROW, X), mode="reference", rules=training_rules(), input_names=["w", "x"], theta=("w", "w"))
     with pytest.raises(ValueError, match="Python identifiers"):
         derive_graph(gm, (ROW, X), mode="reference", rules=training_rules(), input_names=["w", "class"])
 
