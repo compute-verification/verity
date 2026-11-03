@@ -7,7 +7,9 @@ measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, 
 out, each marked with its reason (`status`): an invalid record, one whose read-outs `cw.readout_leaks` lists
 (`read-out-leak`, invalid: the coordinator's 14:22Z rule), an unscored one, one measured by any other commit
 (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the first to submit
-an E is the one its compute is counted for), and one a later ingest of its run supersedes (`re-ingested`). A row
+an E is the one its compute is counted for), one a later ingest of its run's checkpoint supersedes (`re-ingested`:
+by another agent or at another te_core), and the same ingest's copies but the lowest id (`copy`: coordinator 07:48Z,
+records counted once per run and checkpoint). A row
 ingested before 3.13 carries no read-outs; `--facts` gives them by run id (`with_facts`). Under 4.0 an update of the
 tied embedding alone is deep (its lookup's rows are update-dependent and reach every later layer), so the scorer's
 tied-lookup rule (coordinator 13:32Z) is retired. `measured(r)` says whether a row's quantities were measured on its
@@ -60,6 +62,12 @@ def _run_key(r: dict):
     return (r["run_id"], r.get("measurement_commit"), r.get("checkpoint_step")) if r.get("run_id") else None
 
 
+def ingest(r: dict) -> tuple:
+    """Who ingested a row and at which te_core: a run's checkpoint ingested again by another, or at another te_core,
+    supersedes it; the same ingest's copies are one record."""
+    return r.get("agent"), r.get("te_core")
+
+
 def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
     """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args`,
     `readout_leaks` and `changed`, as `ledger.facts` gives them), for rows ingested before te_core 3.13; and with each
@@ -89,21 +97,26 @@ def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 
 def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
-    """Each left-out record's reason: re-ingested, invalid, read-out-leak, unscored, other-version, duplicate-e.
-    `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint (its run id; a row
-    without one is never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E
+    """Each left-out record's reason: re-ingested, copy, invalid, read-out-leak, unscored, other-version,
+    duplicate-e. `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint (its run
+    id; a row without one is never superseded) by another agent or at another te_core (`ingest`) supersedes an earlier
+    one (`re-ingested`), and of one ingest's copies the lowest id stands (`copy`); neither seeds a duplicate. An E
     repeats an earlier
     record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
     E it had at an old one counts."""
     pins = set(commits(pin))
     out, first = {}, {}
     ordered = sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"]))
-    latest = {_run_key(r): r["id"] for r in ordered}
+    kept: dict = {}
+    for r in ordered:
+        key, k = _run_key(r), kept.get(_run_key(r))
+        if key is not None and (k is None or ingest(k) != ingest(r) or r["id"] < k["id"]):
+            kept[key] = r
     for r in ordered:
         e = (r.get("output") or {}).get("e_sha256")
         key = _run_key(r)
-        if key is not None and latest[key] != r["id"]:
-            out[r["id"]] = "re-ingested"
+        if key is not None and kept[key]["id"] != r["id"]:
+            out[r["id"]] = "copy" if ingest(kept[key]) == ingest(r) else "re-ingested"
             continue
         if e and any(at_pin or agent != r.get("agent") for at_pin, agent in first.get(e, ())):
             out[r["id"]] = "duplicate-e"
