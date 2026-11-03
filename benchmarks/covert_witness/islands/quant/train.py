@@ -262,37 +262,56 @@ def unpack_votes(p: torch.Tensor, n: int) -> torch.Tensor:
     return 2 * bits.view(-1)[:n].to(torch.int16) - 1
 
 
-class VoteCodes(torch.optim.Optimizer):
-    """`--opt vote`: each vector's `bits`-bit code (state "code", int8). Every partial gradient a backward leaves on it
-    passes as 1-bit signs (`pack_signs`) and is summed as votes inside that backward (a post-accumulate hook, which clears
-    the gradient); step() moves each code by -sign(votes) where a uniform draw falls under the group's lr (the schedule's
-    fraction), within the code's range. The weights are rebuilt from the codes after each step (`vote_code`)."""
+class VoteSGD(torch.optim.Optimizer):
+    """`--opt vote` on float tensors: every partial gradient a backward leaves on a trained tensor passes as 1-bit signs
+    (`pack_signs`) and is summed as votes inside that backward (a post-accumulate hook, which clears the gradient);
+    step() moves each value by -lr · sign(votes). No state but the votes, which each step clears."""
 
-    def __init__(self, params, bits: int, gen: torch.Generator):
-        super().__init__(params, {"lr": 1.0})
-        self.qmax, self.gen, self.handles = 2 ** (bits - 1) - 1, gen, []
+    def __init__(self, params, lr: float):
+        super().__init__(params, {"lr": lr})
+        self.handles = []
         for grp in self.param_groups:
             for p in grp["params"]:
-                self.state[p] = {"code": torch.zeros(p.shape, dtype=torch.int8, device=p.device),
-                                 "votes": torch.zeros(p.shape, dtype=torch.int16, device=p.device)}
+                self.state[p] = self.init_state(p)
                 self.handles.append(p.register_post_accumulate_grad_hook(self._vote))
+
+    def init_state(self, p: torch.Tensor) -> dict:
+        return {"votes": torch.zeros(p.shape, dtype=torch.int16, device=p.device)}
 
     def _vote(self, p: torch.Tensor) -> None:
         self.state[p]["votes"] += unpack_votes(pack_signs(p.grad), p.numel()).view(p.shape)
         p.grad = None
 
+    def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
+        p.add_(torch.sign(st["votes"]).to(p.dtype), alpha=-grp["lr"])
+
     @torch.no_grad()
     def step(self) -> None:
         for grp in self.param_groups:
             for p in grp["params"]:
-                st = self.state[p]
-                move = torch.sign(st["votes"]) * (torch.rand(p.shape, generator=self.gen, device=p.device) < grp["lr"])
-                st["code"] = torch.clamp(st["code"] - move, -self.qmax, self.qmax).to(torch.int8)
-                st["votes"].zero_()
+                self.move(p, grp, self.state[p])
+                self.state[p]["votes"].zero_()
 
     def close(self) -> None:
         for h in self.handles:
             h.remove()
+
+
+class VoteCodes(VoteSGD):
+    """`--opt vote` on qat's vector codes: each vector's `bits`-bit code (state "code", int8), voted on as VoteSGD's
+    tensors are; step() moves each code by -sign(votes) where a uniform draw falls under the group's lr (the schedule's
+    fraction), within the code's range. The weights are rebuilt from the codes after each step (`vote_code`)."""
+
+    def __init__(self, params, bits: int, gen: torch.Generator):
+        self.qmax, self.gen = 2 ** (bits - 1) - 1, gen
+        super().__init__(params, 1.0)
+
+    def init_state(self, p: torch.Tensor) -> dict:
+        return super().init_state(p) | {"code": torch.zeros(p.shape, dtype=torch.int8, device=p.device)}
+
+    def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
+        move = torch.sign(st["votes"]) * (torch.rand(p.shape, generator=self.gen, device=p.device) < grp["lr"])
+        st["code"] = torch.clamp(st["code"] - move, -self.qmax, self.qmax).to(torch.int8)
 
 
 def vote_code(c: torch.Tensor, bits: int, step: float) -> qf.QArray:
@@ -533,8 +552,9 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                 lambda m, inp, out, A=A, B=B, s=s, fq=fq: out + s * F.linear(F.linear(inp[0], fq(A)), fq(B, B_ROWS))))
         groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr},
                   {"params": [params[n] for n in norms], "lr": x.norm_lr}]
-        opt = SignSGD(groups, x.lr) if x.opt == "sign" else torch.optim.AdamW(
-            [grp | {"weight_decay": 0.0} for grp in groups], betas=(0.9, 0.95), fused=dev.startswith("cuda"))
+        opt = (SignSGD(groups, x.lr) if x.opt == "sign" else VoteSGD(groups, x.lr) if x.opt == "vote" else
+               torch.optim.AdamW([grp | {"weight_decay": 0.0} for grp in groups], betas=(0.9, 0.95),
+                                 fused=dev.startswith("cuda")))
         data = train_data(rec, x)
         n_k, first, ema = sched.counts[k], g, None
         print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_k, "rank": x.rank, "bits": x.qbits,
@@ -554,7 +574,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                     len(xb) / a.batch)
                 loss.backward()
                 total += loss.detach()
-            torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
+            if x.opt != "vote":
+                torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
             opt.step()
             opt.zero_grad(set_to_none=True)
             steps.append({"op": "train", "tokens": tokens})
@@ -571,10 +592,14 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                         + sum(params[n].numel() for n in norms)})
         n_fac = sum(A.numel() + B.numel() for A, B, _ in factors.values())
         n_all = results[-1]["n_entries"]
-        results[-1]["delta_grad"] = (delta_grad(0, 0, n_fac if x.qbits else 0, n_all) if x.opt == "sign" else
-                                     delta_grad(n_all, 0, n_fac if x.qbits else 0))
+        results[-1]["delta_grad"] = (
+            vote_delta_grad(n_all, 0, -(-a.batch // a.micro)) | {"latent_bits": 32 * n_fac if x.qbits else 0}
+            if x.opt == "vote" else delta_grad(0, 0, n_fac if x.qbits else 0, n_all) if x.opt == "sign" else
+            delta_grad(n_all, 0, n_fac if x.qbits else 0))
         for h in handles:
             h.remove()
+        if isinstance(opt, VoteSGD):
+            opt.close()
         del factors, opt
     t_train = time.perf_counter() - t0
     best = min(results, key=lambda r: r["loss"])
@@ -652,8 +677,9 @@ def main() -> int:
     ap.add_argument("--opt", choices=("adamw", "sign", "vote"), default="adamw",
                     help="the optimizer of what Muon doesn't train (qat: the norms; qlora: factors and norms): AdamW, or "
                          "sign: p -= lr · sign(grad) with no state, so Δ_grad is the gradient alone (rates as AdamW's), or "
-                         "vote (qat, vector codes only): each micro-batch's gradient passes as 1-bit signs, and a step "
-                         "moves each code by -sign(their sum) where a draw falls under the schedule's fraction")
+                         "vote: each micro-batch's gradient passes as 1-bit signs (32 an int32 word), and a step moves "
+                         "each value by -lr · sign(their sum) (qlora: factors and norms), or each qat vector code by "
+                         "-sign(their sum) where a draw falls under the schedule's fraction (rates: qlora's --lr)")
     ap.add_argument("--vote-step", type=float, default=2e-3, help="--opt vote: a code's f16 scale, one vote step's move")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
@@ -668,8 +694,8 @@ def main() -> int:
                          "--budget-fraction, and a later arm's checkpoints are charged every earlier arm's MACs")
     a = ap.parse_args()
     arms = parse_arms(a)
-    if a.mode != "qat" and any(x.opt == "vote" for x in arms):
-        raise SystemExit("quant: --opt vote is qat's (vector codes)")
+    if a.mode == "ptq" and any(x.opt == "vote" for x in arms):
+        raise SystemExit("quant: --opt vote is qat's (vector codes) and qlora's")
     if a.mode == "qlora":
         for x in arms:
             if x.qbits and a.emit == "lora" and not x.pow2:
