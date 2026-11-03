@@ -710,8 +710,8 @@ def test_the_front_sends_a_span_of_prompt_lengths(tmp_path, monkeypatch):
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick, the minutes counted at
-    it and greedy sampling (temperature 0, top_p 1, which the warden's client puts on every request, as
-    ``--stop-prompt``'s warm-ups are sent), and the warden's command is the scan's schedule at it. The tunnel and the
+    it and greedy sampling (temperature 0, top_p 1, which the network certifier's client puts on every request, as
+    ``--stop-prompt``'s warm-ups are sent), and `warden_command` is the scan's schedule at it. The tunnel and the
     rehearsal are stand-ins, the rehearsal's check accepting."""
     real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
 
