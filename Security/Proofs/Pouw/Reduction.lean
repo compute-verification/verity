@@ -25,21 +25,21 @@ theorem correctSet_subset_range (P : Protocol Q R S) (U : Workload) (H : Q → R
     correctSet P U H s τ ⊆ range U.layout.N := fun u hu => by
   simp only [correctSet, Finset.mem_filter] at hu; exact hu.1
 
-theorem one_sub_reductionGamma (γ₀ Ωmax : ℝ) : 1 - reductionGamma γ₀ Ωmax = (1 - γ₀) / Ωmax := by
-  unfold reductionGamma; ring
+theorem one_sub_reductionGap (γ₀ Ωmax : ℝ) : 1 - reductionGap γ₀ Ωmax = (1 - γ₀) / Ωmax := by
+  unfold reductionGap; ring
 
-theorem reductionGamma_lt_one {γ₀ Ωmax : ℝ} (hγ₀ : γ₀ < 1) (hΩ : 0 < Ωmax) : reductionGamma γ₀ Ωmax < 1 := by
+theorem reductionGap_lt_one {γ₀ Ωmax : ℝ} (hγ₀ : γ₀ < 1) (hΩ : 0 < Ωmax) : reductionGap γ₀ Ωmax < 1 := by
   have : 0 < (1 - γ₀) / Ωmax := div_pos (by linarith) hΩ
-  unfold reductionGamma; linarith
+  unfold reductionGap; linarith
 
 /-- The pointwise reduction: a win at `γ = 1 − (1 − γ₀)/Ω_max` is a TT event. -/
 theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ))
-    (hwin : Wins P U (reductionGamma γ₀ Ωmax) T τ H s) :
+    (hwin : Wins P U (reductionGap γ₀ Ωmax) T τ H s) :
     T / (1 - γ₀) < ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
   unfold Wins at hwin
-  rw [one_sub_reductionGamma, div_div_eq_mul_div] at hwin
+  rw [one_sub_reductionGap, div_div_eq_mul_div] at hwin
   have h1 : ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
       ≤ Ωmax * ∑ u ∈ correctSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
     rw [Finset.mul_sum]
@@ -54,16 +54,16 @@ theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (�
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
 /-- **(a)** `G_γ` from TT, with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε_TT(q)`. -/
-theorem gammaFromTT : Pinned.GammaFromTT := by
+theorem gapFromTT : Pinned.GapFromTT := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ hwin
   exact wins_imp_tt P U H s _ hΩ (hW U hU) hwin
 
 /-- **The overhead budget**: `γ ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
-theorem gammaBudget : Pinned.GammaBudget := by
+theorem gapBudget : Pinned.GapBudget := by
   intro Ωmax hΩ
-  unfold reductionGamma Params.γ0
+  unfold reductionGap Params.gap0
   rw [show (1 : ℝ) - 1 / 200 = 199 / 200 by norm_num]
   constructor
   · intro h

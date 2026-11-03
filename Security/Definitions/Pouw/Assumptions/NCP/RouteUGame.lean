@@ -16,7 +16,7 @@ namespace Pouw.NCP.RouteU
 
 open Finset
 
-/-- **The hypotheses of `GammaFromTTNCP_U` hold jointly at the lead** (`GamePinned.LeadWitness` on route U): for
+/-- **The hypotheses of `GapFromTTNCP_U` hold jointly at the lead** (`GamePinned.LeadWitness` on route U): for
 every bias `β` and count `f`, an NCP instance with `IsLead`, permutation-matrix `R` on domain shapes, no oracle
 queries and `W_ref = wrefU f`; route U's protocol at `β` is complete on `leadDomain`, the output-priced model runs
 its `H_ref` with no oracle calls, TT_NCP_U(γ₀) holds there with error 0 at every `γ₀ ∈ [0, 1)`, every in-domain

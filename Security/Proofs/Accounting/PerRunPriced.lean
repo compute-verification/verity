@@ -9,7 +9,7 @@ import Proofs.Pouw.PearlC.W1BudgetAbort
 
 Pearl-C's game with `t` tickets weighted by `w`, at units whose `W_ref` is `κ·w`: an accepted run whose correct units
 carry at least `1 − ε_s` of the tickets' weight carry at least `1 − ε_s` of `W_ref`, so a cost below
-`(1 − γ)(1 − ε_s)·∑ W_ref` wins the γ-gap game (`winsPearlC_of_accept`). Work-weighted sampling and `Gγ` bound the
+`(1 − γ)(1 − ε_s)·∑ W_ref` wins the γ-gap game (`winsPearlC_of_accept`). Work-weighted sampling and `GGap` bound the
 two (`pearlC_endToEnd`, every adversary within a sure budget), and truncation (`pr_lt_of_abort`, with `abortPearlC`)
 makes it per run. A run that realizes Pearl-C's game with its cost covered by the priced sum has the compute audit's
 per-run guarantee on that sum.
@@ -94,7 +94,7 @@ theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (
 with `T < (1 − γ)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 theorem pearlC_endToEnd [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : PearlC.CostModel Q R S}
     {P : PearlC.Protocol Q R S} {D : PearlC.Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
-    (hG : PearlC.Gγ CM P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)
+    (hG : PearlC.GGap CM P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {T : ℝ} (hT : 0 ≤ T) {q : ℕ} (hq : q ≤ 2 ^ 64)
     {A : PearlC.Adversary CM} (hA : A.Bounded U T q) (t : ℕ) {εs : ℝ} (hεs : εs ≤ 1) :
     pr (fun x : PearlCCoins Q R S U w t =>

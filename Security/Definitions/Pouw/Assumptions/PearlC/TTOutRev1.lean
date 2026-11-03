@@ -16,7 +16,7 @@ namespace Pouw.PearlC.Assumptions
 variable {Q R S : Type}
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record `d`, rev1**: `TTOut` at `pearlCProtocolDevRev1 d sem ρ`,
-`pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. It is `TTOutPearlCDev` with every promotion into a +0 total,
+`pearlCDomainDev d`, `γ₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev` with every promotion into a +0 total,
 `RNE(+0 + S_g) = S_g`, left out of the credit: the first of every word out of the credit and `W_ref` (`k/(32·G) − 1` adds
 per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The game, error and falsifiers are
 `TTOutPearlCDev`'s. Without promotion (`G = 0`) it is `TTOutPearlCDev`.
@@ -46,13 +46,13 @@ per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The g
   `add.rn.f32x2` compiles to two scalar FADDs, so it does not halve the add. -/
 def TTOutPearlCDevRev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at a device record `d`, rev1**: `TTOutTile` at `pearlCProtocolDevRev1 d sem ρ` and
 `pearlCTilesDevRev1 d sem ρ`. It is `TTOutTilePearlCDev` with rev1's credit, cap and `W_ref`. -/
 def TTOutTilePearlCDevRev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **`tt-out/pearl-c-h100-rev1`**: rev1 at the H100 record, the repair of `TTOutPearlC · Costs.adopted`, with `CM` the
 H100's W1 accounting, a `wgmma` priced by its whole shape. -/

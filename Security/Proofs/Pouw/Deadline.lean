@@ -1,8 +1,8 @@
 import Definitions.Pouw.Guarantees.Deadline
 import Proofs.Pouw.Game
 import Proofs.Pouw.Prob
-import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
@@ -10,7 +10,7 @@ import Proofs.Pouw.PearlC.TTOutW1
 
 The honest clock names a program that outputs the adversary's transcript wherever it is received by the deadline, after
 the same preprocessing, at a cost within the run's spending between the salt and the deadline. That program is within
-the budget `EndToEnd` (or `GγSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
+the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
 deadline.
 
 The sm_120 instances are stated at W1: each is `PearlCSampledByDeadline` at `CM := W1.w1Priced dv salt`, with its

@@ -22,8 +22,8 @@ the pinned statements excludes it or makes it harmless.
 | zero noise | `tt_false_zero_noise` |
 | `T = 0` | `wins_T_zero_iff` |
 | `q = 0` | `transcript_indep_of_q_zero` |
-| `Ω_max < 1/(1 − γ)` | `certified_le`, `omega_lt_inv_one_sub`, `reductionGamma_lt_of_omega_lt_one` |
-| `γ₀ ≥ 1` | `tt_false_of_gamma0_ge_one`, and `tt_admitsRef_bound` for `γ₀ < 1` |
+| `Ω_max < 1/(1 − γ)` | `certified_le`, `omega_lt_inv_one_sub`, `reductionGap_lt_of_omega_lt_one` |
+| `γ₀ ≥ 1` | `tt_false_of_gap0_ge_one`, and `tt_admitsRef_bound` for `γ₀ < 1` |
 | randomized adversaries | `randomized_of_deterministic` |
 | R_copy with zero noise | `copy_zero_noise`: Nz fails and R_copy's bound fails |
 | (d′)'s hypotheses together | `milestone_hypotheses_consistent` (at `W_ref = m1Wref`, `Ω_max = Ω_M1`) |
@@ -209,22 +209,22 @@ theorem transcript_indep_of_q_zero (A : Adversary (outputPriced Q R S)) (U : Wor
 
 /-- What the reduction certifies per unit is `(1 − γ)·W_ref ≤ (1 − γ₀)·W_mm < W_mm`. -/
 theorem certified_le {γ₀ Ωmax Wref Wmm : ℝ} (hΩ : 0 < Ωmax) (hγ₀ : γ₀ < 1) (hW : Wref ≤ Ωmax * Wmm) :
-    (1 - reductionGamma γ₀ Ωmax) * Wref ≤ (1 - γ₀) * Wmm := by
-  rw [one_sub_reductionGamma]
+    (1 - reductionGap γ₀ Ωmax) * Wref ≤ (1 - γ₀) * Wmm := by
+  rw [one_sub_reductionGap]
   have h : 0 ≤ (1 - γ₀) / Ωmax := div_nonneg (by linarith) hΩ.le
   calc (1 - γ₀) / Ωmax * Wref ≤ (1 - γ₀) / Ωmax * (Ωmax * Wmm) := mul_le_mul_of_nonneg_left hW h
     _ = (1 - γ₀) * Wmm := by field_simp
 
 /-- For `γ₀ > 0`, the reduction's `γ` always has `Ω_max < 1/(1 − γ)`: the game certifies less than `m·k·n`. -/
 theorem omega_lt_inv_one_sub {γ₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) (h0 : 0 < γ₀) (h1 : γ₀ < 1) :
-    Ωmax < 1 / (1 - reductionGamma γ₀ Ωmax) := by
-  rw [one_sub_reductionGamma, one_div_div, lt_div_iff₀ (by linarith)]
+    Ωmax < 1 / (1 - reductionGap γ₀ Ωmax) := by
+  rw [one_sub_reductionGap, one_div_div, lt_div_iff₀ (by linarith)]
   nlinarith
 
 /-- An `H_ref` cheaper than the GEMM (`Ω_max < 1`) gives `γ < γ₀`. -/
-theorem reductionGamma_lt_of_omega_lt_one {γ₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) (hΩ1 : Ωmax < 1) (h1 : γ₀ < 1) :
-    reductionGamma γ₀ Ωmax < γ₀ := by
-  unfold reductionGamma
+theorem reductionGap_lt_of_omega_lt_one {γ₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) (hΩ1 : Ωmax < 1) (h1 : γ₀ < 1) :
+    reductionGap γ₀ Ωmax < γ₀ := by
+  unfold reductionGap
   have : 1 - γ₀ < (1 - γ₀) / Ωmax := by rw [lt_div_iff₀ hΩ]; nlinarith
   linarith
 
@@ -262,7 +262,7 @@ theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [
   linarith
 
 /-- **`γ₀ ≥ 1`**: TT is unsatisfiable (error below 1) whenever `H_ref` runs in the model on a workload with work. -/
-theorem tt_false_of_gamma0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
+theorem tt_false_of_gap0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64)
     (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (γ₀ : ℝ) (hγ₀ : 1 ≤ γ₀) (ε : ℕ → ℕ → ℝ)
@@ -276,7 +276,7 @@ theorem tt_false_of_gamma0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
 
 /-- **`γ ≥ 1`**: every budget is beaten by one correct unit of positive work, so `G_γ` cannot hold with `η < 1`
 against the honest reference (the pinned statements assume `γ < 1` or `γ₀ < 1`). -/
-theorem wins_of_gamma_ge_one (P : Protocol Q R S) (U : Workload) {γ T : ℝ} (hγ : 1 ≤ γ) (hT : 0 ≤ T)
+theorem wins_of_gap_ge_one (P : Protocol Q R S) (U : Workload) {γ T : ℝ} (hγ : 1 ≤ γ) (hT : 0 ≤ T)
     (τ : Transcript) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
     Wins P U γ T τ H s :=
   lt_of_le_of_lt (div_nonpos_of_nonneg_of_nonpos hT (by linarith)) hpos
@@ -299,7 +299,7 @@ theorem index_collision [Finite Q] (P : D1.Params Q R S) (c : ℕ) (hc : P.Query
 oracle, so a workload holding both lets one computation be committed twice. -/
 theorem identical_checked [Finite Q] (P : D1.Params Q R S) (c : ℕ) (hc : P.QueryBound c) (s : S) (A : Mat) :
     ∃ u u', u ≠ u' ∧ ∀ (U : Workload) (H : Q → R), U.layout.shape u = U.layout.shape u' →
-      U.layout.wid u = 0 → U.layout.wid u' = 0 → P.Y H s U u A = P.Y H s U u' A := by
+      U.layout.fixedId u = 0 → U.layout.fixedId u' = 0 → P.Y H s U u A = P.Y H s U u' A := by
   obtain ⟨u, u', hne, h1, h2⟩ := index_collision P c hc s A 0
   refine ⟨u, u', hne, fun U H hs hw hw' => ?_⟩
   unfold D1.Params.Y D1.Params.noisedAct D1.Params.noisedWt D1.Params.actF D1.Params.wtF
@@ -322,13 +322,13 @@ theorem single_unit_not_inDomain :
 /-- **Full groups are in the milestone domain**: a layout of milestone shapes and 64-bit weight ids in which every
 unit's group `16·⌊u/16⌋ … 16·⌊u/16⌋ + 15` lies below `N` and on the unit's weight satisfies `m1Domain`'s rows
 condition (`16·2^12 = 2^16`). -/
-theorem fullGroups_inDomain (L : Layout) (hsh : ∀ u < L.N, D1.M1Shape (L.shape u) ∧ L.wid u < 2 ^ 64)
-    (hfull : ∀ u < L.N, ∀ t < 16, 16 * (u / 16) + t < L.N ∧ L.wid (16 * (u / 16) + t) = L.wid u) :
+theorem fullGroups_inDomain (L : Layout) (hsh : ∀ u < L.N, D1.M1Shape (L.shape u) ∧ L.fixedId u < 2 ^ 64)
+    (hfull : ∀ u < L.N, ∀ t < 16, 16 * (u / 16) + t < L.N ∧ L.fixedId (16 * (u / 16) + t) = L.fixedId u) :
     D1.m1Domain L := by
   intro u hu
   refine ⟨(hsh u hu).1, (hsh u hu).2, ?_⟩
   have hsub : (range 16).image (fun t => 16 * (u / 16) + t) ⊆
-      (range L.N).filter (fun u' => u' / 16 = u / 16 ∧ L.wid u' = L.wid u) := by
+      (range L.N).filter (fun u' => u' / 16 = u / 16 ∧ L.fixedId u' = L.fixedId u) := by
     intro x hx
     obtain ⟨t, ht, rfl⟩ := Finset.mem_image.1 hx
     have ht' := Finset.mem_range.1 ht
@@ -353,7 +353,7 @@ theorem milestone_hypotheses_consistent :
       (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
         (D1.m1Wref U.layout u : ℝ) ≤ D1.m1Omega * ((U.layout.shape u).Wmm : ℝ)) ∧
       AdmitsRef (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 D1.m1Wref).toProtocol D1.m1Domain qref ∧
-      Assumptions.TT (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 D1.m1Wref).toProtocol D1.m1Domain Params.γ0
+      Assumptions.TT (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 D1.m1Wref).toProtocol D1.m1Domain Params.gap0
         (fun _ _ => 0) := by
   obtain ⟨hW, hΩ, -⟩ := milestoneWref
   obtain ⟨hTT, hAdm⟩ := ttWitness D1.m1Wref fun U hU u hu => (hW U hU u hu).1
@@ -409,7 +409,7 @@ theorem lone_unit_over_budget :
 /-- **Deterministic adversaries suffice**: an adversary using coins `C` independent of `(H, s)`, within `(T, q)` for
 every coin value, wins with probability at most `η`. -/
 theorem randomized_of_deterministic [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hG : Gγ CM P D γ η) (U : Workload)
+    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hG : GGap CM P D γ η) (U : Workload)
     (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64) (C : Type) [Fintype C] [Nonempty C]
     (A : C → Adversary CM) (hA : ∀ c, (A c).Bounded U T q) :
     pr (fun x : (Q → R) × S × C => Wins P U γ T ((A x.2.2).transcript U x.1 x.2.1) x.1 x.2.1) ≤ η q U.layout.N := by

@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 /-!
 # The bridge from the window's game to C-Flock's
 
-`WindowEps` is stated over the window's own game (`Pouw.Window`), and C-Flock's soundness over `FlockSoundness`'s. The
+`WindowDelta` is stated over the window's own game (`Pouw.Window`), and C-Flock's soundness over `FlockSoundness`'s. The
 two are the same trees: this file maps a C-Flock session into the window's game (`ofFlock`), the window's strategies for
 it back to C-Flock's (`Strategy.toFlock`), and proves that every probability agrees (`prob_ofFlock`). A C-Flock
 `ExtractionAnalysis` of a call's session is then a `CallAnalysis` of that call in the window (`CallAnalysis.ofFlock`),
@@ -28,7 +28,7 @@ at the knowledge bound `ksBoundAccZ`, with its joint inequality discharged (`joi
 `ks S R τ u = ofReal (ksBoundAccZ_j(zcStrat τ) / (1 − rateZ_j))` at `u`'s table `j`, with `ksBoundAccZ = ε_c⁻ + √(k·adv₀)`
 the table's own terms and `rateZ = N₀/(ek) < 1`. So `FlockKnowledgeSound` holds with `κ = 0` and
 `g S R τ = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`, the state's collision finders' advantages, and
-these are the `κ_c` and `g_c` `WindowEps` reads through `ofFlock_knowledgeSound`: the relative term sits in the
+these are the `κ_c` and `g_c` `WindowDelta` reads through `ofFlock_knowledgeSound`: the relative term sits in the
 denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`, `κ = 2^logLen/(e·Kr)`) is the
 non-ZK plain-leaf table's, which main's window doesn't run. The link term `δlink_c` stays `LinkSoundIn`, C-Flock's link
 finder at the window's state.

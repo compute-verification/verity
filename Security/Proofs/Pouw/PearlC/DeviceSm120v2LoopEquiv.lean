@@ -1,5 +1,5 @@
-import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
-import Proofs.Pouw.PearlC.ChainOnlyGamma
+import Proofs.Pouw.PearlC.DeviceSm120LoopGap
+import Proofs.Pouw.PearlC.ChainOnlyGap
 
 /-!
 # v2's TT_OUT is the same statement at both FP32 prices (the price-twins lane's file; staged)

@@ -14,19 +14,19 @@ open Finset
 variable {Q R S : Type}
 
 /-- **TT_OUT(1/400) at an FP4 record** `d`: `TTOut` at `pearlCProtocolFp4 d sem ρ`, `pearlCDomainFp4 sem`,
-`γ₀ = 1/400` and `εPearlC`. It is `TTOutPearlCDev`'s statement on `Fp4Device`'s maps. `PearlCDevice` reads E4M3 codes,
+`γ₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev`'s statement on `Fp4Device`'s maps. `PearlCDevice` reads E4M3 codes,
 32-MAC atoms and promotion groups, so the FP4 line has its own record. At `G = 0` rev1 is this same statement, because
 rev1's first-add term is zero with no promotion. The domain includes D-SK (`Fp4Sem.SaltKeyedB`), so at a `sem` whose
 `B̃` is not keyed by A's salt it claims nothing. -/
 def TTOutFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
     (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at an FP4 record** `d`: `TTOutTile` at `pearlCProtocolFp4 d sem ρ` and
 `pearlCTilesFp4 d sem ρ`, the `64 × 64` audit grid. -/
 def TTOutTileFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
     (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTile CM (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) εPearlC
+  TTOutTile CM (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 /-- **The named assumption `tt-out/fp4-sm120`: TT_OUT(1/400) for Pearl-C4 on sm_120** (`pearl-c-nvfp4-v0`, theory §2
 and §5): `TTOutFp4` at `devFp4Sm120`.

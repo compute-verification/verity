@@ -53,7 +53,7 @@ def Fp4Prices.sm120At (fadd : ℚ) (p : Fp4ScalePath) : Fp4Prices :=
   ⟨4, 64 + p.fixed + p.fp32Ops * fadd / 8 + 2 * fadd + 16, 2 * fadd + fadd / 4⟩
 
 /-- **Pearl-C4's γ at an FP4 record** under the cap `ρ`: `1 − (399/400)/ω` with `ω = wrefFp4/((1 − ρ)·creditFp4)`. -/
-def gammaFp4 (d : Fp4Device) (ρ : ℚ) (s : Shape) : ℚ :=
+def gapFp4 (d : Fp4Device) (ρ : ℚ) (s : Shape) : ℚ :=
   1 - (1 - 1 / 400) / (wrefFp4 d s / ((1 - ρ) * creditFp4 d s))
 
 end Pouw.PearlC

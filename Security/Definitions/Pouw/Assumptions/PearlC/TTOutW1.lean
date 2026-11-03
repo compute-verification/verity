@@ -24,7 +24,7 @@ the salt; W1 charges it and the credit counts none of it, nor `qa·m·k` (in `W_
 The bound on guessing whole output words rests on exactly that.
 
 **Why `w1Priced`.** It charges at least what `w1` (with the operand refund) charges, so TT_OUT at `w1` implies it here:
-it is the weaker assumption. It is the cost model the compute audit reads (`GγPerCoin (w1Priced dv salt)`), and it does
+it is the weaker assumption. It is the cost model the compute audit reads (`GGapPerCoin (w1Priced dv salt)`), and it does
 not depend on the protocol, so a reader whose conclusion's protocol differs from its hypothesis' (the kernel `W_ref`
 variants) uses one cost model on both sides.
 
@@ -86,26 +86,26 @@ def TTOutTileW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1D
 `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at a device record `d`, at W1 on `dv`**: `TTOutTilePearlCDev` at
 `W1.w1Priced dv salt`. -/
 def TTOutTilePearlCDevW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutTileW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) rev1 at a device record `d`, at W1 on `dv`**: `TTOutPearlCDevRev1` (every promotion into a +0 total
 out of the credit) at `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevRev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) rev1 per audit tile at a device record `d`, at W1 on `dv`**: `TTOutTilePearlCDevRev1` at
 `W1.w1Priced dv salt`. -/
 def TTOutTilePearlCDevRev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTileW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400)
-    εPearlC
+    δPearlC
 
 /-- **`tt-out/pearl-c-h100-rev1` at W1**: rev1 at the H100 record on `W1Device.h100 sha fetch`. -/
 def TTOutPearlCH100Rev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)

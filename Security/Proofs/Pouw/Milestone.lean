@@ -33,7 +33,7 @@ requirement at `γ = 1 − (199/200)/Ω_max ≤ 1%`. -/
 theorem milestoneRequirement : Pinned.MilestoneRequirement := by
   intro CM Wref qref Ωmax ε hΩ hΩ1 hW hAdm hTT
   exact ⟨⟨(D1.m1 Wref).toProtocol, qref, d1_complete_m1Domain _ (M1.noiseRange Wref), hAdm,
-    gammaFromTT D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 Ωmax ε γ0_lt_one hΩ hW hTT⟩,
-    (gammaBudget Ωmax hΩ).2 hΩ1⟩
+    gapFromTT D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 Ωmax ε gap0_lt_one hΩ hW hTT⟩,
+    (gapBudget Ωmax hΩ).2 hΩ1⟩
 
 end Pouw.Proofs

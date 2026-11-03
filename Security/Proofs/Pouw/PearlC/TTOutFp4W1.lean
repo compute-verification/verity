@@ -19,12 +19,12 @@ variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 theorem ttOutFp4W1_iff (dv : W1.W1Device) (salt : S → List ℕ) (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) :
     TTOutFp4W1 dv salt d sem ρ ↔ TTOutFp4 (W1.w1Priced dv salt) d sem ρ :=
-  ttOutW1_iff dv salt (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) εPearlC
+  ttOutW1_iff dv salt (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 theorem ttOutTileFp4W1_iff (dv : W1.W1Device) (salt : S → List ℕ) (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) :
     TTOutTileFp4W1 dv salt d sem ρ ↔ TTOutTileFp4 (W1.w1Priced dv salt) d sem ρ :=
   ttOutTileW1_iff dv salt (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400)
-    εPearlC
+    δPearlC
 
 theorem ttOutFp4Sm120W1_iff (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (ρ : ℚ) :
     TTOutFp4Sm120W1 sha fetch salt sem ρ ↔

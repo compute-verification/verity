@@ -21,6 +21,6 @@ def Generic : Prop :=
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
     (q : ℕ),
     CheapPoint CM P D U A c₀ q → 0 < totalWref P U.layout →
-    ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, Gγ CM P D γ η → 1 ≤ η q U.layout.N
+    ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, GGap CM P D γ η → 1 ≤ η q U.layout.N
 
 end Pouw.Guarantees.Barrier

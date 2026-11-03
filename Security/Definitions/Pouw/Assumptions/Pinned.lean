@@ -19,14 +19,14 @@ open Finset
 and TT(γ₀) holds with error `ε(q, N)`, then `G_γ` holds with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε`. `K ⊆ K'` is
 built into the definitions (`Correct = CheckedOK ∧ OutOK`); no random-oracle term is needed because TT is stated in
 the same game. -/
-def GammaFromTT : Prop :=
+def GapFromTT : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
     Assumptions.TT CM P D γ₀ ε →
-    Gγ CM P D (reductionGamma γ₀ Ωmax) ε
+    GGap CM P D (reductionGap γ₀ Ωmax) ε
 
 /-- **(d′) The milestone requirement, in budget form**. For the named instance `D1.m1` on its domain
 and any `W_ref`: if `W_ref ≤ Ω_max·W_mm` with `Ω_max ≤ 199/198`, the cost model runs `H_ref` at cost `≤ W_ref`
@@ -39,8 +39,8 @@ def MilestoneRequirement : Prop :=
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       (Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
     AdmitsRef CM (D1.m1 Wref).toProtocol D1.m1Domain qref →
-    Assumptions.TT CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 ε →
-    Requirement CM D1.m1Domain (reductionGamma Params.γ0 Ωmax) ε ∧ reductionGamma Params.γ0 Ωmax ≤ 1 / 100
+    Assumptions.TT CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 ε →
+    Requirement CM D1.m1Domain (reductionGap Params.gap0 Ωmax) ε ∧ reductionGap Params.gap0 Ωmax ≤ 1 / 100
 
 /-- **(d″) Milestone resource exhaustion**: (d) for `D1.m1` on its domain, at `γ = 1 − (199/200)/Ω_max`. -/
 def MilestoneExhaustion : Prop :=
@@ -48,18 +48,18 @@ def MilestoneExhaustion : Prop :=
     0 < Ωmax →
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       (Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 ε →
+    Assumptions.TT CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 ε →
     ∀ U : Workload, U.InDomain D1.m1Domain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (D1.M1Q → D1.M1R) × Salt × (Fin t → Ticket (Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet (D1.m1 Wref).toProtocol U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - reductionGamma Params.γ0 Ωmax) * (1 - εs) * totalWref (D1.m1 Wref).toProtocol U.layout)
+          T < (1 - reductionGap Params.gap0 Ωmax) * (1 - εs) * totalWref (D1.m1 Wref).toProtocol U.layout)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **The overhead budget**: under TT(0.5%) the reduction's gap is at most 1% exactly when `Ω_max ≤ 199/198`
 (about 0.505% of arithmetic overhead). -/
-def GammaBudget : Prop :=
-  ∀ Ωmax : ℝ, 0 < Ωmax → (reductionGamma Params.γ0 Ωmax ≤ 1 / 100 ↔ Ωmax ≤ 199 / 198)
+def GapBudget : Prop :=
+  ∀ Ωmax : ℝ, 0 < Ωmax → (reductionGap Params.gap0 Ωmax ≤ 1 / 100 ↔ Ωmax ≤ 199 / 198)
 
 /-- **(e1) Usefulness over the integers**: the decode `C' − (A·F_L)·F_R − E_L·(E_R·B')` with `C' = A'·B'`,
 `A' = A + E_L·E_R`, `B' = B + F_L·F_R`, equals `A·B`, for all integer matrices and dimensions. -/
@@ -111,7 +111,7 @@ with `N·m1Queries` oracle calls. -/
 def TTWitness : Prop :=
   ∀ Wref : Layout → ℕ → ℕ,
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N, (U.layout.shape u).Wmm ≤ Wref U.layout u) →
-    Assumptions.TT (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 (fun _ _ => 0) ∧
+    Assumptions.TT (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 (fun _ _ => 0) ∧
     AdmitsRef (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 Wref).toProtocol D1.m1Domain
       (fun U => U.layout.N * D1.m1Queries)
 
@@ -135,7 +135,7 @@ def MilestoneWref : Prop :=
   (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
     (U.layout.shape u).Wmm ≤ D1.m1Wref U.layout u ∧
       (D1.m1Wref U.layout u : ℝ) ≤ D1.m1Omega * ((U.layout.shape u).Wmm : ℝ)) ∧
-  D1.m1Omega ≤ 199 / 198 ∧ reductionGamma Params.γ0 D1.m1Omega = 14017 / 1644225
+  D1.m1Omega ≤ 199 / 198 ∧ reductionGap Params.gap0 D1.m1Omega = 14017 / 1644225
 
 /-- **The honest reference is complete and does not win**: for a complete protocol, every unit of the honest
 transcript is correct, and at budget `T = W` the honest reference does not win for `0 ≤ γ < 1`. -/
@@ -155,9 +155,9 @@ def GameCanBeLost : Prop :=
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ)) →
     (∀ γ : ℝ, γ < 1 → ∀ η : ℕ → ℕ → ℝ,
-      Gγ (freeModel Q R Salt) P.toProtocol D1.m1Domain γ η → 1 ≤ η (16 * c) 16) ∧
+      GGap (freeModel Q R Salt) P.toProtocol D1.m1Domain γ η → 1 ≤ η (16 * c) 16) ∧
     (∀ γ : ℝ, γ < 1 - 1 / Ω → ∀ η : ℕ → ℕ → ℝ,
-      Gγ (outputPriced Q R Salt) P.toProtocol D1.m1Domain γ η → 1 ≤ η (16 * c) 16)
+      GGap (outputPriced Q R Salt) P.toProtocol D1.m1Domain γ η → 1 ≤ η (16 * c) 16)
 
 /-- **R_copy's bound** (tt-attacks §6; the second, noise-dependent witness): under Nz, a copy adversary's correct
 units are worth more than its cost at TT's rate, `∑_{u ∈ K'} 16·N_u > cost/(1 − γ₀)`, with probability at most

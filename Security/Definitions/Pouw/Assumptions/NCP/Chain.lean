@@ -25,7 +25,7 @@ open Finset Pouw.NCP.Relation
 `blockEnd d (3k) t`. -/
 def ParamsYLink : Prop :=
   ∀ {Q R S : Type} (P : Params Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (t i j : ℕ),
-    P.Y H s U u A t i j = wrap32 (ck (U.layout.shape u).k A (U.weight (U.layout.wid u)) (P.e1 H s U u A)
+    P.Y H s U u A t i j = wrap32 (ck (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) (P.e1 H s U u A)
       (P.wtNoise H s U u).1 (P.wtNoise H s U u).2 i j (D1.blockEnd P.d (3 * (U.layout.shape u).k) t))
 
 /-- At `d = 16` and `16 ∣ k`, block `p / (m n)` of position `p` ends at `Relation.checked`'s depth. -/

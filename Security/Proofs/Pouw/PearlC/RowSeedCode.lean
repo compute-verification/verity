@@ -1,4 +1,4 @@
-import Proofs.Pouw.PearlC.RowSeedGamma
+import Proofs.Pouw.PearlC.RowSeedGap
 
 /-!
 # The code-form seed (`-h3`): a relabelling of the one-row-unit form (staging, nothing pinned)
@@ -13,9 +13,9 @@ A fixed permutation of the oracle's inputs, one per layout, carries one to the o
   `calls_relabelTree`), and C5 (`CostModel.RelabelClosed`) relabels its online program, so it runs against `H` as the
   original runs against `H ∘ π⁻¹`, within the same budget (`exists_relabel_adversary`).
 * **The bridge:** `ttOutRowSeed_code` and `ttOutTileRowSeed_code` carry the row-seeded TT_OUT from `sem'` to the
-  code's `semC`, at the same error `εPearlC q R`, so `(q + R)/2^128`.
+  code's `semC`, at the same error `δPearlC q R`, so `(q + R)/2^128`.
 * **From rev1's TT_OUT:** `ttOutRowSeedCode_of_ttOut` and `ttOutTileRowSeedCode_of_ttOutTile` (C1, C1-h3, C3, C5). The
-  γ theorems `pearlCGammaDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
+  γ theorems `pearlCGapDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
 -/
 
 namespace Pouw.PearlC
@@ -100,7 +100,7 @@ section Bridge
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **The code-form seed bridge** (`-h3`, §14): under C1-h3 and C5, the row-seeded TT_OUT at the one-row-unit form
-`sem'` gives it at the code's form `semC`, at the same error `εPearlC q R`. A bounded adversary against `semC` is,
+`sem'` gives it at the code's form `semC`, at the same error `δPearlC q R`. A bounded adversary against `semC` is,
 relabelled by `π⁻¹`, one against `sem'` that wins on `H ∘ π` exactly when it wins on `H`, and `H ∘ π` is uniform. -/
 theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
     {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {γ₀ : ℝ}

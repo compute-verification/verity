@@ -20,7 +20,7 @@ timed run and verifier's rule, and time meets the cost model through one named a
   (`Adversary.BoundedBy`), and the clock.
 * `SpareCapacityAtDeadline`: remote's exhaustion. A declared fleet that can spend `C·(td − ts)` in the window has at most
   `C·(td − ts) − (1 − γ)(1 − ε_s)·W` of it to spare for undeclared work, except with the same probability.
-* `PearlCSampledByDeadline` and its instances: the same in Pearl-C's game, from `GγSampled`, and at v1 under rev1 on
+* `PearlCSampledByDeadline` and its instances: the same in Pearl-C's game, from `GGapSampled`, and at v1 under rev1 on
   sm_120 at the cap 1/1,000 (FP32 at 8.376, the honest cast at 8.72) on the four layouts its sampled γ is pinned at.
   The instances are stated at W1: their cost model is `W1.w1Priced (W1Device.sm120Loop sha fetch) salt`, and their
   hypotheses are TT_OUT rev1 per audit tile at 1/1,000 at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that
@@ -49,7 +49,7 @@ def WorkBetweenSaltAndDeadline : Prop :=
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+          T < (1 - reductionGap γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **Remote's exhaustion: the spare capacity at the deadline.** A declared fleet of capacity `C` per unit of time can
@@ -72,17 +72,17 @@ def SpareCapacityAtDeadline : Prop :=
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          C * (td - run.ts) - (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y)
+          C * (td - run.ts) - (1 - reductionGap γ₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
-/-- **Pearl-C's sampled audit by the deadline.** `GγSampled` and an honest clock give, for every in-domain workload,
+/-- **Pearl-C's sampled audit by the deadline.** `GGapSampled` and an honest clock give, for every in-domain workload,
 adversary, timed run and deadline `td`, every run spending at most `T` after the salt's release and by `td` with at most
 `q` oracle calls, and every draw weighted by the tiles' `W_ref`: the audit accepts a transcript received by `td` while
 `T` is below `1 − γ` of the claimed work less `ε_s` of the layout's with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 def PearlCSampledByDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S)
     (P : PearlC.Protocol Q R S) (TR : PearlC.TileRules Q R S) (D : PearlC.Layout → Prop) (γ : ℝ)
-    (η : ℕ → ℕ → ℝ), PearlC.GγSampled CM P TR D γ η →
+    (η : ℕ → ℕ → ℝ), PearlC.GGapSampled CM P TR D γ η →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
     PearlC.Assumptions.HonestClock CM U A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
@@ -118,7 +118,7 @@ def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
             PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((1648180439 / 446072750000 : ℚ) : ℝ)) *
             (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.εPearlC q U.layout.N
+        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 16384³**: `PearlCSampledByDeadline` at
 `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_16384`'s record, at `γ = 1058166877/294158650000` (0.35973%), with the
@@ -142,7 +142,7 @@ def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
             PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((1058166877 / 294158650000 : ℚ) : ℝ)) *
             (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.εPearlC q U.layout.N
+        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Qwen3-8B's served layout**:
 `PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b`'s record, at
@@ -166,7 +166,7 @@ def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
             PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((74663501 / 19190030000 : ℚ) : ℝ)) *
             (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.εPearlC q U.layout.N
+        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Llama-3.1-8B's served layout**:
 `PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b`'s record, at
@@ -190,6 +190,6 @@ def PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Prop :=
             PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((3045273083 / 782596025000 : ℚ) : ℝ)) *
             (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.εPearlC q U.layout.N
+        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 end Pouw.Guarantees

@@ -47,8 +47,8 @@ theorem theorem1 : Pouw.Guarantees.Theorem1 := by
 /-- **(d) End to end**: TT and the `Ω_max` bound give resource exhaustion with `δ_s = (1 − ε_s)^t`, `η = ε(q)`. -/
 theorem endToEnd : Pouw.Guarantees.EndToEnd := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA t εs hεs
-  have hG := gammaFromTT Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT
-  refine theorem1 Q R S CM P D (reductionGamma γ₀ Ωmax) ε (reductionGamma_lt_one hγ₀ hΩ) hG
+  have hG := gapFromTT Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT
+  refine theorem1 Q R S CM P D (reductionGap γ₀ Ωmax) ε (reductionGap_lt_one hγ₀ hΩ) hG
     U hU T hT q hq A hA (Fin t → Ticket (P.Wref U.layout) U.layout.N)
     (fun H s c => AuditAccepts (correctSet P U H s (A.transcript U H s)) c) εs ((1 - εs) ^ t) ?_
   let G := fun y : ((Q → R) × S) × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
@@ -59,12 +59,12 @@ theorem endToEnd : Pouw.Guarantees.EndToEnd := by
     _ ≤ _ := workWeightedSampling ((Q → R) × S) (P.Wref U.layout) U.layout.N t
         (fun y => correctSet P U y.1 y.2 (A.transcript U y.1 y.2)) εs hεs
 
-theorem γ0_lt_one : Params.γ0 < 1 := by unfold Params.γ0; norm_num
+theorem gap0_lt_one : Params.gap0 < 1 := by unfold Params.gap0; norm_num
 
 /-- **(d″)** Milestone resource exhaustion for `D1.m1` at `γ = 1 − (1 − γ₀)/Ω_max`. -/
 theorem milestoneExhaustion : Pinned.MilestoneExhaustion := by
   intro CM Wref Ωmax ε hΩ hW hTT U hU T hT q hq A hA t εs hεs
-  exact endToEnd D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 Ωmax ε γ0_lt_one hΩ hW hTT
+  exact endToEnd D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 Ωmax ε gap0_lt_one hΩ hW hTT
     U hU T hT q hq A hA t εs hεs
 
 end Pouw.Proofs

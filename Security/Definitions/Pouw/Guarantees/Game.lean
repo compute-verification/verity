@@ -23,7 +23,7 @@ coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfie
 def Theorem1 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → Gγ CM P D γ η →
+    γ < 1 → GGap CM P D γ η →
     ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (C : Type) [Fintype C] (accept : (Q → R) → S → C → Prop) (εs δs : ℝ),
@@ -56,7 +56,7 @@ def EndToEnd : Prop :=
     ∀ A : Adversary CM, A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+          T < (1 - reductionGap γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 end Pouw.Guarantees
@@ -65,7 +65,7 @@ namespace Pouw.Proofs
 open Finset
 
 /-- **(a)** `G_γ` from TT, with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε_TT(q)`. -/
-def _root_.Pouw.Guarantees.GammaFromTT : Prop :=
-  Pinned.GammaFromTT
+def _root_.Pouw.Guarantees.GapFromTT : Prop :=
+  Pinned.GapFromTT
 
 end Pouw.Proofs

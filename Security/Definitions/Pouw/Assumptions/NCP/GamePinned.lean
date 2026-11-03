@@ -28,9 +28,9 @@ def ThreeBlock : Prop :=
 def LastChecked : Prop :=
   ∀ (Q R S : Type) (P : Params Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (i j : ℕ), 0 < P.d →
     (U.layout.shape u).k ≤ 2 ^ 19 - 1 → (∀ l < (U.layout.shape u).k, InInt7 (A i l)) →
-    (∀ l < (U.layout.shape u).k, InInt7 (U.weight (U.layout.wid u) l j)) →
+    (∀ l < (U.layout.shape u).k, InInt7 (U.fixed (U.layout.fixedId u) l j)) →
     P.Y H s U u A (D1.nBlocks P.d (3 * (U.layout.shape u).k) - 1) i j
-      = mm (U.layout.shape u).k A (U.weight (U.layout.wid u)) i j
+      = mm (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) i j
 
 /-- **NCP's honest reference is complete** on the lead's domain, for every noise and every `R`: its int32
 accumulator is the checked values mod `2^32` by definition, and its useful output equals `A·B` (`WrapInt7`). -/
@@ -40,7 +40,7 @@ def LeadComplete : Prop :=
 /-- **`G_γ` from TT_NCP**, with credited work `3·m·k·n`: for every cost model, protocol, segment length `d` and
 domain, if `W_ref(u) ≤ Ω_max·3·W_mm(u)` and `γ₀ ≥ d/(3k)` on the domain and TT_NCP(γ₀) holds with error `ε`, then
 `G_γ` holds with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε`. -/
-def GammaFromTTNCP : Prop :=
+def GapFromTTNCP : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (d : ℕ) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
@@ -48,7 +48,7 @@ def GammaFromTTNCP : Prop :=
       (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ))) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Assumptions.TTNCP CM P d D γ₀ ε →
-    Gγ CM P D (reductionGamma γ₀ Ωmax) ε
+    GGap CM P D (reductionGap γ₀ Ωmax) ε
 
 /-- **Satisfiability witness for TT_NCP** at every `γ₀ ∈ [0, 1)`: for every NCP instance with at most `c` queries per
 unit and `W_ref ≥ 3·W_mm`, in the output-priced model at `3·m·k·n` (a query model) TT_NCP(γ₀) holds with error 0, and
@@ -105,7 +105,7 @@ def SegmentLead : Prop :=
 `[−31, 32]`, the rejection rule), signed-permutation `R` on domain shapes, no oracle queries and `W_ref = 3·W_mm`; its
 protocol is complete on `leadDomain`, the output-priced model at `3·m·k·n` runs its `H_ref` with no oracle calls, and
 TT_NCP(γ₀) holds there with error 0 at every `γ₀ ∈ [0, 1)`; and a layout with at least one unit and `d ∣ k` on every
-unit is in the domain at zero weights. So the hypotheses of `LeadComplete`, `TTNCPWitness`, `GammaFromTTNCP` (at
+unit is in the domain at zero weights. So the hypotheses of `LeadComplete`, `TTNCPWitness`, `GapFromTTNCP` (at
 `Ω_max = 1`) and `OneSegment` hold together at one instance. Its `R` is the cyclic shift by 24, which passes the rule
 for `k ≥ 1024` with `16 ∣ k` (each step's image is disjoint from it and straddles two steps, and `R²` is the shift by
 48, not `±I`); it is a witness, not a proposal. -/

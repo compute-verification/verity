@@ -7,7 +7,7 @@ import Definitions.Pouw.PearlC.Instance
 The verifier opens drawn tiles, not units: `verity.protocols.accounting.work.pouw.audit` draws `t` tiles independently, each with probability
 `W_ref(tile)/W`, and recomputes each drawn tile from its openings (its activation rows and weight rows over the full k).
 So the debit cap has to be decided on a tile, and γ has to hold for a verifier that checks drawn tiles only. This
-file states both; `TileGamma` proves γ from them.
+file states both; `TileGap` proves γ from them.
 
 - **A tile** is the output words `rows g × cols g` of one unit (`Tiling`). The named tiling is the audit's grid of
   `64 × 64` words (`auditTiling`).
@@ -16,7 +16,7 @@ file states both; `TileGamma` proves γ from them.
   bound, and earns no credit: the plan's one per-row rule. The verifier checks
   that an excluded row fails the rules, which is what makes it uncredited here.
 - **A good tile** (`TileGood`): its replayed debit on its credited rows is within the cap, each of its weight rows
-  passes the rules (`weightOK`), and each ticket and useful word of its credited rows is correct. A weight row is never
+  passes the rules (`fixedOK`), and each ticket and useful word of its credited rows is correct. A weight row is never
   excluded: a tile with a failing one is not good, and earns nothing. Each part reads only the tile's openings:
   - the rules are per row;
   - P1's flags of a word read only the word's two rows (`Skip.wordFlags`), so the chain debit, the flagged atoms summed
@@ -27,7 +27,7 @@ file states both; `TileGamma` proves γ from them.
 - **The draw's weights** are every tile's full `W_ref`, fixed by the layout; the certified work counts credited rows only
   (`TileRules.Wcred`).
 - **Blank units** are the ones the prover leaves uncommitted. Their tiles are never checked and never credited.
-- **`GγSampled`:** for every adversary, the probability that the audit accepts and the credited work, less `ε_s` of the
+- **`GGapSampled`:** for every adversary, the probability that the audit accepts and the credited work, less `ε_s` of the
   layout's, exceeds `T/(1 − γ)` is at most `(1 − ε_s)^t + η(q, N)`. The draw is independent of the oracle and the salt,
   so its source must be fixed only after the transcript's commitment.
 -/
@@ -81,8 +81,8 @@ def TileGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q �
     Prop :=
   TR.capOK H s U g c.act ∧
     (∀ j ∈ (TR.tiling U.layout).cols g,
-      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
-        (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
+      P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g))
+        (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j) ∧
     ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →
       ∀ j ∈ (TR.tiling U.layout).cols g,
         wordQ (c.ticket i j) = P.ticket H s U ((TR.tiling U.layout).unit g) c.act i j ∧
@@ -102,8 +102,8 @@ def TileGoodU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q 
     Prop :=
   TR.capOK H s U g c.act ∧
     (∀ j ∈ (TR.tiling U.layout).cols g,
-      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
-        (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
+      P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g))
+        (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j) ∧
     ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →
       ∀ j ∈ (TR.tiling U.layout).cols g,
         wordQ (c.useful i j) = P.useful H s U ((TR.tiling U.layout).unit g) c.act i j
@@ -131,7 +131,7 @@ def tileWrefTotal (TR : TileRules Q R S) (L : Layout) : ℝ := ∑ g ∈ range (
 /-- `AdmitsRef` with the reference's cost bounded tile by tile. -/
 def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop)
     (qref : Workload → ℕ) : Prop :=
-  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
+  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
       CM.run prog H U act [] s = honestTranscript P H s U act ∧
       CM.cost prog H U act [] s ≤ tileWrefTotal TR U.layout ∧
@@ -141,7 +141,7 @@ def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q 
 adversary, every ticket count `w` proportional to the tiles' `W_ref` (`verity.protocols.accounting.work.pouw.audit`'s `tickets`), `t` independent
 draws and `ε_s ≤ 1`: the audit accepts (every drawn tile is good, or of a blank unit) while `T` is below `1 − γ` of the
 claimed work (the credited rows' `W_ref`) less `ε_s` of the layout's, with probability at most `(1 − ε_s)^t + η(q, N)`. -/
-def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+def GGapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
@@ -152,9 +152,9 @@ def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
           T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + η q U.layout.N
 
-/-- **The γ-gap property under the sampled audit with U-only binding**: `GγSampled` with the audit accepting a drawn tile
+/-- **The γ-gap property under the sampled audit with U-only binding**: `GGapSampled` with the audit accepting a drawn tile
 when it is good under U-only binding (`goodTilesU`) or of a blank unit. -/
-def GγSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+def GGapSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →

@@ -17,11 +17,11 @@ variable {Q R S : Type}
 `ε(q, N)`.
 
 The model's programs reach the oracle only through counted queries (`CostModel.Queries`). In the game
-of §3.3 (the same adversaries, budgets and oracle-call bounds as `Gγ`), let `K'` be the units whose checked values
+of §3.3 (the same adversaries, budgets and oracle-call bounds as `GGap`), let `K'` be the units whose checked values
 are correct (`checkedSet`; the useful output is not required). Then
 `Pr_{H,s}[ ∑_{u ∈ K'} m_u·k_u·n_u > T / (1 − γ₀) ] ≤ ε(q, N)`.
 
-It is stated in the same game as `Gγ`, so grinding and collisions over the `q` free oracle calls are inside
+It is stated in the same game as `GGap`, so grinding and collisions over the `q` free oracle calls are inside
 `ε(q, N)`. TT is false when `γ₀ ≥ 1` or for zero noise in natural models (`Pouw.Sanity`). -/
 def TT [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=

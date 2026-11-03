@@ -6,7 +6,7 @@ import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
 
 * **`tth1tAllRight`** (under `H1TRunningWords`): a program right on every tile at every salt holds a register equal to
   every credited word; a slot past the last register would make the word the constant `0`, which is free. So
-  `h1tGammaRunning` bounds its cost by 32 per credited word, and every credited word is in a right tile.
+  `h1tGapRunning` bounds its cost by 32 per credited word, and every credited word is in a right tile.
 * **`tth1tSat`**: at `γ = 1` the event is `cost < 0`, which never holds, so `TTH1T r c 1 0` holds for every domain.
 -/
 
@@ -25,7 +25,7 @@ theorem tth1tAllRight (hR : H1TRunningWords) : TTH1TAllRight := by
       rw [← e]; unfold slotVal; rw [List.getD_eq_getElem _ _ hs]
     · refine absurd (Or.inl ⟨0, ?_⟩) (hfree x)
       rw [← e]; unfold slotVal; funext G; rw [List.getD_eq_default _ _ (not_lt.1 hs)]
-  have h := h1tGammaRunning hR pr hpr N Us hL fpSem L P hLf hP hout
+  have h := h1tGapRunning hR pr hpr N Us hL fpSem L P hLf hP hout
   have hr : rightWords (regs100 fpSem P L) slot tl G = ∑ u, (Us u).m * (Us u).n * Fintype.card (Pos (Us u).T) := by
     have : {x : Idx Us | TileRight (regs100 fpSem P L) slot tl (tl.of x) G} = Set.univ :=
       Set.eq_univ_of_forall fun x => hall G (tl.of x)

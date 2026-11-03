@@ -26,7 +26,7 @@ import Definitions.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
 import Definitions.Pouw.Assumptions.Dither
 import Definitions.Pouw.Assumptions.DitherInstance
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TTile
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions

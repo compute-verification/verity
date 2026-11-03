@@ -28,19 +28,19 @@ def commitAns (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
   let E := P.expAct sh a b
   let F := P.expWt sh b
   let act' : Mat := fun i l => wrap32 (A i l + mmW P.r E.1 E.2 i l)
-  let wt' : Mat := fun l j => wrap32 (U.weight (U.layout.wid u) l j + mmW P.r F.1 F.2 l j)
+  let wt' : Mat := fun l j => wrap32 (U.fixed (U.layout.fixedId u) l j + mmW P.r F.1 F.2 l j)
   ⟨A, fun t => mmW (D1.blockEnd P.d sh.k t) act' wt',
     fun i j => wrap32 (wrap32 (mmW sh.k act' wt' i j - mmW P.r (mmW sh.k A F.1) F.2 i j)
       - mmW P.r E.1 (mmW sh.k E.2 wt') i j)⟩
 
 theorem commitAns_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
-    commitAns P U u A ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s u (U.layout.wid u)).map H)
+    commitAns P U u A ((P.qAct s u A (U.layout.fixedId u)).map H) ((P.qWt s u (U.layout.fixedId u)).map H)
       = ⟨A, P.toProtocol.refChecked H s U u A, P.toProtocol.refOut H s U u A⟩ := rfl
 
 /-- Unit `u`'s honest program: query its noise, then commit. -/
 def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s u (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
+  (queryAll (P.qAct s u (act u) (U.layout.fixedId u))).bind fun a =>
+    (queryAll (P.qWt s u (U.layout.fixedId u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- The honest reference: every unit's honest program, in order. -/
 def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
@@ -57,7 +57,7 @@ theorem calls_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S
     (honestProg P U act s).calls H ≤ U.layout.N * c := by
   refine calls_upTo_le H _ _ c fun u _ => ?_
   simp only [unitProg, calls_bind, calls_queryAll, eval_queryAll, calls]
-  have := hc s u (act u) (U.layout.wid u)
+  have := hc s u (act u) (U.layout.fixedId u)
   omega
 
 end Honest
@@ -89,13 +89,13 @@ theorem checked_le_outputPriced_cost (P : Protocol Q R S) (prog : (outputPriced 
 /-- In the witness model TT(0.5%) holds with error 0 for every protocol and domain: the checked units' work is at
 most the cost, which is at most the budget. -/
 theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
-    (D : Layout → Prop) : Assumptions.TT (outputPriced Q R S) P D Params.γ0 (fun _ _ => 0) := by
+    (D : Layout → Prop) : Assumptions.TT (outputPriced Q R S) P D Params.gap0 (fun _ _ => 0) := by
   refine ⟨outputPriced_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
   have h1 := checked_le_outputPriced_cost P A.online x.1 U A.act (A.pre.eval x.1) x.2
   have h2 := (hA x.1 x.2).1
-  have h3 : T ≤ T / (1 - Params.γ0) := by
-    rw [le_div_iff₀ (by unfold Params.γ0; norm_num)]
-    unfold Params.γ0; nlinarith
+  have h3 : T ≤ T / (1 - Params.gap0) := by
+    rw [le_div_iff₀ (by unfold Params.gap0; norm_num)]
+    unfold Params.gap0; nlinarith
   exact absurd hx (not_lt.2 (h1.trans (h2.trans h3)))
 
 /-- **Satisfiability witness for TT and `AdmitsRef`** in `outputPriced`, for `D1.m1` with `W_ref ≥ W_mm`. -/
@@ -197,7 +197,7 @@ theorem lost_free {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty
     (c : ℕ) (Ω : ℝ) (hN : P.NoiseRange) (hc : P.QueryBound c) (hc64 : 16 * c ≤ 2 ^ 64) (hΩ : 1 ≤ Ω)
     (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (γ : ℝ) (_hγ : γ < 1) (η : ℕ → ℕ → ℝ) (hG : Gγ (freeModel Q R Salt) P.toProtocol D1.m1Domain γ η) :
+    (γ : ℝ) (_hγ : γ < 1) (η : ℕ → ℕ → ℝ) (hG : GGap (freeModel Q R Salt) P.toProtocol D1.m1Domain γ η) :
     1 ≤ η (16 * c) 16 := by
   have := salt_nonempty
   have h := hG M1.sixteen M1.sixteen_inDomain 0 le_rfl (M1.sixteen.layout.N * c) hc64 (freeHonest P)
@@ -211,7 +211,7 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
     (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
     (γ : ℝ) (hγ : γ < 1 - 1 / Ω) (η : ℕ → ℕ → ℝ)
-    (hG : Gγ (outputPriced Q R Salt) P.toProtocol D1.m1Domain γ η) : 1 ≤ η (16 * c) 16 := by
+    (hG : GGap (outputPriced Q R Salt) P.toProtocol D1.m1Domain γ η) : 1 ≤ η (16 * c) 16 := by
   have := salt_nonempty
   have hB := pricedHonest_bounded P hc M1.sixteen
   rw [sum_Wmm_sixteen] at hB

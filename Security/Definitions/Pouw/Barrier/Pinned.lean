@@ -16,7 +16,7 @@ def GenericPr : Prop :=
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
     (q : ℕ),
     U.InDomain D → 0 ≤ c₀ → q ≤ 2 ^ 64 → A.Bounded U c₀ q → 0 < totalWref P U.layout →
-    ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, Gγ CM P D γ η →
+    ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, GGap CM P D γ η →
       pr (fun x : (Q → R) × S => correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N)
         ≤ η q U.layout.N
 
@@ -30,7 +30,7 @@ def Additive : Prop :=
     (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (p : ℝ) (D : Layout → Prop) (U : Workload),
     1 ≤ p → U.InDomain D → 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) →
     (∀ u < U.layout.N, p * ((U.layout.shape u).Wmm : ℝ) ≤ (W U.layout u : ℝ)) →
-    ∀ γ : ℝ, γ < 1 - 1 / p → ∀ η : ℕ → ℕ → ℝ, Gγ (gemmModel N) (addProto N W) D γ η → 1 ≤ η 0 U.layout.N
+    ∀ γ : ℝ, γ < 1 - 1 / p → ∀ η : ℕ → ℕ → ℝ, GGap (gemmModel N) (addProto N W) D γ η → 1 ≤ η 0 U.layout.N
 
 /-- **Class (a) is a real protocol** (satisfiability of `Additive`'s hypotheses on the protocol side): for every noise
 source and domain, `addProto` is complete, and the abstract model runs a complete `H_ref` at `W_ref = 2·W_mm` (the
@@ -51,7 +51,7 @@ def Relation : Prop :=
     1 ≤ t → c (t - 1) * c (t - 1) = 1 → RelNoise t c N → U.InDomain D →
     0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) →
     (∀ u < U.layout.N, (t : ℝ) * ((U.layout.shape u).Wmm : ℝ) ≤ (W U.layout u : ℝ)) →
-    ∀ γ : ℝ, γ < 1 / t → ∀ η : ℕ → ℕ → ℝ, Gγ (gemmModel N) (relProto t c N W) D γ η → 1 ≤ η 0 U.layout.N
+    ∀ γ : ℝ, γ < 1 / t → ∀ η : ℕ → ℕ → ℝ, GGap (gemmModel N) (relProto t c N W) D γ η → 1 ≤ η 0 U.layout.N
 
 /-- **The relation condition is met by the lead's noise with output-only checks**: for all factor sources, the
 noise source of the lead's form satisfies `RelNoise` with `t = 3`, `c = (1, 1, −1)`, and the last coefficient is a
@@ -86,7 +86,7 @@ def Segment : Prop :=
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain D →
     0 < ∑ u ∈ range Lay.N, (((Lay.shape u).m * d * (Lay.shape u).n : ℕ) : ℝ) →
     (∀ u < Lay.N, (((Lay.shape u).m * (L * d) * (Lay.shape u).n : ℕ) : ℝ) ≤ (W Lay u : ℝ)) →
-    ∀ γ : ℝ, γ < 1 / L → ∀ η : ℕ → ℕ → ℝ, Gγ (gemmModel N) (segProto L d α β N W) D γ η → 1 ≤ η 0 Lay.N
+    ∀ γ : ℝ, γ < 1 / L → ∀ η : ℕ → ℕ → ℝ, GGap (gemmModel N) (segProto L d α β N W) D γ η → 1 ≤ η 0 Lay.N
 
 /-- **The hypotheses of `Generic` are jointly satisfiable, with a complete protocol**: in the abstract model there
 are a protocol whose `H_ref` is complete and admitted at `W_ref`, an in-domain workload and a cheap point at a cost

@@ -15,7 +15,7 @@ open Finset
 variable {Q R S : Type}
 
 /-- **TT_OUT(γ₀), output tickets force the noisy chain**, for any cost model `CM`, protocol `P`, domain `D`, target
-`γ₀` and error `ε(q, N)`: in the game of `Pouw.PearlC.Gγ`, with `K` the units whose ticket words and useful output words
+`γ₀` and error `ε(q, N)`: in the game of `Pouw.PearlC.GGap`, with `K` the units whose ticket words and useful output words
 are both correct and whose debit is within the cap, `Pr_{H,s}[ ∑_{u ∈ K} credit(u) > T / (1 − γ₀) ] ≤ ε(q, N)`, where
 `credit(u)` is the reference's value on the unit's committed activations and the realized noise. The named instance is
 `TTOutPearlC`. -/
@@ -29,7 +29,7 @@ def TTOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q 
       ≤ ε q U.layout.N
 
 /-- **The named assumption TT_OUT(1/400) for Pearl-C**: `TTOut` at `pearlCProtocol sem c ρ`, `pearlCDomain Params.pi`,
-`γ₀ = 1/400` and `εPearlC`.
+`γ₀ = 1/400` and `δPearlC`.
 
 **It is falsified** (rating D): the first promotion of every word adds into a +0 total, an exact identity any program
 may skip, yet `creditOf` and `wrefOf` price it (`TTOutRev1.lean`). rev1 (`TTOutPearlCDevRev1`, `TTOutPearlCH100Rev1`) is
@@ -84,7 +84,7 @@ its repair.
   which covers all of these families under `--forming s5`. -/
 def TTOutPearlC [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S)
     (c : Costs) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocol sem c ρ) (pearlCDomain Params.pi) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocol sem c ρ) (pearlCDomain Params.pi) (1 / 400) δPearlC
 
 /-- **TT_OUT(γ₀) per tile**: as `TTOut`, with the tiles of `TR` in place of the units. `K` is the good tiles of the
 committed units (`goodTiles`: debit within the cap, and every ticket and useful word of the credited rows correct), and
@@ -99,7 +99,7 @@ def TTOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMode
       ≤ ε q U.layout.N
 
 /-- **The named assumption TT_OUT(1/400) for Pearl-C, per audit tile**: `TTOutTile` at `pearlCProtocol sem c ρ`, its
-tiles `pearlCTiles sem c ρ` (the audit's `64 × 64` grid), `pearlCDomain Params.pi`, `γ₀ = 1/400` and `εPearlC`. It is
+tiles `pearlCTiles sem c ρ` (the audit's `64 × 64` grid), `pearlCDomain Params.pi`, `γ₀ = 1/400` and `δPearlC`. It is
 `TTOutPearlC` with three changes, for a verifier that checks drawn tiles only. It is falsified as
 `TTOutPearlC` is, by the first-promotion skip (rating D), and rev1 per tile (`TTOutTilePearlCDevRev1`) is its repair.
 
@@ -120,23 +120,23 @@ error, and the same second hole (cross-group joint skips within a word, carried 
 word, and an aligned-spike tile (R = 300, 74.6% of atoms flagged per word) is over the cap and not good. -/
 def TTOutTilePearlC [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) : Prop :=
-  TTOutTile CM (pearlCProtocol sem c ρ) (pearlCTiles sem c ρ) (pearlCDomain Params.pi) (1 / 400) εPearlC
+  TTOutTile CM (pearlCProtocol sem c ρ) (pearlCTiles sem c ρ) (pearlCDomain Params.pi) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record** `d`: `TTOut` at `pearlCProtocolDev d sem ρ`,
-`pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. At `devH100` it is `TTOutPearlC` at `Costs.adopted` on that
+`pearlCDomainDev d`, `γ₀ = 1/400` and `δPearlC`. At `devH100` it is `TTOutPearlC` at `Costs.adopted` on that
 domain narrowed to `n ≥ 64` with `64 ∣ n` (`pearlCDomainDev_h100`), so `TTOutPearlC` gives it (`ttOutPearlCDev_h100`);
-the narrowing keeps out units whose output words are cheaper to guess than `εPearlC` (`pearlCDomainDev`). At another record it is another named assumption: the same game, charging rule, error and
+the narrowing keeps out units whose output words are cheaper to guess than `δPearlC` (`pearlCDomainDev`). At another record it is another named assumption: the same game, charging rule, error and
 falsifiers, on that device's ticket chain, U, flags, salt-dead predicate and prices. `CM` is that device's W1 accounting
 (`w1-complete/<device>`), which charges a tensor-core instruction its whole fragment shape, never per output word. -/
 def TTOutPearlCDev [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at a device record** `d`: `TTOutTile` at `pearlCProtocolDev d sem ρ` and
 `pearlCTilesDev d sem ρ`. At `devH100` it is `TTOutTilePearlC` at `Costs.adopted` on the narrowed domain, which
 `TTOutTilePearlC` gives (`ttOutTilePearlCDev_h100`). -/
 def TTOutTilePearlCDev [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTile CM (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutTile CM (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 end Pouw.PearlC.Assumptions

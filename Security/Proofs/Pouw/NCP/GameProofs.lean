@@ -10,7 +10,7 @@ import Proofs.Pouw.Sanity
 
 * `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]`, a sanity
   bound; `lastChecked`, `leadComplete` (checked values mod `2^32`, NA2).
-* `gammaFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
+* `gapFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
 * `oneSegment`: the zero-input adversary of class (c), in `Pouw.Barrier.gemmModel`.
 -/
 
@@ -119,10 +119,10 @@ theorem leadComplete : GamePinned.LeadComplete := by
 theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ)))
-    (hwin : Wins P U (reductionGamma γ₀ Ωmax) T τ H s) :
+    (hwin : Wins P U (reductionGap γ₀ Ωmax) T τ H s) :
     T / (1 - γ₀) < ∑ u ∈ checkedSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) := by
   unfold Wins at hwin
-  rw [one_sub_reductionGamma, div_div_eq_mul_div] at hwin
+  rw [one_sub_reductionGap, div_div_eq_mul_div] at hwin
   have h1 : ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
       ≤ Ωmax * ∑ u ∈ correctSet P U H s τ, 3 * ((U.layout.shape u).Wmm : ℝ) := by
     rw [Finset.mul_sum]
@@ -137,7 +137,7 @@ theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
 /-- **`G_γ` from TT_NCP.** -/
-theorem gammaFromTTNCP : GamePinned.GammaFromTTNCP := by
+theorem gapFromTTNCP : GamePinned.GapFromTTNCP := by
   intro Q R S _ _ _ _ CM P d D γ₀ Ωmax ε hγ₀ hΩ hW hside hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) ((hTT hside).2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ hwin
@@ -153,17 +153,17 @@ variable (P : Params Q R S)
 def commitAns (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
   let sh := U.layout.shape u
   let X := stackX sh.k A (P.expAct sh a) (P.expWt sh b).2
-  let Y := stackY sh.k (U.weight (U.layout.wid u)) (P.expWt sh b).2 (P.expWt sh b).1
+  let Y := stackY sh.k (U.fixed (U.layout.fixedId u)) (P.expWt sh b).2 (P.expWt sh b).1
   ⟨A, fun t => mmW (D1.blockEnd P.d (3 * sh.k) t) X Y, mmW (3 * sh.k) X Y⟩
 
 theorem commitAns_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
-    commitAns P U u A ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s (U.layout.wid u)).map H)
+    commitAns P U u A ((P.qAct s u A (U.layout.fixedId u)).map H) ((P.qWt s (U.layout.fixedId u)).map H)
       = ⟨A, P.toProtocol.refChecked H s U u A, P.toProtocol.refOut H s U u A⟩ := rfl
 
 /-- Unit `u`'s honest program: query its noise, then commit. -/
 def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
+  (queryAll (P.qAct s u (act u) (U.layout.fixedId u))).bind fun a =>
+    (queryAll (P.qWt s (U.layout.fixedId u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- NCP's honest reference as an oracle program. -/
 def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
@@ -180,7 +180,7 @@ theorem calls_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S
     (honestProg P U act s).calls H ≤ U.layout.N * c := by
   refine calls_upTo_le H _ _ c fun u _ => ?_
   simp only [unitProg, calls_bind, calls_queryAll, eval_queryAll, calls]
-  have := hc s u (act u) (U.layout.wid u)
+  have := hc s u (act u) (U.layout.fixedId u)
   omega
 
 end Honest

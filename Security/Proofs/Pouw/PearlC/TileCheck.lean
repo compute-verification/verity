@@ -18,8 +18,8 @@ theorem tileGood_iff (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) 
     TileGood P TR U H s g c ↔
       TR.capOK H s U g c.act ∧
         (∀ j ∈ (TR.tiling U.layout).cols g,
-          P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
-            (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
+          P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g))
+            (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j) ∧
         TileWordsGood P TR U H s g c :=
   Iff.rfl
 

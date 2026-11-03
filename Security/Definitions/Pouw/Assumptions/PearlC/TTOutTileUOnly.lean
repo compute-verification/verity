@@ -8,7 +8,7 @@ words of its credited rows are right (`TileGoodU`, `TileGood` without its ticket
 over `goodTilesU`, and `TTOutTilePearlCDevUOnly` is it at rev1's protocol and tiles.
 
 It asserts **more** than the (C̃, U) tile row: every tile good under both bindings is good under U alone
-(`TileUOnlyGamma.ttOutTilePearlCDevRev1_of_uOnly`). It is a new conjecture, not a weakening.
+(`TileUOnlyGap.ttOutTilePearlCDevRev1_of_uOnly`). It is a new conjecture, not a weakening.
 -/
 
 namespace Pouw.PearlC.Assumptions
@@ -26,7 +26,7 @@ def TTOutTileU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
       ≤ ε q U.layout.N
 
 /-- **TT_OUT(1/400) per audit tile over U alone at a device record `d`**: `TTOutTileU` at `pearlCProtocolDevRev1 d sem ρ`,
-`pearlCTilesDevRev1 d sem ρ`, `pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. It is `TTOutTilePearlCDevRev1` with the
+`pearlCTilesDevRev1 d sem ρ`, `pearlCDomainDev d`, `γ₀ = 1/400` and `δPearlC`. It is `TTOutTilePearlCDevRev1` with the
 ticket words unchecked, and `TTOutPearlCDevUOnly` per tile: what it adds to the (C̃, U) tile row, its falsifiers and the
 evidence are `TTOutPearlCDevUOnly`'s, read on the tile's credited rows.
 
@@ -34,6 +34,6 @@ evidence are `TTOutPearlCDevUOnly`'s, read on the tile's credited rows.
   output word. -/
 def TTOutTilePearlCDevUOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutTileU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 end Pouw.PearlC.Assumptions

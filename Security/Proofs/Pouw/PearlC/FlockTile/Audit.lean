@@ -84,14 +84,14 @@ end TileReadSession
 
 /-- **T3 at the TileRead session (open obligation, to be discharged by C-Flock's soundness).** For every in-domain
 workload, transcript `τ`, opening `o`, oracle, salt and tile `g`, and every strategy `σ` of tile `g`'s session in the
-session's class at `q`: flock-verify accepts on a run in the event `Bad` with probability at most `ηzk q`. To be met by
+session's class at `q`: flock-verify accepts on a run in the event `Bad` with probability at most `δzk q`. To be met by
 the restack plan's T3 (`Flock.Guarantees.EndToEndCanonicalP` at the drawn units, with its CR hypotheses as `Cls` and
 its event as `Bad`), at the TileRead statement. -/
-def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) : Prop :=
+def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
     (σ : FlockSoundness.Game.Strategy (F.game H s U (F.root U τ o) g)) (q : ℕ), F.Cls U τ o H s g σ q →
     FlockSoundness.Game.prob (fun x => F.verdict x = true ∧ F.Bad U τ o H s g σ x) (F.game H s U (F.root U τ o) g) σ ≤
-      ENNReal.ofReal (ηzk q)
+      ENNReal.ofReal (δzk q)
 
 /-- **The binding (open obligation, to be proved).** For every in-domain workload, transcript `τ`, opening `o`, oracle,
 salt and tile `g`: an output of tile `g`'s session that flock-verify accepts outside `Bad` happens only when tile `g` is
@@ -109,10 +109,10 @@ def TileReadBinds (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Pr
 (`game_eq` by definition); its `Bad` is the session's, read at the session's strategy; `bad_le` is `TileReadSound`
 through the bridge's `prob_ofVerity`; and `good_of_accept` is `TileReadBinds`. -/
 def TileReadSession.tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ ηzk q)
-    (hT3 : TileReadSound P D F ηzk) (hbind : TileReadBinds P TR D F) (U : Workload) (hU : U.InDomain P D)
+    (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ δzk q)
+    (hT3 : TileReadSound P D F δzk) (hbind : TileReadBinds P TR D F) (U : Workload) (hU : U.InDomain P D)
     (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ) :
-    TileGame P TR F.audit F.cls ηzk U τ o H s g where
+    TileGame P TR F.audit F.cls δzk U τ o H s g where
   Out := F.Out U
   G := toVerity (F.game H s U (F.root U τ o) g)
   verdict := F.verdict

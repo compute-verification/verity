@@ -1,5 +1,5 @@
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
-import Proofs.Pouw.Fp8Atom.H1TGammaProofs
+import Proofs.Pouw.Fp8Atom.H1TGapProofs
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 
 /-!
@@ -9,7 +9,7 @@ A credited word reads only its own row's salt (`word_row`). So two equal words o
 and within a row the pairs split into those `H1TOneFlip` separates on half of the salts, and the `Hard` ones, which
 `H1TRunningWords` separates. A word is not constant by `H1TOneFlip` (not `Stuck`) or `H1TRunningWords` (`Stuck`), and
 not a raw XOF word by `h1tNotRawWord`. Conversely `DistinctLiveH1T` gives `H1TRunningWords` at once, so the two are
-equivalent, and `h1tGamma` holds under `H1TRunningWords`.
+equivalent, and `h1tGap` holds under `H1TRunningWords`.
 -/
 
 namespace Pouw.Fp8Atom.H1T.Proofs
@@ -73,6 +73,6 @@ theorem h1tRunningOfDistinct (hD : DistinctLiveH1T) : H1TRunningWords := by
   obtain ⟨hinj, hfree⟩ := hD U hU
   exact ⟨fun hne _ e => hne (congrArg Prod.snd (hinj e)), fun _ q e => hfree (i, a) (Or.inl ⟨q, e⟩)⟩
 
-theorem h1tGammaRunning (hR : H1TRunningWords) : H1TGamma := h1tGamma (h1tDistinctLive hR)
+theorem h1tGapRunning (hR : H1TRunningWords) : H1TGap := h1tGap (h1tDistinctLive hR)
 
 end Pouw.Fp8Atom.H1T.Proofs

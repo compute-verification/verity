@@ -1,7 +1,7 @@
 import Proofs.Pouw.PearlC.TileCheck4
 import Proofs.Pouw.PearlC.Block4Sem
 import Proofs.Pouw.PearlC.TileProtocol
-import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.TileGap
 
 /-!
 # `pc4`'s tile check computes the words (proofs)

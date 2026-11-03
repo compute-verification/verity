@@ -217,7 +217,7 @@ theorem unitUsefulDev_eq (p : Pipeline) (pr : Prices) (sem : PearlCSem Q R S) (H
       (devAt p 4 pr).useful (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2
         (fun l q => z.FA l q) (fun l q => z.FB l q)
         (fun i q => codeBf16 (lineCodes (sem.beta sh.k (wordsVal sh.m sh.k act i)) (z.EA i) q))
-        (fun j q => codeBf16 (lineCodes (sem.beta sh.k (wordsVal sh.n sh.k (U.weight (U.layout.wid u)) j))
+        (fun j q => codeBf16 (lineCodes (sem.beta sh.k (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) j))
           (z.EB j) q)) :=
   rfl
 
@@ -228,7 +228,7 @@ theorem unitUseful_eq (sem : Fp4Sem Q R S) (H : Q → R) (s : S) (U : Workload) 
     sem.unitUseful devFp4Sm120 H s U u act =
       devFp4Sm120.useful (sem.unitForm devFp4Sm120 H s U u act).1 (sem.unitForm devFp4Sm120 H s U u act).2 z.FA z.FB
         (fun i => eTilde (z.EA i) (e4m3 (sem.beta sh.k (wordsVal sh.m sh.k act i))))
-        (fun j => eTilde (z.EB j) (e4m3 (sem.beta sh.k (wordsVal sh.n sh.k (U.weight (U.layout.wid u)) j)))) :=
+        (fun j => eTilde (z.EB j) (e4m3 (sem.beta sh.k (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) j)))) :=
   rfl
 
 end Pouw.PearlC.TileCircuit

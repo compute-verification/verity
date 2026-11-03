@@ -9,8 +9,8 @@ The game `G_γ(Π, 𝒜, T, q)` of §3.3, with probabilities over the oracle `H`
 
 ~~~text
 0. Oracle.      H : Q → R is uniform over all functions (Q, R finite).
-1. Workload.    U = (layout, weights): N ≤ 2^64 units, unit u has shape (m_u, k_u, n_u), weight id wid u,
-                index u. U is universally quantified outside the probability, as in §3.3's requirement.
+1. Workload.    U = (layout, fixed operands): N ≤ 2^64 units, unit u has shape (m_u, k_u, n_u), fixed operand
+                fixedId u, index u. U is universally quantified outside the probability, as in §3.3's requirement.
 2. Preprocess.  σ = A.pre.eval H : an adaptive oracle program (a QTree), chosen after U, with unbounded
                 computation between queries; never a function of the salt. Its queries count towards q.
 3. Salt.        s : S uniform, independent of H and hence of σ.
@@ -45,16 +45,20 @@ structure Shape where
 /-- `W_mm = m·k·n`, the plain GEMM's multiply-accumulates. -/
 def Shape.Wmm (sh : Shape) : ℕ := sh.m * sh.k * sh.n
 
-/-- The declared layout: `N` units `0, …, N − 1` (unit `u`'s index is `u`), their shapes and weight ids. -/
+/-- The declared layout: `N` units `0, …, N − 1` (unit `u`'s index is `u`), their shapes and the id of each unit's
+fixed operand. -/
 structure Layout where
   N : ℕ
   shape : ℕ → Shape
-  wid : ℕ → ℕ
+  /-- The id of unit `u`'s fixed operand `B`: units with one id share it. -/
+  fixedId : ℕ → ℕ
 
-/-- A declared workload: its layout and the weights `B_w`, fixed before the salt. -/
+/-- A declared workload: its layout and the fixed operands `B_w`. -/
 structure Workload where
   layout : Layout
-  weight : ℕ → Mat
+  /-- The fixed operand `B_w` of id `w`: declared before the salt and reusable across units; model weights are the
+  usual case. -/
+  fixed : ℕ → Mat
 
 /-- The §3.2 default shape domain: `m` a positive multiple of 16, and `k, n ∈ [2^10, 2^16]` multiples of 64. -/
 def Shape.InDefaultDomain (sh : Shape) : Prop :=
@@ -66,17 +70,17 @@ def milestoneShape : Shape := ⟨2 ^ 12, 2 ^ 16, 2 ^ 16⟩
 /-- Every unit's shape is in the shape domain `D`. §3.2's domain is `Layout.ShapesIn Shape.InDefaultDomain`. -/
 def Layout.ShapesIn (D : Shape → Prop) (L : Layout) : Prop := ∀ u < L.N, D (L.shape u)
 
-/-- The rows weight `w` serves: `∑_{u : w(u) = w} m_u`. -/
+/-- The rows fixed operand `w` serves: `∑_{u : fixedId u = w} m_u`. -/
 def Layout.rowsOf (L : Layout) (w : ℕ) : ℕ :=
-  ∑ u ∈ (Finset.range L.N).filter (fun u => L.wid u = w), (L.shape u).m
+  ∑ u ∈ (Finset.range L.N).filter (fun u => L.fixedId u = w), (L.shape u).m
 
 /-- A workload is in the domain `D` (a predicate on layouts, part of `Π`: working decision W3) if it has at most
-`2^64` units (the index is a 64-bit field), its layout satisfies `D`, and every weight entry a unit reads is int7.
-The weights are otherwise arbitrary, degenerate ones included. Without the bound on `N`, a finite oracle gives two
+`2^64` units (the index is a 64-bit field), its layout satisfies `D`, and every fixed-operand entry a unit reads is
+int7. The fixed operands are otherwise arbitrary, degenerate ones included. Without the bound on `N`, a finite oracle gives two
 units identical noise (`Pouw.Sanity.identical_checked`). -/
 def Workload.InDomain (D : Layout → Prop) (U : Workload) : Prop :=
   U.layout.N ≤ 2 ^ 64 ∧ D U.layout ∧
-    ∀ u < U.layout.N, ∀ l < (U.layout.shape u).k, ∀ j < (U.layout.shape u).n, InInt7 (U.weight (U.layout.wid u) l j)
+    ∀ u < U.layout.N, ∀ l < (U.layout.shape u).k, ∀ j < (U.layout.shape u).n, InInt7 (U.fixed (U.layout.fixedId u) l j)
 
 /-! ## Transcripts and cost models -/
 
@@ -137,7 +141,7 @@ def CheckedOK (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ
 /-- The useful output is correct: it equals `A_u · B_{w(u)}` on the unit's `m × n` entries. -/
 def OutOK (U : Workload) (u : ℕ) (c : Commit) : Prop :=
   ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
-    c.out i j = mm (U.layout.shape u).k c.act (U.weight (U.layout.wid u)) i j
+    c.out i j = mm (U.layout.shape u).k c.act (U.fixed (U.layout.fixedId u)) i j
 
 /-- A correct unit (§3.2): correct checked values and the correct useful output. -/
 def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
@@ -162,7 +166,7 @@ def Protocol.Complete (P : Protocol Q R S) (D : Layout → Prop) : Prop :=
     (∀ x ∈ P.checkIdx (U.layout.shape u),
         P.refChecked H s U u A x.1 x.2.1 x.2.2 = P.Y H s U u A x.1 x.2.1 x.2.2) ∧
     (∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
-        P.refOut H s U u A i j = mm (U.layout.shape u).k A (U.weight (U.layout.wid u)) i j)
+        P.refOut H s U u A i j = mm (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) i j)
 
 /-- The honest transcript on activations `act`: `H_ref`'s output for every unit. -/
 def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Mat) : Transcript :=
@@ -210,7 +214,7 @@ def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H :
 
 /-- **The γ-gap property** `G_γ` with error `η(q, N)`, in §3.3's quantifier order after `Π`: for every in-domain
 workload, every budget `T ≥ 0`, every `q ≤ 2^64` and every adversary within `(T, q)`, `Pr_{H,s}[𝒜 wins] ≤ η`. -/
-def Gγ [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
@@ -220,7 +224,7 @@ cost at most `W_ref` (so `W_ref` cannot be under-declared; `W_ref ≡ 0` would m
 holds with error `η`. `W_ref` is input-independent by its type. -/
 def Requirement [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
-  ∃ (P : Protocol Q R S) (qref : Workload → ℕ), P.Complete D ∧ AdmitsRef CM P D qref ∧ Gγ CM P D γ η
+  ∃ (P : Protocol Q R S) (qref : Workload → ℕ), P.Complete D ∧ AdmitsRef CM P D qref ∧ GGap CM P D γ η
 
 /-! ## The audit (§3.5) -/
 

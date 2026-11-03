@@ -143,7 +143,7 @@ def AlgBound : Prop :=
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
 
 /-- **TT_NCP in AlgM_16** at `γ₀ = 16/(3k)`, in the shape of TT_NCP's event (`Pouw.NCP.Assumptions.TTNCP`, used by
-`gammaFromTTNCP`): for every `γ₀ ∈ [16/(3k), 1)`, a program of AlgM_16 on inputs in `V₀` that outputs the non-final
+`gapFromTTNCP`): for every `γ₀ ∈ [16/(3k), 1)`, a program of AlgM_16 on inputs in `V₀` that outputs the non-final
 checked words of the units in `U`, for any `A = g(F₁)`, never has `cost/(1 − γ₀) < Σ_{u ∈ U} 3·W_mm`, with
 `W_mm = m·k·n`. The event is impossible, not only unlikely: correctness is on the whole grid. -/
 def TTNCPAlg : Prop :=

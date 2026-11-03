@@ -1,5 +1,5 @@
 import Mathlib.Data.Set.Card
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 
 /-!
 # H-1T's tiles (trusted statements)
@@ -15,7 +15,7 @@ reads a tiling of the units' outputs and a program's fixed output slots, defined
   `32·rightWords` is `Σ_{c right} W c` with `W c = 32·|credited words of c|`. The useful output `R_(2T−1)` and
   `R_(2T−2)` are not credited (`Pos`), so "right" does not read them.
 * **`TTH1TAllRight`** (M5's sanity statement): a program right on every tile at every salt is never in `TTH1T`'s event
-  at `γ = 0`. It is `H1TGamma` for such a program, so it holds under `H1TRunningWords` (`tth1tAllRight`).
+  at `γ = 0`. It is `H1TGap` for such a program, so it holds under `H1TRunningWords` (`tth1tAllRight`).
 -/
 
 namespace Pouw.Fp8Atom.H1T
@@ -59,7 +59,7 @@ noncomputable def rightWords {N : ℕ} {Us : Fin N → Unit} {C : Type} (rs : Li
     (tl : Tiling Us C) (G : MSalt Us) : ℕ :=
   {x : Idx Us | TileRight rs slot tl (tl.of x) G}.ncard
 
-/-- **`TTH1T`'s event is consistent with `H1TGamma`** (M5's sanity statement): under `H32`, a well-formed `MH100w`
+/-- **`TTH1T`'s event is consistent with `H1TGap`** (M5's sanity statement): under `H32`, a well-formed `MH100w`
 program (draft semantics) on free inputs that is right on every tile at every salt costs at least 32 per credited word
 of the right tiles, at every salt. So at `γ = 0` it is never in `TTH1T`'s event. -/
 def TTH1TAllRight : Prop :=

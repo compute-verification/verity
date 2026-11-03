@@ -1,12 +1,12 @@
 import Definitions.Pouw.PearlC.W1
 -- `W1.Instr.exec`'s equation lemmas, realized there first: two modules that each realize them don't import together
 import Proofs.Pouw.PearlC.W1BudgetAbort
-import Proofs.Pouw.PearlC.RowSeedGamma
+import Proofs.Pouw.PearlC.RowSeedGap
 
 /-!
 # The row-seed reductions' cost-model conditions at W1
 
-The row-seed readers of TT_OUT (`RowSeedGamma.lean`, `RowSeedKGamma.lean`, `RowSeedCode.lean`, `RowCapAtGamma.lean`)
+The row-seed readers of TT_OUT (`RowSeedGap.lean`, `RowSeedKGap.lean`, `RowSeedCode.lean`, `RowCapAtGap.lean`)
 take two conditions on the cost model: (C3) `CostModel.SplitClosed`, and for the code-form seed (C5)
 `CostModel.RelabelClosed`. At `W1.w1Priced dv salt`, the cost model TT_OUT is stated at (`TTOutW1`):
 

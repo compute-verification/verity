@@ -733,7 +733,7 @@ def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
     (∀ W : Codes, Function.Injective fun s : S => seedB s W) ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes),
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
-        drawB (U.layout.shape u) (H (seedB s (U.weight (U.layout.wid u))))
+        drawB (U.layout.shape u) (H (seedB s (U.fixed (U.layout.fixedId u))))
 
 /-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
 16 bits zero) and finite, every row passing `RowAdmit4`. -/
@@ -756,7 +756,7 @@ noncomputable def Fp4Sem.unitForm (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q �
     (act : Codes) : Op4 (U.layout.shape u).m × Op4 (U.layout.shape u).n :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.lines H s U u act
   (fun i => d.form (sem.alpha sh.k (X i)) (sem.beta sh.k (X i)) (X i) (z.EA i) z.FA,
    fun j => d.form (sem.alpha sh.k (W j)) (sem.beta sh.k (W j)) (W j) (z.EB j) z.FB)
@@ -767,7 +767,7 @@ noncomputable def Fp4Sem.unitUseful (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q 
     (act : Codes) : Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.lines H s U u act
   let AB := sem.unitForm d H s U u act
   d.useful AB.1 AB.2 z.FA z.FB (fun i => eTilde (z.EA i) (e4m3 (sem.beta sh.k (X i))))
@@ -811,7 +811,7 @@ noncomputable def Fp4Sem.tileDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q �
     (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.lines H s U u act
   let AB := sem.unitForm d H s U u act
   let fl := d.flags AB.1 AB.2
@@ -852,7 +852,7 @@ noncomputable def pearlCProtocolFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : �
   ticket := fun H s U u act => atNat (d.ticket (sem.unitForm d H s U u act).1 (sem.unitForm d H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUseful d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
+  fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s U u act : ℚ) : ℝ)
   capOK := fun H s U u act => sem.unitDebit d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
   Wref := fun L u => (wrefFp4 d (L.shape u) : ℝ)
@@ -866,7 +866,7 @@ def pearlCShapeFp4 (s : Shape) : Prop :=
 
 /-- **D₄** (theory §2) at `sem`: D-SK of `sem`'s lines (`Fp4Sem.SaltKeyedB`), and every unit of a shape D₄ admits
 (`pearlCShapeFp4`); no promotion (the record has none). It is empty at a `sem` whose `B̃` is not keyed by A's salt. The
-row rules are the protocol's `actOK` and `weightOK`. -/
+row rules are the protocol's `actOK` and `fixedOK`. -/
 def pearlCDomainFp4 (sem : Fp4Sem Q R S) (L : Layout) : Prop :=
   sem.SaltKeyedB ∧ ∀ u < L.N, pearlCShapeFp4 (L.shape u)
 

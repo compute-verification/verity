@@ -22,7 +22,7 @@ It counts tiles by their credited words alone, so Z (`R_(2T−1)`, not credited)
 `HalfApartH1T`, with independent row salts giving the tail over rows. The lifting from pointwise-right tiles to a
 cost bound is research (the FP8 analogue of `LiftMinRank`), so `TTH1T` is Assumed, with `HalfApartH1T` and the
 simulation evidence. `MH100w` is straight-line, so branching is outside it. Two pins check its form: at
-`γ = 0` a program right on every tile at every salt is never in the event (`tth1tAllRight`, from `H1TGamma`, over
+`γ = 0` a program right on every tile at every salt is never in the event (`tth1tAllRight`, from `H1TGap`, over
 every tiling), and it holds at `γ = 1`, `η = 0` for every domain (`tth1tSat`).
 -/
 

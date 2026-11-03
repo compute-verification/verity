@@ -45,7 +45,7 @@ theorem generic : Pouw.Guarantees.Barrier.Generic := by
     pr_eq_one fun x => hall x.1 x.2
   rwa [h1] at h
 
-theorem gamma_ratio {γ c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a) (hc : c₀ = a * T) (hW : b * T ≤ W)
+theorem gap_ratio {γ c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a) (hc : c₀ = a * T) (hW : b * T ≤ W)
     (hγ : γ < 1 - a / b) : γ < 1 - c₀ / W := by
   have hW0 : 0 < W := lt_of_lt_of_le (mul_pos hb hT) hW
   have : c₀ / W ≤ a / b := by
@@ -118,7 +118,7 @@ theorem additive : Pinned.Additive := by
     rw [Finset.mul_sum]
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
   exact generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hγ) η hG
+    (gap_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hγ) η hG
 
 /-! ## Class (a): `H_ref` plans -/
 
@@ -297,7 +297,7 @@ theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : La
       rw [hx1, regs_eq, relPlan_nReg, ite_eq_left (by omega), relPlan_reg, ite_eq_right (by omega)]
       simp only [MExpr.eval, eval_sumE]
       have hs : ∑ y ∈ range (t - 1), c y * (if y < t - 1 then (relPlan t c (U.layout.shape u)).regs 0
-            (U.weight (U.layout.wid u)) (N H s U u 0) y else 0) x.2.1 x.2.2
+            (U.fixed (U.layout.fixedId u)) (N H s U u 0) y else 0) x.2.1 x.2.2
           = ∑ y ∈ range (t - 1), c y * relProd N H s U u 0 y x.2.1 x.2.2 :=
         Finset.sum_congr rfl fun y hy => by
           rw [ite_eq_left (Finset.mem_range.1 hy), relPlan_regs_base c N H s U u (by have := Finset.mem_range.1 hy; omega)
@@ -328,7 +328,7 @@ theorem relation : Pinned.Relation := by
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
   have ht' : (1 : ℝ) ≤ t := by exact_mod_cast ht
   refine generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS (by linarith) (by linarith) rfl hWt ?_) η hG
+    (gap_ratio hS (by linarith) (by linarith) rfl hWt ?_) η hG
   rw [show 1 - ((t : ℝ) - 1) / t = 1 / t by field_simp; ring]
   exact hγ
 
@@ -548,7 +548,7 @@ theorem segment : Pinned.Segment := by
     push_cast
     ring
   refine generic Q R S _ _ D _ _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS' (by linarith) (by linarith) rfl hWt ?_) η hG
+    (gap_ratio hS' (by linarith) (by linarith) rfl hWt ?_) η hG
   rw [show 1 - ((L : ℝ) - 1) / L = 1 / L by field_simp; ring]
   exact hγ
 

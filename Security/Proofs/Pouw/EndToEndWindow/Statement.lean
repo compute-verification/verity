@@ -63,7 +63,7 @@ each drawn unit proved alone (no closures). `WindowWork.WindowBoundOfService` di
 term the subset law's own escape, which is 0 where `K′ = N`. PoUW's PROTOCOL.md (Lifecycle, step 5) describes
 `Sampled(t)`, `t` independent work-weighted draws with replacement, not the code's draw.
 
-Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
+Gap (6)'s `Pouw.Guarantees.Window.WindowDelta` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
 gap (6)'s copy of the game (`Pouw.Window`), with the window's knowledge and link terms composed from its calls'. The
 bridge that makes it a discharge of `WindowBound` is named there (`Pouw.Window.FlockBridge`).
 
@@ -301,7 +301,7 @@ filler, which is no PoUW unit, adds nothing to it.
 
 Its discharges:
 * `WindowBoundOfService`, at the service's law;
-* gap (6)'s `Pouw.Guarantees.Window.WindowEps` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
+* gap (6)'s `Pouw.Guarantees.Window.WindowDelta` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
   sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through the
   bridge to C-Flock's game in `Proofs.Pouw.Window.FlockBridge` (`Pouw.Window.prob_ofFlock`, `CallAnalysis.ofFlock`, and
   its premise `FlockKnowledgeSound`; branch `cursor/pouw-window-eps-stmt2-c7a9`), with the deployed wrong sets
@@ -386,7 +386,7 @@ the recheck's probe 2):
 A session that opens the registered roots to anything but `Ccom` is in `δ_link`.
 
 The service's draw is one law for the whole window; the window's `ε_ks` and `δ_link` composed from its sessions' are
-gap (6)'s (`WindowEps`). -/
+gap (6)'s (`WindowDelta`). -/
 def WindowBoundOfService : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (U : Workload)
     (ε : ℝ), 0 < ε → ε ≤ 1 →
@@ -441,7 +441,7 @@ The audit is `FlockSoundness.Audit.auditReg` at the service's law, one uniform `
   before the draw coin's cutoff, except with probability `ε_id`; with its antecedent, that the model's registrations
   are oracle programs' outputs with their queries counted (`ProverModel.RegQueries`);
 * `WindowWork.WindowBound` at `ε` for `B`'s play at `β(H, s)` (discharged by `WindowBoundOfService`, or gap (6)'s
-  `WindowEps` through its bridge, each from `WindowWork.Realizes`, which holds by construction at coordinate units).
+  `WindowDelta` through its bridge, each from `WindowWork.Realizes`, which holds by construction at coordinate units).
 
 **What it composes**, at every oracle and salt: either the registration was received after the draw coin, which the
 service refuses; or the registration's transcript isn't the extracted adversary's (on average at most `ε_id`); or the

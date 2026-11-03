@@ -59,12 +59,12 @@ def codeBf16 (c : Code) : ℕ := bf16WordOf |codeVal c| ||| (if c.sign then 0x80
 full row's RMS the rule would admit every nonzero row (`liveRow_of_meanSq_pos`). -/
 def PearlCSem.OperandOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) : Prop :=
   (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome) ∧
-    ∀ i : Fin p, LiveRow Params.pi.δ (wordsVal p q W i) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W i)
+    ∀ i : Fin p, LiveRow Params.pi.σ (wordsVal p q W i) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W i)
 
 /-- Row `i` of a committed operand of `p` rows and `q` columns passes Π's rules: `PearlCSem.OperandOK`, one row. -/
 def PearlCSem.RowOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) (i : ℕ) : Prop :=
   (∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ h : i < p,
-    LiveRow Params.pi.δ (wordsVal p q W ⟨i, h⟩) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W ⟨i, h⟩)
+    LiveRow Params.pi.σ (wordsVal p q W ⟨i, h⟩) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W ⟨i, h⟩)
 
 /-- The unit's noisy operands and ticket chain. -/
 noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
@@ -72,7 +72,7 @@ noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s :
       Matrix (Fin (U.layout.shape u).n) (Fin (U.layout.shape u).k) Code :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.noise H s U u act
   (sem.fc.quantA (fun i => sem.alpha sh.k (X i)) (fun i => sem.beta sh.k (X i)) X z,
    sem.fc.quantB (fun j => sem.alpha sh.k (W j)) (fun j => sem.beta sh.k (W j)) W z)
@@ -84,7 +84,7 @@ noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s 
     Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
   let be := fun (β : ℚ) (e : Fin Params.pi.r → Code) (p : Fin 32) => codeBf16 (lineCodes β e p)
@@ -116,7 +116,7 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
     atNat (ctChain Params.pi.G (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUseful H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
+  fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditOf Params.pi c (U.layout.shape u) - debitOf Params.pi c (sem.unitDebit H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act =>
@@ -140,6 +140,6 @@ draws and the units gives `ε`, and it needs no independence between them. With 
   weak. The `2^−128` above is thus a conjecture about draws that all carry their noise.
 - The check is `pearlc-noise-loss.py`. At norm 256 the largest entry
   is at least `2^−8`, also nonzero; an earlier `2^−90` for norm 256 wrongly treated the 32 entries as independent. -/
-noncomputable def εPearlC (q N : ℕ) : ℝ := ((q + N : ℕ) : ℝ) / 2 ^ 128
+noncomputable def δPearlC (q N : ℕ) : ℝ := ((q + N : ℕ) : ℝ) / 2 ^ 128
 
 end Pouw.PearlC
