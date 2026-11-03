@@ -209,3 +209,71 @@ def test_a_suite_past_the_threshold_is_listed_in_parts_by_file_and_a_part_runs_u
     assert (res["verdict"], res["key"]) == ("passed", by["pytest:a:2/3"]["key"])
     (row,) = json.loads((tree.parent / "work-a2" / "suites.json").read_text())
     assert row["part"]["ks"] == [2] and row["counts"]["passed"] == 1, "one of three files: the part's own"
+
+
+def test_run_with_the_graph_runs_any_id_it_lists_as_listed_and_refuses_another_commits_or_an_unlisted_id(tree):
+    """A worker whose own record doesn't split a suite still runs the part another worker listed, of the listed partition and
+    under the listed key: deciding splits from the runner's record failed ids listed elsewhere (`no task ... on this tree`)."""
+    for n in (2, 3):
+        (tree / "a" / "tests" / f"test_a{n}.py").write_text(f"def test_a{n}():\n    assert True\n")
+    costs = tree.parent / "costs.json"
+    costs.write_text(json.dumps({"pytest:a": 2000}))
+    doc, text = _graph(tree, "--costs", str(costs), "--split-s", "900")
+    by = {t["id"]: t for t in doc["tasks"]}
+    assert "pytest:a:3/3" in by and "pytest:a" in _keys(tree), "this machine's own record lists a whole"
+    graph = tree.parent / "graph.json"
+    graph.write_text(text)
+
+    out = tree.parent / "a3.json"
+    r = _tasks(tree, "run", "pytest:a:3/3", "--graph", str(graph), "--out", str(out), "--work", str(tree.parent / "work-a3"))
+    assert r.returncode == 0, r.stderr
+    res = json.loads(out.read_text())
+    assert (res["id"], res["verdict"], res["key"]) == ("pytest:a:3/3", "passed", by["pytest:a:3/3"]["key"])
+    assert "differs from the graph's" not in r.stderr
+    (row,) = json.loads((tree.parent / "work-a3" / "suites.json").read_text())
+    assert row["part"]["ks"] == [3] and row["counts"]["passed"] == 1, "the listed part's one file"
+
+    r = _tasks(tree, "run", "pytest:a", "--graph", str(graph))
+    assert r.returncode == 2 and "no task pytest:a in the graph given" in r.stderr, r.stderr
+    r = _tasks(tree, "run", "pytest:a:3/3", "--graph", str(graph), "--timings", str(costs))
+    assert r.returncode == 2 and "no --timings or --circuit-shards" in r.stderr, r.stderr
+    graph.write_text(json.dumps({**doc, "schema": "tasks/v0"}))
+    r = _tasks(tree, "run", "pytest:a:3/3", "--graph", str(graph))
+    assert r.returncode == 2 and "not a tasks/v1 graph" in r.stderr, r.stderr
+
+    graph.write_text(text)
+    _git(tree, "add", "-A")
+    _git(tree, "commit", "-q", "-m", "more tests")
+    r = _tasks(tree, "run", "pytest:a:3/3", "--graph", str(graph))
+    assert r.returncode == 2 and f"a graph of commit {doc['commit']}, not of this tree's HEAD" in r.stderr, r.stderr
+
+
+def test_a_graph_given_by_art_id_is_fetched_from_the_store_and_must_be_a_tasks_graph(tree, tmp_path, monkeypatch):
+    import importlib.util
+
+    import research.store.local as local
+
+    spec = importlib.util.spec_from_file_location("tasks_graph_under_test", tree / "tools" / "verity" / "check" / "tasks.py")
+    T = importlib.util.module_from_spec(spec)
+    monkeypatch.syspath_prepend(str(tree / "tools" / "verity" / "check"))
+    spec.loader.exec_module(T)
+    head = _git(tree, "rev-parse", "HEAD").strip()
+    doc = {"schema": "tasks/v1", "commit": head, "kind": "after-landing", "tasks": [{"id": "pytest:a"}]}
+    (tmp_path / "g.json").write_text(json.dumps(doc))
+    art, kinds = "art:" + "0" * 64, {"art:" + "0" * 64: "tasks-graph/v1", "art:" + "1" * 64: "fixture/v1"}
+
+    class Store:
+        def get_manifest(self, ref):
+            if ref not in kinds:
+                raise local.NotFound(f"{ref}: no manifest")
+            return type("M", (), {"kind": kinds[ref]})()
+
+        def fetch(self, ref):
+            return tmp_path / "g.json"
+
+    monkeypatch.setattr(local, "LocalStore", Store)
+    assert T.listed(art) == doc
+    with pytest.raises(ValueError, match="a fixture/v1 artifact, not a tasks-graph/v1"):
+        T.listed("art:" + "1" * 64)
+    with pytest.raises(ValueError, match="no manifest"):
+        T.listed("art:" + "2" * 64)
