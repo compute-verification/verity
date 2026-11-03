@@ -26,7 +26,9 @@ There `Comp.err` is at most `KSLin2`'s bound term by term: `κ`, `γ` and `β` e
 searches what `FdevV` searches where its first rerun gives witnesses and nothing where it doesn't
 (`LinkPlanLeFdevV`). So L1 gives `KSLin2On` at the statements where the instance's contract holds
 (`RecoversKSLin2On`): at `RecDeploy.DenseAt` it is today's `Flock.Guarantees.RecursiveKS`, and at every statement
-`Flock.Guarantees.RecursiveKSEveryAtRec`, which rests on V\*'s two contract facts at every form.
+`Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*'s two facts only where some run accepts, and the
+deployed compiled verifier accepts only dense statements, so at the deployment every statement needs V\*'s dense facts
+alone; there `RecursiveKSEvery` also follows from `RecursiveKS` directly (`RecursiveKSEveryOfDense`).
 
 `FdevV` searches its loop's reruns even where its first rerun gives nothing, which its declared cost doesn't charge; the
 gated link's cost charges every rerun it names (`RunFinder.finder`), so the bits read off `linkPlan` charge what they
@@ -275,8 +277,8 @@ open FlockDeploy (Coin FinalP)
 /-- **Knowledge soundness of the recursive verifier at every statement, at a compiled record** `D`: `KSLin2` (no
 restriction to dense statements) at SHA-512, the deployed relation's bound record at the reader `rd`, the deployed
 caps, as `RecursiveKSAtRec` is `KSLin2On` at `RecDeploy.DenseAt`. `Claims.RecGeneric.RecoversKSLin2On` at
-`G := fun _ => True` gives it from the generic theorem and the instance's contract at every statement, V\*'s two facts
-at every inner form among them. -/
+`G := fun _ => True` gives it from the generic theorem and the instance's contract at every statement; V\*'s two facts
+are read only where some run accepts, so at a record that accepts only dense statements they are the dense ones. -/
 def RecursiveKSEveryAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ) : Prop :=
   Claims.Recursion.KSLin2 FlockDeploy.sha512 D
@@ -284,5 +286,22 @@ def RecursiveKSEveryAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w)
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep
+
+/-- **Knowledge soundness of the recursive verifier at every statement, at the deployed reader**: `RecursiveKS` with
+no restriction to dense statements (`RecursiveKSEveryAtRec` at the deployment's record and values). -/
+def RecursiveKSEvery : Prop :=
+  ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+    RecursiveKSEveryAtRec
+      (RecDeploy.recBoundAt _root_.Flock.Readable.relation
+        { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+        (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR))
+      RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR
+
+/-- **Every statement from the dense ones, at the deployment**: the deployed compiled verifier accepts only dense
+statements (`RecDeploy.acc_dense`); where no run accepts, `Pr[run = acc ∧ ¬R] = 0`, and `KSLin2`'s bound is
+nonnegative (the tables' errors are), so `RecursiveKS` gives `RecursiveKSEvery`, with no fact of V\* at another inner
+form. -/
+def RecursiveKSEveryOfDense : Prop := RecursiveKS → RecursiveKSEvery
 
 end Flock.Guarantees
