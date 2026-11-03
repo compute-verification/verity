@@ -133,10 +133,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit and public files' digests and the verifier's registered file, its evidence names the session's record and
-  rep files by SHA-512 in place of `verdicts` (one session, as step 4 says: none or several are refused), and the files
-  come in as `Core.Blobs`; the public file's header must be the registration's (`Record.matchesPublic`). Its draw's coins are the challenger's (parameters naming none are refused), read as v1 reads
-  them (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`). The check runs
-  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
+  rep files by SHA-512 in place of `verdicts` (one session, as step 4 says: none or several refuse), and the files
+  come in as `Core.Blobs`; the public file's header must be the registration's (`Record.matchesPublic`), and its
+  population the program's proof blocks in order (`Slots.popOk`). Its draw's coins are the challenger's (naming none
+  refuses), read as v1 reads them (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`).
+  The check runs `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins. So
   are the session's: before its verdict, the check holds its record to the coin trees the signed release log shows
   the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its

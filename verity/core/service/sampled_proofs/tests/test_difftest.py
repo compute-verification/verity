@@ -1925,6 +1925,9 @@ def _public_of(rec: dict, roots: dict | None = None) -> bytes:
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
+#: `OneStageZk.POPULATION_ORDER`
+POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
+                    "population units in order")
 
 
 def decode_params_v2(j) -> dict:
@@ -2043,6 +2046,39 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
     assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
+
+
+def test_v2_refuses_a_population_out_of_order(server, server_v2):
+    """v2 refuses a registration whose program's proof blocks, read stratum by stratum, are not its population's units
+    in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
+    registration (`population-order`): the session's knowledge soundness reads slot `u` as proof block `u`. v1, whose
+    R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
+    of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
+    verdict."""
+    law = {"k": 2, "law": "subset"}
+    circuit = b"not a circuit file"
+    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
+        assert P.in_order(s.program, s.query, s.population) is ok, s.templates
+        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                       WINDOW, leaf_layer=LEAF)
+        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{s.templates}"), s, law, rec)
+        proved, public, record = DR.proved(d), _public_of(rec), D.canonical(ch.trees[0].record).encode()
+        base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "statement": {}}
+        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+                  "window_root": ch.ledger.window["root"], "work_table": None}
+        v1 = base | {"sessions": [], "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        assert D.replay(ONE_STAGE, _json({"commitment": _hex(rec), "evidence": _hex(v1), "params": params}),
+                        server)[0] == "accept", s.templates
+        v2 = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}, "sessions": ["s"]}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
+                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
+        out = server_v2.exchange(_json(case))
+        want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
+        assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
