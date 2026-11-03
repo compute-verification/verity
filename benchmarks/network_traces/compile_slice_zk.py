@@ -479,10 +479,14 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
             "audit": {k: result.get(k) for k in ("accepted", "complete", "wrong_units")},
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "e2e_s": N2._per(timing.get("e2e_s"), n),
-                         "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)},
+            "per_unit": {"prove_total_s": _per(timing.get("prove_total_s"), n), "e2e_s": _per(timing.get("e2e_s"), n),
+                         "proof_bytes": _per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": _per(lv.get("verify_s"), n)},
             "opened_rows": list(OPENED)}
+
+
+def _per(x, n: int):
+    return None if x is None else round(x / n, 3)
 
 
 def _u16(words: list[int]) -> bytes:
