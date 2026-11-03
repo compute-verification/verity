@@ -1,7 +1,8 @@
 """Island `shallow`: updates confined to the top blocks and the final norm, so the frozen layers below are computed from the
-token's data. `--class shallow` is the harness's cap (the top 2 blocks); `--class reference` takes any set (the top 3 or
-4). The rest stays frozen and the backward stops at the lowest tuned node. The head is the tied embedding, which the
-input lookup also reads (layer 0), so it stays frozen.
+token's data. On a pin with classes (v2.3), `--class shallow` is the harness's cap (the top 2 blocks) and `--class
+reference` takes any set; v3's prepare has none, and submit gets no class there. The rest stays frozen and the backward
+stops at the lowest tuned node. The head is the tied embedding, which the input lookup also reads (layer 0), so it stays
+frozen.
 
 What is tuned: tensors trained in full (`--full`) and matrices trained through rank-`--lora` factors (`--adapt`), each a
 comma list of `tN.LEAF` (block N from the top, t0 the last; LEAF one of LF_LEAVES or `*`) and `final` (the final norm).
@@ -218,7 +219,7 @@ def main() -> int:
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--class", dest="klass", choices=("shallow", "reference"), default="shallow",
-                    help="shallow: the top 2 blocks at most; reference: any set")
+                    help="shallow: the top 2 blocks at most; reference: any set (a pin whose prepare has CLASSES)")
     ap.add_argument("--full", default=None, help="tensors trained in full: tN.LEAF, tN.*, final (default: --blocks/--parts)")
     ap.add_argument("--adapt", default="", help="matrices trained through rank --lora factors: tN.LEAF, tN.*")
     ap.add_argument("--blocks", type=int, default=2)
@@ -429,7 +430,8 @@ def main() -> int:
                                                                     "latent_bits", "folded")},
                   "grad_dtype": arms[best].grad_dtype, "mom_dtype": arms[best].mom_dtype,
                   "bits": v1["delta_grad_bits"], "bytes": v1["delta_grad_bits"] // 8}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed or tuned,
+    klass = (a.klass,) if hasattr(prepare, "CLASSES") else ()
+    prepare.submit(Path(a.out), a.start, *klass, blob, model, trainable, steps, changed=changed or tuned,
                    notes={"method": "shallow", "args": vars(a), "steps": report[best]["steps"], "full": full,
                           "adapt": adapt, "store": arms[best].store, "fresh": report[best]["fresh"], "arms": report,
                           "submitted_arm": best, "delta_grad": delta_grad, "planned_steps": total,
