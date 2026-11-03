@@ -109,11 +109,22 @@ struct Sha512 {
   uint64_t len;
 };
 
+// The round constants are immediates (SX_K_LIST, as dither's h1sha.cuh has them): sx::compress reads them from constant
+// memory, which adds a uniform load a round to this file's kernels on sm_90 and spills registered rows' leaves on sm_120.
 HD void sha512_compress(uint64_t h[8], const uint64_t blk[16]) {
+  const uint64_t K[80] = {SX_K_LIST};
   uint64_t w[16];
 #pragma unroll
   for (int i = 0; i < 16; ++i) w[i] = blk[i];
-  sx::compress<0, 0>(h, w);
+  uint64_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+#pragma unroll
+  for (int i = 0; i < 80; ++i) {
+    if (i >= 16) w[i & 15] = w[i & 15] + sha::s0(w[(i + 1) & 15]) + w[(i + 9) & 15] + sha::s1(w[(i + 14) & 15]);
+    const uint64_t t1 = hh + sha::S1(e) + sha::ch(e, f, g) + K[i] + w[i & 15];
+    const uint64_t t2 = sha::S0(a) + sha::maj(a, b, c);
+    hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
+  h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
 }
 
 HD void sha512_init(Sha512& s) {
