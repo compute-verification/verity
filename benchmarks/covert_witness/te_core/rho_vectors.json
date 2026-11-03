@@ -30,7 +30,7 @@
   "fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)",
   "order": "chain",
   "p_cell": false,
-  "rests_on": "theorem for this circuit (Loomis-Whitney) under P-width and P-chain, without P-cell",
+  "rests_on": "theorem for this circuit (Loomis-Whitney) under P-width (extended), P-match and P-chain, without P-cell",
   "vectors": [
    {
     "fresh_cell": 4138401.093369211,
@@ -227,7 +227,7 @@
     "share": 0.7400625,
     "subset": null,
     "term": null,
-    "why": "unmeasured: no subset of the counted products has a proved bound at this k: each has an operand made whole by a chain, and even the longest such chain is too short (r = k/(3 K^2 b) past 1/4, te_core.io_bound.whole_chain), so \u039b has no root; a void is never a measured 0"
+    "why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
    },
    {
     "fresh_cell": 4138401.093369211,
@@ -369,13 +369,13 @@
     "why": null
    },
    {
-    "fresh_cell": 3041056.689079933,
+    "fresh_cell": 2870251.009582324,
     "inputs": {
      "C_gates": 277159456773655.0,
      "c": 536681984163840.0,
      "k": 65536.0,
      "products": {
-      "capture": "4.10",
+      "capture": "4.12",
       "k": 65536.0,
       "kinds_macs": {
        "attention": 2415919104.0,
@@ -386,6 +386,7 @@
        "unaffected": 0.0
       },
       "order": "chain",
+      "p_match": [],
       "products": [
        {
         "b_a": 16,
@@ -405,9 +406,9 @@
         "cell_gates": 23682.0,
         "gates_per_mac": 1480.125,
         "k_dim": 512,
-        "k_whole": null,
-        "macs": 4429185024.0,
-        "outputs": 8650752.0
+        "k_whole": 512.0,
+        "macs": 738197504.0,
+        "outputs": 1441792.0
        },
        {
         "b_a": 16,
@@ -427,7 +428,7 @@
         "cell_gates": 23682.0,
         "gates_per_mac": 1480.125,
         "k_dim": 512,
-        "k_whole": null,
+        "k_whole": 1408.0,
         "macs": 2013265920.0,
         "outputs": 3932160.0
        },
@@ -438,7 +439,18 @@
         "cell_gates": 23682.0,
         "gates_per_mac": 1480.125,
         "k_dim": 512,
-        "k_whole": null,
+        "k_whole": 1408.0,
+        "macs": 3690987520.0,
+        "outputs": 7208960.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 1408.0,
         "macs": 8388608000.0,
         "outputs": 16384000.0
        },
@@ -482,9 +494,9 @@
         "cell_gates": 23682.0,
         "gates_per_mac": 1480.125,
         "k_dim": 512,
-        "k_whole": null,
-        "macs": 2214592512.0,
-        "outputs": 4325376.0
+        "k_whole": 32000.0,
+        "macs": 369098752.0,
+        "outputs": 720896.0
        },
        {
         "b_a": 16,
@@ -516,28 +528,6 @@
         "gates_per_mac": 1480.125,
         "k_dim": 512,
         "k_whole": 256.0,
-        "macs": 1476395008.0,
-        "outputs": 2883584.0
-       },
-       {
-        "b_a": 16,
-        "b_b": 16,
-        "b_c": 32,
-        "cell_gates": 23682.0,
-        "gates_per_mac": 1480.125,
-        "k_dim": 512,
-        "k_whole": null,
-        "macs": 2415919104.0,
-        "outputs": 4718592.0
-       },
-       {
-        "b_a": 16,
-        "b_b": 16,
-        "b_c": 32,
-        "cell_gates": 23682.0,
-        "gates_per_mac": 1480.125,
-        "k_dim": 512,
-        "k_whole": 256.0,
         "macs": 805306368.0,
         "outputs": 1572864.0
        },
@@ -548,9 +538,42 @@
         "cell_gates": 23682.0,
         "gates_per_mac": 1480.125,
         "k_dim": 512,
-        "k_whole": null,
-        "macs": 1342177280.0,
-        "outputs": 2621440.0
+        "k_whole": 32000.0,
+        "macs": 805306368.0,
+        "outputs": 1572864.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 256.0,
+        "macs": 2013265920.0,
+        "outputs": 3932160.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 256.0,
+        "macs": 2415919104.0,
+        "outputs": 4718592.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 32000.0,
+        "macs": 1845493760.0,
+        "outputs": 3604480.0
        },
        {
         "b_a": 16,
@@ -575,6 +598,100 @@
         "outputs": 64880640.0
        }
       ],
+      "system": {
+       "b": 16,
+       "classes": [
+        {
+         "P": 1.0,
+         "c": 0.3333333333333333,
+         "feeds": [
+          [
+           512.0,
+           1.0
+          ]
+         ],
+         "k": 64
+        },
+        {
+         "P": 1.0,
+         "c": 0.3333333333333333,
+         "feeds": [
+          [
+           64.0,
+           1.0
+          ],
+          [
+           512.0,
+           1.0
+          ]
+         ],
+         "k": 256
+        },
+        {
+         "P": 1.0,
+         "c": 1.0,
+         "feeds": [
+          [
+           256.0,
+           1.0
+          ],
+          [
+           512.0,
+           1.0
+          ],
+          [
+           1408.0,
+           1.0
+          ],
+          [
+           32000.0,
+           1.0
+          ]
+         ],
+         "k": 512
+        },
+        {
+         "P": 1.0,
+         "c": 1.0,
+         "feeds": [
+          [
+           512.0,
+           1.0
+          ]
+         ],
+         "k": 1408
+        },
+        {
+         "P": 1.0,
+         "c": 0.3333333333333333,
+         "feeds": [
+          [
+           512.0,
+           1.0
+          ]
+         ],
+         "k": 32000
+        }
+       ],
+       "counted": [
+        [
+         256.0,
+         1.0
+        ],
+        [
+         512.0,
+         1.0
+        ],
+        [
+         1408.0,
+         1.0
+        ],
+        [
+         32000.0,
+         1.0
+        ]
+       ]
+      },
       "trace_order": "unknown"
      }
     },
@@ -582,7 +699,7 @@
     "order": "chain",
     "share": 0.5515529347520451,
     "subset": null,
-    "term": 165020.69353240656,
+    "term": 163707.77135211992,
     "why": null
    },
    {
@@ -1872,7 +1989,7 @@
     }
    ],
    "products": {
-    "capture": "4.8",
+    "capture": "4.12",
     "k": 65536.0,
     "kinds_macs": {
      "attention": 0.0,
@@ -1883,7 +2000,51 @@
      "unaffected": 1056964608.0
     },
     "order": "chain",
+    "p_match": [],
     "products": [],
+    "system": {
+     "b": 16,
+     "classes": [
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         192.0,
+         1.0
+        ]
+       ],
+       "k": 64
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ]
+       ],
+       "k": 192
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ],
+        [
+         192.0,
+         1.0
+        ]
+       ],
+       "k": 2048
+      }
+     ],
+     "counted": []
+    },
     "trace_order": "unknown"
    },
    "tail_share": 0.9886722037463094,
@@ -3162,7 +3323,7 @@
     }
    ],
    "products": {
-    "capture": "4.8",
+    "capture": "4.12",
     "k": 65536.0,
     "kinds_macs": {
      "attention": 0.0,
@@ -3173,7 +3334,51 @@
      "unaffected": 1056964608.0
     },
     "order": "chain",
+    "p_match": [],
     "products": [],
+    "system": {
+     "b": 16,
+     "classes": [
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         192.0,
+         1.0
+        ]
+       ],
+       "k": 64
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ]
+       ],
+       "k": 192
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ],
+        [
+         192.0,
+         1.0
+        ]
+       ],
+       "k": 2048
+      }
+     ],
+     "counted": []
+    },
     "trace_order": "unknown"
    },
    "tail_share": 0.9886722037463094,
@@ -5161,63 +5366,100 @@
     }
    ],
    "products": {
-    "capture": "4.8",
+    "capture": "4.12",
     "k": 65536.0,
     "kinds_macs": {
      "attention": 1610612736.0,
-     "expansion": 511705088.0,
-     "fresh": 142606336.0,
+     "expansion": 654311424.0,
+     "fresh": 0.0,
      "self": 0.0,
      "theta": 13186891776.0,
      "unaffected": 0.0
     },
     "order": "chain",
-    "products": [
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 64,
-      "k_whole": null,
-      "macs": 50331648.0,
-      "outputs": 786432.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 64,
-      "k_whole": 1024.0,
-      "macs": 16777216.0,
-      "outputs": 262144.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 64,
-      "k_whole": null,
-      "macs": 25165824.0,
-      "outputs": 393216.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 192,
-      "k_whole": 64.0,
-      "macs": 50331648.0,
-      "outputs": 262144.0
-     }
-    ],
+    "p_match": [],
+    "products": [],
+    "system": {
+     "b": 16,
+     "classes": [
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ]
+       ],
+       "k": 32
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ],
+        [
+         192.0,
+         1.0
+        ],
+        [
+         1024.0,
+         1.0
+        ]
+       ],
+       "k": 64
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ]
+       ],
+       "k": 192
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         32.0,
+         1.0
+        ],
+        [
+         64.0,
+         1.0
+        ]
+       ],
+       "k": 1024
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ],
+        [
+         192.0,
+         1.0
+        ],
+        [
+         1024.0,
+         1.0
+        ]
+       ],
+       "k": 2048
+      }
+     ],
+     "counted": []
+    },
     "trace_order": "unknown"
    },
    "tail_share": 0.9839505013150606,
@@ -8647,74 +8889,127 @@
     }
    ],
    "products": {
-    "capture": "4.8",
+    "capture": "4.12",
     "k": 65536.0,
     "kinds_macs": {
      "attention": 1610612736.0,
-     "expansion": 48758784.0,
-     "fresh": 14155776.0,
+     "expansion": 62914560.0,
+     "fresh": 0.0,
      "self": 0.0,
      "theta": 13623099392.0,
      "unaffected": 0.0
     },
     "order": "chain",
-    "products": [
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 4,
-      "k_whole": 64.0,
-      "macs": 3145728.0,
-      "outputs": 786432.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 4,
-      "k_whole": 192.0,
-      "macs": 2097152.0,
-      "outputs": 524288.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 64,
-      "k_whole": null,
-      "macs": 3670016.0,
-      "outputs": 57344.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 4,
-      "k_whole": 64.0,
-      "macs": 4194304.0,
-      "outputs": 1048576.0
-     },
-     {
-      "b_a": 16,
-      "b_b": 16,
-      "b_c": 32,
-      "cell_gates": 23682.0,
-      "gates_per_mac": 1480.125,
-      "k_dim": 64,
-      "k_whole": 1024.0,
-      "macs": 1048576.0,
-      "outputs": 16384.0
-     }
-    ],
+    "p_match": [],
+    "products": [],
+    "system": {
+     "b": 16,
+     "classes": [
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         64.0,
+         1.0
+        ],
+        [
+         192.0,
+         1.0
+        ]
+       ],
+       "k": 4
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         4.0,
+         1.0
+        ],
+        [
+         1024.0,
+         1.0
+        ]
+       ],
+       "k": 32
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         4.0,
+         1.0
+        ],
+        [
+         1024.0,
+         1.0
+        ]
+       ],
+       "k": 64
+      },
+      {
+       "P": 3.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         4.0,
+         3.0
+        ],
+        [
+         1024.0,
+         3.0
+        ]
+       ],
+       "k": 192
+      },
+      {
+       "P": 1.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         4.0,
+         1.0
+        ],
+        [
+         32.0,
+         1.0
+        ],
+        [
+         1024.0,
+         1.0
+        ]
+       ],
+       "k": 1024
+      },
+      {
+       "P": 3.0,
+       "c": 0.3333333333333333,
+       "feeds": [
+        [
+         4.0,
+         3.0
+        ],
+        [
+         64.0,
+         1.0
+        ],
+        [
+         192.0,
+         1.0
+        ],
+        [
+         1024.0,
+         3.0
+        ]
+       ],
+       "k": 2048
+      }
+     ],
+     "counted": []
+    },
     "trace_order": "unknown"
    },
    "tail_share": 0.9981917317164438,
@@ -9009,7 +9304,7 @@
    "case": "dense",
    "fresh_subset": null,
    "k": 80000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "Fit's construction",
@@ -9032,7 +9327,7 @@
    "case": "dense",
    "fresh_subset": null,
    "k": 80000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "partial": true,
    "reading": "A",
    "rests_on": "A1 (reading A), its family: runs and tiles",
@@ -9050,29 +9345,24 @@
    "why": null
   },
   {
-   "binding_kind": "fresh_products",
+   "binding_kind": "token",
    "c": 536681984163840.0,
    "case": "dense",
-   "fresh_subset": {
-    "dropped": 1,
-    "dropped_macs_share": 0.3529411764705882,
-    "k_whole_min": 1024.0,
-    "of": 4
-   },
+   "fresh_subset": null,
    "k": 65536.0,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "partial": false,
    "reading": "A",
-   "rests_on": "theorem for this circuit (Loomis-Whitney) under P-width and P-chain, without P-cell",
-   "rho": 735.3416102810884,
+   "rests_on": "A1 (reading A), its family: runs and tiles",
+   "rho": 263.4961717397754,
    "sensitivities": {
-    "fresh_cell": 5147.4985695638825,
+    "fresh_cell": 0.0,
     "reduction": 0.0,
     "update": 0.0
    },
    "terms": {
     "decoding": 263.4961717397754,
-    "fresh_products": 735.3416102810884,
+    "fresh_products": 0.0,
     "token": 263.4961717397754
    },
    "why": null
@@ -9081,26 +9371,21 @@
    "binding_kind": "token",
    "c": 536681984163840.0,
    "case": "lora",
-   "fresh_subset": {
-    "dropped": 3,
-    "dropped_macs_share": 0.6666666666666667,
-    "k_whole_min": 1024.0,
-    "of": 5
-   },
+   "fresh_subset": null,
    "k": 65536.0,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "A1 (reading A), its family: runs and tiles",
    "rho": 95.68434260057813,
    "sensitivities": {
-    "fresh_cell": 264.63189974664385,
+    "fresh_cell": 0.0,
     "reduction": 0.0,
     "update": 0.0
    },
    "terms": {
     "decoding": 95.68434260057813,
-    "fresh_products": 37.803769085442894,
+    "fresh_products": 0.0,
     "token": 95.68434260057813
    },
    "why": null
@@ -9111,7 +9396,7 @@
    "case": "adapter-live",
    "fresh_subset": null,
    "k": 80000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "unmeasured",
@@ -9134,7 +9419,7 @@
    "case": "adapter-live",
    "fresh_subset": null,
    "k": 65536.0,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "no kind exceeds 1",
@@ -9155,7 +9440,7 @@
  "published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, binding unmeasured, why naming it. Else: 1, binding none.",
  "rests_on": {
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, on the best subset of them (every product still in |C|), each operand and partial sum at its passed width, given its premises on the reference circuit, P-width and P-chain (each output entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and the standard algorithm; without P-cell, a premise on the partition (the whole-cell figure is the sensitivity fresh_cell)",
+  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, on the best subset of them (every product still in |C|), each operand and partial sum at its passed width, given its premises on the reference circuit, P-width extended to every value a block reads while making operands whole (attention's and the optimizer's included), P-match (elementwise steps map operand entries one to one, so fan-out is at most fan-in; checked on the traced step) and P-chain (each output entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and the standard algorithm; without P-cell, a premise on the partition (the whole-cell figure is the sensitivity fresh_cell)",
   "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
  },
  "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
@@ -9791,7 +10076,7 @@
      "x0": 8.333582376964214e-05
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -9856,7 +10141,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 11.065531262155444,
    "rho": 11.065531262155444,
    "rho_fit": 1.0,
@@ -9905,7 +10190,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -9970,7 +10255,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10019,7 +10304,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10084,7 +10369,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10133,7 +10418,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10198,7 +10483,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10247,7 +10532,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10312,7 +10597,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10361,7 +10646,7 @@
      "x0": 8.333582376964214e-05
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10426,7 +10711,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10475,7 +10760,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10540,7 +10825,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10589,7 +10874,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10654,7 +10939,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10703,7 +10988,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10768,7 +11053,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10817,7 +11102,7 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 0.0,
@@ -10882,7 +11167,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10931,18 +11216,18 @@
      "x0": 0.00034364702383247125
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 511705088.0,
-      "fresh": 142606336.0,
+      "expansion": 654311424.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 4,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -10996,7 +11281,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 8.35335685982954,
    "rho": 8.35335685982954,
    "rho_fit": 1.0,
@@ -11045,18 +11330,18 @@
      "x0": 0.08627081452593345
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 511705088.0,
-      "fresh": 142606336.0,
+      "expansion": 654311424.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 4,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11110,7 +11395,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11159,18 +11444,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 511705088.0,
-      "fresh": 142606336.0,
+      "expansion": 654311424.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 4,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11224,7 +11509,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11273,18 +11558,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 511705088.0,
-      "fresh": 142606336.0,
+      "expansion": 654311424.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 4,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11338,7 +11623,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.9996631800490919,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11387,18 +11672,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 511705088.0,
-      "fresh": 142606336.0,
+      "expansion": 654311424.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 4,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11452,7 +11737,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11501,18 +11786,18 @@
      "x0": 0.08805491470908546
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 48758784.0,
-      "fresh": 14155776.0,
+      "expansion": 62914560.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 5,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11566,7 +11851,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 2.7344655410785834,
    "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
@@ -11615,18 +11900,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 48758784.0,
-      "fresh": 14155776.0,
+      "expansion": 62914560.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 5,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11680,7 +11965,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
@@ -11729,18 +12014,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 48758784.0,
-      "fresh": 14155776.0,
+      "expansion": 62914560.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 5,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11794,7 +12079,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.9999300519868622,
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
@@ -11843,18 +12128,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 48758784.0,
-      "fresh": 14155776.0,
+      "expansion": 62914560.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 5,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -11908,7 +12193,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
@@ -11957,18 +12242,18 @@
      "x0": 1.0
     },
     "fresh_products": {
-     "capture": "4.8",
+     "capture": "4.12",
      "k_classified": 65536.0,
      "kinds_macs": {
       "attention": 1610612736.0,
-      "expansion": 48758784.0,
-      "fresh": 14155776.0,
+      "expansion": 62914560.0,
+      "fresh": 0.0,
       "self": 0.0,
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
      "order": "chain",
-     "products": 5,
+     "products": 0,
      "trace_order": "unknown"
     },
     "per_gate": {
@@ -12022,7 +12307,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.10, reading A",
+   "label": "te_core 4.12, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": "inf",
@@ -12046,6 +12331,6 @@
    }
   }
  ],
- "version": "4.10",
+ "version": "4.12",
  "w_fwd_gates": 4925098176.0
 }
