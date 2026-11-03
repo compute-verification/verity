@@ -2,8 +2,8 @@
 name: writing-goals
 description: >
   How a lead writes and keeps its goals in the plan, the one graph Daniel reads on the console's Goals page: what a
-  goal is (an outcome with one owner and a date), tags from the fixed list of projects, tiers (derived from what waits
-  on what, overridable), what a goal waits on (links to goals and Daniel's asks, never free text), why an off-track goal
+  goal is (something that finishes, with one owner and a date), tags from the fixed list of projects, three tiers (a
+  project in Daniel's words, a piece of one, a step; derived from what waits on what, overridable), what a goal waits on (links to goals and Daniel's asks, never free text), why an off-track goal
   is off track, and how to write the description so Daniel can skim it (one plain opening sentence, then the shape that
   fits: landing, research or proof; bold only for key expressions; a lead-in line for every list, math in LaTeX, and no
   word he has said he doesn't know, all three refused by the site). Covers `research goals
@@ -18,8 +18,10 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
 
 ## A goal
 
-- **An outcome, not an activity.** Its title says what will be true, in at most eight plain words: "Remote demo passes
-  on one served H200 run", not "Work on demos".
+- **Something that finishes, never an ongoing activity** ("Work on demos"). A tier-1 title is a project's name in
+  Daniel's words: "Split the Verity and infra repos", "Security posture finalized". A tier-2 or tier-3 title says what
+  will be true, in at most eight plain words: "A full check finishes within 45 minutes". "X measured" isn't a goal until
+  it names what's delivered: "Second swarm's training results out".
 - **One owner** (`--owner`, your handle), who keeps it true and confirms it at least daily (`research goals confirm ID`).
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
@@ -31,9 +33,20 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   work across all three), `training`, `ci`, `infra`, `security`, `cleanup`. `proofs` is what the theorems say; `lean`
   is Lean's code and build (the module system, the Lean check, toolchain bumps). The site refuses any other tag.
   Nothing from your own bookkeeping goes in a tag.
-- **Its tier is derived.** A goal nothing waits on is tier 1, an outcome; a subgoal is one tier deeper than the
-  shallowest goal that needs it. Set `--tier N` only when that's wrong, for example an outcome that something else
-  also happens to wait on; `--no-tier` goes back to the derived one.
+- **Three tiers** (Daniel, 2 Nov):
+  - Tier 1, a project: about a dozen across the plan, each one Daniel would name himself. Its description opens with
+    the state that finishes it.
+  - Tier 2, a piece of a project: a dated state you can check. The soundness theorem and the H200 accounting are
+    pieces of the remote demo; a full check's time is a piece of "Efficient automated tasks".
+  - Tier 3, a step toward a piece.
+- **The tier is derived:** a project waits on its pieces (`--wait goal:ID`), so a goal nothing waits on is tier 1, and
+  one is a tier deeper than the shallowest goal that needs it, down to 3. `--tier N` overrides it; `--no-tier` goes
+  back to the derived one.
+- **Before a goal is tier 1,** ask whether it's a piece of a project already in the plan. If nothing holds it only
+  because an umbrella is missing, add the umbrella or ask its owner to: the security review's fixes, no personal
+  tokens and reviewed landing are pieces of "Security posture finalized". A merge isn't a project; "E2E remote demo on
+  main" is one only while landing is held up.
+- You set your goals' tiers and your lead reviews them; nothing checks them.
 
 ## What it waits on
 
