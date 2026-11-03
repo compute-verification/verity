@@ -99,8 +99,11 @@
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
-#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
-#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) and proves them; then
+#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
+#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on a local development challenger
+#     session's coins (--challenger local, pinned on main's first-parent line: MAIN_FILE's, kept as
+#     $OUT/v3c-audit/main.txt, else MAIN_SHA's) and proves them, its composes made before it with V3C_WARM_JOBS (at
+#     `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -119,8 +122,10 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Coins: sampled proofs' draw is Lean's IO.getRandomBytes in the verifier's process on the served node unless PP_CHALLENGER
-# names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
+# Coins: sampled proofs' sample is on a local development challenger session's coins on the served node (run.sh's
+# PP_CHALLENGER default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER
+# names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); V3c's audit's is on
+# a local development session of its own where it runs (step 6). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -319,6 +324,7 @@ vtag=${V3C//,/-}
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 elif [ -n "${H1_TIE:-}" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
+V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
 V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
@@ -394,10 +400,37 @@ EOF
 # default stratified:1), a stratum of each table's readers, so every table W registers has a sampled reader
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
 # sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another design.
+# With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
+# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
+# templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
+# none, its limit then its sessions'. A compose holds up to what the audit needs (V3C_AUDIT_MEM_GB, a 4,32,4 window's
+# Int8RowQuant at K 8,192), so N is what the run's memory takes. A warm that fails says so, and the audit composes what it
+# didn't keep.
+v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
+  (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    --compose-cache "$VW/compose-cache" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
+  local rc=$? why
+  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
+  else
+    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT"
+    else why=$(tail -3 "$OUT/v3c-audit/warm.err" | tr '\n' ' ' | cut -c1-800); why=${why% }; fi
+    why+="; the audit composes the templates it didn't keep"
+  fi
+  say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
+}
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc tie=() ports=${V3C_PORTS:-16}
+  local run leanb m0 rc tie=() cache=() ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
+  mkdir -p "$OUT/v3c-audit"
+  if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
+    [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
+    [ "$MAIN_FILE" -ef "$main" ] || cp "$MAIN_FILE" "$main"
+  else
+    git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
+      || { say "V3C-AUDIT: no first-parent line of main for its challenger session to pin on (MAIN_FILE unset, and ${MAIN_SHA:-HEAD} has none in this tree): set MAIN_FILE"; return 1; }
+  fi
   if [ -n "${H1_TIE:-}" ]; then
     tie=(--tie "$D/h1/w$K/registration.json" --tie-prefix h1/)
     [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
@@ -405,11 +438,14 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   fi
   leanb=$TREE/verity/core/service/flock/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
-  mkdir -p "$OUT/v3c-audit"
+  if [ -n "${V3C_WARM_JOBS:-}" ]; then
+    v3c_warm
+    cache=(--compose-cache "$VW/compose-cache")
+  fi
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" \
-    --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
+    --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
@@ -794,6 +830,12 @@ if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split
   [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
   SPLIT=1
 fi
+if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
+  [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \
+    || { say "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a positive integer, not $V3C_WARM_JOBS"; exit 3; }
+  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
+    || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
+fi
 if [ -n "${H1_TIE:-}" ]; then  # V3c's audit tied to H1's W, in the serve's run and in `served_verdicts.sh v3c` alike
   grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
@@ -884,13 +926,14 @@ if [ -n "$H1_GATE" ]; then
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
-if [ -n "${PP_CHALLENGER:-}" ]; then
-  say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS;" \
-      "the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
+if [ "${PP_CHALLENGER:-local}" != local ]; then
+  COINS="the challenger $PP_CHALLENGER (peer ${PP_PEER:-?})"
 else
-  say "COINS sampled proofs: Lean's IO.getRandomBytes in the verifier's process on $(hostname -s), the served node, not an auditor's challenger (PP_CHALLENGER unset); $H1_COINS;" \
-      "the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
+  COINS="a local development challenger session on $(hostname -s), the served node, not an auditor's (PP_CHALLENGER local)"
 fi
+COINS+="; $H1_COINS;"
+[ -z "$V3C" ] || COINS+=" V3c's audit: a local development challenger session where it runs;"
+say "COINS sampled proofs: $COINS the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 
 # 0. B: the row's Build of record from its declared inputs, before the lease; the traced Build only its cross-check
 vv predict row --row "$ROW_ID" --out "$PRED" > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
