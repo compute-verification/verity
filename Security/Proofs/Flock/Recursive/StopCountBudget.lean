@@ -17,6 +17,10 @@ released. Here `B` is the stream's failure budget `b`, at every order of the rec
   released.
 * `card_unreleased_le_budget`: the same at every run.
 * `streamStopBudget`: the stream's joint stop as a `Pattern` at its budget, which `card_streamStops` counts.
+* `Flock.SecurityProofs.UnrelLeBudget`, `UnreleasedLeBudget`, `StreamStopBudget`: the three as the lock states them
+  (`UnrelWithin`, `UnreleasedWithin`, `StreamStopWithin`), each with an honest witness, a stream at budget 1 whose
+  first session runs through before its second opens, and a nontrivial one, a firewall without rule 4's refusals
+  (`Witness.openMade`), where a stream at budget 1 leaves two sessions unreleased.
 -/
 
 namespace Flock.StopCount
@@ -677,4 +681,179 @@ def streamStopBudget {m : ℕ} (N : Fin m → ℕ) (M : String → ℕ → ℕ) 
     Pattern (fun i => Σ p : Fin (N i), Fin (M (ss i) p + 1)) b :=
   streamStopIn N M steps ss b (card_unreleased_le_budget M steps ss hinj hs hb)
 
+/-! ## The bounds as the lock states them -/
+
+/-- **At most `b` of the stream `t`'s sessions are left with a statement not released** on the record `evs`, `b` its
+failure budget. -/
+def UnrelWithin (evs : Events) (t : String) : Prop :=
+  ∀ b, budgetOf evs t = some b → (unrel evs t).card ≤ b
+
+/-- **At most `b` of sessions `ss i` are left with a statement not released** in `σ`, of any sessions `ss i`, distinct,
+each opened on the stream `t` if opened at all, `b` its failure budget. -/
+def UnreleasedWithin (σ : St) (t : String) : Prop :=
+  ∀ (m : ℕ) (ss : Fin m → String), Function.Injective ss → (∀ i o, openOf σ.evs (ss i) = some o → o.stream = t) →
+    ∀ b, budgetOf σ.evs t = some b → (univ.filter fun i => unreleasedOf σ (ss i)).card ≤ b
+
+/-- **The joint stop is a `Pattern` at the stream's budget** in `σ`, at message counts `M`: of any sessions `ss i`,
+distinct, each with `N i` statements and opened on the stream `t` if opened at all, at most `b` stop, `b` its failure
+budget. -/
+def StreamStopWithin (M : String → ℕ → ℕ) (σ : St) (t : String) : Prop :=
+  ∀ (m : ℕ) (N : Fin m → ℕ) (ss : Fin m → String), Function.Injective ss →
+    (∀ i o, openOf σ.evs (ss i) = some o → o.stream = t) → ∀ b, budgetOf σ.evs t = some b →
+      ∃ J : Pattern (fun i => Σ p : Fin (N i), Fin (M (ss i) p + 1)) b, J.1 = streamStop N M σ ss
+
+theorem stream_of_all {evs : Events} {s t : String} (h : ((openOf evs s).all fun o => o.stream == t) = true) :
+    ∀ o, openOf evs s = some o → o.stream = t := fun o ho => by
+  rw [ho] at h
+  simpa using h
+
 end Flock.StopCount
+
+namespace Flock.Guarantees
+
+/-- **At most `b` of a stream's sessions are left with a statement not released**, at every order of the record's ops
+(`StopCount.opsRun`: `openSession`, `finish`, `stop`, `release`, `slot`, `admit` and the Loop's `wait`, as
+`Firewall.Record` defines them) and every stream, `b` the stream's failure budget.
+
+It is about the Lean record's ops, in any order, with no model of the loop. The deployed opener is Python's
+`verity_flock.firewall.Firewall`, so for the deployment it rests on Python agreeing with the Lean, which the firewall's
+difftests check. -/
+def UnrelLeBudget : Prop :=
+  ∀ (ops : List StopCount.RecOp) (t : String), StopCount.UnrelWithin (StopCount.opsRun ops) t
+
+/-- **At most `b` of a stream's sessions are left with a statement not released**, at every run (`StopCount.run`: the
+firewall's ops in any order, at each statement's message count `M s p`), of any sessions `ss i`, distinct, each opened on
+the stream if opened at all, `b` the stream's failure budget. It is about `StopCount.run`, as `RecStopsOfRun` is. -/
+def UnreleasedLeBudget : Prop :=
+  ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (t : String), StopCount.UnreleasedWithin (StopCount.run M steps) t
+
+/-- **A stream's joint stop at its budget**: at every run, the joint stop of a stream's sessions (`StopCount.streamStop`)
+is a `Pattern` at the stream's failure budget `b`, at most `b` of its entries stops; and a `Pattern` at `b` takes
+`Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1)` values. It is about `StopCount.run`, as `RecStopsOfRun` is. -/
+def StreamStopBudget : Prop :=
+  (∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (t : String),
+      StopCount.StreamStopWithin M (StopCount.run M steps) t) ∧
+    ∀ (m : ℕ) (N : Fin m → ℕ) (M : String → ℕ → ℕ) (ss : Fin m → String) (b : ℕ),
+      Fintype.card (StopCount.Pattern (fun i => Σ p : Fin (N i), Fin (M (ss i) p + 1)) b) =
+        ∑ S ∈ Finset.univ.filter (fun S : Finset (Fin m) => S.card ≤ b), ∏ i ∈ S, ∑ p : Fin (N i), (M (ss i) p + 1)
+
+end Flock.Guarantees
+
+namespace Flock.SecurityProofs
+
+open Flock.StopCount
+
+/-- **At most `b` unreleased, at every order of the record's ops**: `card_unrel_le_budget`. -/
+theorem UnrelLeBudget : Flock.Guarantees.UnrelLeBudget := fun ops _ _ hb => card_unrel_le_budget ops hb
+
+/-- **At most `b` unreleased, at every run**: `card_unreleased_le_budget`. -/
+theorem UnreleasedLeBudget : Flock.Guarantees.UnreleasedLeBudget := fun M steps _ _ ss hinj hs _ hb =>
+  card_unreleased_le_budget M steps ss hinj hs hb
+
+/-- **The joint stop at the budget, counted**: `streamStopBudget` and `card_streamStops`. -/
+theorem StreamStopBudget : Flock.Guarantees.StreamStopBudget :=
+  ⟨fun M steps _ _ N ss hinj hs _ hb => ⟨streamStopBudget N M steps ss hinj hs hb, rfl⟩,
+    fun _ N M ss b => card_streamStops N M ss b⟩
+
+end Flock.SecurityProofs
+
+namespace Flock.StopCount.Witness
+
+open Core.Firewall
+
+/-- An honest stream at budget 1, as the record's ops: session `r0000` opened, its inner session finished, its statement
+admitted in the slot and released; then `r0001` opened. -/
+def honestOps : List RecOp :=
+  [.openRec "st" #["a"] (some 1) none, .finish "r0000", .slot "r0000" "a", .admit "r0000" "a", .release "r0000" "a",
+   .openRec "st" #["b"] (some 1) none]
+
+/-- The same stream as a run: `r0000` runs through, its statement accepted and released, then `r0001` opens. -/
+def honestStream : List Step :=
+  [.openRec "st" #["a"] (some 1) none, .innerSend "r0000", .innerFinish "r0000", .seat "r0000" "a", .relay,
+   .barrier 150 .ok .ok, .verdict (.ok true), .openRec "st" #["b"] (some 1) none]
+
+/-- The stream's two sessions. -/
+def two : Fin 2 → String := !["r0000", "r0001"]
+
+/-- A firewall without rule 4's refusals: every open is made, whatever the stream's failures and unended sessions. -/
+def openMade (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
+    (release : Option Core.Firewall.Schedule) : Events :=
+  (openSession.made evs stream parts budget release).2
+
+/-- The record's ops at `openMade`. -/
+def applyMade (evs : Events) : RecOp → Events
+  | .openRec stream parts budget sched => openMade evs stream parts budget sched
+  | op => RecOp.apply evs op
+
+def opsMade (ops : List RecOp) : Events := ops.foldl applyMade #[]
+
+/-- A run's step at `openMade`. -/
+def stepMade (M : String → ℕ → ℕ) (σ : St) : Step → St
+  | .openRec stream parts budget release =>
+    match partsOk parts, budgetArg budget with
+    | .ok (), .ok () => { σ with evs := openMade σ.evs stream parts budget release }
+    | _, _ => σ
+  | st => step M σ st
+
+def runMade (M : String → ℕ → ℕ) (steps : List Step) : St := steps.foldl (stepMade M) St.init
+
+/-- Two sessions opened on a stream at budget 1, the first not ended. -/
+def twoOps : List RecOp := [.openRec "st" #["a"] (some 1) none, .openRec "st" #["b"] (some 1) none]
+
+def twoSteps : List Step := [.openRec "st" #["a"] (some 1) none, .openRec "st" #["b"] (some 1) none]
+
+end Flock.StopCount.Witness
+
+namespace Flock.SecurityProofs
+
+open Core.Firewall Flock.StopCount Flock.StopCount.Witness
+
+/-- **`UnrelLeBudget` says something at an honest stream**: at budget 1, `r0000` ran through and was released, `r0001`
+opened after it, and one of the stream's sessions is left unreleased, the budget reached. -/
+theorem UnrelLeBudget_honest :
+    budgetOf (opsRun honestOps) "st" = some 1 ∧ unrelOn (opsRun honestOps) "st" "r0000" = false ∧
+      (openOf (opsRun honestOps) "r0001").isSome = true ∧ (unrel (opsRun honestOps) "st").card = 1 := by
+  decide +kernel
+
+/-- **`UnrelLeBudget` fails at a firewall without rule 4's refusals** (`openMade`): there a stream at budget 1 leaves two
+sessions unreleased. -/
+theorem UnrelLeBudget_nontrivial : ¬ UnrelWithin (opsMade twoOps) "st" := fun h =>
+  absurd (h 1 (by decide +kernel)) (by decide +kernel)
+
+/-- **`UnreleasedLeBudget` says something at an honest run**: at budget 1, `r0000` ran through, `r0001` opened after it
+and is left unreleased, the budget reached. -/
+theorem UnreleasedLeBudget_honest :
+    budgetOf (run one honestStream).evs "st" = some 1 ∧ unreleasedOf (run one honestStream) "r0000" = false ∧
+      unreleasedOf (run one honestStream) "r0001" = true ∧
+      (Finset.univ.filter fun i => unreleasedOf (run one honestStream) (two i)).card = 1 := by
+  decide +kernel
+
+theorem two_injective : Function.Injective two := by decide +kernel
+
+theorem runMade_stream : ∀ i o, openOf (runMade one twoSteps).evs (two i) = some o → o.stream = "st" := by
+  have h : ∀ i, ((openOf (runMade one twoSteps).evs (two i)).all fun o => o.stream == "st") = true := by decide +kernel
+  exact fun i => stream_of_all (h i)
+
+/-- **`UnreleasedLeBudget` fails at a firewall without rule 4's refusals** (`openMade`): there a stream at budget 1
+leaves both its sessions unreleased. -/
+theorem UnreleasedLeBudget_nontrivial : ¬ UnreleasedWithin (runMade one twoSteps) "st" := fun h =>
+  absurd (h 2 two two_injective runMade_stream 1 (by decide +kernel)) (by decide +kernel)
+
+/-- **`StreamStopBudget` says something at an honest run**: at budget 1, of the stream's two sessions `r0000` ran
+through and `r0001`, opened after it, would stop at its inner session, one stop, the budget reached. -/
+theorem StreamStopBudget_honest :
+    budgetOf (run one honestStream).evs "st" = some 1 ∧
+      (streamStop ![2, 2] one (run one honestStream) two 0).isNone = true ∧
+      (streamStop ![2, 2] one (run one honestStream) two 1).isSome = true := by
+  decide +kernel
+
+/-- **`StreamStopBudget` fails at a firewall without rule 4's refusals** (`openMade`): there both sessions of a stream at
+budget 1 stop, which is no `Pattern` at 1. -/
+theorem StreamStopBudget_nontrivial : ¬ StreamStopWithin one (runMade one twoSteps) "st" := fun h => by
+  obtain ⟨J, hJ⟩ := h 2 ![2, 2] two two_injective runMade_stream 1 (by decide +kernel)
+  have hc := J.2
+  rw [hJ] at hc
+  revert hc
+  decide +kernel
+
+end Flock.SecurityProofs
