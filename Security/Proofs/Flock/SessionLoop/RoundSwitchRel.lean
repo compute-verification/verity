@@ -126,10 +126,20 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hbase : Masked.repBase x (2 * j.val + r.val) =
       1 + ((roundsOf spec (Masked.stsOf x)).take (2 * j.val + r.val)).sum := by
     rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
-  have hR0 : A + k < (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 := by
+  obtain ⟨NR, hNd⟩ : ∃ NR, NR = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! +
+      ((Masked.zkTab x j).sch.k0 + 7 + 11 * ((Masked.zkTab x j).sch.levels.size - 1)) := ⟨_, rfl⟩
+  have hR4 : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 = NR + 4 := by
+    have e1 : (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m + (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.c.kLog - 6 =
+        (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m + ((Masked.stsOf x)[(2 * j.val + r.val) / 2]!.c.kLog - 6) := by
+      rw [hst]; omega
     rw [hrk, repRounds_true]
     simp only [hz]
-    rw [hst]
+    rw [hNd]
+    unfold FlockComplete.piopRoundsZk
+    rw [e1]
+  have hR0 : A + k < (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 := by
+    rw [hR4, hNd, hst]
+    unfold FlockComplete.piopRoundsZk
     omega
   obtain ⟨i, hp⟩ : ∃ i, ops.length = i + 2 := ⟨ops.length - 2, by omega⟩
   obtain ⟨a, ha⟩ : ∃ a, A + k = a + 1 := ⟨A + k - 1, by omega⟩
