@@ -781,9 +781,10 @@ RESTS_ON_CELL = {
 #: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update), on every console
 #: row, so the others (`SENSITIVITIES`) stay in `bound`
 CELL_SENSITIVITIES = ("reduction", "update")
-#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: since te_core
-#: 4.5's packer, whose witness family has matrix-product and weight-gradient tiles (coordinator 09:02Z: every row
-#: reading B's, a target, until then)
+#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: it does, at
+#: max(1, the measured terms) with its binding kind, its kinds cell naming fresh products where they're unmeasured, so
+#: the dashboard can mark it partial; only a row with no measured kind publishes None (coordinator 11:20Z, on the
+#: algorithm-policy builder's 10:47Z SMELL)
 READING_A = True
 
 

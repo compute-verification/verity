@@ -137,14 +137,15 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     for case in rho_vectors.CASES:
         v = by(built, case, *default)
         m = formalism.from_json(built["measured"][case])
-        one = formalism.published(m, v["c"], v["k"])
-        assert one == formalism.published(m, v["c"], v["k"], "A") and one["reading"] == "A" and not v["fit"]
+        one = formalism.published(m, v["c"], v["k"], "A")
+        assert formalism.published(m, v["c"], v["k"])["reading"] == ("A" if formalism.READING_A else "B")
+        assert one["reading"] == "A" and not v["fit"]
         assert not differences(rho_vectors.finite([one["rho"], one["terms"], one["sensitivities"]]),
                                [v["rho"], v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
         assert one["binding_kind"] == (v["binding"] if num(v["max"]) > 1 else "none")
         assert one["rests_on"] == formalism.RESTS_ON_CELL[one["binding_kind"]]
         assert one["binding_kind"] == ("none" if case == "adapter-live" else "token")
-    live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"])
+    live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
     assert live["rho"] == 1.0 and live["sensitivities"]["reduction"] > 9
     for gone in ("entries", "ops"):
         m = formalism.from_json(built["measured"]["dense"] | {gone: None})
