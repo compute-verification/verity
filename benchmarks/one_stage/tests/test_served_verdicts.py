@@ -18,7 +18,8 @@ step publishes each case's and each product's verdict lines and nothing else. It
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
-endpoint."""
+endpoint. Its ADVICE-LINE holds a serve-openai ``--advice`` run's B to the compiler the verifier recomputes and every
+closed window's advice line to after B's registration and before the first coin."""
 from __future__ import annotations
 
 import argparse
@@ -103,6 +104,69 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
     (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
     assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
     assert json.loads(capsys.readouterr().out) == got
+
+
+B = {"name": "verity/prove-path/capped-compiler/v0", "digest": "b0" * 64, "cap_bits": 4096,
+     "inner": {"name": "verity-vllm/i2-compile-steps/v0", "digest": "1a" * 64}}
+
+
+def _advised(d: Path, *, cap: int = 4096, t0: float = 10.0) -> Path:
+    """A serve-openai ``--advice`` serve dir: B registered at ``t0`` under a log whose builder is B's item at ``cap``; windows
+    0-2 closed, 1 empty, each with its advice line, 0's and 2's committed under B."""
+    from verity.core.protocols import registration as REG
+
+    item = REG.item_of({"kind": "builder", "digest": B["inner"]["digest"], "advice": "verity-vllm/window-advice/v1", "cap": cap})
+    log = REG.chain("onsite", [REG.Information((item,))])
+    (d / S.ADVICE_REGISTRATION).write_text(json.dumps({
+        "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "t": t0,
+        "registration": {"composite": "onsite", "head": REG.head("onsite", log), "log": json.loads(REG.committed("onsite", log))}}))
+    _write(d, "windows.jsonl", [{"window": k} for k in range(3)])
+    named = {"name": B["name"], "digest": B["digest"]}
+    _write(d, S.ADVICE_LINES, [{"window": 0, "compiler": named, "advice": {"root": "a0" * 64, "bits": 4096}, "t": 11.0},
+                               {"window": 1, "empty": True, "t": 12.0},
+                               {"window": 2, "compiler": named, "advice": {"root": "a2" * 64, "bits": 4096}, "t": 13.0}])
+    for k in (0, 2):
+        (d / "advice" / f"w{k}").mkdir(parents=True)
+        (d / "advice" / f"w{k}" / "registration.json").write_text(json.dumps(
+            {"binding": {"compiler": named, "advice": {"root": f"a{k}" * 64, "bits": 392}}}))
+    return d
+
+
+def test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_first_coin(tmp_path, capsys):
+    """ADVICE-LINE passes on a run whose server registered B, the compiler the verifier recomputes, as its log's builder at
+    ℓ_a, and wrote every closed window's line under B at ℓ_a after that and before the first coin, the audited window's
+    registration its line's root; it names no window and states no advice's own length. It fails, saying why, for another
+    compiler, a log of another ℓ_a, a closed window with no line, a line after the coins or before B, an audited window
+    whose registration roots other advice or that has no advice, and a run that registered no B."""
+    ok, line = S.advice_line(_advised(tmp_path / "ok"), 2, B, coins_after=20.0)
+    assert ok and line.endswith(": PASS") and S.public_line(line) == line and "392" not in line and "4096 bits" in line
+    assert S.main(["advice-line", str(tmp_path / "ok"), "--window", "2", "--compiler", str(_dump(tmp_path, B)),
+                   "--coins-after", "20"]) == 0 and capsys.readouterr().out.strip() == line
+
+    def fails(d: Path, window: int = 2, compiler: dict = B, coins_after: float = 20.0) -> str:
+        ok, line = S.advice_line(d, window, compiler, coins_after)
+        assert not ok and ": FAIL" in line and S.public_line(line) == line
+        return line
+
+    assert "isn't the compiler prove_path.py recomputes" in fails(_advised(tmp_path / "b"), compiler={**B, "digest": "00" * 64})
+    assert "builder isn't B's" in fails(_advised(tmp_path / "cap", cap=8192))
+    assert "after sampled proofs' or the network certifier's first coin" in fails(_advised(tmp_path / "late"), coins_after=12.5)
+    assert "before B's registration" in fails(_advised(tmp_path / "early", t0=11.5))
+    assert "has no committed advice" in fails(_advised(tmp_path / "empty"), window=1)
+    d = _advised(tmp_path / "gap")
+    _write(d, S.ADVICE_LINES, [x for x in S._lines(d / S.ADVICE_LINES) if x["window"] != 0])
+    assert "a closed window has no advice line" in fails(d)
+    d = _advised(tmp_path / "root")
+    (d / "advice" / "w2" / "registration.json").write_text(json.dumps(
+        {"binding": {"compiler": {"name": B["name"], "digest": B["digest"]}, "advice": {"root": "ff" * 64, "bits": 392}}}))
+    assert "isn't its advice line's root under B" in fails(d)
+    (tmp_path / "none").mkdir()
+    assert "the server registered no B" in fails(tmp_path / "none")
+
+
+def _dump(d: Path, doc: dict) -> Path:
+    (d / "doc.json").write_text(json.dumps(doc))
+    return d / "doc.json"
 
 
 #: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
@@ -1488,6 +1552,18 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
     assert ("--protocols" in argv) == bool(env["H1_GATE"])
+
+
+@pytest.mark.parametrize("env, cap, composite", [({}, "8388608", "onsite"), ({"CAP": "65536", "PRODUCT": "remote"}, "65536", "remote")])
+def test_the_server_registers_b_at_cap_and_commits_each_windows_advice_under_the_weights_registration(tmp_path, env, cap,
+                                                                                                      composite):
+    """serve-openai gets ``--advice`` once, B capped at CAP (ℓ_a), its registration log the run's PRODUCT's, and each window's
+    advice recording the serve dir's weights registration, which the run writes once the server listens."""
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
+    assert rc == 10 and argv.count("--advice") == 1, (rc, argv)
+    got = {f: argv[argv.index(f) + 1] for f in ("--advice-cap", "--advice-composite", "--advice-weights")}
+    assert got == {"--advice-cap": cap, "--advice-composite": composite,
+                   "--advice-weights": str(tmp_path / "serve" / "weights_registration.json")}
 
 
 class _Response:

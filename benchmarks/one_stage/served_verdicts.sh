@@ -15,7 +15,10 @@
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
-#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
+#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under `--advice --advice-cap CAP`
+#     (`serve_advice`) the server registers the served compiler B, capped at CAP bits (ℓ_a), before its engine loop runs
+#     ($D/advice_registration.json), and commits each closed window's advice as it serves under the weights registration
+#     (`--advice-weights`), each window's line ($D/advice.jsonl: its root and ℓ_a) out before any coin of the window.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
@@ -44,9 +47,10 @@
 #     them.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
-#     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
-#     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
-#     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
+#     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves):
+#     ADVICE-LINE holds the server's B to the compiler `prove_path.py compiler` recomputes from serve.json and every closed
+#     window's advice line to the time before the run's first coin (`served_verdicts.py advice-line`), then this window's
+#     request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 45m), run after the record (step 5),
@@ -359,7 +363,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
-    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 ${SERVE_ARGS:-} \
+    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 \
+    --advice --advice-cap "$CAP" --advice-composite "$PRODUCT" --advice-weights "$WREG" ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
@@ -675,6 +680,7 @@ PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
 say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
+COINS_AFTER=$(date +%s.%N)  # sampled proofs' and the network certifier's coins are all drawn after this
 CERT=
 if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
   # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
@@ -684,29 +690,21 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest pie
     --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
+(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") > "$OUT/compiler.json" \
+  || stop compiler 13
+(cd "$TREE" && "$PY" benchmarks/one_stage/served_verdicts.py advice-line "$D" --window "$K" --compiler "$OUT/compiler.json" \
+  --coins-after "$COINS_AFTER") 2>&1 | publish_lines
+[ "${PIPESTATUS[0]}" = 0 ] || stop advice 14
 cd "$TREE/integrations/vllm" || exit 9
-CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
-  | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
-[ -n "$CA" ] || stop compiler 13
-echo "registered compiler: $CA" > "$OUT/compiler.txt"
-WA=()
-[ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
-for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
-  # shellcheck disable=SC2086
-  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$D/advice.log" 2>&1
-  [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
-  [ "$k" = "$K" ] && break
-done
-# the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
-# are values: they stay in the serve dir
-[ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
+# the compile log names the request Programs by their prompt lengths and counts the window's requests, which are values:
+# it stays in the serve dir
 "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
   || { say "ADVICE: its registration has no public form"; stop advice 14; }
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
 say "ADVICE: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits padded to the cap")' \
-  "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
-  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", its log in the serve dir, on the node")"
+  "$D/advice/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded ($([ -f "$WREG" ] && echo "--advice-weights $WREG" || echo "$NO_WEIGHTS")); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", its log in the serve dir, on the node")"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0

@@ -14,6 +14,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P]
     served_verdicts.py public-registration REGISTRATION
+    served_verdicts.py advice-line SERVE_DIR --window K --compiler FILE --coins-after T
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
@@ -25,7 +26,9 @@ published form (`public_line`), the line in full appended to ``--private`` (the 
 ``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
 its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
-registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
+registration (`public_registration`: the advice's length padded to its compiler's cap), ``advice-line`` the ADVICE-LINE
+verdict on a serve-openai ``--advice`` run (`advice_line`: B registered before the first window, every window's advice
+line before sampled proofs' and the certifier's first coin, the audited window's registration under B), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
 (`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
@@ -406,6 +409,74 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
     out["rows"] = -(-cap // row_bits)
     return public_json({**out, "padded": list(PADDED)})
+
+
+#: serve-openai ``--advice``'s public records in its serve dir (`verity_vllm.pipeline.serve_advice`): B's registration,
+#: written before its first window, and each closed window's advice line
+ADVICE_REGISTRATION, ADVICE_LINES = "advice_registration.json", "advice.jsonl"
+
+
+def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins_after: float) -> tuple[bool, str]:
+    """The ADVICE-LINE verdict on a serve-openai ``--advice`` run: B as the server registered it before its first window
+    (`ADVICE_REGISTRATION`) is ``compiler``, the one ``prove_path.py compiler`` recomputes from serve.json, and the builder
+    of the registration log it committed (B's inner digest, the window advice's format, ℓ_a); every closed window
+    (``windows.jsonl``) has its line (`ADVICE_LINES`), in window order, each under B with ℓ_a in place of the advice's
+    length and written before ``coins_after`` (unix seconds: before sampled proofs and the network certifier draw any coin);
+    and window ``window``'s registration, the one the records audit opens, is its line's root under B. -> (passed, the line,
+    naming no window)."""
+    from verity.core.protocols import registration as REG
+
+    why: list[str] = []
+    reg, lines = _json(serve_dir / ADVICE_REGISTRATION), _lines(serve_dir / ADVICE_LINES)
+    if reg is None:
+        return False, (f"ADVICE-LINE: FAIL: no {ADVICE_REGISTRATION}: the server registered no B (serve-openai without "
+                       "--advice)")
+    b, cap = reg.get("compiler") or {}, reg.get("cap_bits")
+    if (b.get("digest"), b.get("cap_bits"), b.get("inner")) != (compiler.get("digest"), compiler.get("cap_bits"),
+                                                                 compiler.get("inner")):
+        why.append("the server's B isn't the compiler prove_path.py recomputes from serve.json")
+    if cap != b.get("cap_bits"):
+        why.append("its ℓ_a isn't its compiler's cap")
+    try:
+        composite, log = REG.log_of(reg["registration"]["log"])
+        view = REG.check(REG.Auditor(), composite, log).view()
+        want = {"kind": "builder", "digest": (b.get("inner") or {}).get("digest"), "advice": reg.get("advice"), "cap": cap}
+        if view.builder != want or view.head != reg["registration"].get("head"):
+            why.append("its registration log's builder isn't B's (its inner digest, its advice's format and ℓ_a)")
+    except (KeyError, TypeError, ValueError, REG.Refused) as e:
+        why.append(f"its registration log doesn't check ({type(e).__name__})")
+    closed = sorted({int(x["window"]) for x in _lines(serve_dir / "windows.jsonl")})
+    order = [int(x["window"]) for x in lines]
+    if order != sorted(set(order)):
+        why.append("the advice lines aren't one a window in window order")
+    if sorted(order) != closed:
+        why.append("a closed window has no advice line")
+    for x in lines:
+        if x.get("refused") or x.get("empty"):
+            continue
+        if (x.get("compiler") or {}).get("digest") != b.get("digest") or (x.get("advice") or {}).get("bits") != cap:
+            why.append("an advice line names another compiler than B, or a length other than ℓ_a")
+            break
+    t0 = reg.get("t")
+    if any(not (isinstance(x.get("t"), (int, float)) and x["t"] < coins_after) for x in lines):
+        why.append("an advice line was written after sampled proofs' or the network certifier's first coin")
+    if not isinstance(t0, (int, float)) or any(isinstance(x.get("t"), (int, float)) and x["t"] < t0 for x in lines):
+        why.append("an advice line was written before B's registration")
+    mine = next((x for x in lines if int(x["window"]) == int(window)), None)
+    wreg = _json(serve_dir / "advice" / f"w{int(window)}" / "registration.json")
+    if mine is None or mine.get("refused") or mine.get("empty") or wreg is None:
+        why.append("the audited window has no committed advice")
+    elif (wreg["binding"]["advice"]["root"], wreg["binding"]["compiler"]) != (mine["advice"]["root"], mine["compiler"]) \
+            or mine["compiler"] != {"name": b.get("name"), "digest": b.get("digest")}:
+        why.append("the audited window's registration isn't its advice line's root under B")
+    ok = not why
+    return ok, (f"ADVICE-LINE: B (compiler digest {str(b.get('digest'))[:16]}…, its advice {reg.get('advice')}, ℓ_a {cap} "
+                f"bits) registered by the server once, before its first window, the registration log's builder and the "
+                f"compiler prove_path.py recomputes from serve.json; every closed window's advice committed by the server "
+                f"as it served, its line (the advice's root, ℓ_a in place of its length) out before sampled proofs' and the "
+                f"network certifier's first coin; "
+                f"the audited window's registration its line's root under B: {'PASS' if ok else 'FAIL'}"
+                + (f" ({'; '.join(why)})" if why else ""))
 
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
@@ -1042,6 +1113,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--live-evidence", type=Path)
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
+    al = sub.add_parser("advice-line")
+    al.add_argument("serve_dir", type=Path)
+    al.add_argument("--window", type=int, required=True)
+    al.add_argument("--compiler", type=Path, required=True, help="prove_path.py compiler's output for the serve dir")
+    al.add_argument("--coins-after", type=float, required=True,
+                    help="unix seconds before sampled proofs and the network certifier draw any coin")
     pl = sub.add_parser("public-lines")
     pl.add_argument("--private", type=Path)
     pb = sub.add_parser("publish")
@@ -1075,6 +1152,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
+    if a.cmd == "advice-line":
+        ok, line = advice_line(a.serve_dir, a.window, json.loads(a.compiler.read_text()), a.coins_after)
+        print(line)
+        return 0 if ok else 1
     if a.cmd == "sampled-line":
         rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
         if not rows:
