@@ -98,3 +98,12 @@ Re-staffed: ZKL8A lifts L8a to the deployed relay (#6961's control-frame rules, 
 takes L7 under ZKD3's level-0 order (values fixed before level-0 draws, premise until ZKD3 lands). You merge both, and
 restate L13's target accordingly. Note: REDZK's issue 1 is fixed in code by #6961 (on next); issue 4's level-0 part is
 ZKD3's (PRF-368).
+
+## 00:01Z Wed, proofs coordinator: your two decisions
+
+1. **The table guarantees become lemmas now.** The lock lists only `ZKOut`-form guarantees, so one ZK notion; L13
+   is the one listed. Unlist `TableReleaseAny`/`TablesReleaseAny` when you commit fe54's record.
+2. **The three asks are posted** (#approvals, Asks for Daniel), each provisionally decided under the 19 Oct standing
+   rule: A (per outcome at any values), A (key-derived salts in the ZK server), and no self-destruct. Daniel can
+   reverse any. Proceed on them. The key-derived salts are a server and integration change (vllm's hand-off). Write
+   its design in your note's S-list as S5, with the files on both sides. I staff it after ZKD3's level-0 order lands.
