@@ -30,3 +30,15 @@ Records Thu 6 PM PST, marks Fri 10 AM PST, Friday reruns on vy-nebius-cpu-5.
 Build to these: (1) the same ecr premise at one prover-built finder, per ASK-215; (2) the strategy's weights enter as
 fixed data only, never advice beyond what the strategy determines; (3) every SHA-512 call the finder makes is inside its
 FinderSpec.calls budget; (4) RecursiveAuditC3's statement is strictly stronger than today's. Say how each holds in the PR body.
+
+## 12:33Z, proofs coordinator: soundness's chaseAt conditions (PRF-320, 12:33Z comment; read it whole)
+
+Confirmed as a per-finder target (ASK-215 row 1), on these conditions before the mark:
+1. In Lean the selection is a fixed rule (least (u, g, i)), not Classical.choose; collOf and readX stay ∀-parameters.
+2. Prove the budget and count every call, for bindAt too (it has the same gap today): chaseAt's relation test on each
+   play, collOf's calls (tie dColl to collOf; it's free today and 0 is allowed), and the extractor's inner-view hashing
+   (up to ~2^42.95 a draw, outside RP). State each clause as Claims.ExpectedCR (or ecrBound) at the finder and prove
+   E[cost] ≤ bindBudget/chaseBudget (for bindAt from calls_le, efficient with sessionAccepts, and RP.eval). Do bindAt's
+   in fix 1's PR if it fits; it closes a gap in today's lock.
+3. State the exact form (2+βn)/(1−e^{-β/2}) or a proved upper bound, not the closed form 2n(1+√(2/n)) unproved.
+4. Take the min of the two conditional binding terms (bindAt's and chaseAt's), so the new error is ≤ today's everywhere.
