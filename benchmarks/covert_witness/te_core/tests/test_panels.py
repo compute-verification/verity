@@ -26,8 +26,8 @@ def ledger_rows():
 def with_v3():
     """The pilot's rows and the same records again on v3's data, from l0 = 1.3."""
     pilot = ledger_rows()
-    return pilot + [r | {"id": f"{r['id']}-v3", "data": "v3", "start_bpb": 1.3, "val_bpb": r["val_bpb"] + 0.1}
-                    for r in pilot]
+    return pilot + [r | {"id": f"{r['id']}-v3", "run_id": f"{r['run_id']}-v3", "data": "v3", "start_bpb": 1.3,
+                         "val_bpb": r["val_bpb"] + 0.1} for r in pilot]
 
 
 def pretraining(root, beaten: bool):

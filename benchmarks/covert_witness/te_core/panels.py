@@ -21,7 +21,9 @@ or `v2.3-pilot`, the v2.3 harness's FineWeb-Edu; a loss on one is no loss on the
   (`SERVED`, `served demo`, at its gates in the start's tokens). A dial cell whose curve is the honest one (ρ = 1 at
   every point of it, so S = 1 at every loss) has no rows.
 
-Only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit from `--ladder-fit`).
+It reads the valid records of the pin and of the pilot (pin.py's `pilot`, `frontier.pinned(pilot=True)`) unless `--pin`
+names the commits, and only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit
+from `--ladder-fit`).
 The branch points are the starts (te_core.policy's `starts`) per data, each at (C0, l0) and labelled by its size and
 tokens per parameter, `on_frontier` "yes" when its data's frontier passes through it (nothing reaches its loss for
 less), else "no". C0 is
@@ -388,7 +390,7 @@ def main(argv=None) -> int:
                     help=f"the pretraining runs, a directory per run id (default {PRETRAINING}, fetched)")
     a = ap.parse_args(argv)
     d = rescore.load(a)
-    pin, shapes = d["pin"], d["shapes"]
+    pin, shapes = d["pin"] if a.pin else frontier.pinned(pilot=True), d["shapes"]
     scored, _ = plots.load(d["rows"], pin, shapes, d["keep"], d["ladder"])
     runs = pretraining(a.pretraining or fetch(PRETRAINING))
     source = a.source or (f"python -m te_core.panels {NAME} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "

@@ -80,13 +80,15 @@ def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
     return [r | facts.get(r.get("run_id"), {}) for r in rows]
 
 
-def pinned() -> tuple[str, ...]:
-    """The pin's commit, then the earlier commits that measure the same version (`same_version`)."""
+def pinned(pilot: bool = False) -> tuple[str, ...]:
+    """The pin's commit, then the earlier commits that measure the same version (`same_version`), and with `pilot` the
+    pilot's (`pilot`: an earlier version's commits, whose records te_core.panels shows beside the pin's, labelled by
+    their data)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from pin import pinned as read
 
     pin = read()
-    return (pin["commit"], *pin.get("same_version", []))
+    return (pin["commit"], *pin.get("same_version", []), *(pin.get("pilot", []) if pilot else []))
 
 
 def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
