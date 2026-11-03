@@ -221,6 +221,22 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
             assert len(reqs[engine_of[u.id]]["streamed_ids"]) == body["max_tokens"]
 
 
+def test_a_windows_advice_names_its_commit_from_its_seal_while_its_line_waits_for_its_h1_release(tmp_path):
+    """Under ``--h1-window-commit`` a window's windows.jsonl line waits for its PoUW H1 release, which reads its advice
+    (`serve_tie`), and its seal's line comes first: its registration names its Commit from seals.jsonl."""
+    out = _served(tmp_path)
+    wins = [w for w in records(out, "windows.jsonl") if not w.get("empty")]
+    held = wins[-1]
+    (out / "seals.jsonl").write_text(json.dumps({"window": held["window"], "run_id": held["run_id"],
+                                                 "run_root": held["run_root"], "row_dir": "windows/w"}) + "\n")
+    (out / "windows.jsonl").write_text("".join(json.dumps(w) + "\n" for w in records(out, "windows.jsonl")
+                                               if w["window"] != held["window"]))
+    rep = ADV.write(out, compiler=C, window=held["window"])
+    assert rep["refused"] == {} and rep["pending"] == {} and list(rep["windows"]) == [str(held["window"])]
+    reg = json.loads((out / "advice" / f"w{held['window']}" / "registration.json").read_text())
+    assert reg["commit"] == {"run_id": held["run_id"], "run_root": held["run_root"]}
+
+
 def test_advice_leaves_a_window_still_open_for_a_later_call(tmp_path):
     out = _served(tmp_path)
     recs = ST.load(out / ST.SERVED)
