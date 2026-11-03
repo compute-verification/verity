@@ -781,11 +781,11 @@ RESTS_ON_CELL = {
 #: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update), on every console
 #: row, so the others (`SENSITIVITIES`) stay in `bound`
 CELL_SENSITIVITIES = ("reduction", "update")
-#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: not until the
-#: bound's fresh-products kind is measured too (coordinator 09:02Z: reading B "until te_core 4.5 lands, with
-#: matrix-product tiles in the packer and the fresh-products kind wired in"), since until then a reading-A row
-#: publishes 1 wherever its weak token term is at most 1 (the algorithm-policy builder's 10:47Z SMELL)
-READING_A = False
+#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: its ρ is
+#: max(1, the measured kinds) with its binding kind, the kinds it leaves unmeasured (fresh products, until the products
+#: are extracted) None in its terms, and only a row with no kind measured publishes None (coordinator 11:18Z and 11:44Z,
+#: on the algorithm-policy builder's 10:47Z SMELL)
+READING_A = True
 
 
 def published(m: Measured, c: float | None = None, k: float | None = None, reading: str | None = None) -> dict:
