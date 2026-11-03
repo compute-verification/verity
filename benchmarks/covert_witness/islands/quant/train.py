@@ -10,9 +10,10 @@ Modes:
 - `qat`: every trained matrix's weight is θ + Q(V) in each step's forward, Q a sign, ternary or k-bit quantizer (scaled
   by the mean |V| of a tensor, row or group) of a latent delta V that only the optimizer touches, through a
   straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code. `--qat sparse`
-  is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero; a
-  sparse submission over its E cap (`--max-e-bytes`, else its class's) is re-cut from its latent at a smaller share
-  until it fits (`cut_to_keep`).
+  is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero, or
+  with `--qat-block B` on that share's runs of B consecutive entries with the largest sum of |V|; a sparse submission
+  over its E cap (`--max-e-bytes`, else its class's) is re-cut from its latent at a smaller share until it fits
+  (`cut_to_keep`).
   `--qat fp` trains the weights unquantized, as ptq does;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
@@ -91,7 +92,7 @@ class Schedule:
 
 
 #: what an arm may set (`--arms`); the rest is the run's
-ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
+ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
             "norms", "lr", "norm_lr", "seed"}
 
 
@@ -259,16 +260,27 @@ QAT_FP = "fp"
 
 
 @torch.no_grad()
-def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float = 1.0) -> qf.QArray:
+def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float = 1.0, block: int = 1) -> qf.QArray:
     """Q(V) for QAT: a scale of `mult` times the group's mean |V| (f16), then sign, ternary (round(V/s) in -1..1) or k-bit
     round to nearest; a group of zeros quantizes to zeros. `sparse`: sign(V) on the ceil(keep · group) entries of largest
-    |V| (ties at the threshold kept, zeros never), at `mult` times their mean |V|."""
+    |V| (ties at the threshold kept, zeros never), at `mult` times their mean |V|; with `block` B > 1 the kept entries
+    are the ceil(keep · group / B) runs of B consecutive entries with the largest sum of |V|, so the support costs the
+    entropy coder a B-th as much a kept entry."""
     g = v.numel() if group < 0 else qf.groups_of(v, group)
     vg = v.reshape(-1, g)
     if scheme == "sparse":
         a = vg.abs()
-        n_keep = min(g, max(1, math.ceil(keep * g)))
-        kept = (a >= a.kthvalue(g - n_keep + 1, dim=1, keepdim=True).values) & (a > 0)
+        if block > 1:
+            if g % block:
+                raise SystemExit(f"quant: --qat-block {block} does not divide a group of {g} entries")
+            nb = g // block
+            ab = a.view(-1, nb, block).sum(-1)
+            n_keep = min(nb, max(1, math.ceil(keep * nb)))
+            kb = (ab >= ab.kthvalue(nb - n_keep + 1, dim=1, keepdim=True).values) & (ab > 0)
+            kept = kb.repeat_interleave(block, dim=1) & (a > 0)
+        else:
+            n_keep = min(g, max(1, math.ceil(keep * g)))
+            kept = (a >= a.kthvalue(g - n_keep + 1, dim=1, keepdim=True).values) & (a > 0)
         s = qf._f16(mult * (a * kept).sum(1) / kept.sum(1).clamp(min=1))
         k = torch.where(kept, torch.where(vg >= 0, 2, 0), 1).to(torch.uint8)
         return qf.QArray(torch.tensor([-1.0, 0.0, 1.0, 0.0], dtype=torch.float16), s, k.view(-1), 2, g, tuple(v.shape))
@@ -535,6 +547,8 @@ def main() -> int:
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
     ap.add_argument("--qat-keep", type=float, default=0.05, help="qat sparse: the share of each group kept (nonzero)")
+    ap.add_argument("--qat-block", type=int, default=1,
+                    help="qat sparse: keep runs of this many consecutive entries (row-major), chosen by their sum of |V|")
     ap.add_argument("--xz", choices=("1", "9e", "min"), default="1",
                     help="--emit quan: the submitted E's xz preset (9e, or min: the smallest of qformat.XZ_TRIES, through "
                          "qformat.recompress; checkpoints stay preset 1)")
@@ -627,7 +641,7 @@ def main() -> int:
         @torch.no_grad()
         def materialize(x=x, latent=latent, qarrays=qarrays, quantized=quantized) -> None:
             for n in quantized:
-                q = qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep)
+                q = qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep, x.qat_block)
                 qarrays[n] = q
                 params[n].data.copy_((theta_dev[n].float() + q.value()).to(theta_dev[n].dtype))
 
@@ -744,7 +758,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         cap, keep = a.max_e_bytes or (prepare.CLASSES[a.klass]["max_e_bytes"] if a.klass else None), r["x"].qat_keep
         while r is best and a.emit == "quan" and cap and r["latent"] and len(qblob) > cap and keep > 1e-5:
             keep *= min(0.97, cap / len(qblob))
-            qarrays = {n: qat_quant(v.to(dev), "sparse", r["x"].qat_group, r["x"].qat_mult, keep)
+            qarrays = {n: qat_quant(v.to(dev), "sparse", r["x"].qat_group, r["x"].qat_mult, keep, r["x"].qat_block)
                        for n, v in r["latent"].items()}
             qblob, xz1_bytes = code_blob(a, qarrays, r["rest"], theta)
         rebuilt = qf.decode(theta, qblob, dev)
