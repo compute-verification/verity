@@ -83,9 +83,12 @@ most that. The kinds:
   premise on the partition (`P_CELL`; the whole-cell figure is the sensitivity fresh_cell). io_bound's cap has the
   chain order's constant (its premise P-chain), which is the reference circuit's order by construction (`ORDER`:
   te_core.gates prices a GEMM MAC as a dot cell adding into one running 32-bit sum), so the term is measured on every
-  run's products; unmeasured, with io_bound's chain figure in `inputs`, only for a circuit that declares a tree (none
-  does), and on a record with no product rows. A record with an op log and no product rows (a ledger row traced
-  before 4.8) has its log's
+  run's products. Λ proved is taken on the best subset of the products (io_bound's `bound`: a product whose
+  whole-making chain is too short would void it for the whole step), the dropped products still in |C|, and `inputs`
+  names how many it dropped and their share of the counted MACs (`subset`); where no subset has a root the term is
+  unmeasured (`FRESH_VOID`), never 0. It is unmeasured, with io_bound's chain figure in `inputs`, also for a circuit
+  that declares a tree (none does), and on a record with no product rows. A record with an op log and no product
+  rows (a ledger row traced before 4.8) has its log's
   (`products_of_ops`: dims, widths, θ or attention's where the log's class says so), but a log doesn't keep whether an
   operand is fresh (`LOG_UNKNOWN`), so the term is unmeasured there with the share of MACs whose freshness is unknown;
 - token: A1's cap on a block's affected token work under reading A (below), A1's values from a witness family with
@@ -585,7 +588,8 @@ KINDS = ("fresh_products", "token", "decoding")
 #: what each kind rests on
 RESTS_ON = {
     "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products "
-                      "of two fresh operands, amortized over the partition, each operand and partial sum at its "
+                      "of two fresh operands, amortized over the partition, on the best subset of them (every "
+                      "product still in |C|), each operand and partial sum at its "
                       "passed width, given its premises on the reference circuit, P-width and P-chain (each output "
                       "entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and "
                       f"the standard algorithm; {_CELL}",
@@ -634,6 +638,10 @@ PRODUCTS_FROM = "4.8"
 #: why the fresh-products kind is unmeasured on a record with no product rows
 FRESH_UNMEASURED = ("unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, "
                     f"and a recorded program's trace has them from te_core {PRODUCTS_FROM} on)")
+#: why the fresh-products kind is unmeasured where every subset of the counted products voids the proved Λ
+FRESH_VOID = ("unmeasured: no subset of the counted products has a proved bound at this k: each has an operand made "
+              "whole by a chain, and even the longest such chain is too short (r = k/(3 K^2 b) past 1/4, "
+              "te_core.io_bound.whole_chain), so Λ has no root; a void is never a measured 0")
 #: an op log's class (te_core.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
 #: product: its non-token operand is θ (the product is never fresh), or it is attention's, which io_bound doesn't count
 LOG_KIND = {"theta": "theta", "registered": "theta"}
@@ -692,7 +700,9 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
 def product_kind(row: dict) -> str:
     """A trace's product row's kind (te_core.capture.products' rows), as te_core.io_bound.rows_of classifies a GEMM:
     unaffected, attention (two token-indexed dims among m, k and n), self (both operands one array), theta (one
-    operand doesn't depend on θ′), fresh (both do and both are paid at their width) or expansion."""
+    operand doesn't depend on θ′), fresh (both do and both are paid at their passed width, `io_bound.is_paid` on the
+    row's rates and widths) or expansion. The row's own `paid` isn't read: before te_core 4.10 a capture compared an
+    upcast operand's rate with the cast's width, so a trace's rates and widths decide."""
     if not any(row["affected"]):
         return "unaffected"
     if sum(x in row["token_dims"] for x in ("m", "k", "n")) >= 2:
@@ -701,7 +711,7 @@ def product_kind(row: dict) -> str:
         return "self"
     if not all(row["affected"]):
         return "theta"
-    return "fresh" if all(row["paid"]) else "expansion"
+    return "fresh" if all(io_bound.is_paid(r, w) for r, w in zip(row["rates"], row["widths"])) else "expansion"
 
 
 def products_of_trace(block: dict, steps: float = 1.0) -> dict:
@@ -732,7 +742,9 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     another k, or for a circuit that declares a tree, is unmeasured, with io_bound's chain figure in what it read. A
     record with an op log and no product rows has its log's (`products_of_ops`), none of which a log can count, so the
     term is unmeasured with what the log leaves unknown. The products' `stand_in`, where a run's traced steps differ in
-    shape (`of_record`), is in what it read."""
+    shape (`of_record`), is in what it read, and so is `subset` where io_bound's best subset for the term dropped
+    products (how many, of how many, their share of the counted MACs and the subset's least whole-making chain); where
+    no subset has a proved Λ the term is unmeasured (`FRESH_VOID`)."""
     p = m.products
     if p is None and m.ops is not None:
         p = products_of_ops(m.ops)
@@ -754,7 +766,12 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     if order == "chain":
         proved = got["io_bound"]["proved"]
         got["fresh_cell"] = proved["rho"]
-        return proved["rho" if P_CELL else "rho_no_cell"], None, got
+        sub = proved["subset" if P_CELL else "subset_no_cell"]
+        if sub is not None and sub["dropped"]:
+            got["subset"] = {"dropped": sub["dropped"], "of": sub["dropped"] + len(sub["kept"]),
+                             "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]}
+        term = proved["rho" if P_CELL else "rho_no_cell"]
+        return term, FRESH_VOID if term is None else None, got
     return None, (f"unmeasured: the circuit declares its products summed in a {order}, and te_core.io_bound has the "
                   f"chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound"), got
 
@@ -909,8 +926,10 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     kind is unmeasured, None (binding `unmeasured`), with `why` saying so, never 1, which would read as no slowdown
     (coordinator 12:20Z); else 1, binding `none` (every kind measured, none above 1: the floor sets that 1, not any
     kind). Under reading B, Slowdown's token form, a target. Beside it what it rests on (`RESTS_ON_CELL`), the terms
-    its max takes (None: unmeasured; under reading B the token form) and the bound's `CELL_SENSITIVITIES`. This is
-    the one place that rule lives: nothing downstream relabels its output."""
+    its max takes (None: unmeasured; under reading B the token form), the bound's `CELL_SENSITIVITIES`, and
+    `fresh_subset`, the products the fresh-products term's best subset dropped (`fresh_products`' `subset`; None where
+    it dropped none or the term is unmeasured). This is the one place that rule lives: nothing downstream relabels its
+    output."""
     if (c is None) != (k is None):
         raise ValueError("published: give both c and k, or neither for the console's policy")
     if c is None:
@@ -942,7 +961,8 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
             "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if rho is None else binding],
             "partial": partial, "why": why,
             "terms": terms,
-            "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES}}
+            "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES},
+            "fresh_subset": b["inputs"]["fresh_products"].get("subset")}
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
