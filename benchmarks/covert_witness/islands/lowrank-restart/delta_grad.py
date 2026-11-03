@@ -245,13 +245,20 @@ class Tree:
         self.stack, self.pending, self.codings, self.out = [], {}, 0, None
 
     def _pack(self, g: dict) -> dict:
+        """A message's tensors coded as one flat vector (each a whole number of groups, so no group straddles two),
+        which keeps a step's op count, and the harness's per-op metering, independent of how many tensors train."""
         if self.code is None:
             return g
         self.codings += 1
-        return {n: self.code.pack(t) for n, t in g.items()}
+        self.layout = [(n, t.shape) for n, t in g.items()]
+        return {"*": self.code.pack(torch.cat([t.reshape(-1) for t in g.values()]))}
 
     def _unpack(self, m: dict) -> dict:
-        return m if self.code is None else {n: self.code.unpack(t) for n, t in m.items()}
+        if self.code is None:
+            return m
+        flat = self.code.unpack(m["*"])
+        sizes = [math.prod(sh) for _, sh in self.layout]
+        return {n: t.reshape(sh) for (n, sh), t in zip(self.layout, flat.split(sizes))}
 
     @staticmethod
     def _sum(*gs: dict) -> dict:
