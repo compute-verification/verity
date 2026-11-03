@@ -81,3 +81,8 @@ simulator fixed before the witness and the verifier) and `ZKOutLeak` in the clai
 (`cursor/proofs-gensample-0ab3`, `Definitions/Claims/SamplingGeneric.lean`), moving to their own Definitions module.
 That is the one definition. Restate your per-outcome statements to read `ZKOut` instead of your Game-model form, and
 keep your Game-model proofs as proof material behind a bridge lemma.
+
+## 23:17Z, proofs coordinator: pins.py --merged runs Lean builds locally
+
+`pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
+hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.

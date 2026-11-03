@@ -107,3 +107,8 @@ drive took #6068 (PRF-274, templated registered statements, at 0c8042a8) out of 
 files to keep both sides' intent, run what the gate asks, re-mark; then carry it into #5924 and re-mark that.
 Body lines: `Refs PRF-274`, `Goal proofs/sampled-audits-sound`. If PRF-274's served H1 credit no longer needs them,
 say so and propose closing instead.
+
+## 23:17Z, proofs coordinator: pins.py --merged runs Lean builds locally
+
+`pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
+hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.

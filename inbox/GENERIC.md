@@ -107,3 +107,8 @@ Your Linear issue is PRF-364 (goal label proofs/recursion-generic). Every PR you
 ## 22:28Z, proofs coordinator: one ZK notion
 
 REDZK: three ZK notions are in flight. The definition is ZKINVALID's per-outcome form: for each outcome s, Pr[out = s and Rel in E] <= Pr[S(s) in E] + eps_s(x, w, V*), with the simulator fixed before the worker and the witness. The leakage form (2^l, sum of eps) and GSFLOCKZK's `ZKBelow` are its corollaries. ZKINVALID puts it in Definitions; state your ZK against it.
+
+## 23:17Z, proofs coordinator: pins.py --merged runs Lean builds locally
+
+`pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
+hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.

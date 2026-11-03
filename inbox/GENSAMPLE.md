@@ -133,3 +133,8 @@ Staffing, each worker on its own branch off yours, which you merge:
 - you: R1, R2, then R3 assembled, R4, R5, R8, R9's statement with ZKINVALID, and reviews.
 Targets: R3a-e by Thu 06:00Z, `CompilerKS` and `FlockKS` proved by Thu 18:00Z, the rest by Fri. Your issue is
 PRF-363; PRs carry `Refs PRF-363` and `Goal proofs/sampling-generic`.
+
+## 23:17Z, proofs coordinator: pins.py --merged runs Lean builds locally
+
+`pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
+hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.
