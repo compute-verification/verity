@@ -27,10 +27,11 @@ the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, `
 the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net, the answer's ``eps`` (`DELTA_NET_BESIDE`). K is that statement's
 count as proved, a known overcount (`OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail count
-(`CONNECTIONS`), saying so when a case's caps name none (`NO_CONNECTIONS`). A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the
-bound, ``advice_charge``: the served run's realized advice charge is private (`ADVICE`), and ``measured`` is honest
-serving's, measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
-that run's, never a figure of this one.
+(`CONNECTIONS`), saying so when a case's caps name none (`NO_CONNECTIONS`). A public whose terms don't sum to K, or
+that isn't the rows form, is the bound's ``error``. Beside the bound, ``advice_charge``: the served run's realized
+advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet), and ``measured`` is
+honest serving's, measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and
+labelled as that run's, never a figure of this one.
 
 **Periods**: the run's own certification period (``run``: its m execution phases, each T buckets of τ, from the
 certifier's case's ``schedule``), marked ``proved``, and each monitoring period of `leak_bounds.PERIODS` for the serving
@@ -77,8 +78,10 @@ TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 #: K's terms of each execution phase i, each summing its scan's public fields
 PHASE_TERMS = {"\\ell_{a,i}": ("free",), "k_{skip,i}": ("faulty_sets", "faulty_bits", "faulty_entries"),
                "k_i \\log_2 d_{jit}": ("jitter",)}
-ADVICE = ("private: the realized advice length |a_j| is a value, so the run's published registrations carry the advice "
-          "padded to its compiler's cap, and the bound ℓ_{a,i}, the registered width")
+ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
+          "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
+          "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
+          "committed; the bound charges ℓ_{a,i}, the registered width")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: each connection's cell count is charged twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
              "run coincide; K is PeriodLeakAccepted's count as it states it")

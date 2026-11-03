@@ -4,9 +4,9 @@ certifier accepted in the rows form records K term by term in the notation table
 fields it sums, with its overcount and the connections its caps count, its run's own period proved, and each monitoring
 period's node, datacenter and world scaled from it at the execution phase its case's schedule gives, each naming its
 rule and parameters, beside its figure over one execution phase. A public whose terms don't sum to K, or in the clock
-form, is the bound's error. The served run's advice charge is private, and a test run's measurement is stated beside the
-bound as that run's. The run's `publish` leaves the record as written. The run is of record only when every verdict, the
-onsite composite's included, accepted."""
+form, is the bound's error. The served run's advice charge stays out of the record, and a test run's measurement is
+stated beside the bound as that run's. The run's `publish` leaves the record as written. The run is of record only when
+every verdict, the onsite composite's included, accepted."""
 from __future__ import annotations
 
 import json
