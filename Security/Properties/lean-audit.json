@@ -19290,7 +19290,7 @@
    ]
   },
   "PouwCheck.Pass": {
-   "digest": "2226beee1bf478122eb20cfab5e9b1128fbc560c895bc188138a59336a836df9",
+   "digest": "153cd5705422b644f587e2ee4e89d5e3a2809b6535a9dc5903709876f6d013ec",
    "definitions": {
     "PouwCheck.CALL_BOUND": "add6af22980a5c0e786199b5344ea8d7e6c0e1cd40f7807e29ac07349bb7469f",
     "PouwCheck.CALL_RANGE": "3417060730df2ddbde847d3ced7f2d0533d59774105a352f161c9b8a4d48d6a6",
@@ -19318,7 +19318,7 @@
     "PouwCheck.WEIGHTS_FORM": "8ae119af1e2fffa3b70c9fbf7505666690d1a3d779773a9afdc6c4127938c097",
     "PouwCheck.WINDOW_OPEN_TAG": "74469687d123db163c461070a73ddf643d126a940a6eba6f4adcf4154b50f37c",
     "PouwCheck.at?": "f8df7a5d197063b436f48e572d84143ee929fe0e9e79ec82f5c4dd19143e5f96",
-    "PouwCheck.carries": "1e035dc1f8801f7e17e819926c3420745c6653c1250b3346cb9f4831d24a36ee",
+    "PouwCheck.carries": "f52575dc37754a2eaae8e18953b597d593338b6a8c712d20cdf9b56acdc27456",
     "PouwCheck.certifiedSalt.match_3": "a6c8ef79da9c971123df3e72ecdb03a7bf0e57bebf0b50c4a6d09dea14a3b29b",
     "PouwCheck.checkWorkload": "637de35a3b5ce10156471b7e130b18902a43c15066e0a362492ca1988674fd26",
     "PouwCheck.coin": "ed5c30e48ee7c5aa3219944cac43062463c958dc1ea2d4bfbaed719029c42515",
@@ -19329,12 +19329,11 @@
     "PouwCheck.hex?": "0e979e99e2b9105c210ca9af5f3c696ed45f8d202f923257713913c2bf81bc6c",
     "PouwCheck.hex?._sparseCasesOn_1": "070488f23d70d37c0ce56a8e9966787bce4a3523c19791e7a4a467642130108e",
     "PouwCheck.isDecimal": "29a67404a5bb9d93aceab746f938229570b0a6652ebbcd3c5a68583d4298b7cb",
-    "PouwCheck.jsonStrIs": "285520274e9a56e54993e10f917633d3441936d310e0fdff5f22cfa98add6009",
     "PouwCheck.jsonTrue": "70f02ab49c9e48563e5605a39132e180f358c88875d8569a8fd38a1388601785",
     "PouwCheck.jsonTrue._sparseCasesOn_1": "ed809c243d70594b88d208891bc2d150ce807a24df599d6d79a3202502c7bb66",
     "PouwCheck.jsonTrue._sparseCasesOn_2": "151a28aa68a9a8824dcad5e9d6f0371881ba8eb2a26bc750057b7c5ff04e15c3",
     "PouwCheck.livePassSalt.match_1": "622ff37d26b24882d4ceb18c4c6d01df45b6e1681cb36aa0a8f45916067a35bf",
-    "PouwCheck.liveSaltCheck": "78ce0f031451a591aab4a4f811241eef9a28cddf8be737259a36fafa18d4639f",
+    "PouwCheck.liveSaltCheck": "afadb9129c5061e85102f30e715c8caf38b976c3211b7795d048bee902604465",
     "PouwCheck.manifest": "1123235e215a8bb9bb5fd409f511ae2be859b3085dfc7bf30b59eb7ed66b2fb3",
     "PouwCheck.openingOf._sparseCasesOn_3": "8bf3d7cf637faaf30fda9ace477bcf194c3741bbf477d93fd3bdbd1479560d1a",
     "PouwCheck.openingOf.match_3": "0b4bbd59674b4d077e7fc03b3095a24538d9018d6090d5fb44d0783e3b470b6f",
@@ -19501,7 +19500,7 @@
    ]
   },
   "PouwCheck.WindowSalt": {
-   "digest": "ca07babca389d57a778fee427bf9e7b6467fecbd6a132f6a57d793b2c9f79a06",
+   "digest": "68dac113a3ee0e95a11dd1e6b3df8ba659416b9f4e993a647f6d160e95026811",
    "definitions": {
     "PouwCheck.ANCHORED_EPOCH_TAG": "d284656dd4ec78550b5e6974d6b676ebe17b38910fb1e3343c976bbe23c78bf7",
     "PouwCheck.NO_WINDOW_SALT": "e78d5c0b6cc504082889c682abec1b03378ee36bb3ae0b940f86922494e2353d",
@@ -19522,7 +19521,7 @@
     "PouwCheck.valuesRoot?": "fb4f979eb350604963953802f6f1bff911d131ce34895b4c7a7479bde54afe94",
     "PouwCheck.windowAnchors": "99cb3ee8237e95a96eb9c69adb906e10ce9a29195e6a57e59fc2fdb941149673",
     "PouwCheck.windowAnchors._sparseCasesOn_3": "ec9d29ce8576d1febd20064a07d6d17ac74d857f798795a90d528ff741d17497",
-    "PouwCheck.windowSaltCheck": "ec8286c7ccb41cdea57ca6d8f88da84135cc89d87166a6b2f5e98735db2ace82",
+    "PouwCheck.windowSaltCheck": "89edb549877afa6bdbb359ccb3c5dfdabccee33df105391de26b10318112e017",
     "PouwCheck.windowSaltReason": "28302c3d6e3a786cf602d7cf4efc287e4c0d33ca2d197d6c5248eb5fe3ca3c46"
    },
    "guarantees": [
@@ -23685,10 +23684,10 @@
    ]
   },
   "SampledProofs.ChallengerDraw": {
-   "digest": "c6d7fceb4f96e10991e66bea274359cfa58625f563bfc3eb0ddbb55d767369d3",
+   "digest": "7fabb6853c42ec589565f9b2fdfc42dc69967e811130369cf99e67c7edf11b2e",
    "definitions": {
     "SampledProofs.Challenger.DRAW_FORM": "a80cdf39d88315792d7a71eb3e997c2aa8782423ae3e1f5d25fc96e9e4382f8e",
-    "SampledProofs.Challenger.drawCoins": "3601f44679204d508d8fbeeee3d7c6233ddf4aabf2fbe046b6d289d32a985862"
+    "SampledProofs.Challenger.drawCoins": "eef07d71fcc04b56896423c1aabfc0f8fa1fa037a6fe78fd27f144890ae181d3"
    },
    "guarantees": [
     "Properties.Remote.SecurityProofs.acceptComplies",
@@ -24037,7 +24036,7 @@
    "guarantees": ["Properties.SampledProofs.fleetHaltIsFinal", "Properties.SampledProofs.haltCoversOperator"]
   },
   "SampledProofs.Json": {
-   "digest": "99a6da86ad723ac2c3bdd18ac6a7906ad076ebbbbd80e1e068ee8f649fbc5f06",
+   "digest": "069fc3acb80cfbcff12d8622ac42b970e01e573a0aa28dd5535dd8f08b734644",
    "definitions": {
     "SampledProofs.Check": "c36d7266f9e5d5eabed9940b4e1bee672817580f28bd272281d8bc152f0a219a",
     "SampledProofs.Check.codes": "e97b326cd99a3b7fd4464f75bcda497be198ef4903395062e0b65629f9269147",
@@ -24056,6 +24055,8 @@
     "SampledProofs.isHex": "7af045f62eb5db1e2da1093369f5d8037f127c9148d40ac6921a5968ae08bfb5",
     "SampledProofs.jeq": "caa6fe2fc0d7aa47cb120ab9a5ce40fcf8bf2e88ae32e0ed7a96d42205120ff8",
     "SampledProofs.jeq._sparseCasesOn_1": "85bce44fa0f2416ffd0c4db80592f6c889b3dc84062d4fbfa638eea12deaffa0",
+    "SampledProofs.jsonStrIs": "9c7caa252f0792f4dcdfc52c8490eadef0b3472392ea7d6ea0d26b713de5f1d0",
+    "SampledProofs.jsonStrIs._sparseCasesOn_1": "e6c0f61d16a0ad343b83721259b4dc181b8050ab0c7b370e4fb071997f43f36f",
     "SampledProofs.keys?": "37a2652f9459bf97591b2a36a044d6e2207e92884bab9efd2d2599a0c97a7299",
     "SampledProofs.keys?._sparseCasesOn_1": "ef41f3087eb4a309d964c51e1129b1eaee1c4b9a40c4d188e57d34354728a018",
     "SampledProofs.nat?": "9ec60004020227f25f1827bd5002d740f81ded9156d6f123ae99d13eef8d50fc",
