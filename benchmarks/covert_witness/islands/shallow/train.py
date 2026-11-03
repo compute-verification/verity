@@ -13,7 +13,10 @@ How: AdamW or Muon (`--opt`) on full matrices, AdamW on gains and factors. E (`-
 in θ's dtype, adapters merged (`prepare.encode_full`); `bf16` factors and full tensors in bf16 (the lora format; the
 bf16-autocast forward already multiplies at bf16); `svd:R` each full matrix's delta truncated to rank R as bf16 factors;
 `qB` or `qB:G` each tensor's delta from θ as a CWQUAN1 delta (`prepare.encode_quant`): B-bit round-to-nearest codes into
-a symmetric codebook, an f16 scale per G entries (default 128), xz-coded; `auto` is bf16 with adapters, else fp32. An
+a symmetric codebook, an f16 scale per G entries (default 128), xz-coded; `uB` or `uB:S` the same format on a uniform
+step of S (default 1) times each 128 entries' RMS, zero a level, so xz's entropy coding sets the rate (`uniform_code`),
+and `--max-e-bytes N` fits the step so every checkpoint's |E| is just under N; `auto` is bf16 with adapters, else
+fp32. An
 arm's `store=` codes its own E (`svd:R` only as the global store). `--mom-dtype bf16` keeps Muon's momentum in bf16
 between steps and `--grad-dtype bf16` rounds the accumulated gradient to bf16 after each micro-batch; `--mom-fold` makes
 Muon heavy-ball momentum with each micro-batch's gradient summed straight into that buffer. Each arm's report
@@ -40,8 +43,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import lzma
 import math
 import re
+import struct
 import time
 from pathlib import Path
 
@@ -230,7 +235,8 @@ def main() -> int:
     ap.add_argument("--wd", type=float, default=0.0)
     ap.add_argument("--lora", type=int, default=0, help="rank of the --adapt factors (alone: every tuned matrix)")
     ap.add_argument("--lora-lr", type=float, default=1e-3)
-    ap.add_argument("--store", default="auto", help="auto | fp32 | bf16 | svd:R | qB | qB:G")
+    ap.add_argument("--store", default="auto", help="auto | fp32 | bf16 | svd:R | qB[:G] | uB[:S]")
+    ap.add_argument("--max-e-bytes", type=int, default=None, help="uB: widen the step until |E| fits")
     ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False)
     ap.add_argument("--ema", type=float, default=0.0)
     ap.add_argument("--schedule", choices=("linear", "cosine", "wsd"), default="linear")
@@ -271,10 +277,12 @@ def main() -> int:
     store = a.store if a.store != "auto" else ("bf16" if adapt else "fp32")
     for arm in arms:
         arm.store = arm.store if arm.store != "auto" else store
-        if not re.fullmatch(r"fp32|bf16|svd:\d+|q[1-8](:\d+)?", arm.store):
-            raise SystemExit(f"shallow: --store {arm.store} is not fp32, bf16, svd:R, qB or qB:G (B in 1..8)")
-        if arm.store.startswith("svd:") != store.startswith("svd:") or (arm.store.startswith("q") and adapt):
-            raise SystemExit("shallow: svd:R is the global --store only, and qB codes full tensors' deltas (no --adapt)")
+        if not re.fullmatch(r"fp32|bf16|svd:\d+|q[1-8](:\d+)?|u[2-8](:[0-9.]+)?", arm.store):
+            raise SystemExit(f"shallow: --store {arm.store} is not fp32, bf16, svd:R, qB[:G] (B in 1..8) or uB[:S] (B in 2..8)")
+        if arm.store.startswith("svd:") != store.startswith("svd:") or (arm.store[0] in "qu" and adapt):
+            raise SystemExit("shallow: svd:R is the global --store only, and qB and uB code full tensors' deltas (no --adapt)")
+        if a.max_e_bytes is not None and arm.store[0] != "u":
+            raise SystemExit("shallow: --max-e-bytes fits a uB store's step")
     for p in params.values():
         p.requires_grad_(False)
     for n in full:
@@ -357,7 +365,7 @@ def main() -> int:
 
         def encode() -> bytes:
             cur = {n: (ema[n] if ema is not None else params[n].detach()).float() for n in arm.tuned}
-            return encode_update(arm.store, theta, cur, factors, mats, gains, params, steps, code)
+            return encode_update(arm.store, theta, cur, factors, mats, gains, params, steps, code, a.max_e_bytes)
 
         for step in range(n_steps):
             g += 1
@@ -473,8 +481,47 @@ def merged(w: torch.Tensor, A: torch.Tensor, B: torch.Tensor, s: float) -> torch
         torch.backends.cuda.matmul.allow_tf32 = tf32
 
 
+def quant_size(entries: dict, theta) -> int:
+    """|E| as prepare.encode_quant writes `entries` (its header, arrays and xz), without calling it: the harness takes
+    the first E encoded in each 5% as that checkpoint, so a step's trial sizes must not go through it."""
+    header, parts = [], []
+    for name in sorted(entries):
+        spec, arrays = prepare._quant_array(entries[name]["q"], name)
+        header.append({"n": name, "k": "delta", **spec})
+        parts += arrays
+    h = json.dumps({"t": header}, separators=(",", ":")).encode()
+    return 8 + len(lzma.compress(struct.pack("<I", len(h)) + h + b"".join(parts), **prepare.QUANT_XZ))
+
+
+def uniform_code(theta, cur, bits: int, step: float) -> tuple[dict, float]:
+    """Each tensor's delta from θ as a CWQUAN1 delta on a uniform step: an f16 scale per 128 entries (the group's RMS
+    over c, c the root of the largest, so neither the scales nor the codebook underflow f16) times the nearest of the
+    2**bits levels j·step·c, j from -2**(bits-1), zero among them. Returns the entries and the relative error."""
+    levels = torch.arange(-2 ** (bits - 1), 2 ** (bits - 1), dtype=torch.float32)
+    entries, err, norm = {}, 0.0, 0.0
+    for n, t in cur.items():
+        d = (t - theta[n].to(t.device).float()).reshape(-1)
+        g = math.gcd(d.numel(), 128)
+        rms = d.view(-1, g).square().mean(1).sqrt()
+        top = float(rms.max())
+        c = math.sqrt(top) if top > 0 else 1.0
+        sc = (rms / c).half()
+        cb = (levels.to(d.device) * (step * c)).half()
+        cbf = cb.float()
+        z = d.view(-1, g) / torch.where(sc.float() > 0, sc.float(), 1.0)[:, None]
+        codes = torch.bucketize(z, (cbf[1:] + cbf[:-1]) / 2)
+        q = cbf[codes] * sc.float()[:, None]
+        err += float((q.reshape(-1) - d).square().sum())
+        norm += float(d.square().sum())
+        entries[n] = {"kind": "delta", "q": prepare.QArray(cb, sc, codes.to(torch.uint8), bits, g, tuple(t.shape))}
+    return entries, math.sqrt(err / norm) if norm else 0.0
+
+
+UNIFORM_TRIES, UNIFORM_FILL = 8, 0.98
+
+
 @torch.no_grad()
-def encode_update(store, theta, cur, factors, mats, gains, params, steps, info) -> bytes:
+def encode_update(store, theta, cur, factors, mats, gains, params, steps, info, max_bytes=None) -> bytes:
     if store.startswith("q"):
         bits, _, grp = store[1:].partition(":")
         bits, grp = int(bits), int(grp or 128)
@@ -497,6 +544,32 @@ def encode_update(store, theta, cur, factors, mats, gains, params, steps, info) 
         info.update(bits=bits, group=grp, rel_err=math.sqrt(err / norm) if norm else 0.0)
         steps.append({"op": "extra", "flops": 8 * sum(t.numel() for t in cur.values()), "what": "qB codes of the deltas"})
         return prepare.encode_quant(entries, theta)
+    if store.startswith("u"):
+        bits, _, s = store[1:].partition(":")
+        bits, s = int(bits), float(s or 1.0)
+        numel = sum(t.numel() for t in cur.values())
+        tries = 0
+        if max_bytes is not None:
+            # the step is in RMS units, so the last checkpoint's fitted step starts the search
+            s, best = info.get("step", s), None
+            for tries in range(1, UNIFORM_TRIES + 1):
+                size = quant_size(uniform_code(theta, cur, bits, s)[0], theta)
+                if size <= max_bytes and (best is None or size > best[0]):
+                    best = (size, s)
+                if UNIFORM_FILL * max_bytes <= size <= max_bytes:
+                    break
+                # each doubling of the step takes about a bit a value off an entropy-coded uniform code
+                s *= 2 ** (8 * (size - (1 + UNIFORM_FILL) / 2 * max_bytes) / numel)
+            if best is None:
+                raise SystemExit(f"shallow: {store} fits no step in --max-e-bytes {max_bytes} ({size} B at {s:.3g})")
+            s = best[1]
+        entries, rel = uniform_code(theta, cur, bits, s)
+        blob = prepare.encode_quant(entries, theta)
+        if max_bytes is not None and len(blob) > max_bytes:
+            raise SystemExit(f"shallow: quant_size no longer matches prepare.encode_quant ({len(blob)} B > {max_bytes})")
+        info.update(bits=bits, group=128, codebook="uniform", step=s, tries=tries, rel_err=rel)
+        steps.append({"op": "extra", "flops": 8 * numel * (tries + 1), "what": "uB codes of the deltas (uniform RMS step)"})
+        return blob
     if store == "fp32":
         out = {n: t.to(theta[n].dtype).cpu() for n, t in cur.items()}
         out |= {n: merged(params[n], A, B, s).cpu() for n, (A, B, s) in factors.items()}
