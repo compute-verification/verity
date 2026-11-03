@@ -2237,7 +2237,9 @@
   "PouwCommit.Coins",
   "PouwCommit.Draws",
   "SampledProofs",
-  "Proofs.Pouw.OnsiteFreed"
+  "Proofs.Pouw.OnsiteFreed",
+  "Firewall.Record",
+  "Firewall.Release"
  ],
  "claims": {
   "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],

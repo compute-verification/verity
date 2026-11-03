@@ -27,7 +27,8 @@ open Finset
 abbrev Pattern {m : ℕ} (α : Fin m → Type) (B : ℕ) : Type :=
   {J : (i : Fin m) → Option (α i) // (univ.filter fun i => (J i).isSome).card ≤ B}
 
-instance {m : ℕ} (α : Fin m → Type) (B : ℕ) : Nonempty (Pattern α B) := ⟨⟨fun _ => none, by simp⟩⟩
+instance instNonemptyPattern {m : ℕ} (α : Fin m → Type) (B : ℕ) : Nonempty (Pattern α B) :=
+  ⟨⟨fun _ => none, by simp⟩⟩
 
 /-- The tuples whose entries `some` are exactly at `S`, as their entries there. -/
 def supportEquiv {m : ℕ} (α : Fin m → Type) (S : Finset (Fin m)) :
