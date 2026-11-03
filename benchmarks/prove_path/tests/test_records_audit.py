@@ -476,7 +476,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     with pytest.raises(ValueError, match="a pin is"):
         RA.pinned({"values": {}})
     base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
-            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
@@ -509,7 +509,8 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
         free = RA.declared_count(ldoc, 0, pins=p, roots=r)
         assert (free["registered"], free["free"], free["unpinned"]) == (0, count["free"] + 8 * 8 * K, ["w"])
     base = ["audit", "--window", str(listed.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
-            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local",
+            "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     for pins_, want in (([f"--pin=w={pin['w']}"], count), ([], RA.declared_count(ldoc, 0))):
@@ -727,10 +728,10 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
-    receipt = {"registration": R.digest(rec), "verifier": A5.VERIFIER, "received": 1}
+    receipt = {"registration": R.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
     assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
     assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
-    assert RA.fixed_before_draw(receipt, rec, written.bound, "challenger")["codes"] == ["after-the-draw"]
+    assert RA.fixed_before_draw({**receipt, "verifier": "another stream"}, rec, written.bound)["codes"] == ["after-the-draw"]
     assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
     late = RA.after_draw(receipt, rec, held)
     assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
@@ -749,6 +750,8 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
             RA.main([*args, "--challenger", "gate:research@gate", *bad])
     with pytest.raises(SystemExit, match="2"):
         RA.main([*args, "--challenger", "remote"])
+    with pytest.raises(SystemExit, match="2"):
+        RA.main(args)
 
     class Opened(Exception):
         pass
@@ -772,6 +775,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
     import a5 as A5
+    import a5_coins as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
     mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
@@ -795,10 +799,13 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         seen.update(port=port, ports=kw["ports"])
         raise Opened
 
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", free_ports)
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--challenger", "local", "--main", "m.txt"]
     for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
                                                                          {"port": 10000, "ports": 16})):
         seen.clear()
@@ -815,6 +822,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone."""
     import a5 as A5
+    import a5_coins as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
@@ -825,12 +833,14 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     rec = {**written.rec, "window": {**written.rec["window"], "circuit": hashlib.sha512(body).hexdigest()}}
     (written.dir / "registration.json").write_text(json.dumps(rec))
     assert "cap" not in doc and IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)[0].members == mine.members
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"audit": {"accepted": True}}, True))
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     capsys.readouterr()
     assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
                     "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
-                    "--skip-negatives"]) == 1
+                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
     rows = dict(IF.layout(COORD).rows)
     inputs, window = 5 * 16 * sum(rows.values()), 5 * 16 * (rows["x"] + rows["sx"])
     figure = {"ingress": window, "free": inputs - window, "other_inputs": inputs - window, "bound": "vacuous",
@@ -847,6 +857,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
     that cache, and none without ``--compose-cache``."""
     import a5 as A5
+    import a5_coins as AC
 
     seen = {}
 
@@ -870,11 +881,13 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         seen["audit"] = a.compose_cache
         raise Opened
 
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
-            "--skip-negatives"]
+            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
     for extra, want in ((["--compose-cache", cache], cache), ([], None)):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
@@ -903,7 +916,7 @@ held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok
         "opening": opening, "output": json.loads((t / "c" / "compiled.json").read_text())}}
 assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
-receipt = {{"registration": R.digest(rec), "verifier": A5.VERIFIER}}
+receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm")))
 """
