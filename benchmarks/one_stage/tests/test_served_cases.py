@@ -1,8 +1,14 @@
 """served_cases.py: sampled proofs' one-stage v1 case and the inference-only case (`verity/inference-only/v0`) for a
-served window, from its records audit's v1 case (a5's ``window/case.json``), and with ``--v2`` its v2 case
-(``case-v2.json``), each in a 0700 directory beside its Lean answer, in the directory form a composition reads as a
-case (no composite runs the inference-only case or v2's), and every answer naming the window's registration record's
-digest.
+served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
+same record, and with ``--v2`` its v2 case (``case-v2.json``), each in a 0700 directory beside its Lean answer, in the
+directory form a composition reads as a case (remote's three subprotocols; no composite runs v2's), and every answer
+naming the window's registration record's digest.
+
+Under H1's tie the window's record R is the Commit record H1 named before its sample coin, a v2 record chained right
+after H1's window registration W and reusing W's tables, as soundness's ``remotetie_demo.py`` builds them (`tied_serve`):
+all three cases commit to R, the policy's log is the serve's H1 log through W, and a period whose windows name another
+record (H1's own W, or none) is refused before any composite, so neither product is handed it. v1's own ``parameters``
+name the window's tables as values ahead of its templates', and a Program that isn't that population is refused.
 
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
 templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
@@ -18,6 +24,7 @@ answer's reason. The slow test makes the inference-only case on the 4,32,4 class
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -28,10 +35,13 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import weights as PW
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -181,6 +191,83 @@ def budgets(v1: dict, exe: Path, scratch: Path) -> tuple[int, int]:
     got, _ = SC.lean_answer(exe, SC.inference_only_case(v1, *SC.UNBOUNDED), scratch)
     assert got["verdict"] == "accept" and len(got["profile"]["blocks"]) == 1, got
     return tuple(got["profile"]["blocks"][0])
+
+
+#: H1's toy window as soundness's ``remotetie_demo.py`` builds it: one round at K = 2048 with m = 4, its A table and
+#: input ids registered under the H1 window Program's domain and the window's open root (stand-in digests and roots),
+#: each as credit names it in the Commit record and as H1 names it in its own registration
+H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
+OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
+K, M = 2048, 4
+TABLES = ((Cr.commit_rows(0, K), f"pouw/h1/a/{K}@0", PW.chunks(K) * M), (Cr.commit_ids(0), "pouw/h1/ids@0", 8))
+#: the auditor's ledger digest a period case commits to
+LEDGER = "1e" * 64
+
+
+def h1_registration(previous: str | None = None, entry: int = 0) -> dict:
+    """H1's window registration W at the window's close (`pouw_h1_commit.registration`): a v2 record of the toy's
+    tables under the H1 window Program, chained after ``previous``."""
+    entries = []
+    for _, value, leaves in TABLES:
+        e = {"value": value, "leaves": leaves, "words": 1, "root": "ab" * 64}
+        entries.append({**e, "domain": Cr.domain_of(H1, OPEN, e)})
+    return {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "program": H1,
+            "window": {"kind": "served", "entry": entry, "open_root": OPEN, "refused": []},
+            "registered": entries, "previous": previous}
+
+
+def tied_v1_case(w: dict) -> dict:
+    """v1's case over the window's record R as V3c's window-commit writes it under H1's tie: a v2 record of the toy's
+    population, which takes the window's tables as values ahead of its templates' parameters, registering each at W's
+    root, domain and leaves, chained right after W; its params the v2 params (``parameters``, ``outputs``, ``log`` [W],
+    ``row_schemas``)."""
+    templates = [PAIR, TRIPLE]
+    program = P.mixed_population_program([(t, SLOTS) for t in templates],
+                                         values=[(name, leaves, 16) for name, _, leaves in TABLES])
+    query = P.template_instances_query(templates)
+    law, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
+    reused = {e["value"]: e for e in w["registered"]}
+    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+                   {"kind": "served", "run": "r-served-cases", "row": 0}, previous=R.digest(w),
+                   registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
+    params = RP.params(program, query, law, ports, None, "1/100", partition=P.partition(program, query), log=[w],
+                       registered={name: 1 for name, _, _ in TABLES})
+    params |= {"outputs": {name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
+               "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]],
+               "row_schemas": {name: G.SCHEMA_V2 for name, _, _ in TABLES}}
+    evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
+    return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
+            "params": json.loads(json.dumps(params))}
+
+
+def h1_log(h1: Path, records: list[tuple[int, str, dict]]) -> None:
+    """The serve's H1 log in ``h1`` as `serve_tie` writes it: each ``(window, kind, record)`` in
+    ``w<window>/<kind>.json`` and a line naming that file and the record's digest."""
+    lines = []
+    for k, kind, r in records:
+        f = h1 / f"w{k}" / f"{kind}.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(r, sort_keys=True))
+        lines.append({"digest": R.digest(r), "file": f"w{k}/{kind}.json", "kind": kind, "window": k})
+    (h1 / "log.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
+
+
+def tied_serve(root: Path, commits: list | None = None) -> tuple[Path, dict, dict]:
+    """A serve dir under H1's tie (`served_verdicts.sh`'s H1_TIE) at its one audited window: V3c's audit of the window's
+    record R (``v3c-w0-…/audit``), H1's log of W then R (``h1/``), and PoUW's period case as `served_pouw.sh` has
+    `pouw_piece.py period` write it (``private/pouw/period``), its windows' ``commit`` each of ``commits`` (default: one
+    window naming R, its canonical JSON in hex as credit reads it). The dir, v1's case and W."""
+    w = h1_registration()
+    v1 = tied_v1_case(w)
+    audit_dir(root / "v3c-w0-4-32-4", v1, v2=False)
+    h1_log(root / "h1", [(0, "registration", w), (0, "record", json.loads(bytes.fromhex(v1["commitment"])))])
+    piece = root / SC.PERIOD_PIECE
+    piece.mkdir(parents=True)
+    evidence = {"pins": [], "windows": [{"commit": c} for c in ([v1["commitment"]] if commits is None else commits)]}
+    (piece / "case.json").write_text(json.dumps({"blobs": [], "commitment": LEDGER, "params": {"period": "p"},
+                                                 "evidence": codec.canonical_json(evidence).hex()}, sort_keys=True))
+    (piece / "answer.json").write_text(json.dumps(answer(SC.PERIOD, LEDGER), sort_keys=True) + "\n")
+    return root, v1, w
 
 
 @pytest.fixture
@@ -553,6 +640,180 @@ def test_the_serve_dir_names_its_one_audited_window(tmp_path, capsys):
                                   "--gamma", 1, *exes)
     assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, INF], out
     assert "holds 2 audited windows" in refused[0]["reason"]
+
+
+def test_under_h1s_tie_every_case_commits_to_the_record_h1_named(tmp_path, capsys):
+    """The serve dir under H1's tie: the one-stage case is V3c's audit's, the policy's commits to the same R with its log
+    the serve's H1 log through W (which R is chained right after), and PoUW's period case, every window naming R, is
+    written as `pouw_piece.py` wrote it beside its own answer. R's digest is the one credit reads off each period window's
+    Commit record, so the three name one record, the tie remote checks."""
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    rec, d = json.loads(bytes.fromhex(v1["commitment"])), digest_of(v1)
+    assert rec["previous"] == R.digest(w) and Cr.commit_of(v1["commitment"])[0][0].hex() == d
+    private = serve / "private"
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1))
+    assert (rc, refused) == (0, []), out
+    assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"} for id, d_ in (
+        (V1, "sampled-proofs-v1"), (INF, "inference-only"), (SC.PERIOD, "pouw-period"))]
+    piece, got = serve / SC.PERIOD_PIECE, private / "pouw-period"
+    assert stat.S_IMODE(got.stat().st_mode) == 0o700
+    assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
+    assert json.loads((got / "case.json").read_text()) == json.loads((piece / "case.json").read_text())
+    assert (got / "answer.json").read_text() == (piece / "answer.json").read_text()
+    reg = json.loads((private / "inference-only" / "case.json").read_text())
+    assert reg["commitment"] == v1["commitment"] and reg["params"]["log"] == [w]
+    assert reg["params"]["parameters"] == v1["params"]["parameters"]
+    assert [n for n, _ in reg["params"]["parameters"]] == [name for name, _, _ in TABLES] + ["0.x", "1.x"]
+    assert json.loads((tmp_path / "reg.seen").read_text())["commitment"] == v1["commitment"]
+    for secret in (v1["commitment"], reg["evidence"], json.loads((piece / "case.json").read_text())["evidence"]):
+        assert secret not in out
+
+
+@pytest.mark.parametrize("change, reason", [
+    ("h1-registration", "window 0 of the period names the Commit record {w}…, not the window's registration record "
+                        "{r}…: remote's record tie rejects it"),
+    ("second-window", "window 1 of the period names the Commit record {w}…"),
+    ("no-commit", "window 0 of the period names no Commit record, so not the window's registration record {r}…"),
+    ("v1-record", "window 0 of the period names no Commit record"),
+    ("no-windows", "the period's evidence names no windows"),
+    ("other-answer", f"the period's answer is {V1!r}'s, not {SC.PERIOD}'s"),
+    ("no-answer", "the period's case has no answer line"),
+    ("case-key", "case.json is not a case"),
+])
+def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, capsys, change, reason):
+    """A period case is taken only when every window names R as its Commit record: one naming H1's own registration W
+    (the record H1 named before the tie), one window of two on W, none, or a v1 record, is refused here and so is handed to
+    neither product; so is a period case with no windows, no answer, another protocol's answer or another key. v1's and
+    the policy's cases are still written."""
+    w = h1_registration()
+    on_r, on_w = tied_v1_case(w)["commitment"], codec.canonical_json(w).hex()
+    commits = {"h1-registration": [on_w], "second-window": [on_r, on_w], "no-commit": [None], "no-windows": [],
+               "v1-record": [codec.canonical_json({**w, "format": R.FORMAT}).hex()]}.get(change)
+    serve, v1, _ = tied_serve(tmp_path / "serve", commits)
+    piece = serve / SC.PERIOD_PIECE
+    if change == "other-answer":
+        (piece / "answer.json").write_text(json.dumps(answer(V1, LEDGER)) + "\n")
+    elif change == "no-answer":
+        (piece / "answer.json").unlink()
+    elif change == "case-key":
+        (piece / "case.json").write_text(json.dumps({**json.loads((piece / "case.json").read_text()), "public": {}}))
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
+                                  "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, INF], out
+    want = reason.format(w=R.digest(w)[:16], r=digest_of(v1)[:16])
+    assert [r["protocol"] for r in refused] == [SC.PERIOD] and want in refused[0]["reason"], refused
+    assert not (serve / "private" / "pouw-period").exists()
+
+
+def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_path, capsys):
+    """``--period`` names the period case beside ``--audit``; with neither it nor a serve dir holding one, no period case
+    is made, and a v1 case that isn't one refuses the period with every other."""
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    audit, piece, exes = serve / "v3c-w0-4-32-4" / "audit", serve / SC.PERIOD_PIECE, stand_ins(tmp_path, v1)
+    log = tmp_path / "log.json"
+    log.write_text(json.dumps([w]))
+    rc, cases, _, out = run(capsys, "--audit", audit, "--private", tmp_path / "p1", "--period", piece, "--log", log,
+                            "--alpha", "1", "--gamma", 1, *exes)
+    assert rc == 0 and [c["protocol"] for c in cases] == [V1, INF, SC.PERIOD], out
+    rc, cases, _, out = run(capsys, "--audit", audit, "--private", tmp_path / "p2", "--log", log, "--alpha", "1",
+                            "--gamma", 1, *exes)
+    assert rc == 0 and [c["protocol"] for c in cases] == [V1, INF], out
+    (audit / "window" / "case.json").unlink()
+    (audit / "window" / "case-error.txt").write_text("ValueError: the audit's record has no receipt\n")
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p3", "--alpha", "1",
+                                  "--gamma", 1, *exes)
+    assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, INF, SC.PERIOD], out
+    assert not (tmp_path / "p3").exists()
+
+
+def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_path):
+    """Over a serve of several windows, each window's W then R, the log before a window's R is every record through its
+    own W, which chains from the deployment's first record (null previous) to R; later windows' records aren't in it."""
+    w0 = h1_registration()
+    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
+    w1 = h1_registration(R.digest(r0), entry=1)
+    r1 = {"format": R.FORMAT_V2, "previous": R.digest(w1), "program": "11" * 64}
+    w2 = h1_registration(R.digest(r1), entry=2)
+    h1_log(tmp_path, [(0, "registration", w0), (0, "record", r0), (1, "registration", w1), (1, "record", r1),
+                      (2, "registration", w2)])
+    assert SC.h1_log(tmp_path / "log.jsonl", r1) == [w0, r0, w1]
+    assert SC.h1_log(tmp_path / "log.jsonl", r0) == [w0]
+    assert SC.h1_log(tmp_path / "nowhere.jsonl", {**r0, "previous": None}) == []
+    SC._chain([w0, r0, w1], r1)
+
+
+@pytest.mark.parametrize("change, reason", [
+    ("other-file", "the serve's H1 log names w0/registration.json as the record of digest"),
+    ("no-file", "a line of the serve's H1 log names no record file and digest"),
+    ("unchained", "the record's previous is no record the serve's H1 log names"),
+    ("not-json", "the record names a previous record, and the serve's H1 log isn't readable: JSONDecodeError"),
+    ("no-log", "the record names a previous record, so pass the deployment's log (--log)"),
+])
+def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_record(tmp_path, capsys, change, reason):
+    """The policy's log is read off the serve's H1 log only as it names its records: a line whose file isn't the record
+    of its digest, a line naming none, a log that never reaches R's previous or isn't JSON, or no log for an R naming
+    one, refuses the policy's case alone (one-stage's and the period's are still written)."""
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    h1 = serve / "h1"
+    if change == "other-file":
+        (h1 / "w0" / "registration.json").write_text(json.dumps({**w, "window": {**w["window"], "entry": 9}}))
+    elif change == "no-file":
+        (h1 / "log.jsonl").write_text(json.dumps({"digest": R.digest(w), "kind": "registration", "window": 0}) + "\n")
+    elif change == "unchained":
+        h1_log(h1, [(0, "registration", h1_registration(entry=5))])
+    elif change == "not-json":
+        (h1 / "log.jsonl").write_text("{\n")
+    else:
+        (h1 / "log.jsonl").unlink()
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
+                                  "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SC.PERIOD], out
+    assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
+
+
+@pytest.mark.parametrize("change, reason", [
+    ("table-leaves", "isn't the population program over its root's templates and the values its params' parameters "
+                     "name"),
+    ("template-type", "v1's params' parameters aren't its Program's program function's"),
+    ("value-type", "v1's params' parameter input-ids/0 is no template's and no registered value"),
+    ("none", "isn't the population program over its root's templates, so its program function's parameters"),
+])
+def test_v1s_parameters_name_the_windows_tables_and_are_its_programs(change, reason):
+    """The policy case's parameters are the ones the rebuilt population program over v1's templates and v1's tables has:
+    tables of other leaves, another template parameter's type or a table that isn't an array of values is refused, and
+    so is a window Program that takes tables when v1's params name none (a5's params before the v2 params)."""
+    w = h1_registration()
+    v1 = tied_v1_case(w)
+    ps = v1["params"]["parameters"]
+    at = {n: i for i, (n, _) in enumerate(ps)}
+    if change == "table-leaves":
+        ps[at[Cr.commit_rows(0, K)]][1] = Array(3, Bits(16)).to_json()
+    elif change == "template-type":
+        ps[at["0.x"]][1] = Array(SLOTS, Array(2, Bits(16))).to_json()
+    elif change == "value-type":
+        ps[at[Cr.commit_ids(0)]][1] = Bits(16).to_json()
+    else:
+        del v1["params"]["parameters"]
+    with pytest.raises(SC.Refused, match=reason.replace("(", r"\(").replace(")", r"\)")):
+        SC.inference_only_case(v1, 1, 1, [w])
+
+
+@lean
+def test_the_lean_check_accepts_the_policy_case_on_the_tied_record(tmp_path, inference_only_exe, toy_v1):
+    """`inference-only check` on the policy case over R with its log [W]: it reads W as the deployment's first record and
+    R as chained right after it, names R's digest, and accepts at no budget with the same profile as the toy's untied
+    record, so the window's tables, parameters no node reads, add no gate and no fresh-input bit. Without W in the log
+    R's chain breaks, and it rejects."""
+    w = h1_registration()
+    v1 = tied_v1_case(w)
+    case = SC.inference_only_case(v1, *SC.UNBOUNDED, [w])
+    got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
+    assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), "accept"), got
+    assert got["profile"]["blocks"] == [list(budgets(toy_v1, inference_only_exe, tmp_path / "s"))], got
+    case["params"]["log"] = []
+    got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
+    assert (got["protocol"], got["verdict"], got["reason"].split(":")[0]) == (INF, "reject", "trusted"), got
 
 
 @pytest.mark.parametrize("argv", [

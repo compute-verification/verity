@@ -1,15 +1,18 @@
-"""Sampled proofs' one-stage v1 case and the inference-only case for a served window, from its records audit, each
-beside its own Lean answer, in the directory form a composition of the window's subprotocols reads as a case (with
-``--v2``, one-stage v2's case too), though of the three only v1's is one a composite runs:
+"""A served window's cases, each on the window's registration record R and beside its own Lean answer, in the directory
+form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case and the
+inference-only case from its records audit, PoUW's period case held to the same record, and with ``--v2`` one-stage
+v2's case too:
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
-                    [--log FILE] [--v1-exe PATH] [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
+                    [--log FILE] [--period DIR] [--v1-exe PATH] [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
-``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case. Every case commits to the
-same bytes, the window's registration record (``window/case.json``'s commitment, the record the audit sampled against),
-and each Lean answer must name that record's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or
-nothing is written: that digest is what a composition's record tie compares.
+``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
+(``D/h1/log.jsonl``, `H1_LOG`) and PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`) where it holds them.
+Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
+H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
+`serve_tie`), and each must name R's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or nothing is
+written: that digest is what remote's record tie compares (`Core.Remote.windows`).
 
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
   (`a5.write_case`: the registration record, the evidence the audit's record was handed, the sessions' verdicts among
@@ -21,11 +24,14 @@ nothing is written: that digest is what a composition's record tie compares.
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
     ``--from-division`` read off the case's own division, `division_policy`, so the check confirms that the division
     complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
-    either no case is written), ``log`` (the deployment's records before this one, ``--log``; empty when the
-    record's ``previous`` is null), ``program`` (v1's params' Program as canonical text, the one the record's
-    ``program`` names) and ``parameters`` (its program function's, which the descriptor doesn't carry: the population
-    program rebuilt over its root's templates and held to the record's ``program``, `parameters`);
-  - commitment: the registration record;
+    either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
+    null, as the policy's check reads them: ``--log``, else with ``--serve-dir`` the serve's H1 log through R's
+    ``previous``, `h1_log`, each window's registration W and record R up to the window's W; empty when R names no
+    previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
+    ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
+    root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
+    ``program``, `parameters`);
+  - commitment: the registration record R;
   - evidence: ``owner`` per root node of the Program, ``theta`` and ``provenance``. The window's Program is its
     population program (`interface.Circuit.program`), one batch node per template holding that template's instances for
     every slot, so no division into one block a slot is a division of its root nodes: every non-input node is block 0,
@@ -34,20 +40,28 @@ nothing is written: that digest is what a composition's record tie compares.
     most k/c. The Program registers no root input (its inputs are `Input<w>`), so ``theta`` and ``provenance`` are
     empty and every input bit counts as fresh against α.
 
-  No composite may run it: the inference-only policy is a subprotocol of neither (`Core.Remote.components`,
-  `Core.Onsite.components`), so its answer is the policy's own check's and its directory no composition's case.
+  Both composites name the policy among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`), and
+  compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
+* **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
+  `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
+  ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
+  (`credit.commit_of`, as `Core.Remote.windowRecords` reads it): the case commits to the auditor's ledger, so the tie
+  is its windows'. A period with a window on another record, or on none, is refused here, before any composite runs,
+  and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
+  another record's work beside this window's. Without a period case none is made, and a composite names it missing.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
   (`a5.case_v2`: v1's case with the verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused
   when it commits to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
   ``case-v2-error.txt`` says why: v2 verifies one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk
   check` on the case and its blobs. Neither composite names v2, so its case is made only when asked.
 
-Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``inference-only/``,
+Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``inference-only/``, ``pouw-period/``,
 ``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and
-evidence, and v2's ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--from-division``, the
-inference-only case's ``policy.json``). A composition is handed only the directories whose answer's protocol is one of
-its product's subprotocols, so v1's and never the inference-only case's or v2's. The Lean runs on files in a 0700
-scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
+evidence, and v2's and the period's ``blobs``) and ``answer.json``, its Lean answer line (and, given
+``--from-division``, the inference-only case's ``policy.json``). A composition is handed only the directories whose
+answer's protocol is one of its product's subprotocols: remote's are v1's, the inference-only case's and the period's,
+never v2's. The Lean runs on files in a 0700 scratch directory under ``--private``; the period's answer is the one
+`pouw_piece.py` wrote. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
 and fresh-input bits. The lines go to a private log (a reason may quote a5's ``case-error.txt`` or
@@ -70,6 +84,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import period_check as PC
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.one_stage import verifier as VF
@@ -82,7 +98,12 @@ V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
 INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
 NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "nci_reference.py"
-DIRS = {V1: "sampled-proofs-v1", INFERENCE_ONLY: "inference-only", V2: "sampled-proofs-v2"}
+PERIOD = PC.ID
+DIRS = {V1: "sampled-proofs-v1", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period", V2: "sampled-proofs-v2"}
+#: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
+#: "file", "digest"}``, its file under the log's directory), and the period case `served_pouw.sh` has `pouw_piece.py` write.
+H1_LOG = Path("h1/log.jsonl")
+PERIOD_PIECE = Path("private/pouw/period")
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
 #: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
@@ -150,6 +171,34 @@ def v2_case(audit: Path) -> dict[str, Any]:
     return case
 
 
+def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
+    """PoUW's period case in ``d`` as `pouw_piece.py period` wrote it, its answer line and its verdict, once every window
+    of the period names the record of digest ``digest`` as its Commit record (`credit.commit_of`, as
+    `Core.Remote.windowRecords` reads each window's ``commit``): the record tie remote checks (`Core.Remote.windows`)."""
+    case = _json(d / "case.json")
+    _need(isinstance(case, dict) and CASE_KEYS <= set(case) <= CASE_KEYS | {"blobs"},
+          f"{d}/case.json is not a case: it holds {sorted(CASE_KEYS)} and its blobs")
+    try:
+        line = (d / "answer.json").read_text().strip()
+        answer = json.loads(line)
+    except (OSError, ValueError) as e:
+        raise Refused(f"the period's case has no answer line: {type(e).__name__}: {e}") from None
+    _need(isinstance(answer, dict) and answer.get("protocol") == PERIOD,
+          f"the period's answer is {answer.get('protocol') if isinstance(answer, dict) else None!r}'s, not {PERIOD}'s")
+    try:
+        windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
+    except (TypeError, ValueError, KeyError) as e:
+        raise Refused(f"the period's evidence names no windows: {type(e).__name__}: {e}") from None
+    _need(isinstance(windows, list) and windows != [], "the period's evidence names no windows")
+    for i, w in enumerate(windows):
+        got, why = Cr.commit_of(w.get("commit") if isinstance(w, Mapping) else None)
+        _need(why is None, f"window {i} of the period names no Commit record, so not the window's registration record "
+              f"{digest[:16]}…: {why[1] if why else ''}")
+        _need(got[0].hex() == digest, f"window {i} of the period names the Commit record {got[0].hex()[:16]}…, not the "
+              f"window's registration record {digest[:16]}…: remote's record tie rejects it")
+    return case, line, answer.get("verdict")
+
+
 def _reference():
     """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
     spec = importlib.util.spec_from_file_location("nci_reference", NCI_REFERENCE)
@@ -174,28 +223,80 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
         prev = R.digest(r)
 
 
-def parameters(desc: Mapping[str, Any], root: Any) -> list[list[Any]]:
+def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The deployment's records before ``rec``, oldest first, as the serve's H1 log ``path`` names them (`H1_LOG`), through
+    the one ``rec`` names as its ``previous``: under H1's tie each window's registration W and record R, up to the
+    window's own W, which its R is chained right after. Empty when ``rec`` names no previous record."""
+    if rec.get("previous") is None:
+        return []
+    try:
+        lines = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+    except (OSError, ValueError) as e:
+        raise Refused(f"the record names a previous record, and the serve's H1 log isn't readable: {type(e).__name__}: "
+                      f"{e}") from None
+    log = []
+    for x in lines:
+        _need(isinstance(x, dict) and isinstance(x.get("file"), str) and isinstance(x.get("digest"), str),
+              f"a line of the serve's H1 log names no record file and digest: {str(x)[:200]}")
+        r = _json(path.parent / x["file"])
+        _need(isinstance(r, dict) and R.digest(r) == x["digest"],
+              f"the serve's H1 log names {x['file']} as the record of digest {x['digest'][:16]}…, which it isn't")
+        log.append(r)
+        if x["digest"] == rec["previous"]:
+            return log
+    raise Refused("the record's previous is no record the serve's H1 log names, so its log doesn't chain from the "
+                  "deployment's first record")
+
+
+def _values(given: Any, members: Sequence[tuple[Any, int]]) -> tuple[tuple[str, int, int], ...]:
+    """The registered values a population takes ahead of its templates' parameters (`mixed_population_program`'s
+    ``values``), as ``given``, a program function's ``[[name, type], ...]``, names them: each parameter none of the
+    templates' (``<j>.<name>``), an array of values. Empty when ``given`` is None."""
+    if given is None:
+        return ()
+    own = {f"{j}.{name}" for j, (fn, _) in enumerate(members) for name, _ in fn.signature()[0]}
+    _need(isinstance(given, list) and all(isinstance(p, list) and len(p) == 2 and isinstance(p[0], str) for p in given),
+          "v1's params' parameters are not [[name, type], ...]")
+    values = []
+    for name, t in given:
+        if name in own:
+            continue
+        _need(isinstance(t, list) and len(t) == 3 and t[0] == "Array" and isinstance(t[2], list) and len(t[2]) == 2
+              and t[2][0] == "Value", f"v1's params' parameter {name} is no template's and no registered value: {t}")
+        values.append((name, t[1], t[2][1]))
+    return tuple(values)
+
+
+def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[list[Any]]:
     """The program function's ``[[name, type], ...]``, which the descriptor doesn't carry (it inlines the function into
     its root): the population program (`population.mixed_population_program`, or `population_program` for one template)
-    rebuilt over the root's template batches in order, held to the descriptor's digest."""
+    rebuilt over the root's template batches in order, held to the descriptor's digest. ``given``, v1's own copy where
+    its params carry one, names the registered values the population takes ahead of its templates' parameters
+    (`_values`), and must be the rebuilt program's."""
     from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
     from verity.ml.circuits.program import is_input
 
     members = [(n.fn, getattr(n, "n", 1)) for n in root.body.nodes if not is_input(n.fn)]
-    builds = [lambda v: mixed_population_program(members, version=v)]
-    if len(members) == 1:
+    values = _values(given, members)
+    builds = [lambda v: mixed_population_program(members, version=v, values=values)]
+    if len(members) == 1 and not values:
         builds.append(lambda v: population_program(*members[0], version=v))
     want = codec.program_digest(dict(desc))
     for build in builds:
         for v in POPULATION_VERSIONS:
+            if values and v == 0:
+                continue
             try:
                 p = build(v)
             except (ValueError, TypeError) as e:
                 raise Refused(f"v1's Program isn't a population program: {type(e).__name__}: {e}") from None
             if codec.program_digest(p) == want:
-                return [[n, t.to_json()] for n, t in p.fn.signature()[0]]
-    raise Refused("v1's Program isn't the population program over its root's templates, so its program function's "
-                  "parameters aren't known")
+                got = [[n, t.to_json()] for n, t in p.fn.signature()[0]]
+                _need(given is None or given == got, "v1's params' parameters aren't its Program's program function's")
+                return got
+    raise Refused("v1's Program isn't the population program over its root's templates"
+                  + (" and the values its params' parameters name" if values else "")
+                  + ", so its program function's parameters aren't known")
 
 
 def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
@@ -215,7 +316,7 @@ def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamm
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Refused(f"v1's Program doesn't decode: {type(e).__name__}: {e}") from None
     params = {"alpha": _ratio(alpha), "gamma": gamma, "log": [dict(r) for r in log],
-              "parameters": parameters(desc, root), "program": text}
+              "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
 
@@ -297,38 +398,57 @@ def audit_of(a: argparse.Namespace) -> Path:
     return found[0]
 
 
+def period_of(a: argparse.Namespace) -> Path | None:
+    """The period case's directory: ``--period``, else with ``--serve-dir`` `PERIOD_PIECE` when it holds a case."""
+    if a.period is not None:
+        return a.period
+    if a.serve_dir is not None and (a.serve_dir / PERIOD_PIECE / "case.json").is_file():
+        return a.serve_dir / PERIOD_PIECE
+    return None
+
+
 def produce(a: argparse.Namespace) -> int:
-    private, bad = a.private.resolve(), 0
+    private, bad, period = a.private.resolve(), 0, period_of(a)
     try:
         audit = audit_of(a)
         v1 = window_case(audit)
-        _, digest = record_of(v1)
+        rec, digest = record_of(v1)
     except Refused as e:
-        for id in [V1, INFERENCE_ONLY] + ([V2] if a.v2 else []):
+        for id in [V1, INFERENCE_ONLY] + ([PERIOD] if period else []) + ([V2] if a.v2 else []):
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
 
     kept: dict[str, dict[str, Any]] = {}
 
-    def one(id: str, make, exe) -> None:
+    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any) -> None:
+        write(private / DIRS[id], case, line, kept.get(id))
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict},
+                                   sort_keys=True), flush=True)
+
+    def refused(id: str, e: Exception) -> None:
         nonlocal bad
+        bad = 1
+        print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
+
+    def one(id: str, make, exe) -> None:
         try:
             case = make()
             answer, line = lean_answer(exe(), case, private / "scratch")
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
-            bad = 1
-            print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
-            return
-        write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")},
-                                   sort_keys=True), flush=True)
+            return refused(id, e)
+        written(id, case, line, answer.get("verdict"))
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*INFERENCE_ONLY_LEAN))
 
     def inference_only() -> dict[str, Any]:
-        log = _json(a.log) if a.log is not None else []
+        if a.log is not None:
+            log = _json(a.log)
+        elif a.serve_dir is not None and (a.serve_dir / H1_LOG).is_file():
+            log = h1_log(a.serve_dir / H1_LOG, rec)
+        else:
+            log = []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
         if not a.from_division:
             _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha "
@@ -339,6 +459,11 @@ def produce(a: argparse.Namespace) -> int:
         return inference_only_case(v1, alpha, gamma, log)
 
     one(INFERENCE_ONLY, inference_only, inference_only_exe)
+    if period is not None:
+        try:
+            written(PERIOD, *period_case(period, digest))
+        except Refused as e:
+            refused(PERIOD, e)
     if a.v2:
         one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
     return bad
@@ -360,7 +485,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--gamma", type=int, help="the policy's Γ: gates an inference block")
     ap.add_argument("--from-division", action="store_true",
                     help="α and Γ read off the case's own division (division_policy) instead of given")
-    ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list")
+    ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list "
+                    "(default with --serve-dir: its H1 log's, h1_log)")
+    ap.add_argument("--period", type=Path, help="PoUW's period case, pouw_piece.py period's --out (default with "
+                    f"--serve-dir: its {PERIOD_PIECE} when it holds a case)")
     ap.add_argument("--v1-exe", help=f"{V1_LEAN[1]} (default: built here)")
     ap.add_argument("--inference-only-exe", help=f"{INFERENCE_ONLY_LEAN[1]} (default: built here)")
     ap.add_argument("--v2", action="store_true", help="one-stage v2's case too (v2_case), in sampled-proofs-v2/")
