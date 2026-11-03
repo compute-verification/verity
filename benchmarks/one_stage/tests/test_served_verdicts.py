@@ -1358,6 +1358,37 @@ def test_a_follow_on_refuses_a_copy_unlike_the_served_nodes_another_setting_a_no
     assert (rc, lines, order) == (3, [line], []), lines
 
 
+ONLY = "PREFLIGHT_ONLY: nothing kept, built or served"
+DEFERS = "so step 6 defers V3c's audit and the composite to a follow-on"
+
+
+@pytest.mark.parametrize("extra, said", [
+    ({}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
+    (TIES, "512 GB: the serve's lease 150 min, capped at 160 GB"),
+    ({**TIES, "LEASE_MEM_GB": "64"}, "512 GB: the serve's lease 150 min, capped at 64 GB"),
+    ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+])
+def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
+        tmp_path, extra, said):
+    """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
+    minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node) and, on a node short of
+    V3c's audit's memory, its deferral. Nothing runs, and neither the serve root nor C-Flock's work dir is made."""
+    rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                    HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
+    assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
+    assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
+
+
+def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
+    """A follow-on under PREFLIGHT_ONLY passes its own preflight (the deferral's settings, the audit's memory, the served
+    node's tree) and stops before its copy's check or V3c's audit."""
+    assert _deferred(tmp_path).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
+    assert (rc, lines, order) == (0, [f"PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral. {ONLY}"],
+                                  [])
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
