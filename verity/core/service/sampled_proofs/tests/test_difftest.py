@@ -889,24 +889,33 @@ def select(j):
 
 
 def slots(j):
-    """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
-    (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes (`program.is_input`),
-    each its own proof block. A proof block's slot is its index in that order, and the checked proof blocks are
-    `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
+    """`Slots.select`: the claims' partition over the select piece's program and query, one class, and its sample's checked
+    proof blocks. The strata are `partition.strata`'s, each unit a proof block: its gates (`partition.unit_gates`), then
+    `[g, g + 1]` for each gate of the root's input nodes (`program.is_input`) it owns, in gate order, read gate by gate off
+    the program's circuit: an input's owner is the first unit, in unit order, one of whose gates has it as an operand, and
+    an input no unit reads is in no proof block. A proof block's slot is its index in that order, and the checked proof
+    blocks are `(slot, 0)` of each unit the sample proves (`draw.proved`), in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
     gates = P.unit_gates(program, j["query"])
-    pop = [[{"pus": [list(gates[u])], "unit": u} for lo, hi in rs for u in range(lo, hi)]
-           for _t, rs in P.strata(program, j["query"])]
     body = program.root.body
-    inputs = [{"pus": [[g, g + 1]], "unit": None} for k, node in enumerate(body.nodes) if is_input(node.fn)
-              for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
-    classes = [pop, [inputs] if inputs else []]
+    inputs = {g for k, node in enumerate(body.nodes) if is_input(node.fn) for g in range(body.offsets[k], body.offsets[k + 1])}
+    owner: dict[int, int] = {}
+    for u, ivs in enumerate(gates):
+        for lo, hi in ivs:
+            for h in range(lo, hi):
+                for g in program.circuit.gate(h).operands:
+                    if g in inputs:
+                        owner.setdefault(g, u)
+    owned: dict[int, list[int]] = {}
+    for g in sorted(owner):
+        owned.setdefault(owner[g], []).append(g)
+    pop = [[{"pus": [list(iv) for iv in gates[u]] + [[g, g + 1] for g in owned.get(u, [])], "unit": u}
+            for lo, hi in rs for u in range(lo, hi)] for _t, rs in P.strata(program, j["query"])]
     proved = set(DR.proved(out["draw"]))
-    blocks = [b for c in classes for s in c for b in s]
-    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+    blocks = [b for s in pop for b in s]
+    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] in proved], "classes": [pop]}
 
 
 def bound(j):
@@ -3089,40 +3098,45 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the proof blocks' gates and
-    the input class's are every gate of the program once; and the checked proof blocks are the sampled proof blocks' slots and
-    every input slot, in slot order."""
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; each proof block is its
+    instance's gates, then the inputs it reads, so the proof blocks' gates are every gate of the program once; and the
+    checked proof blocks are the sampled proof blocks' slots, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
     case = {"closure": None, "program": desc, "query": query, "rule": {"law": "subset:4", "rule": "law"},
             "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    assert len(out["classes"]) == 1
     assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    blocks = [b for c in out["classes"] for s in c for b in s]
+    blocks = [b for s in out["classes"][0] for b in s]
     gates = sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi))
     assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
     units = [b["unit"] for b in blocks]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
-    assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
+    assert out["checked"] == [[v, 0] for v in sorted(drawn)]
 
 
 def test_the_call_queries_cut_call_by_call(pieces):
     """On a program of root Calls, Lean's slots are the Python's whole under `Q_word` at `X = 16` and `Q_call` at `X = 8`:
     the strata are the Calls' Definitions, `FORK`'s `Q_word` units two output units and its committed interior value, the
-    first's gate span holding the second's; both refuse the widths one-stage doesn't apply, and agree on a Call whose
-    `Q_word` unit commits 32 bits, in the 32-bit class, which `Q_call` at `X = 16` refuses."""
+    first's gates exactly its own, two intervals with the second's between them; under each query every gate of the program
+    is in one proof block once; both refuse the widths one-stage doesn't apply, and agree on a Call whose `Q_word` unit
+    commits 32 bits, in the 32-bit class, which `Q_call` at `X = 16` refuses."""
     desc = json.loads(_calls((0, 2, 0, 3)))
+    size = PROGRAMS[PO.program_sha512(desc)].circuit.size
     case = {"closure": None, "program": desc, "rule": {"law": "subset:2", "rule": "law"},
             "source": hashlib.shake_256(b"calls").hexdigest(400), "work_table": None}
     word = slots({**case, "query": _json(PO.query())})
     assert D.replay(SLOTS, {**case, "query": _json(PO.query())}, pieces) == ("output", D.canonical(word))
     assert [[r["unit"] for r in s] for s in word["classes"][0]] == [[0, 4], [1, 2, 3], [5]]
-    (first,), (second,) = word["classes"][0][1][0]["pus"], word["classes"][0][1][1]["pus"]
-    assert first[0] < second[0] < second[1] < first[1]
+    first, second = word["classes"][0][1][0]["pus"], word["classes"][0][1][1]["pus"]
+    assert first[0][1] <= second[0][0] < second[0][1] <= first[1][0]
     call = slots({**case, "query": _json(PO.call_query(8))})
     assert D.replay(SLOTS, {**case, "query": _json(PO.call_query(8))}, pieces) == ("output", D.canonical(call))
     assert [[r["unit"] for r in s] for s in call["classes"][0]] == [[0, 5], [1, 2, 3, 4], [6]]
+    for out in (word, call):
+        assert sorted(g for s in out["classes"][0] for b in s for lo, hi in b["pus"] for g in range(lo, hi)) == list(range(size))
     wide = json.loads(_calls((0, 4)))
     taken = {**case, "program": wide, "query": _json(PO.query())}
     assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken))))

@@ -113,8 +113,8 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
                                     register=False))
     prog = Program(bind(CompositeDefinition("OneStageTestSharedProgram", 0, (), lambda S: call.signature(),
                                             lambda B, S, x: B.call(call, x), register=False)))
-    assert P.unit_gates(prog, PO.call_query(16)) == [(2, 5), (5, 6)]
-    assert P.unit_gates(prog, PO.call_query(8)) == [(2, 3), (3, 4), (5, 6)]
+    assert P.unit_gates(prog, PO.call_query(16)) == [[(2, 5)], [(5, 6)]]
+    assert P.unit_gates(prog, PO.call_query(8)) == [[(2, 3)], [(3, 4)], [(5, 6)]]
 
 
 XOR3 = bind(CompositeDefinition("OneStageTestTriple", 0, (), lambda S: ((("x", Array(3, Value(8))),), Value(8)),

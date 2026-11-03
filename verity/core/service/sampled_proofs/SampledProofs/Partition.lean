@@ -183,39 +183,147 @@ their first unit. -/
 def strata (p : Program) (query : Json) : V (Array (String × Array (Nat × Nat))) := do
   return Flock.Draw.strataOf ((← evaluate p query).map fun r => (r.template, r.first, r.count))
 
-/-- The gate span `[lo, hi)` of each of `Q_word` Call `(k, d, c)`'s units in root gates: from the least to past the
-greatest gate it owns. -/
-def wordGates (P : Flock.Program.Prog) (k d : Nat) (c : Flock.Qword.DCut) : V (Array (Nat × Nat)) := do
-  let gr ← Flock.Extract.graph P d (full := false)
-  let base := ((P.defs[P.root]!).body.offsets[k]!)
-  let own := c.owner
-  let mut span : Array (Option (Nat × Nat)) := Array.replicate c.units none
-  for i in [0:own.size] do
-    let g := base + gr.keep[i]!
-    span := span.modify own[i]! fun
-      | none => some (g, g + 1)
-      | some (lo, hi) => some (min lo g, max hi (g + 1))
-  span.mapM fun s => match s with
-    | some s => pure s
-    | none => throw s!"query-refused: a unit of {(P.defs[d]!).key} owns no gate"
+/-- Gate `g` added to a unit's gates, as ascending, disjoint intervals with adjacent ones merged. -/
+def pushGate (ivs : Array (Nat × Nat)) (g : Nat) : Array (Nat × Nat) :=
+  match ivs.back? with
+  | some (lo, hi) => if hi == g then ivs.pop.push (lo, g + 1) else ivs.push (g, g + 1)
+  | none => #[(g, g + 1)]
 
-/-- `partition.unit_gates`: each unit's gates `[lo, hi)` in root gates, by unit: an instance's (`TemplateQuery.gates`),
-a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
-def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
+/-- The gates each of `Q_word` Call `(k, d, c)`'s units owns, relative to the Call's first gate, as ascending intervals. -/
+def wordGates (P : Flock.Program.Prog) (d : Nat) (c : Flock.Qword.DCut) : V (Array (Array (Nat × Nat))) := do
+  let gr ← Flock.Extract.graph P d (full := false)
+  let own := c.owner
+  let mut out : Array (Array (Nat × Nat)) := Array.replicate c.units #[]
+  for i in [0:own.size] do
+    out := out.modify own[i]! (pushGate · gr.keep[i]!)
+  if out.any (·.isEmpty) then throw s!"query-refused: a unit of {(P.defs[d]!).key} owns no gate"
+  return out
+
+/-- An activation the query cuts into units: member `m` of root node `k`, of Definition `d`, its units from `first` on,
+each unit's gates relative to the activation's first gate, as ascending intervals. -/
+structure Act where
+  k : Nat
+  m : Nat
+  d : Nat
+  first : Nat
+  units : Array (Array (Nat × Nat))
+  deriving Inhabited
+
+/-- The activation's first gate in root gates. -/
+def Act.base (P : Flock.Program.Prog) (a : Act) : Nat :=
+  (P.defs[P.root]!).body.offsets[a.k]! + a.m * (P.defs[a.d]!).gates
+
+/-- The query's units by activation, in unit order: each instance of a template query its member's whole activation, and
+each `Q_call` or `Q_word` Call its units, a `Q_call` unit its interval and a `Q_word` unit the gates it owns. -/
+def acts (p : Program) (query : Json) : V (Array Act) := do
   let rs ← evaluate p query
   let q := getD (build (Flock.hexOf p.sha512) query) "query"
   let name := (q.getObjValAs? String "name").toOption.getD ""
   let version := (nat? (getD q "version")).getD 0
   let X := (nat? (getD (getD q "params") "X")).getD 0
+  let P := p.prog
+  let root := (P.defs[P.root]!).body
   if (Flock.TemplateQuery.templatesOf name version (getD q "params")).isSome then
-    return ← (Array.range (Flock.TemplateQuery.population rs)).mapM fun u =>
-      match Flock.TemplateQuery.gates p.desc rs u with
-      | some g => pure g
-      | none => throw s!"unit {u} has no instance"
-  let root := (p.prog.defs[p.prog.root]!).body
+    return rs.flatMap fun r =>
+      let d := root.nodes[r.node]!.fn
+      (Array.range r.count).map fun m => { k := r.node, m, d, first := r.first + m, units := #[#[(0, (P.defs[d]!).gates)]] }
   if name == "Q_word" then
-    return ← (← wordCalls p.prog).foldlM (fun acc (k, d, c) => return acc ++ (← wordGates p.prog k d c)) #[]
-  return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
-    acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
+    let mut out := #[]
+    let mut first := 0
+    for (k, d, c) in ← wordCalls P do
+      let units ← wordGates P d c
+      out := out.push { k, m := 0, d, first, units }
+      first := first + units.size
+    return out
+  let mut out := #[]
+  let mut first := 0
+  for c in ← Flock.Qcall.evaluate P X do
+    out := out.push { k := c.k, m := 0, d := c.d, first, units := c.c.units.map fun u => #[(u.lo, u.hi)] }
+    first := first + c.c.units.size
+  return out
+
+/-- The activations' units' gates in root gates, by unit. -/
+def gatesOf (P : Flock.Program.Prog) (as : Array Act) : Array (Array (Nat × Nat)) :=
+  as.flatMap fun a => let b := a.base P; a.units.map (·.map fun (lo, hi) => (b + lo, b + hi))
+
+/-- `partition.unit_gates`: each unit's gates in root gates, as ascending intervals, by unit: an instance's whole activation,
+a `Q_call` unit's interval of its Call, or the gates a `Q_word` unit owns. -/
+def unitGates (p : Program) (query : Json) : V (Array (Array (Nat × Nat))) := return gatesOf p.prog (← acts p query)
+
+/-- The gates of one activation of Definition `d` that read each of its parameter leaves, relative to its first gate,
+ascending: every operand of every gate, a primitive's being its parameters' leaves in order. -/
+def leafReaders (P : Flock.Program.Prog) (d : Nat) : V (Array (Array Nat)) := do
+  let defn := P.defs[d]!
+  let lo := defn.paramLeaves
+  if defn.prim then return Array.replicate lo #[0]
+  let starts := (defn.params.foldl (fun (acc : Array Nat × Nat) (_, t) => (acc.1.push acc.2, acc.2 + t.leaves)) (#[], 0)).1
+  let mut out : Array (Array Nat) := Array.replicate lo #[]
+  let mut stack : Array (Flock.Program.Scope × Nat × Nat) := #[(.top d lo (some starts), 0, 0)]
+  for _ in [0:Flock.Steps.FUEL] do
+    if stack.size == 0 then break
+    let (sc, k, m) := stack.back!
+    let body := (P.defs[sc.d]!).body
+    if k ≥ body.nodes.size then
+      stack := stack.pop
+      continue
+    let node := body.nodes[k]!
+    if m ≥ node.members then
+      stack := stack.set! (stack.size - 1) (sc, k + 1, 0)
+      continue
+    stack := stack.set! (stack.size - 1) (sc, k, m + 1)
+    let callee := P.defs[node.fn]!
+    let o := sc.off + body.offsets[k]!
+    if !callee.prim then
+      stack := stack.push (.child sc node.fn (o + m * callee.gates) k m, 0, 0)
+      continue
+    let j := o + m - lo
+    for i in [0:node.args.size] do
+      let a := node.args[i]!
+      let cnt := if node.form == .batch && a.dims.isSome then (callee.params[i]!.2).leaves else a.seq.count
+      for t in [0:cnt] do
+        let g ← Flock.Program.resolve P sc (if node.form == .batch then a.memberRef m t else a.seq.get t)
+        if g < lo then out := out.modify g fun rs => if rs.back? == some j then rs else rs.push j
+  if stack.size > 0 then throw "a walk of more steps than this verifier follows"
+  return out
+
+/-- Each unit's inputs, by unit: the gates of the root's input nodes whose owner, the first unit in unit order with a gate
+that reads it, is that unit, in gate order. An input no unit reads is no unit's. -/
+def unitInputs (p : Program) (as : Array Act) : V (Array (Array Nat)) := do
+  let P := p.prog
+  let root := (P.defs[P.root]!).body
+  let ins := (Array.range root.nodes.size).filterMap fun k =>
+    if Flock.Program.isInputId (P.defs[root.nodes[k]!.fn]!).key then some (root.offsets[k]!, root.offsets[k + 1]!) else none
+  let mut owner : Std.HashMap Nat Nat := {}
+  let mut memo : Std.HashMap Nat (Array (Option Nat)) := {}
+  for a in as do
+    let defn := P.defs[a.d]!
+    let lead ← match memo[a.d]? with
+      | some l => pure l
+      | none => do
+        let rs ← leafReaders P a.d
+        if a.units.size == 1 && a.units[0]! == #[(0, defn.gates)] then
+          pure (rs.map fun r => if r.isEmpty then none else some 0)
+        else
+          let mut at_ : Array (Option Nat) := Array.replicate defn.gates none
+          for lu in [0:a.units.size] do
+            for (x, y) in a.units[lu]! do
+              for g in [x:y] do at_ := at_.set! g (some lu)
+          pure (rs.map fun r => r.foldl (fun acc j => match at_[j]!, acc with
+            | some u, some v => some (min u v)
+            | some u, none => some u
+            | none, acc => acc) none)
+    memo := memo.insert a.d lead
+    let sc := P.child P.rootScope a.k a.m
+    let mut ℓ := 0
+    for i in [0:defn.params.size] do
+      for t in [0:(defn.params[i]!.2).leaves] do
+        if let some lu := lead[ℓ]! then
+          let g ← Flock.Program.resolve P sc ⟨true, i, t⟩
+          if ins.any fun (x, y) => x ≤ g && g < y then
+            let u := a.first + lu
+            owner := owner.insert g (min u (owner.getD g u))
+        ℓ := ℓ + 1
+  let n := as.foldl (· + ·.units.size) 0
+  return (owner.toArray.qsort (·.1 < ·.1)).foldl (fun out (g, u) => out.modify u (·.push g)) (Array.replicate n #[])
 
 end SampledProofs.Partition
