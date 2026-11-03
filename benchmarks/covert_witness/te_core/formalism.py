@@ -45,7 +45,7 @@ Where Fit holds, Δ + sτ ≤ k bounds u_in by k through the cap, so x0's bound 
 disagree.
 
 **The context charge** (`Measured.context`, te_core.rescore's `--charge-context`; a sensitivity for A1, off by default,
-the coordinator's 3 Nov 01:30Z ask). A1 charges a block a per token it serves. The charge adds, for each token whose
+the coordinator's ask of 3 Nov). A1 charges a block a per token it serves. The charge adds, for each token whose
 affected work a block does without computing the token from its inputs, at each layer the block works on for it, the
 keys and values of every earlier token of the sequence at that layer that the block doesn't compute itself:
 κ = 2·d_kv·16 bits per earlier token per layer, each counted once per block. Only K/V that depend on θ' are charged,
