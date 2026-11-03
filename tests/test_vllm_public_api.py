@@ -52,6 +52,9 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
                                                 "tie (Tables)",
+    "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by NciCheck.Count's "
+                                                "rule: its session Definition, gates by the gate table, fresh bits at the "
+                                                "verifier's pins, and a day's public counts (block-counts)",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "

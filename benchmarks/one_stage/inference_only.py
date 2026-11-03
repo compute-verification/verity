@@ -173,8 +173,8 @@ def digest(doc: Any) -> str:
 
 def serve_facts(model: str, revision: str) -> dict[str, Any]:
     """What φ reads of an H200 int8 serve (`prove_path.phi_of_serve`, `registered_seed`), as its ``serve.json`` records it."""
+    from verity_vllm import TargetProfile
     from verity_vllm.engine.served_seed import DEFAULT_SEED
-    from verity_vllm.program.frontend.target_profile import TargetProfile
 
     target = TargetProfile.default().with_overrides(**H200).to_json()
     return {"model": model, "revision": revision, "target": target, "execution": "bi-eager", "default_seed": DEFAULT_SEED}
@@ -514,7 +514,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pol = json.loads(a.policy.read_text()) if a.policy.is_file() else None
     doc = json.loads(a.circuit.read_text()) if a.circuit.is_file() else None
     from verity.ml.windows import interface as IF
-    from verity_vllm.records.weights_registration import WeightsRegistration
+    from verity_vllm.program.predict.window_weights import WeightsRegistration
 
     pins = (dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)
             if a.pins is not None and a.pins.is_file() else None)

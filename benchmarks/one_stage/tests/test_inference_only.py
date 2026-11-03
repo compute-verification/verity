@@ -23,6 +23,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
+from verity.ml.definitions.registry.catalog import load  # noqa: E402
 from verity.ml.definitions.registry.sampling import bit_at  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.program.predict import block_counts as BC  # noqa: E402
@@ -36,12 +37,18 @@ STARTED = 1_762_000_000.0
 BEFORE, AFTER = "2025-11-01T12:26:39+00:00", "2025-11-01T12:26:41+00:00"
 
 
+def _fn(tid: str):
+    """``tid``'s Definition, from the whole registry."""
+    load()
+    return IF.resolve(tid)
+
+
 @pytest.fixture(scope="module")
 def small() -> dict:
     """`test_block_counts`' record: two slots and three steps, four `GEMM` units (a slot's two in one entry) and six
     `ROPE` units (a slot's three across the steps)."""
     entries = (IF.InferenceEntry(GEMM, 0, (2, 2), ("slot", "-"), 0), IF.InferenceEntry(ROPE, 0, (3, 2), ("step", "slot"), 0))
-    circuit = IF.Circuit("test/blocks", ((BC.resolve(GEMM), 4), (BC.resolve(ROPE), 6)),
+    circuit = IF.Circuit("test/blocks", ((_fn(GEMM), 4), (_fn(ROPE), 6)),
                          blocks=IF.Blocks(slots=2, steps=3, inference=entries))
     return IF.descriptor_record(circuit, 1)
 
@@ -50,7 +57,7 @@ def small() -> dict:
 def feed() -> dict:
     """Two slots of `FEED`, which reads `BitAtx32_v1` (no Boolean version), one step."""
     entries = (IF.InferenceEntry(FEED, 0, (2,), ("slot",), 0),)
-    return IF.descriptor_record(IF.Circuit("test/feed", ((BC.resolve(FEED), 2),),
+    return IF.descriptor_record(IF.Circuit("test/feed", ((_fn(FEED), 2),),
                                            blocks=IF.Blocks(slots=2, steps=1, inference=entries)), 1)
 
 
