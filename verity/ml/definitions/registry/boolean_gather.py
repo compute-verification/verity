@@ -10,6 +10,8 @@ bits (`verity.ml.circuits.boolean.trace`).
     GatherI32x{V}_v2        (token: Array<32, Value<1>>, column: Array<V, Array<32, Value<1>>>) -> Array<32, Value<1>>
                             word view: GatherI32x{V}_v1 (`dsv4_decode_indices.gather_i32`), column[token], else -1
     GatherI32x{N}u{k}_v1    the i32 levels, -1 past N
+    BitAtx{W}_v2            (word: Array<W, Value<1>>, i: Array<32, Value<1>>) -> Value<1>
+                            word view: BitAtx{W}_v1 (`sampling.bit_at`), bit i of the word for 0 <= i < W (signed), else 0
 
 A gather of at most `CHUNK` (1024) words is traced from `verity.ml.circuits.boolean.gather.gather`: the multiplexer tree over the
 token's 32 bits, a word past the end standing for the constant 0x7FFF, so a token outside [0, V) (a negative one is at least
@@ -25,6 +27,9 @@ token, share no gate, and since its body reads only its parameters and returns e
 
 The i32 gather is the same tree over 32-bit words with -1 (0xFFFFFFFF) for the word past the end, made on demand as its word
 primitive is (`verity.ml.definitions.boolean._families`).
+
+`BitAtx{W}_v2` is the gather of the word's W bits as one-bit words by i, 0 past the end, traced whole and made on demand as its
+word primitive is: an i outside [0, W) (a negative one is at least 2^31 unsigned) selects 0 with no separate range check.
 """
 from __future__ import annotations
 
@@ -40,7 +45,7 @@ from verity.ml.circuits.boolean.trace import definition
 from . import b1
 from . import prims as P
 
-__all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "FILL", "I32_FILL", "gather_bf16", "gather_i32", "gather_index"]
+__all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "FILL", "I32_FILL", "bit_at", "gather_bf16", "gather_i32", "gather_index"]
 
 BIT = BL.BIT
 WORD = Array(16, BIT)
@@ -135,6 +140,26 @@ def gather_i32(vocab: int) -> CompositeDefinition:
             f"GatherI32x{vocab}", 2, vocab, 32, "token", DI.gather_i32(vocab),
             f"GatherI32x{vocab}_v1 on bits: column[token] for 0 <= token < {vocab} (i32), else -1; the multiplexer tree over the "
             "token's bits", "I32")
+    return d
+
+
+def _bit_at(C, word, i):
+    return gather(C, i, [[b] for b in word], 0)
+
+
+def bit_at(width: int) -> CompositeDefinition:
+    """`BitAtx{W}_v2`: `BitAtx{W}_v1` on bits, bit i of the word for 0 <= i < W (i32), else 0; the multiplexer tree over i's
+    bits."""
+    from . import sampling
+
+    if width < 1:
+        raise ValueError(f"a word has at least one bit, not {width}")
+    d = _GATHERS.get(("Bit", width))
+    if d is None:
+        d = _GATHERS[("Bit", width)] = definition(
+            f"BitAtx{width}", 2, _bit_at, (("word", Array(width, BIT)), ("i", TOKEN)), BIT, word=sampling.bit_at(width),
+            doc=f"BitAtx{width}_v1 on bits: bit i of the word for 0 <= i < {width} (i32), else 0; the multiplexer tree over "
+                "i's bits")
     return d
 
 

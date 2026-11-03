@@ -1,5 +1,5 @@
-"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers and embedding agree with `GatherBf16x{V}_v1` and
-`Embedding_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are pinned by gate count and
+"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers, embedding and bit selection agree with
+`GatherBf16x{V}_v1`, `Embedding_v1` and `BitAtx{W}_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are pinned by gate count and
 program digest, and cut under `Q_word_v1{X=16,W=32}` into one unit of 16 output bits per gather, with no gate two gathers compute.
 The gathers over more than 1024 words are trees of Calls whose chunk Definition takes seconds to compile, so their tests are
 slow; the quick ones cover the multiplexer tree traced whole."""
@@ -32,8 +32,10 @@ PINS = {
     "GatherBf16x1024u10_v1": (16368, 32736, 0, "342ae6660d384c030788a4e8d1acd46784bb40d4bd1c49f027378765bc35c19036ff5ec3d241ca671d94f34375f48902539942fe64097d8ac4d2d1cb44796b6b"),
     "GatherBf16x1100_v2": (18016, 35600, 405, "13b5d96e04c3c84641ee9330dd9e2d1a14224fc79cf0603aa9216b8e135f1db500f807f3f1a5568c2eec14653871caac90ff709e1fd3b400739046ae18e28d77"),
     "Embedding_v2{V=1100,H=2}": (36032, 71200, 810, "01796fa581b87c15391b8bc98d1789432a6a82b1e928435b46853c81bd15346ebc0d78acaa6db9fdc2baadecb90849af27852c9de053dad3899c6c369d8c0387"),
+    "BitAtx32_v2": (58, 89, 0, "fb8ec4e743bf5393db3093af9048767760a22c67808dd984dc9439415d269cfa6dc1cdbeaee5dfb4f5343cf60ac71830a41ac44fbf6153febf8d229aa6db5c06"),
 }
-QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16)]
+QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16),
+         bind(BGA.bit_at(32))]
 TREES = [bind(BGA.gather_index(1024, 10)), bind(BGA.gather_bf16(1100)), bind(BGA.Embedding, V=1100, H=2)]
 
 
@@ -113,6 +115,18 @@ def test_the_embedding_agrees_with_embedding_v1(V: int, H: int) -> None:
     _agree(e, tok, rng.integers(0, 1 << 16, (len(tok), V, H), dtype=np.uint64).astype(np.uint16))
 
 
+@pytest.mark.parametrize("width", [1, 5, 32])
+def test_bit_at_agrees_with_bit_at_v1(width: int) -> None:
+    """Every index from -3 to W + 2, i32's extremes, then in-range and arbitrary indices over random words."""
+    b = bind(BGA.bit_at(width))
+    assert word_of(b).id == f"BitAtx{width}_v1" and BGA.bit_at(width) is BGA.bit_at(width)
+    rng = np.random.default_rng(width)
+    edge = list(range(-3, width + 3)) + [(1 << 31) - 1, 1 << 31, (1 << 32) - 1]
+    i = np.array([e % (1 << 32) for e in edge] + list(rng.integers(0, width, 300)) + list(rng.integers(0, 1 << 32, 100)),
+                 np.uint32)
+    _agree(b, rng.integers(0, 1 << width, len(i), dtype=np.uint64), i)
+
+
 def test_the_embedding_over_a_tree_agrees_with_embedding_v1() -> None:
     e = bind(BGA.Embedding, V=1100, H=3)
     rng = np.random.default_rng(11)
@@ -147,3 +161,5 @@ def test_what_a_gather_cannot_select_is_refused() -> None:
             BGA.gather_index(n, k)
     with pytest.raises(ValueError, match="at least one word"):
         BGA.gather_bf16(0)
+    with pytest.raises(ValueError, match="at least one bit"):
+        BGA.bit_at(0)

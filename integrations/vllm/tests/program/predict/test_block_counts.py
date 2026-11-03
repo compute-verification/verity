@@ -19,7 +19,9 @@ from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
 
 from verity.ml.circuits import codec, partition_v2 as PV2
+from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.population import population_program
+from verity.ml.definitions.boolean import gate_table
 from verity.ml.windows import interface as IF
 
 REFERENCE = Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py"
@@ -128,14 +130,22 @@ def test_the_judgment_holds_its_fields_alone(small):
     assert "ab" * 64 not in text and "test/blocks" not in text
 
 
-def test_a_primitive_with_no_boolean_version_is_unpriced():
-    """`TokenFeed_v1` reads `BitAtx32_v1`, which no Boolean Definition names as its word: the table leaves it out and a
-    block lists its activations apart, its gates not guessed."""
+def test_the_gate_table_prices_bit_at_by_its_boolean_version():
+    """`TokenFeed_v1` reads `BitAtx32_v1`, which the one gate table (`definitions.boolean.gate_table`) prices by
+    `BitAtx32_v2`: 147 gates, every primitive priced, so a feed's gates are its primitives' sum."""
     feed = BC.resolve("TokenFeed_v1{NP=4,FIRST=false}")
-    table, unpriced = BC.gate_table(BC.primitives([feed]))
-    assert unpriced == ["BitAtx32_v1"] and "BitAtx32_v1" not in table
+    table, unpriced = gate_table([feed])
+    assert unpriced == [] and table["BitAtx32_v1"] == 147
     g, miss = BC.gates(feed, table)
-    assert dict(miss) == {"BitAtx32_v1": 1} and g == sum(table[k] for k in BC.primitives([feed]) if k in table) > 0
+    assert not miss and g == sum(table.values()) > 147
+
+
+def test_a_primitive_with_no_boolean_version_is_unpriced():
+    """`F32Sqrt_v1` has no Boolean version: the table leaves it out and a block lists its activations apart, its gates not
+    guessed."""
+    sqrt = REGISTRY["F32Sqrt_v1"]
+    assert gate_table([sqrt]) == ({}, ["F32Sqrt_v1"])
+    assert BC.gates(sqrt, {}) == (0, {"F32Sqrt_v1": 1})
 
 
 def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
@@ -165,4 +175,4 @@ def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     pub, private = BC.judgment(DAY, [(doc, roots)], {"c": 0, "k": 0, "n": 0}, pins=roots)
     (cls,) = pub.classes
     assert (cls.slots, private["total"], cls.fresh) == (2, 2, IB.budgets(circuit)[1]) and cls.fresh > 0
-    assert set(cls.unpriced) == {"BitAtx32_v1"} and cls.gates > IB.budgets(circuit)[0]
+    assert not cls.unpriced and cls.gates > IB.budgets(circuit)[0]
