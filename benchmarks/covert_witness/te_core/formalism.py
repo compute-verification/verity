@@ -595,14 +595,20 @@ RESTS_ON = {
 }
 
 
-def published(m: Measured, c: float, k: float) -> dict:
-    """The published ρ at (c, k) (coordinator 08:26Z): under reading A where the row has the trace's `entries`, Fit's
-    c/(c − d) where it holds, else max(1, the max over VALID of the terms that are measured and finite), an infinite
-    packer term reported unmeasured, never ∞ (the full-token-state overclaim corrected at 06:45Z), and the token
-    kind unmeasured until the packer proposes matrix-product and weight-gradient tiles; under reading B (traced before
-    4.4) te_core 4.3's ρ, a target. Beside it the binding kind, what it rests on (`RESTS_ON`), each kind's term
-    (None: unmeasured) and the SENSITIVITIES."""
-    reading = "A" if m.entries is not None else "B"
+#: whether a row whose trace has `entries` publishes reading A: not until the packer proposes matrix-product and
+#: weight-gradient tiles and fresh products are wired in (te_core 4.5); until then every row is reading B's, labelled
+#: a target (coordinator 09:02Z)
+READING_A = False
+
+
+def published(m: Measured, c: float, k: float, reading: str | None = None) -> dict:
+    """The published ρ at (c, k) (coordinator 08:26Z): under reading A (`reading`, else where `READING_A` and the row
+    has the trace's `entries`), Fit's c/(c − d) where it holds, else max(1, the max over VALID of the terms that are
+    measured and finite), an infinite packer term reported unmeasured, never ∞ (the full-token-state overclaim
+    corrected at 06:45Z), and the token kind unmeasured until the packer proposes matrix-product and weight-gradient
+    tiles; under reading B te_core 4.3's ρ, a target. Beside it the binding kind, what it rests on (`RESTS_ON`), each
+    kind's term (None: unmeasured) and the SENSITIVITIES."""
+    reading = reading or ("A" if READING_A and m.entries is not None else "B")
     v = at(m, c, k, "A", VALID) if reading == "A" else at(m, c, k)
     b = v["bound"] if reading == "A" else bound(m, c, k, "B", VALID)
 

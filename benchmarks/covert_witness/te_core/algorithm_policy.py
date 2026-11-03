@@ -25,8 +25,8 @@ needs to recompute that ρ at any (c, k): `panels.PACKED` and `SPLIT`, u_in thro
 columns don't give formalism.at's ρ and basis at every cell of te_core.panels' dial (`panels.mismatches`).
 `estimated` names the inputs that are stubs, bounds, assumptions or estimates. The dashboard's cells, from
 te_core.formalism's `published` at the console's default policy (`CONSOLE`; coordinator 08:26Z): `rho_console`, the
-one bound's ρ there ("inf" where infinite), `reading` (A where the row's trace has reading A's entries, else B, whose
-ρ is te_core 4.3's, a target), `te_core` the VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a
+one bound's ρ there ("inf" where infinite), `reading` (A where formalism.READING_A and the row's trace has reading A's
+entries, else B, whose ρ is te_core 4.3's, a target), `te_core` the VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a
 JSON cell of the terms its max takes and the sensitivities it leaves out.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
