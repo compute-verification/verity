@@ -467,7 +467,8 @@ def refused(c: Path) -> set[str]:
 
 
 def ledger(out: Path, te: Path) -> dict:
-    """The scorer's ledger with each traced run's submissions replaced by the node's (under the ledger's id, agent and
+    """The scorer's ledger with each traced run's submissions replaced by the node's (on the original, so a field the
+    harness wrote and the node's re-ingest lacks, such as v3's data and model, stays; under the ledger's id, agent and
     write time), a refused run's (`refused`) marked invalid with REFUSED where te_core refuses none itself (4.2's
     `formalism.refusal`), every other file linked; written to `out` whole, then swapped in."""
     c = cache(te)
@@ -492,7 +493,7 @@ def ledger(out: Path, te: Path) -> dict:
         key = by_id.get(p.stem) if p.suffix == ".json" else None
         if key in traced:
             old = json.loads(p.read_text())
-            new = traced[key][0] | {k: old[k] for k in ("id", "agent", "written_at", "written_ts")}
+            new = old | traced[key][0] | {k: old[k] for k in ("id", "agent", "written_at", "written_ts")}
             if key[0] in bad:
                 new["invalid"] = [*(new.get("invalid") or []), REFUSED]
                 n["refused"] += 1
