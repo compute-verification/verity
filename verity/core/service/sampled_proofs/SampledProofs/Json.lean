@@ -7,6 +7,9 @@ module
 public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true
