@@ -32,6 +32,7 @@ import Definitions.Nci.Guarantees.CompliesCK
 import Definitions.Nci.Guarantees.Ldl
 import Definitions.Nci.Guarantees.Formalism
 import Definitions.Nci.Guarantees.Formalism.Witnesses
+import Definitions.Nci.Guarantees.Products
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
 import Definitions.Pouw.Assumptions
