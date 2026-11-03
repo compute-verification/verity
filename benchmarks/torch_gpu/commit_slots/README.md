@@ -37,13 +37,13 @@ plan = G.Plan(context, G.regroup(layout, 4))
 ```
 
 - `context`: 64 bytes naming the run (the model and serving instance); every domain binds it.
-- `layout`: the step's public structure (`S.Layout`): groups (what one `add` commits) of units of rows, each row the
+- `layout`: the step's public structure (`S.CommitShape`): groups (what one `add` commits) of units of rows, each row the
   concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every slot has
   the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row.
   Parts, rows, groups and their checks are `verity.ml.commitments.layout`'s; `S.load(path)` reads a layout file through
   it, in the form `S._layout_json` writes.
   Groups are the prover's plumbing (one launch each): the layout's digest binds only its units' rows.
-  A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
+  A plan is linear in the layout's units: the layout digest is computed once (`CommitShape.digest`), every unit's domain id in
   one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
   `add` rebinds that group's row table to the step's tensors without a Python step a row.
   A step's memory is its slots' frontiers and one pass's temporaries. It holds no slot's leaves: a slot's tree is its

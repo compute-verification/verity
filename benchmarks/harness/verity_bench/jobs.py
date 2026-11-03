@@ -288,7 +288,7 @@ def _env_flags(spec: ResolvedSpec) -> list[str]:
     return flags
 
 
-def _point_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+def _point_command(source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
     return [
         "bash", "benchmarks/harness/run_point.sh",
         "--spec", _relative_spec(source, root),
@@ -317,7 +317,7 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
     ]
     if spec.admission.max_minutes is not None:
         command += ["--max-min", str(spec.admission.max_minutes)]
-    return [*command, *_env_flags(spec), "--", *_point_command(plan, source, item, root)]
+    return [*command, *_env_flags(spec), "--", *_point_command(source, item, root)]
 
 
 def direct_minutes(spec: ResolvedSpec, node: str) -> float:
@@ -357,7 +357,7 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
         # job is preemptible, as the queued point's is.
         "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
         "--",
-        *_point_command(plan, source, item, root),
+        *_point_command(source, item, root),
     ]
 
 

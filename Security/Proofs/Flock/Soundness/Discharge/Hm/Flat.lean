@@ -196,11 +196,12 @@ theorem not_unitIn_of_rowNet {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.
 past its inputs. -/
 theorem not_unitIn_zero (s₀ : ℕ) : ¬ UnitIn st.c (st.c.unitRange.slot s₀ + st.c.unit.useful) := by
   rintro ⟨s, off, ⟨-, hoff, hx⟩, hlt⟩
-  have hb := built_spec (FlockSoundness.unit_built F.parse F.check)
   have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
   have := (slot_add_inj (r := st.c.unitRange) hz hoff hx).2
-  have h1 := hb.2.1
-  have h2 := hb.2.2.2.1
+  have h1 := F.useful
+  have h2 := L.unit_at.in_le
+  rw [L.unit_at.in_eq] at h2
+  have h3 := L.unit_at.const_le
   omega
 
 /-- **A row net's slot holds its net's rows** in every block of a witness that satisfies every row but the unit input
@@ -348,7 +349,7 @@ theorem flatPairs_countL (hrw : RowWires st.c) {n s off x src : ℕ} (hn : n = s
     rcases hn with rfl | rfl
     · exact F.sha
     · exact F.hm
-  obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+  obtain ⟨hum, huk, huc⟩ := unit_range_facts_of P.unitNet C
   have hunit : ∀ s₀ b, s₀ < st.c.unitRange.count → b < 2 ^ st.c.unitRange.slotLog →
       st.c.unitRange.slot s₀ + b ≠ x := fun s₀ b hs₀ hb he =>
     atSlot_ne L F hnn P.unitNet hun hat (show AtSlot st.c st.c.unitNet s₀ b x from ⟨hs₀, hb, he.symm⟩)
@@ -410,7 +411,7 @@ theorem flatPairs_countL (hrw : RowWires st.c) {n s off x src : ℕ} (hn : n = s
       · exact hwhm
     obtain ⟨hm', hk', -⟩ := rangeOf_spec (C.one_range _ hd1)
     have hq := getD_mem_toList hd3 (d := default)
-    have hle := (nets_ok P w.dst.1).1.2.2 _ hq
+    have hle := (F.nets w.dst.1).1.2.2 _ hq
     have hfit := (L.fit w.dst.1).2
     intro he
     refine atSlot_ne L F hnn hd1 hne hat (s' := g * st.c.perVu.getD w.dst.1 0 + w.dst.2.1)

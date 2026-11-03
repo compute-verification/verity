@@ -178,6 +178,22 @@ theorem Placement.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
     Finset.sum_ite_eq', Finset.mem_univ, if_true, hz.2.1 o] at h
   exact h.symm
 
+theorem Placement.sat {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)} (h : Placement S R col) :
+    PlacedSat S R col :=
+  ⟨S.A₀, S.B₀, h, fun _ hz => hz⟩
+
+theorem PlacedSat.rowsSat {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
+    (hpl : PlacedSat S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+    R.Sat fun c => bit (S.block z o (col c)) := by
+  obtain ⟨A, B, hp, ht⟩ := hpl
+  exact rowsSat_of_satisfies (S := { S with A₀ := A, B₀ := B }) hp (ht z hz) o
+
+theorem PlacedSat.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
+    (hpl : PlacedSat S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+    S.block z o (col R.one) = 1 := by
+  obtain ⟨A, B, hp, ht⟩ := hpl
+  exact hp.one_eq (S := { S with A₀ := A, B₀ := B }) (ht z hz) o
+
 /-- **The compiled lowering, for every template.** If a witness satisfies a statement in which unit
 `u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
 value there, the transcript decoded from that block makes `u` correct. -/
@@ -200,7 +216,7 @@ theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
 decodes to a transcript on which the unit is correct. -/
 theorem correct (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     P.Correct (pl.decode z) u :=
-  lowering_sound pl.inst pl.placed pl.o hz (pl.agree hz)
+  pl.inst.correct_decode (pl.placed.rowsSat hz pl.o) (pl.agree hz)
 
 /-- The decoded transcript carries `true` on the gate the unit's constant reads. -/
 theorem decode_one (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :

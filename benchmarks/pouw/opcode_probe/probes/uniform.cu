@@ -1,11 +1,11 @@
-// EPS1 P10 (note:20261017T0324Z-draft-eps1-spec): the vector issue slots a uniform-datapath instruction takes. Each kernel
+// P10: the vector issue slots a uniform-datapath instruction takes. Each kernel
 // is 16 warps (4 a SMSP, one block a SM); its loop runs a fixed stream F and K uniform instructions: eight warp-uniform
 // chains seeded from a parameter and carried around the loop, K/8 steps of each chain pair an iteration.
 //
 // ptxas decides which datapath runs a warp-uniform chain, and it only puts one on the uniform datapath in a loop with
 // MMAs whose other vector work it feeds (ptxas 13.0.88, local cubins): beside FFMA or LOP3 streams that don't read an
 // MMA's accumulators, in plain C or inline asm, it keeps the chain on lanes, PREDICT's SHFL broadcast (egemm.cu's
-// ubcast) included (r20261017-054411-aeb3). So every fixed stream here sits in the honest step, and its extra vector
+// ubcast) included. So every fixed stream here sits in the honest step, and its extra vector
 // work reads the accumulators; "alone" keeps the honest step's MMAs with their results unread, which ptxas deletes
 // after it has placed the chain, leaving a loop of uniform instructions and its branch. The gate pins each loop's
 // uniform count exactly, so a chain that lands on lanes refuses.

@@ -29,6 +29,7 @@ inputs = [
     "Security/Proofs/Flock/Verifier.lean", "Security/Proofs/Flock/Verifier",
     # what Lake reads to load security_proofs, and security and security_properties, which it requires by path
     "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json", "Security/Proofs/lean-toolchain",
+    "verity/core/protocols/record.py",
     "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
     "Security/Properties/lakefile.toml", "Security/Properties/lake-manifest.json", "Security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements

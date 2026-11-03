@@ -1,5 +1,5 @@
 // EGEMM's edited GEMM with its commitments hashed inside its own CTAs: the windowed receipts (segment.PouwSegCheck_v2{S
-// = 16, FOLD}, E2E's w_ kernels on cursor/e2e-slice-ea24@3341b0f46, ported to egemm.cu's EL) and X's tile leaves (R = 64
+// = 16, FOLD}, E2E's w_ kernels, ported to egemm.cu's EL) and X's tile leaves (R = 64
 // rows x 32 values) committed as hm96-sha512/row/v2 rows in frame-v3-sha512 trees, byte for byte verity.ml.commitments'
 // (commit_gpu.cuh's constants and parts; hgref.py checks every level against the reference).
 //
@@ -234,15 +234,14 @@ DEV void h_salt(u64 prfpos, u64* S, const uint8_t* T) {
   salt_prf(prfpos, Y);
   hm96_mask<false, true>(T, Y, m);
   salt_digest(Y, c);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  rc::mask_words(m, my);
   st8(S, my);
   st8(S + 8, c);
 }
 // a frame leaf's second block (frame_second_nb's, offsets from byte 128)
 template <int NB> DEV void fs_build(int dom, u64 pos, const u64* h, u64* W) {
 #pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = CD[dom].fl_tpl[NB][16 + i];
+  for (int i = 0; i < 16; ++i) W[i] = CD[dom].fl_tpl[NB - 1][16 + i];
   or_be<1 + NB, NB>(W, pos);
   or_digest<35 + 2 * NB>(W, h);
 }
@@ -251,7 +250,7 @@ template <int NI> DEV void node_build(int dom, int half, u64 index, const u64* i
   constexpr int S = 8 * ((10 + NI) % 8);   // the children's offset in a word (10 + NI and 82 + NI bytes)
   if (half == 0) {
 #pragma unroll
-    for (int i = 0; i < 16; ++i) W[i] = CD[dom].node_tpl[NI][i];
+    for (int i = 0; i < 16; ++i) W[i] = CD[dom].node_tpl[NI - 1][i];
     W[0] |= index << (8 * (6 - NI));
 #pragma unroll
     for (int i = 0; i < 8; ++i) {
@@ -267,7 +266,7 @@ template <int NI> DEV void node_build(int dom, int half, u64 index, const u64* i
     }
   } else {
 #pragma unroll
-    for (int i = 0; i < 16; ++i) W[i] = CD[dom].node_tpl[NI][16 + i];
+    for (int i = 0; i < 16; ++i) W[i] = CD[dom].node_tpl[NI - 1][16 + i];
     const u64 r5 = __ldcg(in + 13), r6 = __ldcg(in + 14), r7 = __ldcg(in + 15);
     W[0] |= r6 >> S | r5 << (64 - S);
     W[1] |= r7 >> S | r6 << (64 - S);
@@ -383,7 +382,7 @@ template <bool CUR> DEV void hash_lanes(const HA& h, HS& hs, int ht) {
             W[i] = cv[i] ^ s[i];
             W[8 + i] = s[8 + i];
           }
-          cpy8(cv, C.mid_leaf);
+          cpy8(cv, C.hm.mid_leaf);
         } else {
           switch (nbytes(idx)) {
             case 1: fs_build<1>(tr.dom, idx, cv, W); break;
@@ -445,7 +444,7 @@ template <int FK, int LAG, int TIE, bool THREE, bool HASH, int HREG> DEV void h_
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
-    L::place_tile(pl, tm, tn);
+    L::place_tile(pl, tiles_m, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn, kb = (tile_id * L::NCT + ctid) * (uint32_t)nw * 8u;
     St ch[8];
     L::key(ch, a.seed, kb);

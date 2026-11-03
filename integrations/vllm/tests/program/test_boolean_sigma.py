@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
 from verity.ml.circuits.ops import fp32 as W
@@ -70,6 +71,12 @@ def _agrees(word, n: int = 64, seed: int = 0):
     return bits
 
 
+def _boolean_ids(word) -> list[str]:
+    """The descriptor ids of the Boolean versions of ``word``'s Calls, in body order."""
+    got = [BB.boolean_version(n.fn) for n in word.body.nodes]
+    return [descriptor_id(bind(g) if isinstance(g, CompositeDefinition) else g) for g in got]
+
+
 LEAVES = [S.I32Le, S.I32Eq, S.BitNot, S.BitOr, S.F32Neg, S.F32Sat, S.F32BitsShl23, S.F32IsFinite, W.F32AddFtzV2, W.F32SubFtzV2,
           W.F32MulFtzV2, W.F32FmaFtzV2, W.F32FmaSubFtzV2, P.DivFullScaleAV2, P.F32SubV2, R.F32Sub, R.F32GtStrict, moe.F32FmaRm,
           moe.F32FmaRmV2, MM.I32Div, MM.I32Rem]
@@ -112,7 +119,7 @@ SIGMA = [bind(b1.ResidualAdd, N=4), bind(b1.Gemm, K=32, N=2), bind(I.InductorRoP
 def test_a_sigma_definition_computes_its_word_composite_on_bits(word):
     bits = _agrees(word)
     assert getattr(bits.defn, "sigma_of", None) is word.defn
-    assert [BB._fid(n.fn) for n in bits.body.nodes] == [BB._fid(BB.boolean_version(n.fn)) for n in word.body.nodes]
+    assert [descriptor_id(n.fn) for n in bits.body.nodes] == _boolean_ids(word)
 
 
 @pytest.mark.parametrize("start", [0, 16])
@@ -165,7 +172,7 @@ def test_glm53_tp8s_word_calls_resolve_to_boolean_versions_at_their_served_descr
         assert (sum(b << i for i, b in enumerate(evaluate(bits))),) == evaluate(word)
         return
     assert bits.defn.sigma_of is word.defn and bits.bindings == word.bindings
-    assert [BB._fid(n.fn) for n in bits.body.nodes] == [BB._fid(BB.boolean_version(n.fn)) for n in word.body.nodes]
+    assert [descriptor_id(n.fn) for n in bits.body.nodes] == _boolean_ids(word)
 
 
 def test_a_sigma_definition_whose_body_calls_a_definition_with_no_boolean_version_is_refused_by_name(monkeypatch):

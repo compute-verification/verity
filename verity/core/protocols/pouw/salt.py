@@ -40,14 +40,15 @@ from typing import TYPE_CHECKING, Any
 
 from verity.ml.circuits import ports as _ports
 from verity.ml.commitments import domains
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .protocol import U64, DomainError
 
 if TYPE_CHECKING:
-    from verity.core.protocols.sampled_proofs.service import Registration
+    from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
-SALT_BYTES = 64
+SALT_BYTES = DIGEST_BYTES["sha512"]
 #: `pouw_salt`'s domain tag, which keeps its input apart from `window_salt`'s
 SALT_TAG = domains.POUW_PERIOD_SALT.encode()
 #: `pouw_record`'s domain tag
@@ -56,10 +57,10 @@ RECORD_TAG = domains.POUW_RECORD.encode()
 PROVER_TAG = domains.POUW_PROVER.encode()
 #: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
 #: `audit.weights_root` (`pouw_record`)
-WEIGHTS_ROOT_BYTES = 64
+WEIGHTS_ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: a certified window's stream, the SHA-512 digest that names it, and its prover, the 64-byte id it is registered under
-STREAM_BYTES = 64
-PROVER_BYTES = 64
+STREAM_BYTES = DIGEST_BYTES["sha512"]
+PROVER_BYTES = DIGEST_BYTES["sha512"]
 WINDOW_SEGMENT = "pouw-window"
 #: `window_open_root`'s domain tag
 WINDOW_OPEN_TAG = domains.POUW_PERIOD_OPEN.encode()
@@ -68,9 +69,9 @@ EPOCH_OPEN_TAG = domains.POUW_EPOCH_OPEN.encode()
 #: `anchored_epoch_root`'s domain tag: `EPOCH_OPEN_TAG`'s, its version bumped for the anchors' root in its preimage
 ANCHORED_EPOCH_TAG = domains.POUW_ANCHORED_EPOCH_OPEN.encode()
 #: an H1 window's anchors' root X (`core_check.values_root` of its committed activations)
-ANCHORS_ROOT_BYTES = 64
+ANCHORS_ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: a live window's round-0 request table's root, a frame-v3-sha512 root
-REQUESTS_ROOT_BYTES = 64
+REQUESTS_ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: a challenger session's id, as the auditor's gate assigns it when it reserves the session (``s20261020T114752Z-9e52``)
 SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 _NAT = re.compile(r"0|[1-9][0-9]*")
@@ -255,7 +256,7 @@ def window_of(ctx: Any) -> int | None:
     return p if p < U64 else None
 
 
-def registered(registration: Registration) -> int | None:
+def registered(registration: WindowCommitmentRecord) -> int | None:
     """The PoUW window `registration` is for: its record's window is PoUW's served one, ``{"kind": "served", "context",
     "public"}``, whose context names it (`window_of`); else None."""
     rec = getattr(registration, "record", None)
@@ -266,7 +267,7 @@ def registered(registration: Registration) -> int | None:
     return window_of(w["context"])
 
 
-def revealed(certifier: Any, window: int, registration: Registration | None) -> bytes:
+def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """PoUW window `window`'s certifier salt, `certifier.reveal(window, registration)`, given the window's registration
     as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the certifier (its receipt isn't the registration's; early, before the window's
@@ -283,7 +284,7 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
     return salt
 
 
-def committed(certifier: Any, window: int, registration: Registration | None) -> bytes:
+def committed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """What PoUW recorded with the certifier for PoUW window `window` before it drew the window's salt, the 64-byte
     `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
     (`Proxy.commit_weights` records it, signed by the registered prover), given the window's registration. It fails

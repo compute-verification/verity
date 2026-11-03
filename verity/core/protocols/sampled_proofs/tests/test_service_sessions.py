@@ -38,7 +38,7 @@ def _record(row: int, previous: str | None) -> dict:
                     {"kind": "served", "run": RUN, "row": row}, previous=previous)
 
 
-def _register(stream: S.Stream) -> S.Registration:
+def _register(stream: S.Stream) -> S.WindowCommitmentRecord:
     row = len(stream._entries)
     previous = stream._entries[-1].registration.digest if stream._entries else None
     return stream.register(_record(row, previous), _ports(N))

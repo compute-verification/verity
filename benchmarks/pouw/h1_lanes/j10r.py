@@ -12,7 +12,7 @@ after-draw value, `leaf_lanes.produced_values`).
 * **The after-draw values** (`one_stage.produced`, under the registration's digest): ``partials`` (row l lane l's
   `h1zy.lane_partial`), each ``carry<c>`` (row l what lane l's chunk c hands chunk c + 1, `h1zy.lane_chunk_carries`)
   and ``oks`` (row i statement i's ok word, 1), the row every lane and chunk statement's output ``o0`` opens: so those
-  oks are committed values, and only the combine's ``o0`` is a known row (the one 1 of `h1unit.ok_salt`).
+  oks are in the trace, and only the combine's ``o0`` is a known row (the one 1 of `h1unit.ok_salt`).
 * **The negatives**: ``lane1-chunk0-carry-swapped`` and ``lane1-chunk1-carry-swapped``: a ``carry0`` tree with rows 1
   and 2 swapped, so lane 1's chunk 0 computes a carry its ``carry_out`` row isn't and its chunk 1 continues from lane
   2's: each ok is 0 against its ``oks`` row's 1 (REJECT). ``combine-ok-row-zero``: an ``oks`` tree whose row of lane

@@ -22,6 +22,7 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops import prims as OP
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.windows import interface as IF
 
 #: one plain row template, and one packed with two return fields (a whole ``PARTS`` part, DeepGEMM's linear's quantisation, here
 #: on rows of its own family); each row's committed members and their element dtypes
@@ -47,14 +48,14 @@ def rows(monkeypatch):
     def make(family: str):
         fn, rng = defn(family), np.random.default_rng(3)
         params, _ret = fn.signature()
-        fields = CR.fields(SRW.template(descriptor_id(fn)))
+        lay = IF.layout(fn)
         ops = [[bf16s(rng, len(ty.leaf_widths())) for _nm, ty in params] for _ in OPS]
         outs: dict[str, list[np.ndarray]] = {nm: [] for nm, _dt in ROWS[family][2]}
         for o in ops:
             y = np.asarray(evaluate_batch(fn, *(a.astype(np.uint64).reshape(1, -1) for a in o))).reshape(-1)
             at = 0
-            for (nm, _dt), f in zip(ROWS[family][2], fields, strict=True):
-                n, w = len(f.leaf_widths()), f.leaf_widths()[0]
+            for (nm, _dt), (_o, words), w in zip(ROWS[family][2], lay.outs, lay.widths[len(lay.rows):], strict=True):
+                n = 16 * words // w
                 outs[nm].append(y[at:at + n].astype(f"<u{w // 8}"))
                 at += n
         spec = descriptor_id(fn)
@@ -85,7 +86,7 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
     T, store, _ops, _outs = rows(family)
     tp = SRW.template(T)
     params, _ret = tp.fn.signature()
-    fields = CR.fields(tp)
+    fields = IF.layout(tp.fn).outs
     assert tp.layout == ("part" if family in SRW.PART_OF else "row") and len(fields) == len(ROWS[family][2])
     assert not SRW.chunked(T, None) and not SRW.chunked(T, {}) and SRW.chunked(T, {T: CAP})
     in_rows, out_rows = CR.unit_rows(tp)

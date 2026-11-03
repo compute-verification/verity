@@ -231,8 +231,8 @@ CHALLENGER_COMMITMENT = "verity/challenger/commitment/v1"
 CHALLENGER_RELEASE_LOG = "verity/challenger/release-log/v1"
 INTEGRITY_PROFILE = "verity/integrity-profile/v1"
 ONE_STAGE_AUDIT = "verity/one-stage/audit/v0"
-ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
-ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
+ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
 ONE_STAGE_PERIOD_SALT = "verity/one-stage/window-salt/v1"
 PROOF_SERVICE_OUTCOME = "verity/proof-service/outcome/v0"
 PROOF_SERVICE_STREAM = "verity/proof-service/stream/v0"
@@ -310,17 +310,6 @@ WIPE_MONITORING_PERIOD = "verity/wipe-monitoring-period/v1"
 WIPE_PROTOCOL = "verity/wipe/v0"
 WIPE_EGRESS = "wipe-egress/v1"
 
-# Not yet read from here: the bandwidth audit
-GF31_POLY = "gf31-poly/v1"
-RO_BLAKE3 = "ro-blake3/v1"
-RO_SHA512 = "ro-sha512/v1"
-BANDWIDTH_CHALLENGER_STATE = "verity/bandwidth/challenger-state/v1"
-BANDWIDTH_OPENINGS = "verity/bandwidth/openings/v1"
-BANDWIDTH_SALT = "verity/bandwidth/salt/v2"
-BANDWIDTH_TAG_LEAF = "verity/bandwidth/tag-leaf/v1"
-BANDWIDTH_TAG = "verity/bandwidth/tag/v1"
-BANDWIDTH_PERIOD = "verity/bandwidth/window/v2"
-
 # Not yet read from here: the remote bandwidth audit
 REMOTE_BANDWIDTH_P2_BLOCK4 = "p2-unit4/v0"
 STORE_ORDER = "store-order/v0"
@@ -348,7 +337,7 @@ REMOTE_BANDWIDTH_TIMING_JITTER = "verity/remote-bandwidth/timing-jitter/v0"
 REMOTE_BANDWIDTH_PROTOCOL = "verity/remote-bandwidth/v0"
 REMOTE_BANDWIDTH_PERIOD = "verity/remote-bandwidth/window/v1"
 REMOTE_SESSION_PAYLOAD_SALTS = "verity/remote-session/payload-salts/v0"
-STORE_SALT = "verity/store/salt/v0"
+STORE_SALT = "verity/store/salt/v1"
 
 # Not yet read from here: the network certifier and network accounting
 CERTIFIER_ADVISED_ADVICE = "verity-network-certifier/advised-advice/v2"
@@ -366,7 +355,7 @@ CERTIFIER_OUT = "verity-network-certifier/out/v1"
 CERTIFIER_PAIR_ENC = "verity-network-certifier/pair/v1/enc"
 CERTIFIER_PAIR_MAC = "verity-network-certifier/pair/v1/mac"
 CERTIFIER_PARAMETERS_V1 = "verity-network-certifier/parameters/v1"
-CERTIFIER_PERIOD_SAMPLING = "verity-network-certifier/period-draw/v0"
+CERTIFIER_PERIOD_SAMPLING = "verity-network-certifier/period-draw/v1"
 CERTIFIER_PERIOD = "verity-network-certifier/period/v0"
 CERTIFIER_RECORD_V2 = "verity-network-certifier/record/v2"
 CERTIFIER_RECORDS = "verity-network-certifier/records/v2"
@@ -401,9 +390,8 @@ NETWORK_CERTIFICATE = "verity/network-certificate/v4"
 NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
-# Not yet read from here: composition (onsite, remote, product)
+# Not yet read from here: composition (onsite, remote)
 ONSITE_PROTOCOL = "verity/onsite/v0"
-PRODUCT_PROTOCOL = "verity/product/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

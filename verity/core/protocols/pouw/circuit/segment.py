@@ -45,7 +45,7 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
 (`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
 (`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
-Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Site.other`). The spot check of one thread at segment j is
+Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). The spot check of one thread at segment j is
 
     PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,

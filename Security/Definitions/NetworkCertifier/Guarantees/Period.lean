@@ -1,7 +1,9 @@
-import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.Period
 import Definitions.NetworkCertifier.Tap
+import Definitions.Core.Assumptions
+import Mathlib.Data.Set.Card
+import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits

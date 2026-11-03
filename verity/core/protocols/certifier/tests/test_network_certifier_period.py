@@ -83,15 +83,13 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
     assert all(e[0] == "read" for e in coins.events[1:])
     assert drawn["read"] == (bytes([coins.byte]) * sum(e[1] for e in coins.events[1:])).hex()
     assert drawn["commitment"] == S._sha512({"format": PERIOD_DRAW, "stream": run.stream.digest,
-                                             "roots": roots(run, openings), "advice": None})
+                                             "roots": roots(run, openings)})
     assert drawn["format"] == PERIOD_DRAW and drawn["k"] == 2 and drawn["population"] == 3
     assert len(drawn["units"]) == 2 and drawn["units"] == sorted(set(drawn["units"])) <= [0, 1, 2]
     with pytest.raises(ValueError, match="1 <= K <= 3"):
         run.lw.period_draw(run.stream, roots(run, openings), 4, Coins())
     with pytest.raises(ValueError, match="SHA-512 in lowercase hex"):
         run.lw.period_draw(run.stream, ["00"] * 3, 2, Coins())
-    with pytest.raises(ValueError, match="advice's digest"):
-        run.lw.period_draw(run.stream, roots(run, openings), 2, Coins(), advice="00" * 64)
     prove(run, drawn, openings)
     with pytest.raises(ValueError, match="before the stream's first registration"):
         run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
@@ -250,7 +248,7 @@ def test_the_draw_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
     with pytest.raises(ValueError, match="this stream's"):
         run.lw.network_verdict(another, drawn=drawn)
     swapped = list(reversed(drawn["roots"]))
-    for bad in ({**drawn, "roots": swapped}, {**drawn, "advice": "00" * 64}, {**drawn, "stream": "00" * 64}):
+    for bad in ({**drawn, "roots": swapped}, {**drawn, "commitment": "00" * 64}, {**drawn, "stream": "00" * 64}):
         with pytest.raises(ValueError, match="this stream's"):
             run.lw.network_verdict(run.stream, drawn=bad)
     for bad in ({**drawn, "units": drawn["units"][:1]}, {**drawn, "population": 4}, {**drawn, "units": [2, 0]},

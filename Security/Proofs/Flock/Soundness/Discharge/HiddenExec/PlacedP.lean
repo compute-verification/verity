@@ -60,6 +60,7 @@ structure AcceptedHP (T : Model.Statement) where
   own : Option ByteArray
   st : Stmt
   ht : tags.typed = false
+  hi : tags.isTmpl = false
   h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st
   pi : HmIn.Ports
   s : Hidden.SpecP tags cf pf coins tables draw own pi st
@@ -98,7 +99,7 @@ theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) 
 
 /-- An accepted statement's circuit is the one its circuit file parses to (`parse_untyped`). -/
 theorem c_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
-  have := (Hidden.parse_untyped a.ht a.s.parse).1
+  have := (Hidden.parse_untyped a.ht (a.s.parseF a.hi)).1
   rw [hp] at this
   exact (Except.ok.inj this).symm
 
@@ -124,7 +125,7 @@ theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n
       T.block z o (a.col hg (Fin.cast (congrArg Rows.w hR) c)) =
         T.block z o (a.col hg (Fin.cast (congrArg Rows.w hR) c')) := by
   subst hR
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   exact hal
 
@@ -138,7 +139,7 @@ theorem aliased_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {
       c'.val < ((unitRows a.st a.L.unit_built).stack a.st.c.upv).nIn →
         Aliased.srcKeyP a.st.c a.pi c.val = Aliased.srcKeyP a.st.c a.pi c'.val) :
     a.L.Aliased a.regs inst o hg := by
-  obtain ⟨hpa, -⟩ := Hidden.parse_untyped a.ht a.s.parse
+  obtain ⟨hpa, -⟩ := Hidden.parse_untyped a.ht (a.s.parseF a.hi)
   have P := parse_facts hpa
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
@@ -152,7 +153,7 @@ theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val 
     (hneg : Aliased.pubLeaf a.st.c a.pi x.val < 0) (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m}
     (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
     T.block z o (a.col hg x) = 0 := by
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   exact stack_zero_blockHP L (flat_layoutP ht s) regs (flat_unitFactsP ht s) s.ports hR hg x hx hneg hz hsat o
 
@@ -202,7 +203,7 @@ noncomputable def SitesHP.progPlaces_of_layout (outs : Finset (Fin N))
   inst := inst
   o := si.o
   col := si.col hrows
-  placed := si.placed hrows
+  placed S R u h := (si.placed hrows S R u h).sat
   aliased S R u h :=
     (si.acc S R u h).aliased_of_layout (hrows S R u h) (inst u) (si.o S R u h) (si.hvu S R u h) (hal S R u h)
 

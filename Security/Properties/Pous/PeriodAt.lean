@@ -12,9 +12,11 @@ import Properties.Pous.EndToEndAt
 
 * `AuditsOf sch`, `AuditsAt N`: `Audits` with the payload as `sch`'s bits and the capacity coins the ring model's at `N`.
   `Accepts pt`, `Break pt` and `Certified pt` read the composed check, the table's break and the certificate at `pt`.
-* `RingDeviceAt N pt`: `RingDevice` with `pt`'s certificate and the ring game at `N` (`ServerAt N`, `PassesAt N`, state
-  bound `SAt N`): `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` per run, read at `N`. It is meaningful
-  at `N = pt.params.blocks`, the block count `pt`'s session challenges.
+* `RingDeviceAt N pt`: a ring-model server at `N` for `pt`'s certificate (`ServerAt N`, `PassesAt N`, state bound
+  `SAt N`): `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` per run, read at `N`, still in the form the
+  deployed point's premise had before `PeriodHeld` split it into `DeviceModel` and `Instantiates` over every prover
+  strategy (`Pous.Period`'s header). It is meaningful at `N = pt.params.blocks`, the block count `pt`'s session
+  challenges.
 * `PeriodHeldAt`: at every such `pt` and `N`, from the coin commitments' hiding at `N` and `P2RingRoundSecureWide`, the
   verifier's whole decision at `pt` accepts a period with no break while the capacity account held fewer than `S · len`
   bit-ticks with probability at most `δ + ε_max`.
@@ -83,7 +85,8 @@ def Certified (pt : Run.Point) (ω : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins
 end AuditsOf
 
 /-- `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512`, per run, **at the point `pt` and `N` blocks**:
-`RingDevice` with `pt`'s certificate and the ring game at `N`. At each value `o` of the other audits' coins and each
+a ring-model server for `pt`'s certificate and the ring game at `N`, in the form `PeriodHeld` no longer takes (it reads
+the fixed extractor `extract` of every prover strategy instead). At each value `o` of the other audits' coins and each
 bound `B` with `B + S_chip + ∑ cap_i · round` within the ring game's state bound `SAt N`, there is one `(D, Q, L)`-bounded
 server at `N` with `SAt N` bits of state, fixed before the capacity coins, that passes the ring game's session at `N`
 (`PassesAt N`, at the designated id, bound to the published root, on the payload `W`) on every capacity coin where the

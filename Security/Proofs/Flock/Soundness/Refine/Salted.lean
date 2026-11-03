@@ -231,11 +231,11 @@ accepts, and both reps' paths verify from their rows' salted leaves, under the p
 cap. -/
 theorem verify_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : Session → List (Model.Claim 𝔽 S.m))
+    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : RunRecord → List (Model.Claim 𝔽 S.m))
     (record : String) (proofs : Array ByteArray)
     (hext : ∀ sess, Record.decode spec record = .ok sess → ExtraRealizes st S sess.points (extra sess))
     (h : Flock.verify spec #[st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
       Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[0]! = .ok p₀ ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[1]! = .ok p₁ ∧
@@ -287,7 +287,7 @@ of `verify_refines_hm96` holds for the model statement `stmtOf st` read off the 
 theorem verify_refines_ofCircuit_hm96 (st : Flock.Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
       Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
         (ptsOf st.mPts sess.points)).length) proofs[0]! = .ok p₀ ∧
