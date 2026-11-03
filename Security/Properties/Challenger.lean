@@ -1,6 +1,7 @@
 import CoreProtocol.Live
 import SampledProofs.ChallengerDraw
 import SampledProofs.OneStage
+import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
@@ -11,7 +12,8 @@ what that record shows, for every input: the coins the challenger device drew, o
 * `LiveAnswer`: what `Protocol.answer` accepts, `Protocol.answerAt` accepts at the coins its evidence's record shows.
   It follows from `Live.factors` and reads no device.
 * `CoinsFromLog`, the target: what a component that reads its coins through that reader (`ReadsChallenger`)
-  accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
+  accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`),
+  and so does its v2 on the proofs (`oneStageZkReads`), which reads coins only under a challenger it names.
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a run of the device released after `after`, a run the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
@@ -443,5 +445,34 @@ def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProof
   record := SampledProofs.OneStage.Evidence.coins
   decode := fun b => (some b : Option ByteArray)
   reads := oneStage_reads
+
+/-! ## One-stage v2 reads its coins through the challenger -/
+
+/-- What v2's coins are read under (`OneStageZk.coinsOf`): v1's, on its parameters' v1 part. -/
+def oneStageZkSource (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment) : Option Draws :=
+  oneStageSource p.base c
+
+theorem oneStageZk_reads (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment) (d : Draws)
+    (h : oneStageZkSource p c = some d) (e : SampledProofs.OneStageZk.Evidence) (ξ : ByteArray)
+    (hξ : SampledProofs.OneStageZk.coinsOf p c e = .ok ξ) :
+    ∃ raw, drawCoins d.key d.window d.label d.after e.base.coins = .ok raw ∧ raw = ξ := by
+  unfold SampledProofs.OneStageZk.coinsOf at hξ
+  cases h1 : SampledProofs.OneStage.coinsOf p.base c e.base with
+  | error r => simp [h1, bind, Except.bind] at hξ
+  | ok o =>
+    cases o with
+    | none => simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hξ
+    | some ξ' =>
+      simp [h1, bind, Except.bind, pure, Except.pure] at hξ
+      obtain ⟨raw, hr, he⟩ := oneStage_reads p.base c d h e.base (some ξ') h1
+      exact ⟨raw, hr, by cases he; exact hξ⟩
+
+/-- **One-stage v2 reads its coins through the challenger's reader** (`OneStageZk.live`), on any blobs. -/
+def oneStageZkReads (bs : Array ByteArray) :
+    ReadsChallenger (SampledProofs.OneStageZk.protocol.on bs) (SampledProofs.OneStageZk.live bs) where
+  source := oneStageZkSource
+  record e := SampledProofs.OneStage.Evidence.coins (SampledProofs.OneStageZk.Evidence.base e)
+  decode := id
+  reads := oneStageZk_reads
 
 end Properties.Challenger
