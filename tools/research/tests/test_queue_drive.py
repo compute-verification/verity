@@ -20,7 +20,7 @@ class Harness:
         self.clock = 1_000_000.0
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
-        monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
         monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
@@ -462,6 +462,33 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.clock += BRANCH_SWEEP_S + 1
     h.tick()
     assert len(calls) == 2
+
+
+def test_drive_deletes_the_head_branch_of_a_pr_it_closed_as_landed_unless_something_still_needs_it(world, monkeypatch):
+    """A PR drive closes once `main` reaches it (`_close_carried`) leaves no branch behind, but drive keeps one an open PR
+    uses as its head or base, a fork's, one of `KEEP_BRANCHES`, and one pushed to since (the lease)."""
+    import dataclasses
+
+    h = Harness(world, monkeypatch)
+    h.q._clone()
+    heads = {}
+    for n, branch, base, fork in ((1, "lane/one", "main", False), (2, "lane/two", "main", False), (3, "lane/three", "lane/two", False),
+                                  (4, "lane/four", "main", True), (5, "lane/five", "main", False), (6, "next", "main", False)):
+        heads[n] = world.change({f"{n}.txt": f"{n}\n"})
+        world.gh.put(n, heads[n])
+        world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], branch=branch, base=base, fork=fork)
+        _git(world.origin, "update-ref", f"refs/heads/{branch}", heads[n])
+    _git(world.origin, "update-ref", "refs/heads/lane/five", world.change({"5.txt": "pushed since\n"}))
+    for n in (1, 2, 4, 5, 6):
+        h.d._delete_head(n, heads[n])
+    left = {r.split("refs/heads/")[1] for r in _git(world.origin, "for-each-ref", "--format=%(refname)", "refs/heads/").split()}
+    assert {"lane/two", "lane/three", "lane/four", "lane/five", "next"} <= left and "lane/one" not in left
+    logs = [x for x in world.logs if "#1's head" in x or "kept" in x]
+    assert f"research queue drive: deleted origin's lane/one, #1's head at {heads[1][:12]}" in logs
+    assert "research queue drive: kept lane/two, #2's head: another open PR's head or base" in logs
+    assert "research queue drive: kept lane/four, #4's head: a fork's" in logs
+    assert "research queue drive: kept next, #6's head: kept by drive" in logs
+    assert any(x.startswith("research queue drive: kept lane/five, #5's head: ") and "stale info" in x for x in logs), logs
 
 
 def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypatch):

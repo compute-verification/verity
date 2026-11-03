@@ -29,3 +29,16 @@ def test_a_full_cache_disk_blocks_every_slot(monkeypatch, tmp_path):
     assert SLOT.blocked(slot, NOW) is None, "the test host's own free disk must not decide this"
     monkeypatch.setattr(SLOT, "DISK_MIN_GB", 1e18)
     assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "GB free, under" in SLOT.blocked(slot, NOW)
+
+
+def test_slot_py_shipped_alone_still_reads_its_slots(monkeypatch, tmp_path):
+    """2 Nov: check.py's remote slot read sends slot.py's source alone, so loading common.py beside it failed on every node
+    and drive's train launched nothing; alone, the cache is the default path."""
+    alone = tmp_path / "ship" / "slot.py"
+    alone.parent.mkdir()
+    alone.write_text((ROOT / "tools" / "verity" / "check" / "slot.py").read_text())
+    spec = importlib.util.spec_from_file_location("slot_alone", alone)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert mod.cache_disk() == tmp_path

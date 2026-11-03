@@ -367,9 +367,8 @@ def publish(out: Path, private: Path) -> list[str]:
             shutil.move(p, dst)
             held.append(rel)
             continue
-        try:
-            text = data.decode()
-        except UnicodeDecodeError:
+        text = data.decode(errors="replace")
+        if text.encode() != data:
             continue
         pub = public_doc(text)
         if pub != text:
