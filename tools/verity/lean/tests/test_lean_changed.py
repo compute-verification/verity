@@ -681,8 +681,8 @@ def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_record
     tool = LC.LA.LEAN_TOOL
     files = sorted(tool + p.name for p in HERE.parent.iterdir() if p.is_file())
     files += [tool + "tests/test_new.py", tool + "tests/fixtures/control/New.lean", tool + "NOTES.md", tool + "new.py",
-              "tools/verity/check/common.py"]
-    assert {tool.rstrip("/"), "tools/verity/check/common.py"} <= set(RECORDS_SHARED)
+              "tools/verity/check/common.py", LC.LA.CONTRACT]
+    assert {tool.rstrip("/"), "tools/verity/check/common.py", LC.LA.CONTRACT} <= set(RECORDS_SHARED)
     want, got = {*LC.tool_inputs(files), tool + "merge.py"}, {f for f in files if records_read(f)}
     assert got == want, (
         f"research's records gate (`records_read` in tools/research/src/research/queue.py) counts {sorted(got - want)} that "
