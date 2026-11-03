@@ -101,14 +101,3 @@ theorem release_sched_switch (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
 end LeanRelease
 
 end Claims.ZKServer
-
-#print axioms Claims.ZKServer.LeanRelease.release_sched_switch
-#print axioms Claims.ZKServer.LeanRelease.switch_frame
-#print axioms Claims.ZKServer.Loop.switch_sv
-#print axioms Claims.ZKServer.Loop.swMsgAt_switch
-#print axioms Claims.ZKServer.Loop.check_rs
-#print axioms Claims.ZKServer.Bind.sched_switch_sv
-#print axioms Claims.ZKServer.Ranked.repState_switched
-#print axioms Claims.ZKServer.LeanRelease.rank_unrefused_pcs
-#print axioms Claims.ZKServer.LeanRelease.rank_unrefused_sched
-#print axioms Claims.ZKServer.LeanRelease.unrefused_of_rank
