@@ -781,8 +781,8 @@ def figure(p: dict, out: Path) -> Path:
         if refs := [d for d in whole if reference(d)]:
             ref = min(refs, key=lambda d: (d["p"], d["rho_default"]))
             ax.annotate(f"{REFERENCE_RUN} ({ref['method_key']}):\np {ref['p']:.3g}, rho {ref['rho_default']:.3g}",
-                        (ref["p"], ref["rho_default"]), xytext=(10, -16), textcoords="offset points", fontsize=6.5,
-                        arrowprops={"arrowstyle": "-", "lw": 0.5})
+                        (ref["p"], ref["rho_default"]), xytext=(-10, -24), textcoords="offset points", ha="right",
+                        fontsize=6.5, arrowprops={"arrowstyle": "-", "lw": 0.5})
         at = [d for d in every if d["gain_target"] == g]
         unplotted = len(at) - len(mine)
         if reached:
