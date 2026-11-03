@@ -16,7 +16,7 @@ Modes:
   nearest (one scale a vector), instead of in full.
   `--qat fp` trains the weights unquantized, as ptq does;
 - in either, `--grad-code sign` passes each micro-batch's gradient of the trained matrices as a bool plane of signs and
-  one f16 scale a row (its mean |g|), and `--grad-code rtn{b}` as b-bit codes packed 8/b a byte at one f16 scale a row
+  one bf16 scale a row (its mean |g|), and `--grad-code rtn{b}` as b-bit codes packed 8/b a byte at one bf16 scale a row
   (its absmax), decoded and summed before Muon, with no error feedback, so Δ_g is about 1 or b bits a weight;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
@@ -260,16 +260,17 @@ GRAD_CODES = ("fp32", "sign", "rtn2", "rtn4", "rtn8")
 
 
 def grad_code(g: torch.Tensor, code: str) -> torch.Tensor:
-    """`--grad-code`: one partial's gradient of a matrix as it passes, decoded. `sign`: a bool plane of signs and one f16
-    scale a row (the row's mean |g|). `rtn{b}`: b-bit round to nearest at one f16 scale a row (its absmax over
-    2^(b-1) - 1), packed 8/b codes a byte. No error feedback: a residual carried to the next step would pass at full
-    width."""
+    """`--grad-code`: one partial's gradient of a matrix as it passes, decoded. `sign`: a bool plane of signs and one bf16
+    scale a row (the row's mean |g|). `rtn{b}`: b-bit round to nearest at one bf16 scale a row (its absmax over
+    2^(b-1) - 1), packed 8/b codes a byte. The scales are bf16, not f16, since a row's absmax can be 1e-6 and an f16
+    scale under 6e-5 loses precision or underflows to 0. No error feedback: a residual carried to the next step would
+    pass at full width."""
     if code == "sign":
-        s = g.abs().mean(1, keepdim=True).half()
+        s = g.abs().mean(1, keepdim=True).bfloat16()
         return torch.where(g >= 0, s, -s).to(g.dtype)
     b = int(code[3:])
     qmax, per = 2 ** (b - 1) - 1, 8 // b
-    s = (g.abs().amax(1, keepdim=True) / qmax).half().float()
+    s = (g.abs().amax(1, keepdim=True) / qmax).bfloat16().float()
     k = (torch.clamp(torch.round(g / torch.where(s > 0, s, 1.0)), -qmax, qmax) + qmax).to(torch.uint8)
     kk = k.view(k.shape[0], -1, per)
     packed = kk[..., 0]
@@ -960,8 +961,8 @@ def main() -> int:
                          "counts every partial since its last move")
     ap.add_argument("--grad-code", choices=GRAD_CODES, default="fp32",
                     help="the Muon matrices' gradient as each micro-batch's partial passes it, decoded and summed "
-                         "before Muon, with no error feedback: fp32, sign (a bool plane and one f16 scale a row), or "
-                         "rtn{b} (b-bit round to nearest at one f16 scale a row, packed 8/b a byte)")
+                         "before Muon, with no error feedback: fp32, sign (a bool plane and one bf16 scale a row), or "
+                         "rtn{b} (b-bit round to nearest at one bf16 scale a row, packed 8/b a byte)")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--decay-frac", type=float, default=1.0,
                     help="the rate is flat after the warmup and decays to 0 (--decay-shape) over this last share of an "

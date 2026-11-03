@@ -21,7 +21,7 @@ entropy code E.
   islands/lowrank's keys: `bits` is the fp32 gradient plus optimizer state (Muon's buffer, AdamW's m and v) and
   `latent_bits`, apart from it, the fp32 latents a straight-through code trains (the update application's Δ_t).
   `--grad-code sign|rtn{b}` passes the matrices' gradient at about 1 or b bits a weight (signs, or b-bit codes packed
-  in bytes, and one f16 scale a row per micro-batch, no error feedback), which `grad_bits` then counts.
+  in bytes, and one bf16 scale a row per micro-batch, no error feedback), which `grad_bits` then counts.
 - `test_qformat.py`: CPU round trips (`python islands/quant/test_qformat.py` from `benchmarks/covert_witness/`).
 
 Run: `python benchmarks/covert_witness/launch.py s100 --island quant --note "MECHANISM ..." -- --mode qat --qat sparse
