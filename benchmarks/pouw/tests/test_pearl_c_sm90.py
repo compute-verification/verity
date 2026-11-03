@@ -180,10 +180,26 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
+    """BF16_ROWS is an opt-in: unset (or anything but ``1``) a split pipeline's pd_commit reads its FP32 words, as the
+    registry declares, so a capture that would race on the rows doesn't run them by default."""
+    from verity_config.settings import of
+
+    for raw, on in ((None, False), ("0", False), ("true", False), ("1", True)):
+        if raw is None:
+            monkeypatch.delenv("PEARLC_BF16_ROWS", raising=False)
+        else:
+            monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
+        assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
+        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+    sys.modules.pop("pearl_c_sm90_run_bf16_rows")
+
+
 def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
     """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
     gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
     before; rows set on a pipeline that doesn't read them are refused.  `widen_a` with `pdl` False launches plainly."""
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
     launched = []
 
     class D:
