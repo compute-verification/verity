@@ -179,17 +179,17 @@ def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
 
 def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) -> tuple[list[tuple[int, ...] | None], list[dict]]:
     """The reference's output leaves per vector (None where it raises) and the vectors it raised on; a composite's
-    reference run body by body (`bodies.evaluate`)."""
+    reference run body by body (`bodies.evaluate_rows`)."""
     n = arrays[0].shape[0] if arrays else 1
+    rows = [instance_args(params, arrays, i) for i in range(n)]
     out: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
-    for i in range(n):
-        args = instance_args(params, arrays, i)
-        try:
-            out.append(tuple(BD.evaluate(t, *args)))
-        except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
+    for i, (args, got) in enumerate(zip(rows, BD.evaluate_rows(t, rows))):
+        if isinstance(got, Exception):
             out.append(None)
-            raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
+            raised.append({"instance": i, "args": _short(args), "error": f"{type(got).__name__}: {str(got)[:160]}"})
+        else:
+            out.append(tuple(got))
     return out, raised
 
 
@@ -447,20 +447,21 @@ def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[i
     first copy, a commit of a constant or of one bit for that form, and a commit of a form committed before for the first
     commit.  Returns (count, count by ``owner(bit)``)."""
     live = C.live()
-    rep: dict[int, tuple] = {}
-    seen: dict[tuple, int] = {}
-    copies: dict[tuple, tuple[int, int]] = {}
+    rep: dict[int, tuple[frozenset, int]] = {}
+    seen: dict[frozenset, int] = {}
+    copies: dict[frozenset, tuple[int, int]] = {}
     by: Counter = Counter()
 
     def canon(f):
-        par: dict[int, int] = {}
-        c = f.c
-        for x in f.s:
-            bits, k = rep.get(x, ((x,), 0))
+        hit = rep.keys() & f.s
+        if not hit:
+            return f.s, f.c
+        bits, c = set(f.s - hit), f.c
+        for x in hit:
+            b, k = rep[x]
+            bits ^= b
             c ^= k
-            for y in bits:
-                par[y] = par.get(y, 0) ^ 1
-        return tuple(sorted(y for y, p in par.items() if p)), c
+        return frozenset(bits), c
 
     n = 0
     for v, kind in enumerate(C.kind):
@@ -474,19 +475,19 @@ def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[i
             else:
                 u, c = copies.setdefault(ka[0], (v, ka[1]))
                 if u != v:
-                    rep[v] = ((u,), c ^ ka[1])
+                    rep[v] = (frozenset((u,)), c ^ ka[1])
             continue
         kb = canon(b)
         if not ka[0] or not kb[0] or ka[0] == kb[0]:
             n += 1
             by[owner(v) if owner else "circuit"] += 1
             continue
-        key = (ka, kb) if ka <= kb else (kb, ka)
+        key = frozenset((ka, kb))
         u = seen.get(key)
         if u is None:
             seen[key] = v
             continue
-        rep[v] = ((u,), 0)
+        rep[v] = (frozenset((u,)), 0)
         n += 1
         by[owner(v) if owner else "circuit"] += 1
     return n, by
@@ -809,7 +810,8 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     P = F if applies else Findings()
     v2 = applies and q_word == 2
     across_rule = 0
-    rule = W.unit_rule(fn, opts.X, opts.W, opts.extras, memo=memo, max_gates=opts.partition_max_gates)
+    graphs: dict = {}
+    rule = W.unit_rule(fn, opts.X, opts.W, opts.extras, memo=memo, max_gates=opts.partition_max_gates, graphs=graphs)
     rec: dict[str, Any] = {"applies": applies, "query": rule["query"], "units_per_call": rule["units_per_call"], "by_kind": rule["by_kind"],
                            "committed_interior_words": rule["committed_interior_words"], "max_out_bits": rule["max_out_bits"],
                            "free_gates": rule.get("free_gates")}
@@ -834,8 +836,11 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     if fn.gates <= opts.partition_max_gates:
         # `unit_rule` partitions a body whose nodes read only its parameters node by node, so it never compares two nodes;
         # the whole Definition's own cut does (a value two nodes compute is a recompute across proof blocks)
-        G = W.Graph(fn)
-        R = W.units(G, opts.X, opts.W, opts.extras)
+        if (got := graphs.get(fn.id)) is not None:
+            G, R = got
+        else:
+            G = W.Graph(fn)
+            R = W.units(G, opts.X, opts.W, opts.extras)
         cut = R["cut"]
         seen = {f["code"] for f in P.failures if f["check"] == "partition" and f["definition"] == fn.id}
         for code in cut.codes:
@@ -1024,14 +1029,15 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
     return BE.trace(build)
 
 
-def _export_counts(build: Callable[[], Any], name: str) -> dict:
+def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
     """The Boolean export of one proof block's circuit (`boolean_export.CircuitTypeTable.type_of`): its circuit types' AND/XOR/NOT counts, each
-    distinct sub-circuit once, every type validated and the root evaluated against the circuit on random inputs (raises on a
-    disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs it shares across a call (``shared_across_types``)."""
+    distinct sub-circuit once, every type validated and the root evaluated against the circuit (``C``, one ``build`` made
+    already, else built again) on random inputs (raises on a disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs
+    it shares across a call (``shared_across_types``)."""
     from verity_flock import boolean_export as BE
 
     reg = BE.CircuitTypeTable()
-    rid = reg.type_of(build, name, "proof-unit")
+    rid = reg.type_of(build, name, "proof-unit", circuit=C)
     node = reg.nodes[rid]
     _, flat, typed = reg.shared[-1]
     return {"and": node["and"], "xor": node["xor"], "not": node["not"], "subcircuit_types": len(reg.types), "flat_ands": flat,
@@ -1086,7 +1092,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
             return S.lane_circuit(int(sub.params["V"]))
     C, root = _traced(build)
     typ = lowering_type(C)
-    counts = _export_counts(build, f"{name} unit")
+    counts = _export_counts(build, f"{name} unit", C)
     rec["export"] = counts
     if counts["flat_ands"] != rec["ands"]:
         F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
