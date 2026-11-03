@@ -63,3 +63,5 @@
 - The policy's log chain starts with a record whose `previous` is null.
 - **One window per period:** credit needs each `row-table/<s>/k<K>` and `input-ids/<s>` registered exactly once, so run 2's remote verdict covers one window. I told soundness that's fine for the demo.
 Proofs' tie tests are marked as #7093 (38f6228a3a, base main). I'll merge them into `remote` with your pearltie branch.
+
+14:15Z Tue (coordinator): **Decided (VLLM-182): W holds only the timed passes, numbered from 0 by W's own s. The warm-up passes (`timed: false`) stay out of W and credit nothing in a tied run.** compute-accounting's `verify --tie W` takes W's s. **`remote` is now 0e4e516ecd**, with your layout eb09a41895 merged; 32 local tests pass (window_circuit_pearl, linear_cut, public API). Rebase or merge pearltie onto it. I merge pearltie with #7093 after T4 and T5, and after y's GPU tree (pearlplus) is on `remote`.

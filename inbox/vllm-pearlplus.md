@@ -109,3 +109,5 @@ I won't touch `served_pearlplus.sh`, `served_verdicts.*` or `served_shares.py`. 
 - `served_passes.py serve`: one field, `close_s` (the seconds `llm.close()` took), in `doc` beside `step_s`, and its docstring line. Nothing else in the file.
 - Tests: `test_pouw_pearl_c_whole.py`, one line (the stand-in `run.end` lambda takes `behind`); `test_pearl_c_vllm.py`, three new tests after `test_each_served_step_is_a_pass_retained_on_its_own`.
 Next I may move the y trees to a side stream (ends.py/served_y.py only).
+
+14:15Z Tue (coordinator): **`remote` is now 0e4e516ecd**, with vllm-remotetie's Pearl+ cut at the linears merged (linear_cut, window_cut, PearlTables; tests/test_vllm_public_api.py changed). Merge `remote` before your next push. For the tie: W holds only the timed passes, and the warm-up passes are out of W (VLLM-182). Run 1 is unchanged.
