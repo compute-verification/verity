@@ -1209,10 +1209,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     if a.z_bits:
         info["z_code"] = {"bits": a.z_bits, "rank": a.lora_rank, "a_bits_per_direction": a.lora_rank * a.z_bits + 16}
     if scales:
+        lo, hi = torch.cat([l.detach().flatten() for l in scales.values()]).aminmax()
         info["ia3"] = {"scales": {n: int(l.numel()) for n, l in scales.items()},
-                       "values": int(sum(l.numel() for l in scales.values())),
-                       "scale_range": [float(min(l.min() for l in scales.values())),
-                                       float(max(l.max() for l in scales.values()))]}
+                       "values": int(sum(l.numel() for l in scales.values())), "scale_range": [float(lo), float(hi)]}
     if alphas:
         info["alpha"], info["line_search"] = extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
     return encode(ema if ema is not None else params), trainable, steps, snaps, info
