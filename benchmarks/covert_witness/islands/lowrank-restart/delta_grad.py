@@ -26,10 +26,12 @@ keeps its row and column factors); E codes the scattered Δ once at `--e-bits`. 
 W + B A instead (B zero, A drawn from `--seed`): a block's message is its factor gradients Bᵀ G and G Aᵀ, computed from
 its own G, the factors are the optimizer's tensors and the store's, and E is CWLORA2 at `--e-bits` (4 or 8).
 `--targets gains` makes the norm gains of `--blocks` and the final norm the trained set instead (elementwise: `--opt
-sign` or `adamw`), coded, reduced and stored like the matrices, for a state small enough for Fit at the default dial.
+sign` or `adamw`), coded, reduced and stored like the matrices, for a state small enough for Fit at the default dial
+(`gains:mlp_norm+norm --blocks 5-5`, 1,024 values on s-t20, is Fit at 8 KiB).
 Otherwise the trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
 record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits (`delta_grad`, in the
-keys the other directions use), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
+keys the other directions use; Δ_grad prices each message entry at te_core's 32-bit accumulator, whatever its coded
+width, which `coded_delta_grad_bits` keeps), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
 update application Δ_t + Δ_grad ≤ k) at k = 8 KiB (the console's default), 10 kB, 1 MB and 10 MB, with sτ = a block's
 tokens × ⌈log₂ V⌉ bits. Fit's blocks are about 1,250 training tokens at the console's default: `--leaf 1` (1,024).
 
@@ -64,6 +66,9 @@ KS = {"8KiB": 2 ** 16, "10kB": 8 * 10 ** 4, "1MB": 8 * 10 ** 6, "10MB": 8 * 10 *
 CODE_FLOPS = 16
 #: a sticky store scale, when a value outgrows it, becomes this × its group's absmax (so it is rarely re-fit)
 STICKY_HEADROOM = 1.125
+#: te_core 4.x's capture prices Δ_grad's gradient cut at the accumulator's width, 32 bits an element at least, so a
+#: coded message counts at 32 bits an entry in `delta_grad_bits` (its coded width is `coded_message_bits`)
+ACCUMULATOR_BITS = 32
 
 
 # ---- codes ------------------------------------------------------------------------------------------------------------
@@ -385,14 +390,16 @@ def accounting(a, shapes: dict, n_norm: int, opt: Opt, tau_bits: int) -> dict:
     """Formalism v2's training quantities for this run's configuration, in bits (`fit` adds Δ once E exists)."""
     n = sum(math.prod(s) for s in shapes.values())
     nm = sum(a.mom_rank * (max(s) + min(s)) for s in shapes.values()) if a.msg_proj else n
-    msg = 32 * nm if a.msg_bits >= 32 else nm if a.vote else nm * a.msg_bits + 16 * (nm // a.group)
-    msg += 32 * n_norm
+    coded = 32 * nm if a.msg_bits >= 32 else nm if a.vote else nm * a.msg_bits + 16 * (nm // a.group)
+    coded += 32 * n_norm
+    msg = ACCUMULATOR_BITS * (nm + n_norm)
     state = opt.state_bits() + 64 * n_norm
     store = 16 * n if a.store == "bf16" else n * int(a.store[1:]) + 16 * (n // a.group)
     store += 32 * n_norm
     s_tau = a.leaf * prepare.EVAL_CTX * tau_bits
     return {"n_matrix_entries": n, "n_message_entries": nm, "n_norm_entries": n_norm, "message_bits": msg,
-            "state_bits": state, "delta_grad_bits": msg + state, "delta_t_bits": store, "tau_bits": tau_bits,
+            "coded_message_bits": coded, "state_bits": state, "delta_grad_bits": msg + state,
+            "coded_delta_grad_bits": coded + state, "delta_t_bits": store, "tau_bits": tau_bits,
             "s_tau_bits": s_tau, "leaf_tokens": a.leaf * prepare.EVAL_CTX, "tree": a.tree}
 
 
@@ -411,7 +418,8 @@ def main() -> int:
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names joined by '+' (wq+wo); "
-                    "gains: the norm gains of --blocks and the final norm, as the coded trainable set")
+                    "gains: the norm gains of --blocks and the final norm, as the coded trainable set; "
+                    "gains:KINDS only those of KINDS (attn_norm, mlp_norm, norm joined by '+')")
     ap.add_argument("--blocks", default="all", help="all, or LO-HI (0-based, inclusive)")
     ap.add_argument("--norms", choices=("trained", "none"), default="trained",
                     help="trained: the gains of the trained blocks and the final norm")
@@ -480,16 +488,19 @@ def main() -> int:
     for p in params.values():
         p.requires_grad_(False)
     theta_dev = {n: theta[n].to(DEV) for n in params}
-    gains = a.targets == "gains"
+    gains = a.targets.split(":")[0] == "gains"
     if gains and (a.opt not in ("sign", "adamw") or lora or sparse or a.mom_rank):
         raise SystemExit("delta_grad: --targets gains trains the norm gains elementwise (--opt sign or adamw), "
                          "with no --lora, --support or --mom-rank")
+    kinds = set(a.targets.split(":")[1].split("+")) if ":" in a.targets else {"attn_norm", "mlp_norm", "norm"}
     n_layer = 1 + max(int(n.split(".")[1]) for n in params if n.startswith("blocks."))
     lo = int(a.blocks.split("-")[0]) if gains and a.blocks != "all" else 0
     hi = int(a.blocks.split("-")[1]) if gains and a.blocks != "all" else n_layer - 1
-    targets = sorted(n for n, p in params.items() if p.ndim == 1 and (
-        n.startswith("norm") or n.startswith("blocks.") and lo <= int(n.split(".")[1]) <= hi)) if gains \
+    targets = sorted(n for n, p in params.items() if p.ndim == 1 and n.split(".")[-1] in kinds and (
+        n == "norm" or n.startswith("blocks.") and lo <= int(n.split(".")[1]) <= hi)) if gains \
         else targets_of(params, a.targets, a.blocks)
+    if not targets:
+        raise SystemExit(f"delta_grad: --targets {a.targets} --blocks {a.blocks} names no tensor")
     lo = lo if gains else min(int(n.split(".")[1]) for n in targets)
     norms = []
     if a.norms == "trained" and not gains:
