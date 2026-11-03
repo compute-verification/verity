@@ -191,8 +191,6 @@ Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` 
 2. It opens nothing outside the tree but the interpreter's own files (an audit hook on `open`, `os.listdir`, `os.scandir`).
 3. Keys reproduce `tests/key_vectors.json`.
 4. No `owner` field.
-5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
-   its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
-   module).
+5. It lists the whole graph in under 60 CPU seconds of one core.
 6. Errors never become results; a fail is never retried.
 7. The reference executor lists once: no task's run calls a lister, on a clean tree or a dirty one.
