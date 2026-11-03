@@ -572,11 +572,10 @@ def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names()
     b = F.bound(coded, c, 2800)
     assert (b["terms"]["token"], b["terms"]["decoding"], b["binding"]) == (
         pytest.approx(0.5), pytest.approx(c * 0.5 / (5e10 + 1.75e8)), "decoding")
-    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"te_core {F_VERSION}, reading A"
+    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"{F.THE_CODE} {F_VERSION}, reading A"
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"].startswith(
         f"unmeasured: {F.LOG_UNKNOWN}; 100% of its products' MACs")
-    assert b["unmeasured"]["fresh_products"].endswith(f"a trace with te_core {F.PRODUCTS_FROM} or later keeps them "
-                                                      f"(te_core.capture.products)")
+    assert b["unmeasured"]["fresh_products"].endswith(f"a trace from {F.THE_CODE} {F.PRODUCTS_FROM} on keeps them")
     assert b["inputs"]["fresh_products"] == {"source": "op log", "order": "chain", "rows": 1, "unknown_share": 1.0,
                                              "macs": {"theta": 0.0, "attention": 0.0, "unknown": 1e12}}
     assert F.bound(replace(coded, ops=None), c, 2800)["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
@@ -625,7 +624,7 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert one["binding_kind"] == "fresh_products" and one["rho"] == pytest.approx(rho * policy.CONSOLE[0] / c,
                                                                                    rel=1e-12)
     assert one["sensitivities"]["fresh_cell"] == pytest.approx(proved["rho"] * policy.CONSOLE[0] / c, rel=1e-12)
-    assert "P-chain" in one["rests_on"] and "without P-cell" in one["rests_on"]
+    assert "P-chain" in one["rests_on"] and f"without assuming that {F.P_CELL_WORDS}" in one["rests_on"]
     assert F.bound(replace(chain, products=chain.products | {"order": None}), c, k)["terms"]["fresh_products"] == rho
     tree = F.bound(replace(chain, products=chain.products | {"order": "tree"}), c, k)
     assert tree["terms"]["fresh_products"] is None and "declares its products summed in a tree" in tree["unmeasured"][
@@ -645,13 +644,57 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert F.bound(steps, c, k)["terms"]["fresh_products"] == pytest.approx(rho, rel=1e-10)
     assert F.from_json(chain.to_json()).products == chain.products
     assert "fresh operands" in F.RESTS_ON["fresh_products"] and "P-chain" in F.RESTS_ON["fresh_products"]
-    assert all(x in F.RESTS_ON["fresh_products"] for x in ("P-match", "P-width extended"))
-    assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in ("P-match", "P-width (extended)", "P-chain"))
+    assert all(x in F.RESTS_ON["fresh_products"] for x in (F.P_MATCH, F.P_WIDTH, F.P_CHAIN, "P-share"))
+    assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in (F.P_MATCH, "(P-width, extended", F.P_CHAIN))
     assert F.bound(replace(chain, products=chain.products | {"system": None}), c, k)["unmeasured"][
         "fresh_products"] == F.FRESH_RETRACE
     hand = F.bound(replace(chain, products={"k": k, "order": "chain", "products": [SQUARE]}), c, k)
     assert hand["terms"]["fresh_products"] == io_bound.bound([SQUARE], c, k, 1e12)["proved"]["rho_no_cell"]
     assert hand["inputs"]["fresh_products"]["whole_making"] == F.ONE_CLASS
+
+
+#: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
+#: (te_core, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) or a command-line flag
+CODE_NAME = __import__("re").compile(r"\b[A-Za-z]\w*\.[A-Za-z_]\w*|\b[A-Za-z][A-Za-z0-9]*_\w+\b|--[a-z]")
+
+
+def test_no_published_string_names_the_code():
+    """Every string a panel publishes is plain words, since the dashboard prints them on a reader's page: what each kind
+    and each published ρ rests on, every reason a term is unmeasured (an op log, no product rows, another k, a tree, a
+    retrace, an unchecked trace, products written elementwise, a broken P-match, a void, a stand-in), the
+    sensitivities' labels, the record's labels and the label. The code is "training's slowdown code", and a premise is
+    named in words beside its name."""
+    c, k = 1e11, policy.CONSOLE[1]
+    static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
+              F.FRESH_UNMEASURED, F.FRESH_VOID, F.FRESH_RETRACE, F.FRESH_UNCHECKED, F.ONE_CLASS, F.LOG_UNKNOWN,
+              F.STAND_IN, F.ENTRIES, F.OPS, F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
+    strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
+    chain = {"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM, "elementwise_products": []}
+    coded = one_segment(delta=500.0, decoder=5e10)
+    records = [coded, replace(coded, ops=None), replace(coded, ops=[]), replace(coded, entries=None)] + [
+        replace(one_segment(), products=chain | x) for x in (
+            {}, {"system": None}, {"elementwise_products": None}, {"order": "tree"},
+            {"elementwise_products": [{"op": "mul", "count": 2, "macs": 4.0}]},
+            {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]})] + [
+        replace(one_segment(), products={x: v for x, v in chain.items() if x != "system"})]
+    reasons = set()
+    for m in records:
+        for at in (k, 2800.0, 80_000.0):
+            b = F.bound(m, c, at)
+            strings += [b["label"], *b["rests_on"].values(), *b["unmeasured"].values(), *b["labels"].values()]
+            reasons |= set(b["unmeasured"].values())
+            if isinstance(b["inputs"]["fresh_products"].get("whole_making"), str):
+                strings.append(b["inputs"]["fresh_products"]["whole_making"])
+            for reading in ("A", "B"):
+                one = F.published(m, c, at, reading)
+                strings += [one["label"], one["rests_on"], one["why"] or ""]
+    assert {F.FRESH_UNMEASURED, F.FRESH_RETRACE, F.FRESH_UNCHECKED} <= reasons
+    assert all(any(x in r for r in reasons) for x in ("op log", "classified at k", "summed in a tree", "elementwise "
+                                                      "steps (", "breaks the premise", "no entries", "no op log"))
+    named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
+    assert not named, named
+    assert all(f"{words} ({name})" in F.RESTS_ON["fresh_products"] for name, words in F.PREMISES.items()
+               if name != "P-cell") and F.P_CELL_WORDS in F.RESTS_ON_CELL["fresh_products"]
 
 
 def test_published_reading_a_where_fit_holds_is_fits_c_over_c_minus_d():
@@ -865,7 +908,7 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == F.FRESH_VOID
     assert b["sensitivities"]["fresh_cell"] is None and b["unmeasured"]["fresh_cell"] == F.FRESH_VOID
     broken, why, inputs = term(got | {"p_match": [{"op": "expand", "fan_out": 2.0, "count": 6}]})
-    assert broken is None and "breaks P-match" in why and "expand (fan-out 2, 6×)" in why
+    assert broken is None and f"breaks the premise that {F.P_MATCH}" in why and "expand (fan-out 2, 6×)" in why
     assert inputs["p_match"] == [{"op": "expand", "fan_out": 2.0, "count": 6}]
 
 
@@ -900,7 +943,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     assert [round(c * per[str(k)][0]) for k in (65_536, 80_000, 145_568)] == [163_341, 130_996, 64_340]
     assert [per[str(k)] is None for k in products.DIAL_K] == [False] * 3 + [True] * 4
     term, why, _ = F.fresh_products(m, c, 100_000)
-    assert term is None and "keep none at it" in why and "DIAL_K" in why
+    assert term is None and "keep none at it" in why and "each k of the console's dial" in why
     assert F.fresh_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {"65536": per["65536"]}
     assert F.fresh_per_c(replace(m, products=None)) is None
     assert F.from_json(m.to_json()).products == m.products

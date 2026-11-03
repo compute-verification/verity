@@ -68,7 +68,7 @@ def test_every_rho_is_rho_fit_where_fit_holds_else_the_max_over_measured_kinds_n
     assert built["version"] == VERSION and built["kinds"] == list(formalism.KINDS)
     assert set(built["rests_on"]) == set(formalism.KINDS) and set(built["sensitivities"]) == set(formalism.SENSITIVITIES)
     for v in built["vectors"]:
-        assert v["label"] == f"te_core {VERSION}, reading A"
+        assert v["label"] == f"{formalism.THE_CODE} {VERSION}, reading A"
         measured = {kind: num(t) for kind, t in v["terms"].items() if t is not None}
         assert set(v["terms"]) - set(measured) <= set(v["unmeasured"])
         top = max(measured.values()) if measured else None
@@ -183,7 +183,7 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     2,870,251 before that trim; 4.11's one-class rule gave 165,021 and 3,041,057)."""
     f = built["fresh"]
     assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
-    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and "without P-cell" in f["rests_on"]
+    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and f"without assuming that {formalism.P_CELL_WORDS}" in f["rests_on"]
     vs = {v["name"]: v for v in f["vectors"]}
     from te_core import io_bound
 
@@ -276,7 +276,7 @@ def test_the_published_vectors_take_each_case_of_the_rule(built):
             assert max(terms.values()) <= 1
             seen.add("none")
         assert v["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if v["rho"] is None else v["binding_kind"]]
-        assert v["label"] == f"te_core {VERSION}, reading A"
+        assert v["label"] == f"{formalism.THE_CODE} {VERSION}, reading A"
     assert seen == {"fit", ("max", True), ("max", False), "unmeasured", "none"}
 
 
