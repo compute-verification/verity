@@ -1,7 +1,7 @@
 /-
 A draw over hidden positions (`one_stage.hidden_draw`): a stratum's population is `M` positions whose layout is private.
 The prover commits a calls table before the draw coin, call `c` an `offset` and its live `rows`, each row `width` units
-(column tiles) wide, and the verifier draws positions `r < M` from its own coins. A drawn position is proved by a witness
+(column tiles) wide, and positions `r < M` are drawn from the challenger's coins. A drawn position is proved by a witness
 `(c, j, t)` that the opening checks inside the proof: call `c` covers `r` (`offset ≤ r < offset + rows·width`), and
 `r − offset = j·width + t`, so `j` is the live row and `t` the tile (`witness`).
 

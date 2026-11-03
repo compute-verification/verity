@@ -70,11 +70,13 @@ def setupOf (I : Inputs) (record : String) : V (SessionSpec × Array Stmt) :=
     I.program
 
 /-- `verify --zk --registered F`'s verdict on a session set up as `s`: every table's registered reads against `own`,
-every table's shape, and `Zk.verify`. -/
+every port of every table's circuit a port of `own` (`Registered.checkComplete`), every table's shape, and
+`Zk.verify`. -/
 def acceptsZKRAt (s : V (SessionSpec × Array Stmt)) (own : Array Registered.Port) (record : String)
     (proofs : Array ByteArray) : V Unit := do
   let r ← s
   r.2.forM (checkRegistered · (some own))
+  r.2.forM fun st => Registered.checkComplete st.c own
   r.2.forM Zk.shapeOk
   Zk.verify r.1 (r.2.map Setup.ofCircuit) record proofs
 
