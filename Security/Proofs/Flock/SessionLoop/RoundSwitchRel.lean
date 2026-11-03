@@ -130,7 +130,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [hrk, repRounds_true]
     simp only [hz]
     rw [hst]
-    unfold FlockComplete.piopRoundsZk
     omega
   obtain ⟨i, hp⟩ : ∃ i, ops.length = i + 2 := ⟨ops.length - 2, by omega⟩
   obtain ⟨a, ha⟩ : ∃ a, A + k = a + 1 := ⟨A + k - 1, by omega⟩
