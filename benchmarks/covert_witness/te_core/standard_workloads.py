@@ -15,7 +15,8 @@ at the console's default policy (`CONSOLE`, te_core.policy's: one full session o
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
 has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
-algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
+algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, its `void` mark
+where the ρ reads a void fresh-products term (algorithm_policy's `voided`: a 0 that is no result), and, beside
 them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
 P-cell) and reading B's token and decoding forms. `rho_inputs` holds
 `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
@@ -360,11 +361,12 @@ def rho_cell(v: float | None) -> float | str | None:
     return None if v is None else "inf" if math.isinf(v) else float(algorithm_policy.num(v))
 
 
-def kinds(one: dict, b: dict) -> str:
+def kinds(one: dict, b: dict, void: bool = False) -> str:
     """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
-    from the one bound `b` at its point, less any `one`'s max takes."""
+    from the one bound `b` at its point, less any `one`'s max takes, marked `void` where `one` reads a void
+    fresh-products term (algorithm_policy's `voided`)."""
     return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
-                                                           if s not in one["terms"]}})
+                                                           if s not in one["terms"]}}, void)
 
 
 def finite(x):
@@ -409,7 +411,8 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
         con = one["console"]
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
-                     con["binding_kind"], con["rests_on"], kinds(con, bound["console"]),
+                     con["binding_kind"], con["rests_on"],
+                     kinds(con, bound["console"], algorithm_policy.voided(m, con)),
                      rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
                                "w_fwd_gates": w_fwd, "labels": m.labels,

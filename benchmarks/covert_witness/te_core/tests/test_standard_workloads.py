@@ -133,6 +133,17 @@ def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_
         build(m, fx, monkeypatch)
 
 
+def test_a_row_reading_a_void_fresh_products_term_has_its_kinds_cell_marked_void(monkeypatch):
+    """Where algorithm_policy.voided finds a row's published ρ at the console's default reading a void fresh-products
+    term (a 0 where io_bound's proved Λ is void, no result), its kinds cell carries algorithm-policy's void mark."""
+    fx = json.loads(PINNED.read_text())
+    m = formalism.from_json(fx["measured"])
+    seen = []
+    monkeypatch.setattr(algorithm_policy, "voided", lambda mm, one: seen.append((mm, one["reading"])) or True)
+    _, _, cells = build(m, fx, monkeypatch)
+    assert seen == [(m, "A")] and json.loads(cells["kinds"])["void"] == algorithm_policy.VOIDED
+
+
 def test_traces_from_te_core_4_4_to_this_one_are_read_and_others_refused(tmp_path, monkeypatch):
     (tmp_path / "traces").mkdir()
     (tmp_path / "manifest.json").write_text(json.dumps({"te_commit": "c0ffee"}))
