@@ -572,11 +572,10 @@ def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names()
     b = F.bound(coded, c, 2800)
     assert (b["terms"]["token"], b["terms"]["decoding"], b["binding"]) == (
         pytest.approx(0.5), pytest.approx(c * 0.5 / (5e10 + 1.75e8)), "decoding")
-    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"te_core {F_VERSION}, reading A"
+    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"{F.THE_CODE} {F_VERSION}, reading A"
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"].startswith(
         f"unmeasured: {F.LOG_UNKNOWN}; 100% of its products' MACs")
-    assert b["unmeasured"]["fresh_products"].endswith(f"a trace with te_core {F.PRODUCTS_FROM} or later keeps them "
-                                                      f"(te_core.capture.products)")
+    assert b["unmeasured"]["fresh_products"].endswith(f"a trace from {F.THE_CODE} {F.PRODUCTS_FROM} on keeps them")
     assert b["inputs"]["fresh_products"] == {"source": "op log", "order": "chain", "rows": 1, "unknown_share": 1.0,
                                              "macs": {"theta": 0.0, "attention": 0.0, "unknown": 1e12}}
     assert F.bound(replace(coded, ops=None), c, 2800)["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
@@ -608,7 +607,8 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     from te_core import io_bound
 
     c, k = 1e11, policy.CONSOLE[1]
-    chain = replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM})
+    chain = replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM,
+                                             "elementwise_products": []})
     b = F.bound(chain, c, k)
     wc = F.whole_chain(SYSTEM, k)["whole_chain"]
     assert wc == pytest.approx(io_bound.whole_chain(k, 512, 16), rel=1e-9)
@@ -624,7 +624,7 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert one["binding_kind"] == "fresh_products" and one["rho"] == pytest.approx(rho * policy.CONSOLE[0] / c,
                                                                                    rel=1e-12)
     assert one["sensitivities"]["fresh_cell"] == pytest.approx(proved["rho"] * policy.CONSOLE[0] / c, rel=1e-12)
-    assert "P-chain" in one["rests_on"] and "without P-cell" in one["rests_on"]
+    assert "P-chain" in one["rests_on"] and f"without assuming that {F.P_CELL_WORDS}" in one["rests_on"]
     assert F.bound(replace(chain, products=chain.products | {"order": None}), c, k)["terms"]["fresh_products"] == rho
     tree = F.bound(replace(chain, products=chain.products | {"order": "tree"}), c, k)
     assert tree["terms"]["fresh_products"] is None and "declares its products summed in a tree" in tree["unmeasured"][
@@ -644,13 +644,57 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert F.bound(steps, c, k)["terms"]["fresh_products"] == pytest.approx(rho, rel=1e-10)
     assert F.from_json(chain.to_json()).products == chain.products
     assert "fresh operands" in F.RESTS_ON["fresh_products"] and "P-chain" in F.RESTS_ON["fresh_products"]
-    assert all(x in F.RESTS_ON["fresh_products"] for x in ("P-match", "P-width extended"))
-    assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in ("P-match", "P-width (extended)", "P-chain"))
+    assert all(x in F.RESTS_ON["fresh_products"] for x in (F.P_MATCH, F.P_WIDTH, F.P_CHAIN, "P-share"))
+    assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in (F.P_MATCH, "(P-width, extended", F.P_CHAIN))
     assert F.bound(replace(chain, products=chain.products | {"system": None}), c, k)["unmeasured"][
         "fresh_products"] == F.FRESH_RETRACE
     hand = F.bound(replace(chain, products={"k": k, "order": "chain", "products": [SQUARE]}), c, k)
     assert hand["terms"]["fresh_products"] == io_bound.bound([SQUARE], c, k, 1e12)["proved"]["rho_no_cell"]
     assert hand["inputs"]["fresh_products"]["whole_making"] == F.ONE_CLASS
+
+
+#: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
+#: (te_core, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) or a command-line flag
+CODE_NAME = __import__("re").compile(r"\b[A-Za-z]\w*\.[A-Za-z_]\w*|\b[A-Za-z][A-Za-z0-9]*_\w+\b|--[a-z]")
+
+
+def test_no_published_string_names_the_code():
+    """Every string a panel publishes is plain words, since the dashboard prints them on a reader's page: what each kind
+    and each published ρ rests on, every reason a term is unmeasured (an op log, no product rows, another k, a tree, a
+    retrace, an unchecked trace, products written elementwise, a broken P-match, a void, a stand-in), the
+    sensitivities' labels, the record's labels and the label. The code is "training's slowdown code", and a premise is
+    named in words beside its name."""
+    c, k = 1e11, policy.CONSOLE[1]
+    static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
+              F.FRESH_UNMEASURED, F.FRESH_VOID, F.FRESH_RETRACE, F.FRESH_UNCHECKED, F.ONE_CLASS, F.LOG_UNKNOWN,
+              F.STAND_IN, F.ENTRIES, F.OPS, F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
+    strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
+    chain = {"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM, "elementwise_products": []}
+    coded = one_segment(delta=500.0, decoder=5e10)
+    records = [coded, replace(coded, ops=None), replace(coded, ops=[]), replace(coded, entries=None)] + [
+        replace(one_segment(), products=chain | x) for x in (
+            {}, {"system": None}, {"elementwise_products": None}, {"order": "tree"},
+            {"elementwise_products": [{"op": "mul", "count": 2, "macs": 4.0}]},
+            {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]})] + [
+        replace(one_segment(), products={x: v for x, v in chain.items() if x != "system"})]
+    reasons = set()
+    for m in records:
+        for at in (k, 2800.0, 80_000.0):
+            b = F.bound(m, c, at)
+            strings += [b["label"], *b["rests_on"].values(), *b["unmeasured"].values(), *b["labels"].values()]
+            reasons |= set(b["unmeasured"].values())
+            if isinstance(b["inputs"]["fresh_products"].get("whole_making"), str):
+                strings.append(b["inputs"]["fresh_products"]["whole_making"])
+            for reading in ("A", "B"):
+                one = F.published(m, c, at, reading)
+                strings += [one["label"], one["rests_on"], one["why"] or ""]
+    assert {F.FRESH_UNMEASURED, F.FRESH_RETRACE, F.FRESH_UNCHECKED} <= reasons
+    assert all(any(x in r for r in reasons) for x in ("op log", "classified at k", "summed in a tree", "elementwise "
+                                                      "steps (", "breaks the premise", "no entries", "no op log"))
+    named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
+    assert not named, named
+    assert all(f"{words} ({name})" in F.RESTS_ON["fresh_products"] for name, words in F.PREMISES.items()
+               if name != "P-cell") and F.P_CELL_WORDS in F.RESTS_ON_CELL["fresh_products"]
 
 
 def test_published_reading_a_where_fit_holds_is_fits_c_over_c_minus_d():
@@ -670,7 +714,7 @@ def test_published_reading_a_above_1_is_the_measured_max_partial_where_a_kind_is
     assert one["partial"] and one["why"] is None and one["terms"]["fresh_products"] is None
     assert one["rests_on"] == F.RESTS_ON_CELL["token"]
     chain = replace(one_segment(), products={"k": policy.CONSOLE[1], "order": "chain", "products": [SQUARE],
-                                             "system": SYSTEM})
+                                             "system": SYSTEM, "elementwise_products": []})
     full = F.published(chain, 1e10, policy.CONSOLE[1], "A")
     assert full["binding_kind"] == "fresh_products" and full["rho"] == full["terms"]["fresh_products"] > 1
     assert not full["partial"] and full["rests_on"] == F.RESTS_ON_CELL["fresh_products"]
@@ -691,7 +735,8 @@ def test_published_reading_a_with_every_kind_measured_and_none_above_1_is_1_bind
     """Every kind measured (the chain's products, an op log and entries), each at most 1 at c = 1e8: ρ is 1, binding
     none, resting on no kind exceeding 1; the floor sets it, not the token term."""
     k = policy.CONSOLE[1]
-    chain = replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM})
+    chain = replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM,
+                                             "elementwise_products": []})
     one = F.published(chain, 1e8, k, "A")
     assert all(t is not None and t <= 1 for t in one["terms"].values())
     assert (one["rho"], one["binding_kind"], one["partial"], one["why"]) == (1.0, "none", False, None)
@@ -863,7 +908,7 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == F.FRESH_VOID
     assert b["sensitivities"]["fresh_cell"] is None and b["unmeasured"]["fresh_cell"] == F.FRESH_VOID
     broken, why, inputs = term(got | {"p_match": [{"op": "expand", "fan_out": 2.0, "count": 6}]})
-    assert broken is None and "breaks P-match" in why and "expand (fan-out 2, 6×)" in why
+    assert broken is None and f"breaks the premise that {F.P_MATCH}" in why and "expand (fan-out 2, 6×)" in why
     assert inputs["p_match"] == [{"op": "expand", "fan_out": 2.0, "count": 6}]
 
 
@@ -898,7 +943,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     assert [round(c * per[str(k)][0]) for k in (65_536, 80_000, 145_568)] == [163_341, 130_996, 64_340]
     assert [per[str(k)] is None for k in products.DIAL_K] == [False] * 3 + [True] * 4
     term, why, _ = F.fresh_products(m, c, 100_000)
-    assert term is None and "keep none at it" in why and "DIAL_K" in why
+    assert term is None and "keep none at it" in why and "each k of the console's dial" in why
     assert F.fresh_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {"65536": per["65536"]}
     assert F.fresh_per_c(replace(m, products=None)) is None
     assert F.from_json(m.to_json()).products == m.products
@@ -1034,8 +1079,10 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     products reading gathered rows, which its rows can't name; at 4.12.1 at the console's k only, though the trace
     keeps rows at each k of the dial (`at`). `complete` reads them as this te_core's ingest of the same rows over the
     same traced steps (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a stand-in), so rows
-    captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered` are
-    measured on their system, at each k their trace keeps rows at (the served block's here), with no re-ingest;
+    captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered`, from a
+    capture that looked for products written elementwise and found none, are measured on their system, at each k
+    their trace keeps rows at (the served block's here), with no re-ingest; products a 4.12 ingest stored are never
+    read as they are, since no capture before `ELEMENTWISE_FROM` looked for those products (`FRESH_UNCHECKED`);
     products a record has of its own stand."""
     row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
            "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
@@ -1080,12 +1127,11 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     assert now_412["products"]["system"] is None
     at_412 = before_412(now_412)
     at_412["products"] |= {"system": F.system_of([r | {"gathered": [False, False]} for r in fed]), "p_match": []}
-    stale = fresh(at_412 | {"trace": {}})
-    assert stale[0] > 0 and stale[2]["whole_making"] != F.ONE_CLASS
+    assert fresh(at_412 | {"trace": {}})[:2] == (None, F.FRESH_UNCHECKED)
     for old, rows in ((at_48, now), (at_411, now), (at_412, now_412)):
         assert F.complete(old, out, SHAPE).products == rows["products"]
         assert fresh(old)[:2] == (None, F.FRESH_RETRACE)
-    captured = block | {"capture": F.SYSTEM_FROM, "p_match": [],
+    captured = block | {"capture": F.ELEMENTWISE_FROM, "p_match": [], "elementwise_products": [],
                         "rows": [r | {"gathered": [False, False]} for r in fed]}
     now = F.of_record(record(captured))
     assert now["products"]["system"] is not None
@@ -1103,7 +1149,7 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
 
 
 def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whatever_te_core_ingested_it(monkeypatch):
-    """The 45M dense step's 4.12.1 capture (`dense_45m.products.json`) as a ledger row's trace. Ingested at 4.11 (rows
+    """The 45M dense step's capture (`dense_45m.products.json`) as a ledger row's trace. Ingested at 4.11 (rows
     with no `fed`, `P` or `gathered`, products with no system) the row published the one-class rule's number; read
     now it publishes the fresh-products kind unmeasured with the retrace reason until it is traced again. Ingested at
     4.12.1 (products at the console's k only, none at the dial's other k, no `fed` and no shared-prefix trim) it
@@ -1132,7 +1178,8 @@ def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whateve
 
     c = policy.CONSOLE[0]
     rows = [{x: v for x, v in r.items() if x not in ("fed", "P", "gathered")} for r in fixture["rows"]]
-    at_411 = row({x: v for x, v in fixture.items() if x not in ("at", "p_match")} | {"capture": "4.11", "rows": rows})
+    at_411 = row({x: v for x, v in fixture.items() if x not in ("at", "p_match", "elementwise_products")}
+                 | {"capture": "4.11", "rows": rows})
     at_411["formalism"]["products"] = {x: v for x, v in at_411["formalism"]["products"].items()
                                        if x not in ("system", "p_match", "gathered", "shared_prefix")}
     one_class, why = fresh(stored(at_411), c, policy.CONSOLE[1])
