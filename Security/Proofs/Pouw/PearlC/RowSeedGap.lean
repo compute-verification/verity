@@ -6,7 +6,7 @@ import Proofs.Pouw.PearlC.DeviceSm120Gap
 # Row additivity: rev1's TT_OUT gives the row-seeded one (staging, nothing pinned)
 
 The per-row seed is not a new assumption: rev1's TT_OUT on the split workload, where every row is a unit of its own,
-gives `TTOutRowSeed`, and the γ theorems carry over with the error at the row count.
+gives `TTOutRowSeed`, and the g theorems carry over with the error at the row count.
 
 * **Transport:** at a row-local record (C0, `devAt_rowLocal`, by `rfl` at every captured step) and under C1, row `i`'s
   ticket and useful words (`split_ticket`, `split_useful`) and its debit (`split_debit`, `split_tileDebit`) are those of
@@ -17,10 +17,10 @@ gives `TTOutRowSeed`, and the γ theorems carry over with the error at the row c
 * **Per audit tile:** the same through the split layout's 64×64 tiles (`split_tileCredit_le`),
   `ttOutTileRowSeed_of_ttOutTile`.
 * **One-row units are admitted:** `pearlCDomainDev_split`, `devSm120v1_domain_row`, `devSm120v2_domain_row`.
-* **γ at any record,** on the one-shape domain with at most `2^64` rows, at `γ = 1 − (399/400)/ω` and error
+* **The gap at any record,** on the one-shape domain with at most `2^64` rows, at `g = 1 − (399/400)/ω` and error
   `δPearlC q (N·m)` (`ttOut_of_ttOutRowSeed`, `ttOutTile_of_ttOutTileRowSeed`): `pearlCGapDevRev1RowSeedAt` and
   `pearlCSampledDevRev1RowSeedAt`.
-* **γ at the sm_120 records**, from rev1's TT_OUT (per unit or per tile), C1 and C3 alone:
+* **The gap at the sm_120 records**, from rev1's TT_OUT (per unit or per tile), C1 and C3 alone:
   - v1 (`devSm120v1 Prices.sm120`), cap 1/400: `16223/3177500` at 8192³ and `2963/586700` at 16384³;
   - v2 (`devSm120v2 Prices.sm120`), cap 1/1,000: `216793/59950000` at 8192³ and `2950127/829250000` at 16384³;
   per unit and per audit tile, the rev1 values at both records.
@@ -1063,7 +1063,7 @@ theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [F
 
 end TileReduction
 
-/-! ## The γ theorems, with the error at the row count -/
+/-! ## The g theorems, with the error at the row count -/
 
 section Gap
 
@@ -1071,44 +1071,44 @@ variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **The row-seeded TT_OUT is a TT_OUT at the row count** on a one-shape domain of at most `2^64` rows: its error is
 `δPearlC q (N·m)`, `(q + R)/2^128` at the `R = N·m` declared rows. -/
-theorem ttOut_of_ttOutRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {d : PearlCDevice} {s : Shape} {γ₀ : ℝ}
-    (h : TTOutRowSeed CM P (pearlCDomainDev d) γ₀) :
-    TTOut CM P (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) γ₀ (fun q N => δPearlC q (N * s.m)) :=
+theorem ttOut_of_ttOutRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {d : PearlCDevice} {s : Shape} {g₀ : ℝ}
+    (h : TTOutRowSeed CM P (pearlCDomainDev d) g₀) :
+    TTOut CM P (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) g₀ (fun q N => δPearlC q (N * s.m)) :=
   ⟨h.1, fun U hU T hT q hq A hA => by
     have h' := h.2 U ⟨hU.1, hU.2.1.1⟩ hU.2.2 T hT q hq A hA
     rwa [rowsOf_const hU.2.1.2] at h'⟩
 
 /-- **The row-seeded TT_OUT per audit tile is a TT_OUT per tile at the row count**, as `ttOut_of_ttOutRowSeed`. -/
 theorem ttOutTile_of_ttOutTileRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S}
-    {d : PearlCDevice} {s : Shape} {γ₀ : ℝ} (h : TTOutTileRowSeed CM P TR (pearlCDomainDev d) γ₀) :
-    TTOutTile CM P TR (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) γ₀ (fun q N => δPearlC q (N * s.m)) :=
+    {d : PearlCDevice} {s : Shape} {g₀ : ℝ} (h : TTOutTileRowSeed CM P TR (pearlCDomainDev d) g₀) :
+    TTOutTile CM P TR (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) g₀ (fun q N => δPearlC q (N * s.m)) :=
   ⟨h.1, fun U hU T hT q hq A hA => by
     have h' := h.2 U ⟨hU.1, hU.2.1.1⟩ hU.2.2 T hT q hq A hA
     rwa [rowsOf_const hU.2.1.2] at h'⟩
 
 /-- The row-seeded TT_OUT does not read `W_ref`. -/
-theorem ttOutRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ}
-    (W : Layout → ℕ → ℝ) (h : TTOutRowSeed CM P D γ₀) : TTOutRowSeed CM { P with Wref := W } D γ₀ :=
+theorem ttOutRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {D : Layout → Prop} {g₀ : ℝ}
+    (W : Layout → ℕ → ℝ) (h : TTOutRowSeed CM P D g₀) : TTOutRowSeed CM { P with Wref := W } D g₀ :=
   h
 
 /-- The row-seeded TT_OUT per tile reads neither `W_ref` nor the credited rows' `W_ref`. -/
 theorem ttOutTileRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S}
-    {D : Layout → Prop} {γ₀ : ℝ} (W W' : Layout → ℕ → ℝ) (Wc : Layout → ℕ → Codes → ℝ)
-    (h : TTOutTileRowSeed CM P TR D γ₀) :
-    TTOutTileRowSeed CM { P with Wref := W } { TR with Wref := W', Wcred := Wc } D γ₀ :=
+    {D : Layout → Prop} {g₀ : ℝ} (W W' : Layout → ℕ → ℝ) (Wc : Layout → ℕ → Codes → ℝ)
+    (h : TTOutTileRowSeed CM P TR D g₀) :
+    TTOutTileRowSeed CM { P with Wref := W } { TR with Wref := W', Wcred := Wc } D g₀ :=
   h
 
-/-- **The row-seeded TT_OUT gives `G_γ` at any per-shape `W_ref`** `W`: rev1 with the per-row cap and `W_ref` at `W`, on
-the one-shape domain at `γ = 1 − (399/400)/ω`, where `W s = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
+/-- **The row-seeded TT_OUT gives `G_g` at any per-shape `W_ref`** `W`: rev1 with the per-row cap and `W_ref` at `W`, on
+the one-shape domain at `g = 1 − (399/400)/ω`, where `W s = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
 (`gapFromTTOut`). The reduction doesn't read `W_ref` (`ttOutRowSeed_wref`); `W` enters only through the per-unit bound
 `W_ref ≤ ω·credit` on the original layout. rev1 (`wrefDevRev1`) and the honest kernel's `wrefDevRev1K` instantiate it. -/
 theorem pearlCGapDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
-    (W : Shape → ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω) (hω : W s = ω * ((1 - ρ) * creditDevRev1 d s))
-    (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (W : Shape → ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω) (hω : W s = ω * ((1 - ρ) * creditDevRev1 d s))
+    (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem ρ) (pearlCDomainDev d) (1 / 400)) :
     GGap CM { pearlCProtocolDevRev1RowCap d sem ρ with Wref := fun L u => (W (L.shape u) : ℝ) }
-      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (γ : ℝ) (fun q N => δPearlC q (N * s.m)) := by
-  have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring
+      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (g : ℝ) (fun q N => δPearlC q (N * s.m)) := by
+  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
   rw [e]
   refine gapFromTTOut CM _ _ (1 / 400) (ω : ℝ) _ (by exact_mod_cast hω0) ?_
     (ttOut_of_ttOutRowSeed (ttOutRowSeed_wref (fun L u => (W (L.shape u) : ℝ)) hTT))
@@ -1171,28 +1171,28 @@ theorem pearlCSampledDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice)
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0
 
-/-- The row-seeded TT_OUT gives `G_γ` for rev1 with the per-row cap on the one-shape domain at
-`γ = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
+/-- The row-seeded TT_OUT gives `G_g` for rev1 with the per-row cap on the one-shape domain at
+`g = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
 (`gapFromTTOut`). -/
 theorem pearlCGapDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
-    (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
-    (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (s : Shape) (ω g : ℚ) (hω0 : 0 < ω) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
+    (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem ρ) (pearlCDomainDev d) (1 / 400)) :
-    GGap CM (pearlCProtocolDevRev1RowCap d sem ρ) (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (γ : ℝ)
+    GGap CM (pearlCProtocolDevRev1RowCap d sem ρ) (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (g : ℝ)
       (fun q N => δPearlC q (N * s.m)) :=
-  pearlCGapDevRev1RowSeedWAt CM d sem ρ (wrefDevRev1 d) s ω γ hω0 hω hγ hTT
+  pearlCGapDevRev1RowSeedWAt CM d sem ρ (wrefDevRev1 d) s ω g hω0 hω hg hTT
 
 /-- The row-seeded TT_OUT per audit tile gives `GGapSampled` for rev1's tiles with the per-row cap on the one-shape
-domain at `γ = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1 ≥ 0`, with the error at the row count
+domain at `g = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1 ≥ 0`, with the error at the row count
 (`gapSampled`). -/
 theorem pearlCSampledDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
-    (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω) (hw0 : 0 ≤ wrefDevRev1 d s)
-    (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (s : Shape) (ω g : ℚ) (hω0 : 0 < ω) (hw0 : 0 ≤ wrefDevRev1 d s)
+    (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem ρ) (pearlCTilesDevRev1RowCap d sem ρ)
       (pearlCDomainDev d) (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1RowCap d sem ρ) (pearlCTilesDevRev1RowCap d sem ρ)
-      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (γ : ℝ) (fun q N => δPearlC q (N * s.m)) :=
-  pearlCSampledDevRev1RowSeedWAt CM d sem ρ (wrefDevRev1 d) s ω γ hω0 hw0 hω hγ hTT
+      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (g : ℝ) (fun q N => δPearlC q (N * s.m)) :=
+  pearlCSampledDevRev1RowSeedWAt CM d sem ρ (wrefDevRev1 d) s ω g hω0 hw0 hω hg hTT
 
 /-! ## The sm_120 corollaries -/
 
@@ -1204,7 +1204,7 @@ theorem devSm120_add (G : ℕ) : 0 ≤ (devAt sm120E4m3 G Prices.sm120).prices.a
 theorem devSm120_bf16 (G : ℕ) : 0 ≤ (devAt sm120E4m3 G Prices.sm120).prices.bf16 := by
   show (0 : ℚ) ≤ Prices.sm120.bf16; norm_num [Prices.sm120]
 
-/-- **v1 with per-row seeds at 8192³**, from rev1's TT_OUT: `γ = 16223/3177500`, rev1's, with the error at the
+/-- **v1 with per-row seeds at 8192³**, from rev1's TT_OUT: `g = 16223/3177500`, rev1's, with the error at the
 `8192·N` rows. -/
 theorem pearlCGapSm120v1RowSeed_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
@@ -1218,7 +1218,7 @@ theorem pearlCGapSm120v1RowSeed_8192
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4) (devSm120_bf16 4))
 
-/-- **v1 with per-row seeds at 16384³**, from rev1's TT_OUT: `γ = 2963/586700`, rev1's, with the error at the
+/-- **v1 with per-row seeds at 16384³**, from rev1's TT_OUT: `g = 2963/586700`, rev1's, with the error at the
 `16384·N` rows. -/
 theorem pearlCGapSm120v1RowSeed_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
@@ -1233,7 +1233,7 @@ theorem pearlCGapSm120v1RowSeed_16384
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4) (devSm120_bf16 4))
 
 /-- **v2 with per-row seeds at the cap 1/1,000 at 8192³**, from rev1's TT_OUT (rev1 is v2's row at `G = 0`):
-`γ = 216793/59950000`, rev1's, with the error at the `8192·N` rows. -/
+`g = 216793/59950000`, rev1's, with the error at the `8192·N` rows. -/
 theorem pearlCGapSm120v2RowSeedCap1000_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1246,7 +1246,7 @@ theorem pearlCGapSm120v2RowSeedCap1000_8192
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0) (devSm120_bf16 0))
 
-/-- **v2 with per-row seeds at the cap 1/1,000 at 16384³**, from rev1's TT_OUT: `γ = 2950127/829250000`, rev1's,
+/-- **v2 with per-row seeds at the cap 1/1,000 at 16384³**, from rev1's TT_OUT: `g = 2950127/829250000`, rev1's,
 with the error at the `16384·N` rows. -/
 theorem pearlCGapSm120v2RowSeedCap1000_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
@@ -1260,7 +1260,7 @@ theorem pearlCGapSm120v2RowSeedCap1000_16384
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0) (devSm120_bf16 0))
 
-/-- **v1 with per-row seeds per audit tile at 8192³**, from rev1's TT_OUT per tile: `γ = 16223/3177500`. -/
+/-- **v1 with per-row seeds per audit tile at 8192³**, from rev1's TT_OUT per tile: `g = 16223/3177500`. -/
 theorem pearlCSampledSm120v1RowSeed_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1277,7 +1277,7 @@ theorem pearlCSampledSm120v1RowSeed_8192
     (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4)
       (devSm120_bf16 4))
 
-/-- **v1 with per-row seeds per audit tile at 16384³**, from rev1's TT_OUT per tile: `γ = 2963/586700`. -/
+/-- **v1 with per-row seeds per audit tile at 16384³**, from rev1's TT_OUT per tile: `g = 2963/586700`. -/
 theorem pearlCSampledSm120v1RowSeed_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1295,7 +1295,7 @@ theorem pearlCSampledSm120v1RowSeed_16384
       (devSm120_bf16 4))
 
 /-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 8192³**, from rev1's TT_OUT per tile:
-`γ = 216793/59950000`. -/
+`g = 216793/59950000`. -/
 theorem pearlCSampledSm120v2RowSeedCap1000_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1313,7 +1313,7 @@ theorem pearlCSampledSm120v2RowSeedCap1000_8192
       (devSm120_bf16 0))
 
 /-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 16384³**, from rev1's TT_OUT per tile:
-`γ = 2950127/829250000`. -/
+`g = 2950127/829250000`. -/
 theorem pearlCSampledSm120v2RowSeedCap1000_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :

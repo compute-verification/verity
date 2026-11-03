@@ -7,7 +7,7 @@ import Proofs.Pouw.PearlC.TTOutW1
 
 Each FP4 form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) is the abstract form at
 `CM := W1.w1Priced dv salt` (`ttOutFp4W1_iff`, …), since `w1Priced` meets `CostModel.Queries`
-(`TTOutW1.w1Priced_queries`). The `_of_w1` lemmas give the forms the FP4 γ readers' reductions take, so each reader at
+(`TTOutW1.w1Priced_queries`). The `_of_w1` lemmas give the forms the FP4 g readers' reductions take, so each reader at
 W1 is its reduction at that cost model.
 -/
 

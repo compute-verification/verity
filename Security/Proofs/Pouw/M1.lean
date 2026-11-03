@@ -208,7 +208,7 @@ theorem milestoneInstance : Pinned.MilestoneInstance := fun Wref =>
     fun _ => ((4 : Fin 7), true), ⟨0, M1.salt_zero_lt⟩, M1.sixteen, 0, M1.sixteen_inDomain,
     by norm_num [M1.sixteen], M1.noise_ne_zero Wref _ 0⟩
 
-/-- **The milestone's `W_ref`**: `W_mm ≤ m1Wref ≤ (65769/65536)·W_mm` on the domain, and `γ = 14017/1644225`. -/
+/-- **The milestone's `W_ref`**: `W_mm ≤ m1Wref ≤ (65769/65536)·W_mm` on the domain, and `g = 14017/1644225`. -/
 theorem milestoneWref : Pinned.MilestoneWref :=
   ⟨fun U hU u hu => ⟨M1.Wmm_le_m1Wref U.layout u, M1.m1Wref_real U.layout hU.2.1 u hu⟩,
     by unfold D1.m1Omega; norm_num,

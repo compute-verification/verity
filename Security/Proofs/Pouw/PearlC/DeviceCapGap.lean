@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
-# The unpromoted record, the cap, and γ at sm_120's prices
+# The unpromoted record, the cap, and g at sm_120's prices
 
 Staged; nothing pinned.
 * **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 64 × 128` layout in `pearlCDomainDev d`
@@ -73,7 +73,7 @@ theorem ttOutPearlCDev_cap_anti [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
 
 end
 
-/-- **v2 at the cap 1/1,000, 8192³**, at a record with no promotion and sm_120's prices: `γ = 216793/59950000`. -/
+/-- **v2 at the cap 1/1,000, 8192³**, at a record with no promotion and sm_120's prices: `g = 216793/59950000`. -/
 theorem pearlCGapUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDev CM d sem (1 / 1000)) :
@@ -81,7 +81,7 @@ theorem pearlCGapUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq 
   pearlCGapDevAt CM d sem _ _ (1049125 / 1047951) _ (by norm_num)
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, at a record with no promotion and sm_120's prices: `γ = 2950127/829250000`. -/
+/-- **v2 at the cap 1/1,000, 16384³**, at a record with no promotion and sm_120's prices: `g = 2950127/829250000`. -/
 theorem pearlCGapUnpromotedCap1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDev CM d sem (1 / 1000)) :
@@ -90,7 +90,7 @@ theorem pearlCGapUnpromotedCap1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq
   pearlCGapDevAt CM d sem _ _ (2073125 / 2070927) _ (by norm_num)
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 per audit tile, 8192³**: `GGapSampled` at `γ = 216793/59950000`. -/
+/-- **v2 at the cap 1/1,000 per audit tile, 8192³**: `GGapSampled` at `g = 216793/59950000`. -/
 theorem pearlCSampledUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
@@ -100,7 +100,7 @@ theorem pearlCSampledUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [Decidabl
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 per audit tile, 16384³**: `GGapSampled` at `γ = 2950127/829250000`. -/
+/-- **v2 at the cap 1/1,000 per audit tile, 16384³**: `GGapSampled` at `g = 2950127/829250000`. -/
 theorem pearlCSampledUnpromotedCap1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
@@ -110,7 +110,7 @@ theorem pearlCSampledUnpromotedCap1000_16384 {Q R S : Type} [Fintype Q] [Decidab
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384])
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, at a record promoted every 4 atoms with sm_120's prices, cap 1/400: `γ = 16223/3177500`. -/
+/-- **v1 under rev1, 8192³**, at a record promoted every 4 atoms with sm_120's prices, cap 1/400: `g = 16223/3177500`. -/
 theorem pearlCGapSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevRev1 CM d sem (1 / 400)) :
@@ -119,7 +119,7 @@ theorem pearlCGapSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, at a record promoted every 4 atoms with sm_120's prices, cap 1/400: `γ = 2963/586700`. -/
+/-- **v1 under rev1, 16384³**, at a record promoted every 4 atoms with sm_120's prices, cap 1/400: `g = 2963/586700`. -/
 theorem pearlCGapSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevRev1 CM d sem (1 / 400)) :
@@ -128,7 +128,7 @@ theorem pearlCGapSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fin
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile, 8192³**, at sm_120's prices: `GGapSampled` at `γ = 16223/3177500`. -/
+/-- **v1 under rev1 per audit tile, 8192³**, at sm_120's prices: `GGapSampled` at `g = 16223/3177500`. -/
 theorem pearlCSampledSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevRev1 CM d sem (1 / 400)) :
@@ -139,7 +139,7 @@ theorem pearlCSampledSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile, 16384³**, at sm_120's prices: `GGapSampled` at `γ = 2963/586700`. -/
+/-- **v1 under rev1 per audit tile, 16384³**, at sm_120's prices: `GGapSampled` at `g = 2963/586700`. -/
 theorem pearlCSampledSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevRev1 CM d sem (1 / 400)) :

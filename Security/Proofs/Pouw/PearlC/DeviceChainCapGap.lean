@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
-# The cap on the chain's share: what it admits, that it asserts less, and γ
+# The cap on the chain's share: what it admits, that it asserts less, and g
 
 Staged; nothing pinned.
 * **What it admits:** `chainCap_flagged_le`. A debit within `ρ·chainCreditDev` has at most `ρ·m·k·n/32` flagged
@@ -14,10 +14,10 @@ Staged; nothing pinned.
 * **It asserts less than the per-unit cap at the same `ρ`,** per unit (`ttOutPearlCDevChainCap_of_cap`) and per tile
   (`ttOutTilePearlCDevChainCap_of_cap`), for non-negative prices and `0 ≤ ρ ≤ 1`. `chainCreditDev ≤ creditDev`, so a unit
   or tile within the chain cap is within the per-unit one, and the credit is the same.
-* **γ at any record:** per unit at `γ = 1 − (399/400)/ω` with `wrefDev = ω·(creditDev − ρ·chainCreditDev)`
+* **The gap at any record:** per unit at `g = 1 − (399/400)/ω` with `wrefDev = ω·(creditDev − ρ·chainCreditDev)`
   (`pearlCGapDevChainCapAt`). That is a little better than the per-unit cap's, since an admitted unit's debit is at most
   `ρ` times the chain, not the whole credit. Per tile, with the same fixed credit as `pearlCTilesDev`, it is the per-unit
-  cap's γ (`pearlCSampledDevChainCapAt`).
+  cap's gap (`pearlCSampledDevChainCapAt`).
 * **v2 at the chain cap 1/1,000**, at any record with `G = 0` and `Prices.sm120`:
   - per unit, `26921/7493750` (0.35925%) at 8192³ and `367519/103656250` (0.35456%) at 16384³;
   - per audit tile, `216793/59950000` (0.36162%) and `2950127/829250000` (0.35576%), as the 1/1,000 row.
@@ -148,13 +148,13 @@ theorem ttOutTilePearlCDevChainCap_of_cap [Fintype Q] [DecidableEq Q] [Fintype R
 
 end
 
-/-- TT_OUT with the chain cap gives `G_γ` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
+/-- TT_OUT with the chain cap gives `G_g` on the one-shape domain at `g = 1 − (399/400)/ω`, where
 `wrefDev = ω·(creditDev − ρ·chainCreditDev)`: an admitted unit's debit is at most `ρ·chainCreditDev`. -/
 theorem pearlCGapDevChainCapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
-    (hω : wrefDev d s = ω * (creditDev d s - ρ * chainCreditDev d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
+    (hω : wrefDev d s = ω * (creditDev d s - ρ * chainCreditDev d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutPearlCDevChainCap CM d sem ρ) :
-    GGap CM (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDevAt d s) (γ : ℝ) δPearlC := by
+    GGap CM (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDevAt d s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevChainCap d sem ρ).actOK (U.layout.shape u) act →
@@ -174,7 +174,7 @@ theorem pearlCGapDevChainCapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Finty
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ)
     δPearlC (by exact_mod_cast hω0) hW (ttOut_mono_domain (fun _ h => h.1) hTT)
-  have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring
+  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
   rw [e]
   exact key
 
@@ -215,7 +215,7 @@ theorem pearlCSampledDevChainCapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
   exact key
 
 /-- **v2 at the chain cap 1/1,000, 8192³**, per unit, at a record with no promotion and sm_120's prices:
-`γ = 26921/7493750`. -/
+`g = 26921/7493750`. -/
 theorem pearlCGapUnpromotedChainCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevChainCap CM d sem (1 / 1000)) :
@@ -225,7 +225,7 @@ theorem pearlCGapUnpromotedChainCap1000_8192 {Q R S : Type} [Fintype Q] [Decidab
     (by rw [wrefDev, creditDev, chainCreditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
 /-- **v2 at the chain cap 1/1,000, 16384³**, per unit, at a record with no promotion and sm_120's prices:
-`γ = 367519/103656250`. -/
+`g = 367519/103656250`. -/
 theorem pearlCGapUnpromotedChainCap1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevChainCap CM d sem (1 / 1000)) :
@@ -234,7 +234,7 @@ theorem pearlCGapUnpromotedChainCap1000_16384 {Q R S : Type} [Fintype Q] [Decida
   pearlCGapDevChainCapAt CM d sem _ _ (2073125 / 2070952) _ (by norm_num)
     (by rw [wrefDev, creditDev, chainCreditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000 per audit tile, 8192³**: `GGapSampled` at `γ = 216793/59950000`. -/
+/-- **v2 at the chain cap 1/1,000 per audit tile, 8192³**: `GGapSampled` at `g = 216793/59950000`. -/
 theorem pearlCSampledUnpromotedChainCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevChainCap CM d sem (1 / 1000)) :
@@ -244,7 +244,7 @@ theorem pearlCSampledUnpromotedChainCap1000_8192 {Q R S : Type} [Fintype Q] [Dec
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000 per audit tile, 16384³**: `GGapSampled` at `γ = 2950127/829250000`. -/
+/-- **v2 at the chain cap 1/1,000 per audit tile, 16384³**: `GGapSampled` at `g = 2950127/829250000`. -/
 theorem pearlCSampledUnpromotedChainCap1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevChainCap CM d sem (1 / 1000)) :

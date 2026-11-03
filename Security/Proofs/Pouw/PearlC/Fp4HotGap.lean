@@ -4,8 +4,8 @@ import Definitions.Pouw.PearlC.DeviceFp4Hot
 /-!
 # Pearl-C4 v2's price twins, at any FP32 price and scale path (staged)
 
-* **γ from TT_OUT at any protocol meeting v2's accounting** (`pearlCGapFp4HotAt`, `pearlCSampledFp4HotAt`): with the
-  credited bound `K` and `W_ref = wrefFp4Hot`, TT_OUT gives `G_γ` (per tile, `GGapSampled`) at
+* **The gap from TT_OUT at any protocol meeting v2's accounting** (`pearlCGapFp4HotAt`, `pearlCSampledFp4HotAt`): with the
+  credited bound `K` and `W_ref = wrefFp4Hot`, TT_OUT gives `G_g` (per tile, `GGapSampled`) at
   `1 − (399/400)/(wrefFp4Hot/K)`.
 * **The twins**, forming credited (`pearlC{Gap,Sampled}Fp4Sm120HotAt_…`, at `gapFp4Hot`) and chain-only
   (`pearlC{Gap,Sampled}Fp4Sm120HotChainOnlyAt_…`, at `gapFp4HotChainOnly`): at any record priced
@@ -76,7 +76,7 @@ section Twins
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
 
 /-- **Pearl-C4 v2, 8192³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at `2·fadd` per word,
-cap `1/400`: γ = `gapFp4Hot d (2 * fadd) (1 / 400) sh8192` (the `gapFp4Hot_…` lemmas give its values). -/
+cap `1/400`: g = `gapFp4Hot d (2 * fadd) (1 / 400) sh8192` (the `gapFp4Hot_…` lemmas give its values). -/
 theorem pearlCGapFp4Sm120HotAt_8192
     (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
@@ -99,7 +99,7 @@ theorem pearlCGapFp4Sm120HotAt_8192
   simpa only [gapFp4Hot] using key
 
 /-- **Pearl-C4 v2, 16384³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at `2·fadd` per word,
-cap `1/400`: γ = `gapFp4Hot d (2 * fadd) (1 / 400) sh16384` (the `gapFp4Hot_…` lemmas give its values). -/
+cap `1/400`: g = `gapFp4Hot d (2 * fadd) (1 / 400) sh16384` (the `gapFp4Hot_…` lemmas give its values). -/
 theorem pearlCGapFp4Sm120HotAt_16384
     (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
@@ -122,7 +122,7 @@ theorem pearlCGapFp4Sm120HotAt_16384
   simpa only [gapFp4Hot] using key
 
 /-- **Pearl-C4 v2, per audit tile, 8192³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at
-`2·fadd` per word, cap `1/400`: γ = `gapFp4Hot d (2 * fadd) (1 / 400) sh8192` (the `gapFp4Hot_…` lemmas give its
+`2·fadd` per word, cap `1/400`: g = `gapFp4Hot d (2 * fadd) (1 / 400) sh8192` (the `gapFp4Hot_…` lemmas give its
 values). -/
 theorem pearlCSampledFp4Sm120HotAt_8192
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
@@ -146,7 +146,7 @@ theorem pearlCSampledFp4Sm120HotAt_8192
   simpa only [gapFp4Hot] using key
 
 /-- **Pearl-C4 v2, per audit tile, 16384³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at
-`2·fadd` per word, cap `1/400`: γ = `gapFp4Hot d (2 * fadd) (1 / 400) sh16384` (the `gapFp4Hot_…` lemmas give its
+`2·fadd` per word, cap `1/400`: g = `gapFp4Hot d (2 * fadd) (1 / 400) sh16384` (the `gapFp4Hot_…` lemmas give its
 values). -/
 theorem pearlCSampledFp4Sm120HotAt_16384
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
@@ -170,7 +170,7 @@ theorem pearlCSampledFp4Sm120HotAt_16384
   simpa only [gapFp4Hot] using key
 
 /-- **Pearl-C4 v2, chain-only, 8192³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at `2·fadd`
-per word, cap `1/400`: γ = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh8192` (the `gapFp4HotChainOnly_…` lemmas
+per word, cap `1/400`: g = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh8192` (the `gapFp4HotChainOnly_…` lemmas
 give its values). -/
 theorem pearlCGapFp4Sm120HotChainOnlyAt_8192
     (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
@@ -190,7 +190,7 @@ theorem pearlCGapFp4Sm120HotChainOnlyAt_8192
   simpa only [gapFp4HotChainOnly] using key
 
 /-- **Pearl-C4 v2, chain-only, 16384³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at `2·fadd`
-per word, cap `1/400`: γ = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh16384` (the `gapFp4HotChainOnly_…` lemmas
+per word, cap `1/400`: g = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh16384` (the `gapFp4HotChainOnly_…` lemmas
 give its values). -/
 theorem pearlCGapFp4Sm120HotChainOnlyAt_16384
     (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
@@ -210,7 +210,7 @@ theorem pearlCGapFp4Sm120HotChainOnlyAt_16384
   simpa only [gapFp4HotChainOnly] using key
 
 /-- **Pearl-C4 v2, chain-only, per audit tile, 8192³**, at any FP32 price `fadd` and scale path `p`, the H removal
-credited at `2·fadd` per word, cap `1/400`: γ = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh8192` (the
+credited at `2·fadd` per word, cap `1/400`: g = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh8192` (the
 `gapFp4HotChainOnly_…` lemmas give its values). -/
 theorem pearlCSampledFp4Sm120HotChainOnlyAt_8192
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
@@ -230,7 +230,7 @@ theorem pearlCSampledFp4Sm120HotChainOnlyAt_8192
   simpa only [gapFp4HotChainOnly] using key
 
 /-- **Pearl-C4 v2, chain-only, per audit tile, 16384³**, at any FP32 price `fadd` and scale path `p`, the H removal
-credited at `2·fadd` per word, cap `1/400`: γ = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh16384` (the
+credited at `2·fadd` per word, cap `1/400`: g = `gapFp4HotChainOnly d (2 * fadd) (1 / 400) sh16384` (the
 `gapFp4HotChainOnly_…` lemmas give its values). -/
 theorem pearlCSampledFp4Sm120HotChainOnlyAt_16384
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)

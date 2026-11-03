@@ -3,9 +3,9 @@ import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.QTree
 
 /-!
-# The γ-gap game (trusted; problem statement §3.2–§3.5)
+# The gap game (trusted; problem statement §3.2–§3.5)
 
-The game `G_γ(Π, 𝒜, T, q)` of §3.3, with probabilities over the oracle `H` and the salt `s`:
+The game `G_g(Π, 𝒜, T, q)` of §3.3, with probabilities over the oracle `H` and the salt `s`:
 
 ~~~text
 0. Oracle.      H : Q → R is uniform over all functions (Q, R finite).
@@ -17,7 +17,7 @@ The game `G_γ(Π, 𝒜, T, q)` of §3.3, with probabilities over the oracle `H`
 4. Online.      τ = CM.run A.online H U A.act σ s, with CM.cost ≤ T and (preprocessing queries) + CM.calls ≤ q
                 for every H and s. Preprocessing costs nothing. The online program reads the workload and
                 its activation input A.act (the units' own operands); it may commit other activations.
-5. Score.       K = correctSet; A wins if  T / (1 − γ) < ∑_{u ∈ K} W_ref(u).
+5. Score.       K = correctSet; A wins if  T / (1 − g) < ∑_{u ∈ K} W_ref(u).
 ~~~
 
 The cost model `CM` is a parameter fixed before the protocol and the workload: the adversary picks a program of
@@ -208,23 +208,24 @@ def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (
 /-- `W = ∑_{u ∈ U} W_ref(u)`. -/
 def totalWref (P : Protocol Q R S) (L : Layout) : ℝ := ∑ u ∈ range L.N, (P.Wref L u : ℝ)
 
-/-- The adversary wins: the honest work of its correct units exceeds `T / (1 − γ)`. -/
-def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
-  T / (1 - γ) < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
+/-- The adversary wins: the honest work of its correct units exceeds `T / (1 − g)`. -/
+def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+  T / (1 - g) < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
 
-/-- **The γ-gap property** `G_γ` with error `η(q, N)`, in §3.3's quantifier order after `Π`: for every in-domain
-workload, every budget `T ≥ 0`, every `q ≤ 2^64` and every adversary within `(T, q)`, `Pr_{H,s}[𝒜 wins] ≤ η`. -/
+/-- **The gap property** `G_g` at the gap `g` (an adversary's advantage `ε = g/(1 − g)`) with failure probability
+`δ(q, N)`, in §3.3's quantifier order after `Π`: for every in-domain workload, every budget `T ≥ 0`, every
+`q ≤ 2^64` and every adversary within `(T, q)`, `Pr_{H,s}[𝒜 wins] ≤ δ`. -/
 def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
+    pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
-/-- **§3.3's requirement** at `(γ, η)`: `∃ Π` whose honest reference is complete and runs in the cost model at
-cost at most `W_ref` (so `W_ref` cannot be under-declared; `W_ref ≡ 0` would make `G_γ` trivial), such that `G_γ`
-holds with error `η`. `W_ref` is input-independent by its type. -/
+/-- **§3.3's requirement** at `(g, δ)`: `∃ Π` whose honest reference is complete and runs in the cost model at
+cost at most `W_ref` (so `W_ref` cannot be under-declared; `W_ref ≡ 0` would make `G_g` trivial), such that `G_g`
+holds with failure probability `δ`. `W_ref` is input-independent by its type. -/
 def Requirement [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
-  ∃ (P : Protocol Q R S) (qref : Workload → ℕ), P.Complete D ∧ AdmitsRef CM P D qref ∧ GGap CM P D γ η
+    (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
+  ∃ (P : Protocol Q R S) (qref : Workload → ℕ), P.Complete D ∧ AdmitsRef CM P D qref ∧ GGap CM P D g δ
 
 /-! ## The audit (§3.5) -/
 

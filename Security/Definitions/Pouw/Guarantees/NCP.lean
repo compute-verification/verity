@@ -151,8 +151,8 @@ open Pouw.NCP Pouw.NCP.RouteU Finset
 /-- **`TT_NCP_U` is `TT_NCP` of route U's protocol**, by definition. -/
 def TTNCPUIff : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
-    Assumptions.TTNCP_U β CM P D γ₀ ε ↔ Assumptions.TTNCP CM (P.toProtocolU β) P.d D γ₀ ε
+    (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ),
+    Assumptions.TTNCP_U β CM P D g₀ δ ↔ Assumptions.TTNCP CM (P.toProtocolU β) P.d D g₀ δ
 
 end
 
@@ -162,19 +162,19 @@ namespace Pouw.NCP.RouteU
 
 open Finset
 
-/-- **`G_γ` from TT_NCP_U** (`GamePinned.GapFromTTNCP` on route U): for every bias `β`, count `f` of forming
+/-- **`G_g` from TT_NCP_U** (`GamePinned.GapFromTTNCP` on route U): for every bias `β`, count `f` of forming
 units per position, cost model, NCP instance whose `W_ref` is route U's, `wrefU f`, and domain on which every unit
-has at least `n₀ > 0` columns and `γ₀ ≥ P.d/(3k)`, TT_NCP_U(γ₀) at `β` with error `ε` gives `G_γ` for route U's protocol at `β` with
-`Ω_max = 1 + f/(3n₀)`, so `γ = 1 − (1 − γ₀)/(1 + f/(3n₀))`, and `η = ε`. -/
+has at least `n₀ > 0` columns and `g₀ ≥ P.d/(3k)`, TT_NCP_U(g₀) at `β` with error `δ` gives `G_g` for route U's protocol at `β` with
+`Ω_max = 1 + f/(3n₀)`, so `g = 1 − (1 − g₀)/(1 + f/(3n₀))`, and the same failure probability `δ`. -/
 def GapFromTTNCP_U : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (f : ℕ) (D : Layout → Prop) (γ₀ : ℝ) (n₀ : ℕ)
-    (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU f L u) →
+    (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (f : ℕ) (D : Layout → Prop) (g₀ : ℝ) (n₀ : ℕ)
+    (δ : ℕ → ℕ → ℝ),
+    g₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU f L u) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, n₀ ≤ (U.layout.shape u).n) →
-    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
-    Assumptions.TTNCP_U β CM P D γ₀ ε →
-    GGap CM (P.toProtocolU β) D (reductionGap γ₀ (1 + f / (3 * n₀))) ε
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ g₀ * (3 * (U.layout.shape u).k)) →
+    Assumptions.TTNCP_U β CM P D g₀ δ →
+    GGap CM (P.toProtocolU β) D (reductionGap g₀ (1 + f / (3 * n₀))) δ
 
 end Pouw.NCP.RouteU
 
@@ -184,37 +184,37 @@ section
 
 open Pouw.NCP Pouw.NCP.RouteU Finset
 
-/-- **`G_γ` from TT_NCP_U at ncp-v1** (`GapFromTTNCP_U` at `β = 128`, `f = 24`): `Ω_max = 1 + 8/n₀`, so
-`γ = 1 − (1 − γ₀)/(1 + 8/n₀)`. -/
+/-- **`G_g` from TT_NCP_U at ncp-v1** (`GapFromTTNCP_U` at `β = 128`, `f = 24`): `Ω_max = 1 + 8/n₀`, so
+`g = 1 − (1 − g₀)/(1 + 8/n₀)`. -/
 def GapFromTTNCP_U_v1 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Params Q R S) (D : Layout → Prop) (γ₀ : ℝ) (n₀ : ℕ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU 24 L u) →
+    (CM : CostModel Q R S) (P : Params Q R S) (D : Layout → Prop) (g₀ : ℝ) (n₀ : ℕ) (δ : ℕ → ℕ → ℝ),
+    g₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU 24 L u) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, n₀ ≤ (U.layout.shape u).n) →
-    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
-    Assumptions.TTNCP_U 128 CM P D γ₀ ε →
-    GGap CM (P.toProtocolU 128) D (reductionGap γ₀ (1 + 8 / n₀)) ε
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ g₀ * (3 * (U.layout.shape u).k)) →
+    Assumptions.TTNCP_U 128 CM P D g₀ δ →
+    GGap CM (P.toProtocolU 128) D (reductionGap g₀ (1 + 8 / n₀)) δ
 
-/-- **`G_γ` from TT_NCP_U at C2** (`GapFromTTNCP_U` at `β = 129`, `f = 20`): `Ω_max = 1 + 20/(3n₀)`, so
-`γ = 1 − (1 − γ₀)/(1 + 20/(3n₀))`. -/
+/-- **`G_g` from TT_NCP_U at C2** (`GapFromTTNCP_U` at `β = 129`, `f = 20`): `Ω_max = 1 + 20/(3n₀)`, so
+`g = 1 − (1 − g₀)/(1 + 20/(3n₀))`. -/
 def GapFromTTNCP_U_C2 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Params Q R S) (D : Layout → Prop) (γ₀ : ℝ) (n₀ : ℕ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU 20 L u) →
+    (CM : CostModel Q R S) (P : Params Q R S) (D : Layout → Prop) (g₀ : ℝ) (n₀ : ℕ) (δ : ℕ → ℕ → ℝ),
+    g₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU 20 L u) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, n₀ ≤ (U.layout.shape u).n) →
-    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
-    Assumptions.TTNCP_U 129 CM P D γ₀ ε →
-    GGap CM (P.toProtocolU 129) D (reductionGap γ₀ (1 + 20 / (3 * n₀))) ε
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ g₀ * (3 * (U.layout.shape u).k)) →
+    Assumptions.TTNCP_U 129 CM P D g₀ δ →
+    GGap CM (P.toProtocolU 129) D (reductionGap g₀ (1 + 20 / (3 * n₀))) δ
 
-/-- **Satisfiability witness for TT_NCP_U** at every `γ₀ ∈ [0, 1)` (`GamePinned.TTNCPWitness` on route U): for every
+/-- **Satisfiability witness for TT_NCP_U** at every `g₀ ∈ [0, 1)` (`GamePinned.TTNCPWitness` on route U): for every
 bias `β` and NCP instance with at most `c` queries per unit and `W_ref ≥ 3·W_mm`, in the output-priced model at
-`3·m·k·n` TT_NCP_U(γ₀) holds with error 0, and one program runs route U's `H_ref` at cost `≤ W_ref` with `N·c`
+`3·m·k·n` TT_NCP_U(g₀) holds with error 0, and one program runs route U's `H_ref` at cost `≤ W_ref` with `N·c`
 oracle calls. -/
 def TTNCPUWitness : Prop :=
-  ∀ (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (P : Params Q R Salt) (β : ℤ) (c : ℕ) (γ₀ : ℝ),
-    0 ≤ γ₀ → γ₀ < 1 → P.QueryBound c →
+  ∀ (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (P : Params Q R Salt) (β : ℤ) (c : ℕ) (g₀ : ℝ),
+    0 ≤ g₀ → g₀ < 1 → P.QueryBound c →
     (∀ U : Workload, U.InDomain leadDomain → ∀ u < U.layout.N, 3 * (U.layout.shape u).Wmm ≤ P.Wref U.layout u) →
-    Assumptions.TTNCP_U β (outputPriced3 Q R Salt) P leadDomain γ₀ (fun _ _ => 0) ∧
+    Assumptions.TTNCP_U β (outputPriced3 Q R Salt) P leadDomain g₀ (fun _ _ => 0) ∧
     AdmitsRef (outputPriced3 Q R Salt) (P.toProtocolU β) leadDomain (fun U => U.layout.N * c)
 
 end
@@ -226,15 +226,15 @@ section
 open Pouw.NCP Pouw.NCP.RouteU Finset Pouw.NCP.Relation
 
 /-- **The floor for route U under independence** (`Relation.NCPWordFloorInd` for `C^U`, with NzNCP of `C^U`):
-`N·2^−(m n·(γ₀·3k/16 − 1))`. -/
+`N·2^−(m n·(g₀·3k/16 − 1))`. -/
 def NCPWordFloorIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k →
-    CheckpointIndependent k 16 R → 0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k →
+    CheckpointIndependent k 16 R → 0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     Word.NzNCP (fun _ => positions k m n) (checkedUPos β k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 /-- **The int32 range of route U's checked values** (`Chain.Int7Int32` on route U): for `β ∈ {127, 128, 129}` and
 int7 `A u`, `B u`, every checked value of unit `u` is int32 when `R` is a signed permutation and `k ≤ 2^15`, or a
@@ -256,14 +256,14 @@ def WrapFinalOnlyIndU : Prop :=
 /-- **The floor for route U's protocol checked values** (`Chain.WrapWordFloorInd` on route U, with NzNCP of the
 wrapped route-U values), under independence, in the int32-exact range. -/
 def WrapWordFloorIndU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k →
-    CheckpointIndependent k 16 R → 0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k →
+    CheckpointIndependent k 16 R → 0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     (∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checkedUPos β k m n N R A B ω u p)) →
     Word.NzNCP (fun _ => positions k m n) (wrappedU β k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 end
 

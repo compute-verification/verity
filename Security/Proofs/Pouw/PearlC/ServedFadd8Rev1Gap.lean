@@ -5,7 +5,7 @@ import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 
 `ServedRev1Gap` and `ServedMixedRev1Gap` at v1's record with the cheapest bit-exact FP32 add, 8, instead of the
 in-loop 8.376, the honest cast still at 8.72, at the cap 1/1,000: Llama-3.1-8B's four linears and their layout, per unit
-and per audit tile from TT_OUT at 1/1,000. Each γ is below the in-loop one at the same linear, so the in-loop γ is the
+and per audit tile from TT_OUT at 1/1,000. Each g is below the in-loop one at the same linear, so the in-loop g is the
 one published: from 0.35521% (gate_up) to 0.38818% (down, and the layout).
 -/
 
@@ -40,7 +40,7 @@ theorem wrefDevRev1K_sm120v1Cast8p72_n6144k4096_nonneg (m : ℕ) :
   exact mul_nonneg (by norm_num) (creditDevRev1_sm120v1_nonneg _ _ _ (by norm_num) (by norm_num))
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's qkv)**, FP32 at 8, the honest cast
-at 8.72: `γ = 508661/135634400` (0.37502%). -/
+at 8.72: `g = 508661/135634400` (0.37502%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n6144k4096
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -49,7 +49,7 @@ theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n6144k4096
     (fun m => by rw [wrefDevRev1K_sm120v1Cast8p72_n6144k4096 m]; field_simp) (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's qkv)**, FP32 at 8,
-the honest cast at 8.72: `γ = 508661/135634400` (0.37502%). -/
+the honest cast at 8.72: `g = 508661/135634400` (0.37502%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1Cap1000_n6144k4096
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -74,7 +74,7 @@ theorem wrefDevRev1K_sm120v1Cast8p72_n4096k4096_nonneg (m : ℕ) :
   exact mul_nonneg (by norm_num) (creditDevRev1_sm120v1_nonneg _ _ _ (by norm_num) (by norm_num))
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's o)**, FP32 at 8, the honest cast
-at 8.72: `γ = 1359/350750` (0.38746%). -/
+at 8.72: `g = 1359/350750` (0.38746%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n4096k4096
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -83,7 +83,7 @@ theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n4096k4096
     (fun m => by rw [wrefDevRev1K_sm120v1Cast8p72_n4096k4096 m]; field_simp) (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's o)**, FP32 at 8,
-the honest cast at 8.72: `γ = 1359/350750` (0.38746%). -/
+the honest cast at 8.72: `g = 1359/350750` (0.38746%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1Cap1000_n4096k4096
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -108,7 +108,7 @@ theorem wrefDevRev1K_sm120v1Cast8p72_n28672k4096_nonneg (m : ℕ) :
   exact mul_nonneg (by norm_num) (creditDevRev1_sm120v1_nonneg _ _ _ (by norm_num) (by norm_num))
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8, the honest cast
-at 8.72: `γ = 928813/261481000` (0.35521%). -/
+at 8.72: `g = 928813/261481000` (0.35521%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n28672k4096
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -117,7 +117,7 @@ theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n28672k4096
     (fun m => by rw [wrefDevRev1K_sm120v1Cast8p72_n28672k4096 m]; field_simp) (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8,
-the honest cast at 8.72: `γ = 928813/261481000` (0.35521%). -/
+the honest cast at 8.72: `g = 928813/261481000` (0.35521%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1Cap1000_n28672k4096
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -142,7 +142,7 @@ theorem wrefDevRev1K_sm120v1Cast8p72_n4096k14336_nonneg (m : ℕ) :
   exact mul_nonneg (by norm_num) (creditDevRev1_sm120v1_nonneg _ _ _ (by norm_num) (by norm_num))
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8, the honest cast
-at 8.72: `γ = 106307/27386000` (0.38818%). -/
+at 8.72: `g = 106307/27386000` (0.38818%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n4096k14336
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -151,7 +151,7 @@ theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_n4096k14336
     (fun m => by rw [wrefDevRev1K_sm120v1Cast8p72_n4096k14336 m]; field_simp) (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8,
-the honest cast at 8.72: `γ = 106307/27386000` (0.38818%). -/
+the honest cast at 8.72: `g = 106307/27386000` (0.38818%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1Cap1000_n4096k14336
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -190,7 +190,7 @@ theorem wrefDevRev1K_sm120v1Cast8p72_llama31_8b_le (ρ : ℚ) (hρ : ρ < 1) :
     exact ratio_le_max_div hρ (by norm_num) (creditDevRev1_sm120v1_nonneg _ _ _ (by norm_num) (by norm_num))
 
 /-- **v1 under rev1 at the cap 1/1,000 on Llama-3.1-8B's served layout**, its four linears at any `m` in one layout,
-FP32 at 8, the honest cast at 8.72: `γ = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
+FP32 at 8, the honest cast at 8.72: `g = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
 theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_llama31_8b
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -200,7 +200,7 @@ theorem pearlCGapSm120v1Cast8p72Rev1Cap1000_llama31_8b
     (wrefDevRev1K_sm120v1Cast8p72_llama31_8b_le _ (by norm_num)) (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000 on Llama-3.1-8B's served layout**, FP32 at 8, the honest cast
-at 8.72: `γ = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
+at 8.72: `g = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
 theorem pearlCSampledSm120v1Cast8p72Rev1Cap1000_llama31_8b
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))

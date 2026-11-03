@@ -5,8 +5,8 @@ import Definitions.Pouw.Guarantees.PearlC
 /-!
 # Pearl-C4 at the issue-bound FP32 price (staged)
 
-γ's price rule computes γ at the issue-bound FP32 operation (8.00, `Prices.sm120`'s FADD) and at the measured in-loop
-one (8.38), and publishes the larger. `Fp4Prices.sm120` is the in-loop price; this file holds γ at the issue-bound one
+The gap's price rule computes g at the issue-bound FP32 operation (8.00, `Prices.sm120`'s FADD) and at the measured in-loop
+one (8.38), and publishes the larger. `Fp4Prices.sm120` is the in-loop price; this file holds g at the issue-bound one
 (`Fp4Prices.sm120Issue`), cap `1/400`, forming credited, per unit and per audit tile: `162371257/22950880000`
 (0.70747%) at 8192³ and `814384171/134388640000` (0.60599%) at 16384³. Both are below the in-loop headline at the
 repriced record (0.71731% and 0.61104%, `fs = 21887/200`), so the rule publishes the in-loop one.
@@ -22,7 +22,7 @@ namespace Pouw.PearlC
 open Pouw.PearlC.Assumptions
 
 /-- **Pearl-C4 at the issue-bound price, 8192³**, at any FP4 record with those prices, cap `1/400`:
-`γ = 162371257/22950880000` (0.70747%). -/
+`g = 162371257/22950880000` (0.70747%). -/
 theorem pearlCGapFp4Sm120Issue_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : Fp4Device) (sem : Fp4Sem Q R S) (hp : d.prices = Fp4Prices.sm120Issue)
     (hTT : TTOutFp4 CM d sem (1 / 400)) :
@@ -33,7 +33,7 @@ theorem pearlCGapFp4Sm120Issue_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
         norm_num [Fp4Prices.sm120Issue, Params.pi, sh8192]) (by norm_num) hTT
 
 /-- **Pearl-C4 at the issue-bound price, 16384³**, at any FP4 record with those prices, cap `1/400`:
-`γ = 814384171/134388640000` (0.60599%). -/
+`g = 814384171/134388640000` (0.60599%). -/
 theorem pearlCGapFp4Sm120Issue_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : Fp4Device) (sem : Fp4Sem Q R S) (hp : d.prices = Fp4Prices.sm120Issue)
     (hTT : TTOutFp4 CM d sem (1 / 400)) :
@@ -44,7 +44,7 @@ theorem pearlCGapFp4Sm120Issue_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
         norm_num [Fp4Prices.sm120Issue, Params.pi, sh16384]) (by norm_num) hTT
 
 /-- **Pearl-C4 at the issue-bound price per audit tile, 8192³**, at any FP4 record with those prices, cap `1/400`:
-`GGapSampled` at `γ = 162371257/22950880000` (0.70747%). -/
+`GGapSampled` at `g = 162371257/22950880000` (0.70747%). -/
 theorem pearlCSampledFp4Sm120Issue_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : Fp4Device) (sem : Fp4Sem Q R S) (hp : d.prices = Fp4Prices.sm120Issue)
     (hTT : TTOutTileFp4 CM d sem (1 / 400)) :
@@ -57,7 +57,7 @@ theorem pearlCSampledFp4Sm120Issue_8192 {Q R S : Type} [Fintype Q] [DecidableEq 
         norm_num [Fp4Prices.sm120Issue, Params.pi, sh8192]) (by norm_num) hTT
 
 /-- **Pearl-C4 at the issue-bound price per audit tile, 16384³**, at any FP4 record with those prices, cap `1/400`:
-`GGapSampled` at `γ = 814384171/134388640000` (0.60599%). -/
+`GGapSampled` at `g = 814384171/134388640000` (0.60599%). -/
 theorem pearlCSampledFp4Sm120Issue_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : Fp4Device) (sem : Fp4Sem Q R S) (hp : d.prices = Fp4Prices.sm120Issue)
     (hTT : TTOutTileFp4 CM d sem (1 / 400)) :
@@ -71,8 +71,8 @@ theorem pearlCSampledFp4Sm120Issue_16384 {Q R S : Type} [Fintype Q] [DecidableEq
 
 /-! ## At any FP32 price and scale path
 
-The twins below hold at any record priced `Fp4Prices.sm120At fadd p`, at γ `gapFp4 d (1/400) s`. So repricing the
-scale step, or the FP32 price, instantiates `p` or `fadd` and re-proves nothing. The `gapFp4_…` lemmas give γ at both
+The twins below hold at any record priced `Fp4Prices.sm120At fadd p`, at g `gapFp4 d (1/400) s`. So repricing the
+scale step, or the FP32 price, instantiates `p` or `fadd` and re-proves nothing. The `gapFp4_…` lemmas give g at both
 FP32 prices (8.00 and `1047/125` = 8.376) and both scale paths. The four pins above are the `rcp.approx`, 8.00 case,
 as `Fp4Prices.sm120Issue_eq` shows. -/
 
@@ -168,21 +168,21 @@ theorem pearlCSampledFp4Sm120At_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q]
 
 /-! ## The values: both FP32 prices, both scale paths -/
 
-/-- Pearl-C4's γ at FP32 8.00, the `rcpApprox` scale path, 8192³, cap `1/400`: `162371257/22950880000` (0.70747%). -/
+/-- Pearl-C4's gap at FP32 8.00, the `rcpApprox` scale path, 8192³, cap `1/400`: `162371257/22950880000` (0.70747%). -/
 theorem gapFp4_sm120Issue_rcpApprox_8192
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At 8 Fp4ScalePath.rcpApprox) :
     gapFp4 d (1 / 400) sh8192 = 162371257 / 22950880000 := by
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.rcpApprox, Params.pi, sh8192]
 
-/-- Pearl-C4's γ at FP32 8.00, the `rcpApprox` scale path, 16384³, cap `1/400`: `814384171/134388640000` (0.60599%). -/
+/-- Pearl-C4's gap at FP32 8.00, the `rcpApprox` scale path, 16384³, cap `1/400`: `814384171/134388640000` (0.60599%). -/
 theorem gapFp4_sm120Issue_rcpApprox_16384
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At 8 Fp4ScalePath.rcpApprox) :
     gapFp4 d (1 / 400) sh16384 = 814384171 / 134388640000 := by
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.rcpApprox, Params.pi, sh16384]
 
-/-- Pearl-C4's γ at FP32 `1047/125` = 8.376, the `rcpApprox` scale path, 8192³, cap `1/400`: `1646385229/229553920000`
+/-- Pearl-C4's gap at FP32 `1047/125` = 8.376, the `rcpApprox` scale path, 8192³, cap `1/400`: `1646385229/229553920000`
 (0.71721%). -/
 theorem gapFp4_sm120Loop_rcpApprox_8192
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At (1047 / 125) Fp4ScalePath.rcpApprox) :
@@ -190,7 +190,7 @@ theorem gapFp4_sm120Loop_rcpApprox_8192
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.rcpApprox, Params.pi, sh8192]
 
-/-- Pearl-C4's γ at FP32 `1047/125` = 8.376, the `rcpApprox` scale path, 16384³, cap `1/400`: `8211859687/1344021760000`
+/-- Pearl-C4's gap at FP32 `1047/125` = 8.376, the `rcpApprox` scale path, 16384³, cap `1/400`: `8211859687/1344021760000`
 (0.61099%). -/
 theorem gapFp4_sm120Loop_rcpApprox_16384
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At (1047 / 125) Fp4ScalePath.rcpApprox) :
@@ -198,21 +198,21 @@ theorem gapFp4_sm120Loop_rcpApprox_16384
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.rcpApprox, Params.pi, sh16384]
 
-/-- Pearl-C4's γ at FP32 8.00, the `lut256` scale path, 8192³, cap `1/400`: `6492677/917600000` (0.70757%). -/
+/-- Pearl-C4's gap at FP32 8.00, the `lut256` scale path, 8192³, cap `1/400`: `6492677/917600000` (0.70757%). -/
 theorem gapFp4_sm120Issue_lut256_8192
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At 8 Fp4ScalePath.lut256) :
     gapFp4 d (1 / 400) sh8192 = 6492677 / 917600000 := by
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.lut256, Params.pi, sh8192]
 
-/-- Pearl-C4's γ at FP32 8.00, the `lut256` scale path, 16384³, cap `1/400`: `32568847/5374240000` (0.60602%). -/
+/-- Pearl-C4's gap at FP32 8.00, the `lut256` scale path, 16384³, cap `1/400`: `32568847/5374240000` (0.60602%). -/
 theorem gapFp4_sm120Issue_lut256_16384
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At 8 Fp4ScalePath.lut256) :
     gapFp4 d (1 / 400) sh16384 = 32568847 / 5374240000 := by
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.lut256, Params.pi, sh16384]
 
-/-- Pearl-C4's γ at FP32 `1047/125` = 8.376, the `lut256` scale path, 8192³, cap `1/400`: `9875013901/1376663200000`
+/-- Pearl-C4's gap at FP32 `1047/125` = 8.376, the `lut256` scale path, 8192³, cap `1/400`: `9875013901/1376663200000`
 (0.71732%). -/
 theorem gapFp4_sm120Loop_lut256_8192
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At (1047 / 125) Fp4ScalePath.lut256) :
@@ -220,7 +220,7 @@ theorem gapFp4_sm120Loop_lut256_8192
   rw [gapFp4, wrefFp4, creditFp4, hp]
   norm_num [Fp4Prices.sm120At, Fp4ScalePath.lut256, Params.pi, sh8192]
 
-/-- Pearl-C4's γ at FP32 `1047/125` = 8.376, the `lut256` scale path, 16384³, cap `1/400`: `5473473967/895794400000`
+/-- Pearl-C4's gap at FP32 `1047/125` = 8.376, the `lut256` scale path, 16384³, cap `1/400`: `5473473967/895794400000`
 (0.61102%). -/
 theorem gapFp4_sm120Loop_lut256_16384
     (d : Fp4Device) (hp : d.prices = Fp4Prices.sm120At (1047 / 125) Fp4ScalePath.lut256) :

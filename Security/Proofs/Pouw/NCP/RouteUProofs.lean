@@ -376,33 +376,33 @@ theorem wrefU_le (f : ℕ) {n₀ : ℕ} (hn₀ : 0 < n₀) {sh : Shape} (hn : n�
     exact h2
   linarith
 
-/-- **`G_γ` from TT_NCP_U.** -/
+/-- **`G_g` from TT_NCP_U.** -/
 theorem gapFromTTNCP_U : GapFromTTNCP_U := by
-  intro Q R S _ _ _ _ CM P β f D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  intro Q R S _ _ _ _ CM P β f D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
   have hΩ : (0 : ℝ) < 1 + f / (3 * n₀) := by positivity
-  refine GameProofs.gapFromTTNCP Q R S CM (P.toProtocolU β) P.d D γ₀ (1 + f / (3 * n₀)) ε hγ₀ hΩ
+  refine GameProofs.gapFromTTNCP Q R S CM (P.toProtocolU β) P.d D g₀ (1 + f / (3 * n₀)) δ hg₀ hΩ
     (fun U hU u hu => ?_) hside hTT
   show ((P.Wref U.layout u : ℕ) : ℝ) ≤ _
   rw [hW, wrefU]
   exact wrefU_le f hn₀ (hn U hU u hu)
 
-/-- **`G_γ` from TT_NCP_U at ncp-v1.** -/
+/-- **`G_g` from TT_NCP_U at ncp-v1.** -/
 theorem gapFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GapFromTTNCP_U_v1 := by
-  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  intro Q R S _ _ _ _ CM P D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
   have e : (1 : ℝ) + ((24 : ℕ) : ℝ) / (3 * n₀) = 1 + 8 / n₀ := by
     have : (0 : ℝ) < n₀ := by exact_mod_cast hn₀
     field_simp
     push_cast
     ring
   rw [← e]
-  exact gapFromTTNCP_U Q R S CM P 128 24 D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  exact gapFromTTNCP_U Q R S CM P 128 24 D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
 
-/-- **`G_γ` from TT_NCP_U at C2.** -/
+/-- **`G_g` from TT_NCP_U at C2.** -/
 theorem gapFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GapFromTTNCP_U_C2 := by
-  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  intro Q R S _ _ _ _ CM P D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
   have e : (1 : ℝ) + ((20 : ℕ) : ℝ) / (3 * n₀) = 1 + 20 / (3 * n₀) := by norm_num
   rw [← e]
-  exact gapFromTTNCP_U Q R S CM P 129 20 D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  exact gapFromTTNCP_U Q R S CM P 129 20 D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
 
 section Honest
 
@@ -446,7 +446,7 @@ end Honest
 
 /-- **TT_NCP_U's satisfiability witness.** -/
 theorem ttncpUWitness : Pouw.Guarantees.NCP.TTNCPUWitness := by
-  intro Q R _ _ _ P β c γ₀ h0 h1 hc hW
+  intro Q R _ _ _ P β c g₀ h0 h1 hc hW
   refine ⟨GameProofs.ttncp_outputPriced3 _ _ _ h0 h1, fun U act _ s => honestProgU P β U act s, fun U hU act _ H s =>
     ⟨eval_honestProgU P β H U act s, ?_, calls_honestProgU P β H U act s hc⟩⟩
   refine (GameProofs.outputPriced3_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
@@ -493,7 +493,7 @@ theorem leadUWitness : LeadUWitness := by
   simp only [mul_zero] at hadmit
   exact ⟨leadParamsU f, GameProofs.leadLayout, ⟨rfl, hN, hadm⟩, hS, hU, hq, fun _ _ => rfl,
     leadCompleteU Unit Unit Salt (leadParamsU f) β, hadmit,
-    fun γ₀ h0 h1 => (ttncpUWitness Unit Unit (leadParamsU f) β 0 γ₀ h0 h1 hq hW).1,
+    fun g₀ h0 h1 => (ttncpUWitness Unit Unit (leadParamsU f) β 0 g₀ h0 h1 hq hW).1,
     fun U hU u hu => (hU.2.1.1 u hu).2.2.2.2.2.1, GameProofs.leadLayout_inDomain, one_pos, fun _ _ => ⟨64, rfl⟩⟩
 
 end Pouw.NCP.RouteUProofs

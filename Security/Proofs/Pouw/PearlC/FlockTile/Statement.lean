@@ -6,7 +6,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.FlockTile.Audit
 
 /-!
-# Pearl-C's γ under C-Flock's hidden audit (trusted)
+# Pearl-C's gap under C-Flock's hidden audit (trusted)
 
 `HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` is `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`'s statement at
 C-Flock's hidden audit (`Pouw.PearlC.FlockTile.TileReadSession.audit`), with the hidden audit's open obligation
@@ -23,7 +23,7 @@ namespace Pouw.Guarantees.PearlC
 open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under C-Flock's hidden audit**, FP32 at 8.376, the honest
-cast at 8.72: `γ = 1648180439/446072750000` (0.36949%), at `t·δzk(q)` more error than the sampled audit, for C-Flock's
+cast at 8.72: `g = 1648180439/446072750000` (0.36949%), at `t·δzk(q)` more error than the sampled audit, for C-Flock's
 hidden audit over a TileRead session `F` (`F.audit`: the window root, each drawn tile's TileRead `--zk` session through
 the bridge to core's games, and the class of batch provers whose every induced strategy meets the session's `Cls`).
 

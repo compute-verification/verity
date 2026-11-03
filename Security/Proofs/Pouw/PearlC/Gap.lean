@@ -11,37 +11,37 @@ import Mathlib.Tactic.Ring
 import Definitions.Pouw.Guarantees.PearlC
 
 /-!
-# γ from TT_OUT
+# g from TT_OUT
 
 Lemmas, none a guarantee: `TTOutPearlC`, the premise of `pearlCGap8192` and `pearlCGap16384`, is falsified by the
 first-promotion skip (`Definitions.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`TTOutPearlCDevRev1`) is its repair.
 
 * `gapFromTTOut`: if every in-domain unit that passes the activation rules and the debit cap has reference cost at
-  most `Ω` times its credit, `TT_OUT(γ₀)` gives the γ-gap property at `γ = 1 − (1 − γ₀)/Ω` with the same error; the
+  most `Ω` times its credit, `TT_OUT(g₀)` gives the gap property at `g = 1 − (1 − g₀)/Ω` with the same error; the
   winning event implies TT_OUT's event pointwise. Units above the cap are not correct, so they enter neither sum.
-* **γ is a function of the workload through its debit.** A unit's credit is `creditOf − debit(u)`, and within the cap
-  `ρ` it is at least `(1 − ρ)·creditOf` (`PearlCAccounting`). `pearlCGapAt` gives `G_γ` at any cap `ρ`, with
-  `γ = 1 − (399/400)·(1 − ρ)·creditOf/W_ref`. A workload whose units' debits are at most `ρ·creditOf` loses nothing to
+* **g is a function of the workload through its debit.** A unit's credit is `creditOf − debit(u)`, and within the cap
+  `ρ` it is at least `(1 − ρ)·creditOf` (`PearlCAccounting`). `pearlCGapAt` gives `G_g` at any cap `ρ`, with
+  `g = 1 − (399/400)·(1 − ρ)·creditOf/W_ref`. A workload whose units' debits are at most `ρ·creditOf` loses nothing to
   that cap. The debits measured on the census and on real activations are in `docs/pouw/cheap-binding.md` §4.
 * **The worst case under the deployment cap `ρ = 1/400`,** `Costs.adopted`, promotion every 4 atoms, `r = 32`:
   - `281273/52340000` (0.5374%) at 8192³ and `536953/103540000` (0.5186%) at 16384³ (`pearlCGap8192`,
     `pearlCGap16384`);
   - if TT_OUT credits only the chain and the clean-up: `600473/52340000` (1.1473%) at 8192³ and `856153/103540000`
     (0.8269%) at 16384³;
-  - relative to the honest cost including glue (not the game's γ): `21013/2500000` (0.8405%) at 8192³ and
+  - relative to the honest cost including glue (not the game's gap): `21013/2500000` (0.8405%) at 8192³ and
     `696953/103700000` (0.6721%) at 16384³ if only `α·x` runs as glue with PoUW on, and `601273/52660000` (1.1418%) and
     `95217/11540000` (0.8251%) if a clean E4M3 cast runs as well.
 * **The cap's scope.** What the cap's calibration rests on, and where it holds:
   - the admission and debit figures come from 64×8 tiles at `k ≤ 4,864` (Qwen2.5-0.5B's layers, `pearlc_activations.py`),
     below the headline k. At the headline shapes, where `pearlCDomainAt` needs all of a unit's 8,192 or 16,384
     activation rows and weight rows admissible, admission is unmeasured;
-  - γ does not depend on m, but it does depend on n: `A′·F_B` and the forming stop amortizing, so at an 8-row weight
-    tile (n = 8, k = 8,192) γ at the cap is about 4.1%;
+  - g does not depend on m, but it does depend on n: `A′·F_B` and the forming stop amortizing, so at an 8-row weight
+    tile (n = 8, k = 8,192) g at the cap is about 4.1%;
   - the cap is relative to `creditOf`, whose forming and `A′·F_B` terms don't scale with n. So "every aligned-spike
     family is rejected" holds at the headline shapes, not at every in-domain shape: R = 64 spikes at n = 8, k = 8,192
     have ρ ≈ 0.21% and are admitted, with their frozen atoms debited.
 * **Not in these numbers: cross-group joint skips.** No replay count bounds them (`joint_cross_group`); `TTOutPearlC`
-  carries them, and their measured rate is reported beside γ, not folded into it.
+  carries them, and their measured rate is reported beside g, not folded into it.
 * `ttOutPearlCWitness`: `TTOutPearlC` is satisfiable, beside an honest reference at `W_ref` and an in-domain workload whose
   unit is within the cap and has positive credit. Its cost model has two programs and shows satisfiability only. That the
   honest H100 program fits `W_ref` under the real H100 cost model is the kernel's measured claim, and none of these
@@ -53,10 +53,10 @@ namespace Pouw.PearlC
 open Finset Assumptions Pouw.Fp8Atom Matrix
 
 theorem gapFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
+    (P : Protocol Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ u < U.layout.N, ∀ act : Codes,
       P.actOK (U.layout.shape u) act → P.capOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
-    (hTT : TTOut CM P D γ₀ ε) : GGap CM P D (1 - (1 - γ₀) / Ω) ε := by
+    (hTT : TTOut CM P D g₀ δ) : GGap CM P D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA
   classical
   refine le_trans (Pouw.pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
@@ -73,16 +73,16 @@ theorem gapFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
     rw [hact]
     exact hW U hU x.1 x.2 u (mem_range.mp hu) c.act hcor.1 hcor.2.1
-  have hden : 1 - (1 - (1 - γ₀) / Ω) = (1 - γ₀) / Ω := by ring
+  have hden : 1 - (1 - (1 - g₀) / Ω) = (1 - g₀) / Ω := by ring
   rw [hden, div_div_eq_mul_div] at hwin
-  have hscale : T * Ω / (1 - γ₀) = Ω * (T / (1 - γ₀)) := by ring
+  have hscale : T * Ω / (1 - g₀) = Ω * (T / (1 - g₀)) := by ring
   rw [hscale] at hwin
   exact lt_of_mul_lt_mul_left (lt_of_lt_of_le hwin hsum) hΩ.le
 
 /-- TT_OUT on a domain gives it on any smaller domain. -/
 theorem ttOut_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D D' : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L)
-    (h : TTOut CM P D γ₀ ε) : TTOut CM P D' γ₀ ε :=
+    {P : Protocol Q R S} {D D' : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L)
+    (h : TTOut CM P D g₀ δ) : TTOut CM P D' g₀ δ :=
   ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2⟩⟩
 
 theorem wref_le_at {Q R S : Type} (P : Protocol Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω : ℚ) (hω0 : 0 ≤ ω)
@@ -100,17 +100,17 @@ theorem wref_le_at {Q R S : Type} (P : Protocol Q R S) (c : Costs) (ρ : ℚ) (s
   rw [e]
   exact mul_le_mul_of_nonneg_left hc (by exact_mod_cast hω0)
 
-/-- The headline pattern: `TTOutPearlC` at costs `c` and cap `ρ` gives `G_γ` on the one-shape domain at
-`γ = 1 − (399/400)/ω`, where `W_ref = ω·(1 − ρ)·creditOf`. -/
+/-- The headline pattern: `TTOutPearlC` at costs `c` and cap `ρ` gives `G_g` on the one-shape domain at
+`g = 1 − (399/400)/ω`, where `W_ref = ω·(1 − ρ)·creditOf`. -/
 theorem pearlCGapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
-    (hω : wrefOf Params.pi c s = ω * ((1 - ρ) * creditOf Params.pi c s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
+    (hω : wrefOf Params.pi c s = ω * ((1 - ρ) * creditOf Params.pi c s)) (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutPearlC CM sem c ρ) :
-    GGap CM (pearlCProtocol sem c ρ) (pearlCDomainAt Params.pi s) (γ : ℝ) δPearlC := by
+    GGap CM (pearlCProtocol sem c ρ) (pearlCDomainAt Params.pi s) (g : ℝ) δPearlC := by
   have key := gapFromTTOut CM (pearlCProtocol sem c ρ) (pearlCDomainAt Params.pi s) (1 / 400) (ω : ℝ) δPearlC
     (by exact_mod_cast hω0) (wref_le_at _ c ρ s ω hω0.le hω (pearlCProtocol_accounting sem c ρ))
     (ttOut_mono_domain (fun _ h => h.1) hTT)
-  have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring
+  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
   rw [e]
   exact key
 

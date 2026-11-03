@@ -123,11 +123,11 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
     debitOf Params.pi c (sem.unitDebit H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u)
   Wref := fun L u => (wrefOf Params.pi c (L.shape u) : ℝ)
 
-/-- **The named error** `ε(q, N) = (q + N)·2^−128`. Each of the `q` oracle calls, preprocessing included, yields at
+/-- **The named failure probability** `δ(q, N) = (q + N)·2^−128`. Each of the `q` oracle calls, preprocessing included, yields at
 most one fresh noise draw, and each of the `N` declared units has its own E_A draw (keyed by the unit's index; F_A, F_B
 and E_B are per job, shared by the job's units). The conjecture is that a draw on which some program undercuts that
-unit's credit by more than `γ₀` has probability at most `2^−128`, the seeds' entropy; the union bound over the grinding
-draws and the units gives `ε`, and it needs no independence between them. With `q, N ≤ 2^64`, `ε ≤ 2^−63`.
+unit's credit by more than `g₀` has probability at most `2^−128`, the seeds' entropy; the union bound over the grinding
+draws and the units gives `δ`, and it needs no independence between them. With `q, N ≤ 2^64`, `δ ≤ 2^−63`.
 
 **The noise-loss event has probability 0**, for F's lines at norm 16 (Π's), for one-row units as well.
 - A row the noise floor admits (`mul.rn(σ, α) ≥ 1`) can't lose its noise, whatever the draw.

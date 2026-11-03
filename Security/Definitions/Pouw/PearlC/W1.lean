@@ -632,7 +632,7 @@ def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : �
 
 /-- **W1 priced, with no refund**: a run's compute, the instructions' prices (`final`'s `cost`), plus
 `fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
-γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
+gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
 noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where
   Prog := Prog
   run := fun pr _ U act σ s => readout U act (final dv (salt s) pr U act σ).mem

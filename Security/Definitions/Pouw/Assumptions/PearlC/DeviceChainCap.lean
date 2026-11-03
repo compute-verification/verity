@@ -54,7 +54,7 @@ namespace Pouw.PearlC.Assumptions
 variable {Q R S : Type}
 
 /-- **TT_OUT(1/400) at a device record with the cap on the chain's share**: `TTOut` at
-`pearlCProtocolDevChainCap d sem ρ`, `pearlCDomainDev d`, `γ₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev` with
+`pearlCProtocolDevChainCap d sem ρ`, `pearlCDomainDev d`, `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev` with
 fewer units credited: a unit counts only if its debit is at most `ρ` times its chain's credited work, which bounds its
 flagged share of atom-words by `ρ` at every width (`chainCap_flagged_le`). It asserts less than `TTOutPearlCDev` at the
 same `ρ` (`ttOutPearlCDevChainCap_of_cap`). The game, charging rule, error, debit, falsifiers and cost model are

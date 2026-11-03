@@ -145,7 +145,7 @@ condition is void: read as `32·0 ∣ k` it would force `k = 0` and leave the do
 
 The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `δPearlC` allows. The binding
 attack is partial guessing: compute most of a unit's words and guess the rest. Under W1 a winning strategy must save the
-unit's `n·c` (the weight-side forming and `B̃·F_A`, online and uncredited) plus `γ₀` of its credit, and the cheapest
+unit's `n·c` (the weight-side forming and `B̃·F_A`, online and uncredited) plus `g₀` of its credit, and the cheapest
 such saving guesses about 96% of one row: 124 words at `n = 64` on the H100 (123 on sm_120), about 995 at `n = 512`.
 Each guessed word then needs only about 1.04 bits of salt-dependent min-entropy at `n = 64`, and about 0.13 at
 `n = 512`, which TT_OUT already assumes. `64 ∣ n` matters as much as `64 ≤ n`: a `1 × (n mod 64)` edge tile is guessed

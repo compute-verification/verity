@@ -6,7 +6,7 @@ import Definitions.Pouw.PearlC.W1
 
 Under the `-h1` hashing format's U-only messages (option P1) the verifier checks a
 unit's useful words U and not its ticket words C̃. A unit is then correct when its activations pass, its debit is within
-the cap, its weight rows pass and its U words are right (`CorrectU`); `correctSetU` and the γ-gap property `GGapU` are
+the cap, its weight rows pass and its U words are right (`CorrectU`); `correctSetU` and the gap property `GGapU` are
 `correctSet` and `GGap` with that. `TTOutU` is `TTOut` over `correctSetU`, and `TTOutPearlCDevUOnly` is it at rev1's
 protocol, so its credit, cap, W_ref, debit and domain are rev1's (the granted ones at `G = 0`).
 
@@ -36,15 +36,15 @@ open Classical in
 noncomputable def correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ CorrectU P U H s u c
 
-/-- The adversary wins under U-only binding: the honest work of its U-correct units exceeds `T / (1 − γ)`. -/
-def WinsU (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
-  T / (1 - γ) < ∑ u ∈ correctSetU P U H s τ, P.Wref U.layout u
+/-- The adversary wins under U-only binding: the honest work of its U-correct units exceeds `T / (1 − g)`. -/
+def WinsU (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+  T / (1 - g) < ∑ u ∈ correctSetU P U H s τ, P.Wref U.layout u
 
-/-- **The γ-gap property under U-only binding** `G_γ^U` with error `η(q, N)`. -/
+/-- **The gap property under U-only binding** `G_g^U` with failure probability `δ(q, N)`. -/
 def GGapU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => WinsU P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
+    pr (fun x : (Q → R) × S => WinsU P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
 end Pouw.PearlC
 
@@ -52,19 +52,19 @@ namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}
 
-/-- **TT_OUT(γ₀) over U alone**: `TTOut` with `K′ = correctSetU`, the units whose useful words are correct and whose
+/-- **TT_OUT(g₀) over U alone**: `TTOut` with `K′ = correctSetU`, the units whose useful words are correct and whose
 debit is within the cap, whatever their ticket words. -/
 def TTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
+      T / (1 - g₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
         P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
-      ≤ ε q U.layout.N
+      ≤ δ q U.layout.N
 
 /-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`**: `TTOutU` at `pearlCProtocolDevRev1 d sem ρ`,
-`pearlCDomainDev d`, `γ₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDevRev1` with the ticket words unchecked.
+`pearlCDomainDev d`, `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDevRev1` with the ticket words unchecked.
 
 - **What it adds to the (C̃, U) row.** U is four BF16 k16 steps accumulated into C̃'s word, so U reads C̃ down to the bits
   its first step keeps: a word's U ignores a +1-ulp move of C̃ on about 30% of words and a +4-ulp move on about 5%
@@ -84,17 +84,17 @@ def TTOutPearlCDevUOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM 
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
-/-- **TT_OUT(γ₀) over U alone, at W1**: `TTOutU`'s game at `CM := W1.w1Priced dv salt`. With `K′` the units whose useful
+/-- **TT_OUT(g₀) over U alone, at W1**: `TTOutU`'s game at `CM := W1.w1Priced dv salt`. With `K′` the units whose useful
 words are correct and whose debit is within the cap, no W1 program bounded by `T` makes
-`∑_{u ∈ K′} credit(u) > T / (1 − γ₀)` with probability over `(H, s)` more than `ε(q, N)`. -/
+`∑_{u ∈ K′} credit(u) > T / (1 − g₀)` with probability over `(H, s)` more than `δ(q, N)`. -/
 def TTOutUW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
+      T / (1 - g₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
         P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
-      ≤ ε q U.layout.N
+      ≤ δ q U.layout.N
 
 /-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`, at W1 on `dv`**: `TTOutPearlCDevUOnly` with its cost
 model the term `W1.w1Priced dv salt`. -/

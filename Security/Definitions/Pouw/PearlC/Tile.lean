@@ -6,8 +6,8 @@ import Definitions.Pouw.PearlC.Instance
 
 The verifier opens drawn tiles, not units: `verity.protocols.accounting.work.pouw.audit` draws `t` tiles independently, each with probability
 `W_ref(tile)/W`, and recomputes each drawn tile from its openings (its activation rows and weight rows over the full k).
-So the debit cap has to be decided on a tile, and γ has to hold for a verifier that checks drawn tiles only. This
-file states both; `TileGap` proves γ from them.
+So the debit cap has to be decided on a tile, and the gap has to hold for a verifier that checks drawn tiles only. This
+file states both; `TileGap` proves the gap from them.
 
 - **A tile** is the output words `rows g × cols g` of one unit (`Tiling`). The named tiling is the audit's grid of
   `64 × 64` words (`auditTiling`).
@@ -28,7 +28,7 @@ file states both; `TileGap` proves γ from them.
   (`TileRules.Wcred`).
 - **Blank units** are the ones the prover leaves uncommitted. Their tiles are never checked and never credited.
 - **`GGapSampled`:** for every adversary, the probability that the audit accepts and the credited work, less `ε_s` of the
-  layout's, exceeds `T/(1 − γ)` is at most `(1 − ε_s)^t + η(q, N)`. The draw is independent of the oracle and the salt,
+  layout's, exceeds `T/(1 − g)`, `g` the gap, is at most `(1 − ε_s)^t + δ(q, N)`. The draw is independent of the oracle and the salt,
   so its source must be fixed only after the transcript's commitment.
 -/
 
@@ -44,7 +44,7 @@ structure Tiling where
   cols : ℕ → Finset ℕ
 
 /-- The audit's grid: each unit's `m × n` words in blocks of `tm × tn`, clipped at the edges; the units in order, and a
-unit's blocks by block row, then block column. The order does not enter γ: every tile is drawn by its own weight. -/
+unit's blocks by block row, then block column. The order does not enter g: every tile is drawn by its own weight. -/
 def gridTiles (tm tn : ℕ) (L : Layout) : List (ℕ × ℕ × ℕ) :=
   (List.range L.N).flatMap fun u =>
     (List.range (((L.shape u).m + tm - 1) / tm)).flatMap fun bi =>
@@ -76,7 +76,7 @@ variable {Q R S : Type}
 
 /-- A good tile of a committed unit: its replayed debit is within the cap, each of its weight rows (its columns' rows of
 its unit's weight) passes the rules, and each ticket and useful word of its credited rows (the activation rows that
-pass the rules) has the reference FP32 value. Excluded rows are bound but uncredited, so their words don't enter γ. -/
+pass the rules) has the reference FP32 value. Excluded rows are bound but uncredited, so their words don't enter the gap. -/
 def TileGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
     Prop :=
   TR.capOK H s U g c.act ∧
@@ -137,33 +137,33 @@ def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q 
       CM.cost prog H U act [] s ≤ tileWrefTotal TR U.layout ∧
       CM.calls prog H U act [] s ≤ qref U
 
-/-- **The γ-gap property under the sampled audit.** For every in-domain workload, budget `T`, oracle bound `q` and
+/-- **The gap property under the sampled audit.** For every in-domain workload, budget `T`, oracle bound `q` and
 adversary, every ticket count `w` proportional to the tiles' `W_ref` (`verity.protocols.accounting.work.pouw.audit`'s `tickets`), `t` independent
-draws and `ε_s ≤ 1`: the audit accepts (every drawn tile is good, or of a blank unit) while `T` is below `1 − γ` of the
-claimed work (the credited rows' `W_ref`) less `ε_s` of the layout's, with probability at most `(1 − ε_s)^t + η(q, N)`. -/
+draws and `ε_s ≤ 1`: the audit accepts (every drawn tile is good, or of a blank unit) while `T` is below `1 − g` of the
+claimed work (the credited rows' `W_ref`) less `ε_s` of the layout's, with probability at most `(1 − ε_s)^t + δ(q, N)`. -/
 def GGapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
+    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
           AuditAccepts (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
             blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + η q U.layout.N
+          T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
+        ≤ (1 - εs) ^ t + δ q U.layout.N
 
-/-- **The γ-gap property under the sampled audit with U-only binding**: `GGapSampled` with the audit accepting a drawn tile
+/-- **The gap property under the sampled audit with U-only binding**: `GGapSampled` with the audit accepting a drawn tile
 when it is good under U-only binding (`goodTilesU`) or of a blank unit. -/
 def GGapSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
+    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
           AuditAccepts (goodTilesU P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
             blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + η q U.layout.N
+          T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
+        ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-! ## Pearl-C's tiles -/
 

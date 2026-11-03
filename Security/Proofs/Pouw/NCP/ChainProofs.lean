@@ -56,12 +56,12 @@ theorem wrapFinalOnlyInd : WrapFinalOnlyInd := by
   exact ncpFinalOnlyInd k m n N R A B adv h16 hI hV u hu
 
 theorem wrapWordFloorInd : WrapWordFloorInd := by
-  intro k m n N R A B adv γ₀ h16 hI hγ0 hγ1 hV hr hNz
-  refine (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrapped k m n N R A B) N adv γ₀
-    hγ0 hγ1 hV hNz).trans ?_
-  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * ((fun _ => positions k m n) u : ℕ) -
+  intro k m n N R A B adv g₀ h16 hI hg0 hg1 hV hr hNz
+  refine (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrapped k m n N R A B) N adv g₀
+    hg0 hg1 hV hNz).trans ?_
+  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * ((fun _ => positions k m n) u : ℕ) -
         Word.identCount (fun _ => positions k m n) (wrapped k m n N R A B) adv u))
-      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
+      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
         apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
         have h1 : (Word.identCount (fun _ => positions k m n) (wrapped k m n N R A B) adv u : ℝ) ≤ (m * n : ℕ) := by
           exact_mod_cast wrapFinalOnlyInd k m n N R A B adv h16 hI hV hr u (mem_range.1 hu)
@@ -69,7 +69,7 @@ theorem wrapWordFloorInd : WrapWordFloorInd := by
         simp only [positions]
         push_cast at h1 ⊢
         nlinarith
-    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := by
+    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := by
         rw [sum_const, card_range, nsmul_eq_mul]
 
 theorem e1Of_noise {N m n k : ℕ} (ω : Noise N m n k) (u i l : ℕ) : InNoise6 (e1Of ω u i l) := by
@@ -187,7 +187,7 @@ theorem leadIndWitness : LeadIndWitness := by
   have hadmit := (ttncpWitness Unit Unit leadParams 0 0 le_rfl one_pos hq hW).2
   simp only [mul_zero] at hadmit
   exact ⟨leadParams, leadLayout, ⟨⟨rfl, hN, hadm⟩, hind⟩, hS, hq, fun _ _ => rfl, leadComplete Unit Unit Salt leadParams,
-    hadmit, fun γ₀ h0 h1 => (ttncpWitness Unit Unit leadParams 0 γ₀ h0 h1 hq hW).1, leadLayout_inDomain, one_pos,
+    hadmit, fun g₀ h0 h1 => (ttncpWitness Unit Unit leadParams 0 g₀ h0 h1 hq hW).1, leadLayout_inDomain, one_pos,
     fun _ _ => ⟨64, rfl⟩⟩
 
 end Pouw.NCP.ChainProofs

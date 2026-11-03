@@ -646,7 +646,7 @@ the block scale on `lut256` (§6.6) and FADD at the measured `1047/125`
 - `qa = 9423/500 = 18.846`: the noisy amax (one FMNMX, `2·8.376`) and ρ's squared accumulate on every 8th element
   (`2·8.376/8`), both reading the row alone.
 
-The price rule publishes the larger γ, and γ rises with the FADD price, so the record is at the in-loop 8.376, not the
+The price rule publishes the larger g, and g rises with the FADD price, so the record is at the in-loop 8.376, not the
 issue-bound 8.00 (`fs = 104.5`, `qa = 18`). `creditFp4` and `wrefFp4` read this one `fs`. It was `2444/25 = 97.76`, with
 the block scale at 1 and FADD at 8.38. -/
 def Fp4Prices.sm120 : Fp4Prices := ⟨4, 105299 / 1000, 9423 / 500⟩

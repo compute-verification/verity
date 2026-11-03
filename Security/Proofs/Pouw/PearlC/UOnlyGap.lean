@@ -4,16 +4,16 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
-# TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it
+# TT_OUT over U alone: it asserts more than the (C̃, U) row, and g from it
 
 Staged; nothing pinned.
 * `correctSet_subset_correctSetU`: a unit correct under (C̃, U) binding is correct under U alone.
 * `ttOutPearlCDevRev1_of_uOnly`: TT_OUT over U gives the (C̃, U) row at the same record, for non-negative prices and
   `ρ ≤ 1`. So U-only is the stronger conjecture.
-* `gapFromTTOutU` and `pearlCGapDevUOnlyAt`: TT_OUT over U gives `G_γ^U` at `γ = 1 − (399/400)/ω`, the same ω as
-  rev1, so γ is rev1's: 0.51056% (v1) and 0.36162% (v2 at the cap 1/1,000) at 8192³ at sm_120's prices
+* `gapFromTTOutU` and `pearlCGapDevUOnlyAt`: TT_OUT over U gives `G_g^U` at `g = 1 − (399/400)/ω`, the same ω as
+  rev1, so g is rev1's: 0.51056% (v1) and 0.36162% (v2 at the cap 1/1,000) at 8192³ at sm_120's prices
   (`pearlCGapUOnlySm120Rev1_8192`, `pearlCGapUOnlyUnpromotedCap1000_8192`).
-* `gapU_implies_gap`: `G_γ^U` gives `G_γ`, since a unit the (C̃, U) verifier accepts is one the U-only verifier
+* `gapU_implies_gap`: `G_g^U` gives `G_g`, since a unit the (C̃, U) verifier accepts is one the U-only verifier
   accepts.
 -/
 
@@ -34,10 +34,10 @@ theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q
   obtain ⟨hu, c, hc, hact, hcap, hB, hw⟩ := hu
   exact ⟨hu, c, hc, hact, hcap, hB, fun i hi j hj => (hw i hi j hj).2⟩
 
-/-- `G_γ^U` gives `G_γ` when `W_ref` is non-negative. -/
+/-- `G_g^U` gives `G_g` when `W_ref` is non-negative. -/
 theorem gapU_implies_gap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u)
-    (h : GGapU CM P D γ η) : GGap CM P D γ η := by
+    (P : Protocol Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u)
+    (h : GGapU CM P D g δ) : GGap CM P D g δ := by
   intro U hU T hT q hq A hA
   refine le_trans (Pouw.pr_mono ?_) (h U hU T hT q hq A hA)
   intro x hx
@@ -47,10 +47,10 @@ theorem gapU_implies_gap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM
     fun u _ _ => hW _ u)
 
 theorem gapFromTTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
+    (P : Protocol Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ u < U.layout.N, ∀ act : Codes,
       P.actOK (U.layout.shape u) act → P.capOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
-    (hTT : TTOutU CM P D γ₀ ε) : GGapU CM P D (1 - (1 - γ₀) / Ω) ε := by
+    (hTT : TTOutU CM P D g₀ δ) : GGapU CM P D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA
   classical
   refine le_trans (Pouw.pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
@@ -67,9 +67,9 @@ theorem gapFromTTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : 
     have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
     rw [hact]
     exact hW U hU x.1 x.2 u (mem_range.mp hu) c.act hcor.1 hcor.2.1
-  have hden : 1 - (1 - (1 - γ₀) / Ω) = (1 - γ₀) / Ω := by ring
+  have hden : 1 - (1 - (1 - g₀) / Ω) = (1 - g₀) / Ω := by ring
   rw [hden, div_div_eq_mul_div] at hwin
-  have hscale : T * Ω / (1 - γ₀) = Ω * (T / (1 - γ₀)) := by ring
+  have hscale : T * Ω / (1 - g₀) = Ω * (T / (1 - g₀)) := by ring
   rw [hscale] at hwin
   exact lt_of_mul_lt_mul_left (lt_of_lt_of_le hwin hsum) hΩ.le
 
@@ -120,13 +120,13 @@ theorem ttOutPearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
 
 end
 
-/-- TT_OUT over U at a device record gives `G_γ^U` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
+/-- TT_OUT over U at a device record gives `G_g^U` on the one-shape domain at `g = 1 − (399/400)/ω`, where
 `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`. -/
 theorem pearlCGapDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
-    (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
+    (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutPearlCDevUOnly CM d sem ρ) :
-    GGapU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (γ : ℝ) δPearlC := by
+    GGapU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevRev1 d sem ρ).actOK (U.layout.shape u) act →
@@ -147,11 +147,11 @@ theorem pearlCGapDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
     ⟨hTT.1, fun U hU => hTT.2 U ⟨hU.1, hU.2.1⟩⟩
   have key := gapFromTTOutU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) δPearlC
     (by exact_mod_cast hω0) hW hmono
-  have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring
+  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
   rw [e]
   exact key
 
-/-- **v1 under rev1 with U-only binding, 8192³**, at sm_120's prices, cap 1/400: `γ = 16223/3177500`. -/
+/-- **v1 under rev1 with U-only binding, 8192³**, at sm_120's prices, cap 1/400: `g = 16223/3177500`. -/
 theorem pearlCGapUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevUOnly CM d sem (1 / 400)) :
@@ -161,7 +161,7 @@ theorem pearlCGapUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 with U-only binding, 8192³**, at sm_120's prices: `γ = 216793/59950000`. -/
+/-- **v2 at the cap 1/1,000 with U-only binding, 8192³**, at sm_120's prices: `g = 216793/59950000`. -/
 theorem pearlCGapUOnlyUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevUOnly CM d sem (1 / 1000)) :

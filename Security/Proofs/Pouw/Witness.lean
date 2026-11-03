@@ -124,11 +124,11 @@ theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Worklo
 theorem honestComplete : Pinned.HonestComplete := by
   intro Q R S P D U H s act hP hU hact
   have hK := honest_correctSet P D U H s act hP hU hact
-  refine ⟨hK, fun γ hγ0 hγ1 hwin => ?_⟩
+  refine ⟨hK, fun g hg0 hg1 hwin => ?_⟩
   unfold Wins at hwin
   rw [hK] at hwin
   have hW : 0 ≤ totalWref P U.layout := Finset.sum_nonneg fun _ _ => by positivity
-  have : totalWref P U.layout ≤ totalWref P U.layout / (1 - γ) := by
+  have : totalWref P U.layout ≤ totalWref P U.layout / (1 - g) := by
     rw [le_div_iff₀ (by linarith)]; nlinarith
   exact absurd hwin (not_lt.2 this)
 
@@ -154,8 +154,8 @@ theorem sixteen_Wref {Q R : Type} (P : D1.Params Q R Salt) {Ω : ℝ}
 theorem honest_wins_sixteen {Q R : Type} (P : D1.Params Q R Salt) (hN : P.NoiseRange) {Ω : ℝ}
     (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (H : Q → R) (s : Salt) {γ T : ℝ} (hT : T / (1 - γ) < 16 * 2 ^ 44 * Ω) :
-    Wins P.toProtocol M1.sixteen γ T (honestTranscript P.toProtocol H s M1.sixteen fun _ => 0) H s := by
+    (H : Q → R) (s : Salt) {g T : ℝ} (hT : T / (1 - g) < 16 * 2 ^ 44 * Ω) :
+    Wins P.toProtocol M1.sixteen g T (honestTranscript P.toProtocol H s M1.sixteen fun _ => 0) H s := by
   unfold Wins
   rw [honest_correctSet P.toProtocol _ M1.sixteen H s _ (d1_complete_m1Domain P hN) M1.sixteen_inDomain
     fun _ _ => zero_actOK _]
@@ -197,8 +197,8 @@ theorem lost_free {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty
     (c : ℕ) (Ω : ℝ) (hN : P.NoiseRange) (hc : P.QueryBound c) (hc64 : 16 * c ≤ 2 ^ 64) (hΩ : 1 ≤ Ω)
     (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (γ : ℝ) (_hγ : γ < 1) (η : ℕ → ℕ → ℝ) (hG : GGap (freeModel Q R Salt) P.toProtocol D1.m1Domain γ η) :
-    1 ≤ η (16 * c) 16 := by
+    (g : ℝ) (_hg : g < 1) (δ : ℕ → ℕ → ℝ) (hG : GGap (freeModel Q R Salt) P.toProtocol D1.m1Domain g δ) :
+    1 ≤ δ (16 * c) 16 := by
   have := salt_nonempty
   have h := hG M1.sixteen M1.sixteen_inDomain 0 le_rfl (M1.sixteen.layout.N * c) hc64 (freeHonest P)
     (freeHonest_bounded P hc M1.sixteen)
@@ -210,8 +210,8 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
     (c : ℕ) (Ω : ℝ) (hN : P.NoiseRange) (hc : P.QueryBound c) (hc64 : 16 * c ≤ 2 ^ 64) (hΩ : 1 ≤ Ω)
     (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (γ : ℝ) (hγ : γ < 1 - 1 / Ω) (η : ℕ → ℕ → ℝ)
-    (hG : GGap (outputPriced Q R Salt) P.toProtocol D1.m1Domain γ η) : 1 ≤ η (16 * c) 16 := by
+    (g : ℝ) (hg : g < 1 - 1 / Ω) (δ : ℕ → ℕ → ℝ)
+    (hG : GGap (outputPriced Q R Salt) P.toProtocol D1.m1Domain g δ) : 1 ≤ δ (16 * c) 16 := by
   have := salt_nonempty
   have hB := pricedHonest_bounded P hc M1.sixteen
   rw [sum_Wmm_sixteen] at hB
@@ -221,8 +221,8 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
   rw [pricedHonest_transcript]
   refine honest_wins_sixteen P hN hW x.1 x.2 ?_
   have hΩ0 : 0 < Ω := by linarith
-  have h1 : 1 / Ω < 1 - γ := by linarith
-  have h1' : (0 : ℝ) < 1 - γ := lt_of_le_of_lt (by positivity) h1
+  have h1 : 1 / Ω < 1 - g := by linarith
+  have h1' : (0 : ℝ) < 1 - g := lt_of_le_of_lt (by positivity) h1
   rw [div_lt_iff₀ h1']
   rw [div_lt_iff₀ hΩ0] at h1
   nlinarith
@@ -230,7 +230,7 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
 /-- **The game can be lost.** -/
 theorem gameCanBeLost : Pinned.GameCanBeLost := by
   intro Q R _ _ _ _ P c Ω hN hc hc64 hΩ hW
-  exact ⟨fun γ hγ η hG => lost_free P c Ω hN hc hc64 hΩ hW γ hγ η hG,
-    fun γ hγ η hG => lost_priced P c Ω hN hc hc64 hΩ hW γ hγ η hG⟩
+  exact ⟨fun g hg δ hG => lost_free P c Ω hN hc hc64 hΩ hW g hg δ hG,
+    fun g hg δ hG => lost_priced P c Ω hN hc hc64 hΩ hW g hg δ hG⟩
 
 end Pouw.Proofs

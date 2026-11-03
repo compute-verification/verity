@@ -49,9 +49,9 @@ a GEMM unit spans audit units the closures don't tie together.
 
 **The work step's instance.** `TileWork` is stated at `coordDomain` only, so TT's instances, whose carded domains
 (`Shape.InDefaultDomain`, `m1Domain`, `NCP.leadDomain`) all have `16 ∣ m`, `m > 0` and `n ≥ 2^10` and hold no coordinate
-layout, are no instances of it. `WindowWork.tileWork_metered` exhibits one: the metered model (`meteredModel P γ`), a
-device that pays `(1 − γ)·W_ref(u)` for every coordinate it commits, satisfies `TileWork` at `γ_u = γ` with error `0`,
-for every protocol and every `γ ≤ 1`, on a domain that holds a workload (`coordDomain_inhabited`). Its programs reach
+layout, are no instances of it. `WindowWork.tileWork_metered` exhibits one: the metered model (`meteredModel P g`), a
+device that pays `(1 − g)·W_ref(u)` for every coordinate it commits, satisfies `TileWork` at `γ_u = g` with error `0`,
+for every protocol and every `g ≤ 1`, on a domain that holds a workload (`coordDomain_inhabited`). Its programs reach
 the oracle only through counted queries (`meteredModel_queries`). The deployed device's instance is EPS1's: compute
 accounting's per-unit credit at its `ε` (`Accounting.Guarantees.Compose.CircuitCredit`, on `cursor/compose-stmt-ea24`, not
 on main), through a bridge from its play to PoUW's cost model, which is PoUW's gap (3) and is stated when that module
@@ -96,47 +96,47 @@ def coordinates (L : Layout) : Prop := ∀ u < L.N, (L.shape u).m = 1 ∧ (L.sha
 def coordDomain (L : Layout) : Prop := coordinates L ∧ ∀ u < L.N, 0 < (L.shape u).k
 
 /-- **The work step at coordinate units, TileWork(γ_u)** (a named premise, open), for a cost model `CM`, a protocol `P`,
-a gap `γ_u` and an error `η(q, N)`, on decision 107's domain `coordDomain`. A correct unit was paid for: the prover
+a gap `γ_u` and an error `δ(q, N)`, on decision 107's domain `coordDomain`. A correct unit was paid for: the prover
 spent at least `(1 − γ_u)·W_ref(u)` on it. A cost model prices a whole run, not a unit, so it is stated summed over the
-window, in `G_γ`'s game (the same adversaries, budgets and oracle-call bounds). For every adversary within `(T, q)`,
+window, in `G_g`'s game (the same adversaries, budgets and oracle-call bounds). For every adversary within `(T, q)`,
 $$\Pr_{H,s}\Big[T < (1-\gamma_u)\sum_{u \in K} W_{ref}(u)\Big] \le \eta(q, N),$$
-`K` being the correct units (`correctSet`: checked values and useful output correct). It is `G_γ` at `γ = γ_u` with
+`K` being the correct units (`correctSet`: checked values and useful output correct). It is `G_g` at `g = γ_u` with
 the gap multiplied out, so it needs no `γ_u < 1`: at `γ_u ≥ 1` its event is empty.
 
 It is stated at coordinates only, so no tile-unit premise (TT, TT_NCP) instantiates it: none of their carded domains
-holds a coordinate layout. Its instance in Lean is the metered model (`tileWork_metered`, at `γ_u = γ` with error `0`,
+holds a coordinate layout. Its instance in Lean is the metered model (`tileWork_metered`, at `γ_u = g` with error `0`,
 on a domain that holds a workload, `coordDomain_inhabited`). The deployed device's is EPS1's, from compute accounting's
 per-unit credit (`Accounting.Guarantees.Compose.CircuitCredit`) through gap (3)'s bridge to PoUW's cost model. -/
 def TileWork [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (γu : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (γu : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain coordDomain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM,
     A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
       T < (1 - γu) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ))
-      ≤ η q U.layout.N
+      ≤ δ q U.layout.N
 
-/-- **The metered model at `γ`**, `TileWork`'s instance: its programs are adaptive oracle programs (one for each
+/-- **The metered model at `g`**, `TileWork`'s instance: its programs are adaptive oracle programs (one for each
 workload, activation input, state and salt), a run outputs what its program returns, makes the program's queries, and
-costs `(1 − γ)·W_ref(u)` for every unit `u < N` it commits. It is a device that pays each committed coordinate's
-declared work at the discount `γ` and can't commit one for less. -/
-noncomputable def meteredModel (P : Protocol Q R S) (γ : ℝ) : CostModel Q R S where
+costs `(1 − g)·W_ref(u)` for every unit `u < N` it commits. It is a device that pays each committed coordinate's
+declared work at the discount `g` and can't commit one for less. -/
+noncomputable def meteredModel (P : Protocol Q R S) (g : ℝ) : CostModel Q R S where
   Prog := Workload → (ℕ → Pouw.Mat) → Pouw.State → S → QTree Q R Pouw.Transcript
   run p H U act st s := (p U act st s).eval H
-  cost p H U act st s := (1 - γ) * ∑ u ∈ (range U.layout.N).filter (fun u => ((p U act st s).eval H u).isSome),
+  cost p H U act st s := (1 - g) * ∑ u ∈ (range U.layout.N).filter (fun u => ((p U act st s).eval H u).isSome),
     (P.Wref U.layout u : ℝ)
   calls p H U act st s := (p U act st s).calls H
 
 /-- The metered model's programs reach the oracle only through counted queries (the form of `CostModel.Queries`). -/
-theorem meteredModel_queries (P : Protocol Q R S) (γ : ℝ) : (meteredModel P γ).Queries :=
+theorem meteredModel_queries (P : Protocol Q R S) (g : ℝ) : (meteredModel P g).Queries :=
   fun p U act st s => ⟨p U act st s, fun _ => ⟨rfl, rfl⟩⟩
 
-/-- **`TileWork` holds at the metered model**, at `γ_u = γ` with error `0`, for every protocol and every `γ ≤ 1`: a
+/-- **`TileWork` holds at the metered model**, at `γ_u = g` with error `0`, for every protocol and every `g ≤ 1`: a
 correct unit is a committed one, so the work of the correct units at the discount is at most what the run costs. -/
-theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) {γ : ℝ}
-    (hγ : γ ≤ 1) : TileWork (meteredModel P γ) P γ fun _ _ => 0 := by
+theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) {g : ℝ}
+    (hg : g ≤ 1) : TileWork (meteredModel P g) P g fun _ _ => 0 := by
   intro U _ T _ q _ A hA
   have hempty : ∀ x : (Q → R) × S,
-      ¬ T < (1 - γ) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) := by
+      ¬ T < (1 - g) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) := by
     intro x hlt
     have hsub : correctSet P U x.1 x.2 (A.transcript U x.1 x.2) ⊆
         (range U.layout.N).filter (fun u => ((A.online U A.act (A.pre.eval x.1) x.2).eval x.1 u).isSome) := by
@@ -149,8 +149,8 @@ theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P 
       rfl
     have hle := Finset.sum_le_sum_of_subset_of_nonneg hsub fun u _ _ => (Nat.cast_nonneg (P.Wref U.layout u) : (0 : ℝ) ≤ _)
     have hcost := (hA x.1 x.2).1
-    have : (1 - γ) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ≤ T :=
-      (mul_le_mul_of_nonneg_left hle (sub_nonneg.2 hγ)).trans hcost
+    have : (1 - g) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ≤ T :=
+      (mul_le_mul_of_nonneg_left hle (sub_nonneg.2 hg)).trans hcost
     exact absurd hlt (not_lt.2 this)
   simp only [pr, hempty, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div, le_refl]
 

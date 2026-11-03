@@ -2,11 +2,11 @@ import Proofs.Pouw.PearlC.TileGap
 import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 
 /-!
-# γ at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)
+# g at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)
 
-* **γ at any FP4 record,** on the one-shape domain at `sem` (D-SK included, `Fp4Sem.SaltKeyedB`) where
-  `wrefFp4 = ω·(1 − ρ)·creditFp4`: `G_γ` from TT_OUT
-  (`pearlCGapFp4At`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledFp4At`), both at `γ = 1 − (399/400)/ω`. These
+* **The gap at any FP4 record,** on the one-shape domain at `sem` (D-SK included, `Fp4Sem.SaltKeyedB`) where
+  `wrefFp4 = ω·(1 − ρ)·creditFp4`: `G_g` from TT_OUT
+  (`pearlCGapFp4At`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledFp4At`), both at `g = 1 − (399/400)/ω`. These
   are `pearlCGapDevAt` and `pearlCSampledDevAt` on `Fp4Device`.
 * **Pearl-C4's headline on sm_120**, cap `1/400`, forming credited, at `Fp4Prices.sm120` (`fs = 105.299`, `qa =
   18.846`: block scale on `lut256`, FADD at `1047/125`): `9875013901/1376663200000` (0.71732%) at 8192³ and
@@ -22,8 +22,8 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
   0.5069 and 0.4083 at the four cubes (`cL_8192` to `cL_65536`), F2's threshold at 8,192³ (`cL_f2_threshold`), the
   corner, rectangular shapes, shapes between and past the table's points (`cL_corner`, `cL_rectangular`, `cL_between`,
   `cL_beyond`), and the table's shape and fall in each dimension (`cLTable_dims`, `cLTable_falls`).
-* **Neither the base-split fix nor its restage moves γ.** F1′, F2 and R1 are debit terms
-  (`Fp4Sem.tileDebit`), and the γ statements hold at any debit within the cap. They take TT_OUT on the domain
+* **Neither the base-split fix nor its restage moves g.** F1′, F2 and R1 are debit terms
+  (`Fp4Sem.tileDebit`), and the g statements hold at any debit within the cap. They take TT_OUT on the domain
   `pearlCDomainFp4`, now bounded to the grant's shapes, and read only its one-shape clause, so the instances are
   unchanged.
 -/
@@ -38,13 +38,13 @@ theorem Fp4Sem.passRows_subset {Q R S : Type} (sem : Fp4Sem Q R S) (sh : Shape) 
   unfold Fp4Sem.passRows
   exact filter_subset _ _
 
-/-- TT_OUT at an FP4 record gives `G_γ` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
+/-- TT_OUT at an FP4 record gives `G_g` on the one-shape domain at `g = 1 − (399/400)/ω`, where
 `wrefFp4 = ω·(1 − ρ)·creditFp4`: a unit within the cap is credited at least `(1 − ρ)·creditFp4`. -/
 theorem pearlCGapFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
-    (hω : wrefFp4 d s = ω * ((1 - ρ) * creditFp4 d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
+    (hω : wrefFp4 d s = ω * ((1 - ρ) * creditFp4 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutFp4 CM d sem ρ) :
-    GGap CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (γ : ℝ) δPearlC := by
+    GGap CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) → ∀ (H : Q → R) (s' : S),
       ∀ u < U.layout.N, ∀ act : Codes, (pearlCProtocolFp4 d sem ρ).actOK (U.layout.shape u) act →
         (pearlCProtocolFp4 d sem ρ).capOK H s' U u act →
@@ -61,7 +61,7 @@ theorem pearlCGapFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (1 / 400) (ω : ℝ) δPearlC
     (by exact_mod_cast hω0) hW (ttOut_mono_domain (fun _ h => h.1) hTT)
-  have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring
+  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
   rw [e]
   exact key
 
@@ -97,7 +97,7 @@ theorem pearlCSampledFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
   rw [e]
   exact key
 
-/-- **Pearl-C4's headline on sm_120, 8192³**, worst case under the cap `1/400`: `γ = 9875013901/1376663200000` (0.71732%). -/
+/-- **Pearl-C4's headline on sm_120, 8192³**, worst case under the cap `1/400`: `g = 9875013901/1376663200000` (0.71732%). -/
 theorem pearlCGapFp4Sm120_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120 CM sem (1 / 400)) :
     GGap CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
@@ -105,7 +105,7 @@ theorem pearlCGapFp4Sm120_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Finty
   pearlCGapFp4At CM devFp4Sm120 sem _ _ (3441658000 / 3425534301) _ (by norm_num)
     (by norm_num [wrefFp4, creditFp4, devFp4Sm120, Fp4Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `γ = 5473473967/895794400000` (0.61102%). -/
+/-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `g = 5473473967/895794400000` (0.61102%). -/
 theorem pearlCGapFp4Sm120_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120 CM sem (1 / 400)) :
     GGap CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh16384)
@@ -113,7 +113,7 @@ theorem pearlCGapFp4Sm120_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
   pearlCGapFp4At CM devFp4Sm120 sem _ _ (2239486000 / 2231380767) _ (by norm_num)
     (by norm_num [wrefFp4, creditFp4, devFp4Sm120, Fp4Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **Pearl-C4's headline on sm_120 per audit tile, 8192³**: `GGapSampled` at `γ = 9875013901/1376663200000`. -/
+/-- **Pearl-C4's headline on sm_120 per audit tile, 8192³**: `GGapSampled` at `g = 9875013901/1376663200000`. -/
 theorem pearlCSampledFp4Sm120_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120 CM sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
@@ -122,7 +122,7 @@ theorem pearlCSampledFp4Sm120_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
     (by norm_num [wrefFp4, creditFp4, devFp4Sm120, Fp4Prices.sm120, Params.pi, sh8192])
     (by norm_num [wrefFp4, creditFp4, devFp4Sm120, Fp4Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **Pearl-C4's headline on sm_120 per audit tile, 16384³**: `GGapSampled` at `γ = 5473473967/895794400000`. -/
+/-- **Pearl-C4's headline on sm_120 per audit tile, 16384³**: `GGapSampled` at `g = 5473473967/895794400000`. -/
 theorem pearlCSampledFp4Sm120_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120 CM sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
@@ -229,7 +229,7 @@ theorem int8Saving_readings :
   dsimp only
   decide +kernel
 
-/-- **The headline shapes are in the domain** (`pearlCShapeFp4`), so the γ instances at 8192³ and 16384³ are not vacuous
+/-- **The headline shapes are in the domain** (`pearlCShapeFp4`), so the g instances at 8192³ and 16384³ are not vacuous
 on shape grounds. -/
 theorem pearlCShapeFp4_headline : pearlCShapeFp4 sh8192 ∧ pearlCShapeFp4 sh16384 := by
   unfold pearlCShapeFp4 sh8192 sh16384

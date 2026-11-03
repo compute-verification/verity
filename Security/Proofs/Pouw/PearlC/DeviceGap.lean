@@ -1,15 +1,15 @@
 import Proofs.Pouw.PearlC.TileGap
 
 /-!
-# TT_OUT and γ at a device record
+# TT_OUT and g at a device record
 
 Staged; nothing pinned.
 * **The H100 record is the granted statement on a narrower domain:** `pearlCProtocolDev_h100` and
   `pearlCTilesDev_h100`, and `pearlCDomainDev_h100` (the granted domain with `n ≥ 64`, `64 ∣ n`), so
   `TTOutPearlC CM · Costs.adopted` gives `TTOutPearlCDev CM devH100` (`ttOutPearlCDev_h100`), and likewise per tile
   (`ttOutTilePearlCDev_h100`).
-* **γ at any device record,** on the one-shape domain where `wrefDev = ω·(1 − ρ)·creditDev`: `G_γ` from TT_OUT
-  (`pearlCGapDevAt`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `γ = 1 − (399/400)/ω`.
+* **The gap at any device record,** on the one-shape domain where `wrefDev = ω·(1 − ρ)·creditDev`: `G_g` from TT_OUT
+  (`pearlCGapDevAt`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `g = 1 − (399/400)/ω`.
   `pearlCTilesDev_total`: the audit tiles' `W_ref` is the layout's `∑_u wrefDev`.
 -/
 
@@ -91,13 +91,13 @@ theorem ttOutTilePearlCDev_h100 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
 
 end
 
-/-- TT_OUT at a device record gives `G_γ` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
+/-- TT_OUT at a device record gives `G_g` on the one-shape domain at `g = 1 − (399/400)/ω`, where
 `wrefDev = ω·(1 − ρ)·creditDev`: a unit within the cap is credited at least `(1 − ρ)·creditDev`. -/
 theorem pearlCGapDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
-    (hω : wrefDev d s = ω * ((1 - ρ) * creditDev d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
+    (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
+    (hω : wrefDev d s = ω * ((1 - ρ) * creditDev d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
     (hTT : TTOutPearlCDev CM d sem ρ) :
-    GGap CM (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) (γ : ℝ) δPearlC := by
+    GGap CM (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) → ∀ (H : Q → R) (s' : S),
       ∀ u < U.layout.N, ∀ act : Codes, (pearlCProtocolDev d sem ρ).actOK (U.layout.shape u) act →
         (pearlCProtocolDev d sem ρ).capOK H s' U u act →
@@ -114,7 +114,7 @@ theorem pearlCGapDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) δPearlC
     (by exact_mod_cast hω0) hW (ttOut_mono_domain (fun _ h => h.1) hTT)
-  have e : (γ : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hγ]; push_cast; ring
+  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
   rw [e]
   exact key
 

@@ -52,14 +52,14 @@ def WrapFinalOnlyInd : Prop :=
 
 /-- **The floor for the protocol's checked values**, under independence, in the int32-exact range. -/
 def WrapWordFloorInd : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k → CheckpointIndependent k 16 R →
-    0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k → CheckpointIndependent k 16 R →
+    0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     (∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checked k m n N R A B ω u p)) →
     Word.NzNCP (fun _ => positions k m n) (wrapped k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (wrapped k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 /-- **The int32 range at zero input**: for a signed-permutation `R` and `k ≤ 2^16`, every checked value is at most
 `3k·64² ≤ 805,306,368 < 2^31` in magnitude. -/
@@ -90,8 +90,8 @@ def LeadIndWitness : Prop :=
     (∀ (L : Layout) (u : ℕ), P.Wref L u = 3 * (L.shape u).Wmm) ∧
     P.toProtocol.Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain (fun _ => 0) ∧
-    (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →
-      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain γ₀ (fun _ _ => 0)) ∧
+    (∀ g₀ : ℝ, 0 ≤ g₀ → g₀ < 1 →
+      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain g₀ (fun _ _ => 0)) ∧
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain ∧ 0 < Lay.N ∧ ∀ u < Lay.N, P.d ∣ (Lay.shape u).k
 
 end Pouw.NCP.Chain

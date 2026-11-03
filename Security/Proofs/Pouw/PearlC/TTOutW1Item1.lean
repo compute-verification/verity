@@ -20,7 +20,7 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
 - `wins_of_event`: on that event, the program whose constants are those two words wins TT_OUT's game at `θ`; so
   `exists_guess_ge`: some constants `t, y < 2^32` win with probability at least `Pr[GuessEvent]/2^64`
   (`exists_guess_gt_eps`: above `δPearlC 0 1 = 2^−128` once `Pr[GuessEvent] > 2^−64`), and
-  `pr_guessEvent_le`: TT_OUT at W1 on any domain containing the unit gives `Pr[GuessEvent at 2·fetch/(1−γ₀)] ≤
+  `pr_guessEvent_le`: TT_OUT at W1 on any domain containing the unit gives `Pr[GuessEvent at 2·fetch/(1−g₀)] ≤
   2^64·ε(0, 1)`.
 
 **(a) The refutation** on the old domain, `¬ TTOutW1 dv salt P (pearlCDomainDevOld d) (1/400) δPearlC`, which is
@@ -224,7 +224,7 @@ def GuessEvent (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (x : (Q �
     (∃ t, wordQ t = P.ticket x.1 x.2 (oneUnit k w) 0 a 0 0) ∧ (∃ y, wordQ y = P.useful x.1 x.2 (oneUnit k w) 0 a 0 0) ∧
     θ < P.credit x.1 x.2 (oneUnit k w) 0 a
 
-/-- **The win** of `guessAdv … t y` on `(H, s)`, as TT_OUT's game scores it at `θ = T/(1 − γ₀)`. -/
+/-- **The win** of `guessAdv … t y` on `(H, s)`, as TT_OUT's game scores it at `θ = T/(1 − g₀)`. -/
 def GuessWins (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (t y : ℕ)
     (x : (Q → R) × S) : Prop :=
   θ < ∑ u ∈ correctSet P (oneUnit k w) x.1 x.2 ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) x.1 x.2),
@@ -378,36 +378,36 @@ theorem exists_guess_gt_eps (dv : W1.W1Device) (salt : S → List ℕ) (P : Prot
   rw [e]
   exact div_lt_div_of_pos_right hE (by positivity)
 
-/-- **TT_OUT at W1 bounds the event**: on any domain containing the unit, `Pr[GuessEvent at 2·fetch/(1−γ₀)]` is at most
-`2^64·ε(0, 1)`. -/
-theorem pr_guessEvent_le {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ}
-    {ε : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
-    (ha : ∀ i l, a i l < 2 ^ 32) (h : TTOutW1 dv salt P D γ₀ ε) :
-    pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀))) ≤ 2 ^ 64 * ε 0 1 := by
+/-- **TT_OUT at W1 bounds the event**: on any domain containing the unit, `Pr[GuessEvent at 2·fetch/(1−g₀)]` is at most
+`2^64·δ(0, 1)`. -/
+theorem pr_guessEvent_le {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop} {g₀ : ℝ}
+    {δ : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
+    (ha : ∀ i l, a i l < 2 ^ 32) (h : TTOutW1 dv salt P D g₀ δ) :
+    pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - g₀))) ≤ 2 ^ 64 * δ 0 1 := by
   have hU : (oneUnit k w).InDomain P D := ⟨by show (1 : ℕ) ≤ 2 ^ 64; norm_num, hD⟩
   have hT : (0 : ℝ) ≤ 2 * (dv.prices.fetch : ℝ) := by
     have : (0 : ℝ) ≤ dv.prices.fetch := by exact_mod_cast hf
     linarith
   have hW : ∀ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32),
-      pr (GuessWins dv salt P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)) p.1 p.2) ≤ ε 0 1 :=
+      pr (GuessWins dv salt P k w a (2 * (dv.prices.fetch : ℝ) / (1 - g₀)) p.1 p.2) ≤ δ 0 1 :=
     fun p _ => h (oneUnit k w) hU _ hT 0 (Nat.zero_le _) (guessAdv dv salt a p.1 p.2)
       (guess_bounded dv p.1 p.2 (oneUnit k w) salt a)
-  calc pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)))
+  calc pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - g₀)))
       ≤ ∑ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32),
-          pr (GuessWins dv salt P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)) p.1 p.2) :=
+          pr (GuessWins dv salt P k w a (2 * (dv.prices.fetch : ℝ) / (1 - g₀)) p.1 p.2) :=
         pr_event_le_sum w32_lt dv salt P k w a _ ha
-    _ ≤ ∑ _p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), ε 0 1 := Finset.sum_le_sum hW
-    _ = 2 ^ 64 * ε 0 1 := by
+    _ ≤ ∑ _p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), δ 0 1 := Finset.sum_le_sum hW
+    _ = 2 ^ 64 * δ 0 1 := by
         rw [Finset.sum_const, Finset.card_product, Finset.card_range, nsmul_eq_mul]
         push_cast
         ring
 
-/-- **The refutation, in general**: if the event has probability above `2^64·ε(0, 1)`, TT_OUT at W1 fails on any domain
+/-- **The refutation, in general**: if the event has probability above `2^64·δ(0, 1)`, TT_OUT at W1 fails on any domain
 containing the unit. -/
 theorem not_ttOutW1_of_guess {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop}
-    {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
-    (ha : ∀ i l, a i l < 2 ^ 32) (hE : 2 ^ 64 * ε 0 1 < pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)))) :
-    ¬ TTOutW1 dv salt P D γ₀ ε :=
+    {g₀ : ℝ} {δ : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
+    (ha : ∀ i l, a i l < 2 ^ 32) (hE : 2 ^ 64 * δ 0 1 < pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - g₀)))) :
+    ¬ TTOutW1 dv salt P D g₀ δ :=
   fun h => not_le.2 hE (pr_guessEvent_le hD hf ha h)
 
 /-! ## (a) Pearl-C on the old domain -/
@@ -557,8 +557,8 @@ theorem pearlCDomainDevOld_of_new {d : PearlCDevice} {L : Layout} (h : pearlCDom
     exact ⟨h1, by omega, h3⟩
 
 theorem ttOutW1_mono_domain [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {dv : W1.W1Device}
-    {salt : S → List ℕ} {P : Protocol Q R S} {D D' : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
-    (hD : ∀ L, D' L → D L) (h : TTOutW1 dv salt P D γ₀ ε) : TTOutW1 dv salt P D' γ₀ ε :=
+    {salt : S → List ℕ} {P : Protocol Q R S} {D D' : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
+    (hD : ∀ L, D' L → D L) (h : TTOutW1 dv salt P D g₀ δ) : TTOutW1 dv salt P D' g₀ δ :=
   fun U hU => h U ⟨hU.1, hD _ hU.2⟩
 
 /-- The refuted form implies the narrowed one: the narrowing only weakens the assumption. -/

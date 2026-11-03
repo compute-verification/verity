@@ -11,8 +11,8 @@ bounded forms of `h1tDistinctLive`, `h1tRunningOfDistinct`, `h1tGap` and `h1tGap
 
 * **`DistinctLiveH1TUpTo K`**, **`H1TRunningWordsUpTo K`** and **`H1TCrossLateUpTo K`** are `DistinctLiveH1T`,
   `H1TRunningWords` and `H1TCrossLate` on the legal units with `k ≤ K`.
-* **`H1TGapUpTo K`** is `H1TGap` for families of legal units that all have `k ≤ K`. Both γ shapes (8,192³ and
-  16,384³) are units with `k ≤ 16,384`, so `H1TGapUpTo 16384` under `DistinctLiveH1TUpTo 16384` is γ₀ = 0 there.
+* **`H1TGapUpTo K`** is `H1TGap` for families of legal units that all have `k ≤ K`. Both gap shapes (8,192³ and
+  16,384³) are units with `k ≤ 16,384`, so `H1TGapUpTo 16384` under `DistinctLiveH1TUpTo 16384` is g₀ = 0 there.
 * **`run_le`**: every running word of a legal unit is at most `T·6,881,792 − 256` in magnitude (`run_bound`). So
   `|R_p| < 2^31` (ulp at most 128) for `k ≤ 9,048` (`T ≤ 312`, which covers 8,192³), and `|R_p| < 2^32` (ulp at most
   256) for `k ≤ 18,096` (`T ≤ 624`, which covers 16,384³).
@@ -73,7 +73,7 @@ theorem distinctLiveUpTo_mono {K K' : ℕ} (hK : K ≤ K') (h : DistinctLiveH1TU
 theorem runningWordsUpTo_mono {K K' : ℕ} (hK : K ≤ K') (h : H1TRunningWordsUpTo K') : H1TRunningWordsUpTo K :=
   fun U hU hk => h U hU (le_trans hk hK)
 
-/-! ## The bounded forms of the M4 and γ theorems -/
+/-! ## The bounded forms of the M4 and gap theorems -/
 
 theorem h1tDistinctLiveUpTo {K : ℕ} (hR : H1TRunningWordsUpTo K) : DistinctLiveH1TUpTo K := by
   intro U hU hk

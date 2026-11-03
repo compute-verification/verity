@@ -10,7 +10,7 @@ program can skip it. rev1 takes every promotion into a +0 total out of the credi
   honest kernel needn't execute it either;
 * **any later one** (`T_{g−1} = 0` for `g ≥ 2`): debited by replay (`laterZeroPromos`), since only the chain's values
   show it. It is rare: at most 3.9·10⁻⁶ of later promotions on the H100 atom and none measured on sm_120,
-  so it moves no γ. `W_ref` keeps it: the honest kernel can't skip it
+  so it moves no gap. `W_ref` keeps it: the honest kernel can't skip it
   without a per-word test that costs as much as the add.
 
 The maps, the domain and the cap's form are the device record's. The debit gains the later +0 promotions and is

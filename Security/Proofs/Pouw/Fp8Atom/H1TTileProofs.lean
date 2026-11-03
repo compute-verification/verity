@@ -7,7 +7,7 @@ import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
 * **`tth1tAllRight`** (under `H1TRunningWords`): a program right on every tile at every salt holds a register equal to
   every credited word; a slot past the last register would make the word the constant `0`, which is free. So
   `h1tGapRunning` bounds its cost by 32 per credited word, and every credited word is in a right tile.
-* **`tth1tSat`**: at `γ = 1` the event is `cost < 0`, which never holds, so `TTH1T r c 1 0` holds for every domain.
+* **`tth1tSat`**: at `g = 1` the event is `cost < 0`, which never holds, so `TTH1T r c 1 0` holds for every domain.
 -/
 
 namespace Pouw.Fp8Atom.H1T.Proofs

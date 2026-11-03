@@ -4,7 +4,7 @@ import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Core.Game.Prob
 
 /-!
-# The hidden audit keeps the sampled audit's γ (compute accounting's file)
+# The hidden audit keeps the sampled audit's gap (compute accounting's file)
 
 * **One prover** (`gapHidden_of_sampled`): on each draw, when the hidden audit accepts while some drawn tile is
   neither good nor blank, that tile's verdict was accept (`hidden_pointwise`). So the hidden audit's win probability is
@@ -97,21 +97,21 @@ theorem gapHidden_of_sampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     simp
   linarith
 
-/-- **L2: the hidden audit keeps the sampled audit's γ**, for every opening and every prover in the proof system's
+/-- **L2: the hidden audit keeps the sampled audit's gap**, for every opening and every prover in the proof system's
 class: `GGapSampled` and the open obligation `TileProofSoundAll` give `GGapHidden`, at `t·δzk(q)` more error, for any
 hidden audit. -/
 theorem gapHidden_of_sampled_all [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ)
-    (η : ℕ → ℕ → ℝ) (δzk : ℕ → ℝ) (h : GGapSampled CM P TR D γ η) (hzk : TileProofSoundAll P TR D HA δzk) :
-    GGapHidden CM P TR D HA γ η δzk :=
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S) (g : ℝ)
+    (δ : ℕ → ℕ → ℝ) (δzk : ℕ → ℝ) (h : GGapSampled CM P TR D g δ) (hzk : TileProofSoundAll P TR D HA δzk) :
+    GGapHidden CM P TR D HA g δ δzk :=
   fun U hU T hT q hq A hA w κ hκ hw t εs hεs op σ hσ =>
-    gapHidden_of_sampled CM P TR D HA γ η h U hU T hT q hq A hA w κ hκ hw t εs hεs op σ (δzk q)
+    gapHidden_of_sampled CM P TR D HA g δ h U hU T hT q hq A hA w κ hκ hw t εs hεs op σ (δzk q)
       (hzk U hU (A.transcript U) op w t q σ hσ)
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under the hidden audit, conditional**, FP32 at 8.376, the
-honest cast at 8.72: `γ = 1648180439/446072750000` (0.36949%), for any hidden audit sound per tile up to `δzk(q)`, at
+honest cast at 8.72: `g = 1648180439/446072750000` (0.36949%), for any hidden audit sound per tile up to `δzk(q)`, at
 the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`, from `TTOutTilePearlCDevRev1W1` there.
 
 Conditional: `HA` and `δzk` are free, and the open obligation `TileProofSoundAll` holds at a degenerate hidden audit

@@ -180,23 +180,23 @@ def CostModel.SplitClosed (CM : CostModel Q R S) : Prop :=
 /-- **The row-seeded TT_OUT** (a target form, proved from rev1's TT_OUT, not assumed): `TTOut` with the error read at
 the row count, `δPearlC q R = (q + R)/2^128` for the `R = rowsOf U.layout ≤ 2^64` declared rows. -/
 def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (D : Layout → Prop) (g₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - γ₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
+        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
           P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
         ≤ δPearlC q (rowsOf U.layout)
 
 /-- **The row-seeded TT_OUT per audit tile** (a target form): `TTOutTile` with the error read at the row count. -/
 def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : Layout → Prop) (g₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - γ₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
+        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
           TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
         ≤ δPearlC q (rowsOf U.layout)
 

@@ -4,7 +4,7 @@ import Definitions.Pouw.Assumptions.Dimension.H100W
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 
 /-!
-# H-1T's γ corollary: several units in `MH100w` (trusted statements)
+# H-1T's gap corollary: several units in `MH100w` (trusted statements)
 
 A matmul's output is split into units (`Unit`) of at most 88,412 columns. Each unit's salt context binds its id, so
 each unit's salt is its own coordinate of the joint salt (`MSalt`). The free values
@@ -41,7 +41,7 @@ the joint salt, and none is free. -/
 def H1TUnitsDistinct : Prop :=
   ∀ (N : ℕ) (Us : Fin N → Unit), (∀ u, (Us u).Legal) → Function.Injective (mword Us) ∧ ∀ x, mword Us x ∉ mfree Us
 
-/-- **γ for H-1T** (under `DistinctLiveH1T`; `MH100w` is draft semantics): under `H32`, an `MH100w` program on free
+/-- **The gap for H-1T** (under `DistinctLiveH1T`; `MH100w` is draft semantics): under `H32`, an `MH100w` program on free
 inputs whose registers include every credited word of legal units costs at least 32 per credited word. -/
 def H1TGap : Prop :=
   ∀ pr : Prices100, H32 pr → ∀ (N : ℕ) (Us : Fin N → Unit), (∀ u, (Us u).Legal) →

@@ -186,7 +186,7 @@ theorem independentWitness : Pouw.Guarantees.NCP.IndependentWitness := fun k hk 
 theorem ncpFinalOnlyInd : NCPFinalOnlyInd := fun k m n N R A B adv h16 hI =>
   ncpFinalOnly k m n N R A B adv h16 (independentRelationFree k R hI)
 
-theorem ncpWordFloorInd : NCPWordFloorInd := fun k m n N R A B adv γ₀ h16 hI =>
-  ncpWordFloor k m n N R A B adv γ₀ h16 (independentRelationFree k R hI)
+theorem ncpWordFloorInd : NCPWordFloorInd := fun k m n N R A B adv g₀ h16 hI =>
+  ncpWordFloor k m n N R A B adv g₀ h16 (independentRelationFree k R hI)
 
 end Pouw.NCP.RelationWitness

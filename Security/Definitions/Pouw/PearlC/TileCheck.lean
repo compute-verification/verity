@@ -35,7 +35,7 @@ The cap, `TileGood`'s first conjunct, reads only the committed activations; its 
 own last conjunct; the words read the circuit's outputs. So L3 is the cap and the words (`TileCheck.Computes`,
 `TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
-of its own (L7). `δPearlC` stays TT_OUT's, and a proof system's error stays in its `η`.
+of its own (L7). `δPearlC` stays TT_OUT's, and a proof system's error stays in its `δzk` (`GGapHidden`).
 
 A tile check says something only when it is the deployed Program: a circuit nobody tied to the Program meets L3 with
 any `op`s. The tie is the Program's descriptor digest and a test against `verity.ir`, beside the instance.

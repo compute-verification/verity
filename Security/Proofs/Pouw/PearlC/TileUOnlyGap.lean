@@ -2,13 +2,13 @@ import Proofs.Pouw.PearlC.UOnlyGap
 import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 
 /-!
-# TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and γ from it
+# TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and g from it
 
 Staged; nothing pinned.
 * `goodTiles_subset_goodTilesU`: a tile good under (C̃, U) binding is good under U alone.
 * `ttOutTilePearlCDevRev1_of_uOnly`: the per-tile row over U gives rev1's (C̃, U) tile row at the same record, for
   non-negative prices and `ρ ≤ 1`.
-* `gapSampledU_implies_gapSampled`: the sampled audit's γ under U-only binding gives it under (C̃, U) binding, since a
+* `gapSampledU_implies_gapSampled`: the sampled audit's gap under U-only binding gives it under (C̃, U) binding, since a
   tile the (C̃, U) audit accepts is one the U-only audit accepts.
 * `gapSampledU`: `gapSampled` over `goodTilesU` (both are `sampledOfGood`), and at a record `pearlCSampledDevUOnlyAt`,
   with the same ω as rev1: `pearlCSampledUOnlySm120Rev1_8192` (0.51056%) and `pearlCSampledUOnlyUnpromotedCap1000_8192`
@@ -48,8 +48,8 @@ theorem goodTilesU_subset (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workl
 
 /-- `GGapSampled` under U-only binding gives it under (C̃, U) binding. -/
 theorem gapSampledU_implies_gapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ)
-    (h : GGapSampledU CM P TR D γ η) : GGapSampled CM P TR D γ η := by
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ)
+    (h : GGapSampledU CM P TR D g δ) : GGapSampled CM P TR D g δ := by
   intro U hU T hT q hq A hA w κ hκ hw t εs hεs
   refine le_trans (Pouw.pr_mono ?_) (h U hU T hT q hq A hA w κ hκ hw t εs hεs)
   intro x ⟨hacc, hT'⟩
@@ -59,17 +59,17 @@ theorem gapSampledU_implies_gapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [
   exact this.imp (fun hg => goodTiles_subset_goodTilesU P TR U _ _ _ hg) id
 
 theorem gapSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hg₀ : g₀ < 1)
     (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.capOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
     (hWc : ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.Wcred U.layout g act ≤ TR.Wref U.layout g)
-    (hTT : TTOutTileU CM P TR D γ₀ ε) : GGapSampledU CM P TR D (1 - (1 - γ₀) / Ω) ε := by
+    (hTT : TTOutTileU CM P TR D g₀ δ) : GGapSampledU CM P TR D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA w κ hκ hw t εs hεs
   classical
   refine sampledOfGood TR U (fun H s => A.transcript U H s) (fun H s => goodTilesU P TR U H s (A.transcript U H s))
-    γ₀ Ω T (ε q U.layout.N) hγ₀ hΩ (fun H s => goodTilesU_subset P TR U H s _) ?_ (hWc U hU)
+    g₀ Ω T (δ q U.layout.N) hg₀ hΩ (fun H s => goodTilesU_subset P TR U H s _) ?_ (hWc U hU)
     (hTT.2 U hU T hT q hq A hA) w κ hκ hw t εs hεs
   intro H s g hg
   unfold goodTilesU at hg
@@ -141,7 +141,7 @@ theorem pearlCSampledDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
   rw [e]
   exact key
 
-/-- **v1 under rev1 per audit tile with U-only binding, 8192³**, at sm_120's prices, cap 1/400: `γ = 16223/3177500`. -/
+/-- **v1 under rev1 per audit tile with U-only binding, 8192³**, at sm_120's prices, cap 1/400: `g = 16223/3177500`. -/
 theorem pearlCSampledUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevUOnly CM d sem (1 / 400)) :
@@ -152,7 +152,7 @@ theorem pearlCSampledUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 per audit tile with U-only binding, 8192³**, at sm_120's prices: `γ = 216793/59950000`. -/
+/-- **v2 at the cap 1/1,000 per audit tile with U-only binding, 8192³**, at sm_120's prices: `g = 216793/59950000`. -/
 theorem pearlCSampledUOnlyUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevUOnly CM d sem (1 / 1000)) :

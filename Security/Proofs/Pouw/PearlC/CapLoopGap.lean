@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.DevicePricesLoop
 /-!
 # v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (staged)
 
-γ's price rule computes γ at the issue-bound FP32 add (8.00) and at the measured in-loop one (8.376), and publishes the
+The gap's price rule computes g at the issue-bound FP32 add (8.00) and at the measured in-loop one (8.376), and publishes the
 larger. Each theorem here is the twin of a `DeviceCapGap` instance at `Prices.sm120Loop` in place of `Prices.sm120`,
 with the same hypotheses otherwise and the same general theorem.
 * **v2 at the cap 1/1,000**, at any record with `G = 0`: `522517/139900000` (0.37349%) at 8192³ and `3000127/829300000`
@@ -14,7 +14,7 @@ with the same hypotheses otherwise and the same general theorem.
 
 Each is above its issue-bound twin (0.36162%, 0.35576%, 0.51056%, 0.50503%).
 
-Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
+Every g here is an upper bound on the in-loop g: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGap`'s `…LoopCast8…` pins.
 -/
 
@@ -22,7 +22,7 @@ namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- **v2 at the cap 1/1,000, 8192³**, at sm_120's in-loop prices (an upper bound): `γ = 522517/139900000` (0.37349%).
+/-- **v2 at the cap 1/1,000, 8192³**, at sm_120's in-loop prices (an upper bound): `g = 522517/139900000` (0.37349%).
 Twin of `pearlCGapUnpromotedCap1000_8192`. -/
 theorem pearlCGapUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
@@ -32,7 +32,7 @@ theorem pearlCGapUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [Decidabl
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, at sm_120's in-loop prices (an upper bound): `γ = 3000127/829300000` (0.36177%).
+/-- **v2 at the cap 1/1,000, 16384³**, at sm_120's in-loop prices (an upper bound): `g = 3000127/829300000` (0.36177%).
 Twin of `pearlCGapUnpromotedCap1000_16384`. -/
 theorem pearlCGapUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
@@ -43,7 +43,7 @@ theorem pearlCGapUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [Decidab
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000 per audit tile, 8192³**, at sm_120's in-loop prices (an upper bound): `GGapSampled` at
-`γ = 522517/139900000`. Twin of `pearlCSampledUnpromotedCap1000_8192`. -/
+`g = 522517/139900000`. Twin of `pearlCSampledUnpromotedCap1000_8192`. -/
 theorem pearlCSampledUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
@@ -55,7 +55,7 @@ theorem pearlCSampledUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [Deci
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000 per audit tile, 16384³**, at sm_120's in-loop prices (an upper bound): `GGapSampled` at
-`γ = 3000127/829300000`. Twin of `pearlCSampledUnpromotedCap1000_16384`. -/
+`g = 3000127/829300000`. Twin of `pearlCSampledUnpromotedCap1000_16384`. -/
 theorem pearlCSampledUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
@@ -66,7 +66,7 @@ theorem pearlCSampledUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [Dec
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, at sm_120's in-loop prices (an upper bound), cap 1/400: `γ = 310284613/59477920000`
+/-- **v1 under rev1, 8192³**, at sm_120's in-loop prices (an upper bound), cap 1/400: `g = 310284613/59477920000`
 (0.52168%). Twin of `pearlCGapSm120Rev1_8192`. -/
 theorem pearlCGapSm120LoopRev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4)
@@ -77,7 +77,7 @@ theorem pearlCGapSm120LoopRev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, at sm_120's in-loop prices (an upper bound), cap 1/400: `γ = 1802569231/352995040000`
+/-- **v1 under rev1, 16384³**, at sm_120's in-loop prices (an upper bound), cap 1/400: `g = 1802569231/352995040000`
 (0.51065%). Twin of `pearlCGapSm120Rev1_16384`. -/
 theorem pearlCGapSm120LoopRev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4)
@@ -90,7 +90,7 @@ theorem pearlCGapSm120LoopRev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
     (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile, 8192³**, at sm_120's in-loop prices (an upper bound): `GGapSampled` at
-`γ = 310284613/59477920000`. Twin of `pearlCSampledSm120Rev1_8192`. -/
+`g = 310284613/59477920000`. Twin of `pearlCSampledSm120Rev1_8192`. -/
 theorem pearlCSampledSm120LoopRev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutTilePearlCDevRev1 CM d sem (1 / 400)) :
@@ -103,7 +103,7 @@ theorem pearlCSampledSm120LoopRev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq 
     (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile, 16384³**, at sm_120's in-loop prices (an upper bound): `GGapSampled` at
-`γ = 1802569231/352995040000`. Twin of `pearlCSampledSm120Rev1_16384`. -/
+`g = 1802569231/352995040000`. Twin of `pearlCSampledSm120Rev1_16384`. -/
 theorem pearlCSampledSm120LoopRev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutTilePearlCDevRev1 CM d sem (1 / 400)) :

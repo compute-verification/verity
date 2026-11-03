@@ -3,14 +3,14 @@ import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 /-!
 # v1 under rev1 per audit tile at a stricter cap (compute accounting's file)
 
-* **A stricter cap per tile costs `γ₀`:** `ttOutTilePearlCDevRev1_cap_transfer` gives TT_OUT per tile under rev1 at
-  `ρ' ≤ ρ < 1` from it at `ρ`, with `1 − γ₀' = (1 − γ₀)·(1 − ρ)/(1 − ρ')`, at any record with non-negative add and BF16
+* **A stricter cap per tile costs `g₀`:** `ttOutTilePearlCDevRev1_cap_transfer` gives TT_OUT per tile under rev1 at
+  `ρ' ≤ ρ < 1` from it at `ρ`, with `1 − g₀' = (1 − g₀)·(1 − ρ)/(1 − ρ')`, at any record with non-negative add and BF16
   prices. A good tile at `ρ'` is good at `ρ`, but its credit is the cap's worst case, `(1 − ρ)·C` times its share, not
   its replayed debit, so it grows by `(1 − ρ')/(1 − ρ)`. Per unit the credit is debited, and the stricter cap costs
   nothing (`ttOutPearlCDevRev1_cap_anti`).
-* **The sampled γ at `ρ'` from TT_OUT per tile at `ρ`** (`pearlCSampledDevRev1KAt_of_cap`) is the γ at `ρ`,
+* **The sampled g at `ρ'` from TT_OUT per tile at `ρ`** (`pearlCSampledDevRev1KAt_of_cap`) is the g at `ρ`,
   `1 − (399/400)/ω` with `wrefDevRev1K = ω·(1 − ρ)·creditDevRev1`.
-* From `TTOutTilePearlCDevRev1` at 1/400 the sampled γ at 1/1,000 equals 1/400's (0.51908% at 8192³, 0.50934% at
+* From `TTOutTilePearlCDevRev1` at 1/400 the sampled g at 1/1,000 equals 1/400's (0.51908% at 8192³, 0.50934% at
   16384³), so the headline 0.36949% rests on `TTOutTilePearlCDevRev1` at 1/1,000
   (`pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400`, `_16384_of_cap400`).
 -/
@@ -86,15 +86,15 @@ theorem rev1_tile_cap_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (
         exact_mod_cast this
 
 
-/-- **A stricter cap per audit tile under rev1, at a larger `γ₀`.** TT_OUT per tile under rev1 at a cap `ρ < 1` and any
-`γ₀` gives it at any cap `ρ' ≤ ρ` with `1 − γ₀' = (1 − γ₀)·(1 − ρ)/(1 − ρ')`, at any record with non-negative add and
+/-- **A stricter cap per audit tile under rev1, at a larger `g₀`.** TT_OUT per tile under rev1 at a cap `ρ < 1` and any
+`g₀` gives it at any cap `ρ' ≤ ρ` with `1 − g₀' = (1 − g₀)·(1 − ρ)/(1 − ρ')`, at any record with non-negative add and
 BF16 prices. -/
 theorem ttOutTilePearlCDevRev1_cap_transfer [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ)
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1)
-    (h : TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) γ₀ ε) :
+    (h : TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) g₀ δ) :
     TTOutTile CM (pearlCProtocolDevRev1 d sem ρ') (pearlCTilesDevRev1 d sem ρ') (pearlCDomainDev d)
-      (1 - (1 - γ₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ)) ε := by
+      (1 - (1 - g₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ)) δ := by
   have hr : (0 : ℚ) < 1 - ρ := by linarith
   have hr' : (0 : ℚ) < 1 - ρ' := by linarith
   have ha : (0 : ℝ) < (((1 - ρ) / (1 - ρ') : ℚ) : ℝ) := by exact_mod_cast div_pos hr hr'
@@ -103,21 +103,21 @@ theorem ttOutTilePearlCDevRev1_cap_transfer [Fintype Q] [DecidableEq Q] [Fintype
   refine ⟨h.1, fun U hU T hT q hq A hA => le_trans (Pouw.pr_mono ?_) (h.2 U hU T hT q hq A hA)⟩
   intro x hx
   have hsum := rev1_tile_cap_credit_sum_le d sem ρ ρ' hadd hbf hle hρ1 U hU.2 x.1 x.2 (A.transcript U x.1 x.2)
-  rw [show 1 - (1 - (1 - γ₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ)) = (1 - γ₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ) by ring,
+  rw [show 1 - (1 - (1 - g₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ)) = (1 - g₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ) by ring,
     div_mul_eq_div_div] at hx
   have h2 := lt_of_lt_of_le hx hsum
   rw [div_lt_iff₀ ha] at h2
-  calc T / (1 - γ₀) < _ := h2
+  calc T / (1 - g₀) < _ := h2
     _ = _ := by rw [mul_comm, ← mul_assoc, mul_comm (((1 - ρ) / (1 - ρ') : ℚ) : ℝ), hab, one_mul]
 
-/-- `pearlCSampledDevRev1KAt` at any `γ₀ < 1`. -/
+/-- `pearlCSampledDevRev1KAt` at any `g₀ < 1`. -/
 theorem pearlCSampledDevRev1KAt_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω : ℚ) (γ₀ : ℝ)
-    (hγ₀ : γ₀ < 1) (hω0 : 0 < ω)
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω : ℚ) (g₀ : ℝ)
+    (hg₀ : g₀ < 1) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDevRev1K d c s) (hω : wrefDevRev1K d c s = ω * ((1 - ρ) * creditDevRev1 d s))
-    (hTT : TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) γ₀ δPearlC) :
+    (hTT : TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) g₀ δPearlC) :
     GGapSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c) (pearlCDomainDevAt d s)
-      (1 - (1 - γ₀) / (ω : ℝ)) δPearlC := by
+      (1 - (1 - g₀) / (ω : ℝ)) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
         (pearlCTilesDevRev1K d sem ρ c).capOK H s' U g act →
@@ -140,18 +140,18 @@ theorem pearlCSampledDevRev1KAt_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0
   exact gapSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c)
-    (pearlCDomainDevAt d s) γ₀ (ω : ℝ) δPearlC hγ₀ (by exact_mod_cast hω0) hW hWc
+    (pearlCDomainDevAt d s) g₀ (ω : ℝ) δPearlC hg₀ (by exact_mod_cast hω0) hW hWc
     (ttOutTile_mono_domain (fun _ h => h.1) (ttOutTile_wref _ _ _ hTT))
 
-/-- The sampled γ at a cap `ρ' ≤ ρ < 1` from rev1's TT_OUT per tile at `ρ`, on the one-shape domain: the γ at `ρ`,
+/-- The sampled g at a cap `ρ' ≤ ρ < 1` from rev1's TT_OUT per tile at `ρ`, on the one-shape domain: the g at `ρ`,
 `1 − (399/400)/ω` where `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1 ≥ 0`. -/
 theorem pearlCSampledDevRev1KAt_of_cap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' c : ℚ) (s : Shape) (ω γ : ℚ)
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' c : ℚ) (s : Shape) (ω g : ℚ)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDevRev1K d c s) (hω : wrefDevRev1K d c s = ω * ((1 - ρ) * creditDevRev1 d s))
-    (hγ : γ = 1 - (1 - 1 / 400) / ω) (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) :
+    (hg : g = 1 - (1 - 1 / 400) / ω) (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) :
     GGapSampled CM (pearlCProtocolDevRev1K d sem ρ' c) (pearlCTilesDevRev1K d sem ρ' c) (pearlCDomainDevAt d s)
-      (γ : ℝ) δPearlC := by
+      (g : ℝ) δPearlC := by
   have hr : (0 : ℚ) < 1 - ρ := by linarith
   have hr' : (0 : ℚ) < 1 - ρ' := by linarith
   have key := pearlCSampledDevRev1KAt_gen CM d sem ρ' c s (ω * ((1 - ρ) / (1 - ρ'))) _
@@ -161,9 +161,9 @@ theorem pearlCSampledDevRev1KAt_of_cap [Fintype Q] [DecidableEq Q] [Fintype R] [
     (mul_pos hω0 (div_pos hr hr')) hw0
     (by rw [hω]; field_simp)
     (ttOutTilePearlCDevRev1_cap_transfer CM d sem ρ ρ' (1 / 400) δPearlC hadd hbf hle hρ1 hTT)
-  have e : (γ : ℝ) = 1 - (1 - (1 - (1 - 1 / 400) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ))) /
+  have e : (g : ℝ) = 1 - (1 - (1 - (1 - 1 / 400) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ))) /
       ((ω * ((1 - ρ) / (1 - ρ')) : ℚ) : ℝ) := by
-    rw [hγ]
+    rw [hg]
     have h1 : ((1 - ρ : ℚ) : ℝ) ≠ 0 := by exact_mod_cast hr.ne'
     have h2 : ((1 - ρ' : ℚ) : ℝ) ≠ 0 := by exact_mod_cast hr'.ne'
     have h3 : ((ω : ℚ) : ℝ) ≠ 0 := by exact_mod_cast hω0.ne'
@@ -181,7 +181,7 @@ variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM 
   (sem : PearlCSem Q R S)
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, 8192³**, FP32 at 8.376, the honest
-cast at 8.72: `γ = 926193839/178429100000` (0.51908%), the γ at 1/400. -/
+cast at 8.72: `g = 926193839/178429100000` (0.51908%), the g at 1/400. -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -195,7 +195,7 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400
     (by rw [wrefDevRev1K_sm120v1LoopCast8p72_8192]; field_simp) (by norm_num) hTT
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, 16384³**, FP32 at 8.376, the honest
-cast at 8.72: `γ = 599303077/117663460000` (0.50934%), the γ at 1/400. -/
+cast at 8.72: `g = 599303077/117663460000` (0.50934%), the g at 1/400. -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_16384_of_cap400
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))

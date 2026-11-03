@@ -4,7 +4,7 @@ import Definitions.Pouw.Basic.QTree
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
-# Pearl-C's γ-gap game and accounting (trusted)
+# Pearl-C's gap-gap game and accounting (trusted)
 
 The game of the integer statement (§3.3, `Pouw.Game.Defs`), for a protocol whose bound words are output words: per unit,
 the ticket words (Pearl-C's pre-peel accumulator `C̃`) and the useful output words (`U`, after the checked clean-up and
@@ -19,7 +19,7 @@ peel) are `Pouw.PearlC.Defs`'; here the protocol's reference functions are field
 3. Salt.        s : S uniform, independent of H.
 4. Online.      τ = CM.run A.online H U A.act σ s, cost ≤ T and calls ≤ q for every H and s.
 5. Score.       K = correctSet, the units whose committed words are correct and whose replayed debit is within the
-                cap (units above the cap are rejected, so they enter neither sum); A wins if T / (1 − γ) < ∑_{u ∈ K} W_ref(u).
+                cap (units above the cap are rejected, so they enter neither sum); A wins if T / (1 − g) < ∑_{u ∈ K} W_ref(u).
 ~~~
 -/
 
@@ -162,15 +162,16 @@ def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (
   ∀ (H : Q → R) (s : S), CM.cost A.online H U A.act (A.pre.eval H) s ≤ T ∧
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
-/-- The adversary wins: the honest work of its correct units exceeds `T / (1 − γ)`. -/
-def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
-  T / (1 - γ) < ∑ u ∈ correctSet P U H s τ, P.Wref U.layout u
+/-- The adversary wins: the honest work of its correct units exceeds `T / (1 − g)`. -/
+def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+  T / (1 - g) < ∑ u ∈ correctSet P U H s τ, P.Wref U.layout u
 
-/-- **The γ-gap property** `G_γ` with error `η(q, N)`. -/
+/-- **The gap property** `G_g` at the gap `g` (an adversary's advantage `ε = g/(1 − g)`) with failure probability
+`δ(q, N)`. -/
 def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
+    pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
 /-! ## Pearl-C's accounting and domain (H100 units) -/
 
@@ -196,7 +197,7 @@ def Costs.current : Costs := ⟨64, 36⟩
 
 /-- The credited work of one unit: the ticket chain `m·k·n`, its promotion adds `m·k·n/G`, the fused `A′·F_B` (`m·k·r`),
 the peel combine (BF16, depth `2r`, 2 units per MAC: `4·r·m·n`), and the forming that depends on the salt (`fs·m·k`). The
-per-job share of `B̃·F_A` would enter credit and reference alike, and leaving it out only raises γ. -/
+per-job share of `B̃·F_A` would enter credit and reference alike, and leaving it out only raises g. -/
 def creditOf (p : Params) (c : Costs) (s : Shape) : ℚ :=
   let mkn : ℚ := (s.m : ℚ) * s.k * s.n
   mkn + (if p.G = 0 then 0 else mkn / p.G) + (s.m : ℚ) * s.k * p.r + 4 * (p.r : ℚ) * s.m * s.n + (c.fs : ℚ) * s.m * s.k
@@ -223,8 +224,8 @@ def wrefOf (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s + (c.qa 
 /-- The credited work when forming is not credited at all. -/
 def creditChainOnly (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s - (c.fs : ℚ) * s.m * s.k
 
-/-- The reduction's gap: `γ = 1 − (1 − γ₀)/Ω`. -/
-def gapOf (γ₀ Ω : ℚ) : ℚ := 1 - (1 - γ₀) / Ω
+/-- The reduction's gap: `g = 1 − (1 − g₀)/Ω`. -/
+def gapOf (g₀ Ω : ℚ) : ℚ := 1 - (1 - g₀) / Ω
 
 /-- `Π`'s costs are Pearl-C's accounting at `(p, c)` with cap `ρ`: `W_ref` is `wrefOf`, and a unit within the cap is
 credited at least `(1 − ρ)·creditOf`. -/
@@ -255,7 +256,7 @@ noise law, the seeds and the chain live in the protocol's reference functions.
 - **Rows that still fail.** An activation row that fails Π's rules with the fixed `S_ℓ` (a token-specific massive
   activation, which no fixed set covers: Qwen2.5-7B's early `down_proj` layers) stays in its unit: its words are computed
   and bound, it earns no credit, and the verifier checks that it fails. Excluding a
-  row only lowers the prover's credit, so γ needs no check that the exclusion was forced. The per-tile statement
+  row only lowers the prover's credit, so g needs no check that the exclusion was forced. The per-tile statement
   (`Tile.lean`) credits a tile's passing rows; this unit-level game, whose `actOK` reads the whole unit, credits nothing of
   a unit with such a row. -/
 def pearlCDomain (p : Params) (L : Layout) : Prop :=

@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.FlockTile.Statement
 import Proofs.Pouw.PearlC.HiddenTileGame
 
 /-!
-# Pearl-C's γ under C-Flock's hidden audit, conditional on T3 and the binding
+# Pearl-C's gap under C-Flock's hidden audit, conditional on T3 and the binding
 
 * `tileProofSoundAll_flock`: at C-Flock's hidden audit (`TileReadSession.audit`), the hidden audit's open obligation
   `TileProofSoundAll` follows from T3 at the TileRead session (`TileReadSound`) and the binding (`TileReadBinds`),
@@ -14,7 +14,7 @@ import Proofs.Pouw.PearlC.HiddenTileGame
   `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`FlockTile.Statement`), which is the last.
 
 Both open obligations are about TileRead, whose Definition and C-Flock soundness are not in Lean yet; the session is a
-parameter (`TileReadSession`). A γ under this audit is cited only beside the theorem that the honest prover, at its stated
+parameter (`TileReadSession`). A g under this audit is cited only beside the theorem that the honest prover, at its stated
 `q`, is in the audit's class (`HiddenAudit.ProverBounded`, `HiddenAudit`'s docstring): for `TileReadSession.audit`, that
 every strategy the honest batch prover induces on a tile's proof game meets the session's `Cls` at every tile whose
 proof game it is. It needs the honest TileRead prover, which is not in Lean yet either.
@@ -35,7 +35,7 @@ theorem tileProofSoundAll_flock (P : Protocol Q R S) (TR : TileRules Q R S) (D :
     (fun U hU τ o H s g => F.tileGame P TR D δzk h0 hT3 hbind U hU τ o H s g)
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under C-Flock's hidden audit, conditional on T3 and the
-binding**, FP32 at 8.376, the honest cast at 8.72: `γ = 1648180439/446072750000` (0.36949%), at `F.audit` for the TileRead
+binding**, FP32 at 8.376, the honest cast at 8.72: `g = 1648180439/446072750000` (0.36949%), at `F.audit` for the TileRead
 session `F`, at `t·δzk(q)` more error than the sampled audit, at the cost model `W1.w1Priced` on
 `W1Device.sm120Loop sha fetch`. `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192` with its `hzk` discharged by
 `tileProofSoundAll_flock`.

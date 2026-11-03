@@ -2,20 +2,20 @@ import Proofs.Pouw.PearlC.Gap
 import Proofs.Pouw.Sampling
 
 /-!
-# γ under the sampled audit, from TT_OUT per tile
+# g under the sampled audit, from TT_OUT per tile
 
 Staged; nothing pinned. The pins proposed are `pearlCSampled8192`, `pearlCSampled16384`, `pearlCTiles_total` and
 `ttOutTilePearlCWitness`.
 
-* `gapSampled`: if every good tile's `W_ref` is at most `Ω` times its credit, `TTOutTile(γ₀)` gives `GGapSampled` at
-  `γ = 1 − (1 − γ₀)/Ω` with error `(1 − ε_s)^t + ε(q, N)`. Pointwise, an accepted run either has more than `ε_s` of the
+* `gapSampled`: if every good tile's `W_ref` is at most `Ω` times its credit, `TTOutTile(g₀)` gives `GGapSampled` at
+  `g = 1 − (1 − g₀)/Ω` with error `(1 − ε_s)^t + ε(q, N)`. Pointwise, an accepted run either has more than `ε_s` of the
   layout's tickets on bad tiles of committed units, which `t` work-weighted draws all miss with probability at most
   `(1 − ε_s)^t` (`workWeightedSampling`, pinned), or its good tiles carry the claimed work less `ε_s`, and then TT_OUT's
   event holds.
 * **The headlines are the unit-level worst case under the cap.** A good tile's credit is `(1 − ρ)·creditOf` times its
-  share and its `W_ref` is `wrefOf` times the same share, so `Ω = wrefOf/((1 − ρ)·creditOf)` per shape and γ is
+  share and its `W_ref` is `wrefOf` times the same share, so `Ω = wrefOf/((1 − ρ)·creditOf)` per shape and g is
   `pearlCGap8192`'s and `pearlCGap16384`'s: `281273/52340000` (0.5374%) at 8192³ and `536953/103540000` (0.5186%) at
-  16384³. The sampled audit certifies `(1 − γ)·(W_claimed − ε_s·W)`.
+  16384³. The sampled audit certifies `(1 − g)·(W_claimed − ε_s·W)`.
 * `pearlCTiles_total`: the audit grid covers each unit's words once, so the `W` that `GGapSampled` certifies against is
   the layout's `∑_u wrefOf`.
 * `ttOutTilePearlCWitness`: `TTOutTilePearlC` is satisfiable, beside an honest reference whose cost is at most the
@@ -132,17 +132,17 @@ theorem sampledOfGood {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
           _ ≤ _ := Pouw.Proofs.workWeightedSampling ((Q → R) × S) w (TR.tiling U.layout).NT t K εs hεs
 
 theorem gapSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hg₀ : g₀ < 1)
     (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.capOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
     (hWc : ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.Wcred U.layout g act ≤ TR.Wref U.layout g)
-    (hTT : TTOutTile CM P TR D γ₀ ε) : GGapSampled CM P TR D (1 - (1 - γ₀) / Ω) ε := by
+    (hTT : TTOutTile CM P TR D g₀ δ) : GGapSampled CM P TR D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA w κ hκ hw t εs hεs
   classical
   refine sampledOfGood TR U (fun H s => A.transcript U H s) (fun H s => goodTiles P TR U H s (A.transcript U H s))
-    γ₀ Ω T (ε q U.layout.N) hγ₀ hΩ (fun H s => goodTiles_subset P TR U H s _) ?_ (hWc U hU)
+    g₀ Ω T (δ q U.layout.N) hg₀ hΩ (fun H s => goodTiles_subset P TR U H s _) ?_ (hWc U hU)
     (hTT.2 U hU T hT q hq A hA) w κ hκ hw t εs hεs
   intro H s g hg
   unfold goodTiles at hg
@@ -154,8 +154,8 @@ theorem gapSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
 
 /-- TT_OUT per tile on a domain gives it on any smaller domain. -/
 theorem ttOutTile_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D D' : Layout → Prop} {γ₀ : ℝ}
-    {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L) (h : TTOutTile CM P TR D γ₀ ε) : TTOutTile CM P TR D' γ₀ ε :=
+    {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D D' : Layout → Prop} {g₀ : ℝ}
+    {δ : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L) (h : TTOutTile CM P TR D g₀ δ) : TTOutTile CM P TR D' g₀ δ :=
   ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2⟩⟩
 
 theorem gridTiles_unit_lt {tm tn : ℕ} {L : Layout} {b : ℕ × ℕ × ℕ} (hb : b ∈ gridTiles tm tn L) : b.1 < L.N := by

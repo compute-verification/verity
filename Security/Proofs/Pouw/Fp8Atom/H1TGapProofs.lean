@@ -3,7 +3,7 @@ import Proofs.Pouw.Dimension.H100WProofs
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 
 /-!
-# Proofs of H-1T's γ corollary
+# Proofs of H-1T's gap corollary
 
 A credited word of unit `u` reads only coordinate `u` of the joint salt. So placing a salt `s` of unit `u` in an
 otherwise fixed joint salt (`place`) recovers unit `u`'s word on `s`, and leaves every other unit's words alone. Two
