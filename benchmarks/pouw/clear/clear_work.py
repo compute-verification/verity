@@ -646,18 +646,22 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
     while changed:
         changed = False
         for _, r, _, row_cell, tiles in units if capped else ():
-            while a_left(r):
-                excess: dict[int, Fraction] = {}
-                for _, tile, w in tiles:
-                    rows, cols = credited(r, tile)
-                    if rows and cols:
-                        s, limit = w[np.ix_(rows, cols)].sum(axis=1), row_cell * len(cols) * tol
-                        for x in np.flatnonzero(s > floor(limit)):
-                            i = tile.rows[rows[x]]
-                            excess[i] = excess.get(i, 0) + int(s[x]) - limit
-                if not excess:
+            if not a_left(r):
+                continue
+            # an A row given up leaves every other row's sum and cap as they were (both read the credited columns, which
+            # only a B row changes), so one scan ranks the rows given up one at a time: furthest over, then the lower row
+            excess: dict[int, Fraction] = {}
+            for _, tile, w in tiles:
+                rows, cols = credited(r, tile)
+                if rows and cols:
+                    s, limit = w[np.ix_(rows, cols)].sum(axis=1), row_cell * len(cols) * tol
+                    for x in np.flatnonzero(s > floor(limit)):
+                        i = tile.rows[rows[x]]
+                        excess[i] = excess.get(i, 0) + int(s[x]) - limit
+            for i in sorted(excess, key=lambda i: (-excess[i], i)):
+                if not a_left(r):
                     break
-                va[r.matmul.index].add(max(excess, key=lambda i: (excess[i], -i)))
+                va[r.matmul.index].add(i)
                 changed = True
         for _, r, _, row_cell, tiles in units if capped else ():
             for _, tile, w in tiles:

@@ -1556,6 +1556,98 @@ def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     assert [(x["tile"], [r[0] for r in x["rows"]]) for x in CW.over_words(s, given, three)] == [(1, [2])]
 
 
+def _volunteer_words_one_row_at_a_time(scheme, records, words):
+    """`clear_work.volunteer_words` with its A count stated one row at a time: every tile of the unit rescanned after each
+    A row given up, the row furthest over then given up."""
+    _, tol, units = CW._word_units(scheme, records, words)
+    va = {r.matmul.index: set(r.voluntary_a) for r in records}
+    vb = {}
+    for r in records:
+        vb.setdefault(r.matmul.weight, set(r.voluntary_b))
+
+    def credited(r, tile):
+        ua, ub = set(r.excluded_a) | va[r.matmul.index], set(r.excluded_b) | vb[r.matmul.weight]
+        return ([x for x, i in enumerate(tile.rows) if i < r.real_rows and i not in ua],
+                [z for z, j in enumerate(tile.cols) if j not in ub])
+
+    def a_left(r):
+        return len(va[r.matmul.index]) < CW.voluntary_cap(r.matmul.shape.m)
+
+    def b_left(r):
+        return len(vb[r.matmul.weight]) < CW.voluntary_cap(r.matmul.shape.n)
+
+    changed = True
+    while changed:
+        changed = False
+        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+            while a_left(r):
+                excess = {}
+                for _, tile, w in tiles:
+                    rows, cols = credited(r, tile)
+                    if rows and cols:
+                        s, limit = w[np.ix_(rows, cols)].sum(axis=1), row_cell * len(cols) * tol
+                        for x in np.flatnonzero(s > math.floor(limit)):
+                            excess[tile.rows[rows[x]]] = excess.get(tile.rows[rows[x]], 0) + int(s[x]) - limit
+                if not excess:
+                    break
+                va[r.matmul.index].add(max(excess, key=lambda i: (excess[i], -i)))
+                changed = True
+        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+            for _, tile, w in tiles:
+                while b_left(r):
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    x = int(np.argmax(sub.sum(axis=1)))
+                    z = int(np.argmax(sub[x]))
+                    if int(sub[x].sum()) <= row_cell * len(cols) * tol or int(sub[x, z]) <= row_cell * tol:
+                        break
+                    vb[r.matmul.weight].add(tile.cols[cols[z]])
+                    changed = True
+        for _, r, cell, _, tiles in units:
+            for _, tile, w in tiles:
+                while True:
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    debit, nr, nc = int(sub.sum()), len(rows), len(cols)
+                    if debit <= cell * nr * nc * tol:
+                        break
+                    options = []
+                    if a_left(r) and nr > 1:
+                        options += [(debit - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
+                                    for x, d in enumerate(sub.sum(axis=1))]
+                    if b_left(r) and nc > 1:
+                        options += [(debit - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
+                                    for z, d in enumerate(sub.sum(axis=0))]
+                    if not options:
+                        break
+                    _, side, row = min(options, key=lambda o: o[0])
+                    (va[r.matmul.index] if side == "A" else vb[r.matmul.weight]).add(row)
+                    changed = True
+    return {i: sorted(s) for i, s in va.items() if s}, {w: sorted(s) for w, s in vb.items() if s}
+
+
+def test_volunteer_words_ranks_a_units_rows_over_their_caps_in_one_scan():
+    """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, since an A row given up leaves
+    every other row's sum and cap as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
+    rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
+    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    rng = np.random.default_rng(7)
+    most = 0
+    for trial in range(24):
+        recs = [PW.UnitRecord(Matmul(u, Shape(192, 128, 48), 10 + u), int(rng.integers(150, 193)), 128) for u in range(3)]
+        words = {(p, t): (np.where(rng.random((16, 16)) < 0.04, rng.integers(1, 4, (16, 16)), 0),
+                          np.where(rng.random((16, 16)) < 0.02, rng.integers(1, 3, (16, 16)), 0))
+                 for p, r in enumerate(recs) for t in range(len(s.tiles(r.matmul.shape)))}
+        got = CW.volunteer_words(s, recs, words)
+        assert got == _volunteer_words_one_row_at_a_time(s, recs, words), trial
+        most = max(most, *(len(v) for v in got[0].values()))
+    assert most == CW.voluntary_cap(192) == 3
+
+
 @pytest.mark.slow
 def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row digests,
