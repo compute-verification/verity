@@ -11,6 +11,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
+from te_core import algorithm_policy as AP
 from te_core import console, frontier, panels, plots, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
@@ -42,6 +43,18 @@ def test_a_fit_takes_three_points_spanning_a_decade_and_is_provisional_on_fewer_
     assert FF.fit(scratch[:4] + on(LAW, (200, 400)))["provisional"]
 
 
+def test_a_fits_status_names_e_at_its_bound_and_gives_one_figure_where_a_range_agrees():
+    """`fit` holds E in [0, the least loss), so a law's points with E below 0 put it at 0, which the status names; a
+    range whose ends round alike is one figure."""
+    f = FF.fit(on({"E": -0.05, "A": 1.2 * C0 ** 0.08, "gamma": 0.08}, (1, 1.7, 3, 5, 9, 16, 30, 55, 100)))
+    assert f["E"] == 0 and FF.fit(on(LAW, (1, 3, 10, 30, 100)))["E"] > 0
+    assert FF.status(f, [0.9, 1.0004], [7.291, 7.288], (1.1, 2)) == (
+        f"provisional fit: 0 of its points from scratch, under {FF.FIT_TARGET}; E at its bound 0 (the least squares "
+        "would put it at or below 0); its points' gains 0.9 to 1; its rms in loss is 7.29% in effective compute at its "
+        "starts' 1.1x targets")
+    assert FF.span(1.0, 1.5) == "1 to 1.5" and FF.span(7.291, 7.288, "%") == "7.29%"
+
+
 def test_the_fit_reads_the_frontier_from_the_least_c0_up_one_point_a_bin():
     """The staircase (the least compute at each loss) from c_lo up, and in each 1/20 decade of C its least loss."""
     pts = [(0.5 * C0, 1.3, "below c_lo"), (C0, 1.2, "start"), (1.01 * C0, 1.19, "same bin, lower"),
@@ -55,6 +68,29 @@ def test_effective_compute_inverts_the_fit():
         assert FF.gain(LAW, FF.loss_at(LAW, c), c) == pytest.approx(1)
         assert FF.gain(LAW, FF.loss_at(LAW, 2 * c), c) == pytest.approx(2)
     assert FF.c_eff(LAW, LAW["E"]) == FF.c_eff(LAW, 0.5) == math.inf
+
+
+def test_a_starts_targets_are_daniels_gain_on_the_fit_below_its_loss_with_the_fits_rms_in_compute():
+    """A gain from l0 to L is C(L)/C(l0) on the fit (TRN-40): `target` inverts `gain_from`, is the fit's loss at
+    g·C_eff(l0) whatever the start's own gain, and lies below l0 at every gain; a start at or below E has none.
+    `c_spread` is the fit's rms in loss over its slope in log compute there."""
+    for l0 in (1.0, 1.2, 1.5):
+        for g in AP.GAINS:
+            t = FF.target(LAW, l0, g)
+            assert t < l0 and FF.gain_from(LAW, l0, t) == pytest.approx(g)
+            assert t == pytest.approx(FF.loss_at(LAW, g * FF.c_eff(LAW, l0)))
+    assert FF.target(LAW, LAW["E"], 2) is None and FF.gain_from(LAW, 1.2, LAW["E"]) == math.inf
+    with pytest.raises(ValueError, match="at or below the fit's E"):
+        FF.gain_from(LAW, LAW["E"], 1.0)
+    f, h = LAW | {"rms_pct": 1.0}, 1e-6
+    t = FF.target(f, 1.2, 1.1)
+    c = FF.c_eff(f, t)
+    slope = (FF.loss_at(f, c * (1 - h)) - FF.loss_at(f, c * (1 + h))) / (2 * h)
+    assert FF.c_spread(f, t) == pytest.approx(0.01 * t / slope, rel=1e-6)
+    text = FF.targets(f, 1.2, AP.GAINS)
+    assert text.startswith(f"targets, C(L1)/C(L0) = g: 1.1x {t:.5f} ({100 * (t / 1.2 - 1):+.2f}%), 2x ")
+    assert text.endswith(f"; the fit's rms is {100 * FF.c_spread(f, t):.3g}% in effective compute at 1.1x")
+    assert FF.targets(f, 0.9, AP.GAINS) == "no targets: its loss is at or below the fit's E (0.9)"
 
 
 def test_the_ladders_files_give_v3s_from_scratch_points(tmp_path):
@@ -147,6 +183,11 @@ def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeyp
     assert pilot["rms_pct"] == pytest.approx(rms, rel=0.01, abs=1e-3)
     starts = [(d["source"].split(" (")[0], d["C_gates"], d["loss_bpb"]) for d in ds if d["row"] == "start"]
     assert starts == [("start s1", pytest.approx(C0, rel=1e-5), 1.2), ("start s2", pytest.approx(2 * C0, rel=1e-5), 1.3)]
+    whole = f | {"rms_pct": pilot["rms_pct"]}
+    assert [d["status"] for d in ds if d["row"] == "start"] == [FF.targets(whole, l0, AP.GAINS) for l0 in (1.2, 1.3)]
+    spread = sorted(100 * FF.c_spread(whole, FF.target(whole, l0, 1.1)) for l0 in (1.2, 1.3))
+    assert pilot["status"].endswith(f"; its rms in loss is {spread[0]:.3g}% to {spread[1]:.3g}% in effective compute "
+                                    "at its starts' 1.1x targets")
     every = json.loads((out / "frontier-points.json").read_text())
     assert set(every) == {"v3", "v2.3-pilot"} and every["v3"] == [] and len(every["v2.3-pilot"]) >= len(pts)
 

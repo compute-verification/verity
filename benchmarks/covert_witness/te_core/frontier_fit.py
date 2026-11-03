@@ -24,12 +24,16 @@ through its starts' (`panels.scratch`), and its starts' C0 rest on the dense rat
 fewer than `FIT_TARGET` points from scratch is provisional: its status and the note say so, the note with its points'
 residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. Effective
 compute C_eff(l) = (A/(l − E))^(1/γ) is the compute at which the fit reaches loss l, and a point's gain C_eff(l)/C its
-residual in compute (1 on the fit).
+residual in compute (1 on the fit). A start's gain from its l0 to a loss L is Daniel's C(L)/C(l0) on the fit
+(`gain_from`, TRN-40), so its target at gain g (te_core.algorithm_policy's `GAINS`) is E + (l0 − E)·g^(−γ), below l0 at
+every g (`target`), and the fit's uncertainty in effective compute at a loss is its rms in loss over the fit's slope
+there (`c_spread`).
 
 The panel (`COLUMNS`) has a `fit` row per data (`row`): the form, E, A and γ, the points used, their span and the
-residuals' rms and largest in relative loss, or why there is no fit (`status`); a `point` row per point used, with its
-C, loss, the fit's loss there, the residual and its gain; and a `start` row per start, at (C0, l0), whose gain is the
-start's own. DIR gets `frontier-fit.json` (the panel), `frontier-points.json` (every frontier point, per data) and
+residuals' rms and largest in relative loss, or why there is no fit (`status`, with the rms in effective compute at its
+starts' first targets); a `point` row per point used, with its C, loss, the fit's loss there, the residual and its gain;
+and a `start` row per start, at (C0, l0), whose gain is the start's own and whose status gives its targets (`targets`).
+DIR gets `frontier-fit.json` (the panel), `frontier-points.json` (every frontier point, per data) and
 `console/frontier-fit.json`; `--publish` PUTs the console copy.
 """
 from __future__ import annotations
@@ -45,7 +49,7 @@ from pathlib import Path
 import numpy as np
 
 from . import VERSION, console, frontier, panels, plots, policy, rescore
-from .gates import per_mac
+from .gates import UNIT, per_mac
 
 NAME = "frontier-fit"
 PANEL = f"training/{NAME}"
@@ -159,7 +163,8 @@ def fit(pts: list[tuple]) -> dict | None:
     """L(C) = E + A·C^(−γ) by least squares in relative loss over `pts` (C, loss, ...; by C): for each γ of `GAMMAS`
     and then by golden section about the best, (E, A) by weighted linear least squares, E held in [0, the least loss)
     and A > 0; None with fewer than `FIT_MIN` points or a span under `FIT_SPAN`. E, A and γ are kept to `DIGITS`
-    significant digits, the values the panel shows and every gain reads, and the residuals are theirs. `scratch` counts
+    significant digits, the values the panel shows and every gain reads, and the residuals are theirs, their rms and
+    largest to 3, as the panel shows them and `c_spread` reads the rms. `scratch` counts
     the points from scratch (method key `panels.SCRATCH`), and a fit on fewer than `FIT_TARGET` is `provisional`."""
     if len(pts) < FIT_MIN or pts[-1][0] < FIT_SPAN * pts[0][0]:
         return None
@@ -195,7 +200,7 @@ def fit(pts: list[tuple]) -> dict | None:
     out = {"form": FORM, "E": num(e), "A": num(a * float(c.max()) ** g), "gamma": num(g), "points": len(pts),
            "C_lo": float(c.min()), "C_hi": float(c.max()), "scratch": scratch, "provisional": scratch < FIT_TARGET}
     res = [100 * (y / loss_at(out, x) - 1) for x, y in zip(c, l)]
-    return out | {"rms_pct": math.sqrt(sum(v * v for v in res) / len(res)), "max_abs_pct": max(map(abs, res))}
+    return out | {"rms_pct": num(math.sqrt(sum(v * v for v in res) / len(res)), 3), "max_abs_pct": num(max(map(abs, res)), 3)}
 
 
 def loss_at(f: dict, c: float) -> float:
@@ -209,8 +214,56 @@ def c_eff(f: dict, loss: float) -> float:
 
 
 def gain(f: dict, loss: float, c0: float) -> float:
-    """Effective compute over `c0`: C_eff(loss)/c0."""
+    """Effective compute over `c0`: C_eff(loss)/c0, a point's residual in compute (1 on the fit)."""
     return c_eff(f, loss) / c0
+
+
+def gain_from(f: dict, l0: float, loss: float) -> float:
+    """The gain from a start's loss `l0` to `loss` on the fit, C(L1)/C(L0) (Daniel, TRN-40 7:05 PM PST): C_eff(loss)
+    over C_eff(l0), ((l0 − E)/(loss − E))^(1/γ), infinite at or below E. `l0` is above E (`target`)."""
+    if l0 <= f["E"]:
+        raise ValueError(f"frontier_fit: a start at {l0} bpb is at or below the fit's E ({f['E']}), which no compute "
+                         "reaches, so it has no gain")
+    return ((l0 - f["E"]) / (loss - f["E"])) ** (1 / f["gamma"]) if loss > f["E"] else math.inf
+
+
+def target(f: dict, l0: float, g: float) -> float | None:
+    """The loss a gain of `g` from `l0` reaches on the fit (`gain_from`'s inverse): E + (l0 − E)·g^(−γ), below l0 at
+    every g > 1; None where `l0` is at or below E."""
+    return f["E"] + (l0 - f["E"]) * g ** -f["gamma"] if l0 > f["E"] else None
+
+
+def c_spread(f: dict, loss: float) -> float:
+    """The fit's uncertainty in effective compute at `loss`, as a share: the change in C that moves the fit's loss by
+    its rms residual (`rms_pct`, in relative loss), rms·loss/(γ·(loss − E))."""
+    return f["rms_pct"] / 100 * loss / (f["gamma"] * (loss - f["E"]))
+
+
+def targets(f: dict, l0: float, gains: tuple[float, ...]) -> str:
+    """A start's target losses at `gains` (`target`; te_core.algorithm_policy's `GAINS`) and the fit's uncertainty in
+    effective compute at the first (`c_spread`), as a start row's status."""
+    if l0 <= f["E"]:
+        return f"no targets: its loss is at or below the fit's E ({f['E']:g})"
+    at = [(g, target(f, l0, g)) for g in gains]
+    return ("targets, C(L1)/C(L0) = g: " + ", ".join(f"{g:g}x {t:.5f} ({100 * (t / l0 - 1):+.2f}%)" for g, t in at)
+            + f"; the fit's rms is {100 * c_spread(f, at[0][1]):.3g}% in effective compute at {gains[0]:g}x")
+
+
+def span(lo: float, hi: float, unit: str = "") -> str:
+    """"`lo` to `hi`" at 3 significant digits, one figure where both round alike."""
+    a, b = f"{lo:.3g}{unit}", f"{hi:.3g}{unit}"
+    return a if a == b else f"{a} to {b}"
+
+
+def status(f: dict, spread: list[float], first: list[float], gains: tuple[float, ...]) -> str:
+    """A fit row's status: provisional or not, E at its bound 0 where the points leave it there (`fit` holds E in
+    [0, the least loss)), its points' gains (`spread`) and its rms in effective compute at its starts' first targets
+    (`first`, in %)."""
+    return ((f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}" if f["provisional"]
+             else "fit") + ("; E at its bound 0 (the least squares would put it at or below 0)" if f["E"] == 0 else "")
+            + f"; its points' gains {span(min(spread), max(spread))}"
+            + (f"; its rms in loss is {span(min(first), max(first), '%')} in effective compute at its starts' "
+               f"{gains[0]:g}x targets" if first else ""))
 
 
 def c_lo(shapes: dict[str, dict], data: str, rate: float) -> float | None:
@@ -228,9 +281,9 @@ def row(**values) -> list:
 
 
 def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source: str, extra: list[tuple] = (),
-          stamp: str | None = None) -> tuple[dict, dict]:
+          stamp: str | None = None, gains: tuple[float, ...] = ()) -> tuple[dict, dict]:
     """The panel and what it rests on (`info`): the rate, the ratio, the starts, each data's frontier points and its fit
-    (None where there is none) with the points it read."""
+    (None where there is none) with the points it read; each start's targets at `gains` (`targets`) where given."""
     rate, rate_how = panels.dense_rate(scored, shapes)
     sts = starts(scored, shapes, rate)
     pts, ratio = points(sts, runs, shapes, rate, extra)
@@ -249,21 +302,21 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
             rows.append(row(row="fit", data=d, form=FORM, points=len(read[d]), status=why))
             continue
         spread = [gain(f, y, x) for x, y, _ in read[d]]
+        mine = [s for s in sts if s.data == d]
+        first = [100 * c_spread(f, t) for s in mine if gains and (t := target(f, s.l0, gains[0])) is not None]
         rows.append(row(row="fit", data=d, form=FORM, E_bpb=f["E"], A=f["A"], gamma=f["gamma"], points=f["points"],
                         C_lo_gates=num(f["C_lo"]), C_hi_gates=num(f["C_hi"]), rms_pct=num(f["rms_pct"], 3),
-                        max_abs_pct=num(f["max_abs_pct"], 3),
-                        status=(f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}"
-                                if f["provisional"] else "fit")
-                        + f"; its points' gains {min(spread):.3g} to {max(spread):.3g}"))
+                        max_abs_pct=num(f["max_abs_pct"], 3), status=status(f, spread, first, gains)))
         for x, y, r in read[d]:
             rows.append(row(row="point", data=d, C_gates=num(x), loss_bpb=round(y, 5), fit_bpb=round(loss_at(f, x), 5),
                             residual_pct=num(100 * (y / loss_at(f, x) - 1), 3), gain=num(gain(f, y, x), 4),
                             source=r["source"][:console.CELL_MAX]))
-        for s in (s for s in sts if s.data == d):
+        for s in mine:
             rows.append(row(row="start", data=d, C_gates=num(s.c0), loss_bpb=round(s.l0, 5),
                             fit_bpb=round(loss_at(f, s.c0), 5), residual_pct=num(100 * (s.l0 / loss_at(f, s.c0) - 1), 3),
-                            gain=num(gain(f, s.l0, s.c0), 4), source=f"start {s.name} ({s.label})"))
-    p = {"id": PANEL, "title": "The frontier's fit: L(C) = E + A C^-gamma per data", "kind": "table",
+                            gain=num(gain(f, s.l0, s.c0), 4), source=f"start {s.name} ({s.label})",
+                            status=targets(f, s.l0, gains) if gains else None))
+    p = {"id": PANEL, "title": f"The frontier's fit: L(C) = E + A C^-gamma per data (C in {UNIT})", "kind": "table",
          "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
          "note": note(fits, read, pts), "columns": COLUMNS, "rows": rows}
     return checked(p), {"rate": rate, "rate_how": rate_how, "ratio": ratio, "starts": sts, "points": pts,
@@ -271,21 +324,24 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
 
 
 def note(fits: dict | None = None, read: dict | None = None, pts: dict | None = None) -> str:
-    """The panel's note, and each provisional fit's points (`provisional`)."""
-    out = ("Per data, held-out bpb L against training gates C: E + A*C^-gamma, least squares in relative loss over its "
-           "frontier (the least L at each C: from scratch, starts at C0, checkpoints from a start at C0 + |C|), from "
-           f"the least start's C0 up, a point per 1/{PER_DECADE} decade. gain = C_eff(L)/C, C_eff = "
-           "(A/(L - E))^(1/gamma).")
-    for d, f in (fits or {}).items():
-        if f and f.get("provisional"):
-            out += " " + provisional(d, f, read[d], pts[d])
-    return out
+    """The panel's note, and each provisional fit's points (`provisional`); over the route's `console.NOTE_MAX`
+    without the ladder's runs off the fit."""
+    def text(off: bool) -> str:
+        out = ("Per data, held-out bpb L against training gates C: E + A*C^-gamma, least squares in relative loss over "
+               "its frontier (least L per C: from scratch, starts at C0, checkpoints at C0 + |C|) from the least C0, a "
+               f"point per 1/{PER_DECADE} decade. C_eff = (A/(L - E))^(1/gamma); gain C_eff(L)/C at a point, "
+               "C(L)/C(l0) at a target.")
+        for d, f in (fits or {}).items():
+            if f and f.get("provisional"):
+                out += " " + provisional(d, f, read[d], pts[d], off)
+        return out
+    return next((t for t in (text(True),) if len(t) <= console.NOTE_MAX), text(False))
 
 
-def provisional(data: str, f: dict, read: list[tuple], every: list[tuple]) -> str:
+def provisional(data: str, f: dict, read: list[tuple], every: list[tuple], off: bool = True) -> str:
     """A provisional fit in a sentence: its from-scratch points' residuals in loss, how many other points it reads, the
-    ladder's runs it doesn't read (off its frontier, or sharing a point's 1/`PER_DECADE` decade) and theirs, and
-    whether the ladder's points are `LADDER`'s, built from its manifest."""
+    ladder's runs it doesn't read (off its frontier, or sharing a point's 1/`PER_DECADE` decade) and theirs unless
+    not `off`, and whether the ladder's points are `LADDER`'s, built from its manifest."""
     def res(x, y):
         return f"{round(100 * (y / loss_at(f, x) - 1), 2) or 0.0:+.2f}%"
 
@@ -295,7 +351,7 @@ def provisional(data: str, f: dict, read: list[tuple], every: list[tuple]) -> st
     on = [(x, y, r) for x, y, r in read if r.get("method_key") == panels.SCRATCH]
     mine = {name(r) for _, _, r in on}
     off = sorted({name(r): (x, y, r) for x, y, r in every if r.get("ladder") and name(r) not in mine}.values(),
-                 key=lambda p: p[0])
+                 key=lambda p: p[0]) if off else []
     out = (f"{data} provisional ({len(on)} from scratch, {FIT_TARGET} the target): "
            + ", ".join(f"{name(r)} {res(x, y)}" for x, y, r in on)
            + (f" and {len(read) - len(on)} checkpoints" if len(read) > len(on) else "")
@@ -402,7 +458,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     d, scored = scored_rows(a)
     runs, extra, source = inputs(a, scored, d["shapes"], d)
-    p, info = build(scored, d["shapes"], runs, source, extra)
+    from .algorithm_policy import GAINS
+    p, info = build(scored, d["shapes"], runs, source, extra, gains=GAINS)
     write(p, info, a.out, a.out)
     print(summary(info))
     if d["refused"]:
