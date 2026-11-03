@@ -565,6 +565,33 @@ theorem run_any (s : Schedule) (reqs : List ByteArray) (n : Nat) :
     rw [List.append_nil, hb, hI.sent, List.prefix_iff_eq_take.mp (sofar_prefix hI), hh'', fillAll_take] at e3
     rw [hx, e3, Array.toArray_toList]
 
+/-- **What a live session sent is the schedule's transcript so far but for its commit strings**: with Commit naming
+tables `o` of the schedule, each once, its first `k` messages, all of them when the session finished. -/
+theorem liveOut_blank (s : Schedule) (L : List (ByteArray × List ByteArray)) :
+    ∃ (o : List String) (k : Nat), Tables s o ∧ k ≤ (tmpl s o).length ∧
+      (liveFinished s L = true → k = (tmpl s o).length) ∧
+      (liveOut s { salts := [] } L).1.map blank = (tmpl s o).take k := by
+  obtain ⟨P, t, hP, ht⟩ := liveOut_liveRun s L { salts := [] }
+  have e := run_live s P _ t hP
+  rw [run_eq] at e
+  have hI := loop_inv s (P.map (·.1)) (P.flatMap (·.2))
+  have hR := loop_roots s (P.map (·.1)) (P.flatMap (·.2))
+  revert e hI hR
+  generalize loop s (P.map (·.1)) (P.flatMap (·.2)) = r
+  obtain ⟨u, stp⟩ := r
+  intro e hI hR
+  dsimp only at e hI hR
+  obtain ⟨he1, he2⟩ := Prod.mk.inj e
+  refine ⟨u.roots.map (·.1), (sofar s u).length, ?_, (sofar_prefix hI).length_le, fun hf => ?_, ?_⟩
+  · exact hR
+  · rw [liveFinished_eq] at hf
+    rcases ht with ht | ht <;> rw [ht] at hf
+    · have hu : (u.finished && !stp) = true := he2.trans hf
+      simp only [Bool.and_eq_true] at hu
+      rw [sofar_finished hI hu.1]
+    · exact nomatch hf
+  · rw [← List.prefix_iff_eq_take.mp (sofar_prefix hI), ← hI.sent, he1, List.toList_toArray]
+
 /-- **The live firewall at any requests, at the order its Commit named**: for any requests, each with how many fresh
 salts are read for it (`R`), there are tables `o` of the schedule, each named once, 64-byte digests `ds`, a place `k` of
 the schedule's transcript and an end `fin` such that every live session on those requests, whatever salts it reads
@@ -579,33 +606,12 @@ theorem liveOut_order (s : Schedule) (R : List (ByteArray × Nat)) :
               (fillAll (tmpl s o) (List.zipWith Hm96.Default512.commitString ds (L.flatMap (·.2)))).take k ∧
             liveFinished s L = fin := by
   obtain ⟨L₀, hS₀⟩ : ∃ L₀, shape L₀ = R := ⟨_, shape_canon R⟩
-  obtain ⟨P, t, hP, ht⟩ := liveOut_liveRun s L₀ { salts := [] }
-  have e := run_live s P _ t hP
-  rw [run_eq] at e
-  have hI := loop_inv s (P.map (·.1)) (P.flatMap (·.2))
-  have hR := loop_roots s (P.map (·.1)) (P.flatMap (·.2))
-  revert e hI hR
-  generalize loop s (P.map (·.1)) (P.flatMap (·.2)) = r
-  obtain ⟨u, stp⟩ := r
-  intro e hI hR
-  dsimp only at e hI hR
-  obtain ⟨he1, he2⟩ := Prod.mk.inj e
+  obtain ⟨o, k, ho, hk, hfin, hsof⟩ := liveOut_blank s L₀
   obtain ⟨-, -, ds, hds, hle, hh, -⟩ := liveOut_rel s L₀ L₀ { salts := [] } [] rfl rfl
-  have hsof : (liveOut s { salts := [] } L₀).1.map blank =
-      (tmpl s (u.roots.map (·.1))).take (sofar s u).length := by
-    rw [← List.prefix_iff_eq_take.mp (sofar_prefix hI), ← hI.sent, he1, List.toList_toArray]
-  refine ⟨u.roots.map (·.1), ds, (sofar s u).length, liveFinished s L₀, ?_, hds, ?_,
-    (sofar_prefix hI).length_le, fun hf => ?_, fun L hL => ?_⟩
-  · exact hR
+  refine ⟨o, ds, k, liveFinished s L₀, ho, hds, ?_, hk, hfin, fun L hL => ?_⟩
   · have h1 : ds.length ≤ (L₀.flatMap (·.2)).length := hle
     rw [length_salts, hS₀] at h1
     exact h1
-  · rw [liveFinished_eq] at hf
-    rcases ht with ht | ht <;> rw [ht] at hf
-    · have hu : (u.finished && !stp) = true := he2.trans hf
-      simp only [Bool.and_eq_true] at hu
-      rw [sofar_finished hI hu.1]
-    · exact nomatch hf
   · obtain ⟨hb, hf, ds₁, hds₁, hle₁, hh₁, hh₁'⟩ := liveOut_rel s L₀ L { salts := [] } [] (hS₀.trans hL.symm) rfl
     have hb' : (liveOut s { salts := [] } L₀).1.map blank = (liveOut s { salts := [] } L).1.map blank := hb
     have hf' : (liveOut s { salts := [] } L₀).2.map State.finished =
