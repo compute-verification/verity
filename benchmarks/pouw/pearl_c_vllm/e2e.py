@@ -119,6 +119,20 @@ PROMPTS = [
     "Explain proof of work in simple terms.", "Name the planets of the solar system in order.",
     "How does a refrigerator keep food cold?", "What is a prime number? Give five examples.",
 ]
+
+
+def chat(tok, prompts) -> list[str]:
+    """Each prompt as one user turn of the model's chat template; a base model's tokenizer has none, so its prompts are
+    their own text."""
+    try:
+        return [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True)
+                for p in prompts]
+    except ValueError as e:
+        if "chat_template" not in str(e):
+            raise
+        return list(prompts)
+
+
 #: ``--smoke --retain``'s served requests, each one chat prompt (PROMPTS, by index) as a retained pass: the
 #: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
 #: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
@@ -564,8 +578,7 @@ def serve(conn, args, group: str, coins: dict) -> None:
         many = SamplingParams(temperature=0.0, max_tokens=1 + STEPS, ignore_eos=True)
         tok = llm.get_tokenizer()
         # at most a decode batch of them, so a small batch's chat (its prompts one after another) stays within one pass
-        chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True)
-                for p in PROMPTS[:BATCH]]
+        turns = chat(tok, PROMPTS[:BATCH])
 
         def timed(prompts, sp, retain=None, controls=()):
             """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
@@ -598,7 +611,7 @@ def serve(conn, args, group: str, coins: dict) -> None:
                     whole.prepare()
                     whole.take()
             if op == "chat":
-                *_, outs = timed(chat, SamplingParams(temperature=0.0, max_tokens=48))
+                *_, outs = timed(turns, SamplingParams(temperature=0.0, max_tokens=48))
                 zk = run.statement.take() if run is not None and run.statement is not None and run.statement.enabled else None
                 conn.send({"tokens": [list(o.outputs[0].token_ids) for o in outs], "texts": [o.outputs[0].text for o in outs[:4]],
                            **({"statement": zk} if zk else {}), **({"whole_step": whole.take()} if whole is not None else {})})
@@ -656,7 +669,7 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 if whole is not None:
                     whole.take()
                 for name, i in SERVED.items():
-                    _, _, got, outs = timed([chat[i]], sp, retain=str(Path(args.retain) / name))
+                    _, _, got, outs = timed([turns[i]], sp, retain=str(Path(args.retain) / name))
                     tokens = list(outs[0].outputs[0].token_ids)
                     length = {"ignore_eos": sp.ignore_eos, "max_tokens": [sp.max_tokens], "served": [len(tokens)]}
                     (Path(args.retain) / name / SERVED_RECORD).write_text(json.dumps(length, sort_keys=True) + "\n")

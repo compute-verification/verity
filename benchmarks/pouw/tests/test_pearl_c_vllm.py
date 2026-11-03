@@ -2911,6 +2911,27 @@ def test_a_tag_names_another_model_in_the_shape_names():
     assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
 
 
+def test_a_base_models_chat_prompts_are_their_text():
+    """A base model (the demo's Llama 3.2 1B) has no chat template, so its chat prompts are their own text instead of the
+    engine failing; an instruct model's are its template's turns, and any other refusal still raises."""
+    E2E = load("pearl_c_vllm_e2e_chat", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+
+    class Tokenizer:
+        def __init__(self, error=None):
+            self.error = error
+
+        def apply_chat_template(self, turns, tokenize, add_generation_prompt):
+            if self.error:
+                raise ValueError(self.error)
+            return f"<user>{turns[0]['content']}<assistant>"
+
+    base = Tokenizer("Cannot use chat template functions because tokenizer.chat_template is not set")
+    assert E2E.chat(base, ["a", "b"]) == ["a", "b"]
+    assert E2E.chat(Tokenizer(), ["a"]) == ["<user>a<assistant>"]
+    with pytest.raises(ValueError, match="other"):
+        E2E.chat(Tokenizer("some other refusal"), ["a"])
+
+
 # ---- one install path: the run behind the Stack ------------------------------------------------------------------------
 
 def _stack_sites(weights):
