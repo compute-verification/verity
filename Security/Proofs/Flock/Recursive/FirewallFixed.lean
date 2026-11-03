@@ -56,8 +56,9 @@ theorem adaptOut_fixed (s : Schedule) (reqs : List ByteArray) :
 /-- **The fixed worker finishes exactly when the live session on its requests does.** -/
 theorem adaptFinished_fixed (s : Schedule) (reqs ys : List ByteArray) :
     adaptFinished s (fun h => reqs[h.length]?) reqs.length ys = liveFinished s (chopReqs reqs ys) := by
-  unfold adaptFinished liveFinished
+  unfold adaptFinished
   rw [adaptOut_fixed s reqs reqs { salts := [] } [] ys rfl]
+  rfl
 
 /-- **Whether it finishes reads only how many salts there are** (`Flock.SecurityProofs.liveOut_any`). -/
 theorem liveFinished_chopReqs (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArray}
