@@ -21,10 +21,12 @@ judgement; `check.py` holds the policy.
 - `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
   axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines and the constants under each one's declaration's name (`family`) that its own type,
+  `recorded` (`meaning` and the prefixes of `trees`' `except`, whose definitions a statement reads from the proofs tree),
+  with their source lines and the constants under each one's declaration's name (`family`) that its own type,
   value or constructors use (`reads`, `own`: what its record hashes with it), and the constants other than theorems outside
-  `meaning` where that walk
-  stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
+  `recorded` where that walk
+  stops, with their modules (`outside`). When `recorded` reaches past `meaning`, `meaning_reads` names the `reads` the
+  walk under `meaning` alone reaches. Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `assumption_reads`: for each name under `assumptions`, and each premise head and named hypothesis a pin reports, that
   constant and every definition, inductive type and constructor it reads, transitively, in the modules under `meaning`
@@ -323,7 +325,7 @@ def readsWhere (env : Environment) (table : Std.HashMap Name (Array Name)) (inSc
       stack := stack ++ meaningDeps env table ci
   return (out, outside)
 
-/-- `readsWhere` over the modules under `meaning`: what a guarantee's statement reads. -/
+/-- `readsWhere` over the modules under `meaning`: what a guarantee's statement reads, with `recorded` for `meaning`. -/
 def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (roots : Array Name) :
     Array (Name × Name × ConstantInfo) × Array (Name × Name) :=
   readsWhere env table (under meaning) roots
@@ -1055,6 +1057,8 @@ unsafe def main (args : List String) : IO UInt32 := do
   let cfg ← IO.ofExcept (Json.parse (← IO.FS.readFile cfgPath))
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
+  let further := (names cfg "recorded").filter (!meaning.contains ·)
+  let recorded := meaning ++ further
   let premises := names cfg "premises"
   let listed := (names cfg "assumptions").foldl NameSet.insert {}
   let allowed := names cfg "allowed"
@@ -1080,7 +1084,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut ranges : Std.HashMap Name DeclarationRanges := {}
   for h : i in [0:mnames.size] do
     let m := mnames[i]
-    if !under roots m && !under meaning m then continue
+    if !under roots m && !under recorded m then continue
     let data := env.header.moduleData[i]!
     for (n, r) in entriesOf DeclarationRanges data declRangeExt.name do
       ranges := ranges.insert n r
@@ -1137,7 +1141,15 @@ unsafe def main (args : List String) : IO UInt32 := do
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := Id.run do
-    let tasks := pins.map fun p => Task.spawn fun _ => (env.find? p).map fun ci => reads env table meaning ci.type.getUsedConstants
+    let tasks := pins.map fun p => Task.spawn fun _ => (env.find? p).map fun ci => reads env table recorded ci.type.getUsedConstants
+    let mut acc := {}
+    for h : i in [0:pins.size] do
+      if let some rs := tasks[i]!.get then
+        acc := acc.insert pins[i] rs
+    return acc
+  let meaningReadsOf : Std.HashMap Name (Array Name) := if further.isEmpty then {} else Id.run do
+    let tasks := pins.map fun p => Task.spawn fun _ => (env.find? p).map fun ci =>
+      (reads env table meaning ci.type.getUsedConstants).1.map (·.1)
     let mut acc := {}
     for h : i in [0:pins.size] do
       if let some rs := tasks[i]!.get then
@@ -1160,6 +1172,10 @@ unsafe def main (args : List String) : IO UInt32 := do
         ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
+  let pinned := (pins.zip pinned).map fun (p, (s, j)) =>
+    (s, match meaningReadsOf[p]? with
+      | some ns => j.setObjVal! "meaning_reads" (toJson (ns.map toString))
+      | none => j)
   lap "pins" pinned.size
   let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
   let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
