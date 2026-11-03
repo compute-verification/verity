@@ -83,9 +83,9 @@ theorem pr_not {β : Type} [Fintype β] [Nonempty β] (p : β → Prop) : Pr (fu
   rw [ex_congr (g := fun _ => (1 : ℝ)) fun a => by by_cases h : p a <;> simp [h]]
   exact Ex_const 1
 
-theorem pr_exists_pi {X : Type} [Fintype X] [Nonempty X] (m : ℕ) (A : X → Prop) :
-    Pr (fun y : Fin m → X => ∃ j, A (y j)) = 1 - (1 - Pr A) ^ m := by
-  have h1 : Pr (fun y : Fin m → X => ∃ j, A (y j)) = 1 - Pr (fun y : Fin m → X => ∀ j, ¬ A (y j)) := by
+theorem pr_exists_pi {Xp : Type} [Fintype Xp] [Nonempty Xp] (m : ℕ) (A : Xp → Prop) :
+    Pr (fun y : Fin m → Xp => ∃ j, A (y j)) = 1 - (1 - Pr A) ^ m := by
+  have h1 : Pr (fun y : Fin m → Xp => ∃ j, A (y j)) = 1 - Pr (fun y : Fin m → Xp => ∀ j, ¬ A (y j)) := by
     rw [← pr_not]
     exact Pr_congr fun y => by simp only [not_forall, not_not]
   rw [h1, Pr_pi m (fun x => ¬ A x), pr_not]
@@ -96,13 +96,13 @@ theorem one_sub_pow_le_exp {w : ℝ} (hw1 : w ≤ 1) (M : ℕ) : (1 - w) ^ M ≤
     _ = Real.exp (-(w * M)) := by rw [← Real.exp_nat_mul]; congr 1; ring
 
 /-- **`m` independent tries hit an event of probability `a`** with probability at least `1 − e^{−a m}`. -/
-theorem pr_exists_pi_ge {X : Type} [Fintype X] [Nonempty X] (m : ℕ) (A : X → Prop) :
-    1 - Real.exp (-(Pr A * m)) ≤ Pr (fun y : Fin m → X => ∃ j, A (y j)) := by
+theorem pr_exists_pi_ge {Xp : Type} [Fintype Xp] [Nonempty Xp] (m : ℕ) (A : Xp → Prop) :
+    1 - Real.exp (-(Pr A * m)) ≤ Pr (fun y : Fin m → Xp => ∃ j, A (y j)) := by
   rw [pr_exists_pi]
   linarith [one_sub_pow_le_exp (Pr_le_one A) m]
 
 /-- An average of an optional value's reading, by the value. -/
-theorem ex_elim {X Y : Type} [Fintype X] [Fintype Y] (g : X → Option Y) (F : Y → ℝ) :
+theorem ex_elim {Xp Yv : Type} [Fintype Xp] [Fintype Yv] (g : Xp → Option Yv) (F : Yv → ℝ) :
     Ex (fun x => (g x).elim 0 F) = ∑ y, Pr (fun x => g x = some y) * F y := by
   classical
   have hpt : ∀ x, (g x).elim 0 F = ∑ y, (if g x = some y then (1 : ℝ) else 0) * F y := by
@@ -114,7 +114,7 @@ theorem ex_elim {X Y : Type} [Fintype X] [Fintype Y] (g : X → Option Y) (F : Y
   refine Finset.sum_congr rfl fun y _ => ?_
   rw [ex_mul_const, ex_ind]
 
-theorem pr_ne_none {X Y : Type} [Fintype X] [Fintype Y] (g : X → Option Y) :
+theorem pr_ne_none {Xp Yv : Type} [Fintype Xp] [Fintype Yv] (g : Xp → Option Yv) :
     Pr (fun x => g x ≠ none) = ∑ y, Pr (fun x => g x = some y) := by
   classical
   have h := ex_elim g (fun _ => (1 : ℝ))
@@ -131,26 +131,26 @@ theorem pr_pos_witness {β : Type} [Fintype β] {p : β → Prop} (h : Pr p ≠ 
 /-- **The chase finds a hit**: where each first play `x` the rule `sel` picks at `(u, b)` is off at `b` (`hoff`), the
 off reading at `b` weighs at most the hit (`hmaj`), and the `M b` further plays at `b` carry the rate `β` at `b`'s
 weight (`hM`), some further play at the picked bit hits it with probability at least `(1 − e^{−β/2})` times a pick's. -/
-theorem chase_success {X ι B : Type} [Fintype X] [Nonempty X] [Fintype ι] [Fintype B] [DecidableEq B]
-    (sel : X → Option (ι × B)) (hit off : B → X → Prop) (M : B → ℕ) (β : ℝ)
+theorem chase_success {Xp ι B : Type} [Fintype Xp] [Nonempty Xp] [Fintype ι] [Fintype B] [DecidableEq B]
+    (sel : Xp → Option (ι × B)) (hit off : B → Xp → Prop) (M : B → ℕ) (β : ℝ)
     (hoff : ∀ x u b, sel x = some (u, b) → off b x) (hmaj : ∀ b, Pr (off b) ≤ Pr (hit b))
     (hM : ∀ b, 0 < Pr (hit b) + Pr (off b) → β ≤ (Pr (hit b) + Pr (off b)) * M b) :
     (1 - Real.exp (-(β / 2))) * Pr (fun x => sel x ≠ none) ≤
-      Pr (fun p : X × ((b : B) → Fin (M b) → X) => ∃ ub, sel p.1 = some ub ∧ ∃ j, hit ub.2 (p.2 ub.2 j)) := by
+      Pr (fun p : Xp × ((b : B) → Fin (M b) → Xp) => ∃ ub, sel p.1 = some ub ∧ ∃ j, hit ub.2 (p.2 ub.2 j)) := by
   classical
-  have hpt : ∀ x, (sel x).elim 0 (fun ub => Pr (fun y : Fin (M ub.2) → X => ∃ j, hit ub.2 (y j))) =
-      Pr (fun T : (b : B) → Fin (M b) → X => ∃ ub, sel x = some ub ∧ ∃ j, hit ub.2 (T ub.2 j)) := by
+  have hpt : ∀ x, (sel x).elim 0 (fun ub => Pr (fun y : Fin (M ub.2) → Xp => ∃ j, hit ub.2 (y j))) =
+      Pr (fun T : (b : B) → Fin (M b) → Xp => ∃ ub, sel x = some ub ∧ ∃ j, hit ub.2 (T ub.2 j)) := by
     intro x
     cases sel x with
     | none => simp [Pr_false]
     | some ub =>
-      have e : Pr (fun T : (b : B) → Fin (M b) → X => ∃ ub', some ub = some ub' ∧ ∃ j, hit ub'.2 (T ub'.2 j)) =
-          Pr (fun T : (b : B) → Fin (M b) → X => ∃ j, hit ub.2 (T ub.2 j)) :=
+      have e : Pr (fun T : (b : B) → Fin (M b) → Xp => ∃ ub', some ub = some ub' ∧ ∃ j, hit ub'.2 (T ub'.2 j)) =
+          Pr (fun T : (b : B) → Fin (M b) → Xp => ∃ j, hit ub.2 (T ub.2 j)) :=
         Pr_congr fun T => ⟨fun ⟨ub', h', hj⟩ => by cases h'; exact hj, fun hj => ⟨ub, rfl, hj⟩⟩
       rw [e]
-      exact (pr_pi_eval (Smp := fun b => Fin (M b) → X) ub.2 (fun y => ∃ j, hit ub.2 (y j))).symm
+      exact (pr_pi_eval (Smp := fun b => Fin (M b) → Xp) ub.2 (fun y => ∃ j, hit ub.2 (y j))).symm
   have hA : ∀ ub : ι × B, (1 - Real.exp (-(β / 2))) * Pr (fun x => sel x = some ub) ≤
-      Pr (fun x => sel x = some ub) * Pr (fun y : Fin (M ub.2) → X => ∃ j, hit ub.2 (y j)) := by
+      Pr (fun x => sel x = some ub) * Pr (fun y : Fin (M ub.2) → Xp => ∃ j, hit ub.2 (y j)) := by
     rintro ⟨u, b⟩
     by_cases hA0 : Pr (fun x => sel x = some (u, b)) = 0
     · rw [hA0]; simp
@@ -161,32 +161,32 @@ theorem chase_success {X ι B : Type} [Fintype X] [Nonempty X] [Fintype ι] [Fin
     have hw : β / 2 ≤ Pr (hit b) * M b := by linarith
     have h1 := pr_exists_pi_ge (M b) (hit b)
     have h2 : Real.exp (-(Pr (hit b) * M b)) ≤ Real.exp (-(β / 2)) := Real.exp_le_exp.2 (by linarith)
-    have hPge : 1 - Real.exp (-(β / 2)) ≤ Pr (fun y : Fin (M b) → X => ∃ j, hit b (y j)) := by linarith
+    have hPge : 1 - Real.exp (-(β / 2)) ≤ Pr (fun y : Fin (M b) → Xp => ∃ j, hit b (y j)) := by linarith
     rw [mul_comm]
     exact mul_le_mul_of_nonneg_left hPge (Pr_nonneg _)
   calc (1 - Real.exp (-(β / 2))) * Pr (fun x => sel x ≠ none)
       = ∑ ub, (1 - Real.exp (-(β / 2))) * Pr (fun x => sel x = some ub) := by
         rw [pr_ne_none, Finset.mul_sum]
-    _ ≤ ∑ ub, Pr (fun x => sel x = some ub) * Pr (fun y : Fin (M ub.2) → X => ∃ j, hit ub.2 (y j)) :=
+    _ ≤ ∑ ub, Pr (fun x => sel x = some ub) * Pr (fun y : Fin (M ub.2) → Xp => ∃ j, hit ub.2 (y j)) :=
         Finset.sum_le_sum fun ub _ => hA ub
-    _ = Ex (fun x => (sel x).elim 0 (fun ub => Pr (fun y : Fin (M ub.2) → X => ∃ j, hit ub.2 (y j)))) :=
+    _ = Ex (fun x => (sel x).elim 0 (fun ub => Pr (fun y : Fin (M ub.2) → Xp => ∃ j, hit ub.2 (y j)))) :=
         (ex_elim sel _).symm
-    _ = Ex (fun x => Pr (fun T : (b : B) → Fin (M b) → X => ∃ ub, sel x = some ub ∧ ∃ j, hit ub.2 (T ub.2 j))) :=
+    _ = Ex (fun x => Pr (fun T : (b : B) → Fin (M b) → Xp => ∃ ub, sel x = some ub ∧ ∃ j, hit ub.2 (T ub.2 j))) :=
         ex_congr hpt
-    _ = _ := pr_prod (fun x (T : (b : B) → Fin (M b) → X) => ∃ ub, sel x = some ub ∧ ∃ j, hit ub.2 (T ub.2 j))
+    _ = _ := pr_prod (fun x (T : (b : B) → Fin (M b) → Xp) => ∃ ub, sel x = some ub ∧ ∃ j, hit ub.2 (T ub.2 j))
 
 /-- **The chase's expected cost**: a first play, and where `sel` picks a unit `u` and a bit `b`, `M b` more, is at most
 `2 + β n` plays in expectation, `n` the units, where a pick draws its unit (`hdrawn`), a picked unit weighs at most its
 bit's `q` (`hq`) and `M b ≤ β / q b + 1` (`hM`). -/
-theorem chase_cost {X ι B : Type} [Fintype X] [Nonempty X] [Fintype ι] [Fintype B] [DecidableEq B]
-    (sel : X → Option (ι × B)) (drawn : ι → X → Prop) (q : B → ℝ) (M : B → ℕ) (β : ℝ) (pc : X → ℝ)
+theorem chase_cost {Xp ι B : Type} [Fintype Xp] [Nonempty Xp] [Fintype ι] [Fintype B] [DecidableEq B]
+    (sel : Xp → Option (ι × B)) (drawn : ι → Xp → Prop) (q : B → ℝ) (M : B → ℕ) (β : ℝ) (pc : Xp → ℝ)
     (hβ : 0 ≤ β) (hpc : ∀ x, 0 ≤ pc x) (hdrawn : ∀ x u b, sel x = some (u, b) → drawn u x)
     (hq : ∀ x u b, sel x = some (u, b) → Pr (drawn u) ≤ q b) (hM : ∀ b, (M b : ℝ) ≤ β / q b + 1) :
-    Ex (fun p : X × ((b : B) → Fin (M b) → X) => pc p.1 + (sel p.1).elim 0 (fun ub => ∑ j, pc (p.2 ub.2 j))) ≤
+    Ex (fun p : Xp × ((b : B) → Fin (M b) → Xp) => pc p.1 + (sel p.1).elim 0 (fun ub => ∑ j, pc (p.2 ub.2 j))) ≤
       (2 + β * Fintype.card ι) * Ex pc := by
   classical
   have hE0 : 0 ≤ Ex pc := Ex_nonneg hpc
-  have hrest : ∀ x, Ex (fun T : (b : B) → Fin (M b) → X => (sel x).elim 0 (fun ub => ∑ j, pc (T ub.2 j))) =
+  have hrest : ∀ x, Ex (fun T : (b : B) → Fin (M b) → Xp => (sel x).elim 0 (fun ub => ∑ j, pc (T ub.2 j))) =
       (sel x).elim 0 (fun ub => (M ub.2 : ℝ) * Ex pc) := by
     intro x
     cases sel x with
@@ -194,9 +194,9 @@ theorem chase_cost {X ι B : Type} [Fintype X] [Nonempty X] [Fintype ι] [Fintyp
     | some ub =>
       simp only [Option.elim]
       rw [ex_sum]
-      have h : ∀ j : Fin (M ub.2), Ex (fun T : (b : B) → Fin (M b) → X => pc (T ub.2 j)) = Ex pc := fun j => by
-        rw [ex_pi_eval (Smp := fun b => Fin (M b) → X) ub.2 (fun y => pc (y j))]
-        exact ex_pi_eval (Smp := fun _ : Fin (M ub.2) => X) j pc
+      have h : ∀ j : Fin (M ub.2), Ex (fun T : (b : B) → Fin (M b) → Xp => pc (T ub.2 j)) = Ex pc := fun j => by
+        rw [ex_pi_eval (Smp := fun b => Fin (M b) → Xp) ub.2 (fun y => pc (y j))]
+        exact ex_pi_eval (Smp := fun _ : Fin (M ub.2) => Xp) j pc
       rw [Finset.sum_congr rfl fun j _ => h j]
       simp
   have hterm : ∀ ub : ι × B, Pr (fun x => sel x = some ub) * (M ub.2 : ℝ) ≤
@@ -241,9 +241,9 @@ theorem chase_cost {X ι B : Type} [Fintype X] [Nonempty X] [Fintype ι] [Fintyp
       _ ≤ 1 + β * ∑ _u : ι, (1 : ℝ) :=
           add_le_add (Pr_le_one _) (mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun u _ => hU u) hβ)
       _ = 1 + β * Fintype.card ι := by simp
-  calc Ex (fun p : X × ((b : B) → Fin (M b) → X) => pc p.1 + (sel p.1).elim 0 (fun ub => ∑ j, pc (p.2 ub.2 j)))
+  calc Ex (fun p : Xp × ((b : B) → Fin (M b) → Xp) => pc p.1 + (sel p.1).elim 0 (fun ub => ∑ j, pc (p.2 ub.2 j)))
       = Ex pc + Ex (fun x => (sel x).elim 0 (fun ub => (M ub.2 : ℝ) * Ex pc)) := by
-        rw [Ex_add, ex_fst, ex_prod (fun x (T : (b : B) → Fin (M b) → X) =>
+        rw [Ex_add, ex_fst, ex_prod (fun x (T : (b : B) → Fin (M b) → Xp) =>
           (sel x).elim 0 (fun ub => ∑ j, pc (T ub.2 j))), ex_congr hrest]
     _ = Ex pc + (∑ ub, Pr (fun x => sel x = some ub) * (M ub.2 : ℝ)) * Ex pc := by
         rw [ex_elim, Finset.sum_mul]
@@ -262,6 +262,7 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
 /-! ## The chasing finder's plays -/
 
+open Classical in
 /-- **A play's witness** is the extractor's, at an accepted run, in the recursive relation. -/
 theorem playWit_some (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
@@ -276,6 +277,7 @@ theorem playWit_some (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array By
   · rw [if_neg hacc] at h
     cases h
 
+open Classical in
 theorem playWit_of (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     {ξ : S.Ξ} {s : q.Sample V S ξ} {wt : Claims.Flock.Wit}
@@ -297,7 +299,8 @@ theorem chaseSel_spec (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array B
       (readX (S.x ξ) wt b.1).getLsbD b.2 = !(q.extract V S readX b.1).getLsbD b.2 := by
   unfold Dep.chaseSel at h
   obtain ⟨wt, hw, hf⟩ := Option.bind_eq_some_iff.1 h
-  exact ⟨wt, hw, of_decide_eq_true (List.find?_some hf)⟩
+  have hp := List.find?_some hf
+  exact ⟨wt, hw, of_decide_eq_true hp⟩
 
 theorem chaseSel_off (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
@@ -405,9 +408,9 @@ theorem chaseM_rate (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byt
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
     (b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g))
     (hpos : 0 < q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false) :
-    chaseBeta (V.units θ F) ≤
+    Dep.chaseBeta (V.units θ F) ≤
       (q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false) * q.chaseM V S readX b := by
-  calc chaseBeta (V.units θ F)
+  calc Dep.chaseBeta (V.units θ F)
       ≤ (q.chaseM V S readX b : ℝ) * (q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false) :=
         (div_le_iff₀ hpos).1 (Nat.le_ceil _)
     _ = _ := mul_comm _ _
@@ -473,14 +476,15 @@ theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Ar
     (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
     (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl) :
     Ex (fun s => ((q.chaseAt V S readX collOf).cost s : ℝ)) ≤ q.chaseBudget V S nI dColl := by
-  have hβ0 : 0 ≤ chaseBeta (V.units θ F) := Real.sqrt_nonneg _
+  have hβ0 : 0 ≤ Dep.chaseBeta (V.units θ F) := Real.sqrt_nonneg _
   have hw0 : ∀ b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g),
-      0 ≤ q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false := fun b =>
-    add_nonneg (Ex_nonneg fun _ => Pr_nonneg _) (Ex_nonneg fun _ => Pr_nonneg _)
-  have hc := chase_cost (X := q.Play V S) (fun x => q.chaseSel V S readX x.1 (x.2 x.1))
+      0 ≤ q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false := fun b => by
+    rw [weight_eq, weight_eq]
+    exact add_nonneg (Ex_nonneg fun _ => Pr_nonneg _) (Ex_nonneg fun _ => Pr_nonneg _)
+  have hc := chase_cost (Xp := q.Play V S) (fun x => q.chaseSel V S readX x.1 (x.2 x.1))
     (fun u x => drawEvent q V S u x.1 (x.2 x.1))
     (fun b => q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false) (q.chaseM V S readX)
-    (chaseBeta (V.units θ F)) (fun x => (q.playCost V S x.1 (x.2 x.1) : ℝ)) hβ0 (fun _ => Nat.cast_nonneg _)
+    (Dep.chaseBeta (V.units θ F)) (fun x => (q.playCost V S x.1 (x.2 x.1) : ℝ)) hβ0 (fun _ => Nat.cast_nonneg _)
     (fun x u b h => chaseSel_drawn q V S readX h)
     (fun x u b h => (pr_table (Smp := q.Sample V S) fun ξ s => drawEvent q V S u ξ s).trans_le (by
       obtain ⟨wt, -, -, hg, -⟩ := chaseSel_spec q V S readX h
@@ -507,7 +511,7 @@ theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Ar
       Ex (fun ξ : S.Ξ => (q.playBudget V S nI ξ : ℝ)) :=
     (ex_table (Smp := q.Sample V S) fun ξ s => (q.playCost V S ξ s : ℝ)).trans_le
       (Ex_mono fun ξ => q.ex_playCost_le V S nI hn ξ)
-  have hb2 : 0 ≤ 2 + chaseBeta (V.units θ F) * V.units θ F :=
+  have hb2 : 0 ≤ 2 + Dep.chaseBeta (V.units θ F) * V.units θ F :=
     add_nonneg (by norm_num) (mul_nonneg hβ0 (Nat.cast_nonneg _))
   calc Ex (fun s => ((q.chaseAt V S readX collOf).cost s : ℝ))
       ≤ Ex (fun p : q.Play V S × q.ChasePlays V S readX =>
@@ -520,9 +524,9 @@ theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Ar
             (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
               (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ))) + dColl :=
         ex_add_const _ _
-    _ ≤ (2 + chaseBeta (V.units θ F) * V.units θ F) *
+    _ ≤ (2 + Dep.chaseBeta (V.units θ F) * V.units θ F) *
           Ex (fun x : q.Play V S => (q.playCost V S x.1 (x.2 x.1) : ℝ)) + dColl := add_le_add hc le_rfl
-    _ ≤ (2 + chaseBeta (V.units θ F) * V.units θ F) * Ex (fun ξ : S.Ξ => (q.playBudget V S nI ξ : ℝ)) + dColl :=
+    _ ≤ (2 + Dep.chaseBeta (V.units θ F) * V.units θ F) * Ex (fun ξ : S.Ξ => (q.playBudget V S nI ξ : ℝ)) + dColl :=
         add_le_add (mul_le_mul_of_nonneg_left hE hb2) le_rfl
     _ = q.chaseBudget V S nI dColl := rfl
 
@@ -544,25 +548,28 @@ theorem ex_off_le_chase (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
         Claims.Collision FlockDeploy.sha512 m m')
     (hchase : Claims.ExpectedCR FlockDeploy.sha512 (q.chaseAt V S readX collOf)) :
     Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
-      q.chaseBudget V S nI dColl / ((1 - Real.exp (-(chaseBeta (V.units θ F) / 2))) * 2 ^ (256 : ℝ)) := by
-  have hβ0 : 0 ≤ chaseBeta (V.units θ F) := Real.sqrt_nonneg _
+      q.chaseBudget V S nI dColl / ((1 - Real.exp (-(Dep.chaseBeta (V.units θ F) / 2))) * 2 ^ (256 : ℝ)) := by
+  have hβ0 : 0 ≤ Dep.chaseBeta (V.units θ F) := Real.sqrt_nonneg _
   have h256 : (0 : ℝ) < 2 ^ (256 : ℝ) := by positivity
-  have hden0 : 0 ≤ 1 - Real.exp (-(chaseBeta (V.units θ F) / 2)) := by
-    have h := Real.exp_le_exp.2 (show -(chaseBeta (V.units θ F) / 2) ≤ 0 by linarith)
+  have hden0 : 0 ≤ 1 - Real.exp (-(Dep.chaseBeta (V.units θ F) / 2)) := by
+    have h := Real.exp_le_exp.2 (show -(Dep.chaseBeta (V.units θ F) / 2) ≤ 0 by linarith)
     rw [Real.exp_zero] at h
     linarith
-  have hb2 : 0 ≤ 2 + chaseBeta (V.units θ F) * V.units θ F :=
+  have hb2 : 0 ≤ 2 + Dep.chaseBeta (V.units θ F) * V.units θ F :=
     add_nonneg (by norm_num) (mul_nonneg hβ0 (Nat.cast_nonneg _))
-  have hB0 : 0 ≤ q.chaseBudget V S nI dColl :=
-    add_nonneg (mul_nonneg hb2 (Ex_nonneg fun _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _)
+  have hB0 : 0 ≤ q.chaseBudget V S nI dColl := by
+    unfold Dep.chaseBudget
+    exact add_nonneg (mul_nonneg hb2 (Ex_nonneg fun _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _)
   rcases Nat.eq_zero_or_pos (V.units θ F) with h0 | hpos
-  · have hL : ∀ ξ, Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s) = 0 :=
-      fun ξ => (Claims.Pr_congr fun s => ⟨fun ⟨u, _⟩ => absurd u.isLt (by omega), False.elim⟩).trans Pr_false
+  · have hL : ∀ ξ, Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s) = 0 := by
+      intro ξ
+      refine (Claims.Pr_congr fun s => ?_).trans Pr_false
+      exact ⟨fun ⟨u, _⟩ => absurd u.isLt (by omega), False.elim⟩
     rw [ex_congr hL, Claims.Ex_const]
     exact div_nonneg hB0 (mul_nonneg hden0 h256.le)
-  have hβ : 0 < chaseBeta (V.units θ F) := Real.sqrt_pos.2 (div_pos (by norm_num) (by exact_mod_cast hpos))
-  have hden : 0 < 1 - Real.exp (-(chaseBeta (V.units θ F) / 2)) := by
-    have h := Real.exp_lt_exp.2 (show -(chaseBeta (V.units θ F) / 2) < 0 by linarith)
+  have hβ : 0 < Dep.chaseBeta (V.units θ F) := Real.sqrt_pos.2 (div_pos (by norm_num) (by exact_mod_cast hpos))
+  have hden : 0 < 1 - Real.exp (-(Dep.chaseBeta (V.units θ F) / 2)) := by
+    have h := Real.exp_lt_exp.2 (show -(Dep.chaseBeta (V.units θ F) / 2) < 0 by linarith)
     rw [Real.exp_zero] at h
     linarith
   have hoff : ∀ (x : q.Play V S) u b, q.chaseSel V S readX x.1 (x.2 x.1) = some (u, b) →
@@ -573,14 +580,14 @@ theorem ex_off_le_chase (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
       (pr_hit_eq q V S readX b).symm)
   have hM : ∀ b, 0 < Pr (fun x : q.Play V S => q.chaseHit V S readX b x ≠ none) +
         Pr (fun x : q.Play V S => bitEvent q V S readX b x.1 (x.2 x.1)) →
-      chaseBeta (V.units θ F) ≤ (Pr (fun x : q.Play V S => q.chaseHit V S readX b x ≠ none) +
+      Dep.chaseBeta (V.units θ F) ≤ (Pr (fun x : q.Play V S => q.chaseHit V S readX b x ≠ none) +
         Pr (fun x : q.Play V S => bitEvent q V S readX b x.1 (x.2 x.1))) * q.chaseM V S readX b := by
     intro b hp
     rw [hit_add_off q V S readX b] at hp ⊢
     exact chaseM_rate q V S readX b hp
   have hsucc := chase_success (fun x : q.Play V S => q.chaseSel V S readX x.1 (x.2 x.1))
     (fun b x => q.chaseHit V S readX b x ≠ none) (fun b x => bitEvent q V S readX b x.1 (x.2 x.1))
-    (q.chaseM V S readX) (chaseBeta (V.units θ F)) hoff hmaj hM
+    (q.chaseM V S readX) (Dep.chaseBeta (V.units θ F)) hoff hmaj hM
   have hfind : Pr (fun p : q.Play V S × q.ChasePlays V S readX =>
       ∃ ub, q.chaseSel V S readX p.1.1 (p.1.2 p.1.1) = some ub ∧
         ∃ j, q.chaseHit V S readX ub.2 (p.2 ub.2 j) ≠ none) ≤
@@ -592,7 +599,7 @@ theorem ex_off_le_chase (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
   have hP : Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
       Pr (fun x : q.Play V S => q.chaseSel V S readX x.1 (x.2 x.1) ≠ none) :=
     hP0.trans_eq (pr_table (Smp := q.Sample V S) fun ξ s => q.chaseSel V S readX ξ s ≠ none).symm
-  have h1 : (1 - Real.exp (-(chaseBeta (V.units θ F) / 2))) *
+  have h1 : (1 - Real.exp (-(Dep.chaseBeta (V.units θ F) / 2))) *
       Pr (fun x : q.Play V S => q.chaseSel V S readX x.1 (x.2 x.1) ≠ none) ≤
       q.chaseBudget V S nI dColl / 2 ^ (256 : ℝ) :=
     le_trans hsucc (le_trans hfind (le_trans hchase (div_le_div_of_nonneg_right
@@ -600,9 +607,9 @@ theorem ex_off_le_chase (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
   have h2 := (le_div_iff₀ h256).1 h1
   rw [le_div_iff₀ (mul_pos hden h256)]
   calc _ ≤ Pr (fun x : q.Play V S => q.chaseSel V S readX x.1 (x.2 x.1) ≠ none) *
-          ((1 - Real.exp (-(chaseBeta (V.units θ F) / 2))) * 2 ^ (256 : ℝ)) :=
+          ((1 - Real.exp (-(Dep.chaseBeta (V.units θ F) / 2))) * 2 ^ (256 : ℝ)) :=
         mul_le_mul_of_nonneg_right hP (mul_pos hden h256).le
-    _ = (1 - Real.exp (-(chaseBeta (V.units θ F) / 2))) *
+    _ = (1 - Real.exp (-(Dep.chaseBeta (V.units θ F) / 2))) *
           Pr (fun x : q.Play V S => q.chaseSel V S readX x.1 (x.2 x.1) ≠ none) * 2 ^ (256 : ℝ) := by ring
     _ ≤ q.chaseBudget V S nI dColl := h2
 
