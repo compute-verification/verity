@@ -166,7 +166,8 @@ console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`;
 where the row's trace has entries and an op log: Fit's c/(c − d) where it holds, else the measured max where it
 exceeds 1, partial where a kind is unmeasured, else null where a kind is unmeasured, else 1, binding none; else
 reading B's, a target), the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds` (the terms its max takes
-and the sensitivities it leaves out). Its coverage
+and the sensitivities it leaves out, a measured fresh-products term with its premises, P-width and P-chain, beside
+it). Its coverage
 (gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
 default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). A row `published` marks partial (a valid
