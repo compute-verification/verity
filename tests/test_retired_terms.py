@@ -183,7 +183,6 @@ PENDING: dict[str, str] = {
     "Security/Proofs/Flock/Soundness/Audit/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/bandwidth/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/network_sim/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md": "a queued PR on next rewrites the lines that name "
                                                                             "the coin server; the rename follows it",
     "Security/Proofs/Flock/C3/README.md": "a queued PR on next rewrites the lines that name the coin server; the rename "
