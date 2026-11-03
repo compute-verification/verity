@@ -15,8 +15,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    TE40_WT's traces with the new capture's over them, on that checkout where TE40_WT's capture is READS_SINCE's or
    later, else on LAST's re-score commit; then TE40_WT moves to it.
 2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too under CAPTURE_FINAL's capture or with
-   TE_TRACE_PILOT=1) traced, measured and ingested again in shards of TRACE_SHARD runs over the CPU pool (`research
-   run --on auto`), at most TRACE_MAX_SHARDS a refresh, the runs traced at earlier refreshes kept.
+   TE_TRACE_PILOT=1) traced, measured and ingested again in shards of TRACE_SHARD runs over TRACE_POOLS' free slots,
+   a long-tier record in its tier's layer (TIER_FROM), the runs traced at earlier refreshes kept.
 3. Runs its `python -m te_core.rescore` on that ledger at PINS: per checkpoint of every valid record, v3's and the
    pilot's, measured, formalism v2's quantities measured on its traced step (t literal), Fit per kind of block and rho
    (c/(c - d) where every part fits, else Slowdown's bound, a target) on te_core.policy's (c, k) grid with the frozen
@@ -39,6 +39,7 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
 per-run P4 (final and search) for final.md, and posts FINAL-TABLE instead of DIGEST.
 """
 import argparse
+import collections
 import json
 import math
 import os
@@ -47,6 +48,7 @@ import shutil
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -76,20 +78,25 @@ CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"), ("4.8"
 #: 4.12.1's stores everything 4.12.x reads, each row's fed, P and gathered and the rows at each k of the console's dial
 #: (the toolsmith's 16:34Z line): an older trace's fresh-products term is unmeasured (formalism.FRESH_RETRACE)
 CAPTURE_FINAL = "4.12.1"
-#: where node traces run, and the node's pool a shard asks for: vy-nebius-cpu-9's research pool (infra and the
-#: coordinator 15:08Z: `--on auto` misplaces runs until #7113 lands; auto spread shards over the CPU pool, 07:48Z)
-TRACE_NODE = os.environ.get("TE_TRACE_NODE", "vy-nebius-cpu-9")
-TRACE_POOL = os.environ.get("TE_TRACE_POOL", "research")
+#: the (machine, pool, cap) node traces go to, each pool's research slots any lane's (auto.py's SPILL, and cpu-9's):
+#: a shard takes a slot free there now past its waiters (`pool_room`), at most `cap` shards in flight there across every
+#: layer's cache, half the pool's slots, so the rest stays other lanes'. Named machines, never `--on auto`, which
+#: misplaces runs until #7113 lands (coordinator 15:08Z); not only cpu-9, where they waited 19th in line (17:5xZ).
+#: TE_TRACE_POOLS overrides it: MACHINE:POOL:CAP,...
+TRACE_POOLS = [(m, p, int(c)) for m, p, c in (x.split(":") for x in os.environ.get(
+    "TE_TRACE_POOLS", "vy-nebius-cpu-5:research:6,vy-nebius-cpu-6:research:4,vy-nebius-cpu-9:research:4,"
+    "vy-nebius-cpu-1:research:10,vy-nebius-cpu-3:research:4,vy-nebius-cpu-2:research:2").split(","))]
 #: the lane a pool slot names (`research run --pool` refuses a run without one)
 TRACE_LANE = os.environ.get("RESEARCH_LANE", "te-scorer")
 TRACE_SHARD = 6
-#: the most shards a refresh launches, so the pool (about 27 free slots at 08:50Z) keeps room for other lanes' runs;
-#: the next refresh launches the rest, v3's first
-TRACE_MAX_SHARDS = 30
-#: on a named machine's pool, the most shards in flight there at once across every capture's cache, so the rest of
-#: the pool's line stays other lanes' (infra 15:08Z: vy-nebius-cpu-9's research pool had 8 free); ON_POOL names them
-TRACE_POOL_SHARDS = int(os.environ.get("TE_TRACE_POOL_SHARDS", "8"))
+#: each node run in flight and the machine it went to ({run: machine}; a list, before TRACE_POOLS, was cpu-9's)
 ON_POOL = trace40.STATE / "trace40" / "on-pool.json"
+#: budget tiers whose records a capture replays at their own tier only from this te_core on (4.12.3's
+#: `capture.script.tier_of` sets CW_TIER from run.json's evaluation.budget.tier; 4.12.1's sets none, so a long-tier
+#: record replays at the search tier and refuses at step 0 or ends before its traced step, coordinator 17:5xZ). An
+#: older layer traces none of them; its tier's layer (NEXT_WT-VERSION-TIER, `tier_layer`) traces only them, scored over
+#: the layer whose capture it shares
+TIER_FROM = {"long": "4.12.3"}
 #: a shard's custody key lifetime: `--on auto` adds its 4 h queue wait to the 150 min timeout (23,400 s), past the
 #: default key's 6 h, so `research run` refuses the launch without it
 TRACE_CUSTODY_TTL = "8h"
@@ -202,13 +209,36 @@ def same_capture(a: str, b: str) -> bool:
 FIX = "-fix"
 
 
+def layer_tier(te: Path) -> str | None:
+    """The tier whose records `te` alone traces (NEXT_WT-VERSION-TIER, TIER_FROM), None for a capture's own layer."""
+    return next((t for t in TIER_FROM if te.name.endswith(f"-{t}")), None)
+
+
 def layers() -> list[Path]:
-    """The captures newer than TE40_WT's, oldest first, a fix layer over the layer it fixes: NEXT_WT, NEXT_WT-VERSION
-    (`next_capture`) and NEXT_WT-VERSION-fix (`FIX`)."""
+    """The captures newer than TE40_WT's, oldest first, a fix layer over the layer it fixes and a tier's layer over the
+    layer whose capture it shares: NEXT_WT, NEXT_WT-VERSION (`next_capture`), NEXT_WT-VERSION-fix (`FIX`) and
+    NEXT_WT-VERSION-TIER (`tier_layer`)."""
     have = capture_version(trace40.TE40_WT)
     got = [p for p in (NEXT_WT, *NEXT_WT.parent.glob(NEXT_WT.name + "-*")) if p.exists()]
     return sorted((p for p in got if version(capture_version(p)) > version(have)
-                   and not same_capture(capture_version(p), have)), key=lambda p: version(capture_version(p)))
+                   and (layer_tier(p) or not same_capture(capture_version(p), have))),
+                  key=lambda p: version(capture_version(p)))
+
+
+def tier_layer(tier: str, top: Path, newest: str) -> Path | None:
+    """The layer that traces `tier`'s records over `top`, the layer that traces the rest: the newest
+    NEXT_WT-VERSION-TIER whose capture is top's, else one made at the integrator's newest te_core, if that is at or after
+    TIER_FROM's and captures as top does; None before then. Like `next_capture`'s, it stays at its first commit (its
+    cache is per te_core tree) and has no files."""
+    have = [p for p in layers() if layer_tier(p) == tier and same_capture(capture_version(p), capture_version(top))]
+    if have:
+        return have[-1]
+    want = te_version(newest)
+    if version(want) < version(TIER_FROM[tier]) or not same_capture(want, capture_version(top)):
+        return None
+    new = NEXT_WT.with_name(f"{NEXT_WT.name}-{want}-{tier}")
+    git("worktree", "add", "-q", "--no-checkout", "--detach", str(new), newest, cwd=trace40.REPO)
+    return new
 
 
 def next_capture(newest: str) -> Path | None:
@@ -223,7 +253,7 @@ def next_capture(newest: str) -> Path | None:
     if not NEXT_WT.exists():
         git("worktree", "add", "-q", "--no-checkout", "--detach", str(NEXT_WT), newest, cwd=trace40.REPO)
         return NEXT_WT
-    top = ([p for p in layers() if not p.name.endswith(FIX)] or [NEXT_WT])[-1]
+    top = ([p for p in layers() if not p.name.endswith(FIX) and not layer_tier(p)] or [NEXT_WT])[-1]
     if same_capture(capture_version(top), want):
         return top
     c = trace40.cache(top)
@@ -250,18 +280,20 @@ def covered(te: Path) -> tuple[int, int, int]:
     return len(want), len(want & trace40.done(c)), sum(not (new.get(k) or {"error": 1}).get("error") for k in want)
 
 
-def traced_runs(te: Path) -> tuple[int, int]:
-    """(the runs in scope `te`'s capture traced, those of v3's)."""
-    f = trace40.cache(te) / "traced.json"
-    ok = {k for k, v in (json.loads(f.read_text()) if f.exists() else {}).items() if not v.get("error")}
+def traced_runs(te: Path, *more: Path) -> tuple[int, int]:
+    """(the runs in scope `te`'s capture, or a layer of `more`, traced, those of v3's)."""
+    ok = set()
+    for t in (te, *more):
+        f = trace40.cache(t) / "traced.json"
+        ok |= {k for k, v in (json.loads(f.read_text()) if f.exists() else {}).items() if not v.get("error")}
     return len(ok & {r["run_id"] for r in trace40.scope()}), len(ok & v3_scope())
 
 
-def replaces(new: Path) -> bool:
-    """Whether the capture `new` replaces TE40_WT's: it traced at least as many of the runs in scope and of v3's, so
-    neither the pilot nor v3 loses a row by the switch (every row traced before a capture is refused under its
-    te_core). A v3 scope that grows with each launch never waits on its last run."""
-    return all(a >= b for a, b in zip(traced_runs(new), traced_runs(trace40.TE40_WT)))
+def replaces(new: Path, tiered: list[Path] = ()) -> bool:
+    """Whether the capture `new` replaces TE40_WT's: it, with its tiers' layers (`tier_layer`), traced at least as many
+    of the runs in scope and of v3's, so neither the pilot nor v3 loses a row by the switch (every row traced before a
+    capture is refused under its te_core). A v3 scope that grows with each launch never waits on its last run."""
+    return all(a >= b for a, b in zip(traced_runs(new, *tiered), traced_runs(trace40.TE40_WT)))
 
 
 def retrace_order(v3: set[str]) -> dict[str, int]:
@@ -298,14 +330,32 @@ def retrace_order(v3: set[str]) -> dict[str, int]:
     return {}
 
 
-def to_trace(te: Path, busy: set[str]) -> list[str]:
-    """The runs in scope with no trace in `te`'s cache and no node run tracing them, v3's first (`retrace_order`),
-    then the pilot's under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set."""
+def run_tiers() -> dict[str, str | None]:
+    """Each run's budget tier, as its ledger rows carry it (`budget.tier`: run.json's evaluation.budget.tier, which
+    te_core's capture reads, for all 574 runs in scope at 18:00Z)."""
+    out = {}
+    for line in (trace40.LEDGER / "index.jsonl").open():
+        x = json.loads(line)
+        if x.get("run_id") and x["run_id"] not in out:
+            out[x["run_id"]] = (x.get("budget") or {}).get("tier")
+    return out
+
+
+def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
+    """The runs in scope with no trace in `te`'s cache and no node run tracing them, each with its rank: v3's first
+    (`retrace_order`), then the pilot's under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set. A tier's layer
+    takes only that tier's records, and a layer before TIER_FROM's none of them."""
     v3, done = v3_scope(), trace40.done(trace40.cache(te)) | busy
     pilot = os.environ.get("TE_TRACE_PILOT") == "1" or same_capture(capture_version(te), CAPTURE_FINAL)
-    runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)]
+    tier, tiers, at = layer_tier(te), run_tiers(), version(capture_version(te))
+
+    def here(run: str) -> bool:
+        t = tiers.get(run)
+        return t == tier if tier else not (t in TIER_FROM and at < version(TIER_FROM[t]))
+    runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)
+            and here(r["run_id"])]
     first = retrace_order(v3)
-    return sorted(runs, key=lambda r: (r not in v3, first.get(r, 2)))
+    return sorted(((2 * (r not in v3) + first.get(r, 2), r) for r in runs), key=lambda x: x[0])
 
 
 def ledger_args(out: Path, root: Path | None = None) -> list[str]:
@@ -333,11 +383,61 @@ def trace_resources(runs: int) -> tuple[int, int]:
     return workers, min(200, 12 + 4 * workers)
 
 
-def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, build: bool = True,
-                    over: list[Path] = ()) -> dict:
+def on_pool() -> dict[str, str]:
+    """ON_POOL's node runs still pending in some layer's cache, each with its machine."""
+    x = json.loads(ON_POOL.read_text()) if ON_POOL.exists() else {}
+    x = x if isinstance(x, dict) else {r: "vy-nebius-cpu-9" for r in x}
+    flying = {r for f in ON_POOL.parent.glob("*/pending.json") for r in json.loads(f.read_text())}
+    return {r: m for r, m in x.items() if r in flying}
+
+
+def pool_room() -> tuple[list[tuple[str, str]], dict[str, str]]:
+    """A (machine, pool) per shard that may launch now, in TRACE_POOLS' order: each pool's free slots that fit a shard,
+    past its waiters (auto.py's read of `slot.py --status --json` over the ssh `research run --on` uses), at most its
+    cap less the shards in flight there (`on_pool`); a pool that can't be read takes none. Also what each pool said."""
+    from research import auto
+    workers, gb = trace_resources(TRACE_SHARD)
+    flying = collections.Counter(on_pool().values())
+
+    def one(item: tuple[str, str, int]) -> tuple[int, str]:
+        m, p, _ = item
+        try:
+            r = auto._ssh(auto._reach(m), auto.payload(HERE.parents[2], workers, None, [p]))
+            _, free, waiting, why = auto._pool(json.loads(r.stdout).get(p), workers, gb)
+        except Exception as e:  # noqa: BLE001 - a pool that can't be read takes no shard, whatever stopped the read
+            return 0, f"not read: {str(e)[:120] or type(e).__name__}"
+        return max(0, free - waiting), why
+    with ThreadPoolExecutor(max_workers=len(TRACE_POOLS)) as ex:
+        seen = list(ex.map(one, TRACE_POOLS))
+    slots, said = [], {}
+    for (m, p, cap), (room, why) in zip(TRACE_POOLS, seen):
+        n = min(room, max(0, cap - flying[m]))
+        slots += [(m, p)] * n
+        said[m] = f"{why}; {flying[m]} of ours in flight, cap {cap}, {n} launched"
+    return slots, said
+
+
+def plan(tes: list[Path], slots: list[tuple[str, str]]) -> dict[Path, list[tuple[list[str], str, str]]]:
+    """Each launching layer's shards, each with the slot it takes, as many as there are `slots`: every layer's runs to
+    trace (`to_trace`) in shards of TRACE_SHARD in its own order, the shards taken in retrace order across layers (by
+    their runs' ranks, then the layer's place in `tes`)."""
+    shards = []
+    for i, te in enumerate(tes):
+        pf = trace40.cache(te) / "pending.json"
+        todo = to_trace(te, {r for runs in (json.loads(pf.read_text()) if pf.exists() else {}).values() for r in runs})
+        shards += [(tuple(k for k, _ in todo[j:j + TRACE_SHARD]), i, j, te, [r for _, r in todo[j:j + TRACE_SHARD]])
+                   for j in range(0, len(todo), TRACE_SHARD)]
+    out = {te: [] for te in tes}
+    for (*_, te, runs), slot in zip(sorted(shards, key=lambda s: s[:3]), slots):
+        out[te].append((runs, *slot))
+    return out
+
+
+def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te: Path = trace40.TE40_WT,
+                    build: bool = True, over: list[Path] = (), wait: bool = True) -> dict:
     """trace40.py's measured ledger: the scorer's ledger indexed (rescore reads the measured copy, so nothing else
-    rewrites the index), the valid runs with no trace yet in `te`'s cache and no node run tracing them launched on
-    TRACE_NODE, every node run (this one and earlier refreshes') waited for up to TRACE_WAIT_S and taken as it ends (one
+    rewrites the index), each of `shards` (runs, machine, pool; `plan`) packed from `te`'s cache and launched in its
+    pool, every node run (this one and earlier refreshes') taken as it ends, waited for up to TRACE_WAIT_S (`wait`; one
     still tracing is taken at a later refresh), and the copy built (`build`), with the runs each capture of `over`
     (oldest first) traced taken from there (trace40.ledger)."""
     cw = [sys.executable, str(HERE / "trace40.py")]
@@ -366,14 +466,10 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
 
     # the ended node runs taken first, so the runs they failed (under an older CODE) are traced again in this one
     settle()
-    on_pool = json.loads(ON_POOL.read_text()) if ON_POOL.exists() else []
-    flying = set(on_pool) & {run for f in ON_POOL.parent.glob("*/pending.json") for run in
-                             (pending if f == pf else json.loads(f.read_text()))}
-    cap = max(0, TRACE_POOL_SHARDS - len(flying)) if TRACE_POOL and TRACE_NODE != "auto" else TRACE_MAX_SHARDS
-    todo = to_trace(te, {r for runs in pending.values() for r in runs})[:TRACE_SHARD * cap] if launch else []
-    packed = {"runs": len(todo)}
-    for i in range(0, len(todo), TRACE_SHARD):
-        shard, pack = todo[i:i + TRACE_SHARD], out / f"trace40-pack-{i // TRACE_SHARD}.tar"
+    pf.write_text(json.dumps(pending, indent=1))
+    packed = {"runs": sum(len(s[0]) for s in shards)}
+    for i, (shard, machine, pool) in enumerate(shards):
+        pack = out / f"trace40-pack-{i}.tar"
         p = subprocess.run([*cw, "pack", "--out", str(pack), "--te", str(te), "--only", ",".join(shard)],
                            capture_output=True, text=True, check=False)
         if p.returncode:
@@ -382,28 +478,26 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
         workers, gb = trace_resources(len(runs))
-        r = subprocess.run(["research", "run", "--on", TRACE_NODE, *(["--pool", TRACE_POOL, "--as", TRACE_LANE] if TRACE_POOL else []),
+        # the pool slot's cores are the run's, so no --cpus
+        r = subprocess.run(["research", "run", "--on", machine, "--pool", pool, "--as", TRACE_LANE,
                             "--project", "verity", "--source", str(HERE.parents[2]),
-                            "--cwd", "source", "--send", str(pack),
-                            # on a named machine the pool slot's cores are the run's, and --cpus is the queue's
-                            *(["--cpus", str(workers)] if TRACE_NODE == "auto" else []), "--mem-gb", str(gb),
+                            "--cwd", "source", "--send", str(pack), "--mem-gb", str(gb),
                             "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL, "--",
                             "bash", "benchmarks/covert_witness/scorer/job40.sh"],
                            capture_output=True, text=True, check=False, env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
         said = r.stdout + r.stderr
         run = next((w for w in said.split() if w.startswith("r20") and w.count("-") == 2), None)
-        log.setdefault("launch", []).append(said.strip().splitlines()[-1:])
+        log.setdefault("launch", []).append([machine, *said.strip().splitlines()[-1:]])
         # a refused launch traces nothing, so its runs stay out of pending and the next refresh packs them again
         if run and not r.returncode and " refused" not in said:
             pending[run] = runs
-            if TRACE_POOL:
-                on_pool = [*(x for x in on_pool if x in flying), run]
-                flying.add(run)
-                ON_POOL.write_text(json.dumps(on_pool, indent=1))
+            # written at once, so the next launch (this layer's or another's) counts it in flight
+            pf.write_text(json.dumps(pending, indent=1))
+            ON_POOL.write_text(json.dumps(on_pool() | {run: machine}, indent=1))
         else:
             log.setdefault("launch_refused", []).append(run)
         pack.unlink(missing_ok=True)
-    while launch and pending and time.monotonic() < deadline:
+    while wait and pending and time.monotonic() < deadline:
         time.sleep(60)
         settle()
     pf.write_text(json.dumps(pending, indent=1))
@@ -634,16 +728,30 @@ def main() -> int:
     os.environ["TE_PIN_REV"] = commit
     PINS[:] = trace40.pins(commit)
     nxt, retrace, held = (None, None, {}) if final else (next_capture(newest), None, {})
+    top = nxt or trace40.TE40_WT
+    tiered = [] if final else [p for p in (tier_layer(t, top, newest) for t in TIER_FROM) if p]
+    shards, pools, tiers = {}, {}, {}
+    if not final and not args.no_trace:
+        # the launching layers' ended node runs taken first, so the runs they failed (under an older CODE) are
+        # planned again in this refresh
+        for te in (*tiered, top):
+            measured_ledger(out / f"settle-{te.name}", (), te, build=False, wait=False)
+        slots, pools = pool_room()
+        shards = plan([*tiered, top], slots)
+    for te in tiered:
+        tiers[layer_tier(te)] = measured_ledger(out / f"tier-{te.name}", shards.get(te, []), te, build=False,
+                                                wait=False) | {"te_core": capture_version(te),
+                                                               "commit": git("rev-parse", "HEAD", cwd=te)}
     if nxt:
         # an older layer launches nothing, and its node runs are taken as they end
-        held = {capture_version(h): measured_ledger(out / f"held-{capture_version(h)}", False, h, build=False)
-                for h in layers() if h != nxt}
+        held = {capture_version(h): measured_ledger(out / f"held-{capture_version(h)}", (), h, build=False, wait=False)
+                for h in layers() if h != nxt and h not in tiered}
         # a row traced under a capture before READS_SINCE's is refused under a later te_core, so over such a capture
         # the refresh scores on the last re-score until the new capture's traces replace it
-        retrace = measured_ledger(out / "next-capture", not args.no_trace, nxt, build=False)
+        retrace = measured_ledger(out / "next-capture", shards.get(nxt, []), nxt, build=False, wait=not args.no_trace)
         retrace |= dict(zip(("of", "covered", "traced"), covered(nxt)), te_core=te_version(newest),
                         commit=git("rev-parse", "HEAD", cwd=nxt))
-        if replaces(nxt) or not LAST.exists():
+        if replaces(nxt, tiered) or not LAST.exists():
             git("checkout", "-q", "--detach", retrace["commit"], cwd=trace40.TE40_WT)
             nxt, retrace, held = None, None, {}
         elif version(capture_version(trace40.TE40_WT)) < version(READS_SINCE):
@@ -657,10 +765,16 @@ def main() -> int:
         LAST.write_text(json.dumps({"commit": commit, "te_core": te_version(commit), "stamp": stamp}) + "\n")
     trace_version = capture_version(trace40.TE40_WT)
     # the runs each newer capture has traced are scored on its traces already, where the re-score's te_core reads them
-    over = [p for p in layers() if version(capture_version(p)) <= version(te_version(commit))] if nxt else []
+    over = [p for p in layers() if (nxt or p in tiered) and version(capture_version(p)) <= version(te_version(commit))]
     rs = out / "rescore"
-    traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace and not nxt, over=over),
-                                               trace40.MEASURED)
+    # the tiers' node runs that ended during the wait taken too
+    for te in tiered:
+        t, again = tiers[layer_tier(te)], measured_ledger(out / f"tier-{te.name}", (), te, build=False, wait=False)
+        tiers[layer_tier(te)] = (t | {k: v for k, v in again.items() if k not in ("took", "packed")}
+                                 | {"took": t["took"] + again["took"]})
+    traced, root = (None, None) if final else (
+        measured_ledger(out, shards.get(trace40.TE40_WT, []), over=over, wait=not args.no_trace and not nxt),
+        trace40.MEASURED)
     last = rescore(rs, args.gates, final, root)
     policy = {} if final else policy_panels(out, commit, not args.no_put, root)
     retired = not final and fb_retired(out, policy)
@@ -708,6 +822,10 @@ def main() -> int:
             meta["algorithm_policy_cells"]["rho_console"] = "rho_console" in q["columns"]
     if retrace:
         meta["next_capture"] = retrace
+    if tiers:
+        meta["tiers"] = tiers
+    if pools:
+        meta["pools"] = pools
     if held:
         meta["held"] = held
     if traced:
@@ -879,7 +997,7 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                 f"{REFERENCE}: " + "; ".join(parts) + f". {fb}; nothing else PUT. art: {arts}.")
     tr = meta["trace"]
     tracing = sum(tr["tracing"].values())
-    where = "the CPU pool" if TRACE_NODE == "auto" else TRACE_NODE
+    where = "the research pools of " + ", ".join(sorted({m.removeprefix("vy-nebius-") for m, _, _ in TRACE_POOLS}))
     refused = tr["ledger"].get("refused_runs") or []
     nx = meta.get("next_capture")
     nx_refused = len(nx.get("launch_refused") or []) if nx else 0
