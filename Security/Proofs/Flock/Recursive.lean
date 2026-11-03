@@ -73,6 +73,7 @@ import Proofs.Flock.Recursive.KSLinked
 import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.LamDeployedTight
 import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+import Proofs.Flock.Claims.Recursion.KappaEpsCap
 import Proofs.Flock.Recursive.BitsK
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
