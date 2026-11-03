@@ -17,6 +17,9 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
   (`Session.State.sendHello`: no `Hello` leaves).
 * `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
   (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
+* `Loop.SwOk T`: the coin vectors with no zerocheck outer coin `1` at a `Live` statement the loop serves, or that every
+  table admits, where `RefSession.SwCausalOn` asks the switched round encoding to be causal; `SwCausal` gives it there
+  (`Loop.swCausalOn_swOk`).
 * `LeanRelease.ofLoop_progChecks_sizes`: `ofLoop_progChecks` with its size premises (`hS`, `hP`, `hRow`) from that check.
 * **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
   with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
@@ -98,6 +101,30 @@ theorem linkPoints_size_le (st : Stmt) (c : Array F128) :
   unfold _root_.Flock.Firewall.Drive.linkPoints
   rw [Array.size_map, Array.size_range]
   exact Nat.div_le_self _ _
+
+/-- **The coin vectors the one-tape switched causality covers** (`RefSession.SwCausalOn`): at a `Live` statement the
+loop serves, no table's rep's zerocheck outer coin is `1`; or every table admits them. -/
+def SwOk (T : ZKMal.CoinLayer.TableData) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) : Prop :=
+  (Masked.Live x → Serves x → ∀ j < (Masked.stsOf x).size, ∀ r < 2, ∀ e < (Masked.stsOf x)[j]!.m - 13,
+      Masked.outerAt c j r e ≠ 1) ∨
+    (ZKMal.CoinLayer.session loopNr T).Admits x c
+
+/-- Coin vectors every table admits are `SwOk`'s. -/
+theorem swOk_of_admits (T : ZKMal.CoinLayer.TableData) {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
+    (h : (ZKMal.CoinLayer.session loopNr T).Admits x c) : SwOk T x c :=
+  .inr h
+
+/-- Where the statement is not `Live` or the loop doesn't serve it, every coin vector is `SwOk`'s, so `SwCausalOn` at
+`SwOk` is one-tape `SwCausal` there. -/
+theorem swOk_of_not_served (T : ZKMal.CoinLayer.TableData) {x : Msg} (h : ¬ (Masked.Live x ∧ Serves x))
+    (c : Fin (refK x) → FlockDeploy.Coin) : SwOk T x c :=
+  .inl fun hx hS => absurd ⟨hx, hS⟩ h
+
+/-- **`SwCausal vs` gives `SwCausalOn (SwOk T) vs`**: the restricted premise asks for less. -/
+theorem swCausalOn_swOk (T : ZKMal.CoinLayer.TableData) (vs : (ZKMal.CoinLayer.session loopNr T).SwVals)
+    (h : (ZKMal.CoinLayer.session loopNr T).SwCausal vs) :
+    (ZKMal.CoinLayer.session loopNr T).SwCausalOn (SwOk T) vs :=
+  (ZKMal.CoinLayer.session loopNr T).swCausalOn_of_swCausal vs _ h
 
 end Loop
 
