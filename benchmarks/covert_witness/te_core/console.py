@@ -143,7 +143,11 @@ CUTS = {
     "p3-policy-plane": [
         ("", None, (), None),
         (" Here -1% only.", ref, (), None),
-        (" Here -1% only, no record, g, k_bytes or p (= S/rho).", ref, ("record", "g", "k_bytes", "p"), None)],
+        (" Here -1% only, no record, g, k_bytes or p (= S/rho).", ref, ("record", "g", "k_bytes", "p"), None),
+        (" Here -1% only, no record, g, k_bytes, p (= S/rho) or checkpoint.", ref,
+         ("record", "g", "k_bytes", "p", "checkpoint"), None),
+        (" Here -1% only, no record, g, k_bytes, p (= S/rho), checkpoint, method or c in tokens.", ref,
+         ("record", "g", "k_bytes", "p", "checkpoint", "method", "c_tokens_per_block"), None)],
     "p4-decomposition": [
         ("", None, (), None),
         (" Per start and target, the (p, s) front only.", None, (), front("p", "s"))],
