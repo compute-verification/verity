@@ -10,7 +10,8 @@ Without them, `--blocks`/`--parts`/`--final` name the full set. The first update
 upstream, so it is never deep: `--full t0.w_gate,t0.w_up,final` has φ = 0 and depth 0, and `--full t1.w_gate,t1.w_up
 --adapt t1.w_down,t0.* --lora 4` keeps every later update low-rank.
 
-How: AdamW or Muon (`--opt`) on full matrices, AdamW on gains and factors. E (`--store`): `fp32` every changed tensor
+How: AdamW or Muon (`--opt`) on full matrices, AdamW on factors, and AdamW or SGD with one fp32 momentum buffer
+(`--gain-opt sgd`, a third of AdamW's state with the gradient) on gains. E (`--store`): `fp32` every changed tensor
 in θ's dtype, adapters merged (`prepare.encode_full`); `bf16` factors and full tensors in bf16 (the lora format; the
 bf16-autocast forward already multiplies at bf16); `svd:R` each full matrix's delta truncated to rank R as bf16 factors;
 `qB` or `qB:G` each tensor's delta from θ as a CWQUAN1 delta (`prepare.encode_quant`): B-bit round-to-nearest codes into
@@ -186,9 +187,10 @@ CHECKPOINTS = 20
 ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": float, "ema": float, "schedule": str,
             "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
             "data_seed": int, "seed": int, "share": float, "full": str, "store": str, "mom_dtype": str,
-            "grad_dtype": str, "mom_fold": lambda v: v.lower() in ("1", "true", "on", "yes")}
+            "grad_dtype": str, "mom_fold": lambda v: v.lower() in ("1", "true", "on", "yes"), "gain_opt": str,
+            "gain_momentum": float}
 ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd"), "mom_dtype": ("fp32", "bf16"),
-               "grad_dtype": ("fp32", "bf16")}
+               "grad_dtype": ("fp32", "bf16"), "gain_opt": ("adamw", "sgd")}
 DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16}
 BITS = {"fp32": 32, "bf16": 16}
 
@@ -234,6 +236,9 @@ def main() -> int:
                     help="the gradient as accumulated and passed (bf16: rounded after every micro-batch's backward)")
     ap.add_argument("--mom-fold", action=argparse.BooleanOptionalAction, default=False,
                     help="Muon as heavy-ball momentum with the gradient summed straight into its --mom-dtype buffer")
+    ap.add_argument("--gain-opt", choices=("adamw", "sgd"), default="adamw",
+                    help="the gains' optimizer: AdamW, or SGD with one fp32 momentum buffer (--gain-momentum)")
+    ap.add_argument("--gain-momentum", type=float, default=0.9)
     ap.add_argument("--wd", type=float, default=0.0)
     ap.add_argument("--lora", type=int, default=0, help="rank of the --adapt factors (alone: every tuned matrix)")
     ap.add_argument("--lora-lr", type=float, default=1e-3)
@@ -351,8 +356,9 @@ def main() -> int:
             opts.append((torch.optim.AdamW([params[n] for n in mats], lr=arm.lr, betas=(0.9, 0.95), weight_decay=arm.wd,
                                            fused=fused), arm.lr))
         if gains:
-            opts.append((torch.optim.AdamW([params[n] for n in gains], lr=arm.lr, betas=(0.9, 0.95), weight_decay=0.0,
-                                           fused=fused), arm.lr))
+            gp = [params[n] for n in gains]
+            opts.append((torch.optim.SGD(gp, lr=arm.lr, momentum=arm.gain_momentum) if arm.gain_opt == "sgd" else
+                         torch.optim.AdamW(gp, lr=arm.lr, betas=(0.9, 0.95), weight_decay=0.0, fused=fused), arm.lr))
         trained = [p for o, _ in opts for grp in o.param_groups for p in grp["params"]]
         folder = next((o for o, _ in opts if isinstance(o, Muon) and o.fold_grads), None)
         tokens = arm.batch * c
@@ -428,8 +434,8 @@ def main() -> int:
     tuned = sorted(full + adapt)
     changed = sorted(n for n in tuned if not prepare.same_bits(model[n], theta[n]))
     v1 = report[best]["v1"]
-    delta_grad = {"trainable": v1["params"], **{k: v1[k] for k in ("grad_bits", "adam_bits", "muon_bits", "ema_bits",
-                                                                    "latent_bits", "folded")},
+    delta_grad = {"trainable": v1["params"], **{k: v1[k] for k in ("grad_bits", "adam_bits", "sgd_bits", "muon_bits",
+                                                                    "ema_bits", "latent_bits", "folded", "gain_opt")},
                   "grad_dtype": arms[best].grad_dtype, "mom_dtype": arms[best].mom_dtype,
                   "bits": v1["delta_grad_bits"], "bytes": v1["delta_grad_bits"] // 8}
     klass = (a.klass,) if hasattr(prepare, "CLASSES") else ()
@@ -458,20 +464,23 @@ def svd_flops(params: dict, mats: list[str]) -> int:
 def v1_state(arm: argparse.Namespace, params: dict, factors: dict) -> dict:
     """What training carries between steps, in bits (Δ_grad is the gradient plus the optimizer's state as passed): the
     gradient at --grad-dtype; AdamW's fp32 exp_avg and exp_avg_sq, or Muon's one momentum buffer per matrix at
-    --mom-dtype (gains and factors on AdamW), which under --mom-fold is also the matrices' gradient; the EMA's fp32 copy
-    if any. The fp32 weights are listed apart."""
+    --mom-dtype (gains and factors on AdamW, or gains on SGD's one fp32 buffer), which under --mom-fold is also the
+    matrices' gradient; the EMA's fp32 copy if any. The fp32 weights are listed apart."""
     mat = sum(params[n].numel() for n in arm.mats)
     gain = sum(params[n].numel() for n in arm.gains)
     lora = sum(A.numel() + B.numel() for A, B, _ in factors.values())
     n = mat + gain + lora
     muon = arm.opt == "muon" and mat > 0
-    adam = 64 * (gain + lora + (0 if muon else mat))
+    sgd = arm.gain_opt == "sgd"
+    adam = 64 * ((0 if sgd else gain) + lora + (0 if muon else mat))
+    sgd_bits = 32 * gain if sgd else 0
     muon_bits = BITS[arm.mom_dtype] * mat if muon else 0
     ema = 32 * (mat + gain) if arm.ema else 0
     grad = BITS[arm.grad_dtype] * (n - mat if muon and arm.mom_fold else n)
-    state = adam + muon_bits + ema
-    return {"params": n, "opt": arm.opt, "grad_bits": grad, "adam_bits": adam, "muon_bits": muon_bits, "ema_bits": ema,
-            "latent_bits": 0, "folded": bool(muon and arm.mom_fold), "state_bits": state, "weights_bits": 32 * n,
+    state = adam + sgd_bits + muon_bits + ema
+    return {"params": n, "opt": arm.opt, "gain_opt": arm.gain_opt, "grad_bits": grad, "adam_bits": adam,
+            "sgd_bits": sgd_bits, "muon_bits": muon_bits, "ema_bits": ema, "latent_bits": 0,
+            "folded": bool(muon and arm.mom_fold), "state_bits": state, "weights_bits": 32 * n,
             "delta_grad_bits": grad + state}
 
 
@@ -561,7 +570,7 @@ def encode_update(store, theta, cur, factors, mats, gains, params, steps, info, 
             s, best = max(floor, info.get("step", s)), None
             for tries in range(1, UNIFORM_TRIES + 1):
                 size = quant_size(uniform_code(theta, cur, bits, s)[0], theta)
-                if size <= max_bytes and (best is None or size > best[0]):
+                if size <= max_bytes and (best is None or s < best[1]):
                     best = (size, s)
                 if UNIFORM_FILL * max_bytes <= size <= max_bytes or (size <= max_bytes and s <= floor):
                     break
