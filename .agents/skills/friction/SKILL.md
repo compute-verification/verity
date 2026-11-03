@@ -207,10 +207,10 @@ Protocols and claims:
 - A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
   definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
-- The training formalism (`GLOSSARY.md`, "Training") is the training slowdown's statement. Its inputs are the start
-  loss ℓ_0, the target loss ℓ* and the policy (c, k, n); the red team determines everything else.
-- The slowdown counts update-dependent work, θ's computation on changed activations included. The honest cost H(ℓ*) is
-  the least compute of any method, so W*/H(ℓ*) ≥ 1; a reported W* is the best attack known, an upper bound.
+- The training formalism (`GLOSSARY.md`, "Training") states the slowdown from ℓ_0, ℓ* and (c, k, n), the red team
+  choosing the rest. A1 is read by entry point: a token's state where a block's work begins, with the earlier tokens'
+  keys and values it reads, at the least reads any checked witness block achieves. Gradient reductions add Δ_g/k.
+  H(ℓ*) is the least compute of any method, so W*/H(ℓ*) ≥ 1, and every ρ names its te_core version.
 
 ## Before you finish
 
