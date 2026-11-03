@@ -12,15 +12,16 @@ else is `Claims.Sampling`'s, read as it stands: the statement (`AuditStatement`)
 relation at `δ` (`Sampling.R`: the incorrect set of the extracted trace is in `M_δ = {B : P_a(B) > δ}`) and its count
 form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme and its binding (`CommitmentScheme`,
 `CommitmentScheme.Binds`), the waits, the extraction-based finder `Bext` and the claims' forms (`KSLinOn`, `BitsLin`,
-`ExtractOwnLe`, `SimLeak`, `leafLayer`).
+`ExtractOwnLe`, `leafLayer`).
 
 1. **The proof system for proof blocks** (`Arg`): a public-coin verifier over byte strings, its statements' public shape
    (`Sh`, `shape`) and the rounds a shape fixes, its witnesses and relation, and its extractor: coins per shape (`EC`),
    a rerun program at the judged run's coins (`ext`), and its errors per shape (`κ`, `γ`). It is knowledge sound in
    `Claims.KS`'s form (`Arg.KS`); its cost is reruns (`Arg.RerunsLe`, `Arg.RerunsExpLe`) and its own SHA-512 calls
-   (`Arg.OwnLe`), both counted by `RP.eval`. Its zero knowledge is with a leak (`Arg.ZK`, `ZKLeak`): on every event the
-   honest view's probability is at most `2^ℓ` times the simulator's plus an error that reads the statement, the
-   witness and the verifier.
+   (`Arg.OwnLe`), both counted by `RP.eval`. Its zero knowledge is per public outcome (`ZkArg.ZK`, `ZKOut`): at each
+   outcome (each verdict, where a session stopped), the honest view's probability of the outcome and an event is at
+   most the simulator's, given the outcome, plus an error that reads the statement, the witness, the verifier and the
+   outcome; the leak form over `n` outcomes is its corollary (`ZKOutLeak`).
 2. **The compiled sampled verifier** (`Compiled`, `Sampling.Deploy` without Flock): its verifier, parser, scope check,
    partition and commitment; the rounds after the draw (`stage2`); the sampled proof blocks (`checked`); each one's
    session (`session`: its statement and view), public shape (`sh`) and coins (`place`, `coinsOf`); and what a
@@ -39,7 +40,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    its rounds is a run of a prover against `Arg`'s verifier; and a witness in `Arg`'s relation reveals openings under
    which its proof block is correct.
 6. **The claims** of a compiled verifier (`Compiled.KS`, `Compiled.KSCount`, `Compiled.Bits`, `Compiled.Efficient`,
-   and `ZkCompiled.ZK`, zero knowledge with a leak relative to the published leaf layer).
+   and `ZkCompiled.ZK`, zero knowledge per public outcome relative to the published leaf layer).
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSCount`, `CompilerBits`, `CompilerEfficient`): each claim of
    every compiled verifier that meets the contract, from `Arg`'s.
 8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at a decoder, its shape the numbers its errors read; `FlockArgKS` says
@@ -55,7 +56,7 @@ namespace Claims.SamplingGeneric
 
 open Claims
 open Claims.Sampling (AuditStatement Partition CommitmentScheme Opening InScope waitAccC forkOn flatMapRP
-  checkRevealed assemble Bext KSLinOn BitsLin ExtractOwnLe lamLin slack SimLeak leafLayer Rhon)
+  checkRevealed assemble Bext KSLinOn BitsLin ExtractOwnLe lamLin slack leafLayer Rhon)
 open Claims.Recursion (serve viewing)
 
 /-- The largest of `f 0, …, f (n − 1)`, and `0` when there is none. -/
@@ -116,22 +117,56 @@ def OwnLe (H : Msg → Msg) (A : Arg Coin) (h : A.Sh → ℕ) : Prop :=
 
 end Arg
 
-/-! ### Zero knowledge with a leak -/
+/-! ### Zero knowledge with a public outcome -/
 
-/-- **Zero knowledge with a leak** (`ZKmalRx`'s one-sided form at the factor `2^ℓ`): for `(x, w) ∈ R` and every
-verifier `V*` of the protocol's `k(x)` rounds and tape `θ`, on every event the honest transcript's probability is at most
-`2^{ℓ(x)}` times the simulator's plus `ε(x, w, V*, θ)`. `ℓ` is the bits the protocol leaks (a session that may stop
-leaks whether it stops), and `ε` is a function of the statement, the witness and the verifier, such as a collision
-finder's success built from them (`Fork`), never an assumed bound. -/
-def ZKLeak {W : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+/-- **A simulator given the outcome**: its coins, and its program, which also receives the protocol's public outcome
+`o ∈ St` (each verdict, and where a session stopped). -/
+structure SimOut (St : Type) where
+  C : Msg → Type
+  [fin : ∀ x, Fintype (C x)]
+  [ne : ∀ x, Nonempty (C x)]
+  prog : (x : Msg) → St → C x → SP (List (Msg × Out))
+
+attribute [instance] SimOut.fin SimOut.ne
+
+/-- The simulator given the outcome `o`, as the spec's `Simulator`. -/
+def SimOut.given {St : Type} (S : SimOut St) (o : St) : Simulator where
+  C := S.C
+  prog x c := S.prog x o c
+
+/-- **Zero knowledge with a public outcome**, per outcome (`ZKmalRx`'s one-sided form at each outcome): for `(x, w) ∈ R`,
+every verifier `V*` of the protocol's `k(x)` rounds and tape `θ`, every outcome `o` and every event, the honest
+transcript's probability of showing the outcome `o` and the event is at most the simulator's, given `o`, of the event,
+plus `ε(x, w, V*, θ, o)`. `out` reads the outcome off the transcript, so the outcome is public; the simulator is fixed
+before the witness and the verifier; `ε` is a function of the statement, the witness, the verifier and the outcome, such
+as a collision finder's success built from them (`Fork`), never an assumed bound. Over `n` outcomes it gives the leak
+form, `n` times the simulator that draws the outcome uniformly plus `Σ_o ε` (`ZKOutLeak`). -/
+def ZKOut {W St : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
-    (S : Simulator) (ℓ : Msg → ℕ) (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → ℝ) : Prop :=
-  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
-    Pr (fun ω : N x × Ω x => Ev (runStar H (P w x) Vs x ω θ).msgs) ≤
-      2 ^ ℓ x * (Pr (fun c : S.C x => Ev (S.out H Vs θ x c)) + ε x w Θ Vs θ)
+    (out : Msg → List (Msg × Out) → St) (S : SimOut St) (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ) :
+    Prop :=
+  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (o : St) (Ev : List (Msg × Out) → Prop),
+    Pr (fun ω : N x × Ω x =>
+        out x (runStar H (P w x) Vs x ω θ).msgs = o ∧ Ev (runStar H (P w x) Vs x ω θ).msgs) ≤
+      Pr (fun c : S.C x => Ev ((S.given o).out H Vs θ x c)) + ε x w Θ Vs θ o
+
+/-- **The leak form, from the per-outcome form**: over finitely many outcomes, on every event the honest transcript's
+probability is at most the number of outcomes times the simulator's that draws the outcome uniformly, plus the sum of
+the outcomes' errors. -/
+def ZKOutLeak : Prop :=
+  ∀ {W St : Type} [Fintype St] [Nonempty St] (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
+    [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x))
+    (R : Rel W) (out : Msg → List (Msg × Out) → St) (S : SimOut St)
+    (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ),
+    ZKOut N Ω H k P R out S ε →
+    ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
+      Pr (fun ω : N x × Ω x => Ev (runStar H (P w x) Vs x ω θ).msgs) ≤
+        (Fintype.card St : ℝ) * Pr (fun p : St × S.C x => Ev ((S.given p.1).out H Vs θ x p.2)) +
+          ∑ o, ε x w Θ Vs θ o
 
 /-- **A proof system for proof blocks with zero knowledge**: its honest prover at each witness, on a tape of each
-statement's own nonce and rest, its simulator, its leaked bits per shape and its error. -/
+statement's own nonce and rest, its public outcome (`St`, read off a transcript by `out`), its simulator given the
+outcome, and its error. -/
 structure ZkArg (Coin : Type) extends Arg Coin where
   Nonce : Msg → Type
   Rest : Msg → Type
@@ -140,16 +175,16 @@ structure ZkArg (Coin : Type) extends Arg Coin where
   [restFin : ∀ x, Fintype (Rest x)]
   [restNe : ∀ x, Nonempty (Rest x)]
   P : W → (x : Msg) → Prover (Nonce x × Rest x)
-  S : Simulator
-  ℓ : Sh → ℕ
-  εzk : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → ℝ
+  St : Type
+  out : Msg → List (Msg × Out) → St
+  S : SimOut St
+  εzk : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ
 
 attribute [instance] ZkArg.nonceFin ZkArg.nonceNe ZkArg.restFin ZkArg.restNe
 
-/-- **The proof system is zero knowledge with a leak**, against every verifier of its rounds, at its leak per shape and
-its error. -/
+/-- **The proof system is zero knowledge with a public outcome**, against every verifier of its rounds, at its error. -/
 def ZkArg.ZK (H : Msg → Msg) {Coin : Type} (A : ZkArg Coin) : Prop :=
-  ZKLeak A.Nonce A.Rest H A.V.k A.P A.R A.S (fun x => A.ℓ (A.shape x)) A.εzk
+  ZKOut A.Nonce A.Rest H A.V.k A.P A.R A.out A.S A.εzk
 
 /-! ## 2. The compiled sampled verifier -/
 
@@ -358,7 +393,9 @@ def Efficient (H : Msg → Msg) (L : Compiled Coin A) (ρ : A.Sh → ℕ) (e : A
 end Compiled
 
 /-- **A masked compiled verifier**: the reference prover's tape at each statement a nonce and the rest of the
-statement's own (`tapeOf`), and the simulator, given the trace's published leaf layer (`S`, `Sampling.ZkDeploy`'s). -/
+statement's own (`tapeOf`); the audit's public outcome (`St`, read off a transcript by `out`: each sampled session's
+verdict and where it stopped); and the simulator, given the trace's published leaf layer and the outcome (`S`,
+`Sampling.ZkDeploy`'s with the outcome). -/
 structure ZkCompiled (Coin : Type) (A : Arg Coin) extends Compiled Coin A where
   Nonce : Msg → Type
   Rest : Msg → Type
@@ -367,7 +404,9 @@ structure ZkCompiled (Coin : Type) (A : Arg Coin) extends Compiled Coin A where
   [restFin : ∀ x, Fintype (Rest x)]
   [restNe : ∀ x, Nonempty (Rest x)]
   tapeOf : (x : Msg) → Nonce x × Rest x → Tape
-  S : SimLeak
+  St : Type
+  out : Msg → List (Msg × Out) → St
+  S : SimOut (List Msg × St)
 
 attribute [instance] ZkCompiled.nonceFin ZkCompiled.nonceNe ZkCompiled.restFin ZkCompiled.restNe
 
@@ -379,14 +418,16 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 def prover (L : ZkCompiled Coin A) (w : Sampling.Wit) (x : Msg) : Prover (L.Nonce x × L.Rest x) :=
   (L.P w).comap (L.tapeOf x)
 
-/-- **Zero knowledge with a leak, relative to the published leaf layer** (`Sampling.ZK` in `ZKLeak`'s form): of the
-reference prover when no proof block is incorrect, at the simulator given the trace's leaf layer, against every verifier
-of the compiled verifier's rounds, at the leak `ℓ` and the error `ε`. -/
-def ZK (H : Msg → Msg) (L : ZkCompiled Coin A) (ℓ : Msg → ℕ)
-    (ε : (x : Msg) → Sampling.Wit → (Θ : Type) → VStar Θ → Θ → ℝ) : Prop :=
+/-- **Zero knowledge with a public outcome, relative to the published leaf layer** (`Sampling.ZK` in `ZKOut`'s form): of
+the reference prover when no proof block is incorrect, against every verifier of the compiled verifier's rounds, per
+outcome, at the simulator given the trace's leaf layer `l x` and the outcome, at the error `ε`. Hiding the leaf layer is
+the commitment's (`Claims.Hm96Hiding` at Flock). -/
+def ZK (H : Msg → Msg) (L : ZkCompiled Coin A)
+    (ε : (x : Msg) → Sampling.Wit → (Θ : Type) → VStar Θ → Θ → List Msg × L.St → ℝ) : Prop :=
   ∀ l : Msg → List Msg,
-    ZKLeak L.Nonce L.Rest H L.V.k L.prover
-      (fun x w => Rhon H L.commit L.parse L.partition x w ∧ leafLayer H L.commit L.parse x w = l x) (L.S.given l) ℓ ε
+    ZKOut L.Nonce L.Rest H L.V.k L.prover
+      (fun x w => Rhon H L.commit L.parse L.partition x w ∧ leafLayer H L.commit L.parse x w = l x)
+      (fun x ms => (l x, L.out x ms)) L.S ε
 
 end ZkCompiled
 
