@@ -371,6 +371,46 @@ def test_bind_refuses_a_certified_request_served_twice_or_never(honest):
     assert CP.bind(honest.served, honest.io, run_id, honest.served).keys() == {f"user-{j}" for j in range(4)}
 
 
+def test_the_relay_counts_completions_so_a_port_probe_or_a_model_listing_is_never_the_attacks():
+    """A front's network certifier connects to the endpoint's port and lists its model before its first completion:
+    `--nth` counts completions, so the attack plays on the first one and the probes pass as they came."""
+    B, P = PARAMS.cell_bytes, PARAMS.payload
+    completions = [WS.id_request(model="m", user=f"user-{j}", prompt=[j + 1] * 8, max_tokens=2, frame_bytes=B,
+                                 offset=0) for j in range(2)]
+    served: list[bytes] = []
+
+    async def endpoint(reader: asyncio.StreamReader, writer: Pipe) -> None:
+        request = await AT.read_request(reader)
+        served.append(request)
+        writer.write(b"HTTP/1.1 200 OK\r\n\r\n{}" if request.startswith(b"GET ")
+                     else WS.id_response(answer_ids(json.loads(request.partition(b"\r\n\r\n")[2])), P))
+        writer.close()
+
+    async def main() -> tuple[AT.Relay, list[bytes]]:
+        async def open_endpoint():
+            up, down = Pipe(lambda: None), Pipe(lambda: None)
+            asyncio.ensure_future(endpoint(up.reader, down))
+            return down.reader, up
+
+        relay = AT.Relay("extra", open_endpoint, cell_bytes=B, bucket_s=0.1, delay=PARAMS.delay, nth=1)
+        answers = []
+        for request in (b"", b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n", *completions):
+            to_relay, back = Pipe(lambda: None), Pipe(lambda: None)
+            to_relay.write(request)
+            to_relay.close()
+            await relay.handle(to_relay.reader, back)
+            answers.append(bytes(back.data))
+        return relay, answers
+
+    relay, answers = asyncio.run(main())
+    assert [(line["attack"], line.get("completion")) for line in relay.lines] == \
+        [("honest", None), ("honest", None), ("extra", 1), ("honest", 2)]
+    assert served == [b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n", completions[1]]
+    body = json.loads(completions[0].partition(b"\r\n\r\n")[2])
+    assert answers[1:] == [b"HTTP/1.1 200 OK\r\n\r\n{}", WS.id_response(WS.fake_ids(body), P),
+                           WS.id_response(answer_ids(json.loads(completions[1].partition(b"\r\n\r\n")[2])), P)]
+
+
 def test_the_relays_copy_is_the_requests_own_but_its_release_and_user():
     B = PARAMS.cell_bytes
     request = WS.id_request(model="m", user="user-7", prompt=[5, 6], max_tokens=2, frame_bytes=B, offset=0)

@@ -37,9 +37,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
   tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,
   so it never stands for the gate. ``--attack NAME`` (after the warm-ups) puts the prover's relay playing attack NAME
-  (`attacks.py relay`; ``--attack-nth K``, the connection it plays on) between the gate's tunnel and PORT, at the
-  scan's cells and delay and the front's tick (`attack_relay`), its log the prover's under SERVE_DIR/`PRIVATE`/attacks;
-  `attacks.py judge` reads the outcome. Exit as `served_session.session`'s.
+  (`attacks.py relay`; ``--attack-nth K``, the completion request it plays on) between the gate's tunnel and PORT, at
+  the scan's cells and delay and the front's tick (`attack_relay`), its log the prover's under
+  SERVE_DIR/`PRIVATE`/attacks; `attacks.py judge` reads the outcome. Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
   1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
@@ -893,7 +893,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--attack", choices=AT.RELAYED,
                    help="the prover's relay playing this attack between the gate's tunnel and PORT (attacks.py)")
     f.add_argument("--attack-nth", type=int, default=1, metavar="K",
-                   help="the connection, from 1, an attack on one connection plays on")
+                   help="the completion request, from 1, an attack on one connection plays on")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)

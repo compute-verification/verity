@@ -40,13 +40,15 @@ cells' payload and the id-form response's event size) and writes it:
 - ``late``: the whole response after holding its first byte D + 2 buckets, past its first cell's deadline;
 - ``pad``: a cell's worth of padding bytes (P spaces) before the response's tail, its trailer;
 - ``token``: its first event's id one other (`other_event`); ``token-pad``: one more id event before the tail.
-``jitter`` and ``chunk`` play on every connection, the others on connection ``--nth``. Two act on a connection:
-``extra`` answers connection ``--nth`` itself, an id-form response of the request's `warden_serve.fake_ids`, and never
-opens the endpoint, so the network certifier carries a response the endpoint didn't serve; ``bypass`` first sends a
-copy of connection ``--nth``'s request straight to the endpoint (its release headers gone, its ``user`` another of
-the same width), a request served around the network certifier, whose answer it drops, then relays the connection;
-``bypass-user`` sends the copy under the request's own ``user``. ``--log`` gets, once each connection ends, its line:
-the connection, the attack, its bytes each way, the holds and the bits (the prover's own record, kept on its node).
+``jitter`` and ``chunk`` play on every connection, the others on completion ``--nth``: the connection carrying the
+network certifier's ``--nth`` completion request (`COMPLETION`), its port probes and model listing aside. Two act on
+a connection: ``extra`` answers completion ``--nth`` itself, an id-form response of the request's
+`warden_serve.fake_ids`, and never opens the endpoint, so the network certifier carries a response the endpoint didn't
+serve; ``bypass`` first sends a copy of completion ``--nth``'s request straight to the endpoint (its release headers
+gone, its ``user`` another of the same width), a request served around the network certifier, whose answer it drops,
+then relays the connection; ``bypass-user`` sends the copy under the request's own ``user``. ``--log`` gets, once
+each connection ends, its line: the connection, its completion's number, the attack, its bytes each way, the holds
+and the bits (the prover's own record, kept on its node).
 
 **The judge** (`judge`): an attack's served rehearsal (`certifier_piece.py front --attack`, its OUT's
 ``session.json`` and `SPAN`, and the serve dir it kept the run in) read as the attack's verdict (`verdict`): the network
@@ -101,6 +103,9 @@ PIECE = ("bound", "reject", "missing")
 EGRESS = ("honest", "jitter", "chunk", "late", "pad", "token", "token-pad")
 EVERY = ("jitter", "chunk")
 CONNECTION = ("extra", "bypass", "bypass-user")
+#: the request line ``--nth`` counts: the network certifier's id-form completion (`active.ID_REQUEST_HEAD`), never its
+#: port probes or its ``GET /v1/models``
+COMPLETION = b"POST /v1/completions "
 RELAYED = EGRESS + CONNECTION
 #: the reasons the verdicts name, as their checks word them: `warden.audit`'s, `warden_chain.io`'s, the network
 #: certifier's check's, and `certifier_piece.bind`'s
@@ -323,18 +328,22 @@ class Relay:
         self.attack, self.open, self.frame_bytes, self.payload = attack, open, cell_bytes, cell_bytes - IT.HEADER.size
         self.hold_s, self.late_s, self.nth = bucket_s / 2, (delay + 2) * bucket_s, nth
         self.sleep, self.bits, self.log = sleep, bits, log
-        self.connections = 0
+        self.connections = self.completions = 0
         self.lines: list[dict] = []
         self._copies: set[asyncio.Task] = set()
 
     async def handle(self, reader: asyncio.StreamReader, writer: Any) -> None:
         self.connections += 1
-        k = self.connections
-        mine = k == self.nth
-        line = {"connection": k, "attack": self.attack if self.attack in EVERY or mine else "honest"}
+        line = {"connection": self.connections, "attack": self.attack if self.attack in EVERY else "honest"}
         try:
             request = await read_request(reader)
             line["request_bytes"] = len(request)
+            if request.startswith(COMPLETION):
+                self.completions += 1
+                line["completion"] = self.completions
+            mine = line.get("completion") == self.nth
+            if mine:
+                line["attack"] = self.attack
             if mine and self.attack == "extra":
                 answer = WS.id_response(WS.fake_ids(json.loads(request.partition(b"\r\n\r\n")[2])), self.payload)
                 writer.write(answer)
@@ -524,7 +533,8 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--cell-bytes", type=int, required=True, help="B: the cells' bytes, the schedule's")
     r.add_argument("--bucket-ms", type=int, default=100)
     r.add_argument("--delay", type=int, default=27, help="D: buckets from admission to the first egress cell")
-    r.add_argument("--nth", type=int, default=1, help="the connection, from 1, the attack plays on")
+    r.add_argument("--nth", type=int, default=1,
+                   help="the completion request, from 1, the attack plays on (jitter and chunk: every connection)")
     r.add_argument("--log", type=Path)
     j = sub.add_parser("judge")
     j.add_argument("name", choices=sorted(a.name for a in ATTACKS.values() if a.served))
