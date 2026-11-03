@@ -11,9 +11,9 @@ Measured per record (`Measured`), each with its source in `labels` ("measured: .
   the affected gates among those, |A ∩ ∪T| (`affected_gates`: the gates that depend on θ'), and the gradient and
   optimizer state its blocks pass between them (`delta_grad_bits`, Δ_grad; None: unmeasured);
 - `tau_bits` τ, the inputs outside θ a token block reads; `delta_bits` Δ, the bits that describe θ' given θ, by a
-  decoder of `decoder_gates` d gates (None: unmeasured, taken as 0, a label); `delta_t_bits` Δ_t, the weights in the
-  form the update rule reads and writes: a straight-through run's fp32 latents at 32 bits a value (None: Δ, for every
-  other run; the coordinator's 00:47Z ruling);
+  decoder of `decoder_gates` d gates (`decoder`; None: unmeasured, so Δ never counts and Fit fails); `delta_t_bits`
+  Δ_t, the weights in the form the update rule reads and writes: a straight-through run's fp32 latents at 32 bits a
+  value (None: Δ, for every other run; the coordinator's 00:47Z ruling);
 - `a_bits` a, the cut cost: the computed bits a block reads to do any of a token's affected work without computing that
   token from its inputs;
 - `u`, A1's update profile: u(x) the update bits a block must read to do a share x of one token's affected work, as
@@ -71,6 +71,39 @@ choices favourable to the block:
 - tokens are fractional, as in v2's room.
 A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
 
+**The one bound** (`bound`, and `at` with a `reading`): the counting lemma over
+kinds K of block work, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c), each kind's term returned with its inputs and the max. Where
+Fit fails ρ is max(1, that max); where Fit holds it is c/(c − d), and every term is at most that. The kinds:
+- token: A1's cap on a block's affected token work, under reading B (Slowdown's token form) or A (below);
+- reduction: where a step's token work fills b ≥ 2 blocks by gates (b = ⌈N·w/c⌉), its b − 1 partial gradients at
+  their passed width (`Part.partial_bits`) are read by blocks of k bits each, c·Σ steps·(b − 1)·partial/(k|C|)
+  (assumption (R));
+- update: there, the blocks applying the update read the gradient's cut (`Part.grad_bits`), the weights read once and θ
+  free, c·Σ steps·γ/(k|C|) (assumption (U));
+- decoding: a block reading the update code runs the whole decoder, so it holds at most c − d affected gates
+  (assumption (D)): under B, share·c/max(c − d, min(c, α_max(x0·s + s*))) on the uncapped profiles, share the affected
+  gates' share of |C|; under A, the packer with such blocks at c − d gates.
+A kind whose inputs are unmeasured (a part traced before te_core 4.4, which has no partial or gradient cut) counts 0
+and is named (`unmeasured`). Each result is labelled "te_core VERSION, reading R" and each term by `BOUND_LABELS`. (R)
+and (U) hold for blocks split by tokens, not by layers or tensors (a block holding only frozen layers' work passes no
+partial), so `kinds` names the kinds the max is over; every kind's term is returned.
+
+**Reading A** (A1's approved reading): every block I reads |in(I) \\ θ| ≥ u_I + Σ_T a_T(e_T(I)), u_I the
+update bits I's work reads, counted once, and a_T(e) the bits of token T's computed state where I's work on T begins,
+the earlier tokens' keys and values that work reads and doesn't compute included. A1's values are the least reads any
+checked witness achieves (a witness block is a set of the trace's ops, te_core.capture.circuit.check counts its gates
+and reads), and the default packer's witnesses are the runs of one traced token's path in segments (the trace's
+`entries`, which `check` counts the same). `packer` gives the token kind's term from them: a gate g of token work at
+segment s and position p has cap(g), the most affected gates of a packer block holding it, the max over runs i..j ∋ s
+and block kinds of M·W_ij, W_ij the run's gates a token and M (`_span_tokens`) the most tokens such a block holds: at
+most C0 = its gates over W_ij, and reads U + A·M + its context ≤ k, U the run's update cut (once), A its frontier and
+token ids at ⌈log2 V⌉ a token, and the context kf a position before and kb a position after p in p's sequence outside
+the block's span, each read once a block. A block of c gates reads the run's update cut; where Δ counts (d < c), one
+reading the code reads min(cut, Δ) and has c − d gates (c for the token kind). The term is (c/|C|)·Σ_g 1/cap(g) =
+c·share·mean_p Σ_s (W_s/W)/cap(p, s), and ∞ where some gate is in no block. The choices favourable to the block:
+tokens are fractional; a block's tokens beyond p's sequence cost A each, as if it computed their sequences' context;
+values computed from θ and token data alone are free.
+
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
 (`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
 4.0 measures them on the record's traced step (te_core.capture.circuit, `TRACED` its labels): each traced structure's
@@ -80,6 +113,22 @@ under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of 
 carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
 "u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "labels"}, which `of_record` passes
 through field by field.
+
+**The decoder** (`decoder`; seed-mezo's 04:15Z finding): d is the block's `decoder_gates` where it gives one,
+else the gates the record's program reports for the checkpoint's E (`output.decoder_gates`, ingest's from the
+submission's `notes.decoder`), else the witness's: the harness's decoder for E, `prepare.rebuild_macs(θ, E)` fp32
+multiply-adds (`output.rebuild_macs`) at F32Fma_v4's gates each. d is 0 only where no decoder exists (E stores θ'
+directly: rebuild_macs 0, or a full or model E), and unmeasured (Fit refused) where the row has none of these.
+
+**Refusals** (`refusal`, `measure` raising `Refused`; the same finding): a traced row's measured quantities are refused,
+never scored, with the reason, when
+- its trace lists no read-backs: it was traced before te_core 4.2, whose capture lists them (unchecked);
+- its capture lists a read-back that decides what the graph can't carry (`trace.data_dependent`, te_core.capture.script:
+  a Python clip or branch on a read-back loss): the update the trace shows is the stand-in's, not the run's;
+- a Python number is folded over steps (`trace.carried_scalars`, an EMA of read-back estimates kept as a float): the
+  trace carries every earlier step's read-back, so its Δ_grad grows with the step;
+- E is not empty (Δ > 0, or E's size unknown) but the trace shows no update: its affected share is 0, or u(1) is 0.
+Any row with a nonempty E whose prefix has no affected gates (no step through its checkpoint reads θ') is refused too.
 """
 from __future__ import annotations
 
@@ -88,7 +137,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from .gates import of_log, per_mac
+from .gates import gates, of_log, per_mac
 
 ACT_BITS = 16
 
@@ -101,6 +150,10 @@ class Part:
     affected_gates: float
     steps: int = 1
     delta_grad_bits: float | None = None
+    #: the bound's reduction and update kinds: one token block's partial gradient and the step's gradient cut, each at
+    #: its passed width (the trace's `partial_cut_bits` and `grad_cut_bits`; None: unmeasured)
+    partial_bits: float | None = None
+    grad_bits: float | None = None
 
 
 @dataclass(frozen=True)
@@ -116,6 +169,9 @@ class Measured:
     tail_share: float = 0.0
     context: dict | None = None
     delta_t_bits: float | None = None
+    #: reading A's inputs: the trace's `entries` (te_core.capture.circuit) and `id_bits`, ⌈log2 V⌉ (None: traced before
+    #: te_core 4.4, or not traced)
+    entries: dict | None = None
 
     @property
     def delta_t(self) -> float | None:
@@ -188,7 +244,7 @@ class Measured:
 def from_json(d: dict) -> Measured:
     return Measured(tuple(Part(**p) for p in d["parts"]), d["tau_bits"], d["a_bits"], tuple(map(tuple, d["u"])),
                     tuple(map(tuple, d["u_in"])), d.get("delta_bits"), d.get("decoder_gates"), d.get("labels", {}),
-                    d.get("tail_share", 0.0), d.get("context"), d.get("delta_t_bits"))
+                    d.get("tail_share", 0.0), d.get("context"), d.get("delta_t_bits"), d.get("entries"))
 
 
 # ---- the update profiles -----------------------------------------------------------------------------------------------
@@ -319,10 +375,166 @@ def _token_form(sigma: float, x0: float, s: float, s_star: float, ratio: float) 
     return lead / s_star if s_star > 0 else math.inf
 
 
-def at(m: Measured, c: float, k: float) -> dict:
+def _span_tokens(A: float, U: float, kf: float, kb: float, L: int | None, C0: float, k: float) -> np.ndarray:
+    """Per position p of a sequence of L (one value where L is None: no context), the most tokens M of one run's work a
+    block covering p holds (reading A's default packer, module docstring): it reads U once and A a token, the run's
+    context for each position of p's sequence outside its span (kf each earlier one, kb each later one), and holds at
+    most C0 tokens by gates. M = f + x with p's own share f ≤ 1 and x other tokens at A each (whole sequences, whose
+    context the block computes, fractional), or M = 1 + n + x with n positions of p's sequence in the span, the
+    cheaper side first (A − max(kf, kb) a token, then A − min(kf, kb)): reads are convex in M, so the most M under k
+    lies on the last piece that fits. 0 where no block fits."""
+    if L is None or not (kf or kb):
+        top = (k - U) / A if A > 0 else (math.inf if U <= k else -1.0)
+        return np.array([min(max(top, 0.0) if U <= k else 0.0, C0)])
+    p = np.arange(L, dtype=float)
+    k1, k2 = max(kf, kb), min(kf, kb)
+    n1 = p if kf >= kb else L - 1 - p
+    n2 = L - 1 - n1
+    r0 = U + p * kf + (L - 1 - p) * kb
+    with np.errstate(divide="ignore", invalid="ignore"):
+        lone = np.where(r0 <= k, (k - r0) / A if A > 0 else math.inf, 0.0)
+        r1 = r0 + A
+        r2 = r1 + n1 * (A - k1)
+        r3 = r2 + n2 * (A - k2)
+        span = np.where(r3 <= k, L + ((k - r3) / A if A > 0 else math.inf),
+                        np.where(r2 <= k, 1 + n1 + (k - r2) / (A - k2),
+                                 np.where(r1 <= k, 1 + (k - r1) / (A - k1), 0.0)))
+    return np.minimum(np.maximum(lone, np.nan_to_num(span, nan=0.0)), C0)
+
+
+def packer(m: Measured, c: float, k: float, decoder: bool = True) -> float:
+    """The token kind under reading A (module docstring): (c/|C|)·Σ_g 1/cap(g) over the affected gates g of token
+    blocks, spread over one traced token's path (`entries`) by its segments' gates and over the sequence's positions,
+    cap(g) the most affected gates of any of the default packer's blocks that holds g (`_span_tokens` for each run of
+    segments i..j and each block kind). A block not reading the update code reads the run's update cut and has c gates;
+    one reading it (Δ counted, d < c) reads min(cut, Δ) and has c − d gates (`decoder`; c without it). Infinite where
+    some affected gate is in no block."""
+    e = m.entries
+    W = np.asarray(e["gates"], dtype=float)
+    total = W.sum()
+    if not total:
+        return 0.0
+    n, L = e["segments"], e.get("positions")
+    kf = np.asarray(e.get("context_fwd_bits") or [0.0] * n, dtype=float)
+    kb = np.asarray(e.get("context_bwd_bits") or [0.0] * n, dtype=float)
+    d = m.decoder_gates if m.decoder_gates is not None else math.inf
+    kinds = [(c, None)]
+    if m.delta_bits is not None and d < c:
+        kinds.append((c - d if decoder else c, m.delta_bits))
+    cw, cf, cb = (np.concatenate([[0.0], np.cumsum(x)]) for x in (W, kf, kb))
+    cap = np.zeros((L if L and (kf.any() or kb.any()) else 1, n))
+    for i in range(n):
+        for j in range(i, n):
+            w = cw[j + 1] - cw[i]
+            if w <= 0:
+                continue
+            a = e["frontier_bits"][i][j - i] + e["ids"][i][j - i] * e["id_bits"]
+            for size, delta in kinds:
+                u = e["u_bits"][i][j - i] if delta is None else min(e["u_bits"][i][j - i], delta)
+                t = _span_tokens(a, u, cf[j + 1] - cf[i], cb[j + 1] - cb[i], L if len(cap) > 1 else None,
+                                 size / w, k)
+                cap[:, i:j + 1] = np.maximum(cap[:, i:j + 1], (t * w)[:, None])
+    if (cap[:, W > 0] <= 0).any():
+        return math.inf
+    per = (W[W > 0] / total / cap[:, W > 0]).sum(axis=1).mean()
+    return c * sum(p.affected_gates for p in m.parts) / m.gates * per
+
+
+def _blocks(p: Part, c: float) -> float:
+    """The fewest blocks a step's token work of part `p` fills by gates, ⌈N·w/c⌉ (N its tokens a step)."""
+    return math.ceil(p.token_gates / p.steps / c) if p.tokens else 0
+
+
+#: the one bound's kinds (`bound`)
+KINDS = ("token", "reduction", "update", "decoding")
+#: each kind's source, by reading where it has one
+BOUND_LABELS = {
+    ("token", "B"): "assumption (A1, reading B): the token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at "
+                    "Delta for a block reading the update code",
+    ("token", "A"): "assumption (A1, reading A): the default packer's blocks (formalism.packer), a block reading the "
+                    "update code at c gates",
+    ("reduction", None): "assumption (R): each block holding a step's token work passes one partial gradient at its "
+                         "passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) "
+                         "blocks; blocks split by layers or tensors rather than tokens break it (one holding only "
+                         "frozen layers passes no partial)",
+    ("update", None): "assumption (U): where two or more blocks hold a step's token work, the block applying the "
+                      "update to a coordinate reads its share of the gradient's cut (grad_cut_bits); the weights are "
+                      "read once, theta free; blocks split by tensors break it (a tensor's gradient made and applied "
+                      "in one block)",
+    ("decoding", "B"): "assumption (D): a block reading the update code runs the whole decoder, so it holds at most "
+                       "c - d affected gates; any other block at most alpha_max (x0 s + s*) on the uncapped profiles",
+    ("decoding", "A"): "assumption (D, reading A): the default packer's blocks, a block reading the update code at "
+                       "c - d gates (the whole decoder)",
+}
+
+
+def bound(m: Measured, c: float, k: float, reading: str = "B", kinds: tuple[str, ...] = KINDS) -> dict:
+    """The counting lemma over kinds of block work at (c, k) (module docstring): each kind's term, ρ ≥ their max over
+    `kinds` (every kind's term is returned), under `reading` B (A1's token form) or A (the default packer over the
+    trace's `entries`, which a row traced before te_core 4.4 lacks: `Refused`). A kind whose inputs are unmeasured
+    counts 0 (`unmeasured`); `inputs` holds what each kind's term reads beyond `m`'s fields."""
+    if reading not in ("A", "B"):
+        raise ValueError(f"reading {reading!r}: A or B")
+    if not kinds or set(kinds) - set(KINDS):
+        raise ValueError(f"kinds {kinds!r}: some of {KINDS}")
+    if reading == "A" and m.entries is None:
+        raise Refused("reading A: no entries (traced before te_core 4.4, or untraced); trace the run again")
+    from . import VERSION
+
+    total = m.gates
+    d = m.decoder_gates if m.decoder_gates is not None else math.inf
+    code = m.delta_bits is not None and d < c
+    share = sum(p.affected_gates for p in m.parts) / total if total else 0.0
+    terms, unmeasured = {}, []
+    shared = {"share": share, "delta_bits": m.delta_bits if code else None, "decoder_gates": m.decoder_gates}
+    if reading == "A":
+        terms["token"] = packer(m, c, k, decoder=False)
+        terms["decoding"] = packer(m, c, k, decoder=True) if code else terms["token"]
+        seg = {"segments": m.entries["segments"], "positions": m.entries.get("positions")}
+        inputs = {"token": shared | seg, "decoding": shared | seg}
+    else:
+        u, u_in = (capped(m.u, m.delta_bits), capped(m.u_in, m.delta_bits)) if code else (m.u, m.u_in)
+        x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
+        if m.context is not None:
+            s_star = context_s_star(m.context, u, k, m.a_bits, x0, s_star)
+        terms["token"] = _token_form(m.sigma, x0, c / m.w, s_star, m.alpha_ratio)
+        x0r, sr = bottom_share(m.u_in, k), room(m.u, k) / m.a_bits
+        if m.context is not None:
+            sr = context_s_star(m.context, m.u, k, m.a_bits, x0r, sr)
+        cap = max(c - d if code else 0.0, min(c, m.alpha_max * (x0r * c / m.w + sr)))
+        terms["decoding"] = share * c / cap if cap > 0 else (math.inf if share else 0.0)
+        inputs = {"token": {"sigma": m.sigma, "x0": x0, "s": c / m.w, "s_star": s_star, "alpha_ratio": m.alpha_ratio},
+                  "decoding": shared | {"x0": x0r, "s_star": sr, "alpha_max": m.alpha_max, "cap": cap}}
+    red = upd = 0.0
+    blocks = [_blocks(p, c) for p in m.parts]
+    for p, b in zip(m.parts, blocks):
+        if b >= 2 and p.partial_bits is None:
+            unmeasured.append("reduction")
+        elif b >= 2:
+            red += p.steps * (b - 1) * p.partial_bits
+        if b >= 2 and p.grad_bits is None:
+            unmeasured.append("update")
+        elif b >= 2:
+            upd += p.steps * p.grad_bits
+    terms["reduction"], terms["update"] = (c * x / (k * total) if total else 0.0 for x in (red, upd))
+    steps = [p.steps for p in m.parts]
+    inputs |= {"reduction": {"blocks": blocks, "steps": steps, "partial_bits": [p.partial_bits for p in m.parts]},
+               "update": {"blocks": blocks, "steps": steps, "grad_bits": [p.grad_bits for p in m.parts]}}
+    terms = {kind: terms[kind] for kind in KINDS}
+    top = max((kind for kind in KINDS if kind in kinds), key=lambda kind: terms[kind])
+    return {"reading": reading, "version": VERSION, "label": f"te_core {VERSION}, reading {reading}", "terms": terms,
+            "kinds": [kind for kind in KINDS if kind in kinds], "max": terms[top], "argmax": top,
+            "unmeasured": sorted(set(unmeasured)),
+            "inputs": {kind: inputs[kind] for kind in KINDS},
+            "labels": {kind: BOUND_LABELS.get((kind, reading), BOUND_LABELS.get((kind, None))) for kind in KINDS}}
+
+
+def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple[str, ...] = KINDS) -> dict:
     """ρ at (c, k), with each part's s, w and Fit, Slowdown's bound and its terms, and the attack side (module
-    docstring); with `m.context`, s* is the context charge's (`context_s_star`) and v2's is `s_star_a1`."""
-    d = m.decoder_gates or 0.0
+    docstring); with `m.context`, s* is the context charge's (`context_s_star`) and v2's is `s_star_a1`. An unmeasured
+    decoder (d None) fits no block. With `reading` (A or B), ρ where Fit fails is the one bound's, max(1, `bound`'s
+    max over `kinds`), and `bound` gives its terms and label; without it, Slowdown's token form alone."""
+    d = m.decoder_gates if m.decoder_gates is not None else math.inf
     delta, delta_t = (m.delta_bits, m.delta_t) if d < c else (None, None)
     u, u_in = (m.u, m.u_in) if delta is None else (capped(m.u, delta), capped(m.u_in, delta))
     rho_fit = c / (c - d) if d < c else math.inf
@@ -331,12 +543,12 @@ def at(m: Measured, c: float, k: float) -> dict:
         w = p.token_gates / p.tokens if p.tokens else math.inf
         s = c / w
         dg = p.delta_grad_bits
-        kinds = {"compute": delta is not None and delta + s * m.tau_bits <= k}
+        checks = {"compute": delta is not None and delta + s * m.tau_bits <= k}
         if p.tokens or dg is not None:
-            kinds["reduction"] = dg is not None and 2 * dg <= k
-            kinds["update"] = delta_t is not None and dg is not None and delta_t + dg <= k
-        fits.append(all(kinds.values()))
-        parts.append({"w": w, "s": s, "fit": kinds, "fit_training": fits[-1]})
+            checks["reduction"] = dg is not None and 2 * dg <= k
+            checks["update"] = delta_t is not None and dg is not None and delta_t + dg <= k
+        fits.append(all(checks.values()))
+        parts.append({"w": w, "s": s, "fit": checks, "fit_training": fits[-1]})
     sigma, s = m.sigma, c / m.w
     ratio = m.alpha_ratio
     x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
@@ -344,16 +556,18 @@ def at(m: Measured, c: float, k: float) -> dict:
     if m.context is not None:
         charged = {"s_star_a1": s_star}
         s_star = context_s_star(m.context, u, k, m.a_bits, x0, s_star)
-    bound = _token_form(sigma, x0, s, s_star, ratio)
+    slow = _token_form(sigma, x0, s, s_star, ratio)
     fit = all(fits)
     x0_known = 1.0 if all(p["fit"]["compute"] for p in parts) else 0.0
     t = m.tail_share
     tail_tokens = min(math.floor(k / (m.a_bits + m.tau_bits)),
                       math.floor(c / (t * m.alpha_max)) if t * m.alpha_max else math.inf) if 0 < t < 1 else 0
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
+    one = {} if reading is None else {"bound": bound(m, c, k, reading, kinds)}
+    low = one["bound"]["max"] if one else slow
     return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
-            "slowdown": bound, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
-            "rho": rho_fit if fit else max(1.0, bound), "x0_known": x0_known, "s_star_known": s_star_known} | charged
+            "slowdown": slow, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
+            "rho": rho_fit if fit else max(1.0, low), "x0_known": x0_known, "s_star_known": s_star_known} | charged | one
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
@@ -370,8 +584,8 @@ def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, 
 def fit_k(m: Measured, c: float, w_run: float) -> tuple[float | None, float | None]:
     """The least k at which Fit holds at c, for running θ' (one block per s = c/w_run tokens of the served model,
     `w_run` its gates per token) and for the training (each part's three kinds of block); None: at no k, or
-    unmeasured."""
-    if m.delta_bits is None or (m.decoder_gates or 0.0) >= c:
+    unmeasured (Δ, or the decoder)."""
+    if m.delta_bits is None or m.decoder_gates is None or m.decoder_gates >= c:
         return None, None
     run = m.delta_bits + c / w_run * m.tau_bits
     need = []
@@ -392,11 +606,21 @@ STUBS = {
     "u": "assumption (A1): evenly spread, u(x) = x * u(1)",
     "u_in": "assumption (A1'): evenly spread, u_in = u",
     "u1_bits": "upper bound (witness): u(1) = Delta, every token's path reads the whole update code",
-    "decoder_gates": "stub: the decoder's gates d unmeasured, taken as 0 (rho 1 where Fit holds)",
     "delta_bits": "upper bound (witness): 8 |E|, the submitted update code",
     "delta_grad_bits": "unmeasured: training Fit unchecked",
     "token_gates": "stub: every gate in a token block (sigma 1)",
 }
+#: a rebuild multiply-add's circuit Definition (`decoder`)
+DECODER_DEFINITION = "F32Fma_v4"
+DECODER = {
+    "notes": "reported: the record's program's decoder gates for this checkpoint's E (the submission's notes.decoder)",
+    "witness": f"upper bound (witness): prepare.rebuild_macs(theta, E), the harness's decoder for E, in fp32 "
+               f"multiply-adds at {DECODER_DEFINITION}'s gates each",
+    "none": "measured: no decoder, E stores theta' directly (prepare.rebuild_macs 0, or a full or model E)",
+    "unmeasured": "unmeasured: no decoder cost for E (no notes.decoder, no rebuild_macs), so Fit is refused",
+}
+#: formats whose E stores the updated tensors themselves (`prepare.rebuild_macs` 0)
+STORED = ("full", "model")
 V23 = {
     "gates": "v2.3 macs_log in gates (te_core.gates; no dtypes, so its assumptions)",
     "tokens": "stub: forward MACs over the start's forward MACs per token (a v2.3 row has no token count)",
@@ -411,8 +635,9 @@ TRACED = {
                    "optimizer in none) over its gates",
     "affected_gates": "measured (trace): the traced step's token ops that depend on theta' over its gates, times "
                       "|C_j|; 0 for a step before the first update",
-    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut at 32 bits or more an element, plus "
-                       "the carried state the token ops don't read",
+    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut, each value at the width the step "
+                       "passes it (a coded message at its code's) and a reduction over the tokens at 32 bits or more "
+                       "an element, plus the carried state the token ops don't read",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, "
                 "and its other inputs",
     "a_bits": "upper bound (witness, trace): the narrowest cut across the forward's affected path, per consumed token",
@@ -421,7 +646,13 @@ TRACED = {
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
 }
-TRACED_STRUCTURE = ("sigma", "affected_share", "token_factor", "delta_grad_bits")
+TRACED_STRUCTURE = ("sigma", "affected_share", "token_factor", "delta_grad_bits", "partial_cut_bits", "grad_cut_bits")
+ENTRIES = ("assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its "
+           "frontier, token positions, update cut and context per other position), the least any of the default "
+           "packer's blocks reads")
+#: the capture's lists of read-backs that decide what the graph can't carry (te_core.capture.script), which `refusal`
+#: reads under a row's `trace`
+READ_BACKS = ("data_dependent", "carried_scalars")
 CONTEXT = ("charged (--charge-context): every earlier token's keys and values at each layer from l_kv up, "
            "2 d_model x 16 bits; h an upper bound from the start's shape and the run's changed tensors "
            "(formalism.context)")
@@ -514,12 +745,16 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         f = f | {"tau_bits": f["tau_ids"] * math.ceil(math.log2(shape["vocab"])) + f.get("tau_other_bits", 0.0)}
     e = (row.get("output") or {}).get("e_bytes")
     defaults = {"tau_bits": math.ceil(math.log2(shape["vocab"])), "a_bits": shape["d_model"] * ACT_BITS,
-                "delta_bits": 8 * e if e is not None else None, "decoder_gates": None}
+                "delta_bits": 8 * e if e is not None else None}
     for name, default in defaults.items():
         out[name] = f.get(name, default)
         if name not in f:
-            labels.setdefault(name, STUBS[name] if default is not None or name == "decoder_gates"
-                              else "unmeasured: no update code")
+            labels.setdefault(name, STUBS[name] if default is not None else "unmeasured: no update code")
+    out["decoder_gates"], how = decoder(f, row)
+    if how is None:
+        labels.setdefault("decoder_gates", "the record's block: its decoder_gates")
+    else:
+        labels["decoder_gates"] = how
     t = float(f.get("tail_share") or 0.0)
     if not 0 <= t < 1:
         raise ValueError(f"tail share {t} is not in [0, 1)")
@@ -543,14 +778,78 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         labels.setdefault("delta_grad_bits", STUBS["delta_grad_bits"])
     if f.get("context"):
         labels.setdefault("context", CONTEXT)
+    entries = f.get("entries") or (f.get("trace") or {}).get("entries")
+    if entries is not None:
+        entries = entries | {"id_bits": math.ceil(math.log2(shape["vocab"]))}
+        labels.setdefault("entries", ENTRIES)
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["u_in"], out["delta_bits"],
-                    out["decoder_gates"], labels, t, f.get("context"), f.get("delta_t_bits"))
+                    out["decoder_gates"], labels, t, f.get("context"), f.get("delta_t_bits"), entries)
+
+
+def decoder(f: dict, row: dict) -> tuple[float | None, str | None]:
+    """d and its source (module docstring): the block's own `decoder_gates` (its label stands: None here), else the
+    row's output's (`DECODER`)."""
+    if f.get("decoder_gates") is not None:
+        return float(f["decoder_gates"]), None
+    out = row.get("output") or {}
+    if out.get("decoder_gates") is not None:
+        return float(out["decoder_gates"]), DECODER["notes"]
+    if out.get("rebuild_macs"):
+        return float(out["rebuild_macs"]) * gates(DECODER_DEFINITION), DECODER["witness"]
+    if out.get("rebuild_macs") == 0 or out.get("format") in STORED:
+        return 0.0, DECODER["none"]
+    return None, DECODER["unmeasured"]
+
+
+class Refused(ValueError):
+    """A row whose quantities are refused, never scored (module docstring); its message is the reason."""
+
+
+def _events(es: list[dict], n: int = 3) -> str:
+    one = [f"{e['kind']} at {e.get('where') or 'an unknown line'}, steps {e['steps'][0]} to {e['steps'][1]}"
+           for e in es[:n]]
+    return "; ".join(one) + (f"; and {len(es) - n} more" if len(es) > n else "")
+
+
+def _size(e) -> str:
+    return "of unknown size" if e is None else f"{e} bytes"
+
+
+def refusal(row: dict) -> str | None:
+    """Why a traced row's measured quantities are refused (module docstring), or None: they aren't, or the row has no
+    trace (its quantities are stubs or another source's, labelled)."""
+    tr = (row.get("formalism") or {}).get("trace")
+    if tr is None:
+        return None
+    missing = [k for k in READ_BACKS if k not in tr]
+    if missing:
+        return (f"read-backs unchecked: traced before te_core 4.2 (no {' or '.join(missing)}), whose capture lists the "
+                f"read-backs that decide what the graph can't carry; trace the run again")
+    if tr["data_dependent"]:
+        return f"data-dependent: not measured ({_events(tr['data_dependent'])})"
+    if tr["carried_scalars"]:
+        return (f"carried Python number: Delta_grad grows with the step, not measured ({_events(tr['carried_scalars'])}); "
+                f"a program keeps such state as a device tensor")
+    e = (row.get("output") or {}).get("e_bytes")
+    none = [w for k, w in (("affected_share", "its affected share is 0"), ("u1_bits", "u(1) is 0")) if not tr.get(k)]
+    if e != 0 and none:
+        return f"update-free trace: E is {_size(e)}, but the traced step shows no update ({' and '.join(none)})"
+    return None
 
 
 def measure(row: dict, shape: dict) -> Measured:
     """A ledger row's quantities: its `formalism` block (ingest's, `of_record`), else a v2.3 row's own fields, with
-    stubs where it has none (`STUBS`, `V23`)."""
-    return complete(row.get("formalism") or {}, row, shape)
+    stubs where it has none (`STUBS`, `V23`). Raises `Refused` for a row `refusal` refuses, and for one with a nonempty
+    E whose prefix has no affected gates."""
+    why = refusal(row)
+    if why:
+        raise Refused(why)
+    m = complete(row.get("formalism") or {}, row, shape)
+    e = (row.get("output") or {}).get("e_bytes")
+    if e != 0 and not any(p.affected_gates for p in m.parts):
+        raise Refused(f"update-free prefix: E is {_size(e)}, but no step through checkpoint {row.get('checkpoint_step')} "
+                      f"reads theta' (affected gates 0)")
+    return m
 
 
 def of_record(record: dict, through: int | None = None) -> dict:
@@ -589,8 +888,10 @@ def of_record(record: dict, through: int | None = None) -> dict:
             log["ops"][key] = [row[4] * n, row[5] * n]
         gates, tokens = of_log(log)["gates"], sum(s.get("tokens", 0) for s in ss)
         token_gates = of_log(_token_log(log))["gates"]
+        partial = grad = None
         if traced:
             affected, dg = st.get("affected_share", 0.0) * gates, st.get("delta_grad_bits")
+            partial, grad = st.get("partial_cut_bits"), st.get("grad_cut_bits")
             tokens *= st.get("token_factor", 1.0)
             token_gates = st["sigma"] * gates if "sigma" in st else token_gates
         else:
@@ -604,7 +905,7 @@ def of_record(record: dict, through: int | None = None) -> dict:
             if "delta_grad_bits" not in st and dg is not None:
                 labels.setdefault("delta_grad_bits", "measured: te_core 4.0's cut (gradient side to the new values)")
         parts.append({"gates": gates, "tokens": tokens, "token_gates": token_gates, "affected_gates": affected,
-                      "steps": n, "delta_grad_bits": dg})
+                      "steps": n, "delta_grad_bits": dg, "partial_bits": partial, "grad_bits": grad})
     labels.setdefault("gates", "counted MACs in gates (te_core.gates)")
     labels.setdefault("tokens", "measured: the steps' token counts")
     labels.setdefault("token_gates", "counted: the steps' forward and backward in gates (te_core.gates)")

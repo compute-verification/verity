@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import pytest
 
+from te_core import VERSION as F_VERSION
 from te_core import formalism as F
 from te_core import frontier, policy
 from te_core.gates import per_mac
@@ -14,8 +15,9 @@ SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters"
          "forward_macs_per_token": 51_342_080}
 
 
-def measured(u1=1e8, sigma=0.8, delta=None, dgrad=None, decoder=None, tail=0.0, affected=0.5) -> F.Measured:
-    """One part of 1e12 gates and 1e3 token blocks, σ of the gates in them and `affected` of those affected."""
+def measured(u1=1e8, sigma=0.8, delta=None, dgrad=None, decoder=0.0, tail=0.0, affected=0.5) -> F.Measured:
+    """One part of 1e12 gates and 1e3 token blocks, σ of the gates in them and `affected` of those affected; no decoder
+    (d = 0) unless given."""
     u, u_in = F.tail(u1, tail)
     part = F.Part(gates=1e12, tokens=1e3, token_gates=sigma * 1e12, affected_gates=affected * sigma * 1e12,
                   delta_grad_bits=dgrad)
@@ -75,13 +77,15 @@ def test_varying_token_blocks_take_the_largest_per_token_affected_count():
 
 def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     """Training fits when compute (Δ + sτ), reduction (2Δ_grad) and update application (Δ + Δ_grad) each fit in k;
-    ρ is then c/(c − d), 1 with no decoder measured; there Δ ≤ k bounds u and u_in (`capped`), so x0's bound is 1 and
-    Slowdown's bound 0."""
+    ρ is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
+    (`capped`), so x0's bound is 1 and Slowdown's bound 0."""
     c, k = 1e13, 1e6
     s_tau = c / 0.8e9 * 32
     fits = F.at(measured(u1=1e5, dgrad=1e5, decoder=1e12), c, k)
     assert fits["fit"] and fits["rho"] == pytest.approx(c / (c - 1e12))
     assert F.at(measured(u1=1e5, dgrad=1e5), c, k)["rho"] == 1.0
+    unmeasured = F.at(measured(u1=1e5, dgrad=1e5, decoder=None), c, k)
+    assert not unmeasured["fit"] and not unmeasured["delta_counted"] and unmeasured["rho_fit"] == math.inf
     kinds = {"compute": measured(u1=k - s_tau + 1, dgrad=1),
              "reduction": measured(u1=1, dgrad=k / 2 + 1),
              "update": measured(u1=5.5e5, dgrad=4.6e5)}
@@ -104,7 +108,7 @@ def test_u_and_u_in_are_at_most_delta_where_delta_counts():
     assert F.capped(u, 50.0) == u and F.capped(u, 10.0)[1:] == ((0.5, 10.0), (0.75, 10.0), (1.0, 10.0))
     part = F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12)
     c, k = 1e13, 30.0
-    r = F.at(F.Measured((part,), 32, 8192, u, u, 20.0), c, k)
+    r = F.at(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=0.0), c, k)
     assert r["x0"] == 1.0 and r["s_star"] == pytest.approx((k - 20.0) / 8192)
     wide = F.at(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=c), c, k)
     assert wide["x0"] == pytest.approx(0.5 + 0.25 * 2 / 3)
@@ -112,16 +116,18 @@ def test_u_and_u_in_are_at_most_delta_where_delta_counts():
 
 def test_fit_k_is_the_least_k_at_which_fit_holds():
     """Running θ': Δ + (c/w_run)τ; training: the most of its three kinds (None without Δ_grad), a part with no token
-    blocks (the setup) needing Δ alone; none when the decoder reaches c."""
+    blocks (the setup) needing Δ alone; none when the decoder reaches c or is unmeasured."""
     m, c, w_run = measured(u1=1e6, delta=1e3, dgrad=1e4), 1e13, 2e8
     s_tau = c / 0.8e9 * 32
     run, train = F.fit_k(m, c, w_run)
     assert (run, train) == pytest.approx((1e3 + c / w_run * 32, max(1e3 + s_tau, 2e4, 1e3 + 1e4)))
     assert F.at(m, c, train)["fit"] and not F.at(m, c, train * (1 - 1e-9))["fit"]
     setup = F.Part(gates=1e9, tokens=0, token_gates=0.0, affected_gates=0.0)
-    assert F.fit_k(F.Measured(m.parts + (setup,), 32, 8192, m.u, m.u_in, 1e3), c, w_run) == pytest.approx((run, train))
+    assert F.fit_k(F.Measured(m.parts + (setup,), 32, 8192, m.u, m.u_in, 1e3, 0.0), c, w_run) == pytest.approx(
+        (run, train))
     assert F.fit_k(measured(u1=1e6), c, w_run)[1] is None
     assert F.fit_k(measured(u1=1e6, decoder=c), c, w_run) == (None, None)
+    assert F.fit_k(measured(u1=1e6, delta=1e3, dgrad=1e4, decoder=None), c, w_run) == (None, None)
 
 
 def test_update_application_reads_delta_t_where_the_run_has_latents():
@@ -221,7 +227,7 @@ def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
     """A total update (Fit's Δ) larger than the per-token update (Slowdown's u(1)), as for an update each token's path
     reads only part of: the compute block fails on Δ while the Slowdown bound reads u(1). With a small Δ the compute
     block fits and Δ bounds u too. The record says which value each came from."""
-    row = {"output": {"e_bytes": 10**9}, "macs_log": {"by": {}, "ops": {}}}
+    row = {"output": {"e_bytes": 10**9, "rebuild_macs": 0}, "macs_log": {"by": {}, "ops": {}}}
     part = {"gates": 1e12, "tokens": 1e3, "token_gates": 1e12, "affected_gates": 5e11, "steps": 1,
             "delta_grad_bits": None}
     f = {"parts": [part], "u1_bits": 1e9, "labels": {"u1_bits": "upper bound (witness): a test"}}
@@ -233,7 +239,7 @@ def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
     r = F.at(m, 1e13, k)
     assert not r["parts"][0]["fit"]["compute"] and r["x0"] == pytest.approx(k / 1e9)
     assert r["rho"] == pytest.approx(4 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
-    small = F.at(F.complete(f, row | {"output": {"e_bytes": 10}}, SHAPE), 1e13, k)
+    small = F.at(F.complete(f, row | {"output": {"e_bytes": 10, "format": "full"}}, SHAPE), 1e13, k)
     assert small["parts"][0]["fit"]["compute"] and not small["fit"] and small["x0"] == 1.0 and small["rho"] == 1.0
     with pytest.raises(ValueError):
         F.complete({"parts": [part], "u": [[0, 0], [1, 5.0]], "u1_bits": 6.0}, row, SHAPE)
@@ -262,6 +268,83 @@ def test_a_decoder_as_wide_as_c_counts_no_update():
     assert r["delta_counted"] is False and not r["parts"][0]["fit"]["compute"] and not r["fit"]
 
 
+@pytest.mark.parametrize("output, d, source", [
+    ({"decoder_gates": 5e9, "rebuild_macs": 10}, 5e9, "notes"),
+    ({"rebuild_macs": 4 * 10 ** 6, "format": "seedlog"}, 4e6 * 12637, "witness"),
+    ({"rebuild_macs": 0, "format": "lora"}, 0.0, "none"),
+    ({"format": "full"}, 0.0, "none"),
+    ({"format": "lora"}, None, "unmeasured"),
+])
+def test_the_decoder_is_the_notes_else_the_witness_rebuild_and_0_only_without_one(output, d, source):
+    """seed-mezo's 04:15Z finding: d is the program's notes.decoder gates for the checkpoint's E, else
+    prepare.rebuild_macs(θ, E) at F32Fma_v4's 12,637 gates a multiply-add, 0 only where E stores θ' directly; with none,
+    Fit is refused. The block's own d stands over all of them."""
+    row = {"output": {"e_bytes": 10} | output, "macs_log": {"by": {}, "ops": {}}}
+    part = {"gates": 1e12, "tokens": 1e3, "token_gates": 1e12, "affected_gates": 5e11, "delta_grad_bits": 10.0}
+    m = F.complete({"parts": [part], "u1_bits": 80.0}, row, SHAPE)
+    assert m.decoder_gates == d and m.labels["decoder_gates"] == F.DECODER[source]
+    assert F.at(m, 1e13, 1e6)["fit"] is (d is not None)
+    own = F.complete({"parts": [part], "u1_bits": 80.0, "decoder_gates": 7.0}, row, SHAPE)
+    assert own.decoder_gates == 7.0 and own.labels["decoder_gates"] == "the record's block: its decoder_gates"
+    if d:
+        assert F.at(m, 1e13, 1e6)["rho"] == pytest.approx(1e13 / (1e13 - d))
+        assert not F.at(m, 0.5 * d, 1e6)["fit"]
+
+
+def traced(trace: dict, e_bytes=10) -> dict:
+    """A traced row: one part with affected gates, and the trace's quantities (`F.of_trace`'s `trace`)."""
+    f = {"tail_share": 0.0, "u_in": [[0, 0], [1, 80.0]], "u1_bits": 80.0, "tau_ids": 1.0, "tau_other_bits": 0.0,
+         "affected_share": 0.5, "data_dependent": [], "carried_scalars": []} | trace
+    block = F.of_trace(f) | {"parts": [{"gates": 1e12, "tokens": 1e3, "token_gates": 1e12, "affected_gates": 5e11,
+                                        "delta_grad_bits": 10.0}]}
+    return {"id": "r", "start": "s", "output": {"e_bytes": e_bytes, "format": "full"}, "formalism": block,
+            "checkpoint_step": 3}
+
+
+CLIP = {"kind": "a comparison of a read-back float", "where": "train.py:399", "steps": [0, 4], "count": 5}
+EMA = {"kind": "a Python number read back in several earlier steps", "where": "train.py:395", "steps": [2, 4],
+       "count": 3, "earlier_steps": 4}
+
+
+@pytest.mark.parametrize("trace, e_bytes, reason", [
+    ({"data_dependent": [CLIP]}, 10, "data-dependent: not measured (a comparison of a read-back float at train.py:399, "
+                                     "steps 0 to 4)"),
+    ({"carried_scalars": [EMA]}, 10, "carried Python number: Delta_grad grows with the step"),
+    ({"affected_share": 0.0, "u1_bits": 0.0, "u_in": [[0, 0], [1, 0.0]]}, 10,
+     "update-free trace: E is 10 bytes, but the traced step shows no update (its affected share is 0 and u(1) is 0)"),
+    ({"u1_bits": 0.0, "u_in": [[0, 0], [1, 0.0]]}, None, "update-free trace: E is of unknown size"),
+    ({"data_dependent": None}, 10, "read-backs unchecked: traced before te_core 4.2 (no data_dependent)"),
+])
+def test_a_trace_the_capture_cannot_vouch_for_is_refused_never_scored(trace, e_bytes, reason):
+    """seed-mezo's 04:15Z LOOPHOLE: a clip on a read-back estimate left the trace with no update (affected share 0,
+    u(1) 0), which scored ρ = 1 whatever the update. A data-dependent capture, a Python number folded over steps, a
+    nonempty E with no update in its trace and a trace without the read-back lists are each refused with the reason,
+    and the frontier leaves the row out with it."""
+    row = traced({k: v for k, v in trace.items() if v is not None}, e_bytes)
+    if trace.get("data_dependent", []) is None:
+        del row["formalism"]["trace"]["data_dependent"]
+    assert F.refusal(row).startswith(reason)
+    with pytest.raises(F.Refused, match="^" + reason.split(" (")[0]):
+        F.measure(row, SHAPE)
+    scored, skipped = frontier.formalism_rows([row], {"s": SHAPE})
+    assert scored == [] and skipped["r"] == frontier.REFUSED + F.refusal(row)
+
+
+def test_an_empty_e_with_no_update_is_scored_and_a_nonempty_one_with_an_update_free_prefix_is_not():
+    """E = 0 bytes (the start itself) may show no update; a nonempty E whose prefix reads θ' nowhere (a checkpoint
+    taken before its first update reads one) is refused."""
+    none = {"affected_share": 0.0, "u1_bits": 0.0, "u_in": [[0, 0], [1, 0.0]]}
+    empty = traced(none, e_bytes=0)
+    empty["formalism"]["parts"][0]["affected_gates"] = 0.0
+    assert F.refusal(empty) is None and F.measure(empty, SHAPE).delta_bits == 0
+    early = traced({})
+    early["formalism"]["parts"][0]["affected_gates"] = 0.0
+    assert F.refusal(early) is None
+    with pytest.raises(F.Refused, match="update-free prefix: E is 10 bytes, but no step through checkpoint 3 reads"):
+        F.measure(early, SHAPE)
+    assert F.measure(traced({}), SHAPE).decoder_gates == 0.0
+
+
 def test_a_v23_row_is_measured_from_its_old_fields_with_every_stub_named():
     fwd = 3 * SHAPE["forward_macs_per_token"]
     row = {"start": "s50", "output": {"e_bytes": 1000}, "annotation": {"steps": 3},
@@ -276,7 +359,8 @@ def test_a_v23_row_is_measured_from_its_old_fields_with_every_stub_named():
     assert m.tau_bits == 16 and m.a_bits == 512 * 16 and m.u1_bits == 8000
     assert set(m.labels) == {"gates", "tokens", "token_gates", "affected_gates", "tau_bits", "a_bits", "delta_bits",
                              "decoder_gates", "u", "u_in", "u1_bits", "delta_grad_bits"}
-    assert all(m.labels[k].startswith("stub") for k in ("tokens", "affected_gates", "tau_bits", "decoder_gates"))
+    assert all(m.labels[k].startswith("stub") for k in ("tokens", "affected_gates", "tau_bits"))
+    assert m.decoder_gates is None and m.labels["decoder_gates"] == F.DECODER["unmeasured"]
     assert all(m.labels[k].startswith("upper bound") for k in ("a_bits", "u1_bits", "delta_bits"))
     assert all(m.labels[k].startswith("assumption") for k in ("u", "u_in"))
     with pytest.raises(ValueError):
@@ -325,7 +409,8 @@ def test_the_grid_spans_the_reference_shapes_in_decades():
     assert s["inference"]["c"] == w_fwd and s["inference"]["k"] == 16 + 1023 * 2 * 6 * 512 * 16
     ref = s["reference"]
     assert (ref["c"], ref["k"]) == (4096 * w_fwd, 80_000)
-    serving = F.Measured((F.Part(1024 * w_fwd, 1024, 1024 * w_fwd, 0.0),), 16, 512 * 16, F.even(0.0), F.even(0.0), 0.0)
+    serving = F.Measured((F.Part(1024 * w_fwd, 1024, 1024 * w_fwd, 0.0),), 16, 512 * 16, F.even(0.0), F.even(0.0), 0.0,
+                         0.0)
     assert F.fit_k(serving, ref["c"], w_fwd)[0] <= ref["k"]  # honest serving passes Fit at the reference policy
     assert s["server"]["c"] == pytest.approx(3 * SHAPE["forward_macs_per_token"] * SHAPE["tokens"] * per_mac("gemm/bf16"))
     assert s["server"]["k"] == SHAPE["parameters"] * 80
@@ -349,7 +434,8 @@ def test_honest_is_the_least_gates_of_any_checkpoint_and_s_is_at_least_one():
     row = {"start": "s", "output": {"e_bytes": 10 ** 6}, "start_bpb": 2.0, "direction": "d", "annotation": {"steps": 1}}
 
     def r(i, gates_macs, bpb, step, run):
-        log = {"by": {"fwd/theta": gates_macs}, "ops": {"fwd theta mm [[1]]": [1, gates_macs]}}
+        log = {"by": {"fwd/theta": gates_macs, "fwd/updated": 1},
+               "ops": {"fwd theta mm [[1]]": [1, gates_macs], "fwd updated mm [[1]]": [1, 1]}}
         return row | {"id": f"r{i}", "macs_log": log, "val_bpb": bpb, "checkpoint_step": step, "run_id": run}
 
     rows = [r(1, 10 ** 9, 1.9, 9, "a"), r(2, 10 ** 8, 1.9, 4, "b"), r(3, 10 ** 10, 1.9, 9, "b")]
@@ -366,3 +452,65 @@ def test_honest_is_the_least_gates_of_any_checkpoint_and_s_is_at_least_one():
     assert all(set(frontier.TERMS) <= set(v) for v in t["cells"].values())
     assert set(out["marks"]) == set(policy.MARKS)
     assert len(out["targets"]) == len(frontier.TARGETS)
+
+
+def test_a_span_block_holds_the_most_tokens_its_reads_and_gates_allow():
+    """No context: (k − U)/A tokens, at most C0, none where U > k. With context (kf a position before p, read once a
+    block), a block serving p either reads the earlier positions' context or computes them at A each: at k = 14 with
+    A = 4, kf = 10, L = 4, positions 0-2 hold 3.5 tokens and position 3 none (30 bits of context, or 16 of states)."""
+    assert F._span_tokens(16, 1000, 0, 0, None, 500, 17000).tolist() == [500]
+    assert F._span_tokens(16, 1000, 0, 0, None, 2000, 17000).tolist() == [1000]
+    assert F._span_tokens(16, 20000, 0, 0, None, 2000, 17000).tolist() == [0]
+    assert F._span_tokens(4, 0, 10, 0, 4, math.inf, 14).tolist() == [3.5, 3.5, 3.5, 0]
+    assert F._span_tokens(4, 0, 10, 0, 4, math.inf, 40).tolist() == [10, 10, 10, 10]
+    assert F._span_tokens(4, 0, 0, 10, 4, math.inf, 14).tolist() == [0, 3.5, 3.5, 3.5]
+
+
+def one_segment(U=2000.0, delta=None, decoder=0.0) -> F.Measured:
+    """One part of 1e12 gates, 1e3 tokens of 1e9 gates each, half of them affected, and reading A's entries of one
+    segment that reads a token's id (16 bits) and U update bits."""
+    part = F.Part(gates=1e12, tokens=1e3, token_gates=1e12, affected_gates=5e11)
+    entries = {"segments": 1, "gates": [1e9], "frontier_bits": [[0.0]], "ids": [[1.0]], "id_bits": 16,
+               "u_bits": [[U]], "positions": None, "context_fwd_bits": None, "context_bwd_bits": None}
+    return F.Measured((part,), tau_bits=16, a_bits=16, u=F.even(U), u_in=F.even(U), delta_bits=delta,
+                      decoder_gates=decoder, entries=entries)
+
+
+def test_the_default_packer_is_the_counting_lemma_at_its_blocks_cap():
+    """c = 1e11 gates holds 100 tokens: the cap is min((k − U)/16, 100) tokens of 1e9 gates, the term c·share/cap.
+    A block reading the update code (Δ = 500 < U) reads less but has c − d gates under decoding, c under token."""
+    m, c = one_segment(), 1e11
+    assert F.packer(m, c, 3600) == pytest.approx(0.5) and F.packer(m, c, 10 ** 4) == pytest.approx(0.5)
+    assert F.packer(m, c, 2800) == pytest.approx(1.0) and F.packer(m, c, 1000) == math.inf
+    coded = one_segment(delta=500.0, decoder=5e10)
+    assert F.packer(coded, c, 2800, decoder=False) == pytest.approx(0.5)
+    assert F.packer(coded, c, 2800, decoder=True) == pytest.approx(1.0)
+    b = F.bound(coded, c, 2800, "A")
+    assert (b["terms"]["token"], b["terms"]["decoding"], b["argmax"]) == (pytest.approx(0.5), pytest.approx(1.0),
+                                                                          "decoding")
+    assert F.packer(coded, c, 1000, decoder=False) == pytest.approx(1e11 * 0.5 / (1e9 * 500 / 16))
+
+
+def test_the_one_bound_is_the_max_over_kinds_with_reading_b_the_token_form():
+    """Reading B's token term is Slowdown's; the reduction and update kinds count where the step's token work fills
+    two or more blocks (b = 8 at c = 1e11), unmeasured without the cuts; `kinds` restricts the max, and reading A needs
+    entries."""
+    m, c, k = measured(u1=1e9), 1e11, 1e5
+    b = F.bound(m, c, k, "B")
+    assert b["terms"]["token"] == F.at(m, c, k)["slowdown"] and b["label"] == f"te_core {F_VERSION}, reading B"
+    assert b["unmeasured"] == ["reduction", "update"] and b["terms"]["reduction"] == 0
+    cut = replace(m, parts=(replace(m.parts[0], partial_bits=1e6, grad_bits=2e6),))
+    b = F.bound(cut, c, k, "B")
+    assert b["inputs"]["reduction"]["blocks"] == [8] and not b["unmeasured"]
+    assert b["terms"]["reduction"] == pytest.approx(c * 7 * 1e6 / (k * 1e12))
+    assert b["terms"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
+    assert b["max"] == max(b["terms"].values())
+    only = F.bound(cut, c, k, "B", kinds=("token", "decoding"))
+    assert only["terms"] == b["terms"] and only["max"] == max(b["terms"]["token"], b["terms"]["decoding"])
+    r = F.at(cut, c, k, "B")
+    assert r["bound"]["max"] == b["max"] and r["rho"] == max(1.0, b["max"]) and not r["fit"]
+    assert F.at(cut, c, k)["rho"] == max(1.0, b["terms"]["token"])
+    with pytest.raises(F.Refused, match="reading A: no entries"):
+        F.bound(m, c, k, "A")
+    with pytest.raises(ValueError):
+        F.bound(m, c, k, "B", kinds=("tokens",))
