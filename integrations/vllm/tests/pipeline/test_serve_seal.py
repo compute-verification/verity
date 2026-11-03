@@ -496,12 +496,12 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     from verity_vllm.pipeline import advice_windows as AW
     from verity_vllm.program.predict import steps as ST
 
-    assert ADV.CAP_BITS == AW.CAP_BITS == ST.CAP_BITS == 1 << 23 and AW.CAPPED == "verity/prove-path/capped-compiler/v0"
+    assert ADV.CAP_BITS == AW.CAP_BITS == ST.CAP_BITS == 1 << 23 and AW.CAPPED == "verity/prove-path/capped-compiler/v1"
     c = ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096)
-    want = hashlib.sha512(canonical_json({"name": "verity/prove-path/capped-compiler/v0", "cap_bits": 4096,
+    want = hashlib.sha512(canonical_json({"name": "verity/prove-path/capped-compiler/v1", "cap_bits": 4096,
                                           "compiler": {"name": "inner-compiler", "digest": "cd" * 64}})).hexdigest()
     assert isinstance(c, AW.Capped) and c.name == AW.CAPPED and c.digest == want
-    assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
+    assert c.digest == "d43ba51c9221c840736fc834152e0a386c3b9728a74514c49fac679f9684a32269ee61104b70d6c3b9a1505c45c08e6558dbde500d597152ba048684fa3bff5a"
     assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
     assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
 

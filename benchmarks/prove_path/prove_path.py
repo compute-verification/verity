@@ -1,8 +1,8 @@
 """Prove path: a committed run and its advice through the proof system, for network accounting under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
-workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
-and each window's registration binds the compiler's digest and that commitment's root, before any coin. The prover commits each
+workload's. The advice is private, its length too: the prover commits I1's canonical encoding padded to ℓ (`advice_windows.pad`)
+under hiding rows (`advice_windows.commit_advice`), and each window's registration binds the compiler's digest and that commitment's root, before any coin. The prover commits each
 window over the compiler's Programs from its sealed bundle. The verifier, handed the commitment's opening (the named gap: the
 advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`benchmarks/one_stage/a5.py`'s
@@ -34,7 +34,7 @@ Two kinds of committed run:
   own (`serve_check`): the registration names this window, a compiler whose digest carries the cap ℓ and is the verifier's own,
   and the root the opening opens; the root serve-openai published for the window is a SHA-512 root, the row dir's run root.
 
-    prove_path.py advice --workload F --out FILE
+    prove_path.py advice --workload F --out FILE [--cap-bits L]
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
@@ -57,7 +57,8 @@ Two kinds of committed run:
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
         [--workers N] [--hf-config F] [--target F] [--cap-bits L]
 
-* **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
+* **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding
+  padded to ℓ (``--cap-bits``, `advice_windows.pad`), as the registered compiler reads it.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
 * **commit** (the prover): the advice compiled (`compile_advice`) and committed, its opening (the advice and its salts) written to
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
@@ -125,8 +126,10 @@ Two kinds of committed run:
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
   verifier's own ``window-circuit`` record is the circuit it holds it to.
 
-`Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
-every byte string: the requests, or a `ValueError` naming why, the same one on every run.
+`Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest and reads the advice at ℓ bits
+(`advice_windows.pad`: the encoding, a 0x80 byte, zero bytes), so its commitment's rows and its registration's length are ℓ's
+whatever the encoding's; `compile_advice` is total on every byte string: the requests, or a `ValueError` naming why, the same
+one on every run.
 
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
@@ -566,19 +569,18 @@ def serve_negatives(s: SimpleNamespace, compiler: Capped, bound: Mapping[str, An
 
 def compile_advice(compiler: Capped, data: Any, codec: Any = None) -> list[dict]:
     """The compiler on any input: the requests it compiles, or a `ValueError` naming why it refuses the input, a function of the
-    input alone. Refused in order: not bytes; over the cap ℓ (before any of it is read); not I1 advice (`MalformedAdvice`, the
-    codec's first broken rule); not its canonical encoding; a request the compiler can't run (a chunked prefill, a prefix-cache
-    hit, a preemption, a gap: `advice_windows.requests_of`, or I2's own refusals, `I2Compiler.requests`)."""
+    input alone. Refused in order: not bytes; not ℓ bits padded (`Capped.unpad`, before any of it is read); not I1 advice
+    (`MalformedAdvice`, the codec's first broken rule); not its canonical encoding; a request the compiler can't run (a chunked
+    prefill, a prefix-cache hit, a preemption, a gap: `advice_windows.requests_of`, or I2's own refusals, `I2Compiler.requests`)."""
     if not isinstance(data, bytes):
         raise ValueError(f"the advice is a byte string, not a {type(data).__name__}")
-    if 8 * len(data) > compiler.cap_bits:
-        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {compiler.cap_bits} bits")
+    enc = compiler.unpad(data)
     c = AW.codec_of(codec)
-    advice = c.decode(data)
-    if c.encode(advice) != data:
+    advice = c.decode(enc)
+    if c.encode(advice) != enc:
         raise ValueError("the advice's bytes are not its canonical encoding")
     own = getattr(compiler.inner, "requests", None)
-    return own(data) if own is not None else AW.requests_of(advice)
+    return own(enc) if own is not None else AW.requests_of(advice)
 
 
 def commit_advice(compiler: Capped, data: bytes) -> tuple[list[dict], dict, dict]:
@@ -1109,7 +1111,7 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     (`serving_rows.population`, as `window1` makes the verifier's), each Program's Build this command's own, from its compile
     (`own_builds`, into a directory of its own beside ``--out``: it reads no row dir and needs no vLLM), and its circuit record
     (`serving_rows.circuit_record`) written to ``--out``, under no run (its `interface.RUN_FIELDS` empty: the compiler knows
-    none). -> the advice's length in bits, the one the registration charges (`advice_windows.of_advice`)."""
+    none). -> the advice's length in bits, ℓ, the one the registration charges (`advice_windows.of_advice`)."""
     import tempfile
 
     from verity_vllm.pipeline import serving_rows as SRW
@@ -1123,8 +1125,7 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
                                       transfer_gates=compiler.transfer_gates)
         record = SRW.circuit_record(window, rows, p.arrivals)
     Path(a.out).write_bytes(IF.circuit_bytes(record))
-    c = AW.codec_of()
-    return {"bits": int(c.total_bits(c.decode(data)))}
+    return {"bits": 8 * len(data)}
 
 
 def window_class_of(arg: str | None) -> Any:
@@ -1141,7 +1142,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     network certifier's scan state rows), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
-    length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
+    length in bits, ℓ, and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
     each held to the root the window's registration (``advice/w<K>/registration.json``) records for its parameter
     (`registration_roots`)."""
     from verity_vllm.program.predict.build import Unexpressible
@@ -1153,15 +1154,14 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
     t0 = time.time()
     try:
-        circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls)
+        circuit = window_circuit(registered, compile_steps(registered, compiler.unpad(data), compiler.inner.ingress), cls)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
     doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
-    c = AW.codec_of()
     roots = registration_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
-    return {"bits": int(c.total_bits(c.decode(data))), "count": IF.input_count(doc, pins=pins, roots=roots),
+    return {"bits": 8 * len(data), "count": IF.input_count(doc, pins=pins, roots=roots),
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
 
 
@@ -1362,7 +1362,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
     try:
-        compiled = compile_steps(registered, data, compiler.inner.ingress)
+        compiled = compile_steps(registered, compiler.unpad(data), compiler.inner.ingress)
         WC.takes(compiled, cls)
         low = WC.lower(registered, cls)
     except Unexpressible as e:
@@ -1464,7 +1464,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     (out / "windows.jsonl").write_text(json.dumps({"window": 0, "run_id": run_id, "run_root": root,
                                                    "requests": [q["engine_id"] for q in reqs], "passed": True}) + "\n")
     compiler = Capped(i2_of_serve(str(out), 0, a.row_dir, a.hf_config, None, a.cap_bits), a.cap_bits)
-    data = AW.codec_of().encode(AW.advice_of_workload(json.loads(Path(a.workload).read_text())))
+    data = compiler.pad(AW.codec_of().encode(AW.advice_of_workload(json.loads(Path(a.workload).read_text()))))
     _reqs, bound, reg = AW.of_advice(compiler, data)
     adv = out / "advice" / "w0"
     (adv / "private").mkdir(parents=True, exist_ok=True)
@@ -1489,7 +1489,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("advice", help="a declared run's I1 advice from its workload file")
     p.add_argument("--workload", required=True, type=workload_arg)
-    p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding")
+    p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding padded to ℓ (advice_windows.pad)")
+    p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the length in bits the advice is padded to (default 2^23)")
     for name in ("commit", "audit"):
         p = sub.add_parser(name)
         p.add_argument("--tp-commit", help="a TP Commit's record (its --out: runs.jsonl, versions.json)")
@@ -1636,11 +1637,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "advice":
         c = AW.codec_of()
         advice = AW.advice_of_workload(json.loads(Path(a.workload).read_text()), c)
-        data = c.encode(advice)
+        data = AW.pad(c.encode(advice), a.cap_bits)
         AW.requests_of(advice)
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
         Path(a.out).write_bytes(data)
-        print(json.dumps({"advice": a.out, "requests": len(advice.requests), "steps": len(advice.steps), "bits": c.total_bits(advice)}))
+        print(json.dumps({"advice": a.out, "requests": len(advice.requests), "steps": len(advice.steps), "bits": 8 * len(data)}))
         return 0
     if served(a):
         if a.tp_commit or a.workload or a.window is None or not a.row_dir or getattr(a, "advice", None):

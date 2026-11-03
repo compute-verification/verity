@@ -407,7 +407,7 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
     or none, every registered read is free."""
     import prove_path as PP
-    from test_prove_path import _served
+    from test_prove_path import CAP, _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.build import Unexpressible
 
@@ -426,7 +426,7 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     served = json.loads(reg_file.read_text())
     reg_file.write_text(json.dumps({**served, "registered_roots": PIN_A}))
     base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a=" + PIN_A["a"]]
+            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a=" + PIN_A["a"], "--cap-bits", str(CAP)]
     capsys.readouterr()
     assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
     got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
@@ -944,7 +944,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
     registration charges, and exits `records_audit.REFUSED` on advice it can't compile."""
     import prove_path as PP
-    from test_prove_path import _served
+    from test_prove_path import CAP, _served
     from verity_vllm.pipeline import serving_rows as SRW
 
     s = _served(tmp_path, monkeypatch)
@@ -955,10 +955,10 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
     base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
-            str(tmp_path / "out.json")]
+            str(tmp_path / "out.json"), "--cap-bits", str(CAP)]
     capsys.readouterr()
     assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
-    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]} == {"bits": CAP}
     out = json.loads((tmp_path / "out.json").read_text())
     assert out["format"] == IF.CIRCUIT and (out["run"], out["context"]) == ("", "") and set(out) == set(IF.circuit_record(
         window, "x", IF.templates_of(window)))
@@ -1009,7 +1009,7 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
     two weights fields swapped): the verifier's record is its own compile's in each case."""
     import prove_path as PP
-    from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
+    from test_prove_path import CAP, LAYER0, _circuit, _row_dir, _tiny_served
 
     s = _tiny_served(tmp_path, monkeypatch)
     (tmp_path / "part.json").write_text(json.dumps(LAYER0))
@@ -1017,10 +1017,11 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     out = tmp_path / "mine" / "circuit.json"
     out.parent.mkdir()
     assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
-                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out), "--cap-bits", str(CAP)]) == 0
     assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
     mine = json.loads(out.read_text())
-    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
+    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, CAP, own=True), CAP),
+                             s.data, LAYER0)
     assert IF.circuit_of(own) == IF.circuit_of(mine)
     copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
             f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
@@ -1034,6 +1035,6 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
             ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
             ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
         rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
-        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
+        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None, CAP), CAP), s.data, LAYER0)
         v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
         assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name

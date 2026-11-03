@@ -40,12 +40,12 @@
 #     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
 #     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
 #     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
-#     that names or counts a window, its public form in its place. The advice registration's published copies
-#     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
-#     cap (`served_verdicts.py public-registration`), SAMPLED-PROOFS' leak count charges that cap (`sampled-line
-#     --cap-bits`), and the audit's log and run.sh's served path (its summary,
-#     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
-#     them.
+#     that names or counts a window, its public form in its place. Each window's advice is padded to its compiler's cap
+#     ℓ_a before it is committed and compiled (`advice_windows.pad`), so its registration, its rows and SAMPLED-PROOFS'
+#     leak count say ℓ_a, never the advice's length; the registration's published copies ($OUT/registration.json, the
+#     records audit's served-records) are refused unless it is so (`served_verdicts.py public-registration`), and the
+#     audit's log and run.sh's served path (its summary, registrations, sessions and audit log, which count the window's
+#     members) stay in the serve dir, where the record reads them.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves):
@@ -456,7 +456,7 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
     --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} \
     "${cls[@]}" > "$D/window-circuit-$tag.count.json" 2> "$D/window-circuit-$tag.err"
   rc=$?
-  if [ "$rc" = 0 ]; then  # the count's `bits` is the advice's length, which stays on the node
+  if [ "$rc" = 0 ]; then  # the count's `bits` is ℓ_a, which ADVICE-LINE states
     "$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); c.pop("bits", None); print(json.dumps(c, sort_keys=True))' \
       "$D/window-circuit-$tag.count.json" > "$OUT/window-circuit-$tag.json"
     say "$head: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
@@ -738,7 +738,7 @@ rc=$?
 SP=$D/sampled-proofs-served
 rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || mv "$OUT/sampled-proofs/served" "$SP"
 # run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
-# (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone
+# (serve.json) and the window's advice registration (registration.json), published only if it is at ℓ_a
 SR=$OUT/sampled-proofs/served-records
 rm -f "$SR/windows.jsonl" "$SR/serve.json"
 if [ -f "$SR/registration.json" ]; then
@@ -746,7 +746,7 @@ if [ -f "$SR/registration.json" ]; then
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
 fi
 say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --cap-bits "$CAP" --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
+  --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote

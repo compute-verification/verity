@@ -211,7 +211,7 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
         reg = json.loads((d / "registration.json").read_text())
         assert reg["window"] == int(w) and reg["commit"] == {"run_id": commits[int(w)]["run_id"], "run_root": commits[int(w)]["run_root"]}
         assert entry["root"] == reg["binding"]["advice"]["root"] and entry["registration"] == f"w{w}/registration.json"
-        data = (d / "private" / "advice.bin").read_bytes()
+        data = C.unpad((d / "private" / "advice.bin").read_bytes())
         assert data.hex() not in (d / "registration.json").read_text()
         advice = I1.decode(data)
         ingress = {q.id: bodies.get(q.id) or {**bodies[None], "user": q.id} for q in advice.requests}
@@ -250,12 +250,13 @@ def test_a_request_split_across_commit_windows_is_carried_and_each_windows_advic
     last, placed, digests, carried_in = None, {}, {}, 0
     for w in sorted(map(int, rep["windows"])):
         d = out / "advice" / f"w{w}"
-        data = (d / "private" / "advice.bin").read_bytes()
+        padded = (d / "private" / "advice.bin").read_bytes()
+        data = C.unpad(padded)
         a = WA.decode(data)
         assert WA.encode(a) == data
         salts = [bytes.fromhex(s) for s in json.loads((d / "private" / "opening.json").read_text())["salts"]]
-        root = AW.commit_advice(C, data, salts).root.hex()
-        assert json.loads((d / "registration.json").read_text())["binding"] == AW.binding(C, root, WA.total_bits(a))
+        root = AW.commit_advice(C, padded, salts).root.hex()
+        assert json.loads((d / "registration.json").read_text())["binding"] == AW.binding(C, root, C.cap_bits)
         if last is not None:
             WA.follows(last, a)
         last, carried_in = a, carried_in + len(a.carried)
@@ -410,7 +411,7 @@ def test_a_request_its_client_aborts_is_freed_after_its_step_and_every_window_it
     assert rep["refused"] == {} and rep["open"] == []
     bodies, last, placed, held = {"na-ab": gone, "na-7": other}, None, [], []
     for w in sorted(map(int, rep["windows"])):
-        data = (tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()
+        data = C.unpad((tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes())
         a = WA.decode(data)
         if last is not None:
             WA.follows(last, a)
@@ -451,7 +452,7 @@ def test_a_request_its_client_aborts_before_it_is_ever_scheduled_is_in_no_window
     assert rep["refused"] == {} and rep["open"] == [] and all(r.get("request") != e for w in ADV.windows_of(recs)[0].values() for r in w)
     bodies, last = {b["user"]: b for b in (OTHER, QUEUED, *WAVES[1])}, None
     for w in sorted(map(int, rep["windows"])):
-        data = (tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()
+        data = C.unpad((tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes())
         a = WA.decode(data)
         if last is not None:
             WA.follows(last, a)
@@ -468,8 +469,8 @@ def test_the_servers_advice_is_the_advice_commands_window_for_window_and_each_ha
     """Under ``--advice`` the server commits each closed window's advice as it serves (`serve_advice.ServedAdvice`; 3-step
     windows, so requests are carried across them): each is the advice `verity-vllm advice` writes of the same records
     afterwards, byte for byte, and its registration the same but for its fresh salts' root. Each window has its line in
-    advice.jsonl, in window order: B, the root, and ℓ_a for the advice's length, which stays in the serve dir. The advice
-    command then refuses to commit the run's advice again."""
+    advice.jsonl, in window order: B, the root, ℓ_a and the rows ℓ_a fixes, the advice committed padded to ℓ_a, so no line
+    or registration says its own length. The advice command then refuses to commit the run's advice again."""
     with Server(tmp_path, window_steps=3, advice=True) as s:
         for wave in WAVES:
             serve_concurrently(s, wave)
@@ -484,7 +485,7 @@ def test_the_servers_advice_is_the_advice_commands_window_for_window_and_each_ha
         d, e = tmp_path / "advice" / f"w{w}", tmp_path / "late" / f"w{w}"
         data = (d / "private" / "advice.bin").read_bytes()
         assert data == (e / "private" / "advice.bin").read_bytes()
-        carried += len(WA.decode(data).carried)
+        carried += len(WA.decode(C.unpad(data)).carried)
         ours, theirs = (json.loads((x / "registration.json").read_text()) for x in (d, e))
         assert ours["binding"]["advice"]["root"] != theirs["binding"]["advice"]["root"]
         for r in (ours, theirs):
@@ -496,7 +497,8 @@ def test_the_servers_advice_is_the_advice_commands_window_for_window_and_each_ha
     for x in lines:
         reg = json.loads((tmp_path / "advice" / f"w{x['window']}" / "registration.json").read_text())
         assert x["compiler"] == {"name": C.name, "digest": C.digest} and x["commit"] == reg["commit"]
-        assert x["advice"] == {"root": reg["binding"]["advice"]["root"], "bits": C.cap_bits} != reg["binding"]["advice"]
+        assert x["advice"] == {"root": reg["binding"]["advice"]["root"], "bits": C.cap_bits} == reg["binding"]["advice"]
+        assert x["rows"] == reg["rows"] == C.cap_bits // AW.ROW_BITS
     with pytest.raises(ValueError, match="a window's advice is committed once"):
         ADV.write(tmp_path, compiler=C)
 

@@ -53,7 +53,7 @@ def _run(tmp_path, arrivals: dict[int, list[FakeRequest]], *, abort_at=None, clo
 
 
 def _advice(tmp_path) -> I1.Advice:
-    return I1.decode((tmp_path / "advice" / "private" / "advice.bin").read_bytes())
+    return I1.decode(C.unpad((tmp_path / "advice" / "private" / "advice.bin").read_bytes()))
 
 
 def test_a_varied_run_gives_i1_advice_that_round_trips_with_its_bits_charged_to_windows(tmp_path):
@@ -243,7 +243,7 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     assert rep["registration"]["binding"]["compiler"] == {"name": capped.name, "digest": capped.digest}
     assert rep["registration"]["compiler"]["inner"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
     private = out / "private"
-    assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
+    assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode(capped.unpad((private / "advice.bin").read_bytes()))
 
 
 def test_the_registration_records_the_committers_weights_roots_and_refuses_anything_else(tmp_path):

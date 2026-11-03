@@ -70,6 +70,7 @@ from verity.core.protocols.certifier import advice as I1  # noqa: E402
 from verity.core.protocols.certifier.active import compact_record_data  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.commitments import advice as AC  # noqa: E402
+from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
 
@@ -209,11 +210,14 @@ def endpoint_config(recs: list[dict], serve: dict, eos: list[int]) -> dict:
 def opens(reg: dict, opening: dict, adv) -> bool:
     """Whether a Commit window's opening opens its registered root (``reg``, its public registration) to ``adv``, its
     window advice (`window_advice.Advice`, or an I1 v0 advice, a window that carries nothing): the opening's bytes are
-    ``adv``'s encoding (`window_advice.encode`, I1 v0's for a window that carries nothing), committed as
-    `advice_windows.commit_advice` commits them (``row_bits`` rows, the last zero-padded, under the binding of the
-    scheme to the registered compiler)."""
+    ``adv``'s encoding (`window_advice.encode`, I1 v0's for a window that carries nothing), padded to the registered
+    length when the compiler reads it padded (`advice_windows.pad`), committed as `advice_windows.commit_advice` commits
+    them (``row_bits`` rows, the last zero-padded, under the binding of the scheme to the registered compiler)."""
     data = bytes.fromhex(opening["advice"])
-    if data != (I1.encode(adv) if type(adv) is I1.Advice else WA.encode(adv)) or opening.get("scheme") != reg["scheme"]:
+    enc = I1.encode(adv) if type(adv) is I1.Advice else WA.encode(adv)
+    bits = int(reg["binding"]["advice"]["bits"])
+    if data not in (enc, AW.pad(enc, bits) if 8 * len(enc) + 8 <= bits and not bits % 8 else enc) \
+            or opening.get("scheme") != reg["scheme"]:
         return False
     w = reg["row_bits"] // 8
     rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]

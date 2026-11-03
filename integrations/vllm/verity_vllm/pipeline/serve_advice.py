@@ -12,8 +12,9 @@ window's advice committed by the server, its public line out before any coin of 
   request it ran, which the server writes at the close of the window the request finishes in. A window waits on its slowest
   request, so on at most that request's token cap, and the windows are committed in order. Each gets a line of
   ``advice.jsonl`` (`LINES`, public, mirrored): the compiler's digest, the root of the advice's hiding commitment and ℓ_a,
-  the registered width, where the advice's own length stays a value (``registration.json`` holds it, in the serve dir); a
-  window the advice refuses is a line naming it refused, its reason in ``advice/windows.json``, and one with no step a line
+  the registered width, the length the advice is padded to before it is committed and compiled (`advice_windows.pad`), so
+  no row count or public field says the advice's own length, which only the prover's ``private/`` knows; a window the advice
+  refuses is a line naming it refused, its reason in ``advice/windows.json``, and one with no step a line
   naming it empty, so every closed window has its line.
 * **Coins.** A draw of a window through ``--draws-dir`` before its line is out is refused, and the window's release with it
   (`serve_release.DrawDir`): no coin of a window is drawn before its advice is committed. At the stop the windows left are
@@ -54,8 +55,8 @@ class AdviceOptions:
                                "Commit window's advice as the server serves, its public line in advice.jsonl before any draw of "
                                "the window (serve_advice)")
     advice_cap: int = option("--advice-cap", type=int, default=AW.CAP_BITS, metavar="BITS",
-                             help="ℓ_a, the registered width: the cap on a window's advice in bits, which B's digest covers and "
-                                  "each window's public line states in place of the advice's own length (default 2^23)")
+                             help="ℓ_a, the registered width: the length in bits every window's advice is padded to before it is "
+                                  "committed and compiled, which B's digest covers (default 2^23)")
     advice_composite: str = option("--advice-composite", choices=COMPOSITES, default="onsite",
                                    help="the deployment whose registration log B's entry opens (default onsite)")
     advice_weights: str | None = option("--advice-weights", default=None, metavar="JSON",
@@ -67,14 +68,15 @@ class AdviceOptions:
 
 
 def refusal(opts: Any) -> str | None:
-    """Why ``--advice`` can't hold (None: it can): it reads the Commit's windows, and ℓ_a is a whole number of bits, at least 8."""
+    """Why ``--advice`` can't hold (None: it can): it reads the Commit's windows, and ℓ_a is a whole number of bits, a multiple
+    of 8 and at least 8."""
     a = opts.advising
     if not a.advice:
         return None
     if not opts.commit:
         return "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
-    if isinstance(a.advice_cap, bool) or a.advice_cap < 8:
-        return f"--advice-cap {a.advice_cap}: ℓ_a is a whole number of bits, at least 8"
+    if isinstance(a.advice_cap, bool) or a.advice_cap < 8 or a.advice_cap % 8:
+        return f"--advice-cap {a.advice_cap}: ℓ_a is a whole number of bits, a multiple of 8 and at least 8"
     if (Path(opts.out) / REGISTRATION).exists():
         return (f"{Path(opts.out) / REGISTRATION} exists: a run registers B once, so a server doesn't serve into another's serve "
                 "dir (give a fresh --out)")
@@ -102,12 +104,12 @@ def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str 
     return compiler, body
 
 
-def public_line(window: int, reg: Mapping[str, Any], cap_bits: int, t: float) -> dict[str, Any]:
-    """Window ``window``'s line of `LINES`: its registration's binding with the advice's length at ℓ_a, the rows ℓ_a fixes, the
-    window's Commit and when the line was written (unix seconds)."""
+def public_line(window: int, reg: Mapping[str, Any], t: float) -> dict[str, Any]:
+    """Window ``window``'s line of `LINES`: its registration's binding (the advice committed padded to ℓ_a, `advice.commit`, so
+    its length is ℓ_a) and the rows ℓ_a fixes, the window's Commit and when the line was written (unix seconds)."""
     b = reg["binding"]
-    return {"window": int(window), "compiler": dict(b["compiler"]), "advice": {"root": b["advice"]["root"], "bits": int(cap_bits)},
-            "rows": -(-int(cap_bits) // AW.ROW_BITS), "commit": reg.get("commit"), "t": t}
+    return {"window": int(window), "compiler": dict(b["compiler"]), "advice": dict(b["advice"]), "rows": int(reg["rows"]),
+            "commit": reg.get("commit"), "t": t}
 
 
 class ServedAdvice:
@@ -235,7 +237,7 @@ class ServedAdvice:
             rep = ADV._written(self.out, self.out / "advice" / f"w{w}", b, sub, self.out / ST.SERVED,
                                self.out / "requests.jsonl", T=self.T, compiler=self.compiler,
                                extra={"window": w, "commit": commit}, registered_roots=self._roots())
-            self._settle(w, public_line(w, rep["registration"], self.compiler.cap_bits, self.wall()), report=rep)
+            self._settle(w, public_line(w, rep["registration"], self.wall()), report=rep)
 
     def _roots(self) -> dict[str, str] | None:
         if self.weights is None or not Path(self.weights).exists():

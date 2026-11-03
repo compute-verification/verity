@@ -85,28 +85,42 @@ def test_the_window_subcommand_prints_the_whole_pick_which_stays_on_the_node(tmp
     assert json.loads(out.getvalue()) == got
 
 
-REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600, "window": 7,
-                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+#: a window's advice registration as `verity-vllm advice` writes it, its advice padded to the cap ℓ_a = 2^23: 32,768 rows
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 32768, "window": 7,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 8388608}},
                 "commit": {"run_id": "r1/w7", "run_root": "ef" * 64},
-                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"7": 392, "8": 7},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608},
                 "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
 
 
-def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
-    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
-    none of its requests, names no window, and keeps its roots, compiler and binding's root."""
+def test_the_published_registration_is_the_padded_one_and_one_stating_the_advices_length_is_refused(tmp_path, capsys):
+    """A window's advice registration is published as committed, its advice padded to its compiler's cap so its length and
+    rows are ℓ_a's, less the count and refusals of its requests and its window's number. One that states the advice's own
+    length (a length or a row count other than ℓ_a's, or its bits per egress window) is refused, by the command too, which
+    prints nothing on stdout."""
     got = S.public_registration(REGISTRATION)
-    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
-    assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
-    assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
-    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
-        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    assert got["binding"] == REGISTRATION["binding"] and got["rows"] == 32768 and S.padded(REGISTRATION)
+    assert got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64} and not {"requests", "compiled", "refused", "window"} & set(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "schema", "row_bits")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "schema", "row_bits")}
     (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
     assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
     assert json.loads(capsys.readouterr().out) == got
+    advice = REGISTRATION["binding"]["advice"]
+    for bad in ({**REGISTRATION, "binding": {**REGISTRATION["binding"], "advice": {**advice, "bits": 392}}},
+                {**REGISTRATION, "rows": 2}, {**REGISTRATION, "bits_by_window": {"7": 392}},
+                {k: v for k, v in REGISTRATION.items() if k != "rows"},
+                {**REGISTRATION, "compiler": {**REGISTRATION["compiler"], "cap_bits": 4096}}):
+        assert not S.padded(bad)
+        with pytest.raises(ValueError, match="states the advice's own length"):
+            S.public_registration(bad)
+        (tmp_path / "r.json").write_text(json.dumps(bad))
+        assert S.main(["public-registration", str(tmp_path / "r.json")]) == 1
+        out = capsys.readouterr()
+        assert out.out == "" and "wasn't committed padded to its compiler's cap" in out.err
 
 
-B = {"name": "verity/prove-path/capped-compiler/v0", "digest": "b0" * 64, "cap_bits": 4096,
+B = {"name": "verity/prove-path/capped-compiler/v1", "digest": "b0" * 64, "cap_bits": 4096,
      "inner": {"name": "verity-vllm/i2-compile-steps/v0", "digest": "1a" * 64}}
 
 
@@ -119,28 +133,36 @@ def _advised(d: Path, *, cap: int = 4096, t0: float = 10.0) -> Path:
     log = REG.chain("onsite", [REG.Information((item,))])
     d.mkdir(parents=True)
     (d / S.ADVICE_REGISTRATION).write_text(json.dumps({
-        "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "t": t0,
+        "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "row_bits": 256, "t": t0,
         "registration": {"composite": "onsite", "head": REG.head("onsite", log), "log": json.loads(REG.committed("onsite", log))}}))
     _write(d, "windows.jsonl", [{"window": k} for k in range(3)])
     named = {"name": B["name"], "digest": B["digest"]}
-    _write(d, S.ADVICE_LINES, [{"window": 0, "compiler": named, "advice": {"root": "a0" * 64, "bits": 4096}, "t": 11.0},
-                               {"window": 1, "empty": True, "t": 12.0},
-                               {"window": 2, "compiler": named, "advice": {"root": "a2" * 64, "bits": 4096}, "t": 13.0}])
+    _write(d, S.ADVICE_LINES, [
+        {"window": 0, "compiler": named, "advice": {"root": "a0" * 64, "bits": 4096}, "rows": 16, "t": 11.0},
+        {"window": 1, "empty": True, "t": 12.0},
+        {"window": 2, "compiler": named, "advice": {"root": "a2" * 64, "bits": 4096}, "rows": 16, "t": 13.0}])
     for k in (0, 2):
         (d / "advice" / f"w{k}").mkdir(parents=True)
-        (d / "advice" / f"w{k}" / "registration.json").write_text(json.dumps(
-            {"binding": {"compiler": named, "advice": {"root": f"a{k}" * 64, "bits": 392}}}))
+        (d / "advice" / f"w{k}" / "registration.json").write_text(json.dumps(_window_registration(named, f"a{k}" * 64)))
     return d
+
+
+def _window_registration(compiler: dict, root: str, bits: int = 4096, rows: int = 16) -> dict:
+    """A window's advice registration under B, its advice committed padded to ℓ_a = 4096 bits (16 rows) unless ``bits`` and
+    ``rows`` say its own length."""
+    return {"binding": {"compiler": compiler, "advice": {"root": root, "bits": bits}}, "rows": rows, "row_bits": 256,
+            "compiler": {**compiler, "cap_bits": 4096}}
 
 
 def test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_first_coin(tmp_path, capsys):
     """ADVICE-LINE passes on a run whose server registered B, the compiler the verifier recomputes, as its log's builder at
-    ℓ_a, and wrote every closed window's line under B at ℓ_a after that and before the first coin, the audited window's
-    registration its line's root; it names no window and states no advice's own length. It fails, saying why, for another
-    compiler, a log of another ℓ_a, a closed window with no line, a line after the coins or before B, an audited window
-    whose registration roots other advice or that has no advice, and a run that registered no B."""
+    ℓ_a, and wrote every closed window's line under B at ℓ_a and its rows after that and before the first coin, the audited
+    window's registration its line's root, its advice padded to ℓ_a; it names no window and states no advice's own length.
+    It fails, saying why, for another compiler, a log of another ℓ_a, a closed window with no line, a line of another length
+    or row count, a line after the coins or before B, an audited window whose registration roots other advice, states the
+    advice's own length or has no advice, and a run that registered no B."""
     ok, line = S.advice_line(_advised(tmp_path / "ok"), 2, B, coins_after=20.0)
-    assert ok and line.endswith(": PASS") and S.public_line(line) == line and "392" not in line and "4096 bits" in line
+    assert ok and line.endswith(": PASS") and S.public_line(line) == line and "4096 bits" in line
     assert S.main(["advice-line", str(tmp_path / "ok"), "--window", "2", "--compiler", str(_dump(tmp_path, B)),
                    "--coins-after", "20"]) == 0 and capsys.readouterr().out.strip() == line
 
@@ -157,10 +179,18 @@ def test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_fi
     d = _advised(tmp_path / "gap")
     _write(d, S.ADVICE_LINES, [x for x in S._lines(d / S.ADVICE_LINES) if x["window"] != 0])
     assert "a closed window has no advice line" in fails(d)
+    named = {"name": B["name"], "digest": B["digest"]}
+    for k, (field, value) in enumerate((("rows", 2), ("advice", {"root": "a0" * 64, "bits": 392}))):
+        d = _advised(tmp_path / f"line{k}")
+        _write(d, S.ADVICE_LINES, [{**x, field: value} if x["window"] == 0 else x for x in S._lines(d / S.ADVICE_LINES)])
+        assert "a length or row count other than ℓ_a's" in fails(d)
     d = _advised(tmp_path / "root")
-    (d / "advice" / "w2" / "registration.json").write_text(json.dumps(
-        {"binding": {"compiler": {"name": B["name"], "digest": B["digest"]}, "advice": {"root": "ff" * 64, "bits": 392}}}))
+    (d / "advice" / "w2" / "registration.json").write_text(json.dumps(_window_registration(named, "ff" * 64)))
     assert "isn't its advice line's root under B" in fails(d)
+    for k, (bits, rows) in enumerate(((392, 16), (4096, 2), (392, 2))):
+        d = _advised(tmp_path / f"own{k}")
+        (d / "advice" / "w2" / "registration.json").write_text(json.dumps(_window_registration(named, "a2" * 64, bits, rows)))
+        assert "wasn't committed padded to ℓ_a" in fails(d)
     (tmp_path / "none").mkdir()
     assert "the server registered no B" in fails(tmp_path / "none")
 
@@ -282,32 +312,27 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert S.publish(out, private) == []
 
 
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
-    """The line's leak count charges ℓ_a: its other inputs are the free ones plus the cap, the run figure's and the window
-    figure's, so neither the advice's length nor other inputs less free (which is that length) is in it."""
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_population_or_steps(tmp_path, capsys):
+    """The line carries the records audit's leak count as the audit counted it, whose advice term is ℓ_a, the length the
+    window's padded advice registers (`advice_windows.pad`), so its other inputs less free say ℓ_a, never the advice's own
+    length; it names no population or step of the scope."""
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
-           "leak": {"advice_bits": 832, "bound": "vacuous", "free": 785600, "other_inputs": 786432, "registered": 0,
-                    "window": {"free": 512, "other_inputs": 1344, "bound": "vacuous"}}}
+           "leak": {"advice_bits": 4096, "bound": "vacuous", "free": 785600, "other_inputs": 789696, "registered": 0,
+                    "window": {"free": 512, "other_inputs": 4608, "bound": "vacuous"}}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
             "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
-    line = S.sampled_line(row, part, 4096)
+    line = S.sampled_line(row, part)
     head, _, rec = line.partition(": RECORDS ")
     assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law subset:2), drawn members [0, 2]"
     assert "steps" not in line and "11" not in line
-    assert json.loads(rec)["leak"] == {"bound": "vacuous", "free": 785600, "other_inputs": 789696, "registered": 0,
-                                       "window": {"free": 512, "other_inputs": 4608, "bound": "vacuous"}}
-    assert "832" not in line and "786432" not in line and "1344" not in line
+    assert json.loads(rec) == {k: v for k, v in row.items() if k != "population"}
     assert "population" not in line and "37" not in line and row["population"] == 37
-    assert S.charged_at_cap({"free": 0, "other_inputs": 832, "bound": "within the charge"}, 4096) == {
-        "free": 0, "other_inputs": 4096, "bound": "within the charge"}
-    assert S.charged_at_cap({"other_inputs": 5000, "bound": "vacuous", "advice_bits": 6000}, 4096) == {
-        "other_inputs": 5000, "bound": "vacuous"}
     (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
     (tmp_path / "p.json").write_text(json.dumps(part))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--cap-bits", "4096", "--partition", str(tmp_path / "p.json")]) == 0
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
     assert capsys.readouterr().out == line + "\n"
     (tmp_path / "log").write_text("refused\n")
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--cap-bits", "4096"]) == 1
+    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
 
 
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):

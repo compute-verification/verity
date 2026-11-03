@@ -22,20 +22,20 @@ from the Commit record's token ids.  Each kept output's `release` bucket is the 
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
 
-The advice is not published: its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
-hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
-the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
-``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
+The advice is not published, nor is its length: its canonical encoding, padded to the registered compiler's ℓ bits
+(`advice_windows.pad`), is committed as hiding rows (`advice_windows.commit_advice`: hm96-sha512 rows under
+`verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), as many as ℓ fixes, and only the root and
+ℓ go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's ``binding``,
+which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
-    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
-                          registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
-                          and the compiler it wraps (``compiler``), the bits
-                          I1 charges each egress window of `--T` buckets (``bits_by_window``), and with `--weights-of-record`
-                          the committer's hiding root of each weight parameter the window circuit registers, as its weights
-                          registration records it (``registered_roots``: `registered_weights`)
-    private/advice.bin    the prover's: the advice, I1's canonical encoding
+    registration.json     public: the binding (the compiler's name and digest, the advice's root and ℓ), the registered
+                          compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers) and the
+                          compiler it wraps (``compiler``), the rows ℓ fixes, and with `--weights-of-record` the committer's
+                          hiding root of each weight parameter the window circuit registers, as its weights registration
+                          records it (``registered_roots``: `registered_weights`)
+    private/advice.bin    the prover's: the advice as the compiler reads it, I1's canonical encoding padded to ℓ bits
     private/advice.json   the same advice, I1's `to_json`
-    private/opening.json  the advice's opening (`advice_windows.opening`: its encoding and every row's salt)
+    private/opening.json  the advice's opening (`advice_windows.opening`: its padded bytes and every row's salt)
     private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), and the digests of
                           what it read
 
@@ -418,18 +418,14 @@ def registered_weights(registration: dict[str, Any], serve: dict[str, Any] | Non
     return r.roots
 
 
-def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int,
-                 registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
-    """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
-    bits), the bits I1 charges each egress window of ``T`` buckets and, given, the root of each registered parameter
-    (``registered_roots``, `registered_weights`).  Nothing of the advice itself."""
-    c = codec(a)
-    return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(c.total_bits(a))),
+def registration(compiler: Any, root: bytes, rows: int, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
+    """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and ℓ, the length
+    in bits the compiler reads it at) and, given, the root of each registered parameter (``registered_roots``,
+    `registered_weights`).  Nothing of the advice itself, its length included: the commitment's ``rows`` are the ones ℓ fixes."""
+    return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(compiler.cap_bits)),
             "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
                          "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
-            "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
-            "bits_by_window": {str(w): int(n) for w, n in sorted(c.bits_by_window(a, int(T)).items())},
-            **({"registered_roots": dict(registered_roots)} if registered_roots else {})}
+            "rows": rows, "row_bits": AW.ROW_BITS, **({"registered_roots": dict(registered_roots)} if registered_roots else {})}
 
 
 def codec(a: Any) -> Any:
@@ -437,17 +433,15 @@ def codec(a: Any) -> Any:
     return WA if isinstance(a, WA.Advice) else I1
 
 
-def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None,
+def commit(compiler: Any, a: Any, salts: list[bytes] | None = None,
            registered_roots: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice (I1's, or a Commit window's) committed: its public registration (`registration`, with ``registered_roots``) and
-    its private opening (`advice_windows.opening`).  Advice over the compiler's ℓ (``compiler``: an `advice_windows.Capped`)
-    is refused: the compiler is total only up to it."""
-    data = codec(a).encode(a)
-    cap = int(compiler.cap_bits)
-    if 8 * len(data) > cap:
-        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
+    """The advice (I1's, or a Commit window's) committed at the compiler's ℓ (``compiler``: an `advice_windows.Capped`), its
+    encoding padded to ℓ bits (`advice_windows.pad`) so the rows ℓ fixes hold it whatever its length: its public registration
+    (`registration`, with ``registered_roots``) and its private opening (`advice_windows.opening`, of the padded bytes).
+    Advice past ℓ less the pad's end mark is refused: the compiler is total only up to it."""
+    data = compiler.pad(codec(a).encode(a))
     reg = AW.commit_advice(compiler, data, salts)
-    return registration(compiler, a, reg.root, len(reg.rows), T, registered_roots), AW.opening(data, reg)
+    return registration(compiler, reg.root, len(reg.rows), registered_roots), AW.opening(data, reg)
 
 
 class TraceIndex:
@@ -619,12 +613,12 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
     a = b.advice
     data = WA.encode(a)
     back = WA.decode(data)
-    public, opened = commit(compiler, a, T, registered_roots=registered_roots)
+    public, opened = commit(compiler, a, registered_roots=registered_roots)
     public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
     (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
-    (private / "advice.bin").write_bytes(data)
+    (private / "advice.bin").write_bytes(bytes.fromhex(opened["advice"]))
     (private / "advice.json").write_text(json.dumps(WA.to_json(a), separators=(",", ":")) + "\n")
     (private / "opening.json").write_text(json.dumps(opened) + "\n")
     steps = ST.steps(recs)
@@ -671,9 +665,10 @@ class Options:
                                          help="its digest, 128 hex digits (default: interface.compiler_digest of the name over "
                                               "the integration's import closure in this git work tree)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
-                      help="ℓ, the cap on the advice's length in bits the compiler is total up to: the registered compiler is "
-                           "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
-    T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
+                      help="ℓ, the cap on the advice's length in bits the compiler is total up to and the length every window's "
+                           "advice is padded to and committed at: the registered compiler is advice_windows.Capped over the one "
+                           "named, whose digest covers ℓ (default 2^23, 1 MiB)")
+    T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window in the private report")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON",
                                            help="the committer's weights registration (window_weights.weights_registration), "
@@ -683,10 +678,8 @@ class Options:
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:
     reg = rep["registration"]
-    for w, bits in reg["bits_by_window"].items():
-        print(f"[advice]{where} egress window {w} (buckets {int(w) * reg['T']}-{(int(w) + 1) * reg['T'] - 1}): {bits} bits", flush=True)
     bound = reg["binding"]["advice"]
-    print(f"[advice]{where} {bound['bits']} bits at T={reg['T']}, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
+    print(f"[advice]{where} padded to ℓ = {bound['bits']} bits, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
           f"round trip {'equal' if rep['roundtrip'] else 'NOT EQUAL'} ({rep['i1']['module']})", flush=True)
     return bool(rep["roundtrip"])
 

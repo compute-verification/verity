@@ -23,8 +23,9 @@ commitments and never published.
    `verity/registration/v1` item `window`, which the record's digest covers) carries `compiler: {name, digest}` and
    `advice: {root, bits}` (`pipeline.advice_windows.binding`). The compiler's digest is `Capped`'s: the inner compiler's digest
    and ℓ, the public cap on the advice's length. The root is the advice's hiding commitment (`advice_windows.commit_advice`:
-   I1's canonical encoding in 256-bit rows, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the compiler).
-   `bits` is the advice's length, the leak the certifier charges. Every rank binds the same root: the prover commits the advice
+   I1's canonical encoding padded to ℓ bits, `advice_windows.pad`, in 256-bit rows, hm96-sha512 leaves in one
+   frame-v3-sha512 tree, its domain bound to the compiler). `bits` is ℓ, the leak the certifier charges, so neither it nor
+   the row count says the advice's own length. Every rank binds the same root: the prover commits the advice
    once. The record gains no field.
 2. **Each step's Programs are the compiler's output.** The window's `served_programs` are the digests the compiler produced
    for the advice, and the population program and partition the registration is checked against (R1–R7) are over those
@@ -124,8 +125,8 @@ history would discharge, and doesn't discharge them yet.
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
 `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
 - c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+  the registration's `window.advice.bits`: ℓ, the length the I1 advice is padded to before it is committed and compiled
+  (`advice_windows.pad`), which `prove_path.py advice` prints as `bits`. Over several windows, c is their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -170,7 +171,8 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);
-  - b, the advice's length in bits (`window.advice.bits`, which is public and is the length term the certifier charges);
+  - b, the advice's length in bits as committed, ℓ (`window.advice.bits`, which is public and is the length term the
+    certifier charges);
   - Π, what the window's Programs commit to: either the window's `served_programs` (request id ↦ Program digest) with the
     population Program's and partition's digests that R1–R7 hold the registration to, or, with the compiler's padded public
     step templates, the root of a hiding commitment to the routing (which committed row of each step feeds which public template

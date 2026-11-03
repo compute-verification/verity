@@ -15,7 +15,7 @@ sampled proofs, and the one record of every verdict (the block record).
                               [--product P]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py advice-line SERVE_DIR --window K --compiler FILE --coins-after T
-    served_verdicts.py sampled-line LOG --cap-bits L [--partition FILE]
+    served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -26,12 +26,12 @@ published form (`public_line`), the line in full appended to ``--private`` (the 
 ``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
 its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
-registration (`public_registration`: the advice's length padded to its compiler's cap), ``advice-line`` the ADVICE-LINE
+registration (`public_registration`: refused unless the advice was committed padded to its compiler's cap), ``advice-line`` the ADVICE-LINE
 verdict on a serve-openai ``--advice`` run (`advice_line`: B registered before the first window, every window's advice
 line before sampled proofs' and the certifier's first coin, the audited window's registration under B), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, its leak count charging the advice's cap ``--cap-bits``,
-and no length of the advice or count of the scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -396,19 +396,25 @@ def publish(out: Path, private: Path) -> list[str]:
     return held
 
 
-#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
-PADDED = ("binding.advice.bits", "rows")
+def padded(reg: Mapping[str, Any]) -> bool:
+    """Whether a window's advice registration says no length of the advice: its advice committed padded to its compiler's
+    ``cap_bits`` (`advice_windows.pad`), so its length is the cap and its rows the ones the cap fixes at ``row_bits`` each,
+    and no field of the bits per egress window."""
+    try:
+        cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+        return (int(reg["binding"]["advice"]["bits"]), int(reg["rows"])) == (cap, -(-cap // row_bits)) \
+            and "bits_by_window" not in reg
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
-    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
-    no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
-    cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
-    out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
-    out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
-    out["rows"] = -(-cap // row_bits)
-    return public_json({**out, "padded": list(PADDED)})
+    """What the run publishes of a window's advice registration: the registration as committed, refused (ValueError) unless
+    it is `padded`, with no count or refusal of its requests and no window's number (`public_json`)."""
+    if not padded(reg):
+        raise ValueError("the window's advice registration states the advice's own length: its advice wasn't committed "
+                         "padded to its compiler's cap (advice_windows.pad)")
+    return public_json({k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")})
 
 
 #: serve-openai ``--advice``'s public records in its serve dir (`verity_vllm.pipeline.serve_advice`): B's registration,
@@ -420,10 +426,10 @@ def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins
     """The ADVICE-LINE verdict on a serve-openai ``--advice`` run: B as the server registered it before its first window
     (`ADVICE_REGISTRATION`) is ``compiler``, the one ``prove_path.py compiler`` recomputes from serve.json, and the builder
     of the registration log it committed (B's inner digest, the window advice's format, ℓ_a); every closed window
-    (``windows.jsonl``) has its line (`ADVICE_LINES`), in window order, each under B with ℓ_a in place of the advice's
-    length and written before ``coins_after`` (unix seconds: before sampled proofs and the network certifier draw any coin);
-    and window ``window``'s registration, the one the records audit opens, is its line's root under B. -> (passed, the line,
-    naming no window)."""
+    (``windows.jsonl``) has its line (`ADVICE_LINES`), in window order, each under B with ℓ_a and the rows ℓ_a fixes as
+    the advice's length and row count, written before ``coins_after`` (unix seconds: before sampled proofs and the network
+    certifier draw any coin); and window ``window``'s registration, the one the records audit opens, is its line's root
+    under B, its advice committed padded to ℓ_a (`padded`). -> (passed, the line, naming no window)."""
     from verity.core.protocols import registration as REG
 
     why: list[str] = []
@@ -451,11 +457,13 @@ def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins
         why.append("the advice lines aren't one a window in window order")
     if sorted(order) != closed:
         why.append("a closed window has no advice line")
+    rows = -(-int(cap) // int(reg.get("row_bits") or 1)) if isinstance(cap, int) else None
     for x in lines:
         if x.get("refused") or x.get("empty"):
             continue
-        if (x.get("compiler") or {}).get("digest") != b.get("digest") or (x.get("advice") or {}).get("bits") != cap:
-            why.append("an advice line names another compiler than B, or a length other than ℓ_a")
+        if (x.get("compiler") or {}).get("digest") != b.get("digest") or (x.get("advice") or {}).get("bits") != cap \
+                or x.get("rows") != rows:
+            why.append("an advice line names another compiler than B, or a length or row count other than ℓ_a's")
             break
     t0 = reg.get("t")
     if any(not (isinstance(x.get("t"), (int, float)) and x["t"] < coins_after) for x in lines):
@@ -469,39 +477,25 @@ def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins
     elif (wreg["binding"]["advice"]["root"], wreg["binding"]["compiler"]) != (mine["advice"]["root"], mine["compiler"]) \
             or mine["compiler"] != {"name": b.get("name"), "digest": b.get("digest")}:
         why.append("the audited window's registration isn't its advice line's root under B")
+    elif not padded(wreg) or wreg["compiler"].get("cap_bits") != cap:
+        why.append("the audited window's advice wasn't committed padded to ℓ_a: its registration states its own length")
     ok = not why
     return ok, (f"ADVICE-LINE: B (compiler digest {str(b.get('digest'))[:16]}…, its advice {reg.get('advice')}, ℓ_a {cap} "
                 f"bits) registered by the server once, before its first window, the registration log's builder and the "
                 f"compiler prove_path.py recomputes from serve.json; every closed window's advice committed by the server "
-                f"as it served, its line (the advice's root, ℓ_a in place of its length) out before sampled proofs' and the "
-                f"network certifier's first coin; "
-                f"the audited window's registration its line's root under B: {'PASS' if ok else 'FAIL'}"
+                f"as it served, padded to ℓ_a, its line (the advice's root, ℓ_a and the rows ℓ_a fixes) out before sampled "
+                f"proofs' and the network certifier's first coin; "
+                f"the audited window's registration its line's root under B, at ℓ_a: {'PASS' if ok else 'FAIL'}"
                 + (f" ({'; '.join(why)})" if why else ""))
 
 
-def charged_at_cap(leak: Mapping[str, Any], cap_bits: int) -> dict[str, Any]:
-    """A records audit's leak count with the advice charged at ℓ_a, its compiler's cap ``cap_bits``, never at its own
-    length, which the count's ``advice_bits`` says and its ``other_inputs`` less ``free`` would: ``other_inputs`` the free
-    inputs plus ℓ_a (the run figure's and the window figure's), and ``bound`` against ℓ_a."""
-    out = {k: v for k, v in leak.items() if k != "advice_bits"}
-    if "free" in out:
-        out["other_inputs"] = int(out["free"]) + cap_bits
-    if isinstance(out.get("window"), Mapping) and "free" in out["window"]:
-        out["window"] = {**out["window"], "other_inputs": int(out["window"]["free"]) + cap_bits}
-    if "other_inputs" in out:
-        out["bound"] = "vacuous" if int(out["other_inputs"]) > cap_bits else "within the charge"
-    return out
-
-
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, cap_bits: int) -> str:
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
-    templates, its scope's op path and law), which members it drew, and the row with its leak count charging ℓ_a
-    (``cap_bits``, `charged_at_cap`), so it says no length of the advice, and no ``population``, the scope's unpadded
-    member count, which counts the window's tokens. The scope's ``steps``, the window's engine steps, stay on the node
-    too."""
+    templates, its scope's op path and law), which members it drew, and the row with its leak count as the audit counted
+    it, whose advice term is ℓ_a (the window's advice is committed padded to it, `advice_windows.pad`, and ADVICE-LINE
+    fails otherwise), and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
+    scope's ``steps``, the window's engine steps, stay on the node too."""
     row = {k: v for k, v in records.items() if k != "population"}
-    if isinstance(row.get("leak"), Mapping):
-        row["leak"] = charged_at_cap(row["leak"], cap_bits)
     part = partition or {}
     scope = part.get("scope") or {}
     over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
@@ -1142,7 +1136,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     sl = sub.add_parser("sampled-line")
     sl.add_argument("log", type=Path)
     sl.add_argument("--partition", type=Path)
-    sl.add_argument("--cap-bits", type=int, required=True, help="ℓ_a, the advice's cap, which the leak count charges")
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -1166,7 +1159,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if a.product not in BR.PRODUCTS:
             ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
     if a.cmd == "public-registration":
-        print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        try:
+            print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        except ValueError as e:
+            print(f"public-registration: {e}", file=sys.stderr)
+            return 1
         return 0
     if a.cmd == "advice-line":
         ok, line = advice_line(a.serve_dir, a.window, json.loads(a.compiler.read_text()), a.coins_after)
@@ -1177,7 +1174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not rows:
             print("no RECORDS line")
             return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None, a.cap_bits))
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
         return 0
     if a.cmd == "front-line":
         try:
