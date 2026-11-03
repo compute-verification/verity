@@ -6,7 +6,7 @@ Given H1's tables of the window (`Tables`, by the names the Commit record regist
 ``row-table/<s>/k<K>``, and its input-ids table, ``input-ids/<s>``), the circuit reads them where the model makes them, each
 a read of an output row (`interface.Read`), which fills no input and holds the proof block's output row to the registered
 row, so a table that isn't what the model computed fails the proof of the proof block that reads it. Each quantizer at
-that K is `Int8RowQuant_v5{K, R}`, whose ``o2`` is H1's leaf of its row (its codes four to a u32, then its scale: the
+that K is `Int8RowQuant_v5{K, R, ROUND}` at its round, whose ``o2`` is H1's leaf of its row (its codes four to a u32, then its scale: the
 node's words whole), read as row c·m + i of its round's A table, c its index among its position's int8 linears of that K
 and i its position's row; each position's token row (its lane's of the slot's `ScanSlots_v2`, its `TokenFeed_v1`'s or the
 previous select's) is read as row i of its round's input-ids table. A position's round and row are a fixed load's (`Tables.at`):
