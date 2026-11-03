@@ -30,17 +30,18 @@ chain's (`Top.accRC rd key`), so `TargetE` is proved (`targetE_accRC`, `rowEHold
 
 * the row targets: `TargetRDep` and `TargetDMerkle` (`TargetDecode` is `decode_at`, with no JSON premise);
 * `hrest`, the checks no part holds: `BasesHold` (the base checks), `FinalReadsL`, `RoundLensL`, `ReadsAtL` (the last
-  message's reading, the rounds' lengths, the record's reading; RESTREAD's three at `L`), `SaltRowRest` (a round's
+  message's reading, the rounds' lengths, the record's reading; the three at `L`), `SaltRowRest` (a round's
   commit strings where no part holds it) and `PiecesOwned` (every piece has an owner, so `hrest` is asked of none);
 * `hlowR`, each part's share of the checks it holds that are no pieces: `RestLowR`;
 * `hlowP`, each part's share of the pieces at the parts' own messages: `dense` (proved), the residuals (`ResLowJ`),
   the openings (`openPieces_deployed`, from `SideSchR`, `CopyOpensR`, `CopyDirsTieR` and `CopyTopR`; the copy's range,
   `copyFitsR_rowD`, and its position bits, `copyBitsR_of`, are proved) and their running sums (`Top.RowEJoint` at
-  `acceptsLV`, RECE's, through `piecesComputes_accPiece`). The leaves stated under `Joint` read `JointV` through
+  `acceptsLV`, through `piecesComputes_accPiece`). The leaves stated under `Joint` read `JointV` through
   `joint_of_jointP (jointP_of_jointV _)`.
 
 `recKSDecompD_of_leaves` is the same at the layout of record `DeployedR.layR elem`, the side `sideAtR rd` and the
-positions `Rows.posAt`: `TargetDMerkle` proved (`targetDMerkle_PD`, RECL's), RESTREAD's facts as it states them, `RoundLens` proved (`roundLens`), `SideSchR` proved (`sideSchR_sideAtR`) and `CopyTopR` from CAPLOWER's
+positions `Rows.posAt`: `TargetDMerkle` proved (`targetDMerkle_PD`), the last message's reading and the record's as
+stated, `RoundLens` proved (`roundLens`), `SideSchR` proved (`sideSchR_sideAtR`) and `CopyTopR` from
 `OutBindR` and `SideCapR` (`capTop_of`).
 -/
 
@@ -144,7 +145,7 @@ theorem rowEHolds_PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
     h (.opn q) (List.mem_append.2 (Or.inl (List.mem_append.2 (Or.inr (List.mem_map.2 ⟨q, hq, rfl⟩)))))).2
 
 /-- **`TargetDMerkle` at the parts' pieces, at `nextR`'s side and the decision's positions, with nothing open**:
-RECL's `targetDMerkle_of_accept_sideAtR`, whose pieces say `openHolds` alone, which `openE` gives. -/
+`targetDMerkle_of_accept_sideAtR`, whose pieces say `openHolds` alone, which `openE` gives. -/
 theorem targetDMerkle_PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
@@ -173,18 +174,18 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- **`final` reads the last message at every witnesses** (RESTREAD's `FinalReads`, at layout `L`). -/
+/-- **`final` reads the last message at every witnesses** (`FinalReads`, at layout `L`). -/
 def FinalReadsL : Prop :=
   ∀ x, DenseX x → ∀ ws : List Claims.Flock.Wit, ws.length = nS x →
     ∃ os last, final ((L.msgs x ws).getD (kI x - 1) []) = some (os, last) ∧ os.length + 1 = kI x ∧
       ∀ j < os.length, (os.getD j []).length = nAtSched (xIOf x) j
 
-/-- **Each round before the last is 128 bytes a commit string** (RESTREAD's `RoundLens`, at layout `L`). -/
+/-- **Each round before the last is 128 bytes a commit string** (`RoundLens`, at layout `L`). -/
 def RoundLensL : Prop :=
   ∀ x, DenseX x → ∀ ws : List Claims.Flock.Wit, ws.length = nS x → ∀ j < kI x - 1,
     ((L.msgs x ws).getD j []).length = 128 * nAtSched (xIOf x) j
 
-/-- **The last step reads at every witnesses whose calls are true** (RESTREAD's `ReadsAt`, at layout `L`). -/
+/-- **The last step reads at every witnesses whose calls are true** (`ReadsAt`, at layout `L`). -/
 def ReadsAtL : Prop :=
   ∀ x, DenseX x → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = nS x →
     (∀ e ∈ L.allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
@@ -223,7 +224,7 @@ def RestLowR : Prop :=
 /-- **The residual groups' share at the parts' own messages** (`hlowP`'s `rec-residuals` kind): where every part
 accepts at the parts' own messages, each group `ownR` gives part `s` holds. -/
 def ResLowJ : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
       Joint FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
         (acceptsL rd b aux nOf hd rest wE final w L) x c ws →
@@ -417,9 +418,9 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
 
 /-- **`RecKSDecompR`'s premise at the layout of record, from its leaves**: `recKSDecompL_of_leaves` at
 `DeployedR.layR elem`, the side `sideAtR rd` and the decision's positions `Rows.posAt`. `TargetDMerkle` is proved
-there (`targetDMerkle_PD`). RESTREAD's facts are as it states them at `restR elem`
+there (`targetDMerkle_PD`). The last message's reading and the record's are as stated at `restR elem`
 (`finalReads` proves the first at `finalR`, and `readsAt` the second at `rdR`, `finalR`), the rounds' lengths are
-proved (`roundLens`), and so is the side's schedule (`sideSchR_sideAtR`). The copy's top comes from CAPLOWER's
+proved (`roundLens`), and so is the side's schedule (`sideSchR_sideAtR`). The copy's top comes from the cap's
 binding and reader (`capTop_of`). -/
 theorem recKSDecompD_of_leaves
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt (OpenLower.sideAtR rd) Rows.posAt) (Top.accRC rd key))

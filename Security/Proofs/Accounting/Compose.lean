@@ -303,7 +303,7 @@ theorem CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit := by
     ρ p p0 wmax Λ δs δbind δks win hS hρ hρN hw hlk hΛ hSR hgame hOf hMoved hJS hPins hMu hRB hG hUF hFits hMS
     hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
   obtain ⟨ha, hb⟩ := costs_nonneg Sc Cd Z lam hMS
-  unfold Certificate.Holds
+  unfold CreditCertificate.Holds
   refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
     (CircuitWork Sc Cd hN hr hK W Pl pr folded ρ p p0 _ _ wmax Λ δs δbind δks hS hρ hρN hw hlk ha hb hΛ hSR
       hgame hOf hMoved hJS hPins hMu hRB hG hUF)
@@ -319,7 +319,7 @@ theorem CircuitCreditSeeded : Accounting.Guarantees.Compose.CircuitCreditSeeded 
     T J ρ κ0 δs δg δb δbind δks win hS hδg hKd hρ hρN ha hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF hFits hMS
     hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
   have hb := (costs_nonneg Sc Cd Z lam hMS).2
-  unfold Certificate.Holds
+  unfold CreditCertificate.Holds
   refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
     (CircuitWorkSeeded Sc Cd hN hr hK R Pl pr folded sq εid T J ρ _ _ κ0 δs δg δb δbind δks hS hδg hKd hρ hρN ha hb
       hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF)

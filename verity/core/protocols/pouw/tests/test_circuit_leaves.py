@@ -2,7 +2,7 @@
 are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor's memory, a row's commit string is core's
 over `sha512/row-seg/v1` or `sha512/row/v2` at every padding and segment edge, the pinned row-seg rows are rebuilt from the
 spec and core's own row-seg vectors are PoUW's rows, each unit's statement rows are its ports' schemas, and the tile digest
-in gates is the pinned one and `pearl_c.leaf`.  C-Flock's tests recompute every row's vector through its own ports
+in gates is the pinned one and `pearl_c.leaf`.  Flock's tests recompute every row's vector through its own ports
 (``verity/ml/flock/tests/test_pouw_rows.py``)."""
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ STATEMENTS = {
 
 @pytest.mark.parametrize("mod, role", list(STATEMENTS), ids=lambda x: getattr(x, "__name__", x))
 def test_a_units_statement_rows_are_its_ports_schemas(mod, role):
-    """`statement_rows` of a unit's ports is its C-Flock META's ``row_schemas`` and ``out_row_ports``: each input row once
+    """`statement_rows` of a unit's ports is its Flock META's ``row_schemas`` and ``out_row_ports``: each input row once
     per row a tile reads of it (a 2 × 3 tile: two A rows, three B rows), then each output row, every one under its
     (row, role)'s schema (`ROW_SCHEMA`, so the reader's and the writer's agree) and of its words' bits; the row a row unit
     writes as its codes, scales and P (A′_i ‖ P_A,i, B̃_j ‖ P_B,j, the fp8-p rows) is one run of output ports, and META

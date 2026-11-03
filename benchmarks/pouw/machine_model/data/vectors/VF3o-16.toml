@@ -1,8 +1,7 @@
-# VF3o-16: VF3n-16 with M1c's schedule search (r20261017-052102-d832) in the joint issue rows' refit: JI3n_0..2 close for JI3o_0..2, each at the 2% noise margin over M1's and the search's programs, divided by its measured schedule margin (1.0378, 1.0262, 1.0247) in place of 1.07.
+# VF3o-16: VF3n-16 with a schedule search in the joint issue rows' refit: JI3n_0..2 close for JI3o_0..2, each at the 2% noise margin over the native forms' and the search's programs, divided by its measured schedule margin (1.0378, 1.0262, 1.0247) in place of 1.07.
 name = "VF3o-16"
 epoch = "VF3o-16"
-summary = "VF3n-16 with M1c's schedule search (r20261017-052102-d832) in the joint issue rows' refit: JI3n_0..2 close for JI3o_0..2, each at the 2% noise margin over M1's and the search's programs, divided by its measured schedule margin (1.0378, 1.0262, 1.0247) in place of 1.07."
-note = "note:20261017T0321Z-draft-eps1-tensor"
+summary = "VF3n-16 with a schedule search in the joint issue rows' refit: JI3n_0..2 close for JI3o_0..2, each at the 2% noise margin over the native forms' and the search's programs, divided by its measured schedule margin (1.0378, 1.0262, 1.0247) in place of 1.07."
 superseded_by = "VF3p-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
@@ -42,8 +41,7 @@ credits = [
     ["LDGSTS16", 4096], ["UBLKCP4K", 32768], ["DSMST4P", 4096],
 ]
 
-[published]  # as `machine-model solve VF3o-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as `machine-model solve VF3o-16` printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0588
-tau_600w = 0.0460
 uf_low = 1.1563
 margin = 2.0

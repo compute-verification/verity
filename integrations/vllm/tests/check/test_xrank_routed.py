@@ -270,7 +270,7 @@ def test_the_programs_must_bind_every_request_call() -> None:
 
 def test_a_routed_family_no_phase_stratum_drew_gets_its_own_stratum() -> None:
     """Mixed arrivals leave prefill-sized launches among the decode-phase steps; a family a site takes that its phase strata missed
-    (the fused norm at a few layers of the GLM-5.3 B8 Commit) is drawn on its own, and the phase strata draw what they drew."""
+    (the fused norm at a few layers of the GLM-5.3 B8 Commit) is sampled on its own, and the phase strata draw what they drew."""
     site, sizes = "model.layers.38.input_layernorm", {0: 256, 1: 120, 2: 100, 3: 90, 4: 3, 5: 80}
     layouts = {s: [(f"{site}/part_rank0", (m, NC))] for s, m in sizes.items()}
 

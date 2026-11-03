@@ -11,7 +11,7 @@ it computes, and when.
   most `mem` bits (M).
 * **Ingress.** Bits reach the chip from device memory at most `bw` per tick (BW), and over each side channel `i : ι` at
   most `cap i` per tick: PCIe from NVMe and the network (there is no host RAM, Daniel's ruling of 3 Oct).
-* **Ops.** Each op class (`Op`) runs at most `rate o` times per tick: tensor-core multiply-adds (`rate .tc` is F),
+* **Ops.** Each op class (`OpClass`) runs at most `rate o` times per tick: tensor-core multiply-adds (`rate .tc` is F),
   CUDA-core ops and oracle queries.
 * **Time.** A tick is the device's unit of time, and a window is `len` consecutive ticks from `start`, so its duration
   T is `len`.
@@ -29,7 +29,7 @@ account's average in bits.
 namespace Accounting
 
 /-- The op classes a step charges. -/
-inductive Op
+inductive OpClass
   /-- a tensor-core multiply-add -/
   | tc
   /-- a CUDA-core op -/
@@ -38,7 +38,7 @@ inductive Op
   | oracle
   deriving DecidableEq
 
-instance instFintypeOp : Fintype Op where
+instance instFintypeOpClass : Fintype OpClass where
   elems := {.tc, .cuda, .oracle}
   complete o := by cases o <;> simp
 
@@ -49,7 +49,7 @@ structure Device (ι : Type) where
   /-- bits of device memory (M) -/
   mem : ℕ
   /-- ops of class `o` per tick (`rate .tc` is F) -/
-  rate : Op → ℕ
+  rate : OpClass → ℕ
   /-- bits from device memory to the chip per tick (BW) -/
   bw : ℕ
   /-- bits in over side channel `i` per tick -/
@@ -59,7 +59,7 @@ structure Device (ι : Type) where
 not once per use of its result: PoUW's outputs are useful by design, so the residual counts ops, not information. -/
 structure Step (ι α : Type) where
   /-- the ops of class `o` that account `a` ran -/
-  ops : α → Op → ℕ
+  ops : α → OpClass → ℕ
   /-- the bits account `a` read from device memory -/
   read : α → ℕ
   /-- the bits account `a` took in over side channel `i` -/
@@ -82,7 +82,7 @@ def Window.ticks (w : Window) : Finset ℕ := Finset.Ico w.start (w.start + w.le
 
 /-- A price per op of each class: the cost unit a work certificate counts in (PoUW's counts RTX 4090 multiply-adds and
 CUDA-core integer ops). -/
-abbrev Price : Type := Op → ℕ
+abbrev Price : Type := OpClass → ℕ
 
 /-- The priced work the device can do in one tick (F when `p` prices a tensor-core multiply-add at 1 and nothing
 else). -/
@@ -103,7 +103,7 @@ namespace Schedule
 variable (sc : Schedule ι α) (w : Window) (a : α)
 
 /-- The ops of class `o` account `a` ran over window `w`. -/
-def ops (o : Op) : ℕ := ∑ t ∈ w.ticks, (sc t).ops a o
+def ops (o : OpClass) : ℕ := ∑ t ∈ w.ticks, (sc t).ops a o
 
 /-- Account `a`'s work over window `w` at price `p`. -/
 def work (p : Price) : ℕ := ∑ o, p o * sc.ops w a o

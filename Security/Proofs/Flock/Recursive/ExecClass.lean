@@ -79,7 +79,7 @@ theorem acceptsStmt_merkle {st : Flock.Stmt} (h : AcceptsStmt st) :
   · obtain rfl : st = st' := by simpa using hsts
     have s := Hidden.setupHidden_spec' hst
     have hf := s.merkle
-    rw [Hidden.parse_leafScheme s.parse, innerTags_merkleLeaf,
+    rw [Hidden.parse_leafScheme (s.parseF (by decide)), innerTags_merkleLeaf,
       show Flock.MerkleScheme.find? "flock-leaf/sha512-unsalted" =
         some (Flock.MerkleScheme.sha512 "flock-leaf/sha512-unsalted") from rfl] at hf
     exact (Option.some.inj hf).symm

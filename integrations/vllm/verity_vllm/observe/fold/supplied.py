@@ -6,7 +6,7 @@ the fold finishes."""
 from __future__ import annotations
 
 from verity.ml.circuits.refs import Affine
-from verity.ml.circuits.types import Record, Type, Value
+from verity.ml.circuits.types import RecordType, Type, Value
 
 from verity_vllm.observe.fold.resolver import Supplied
 
@@ -25,9 +25,9 @@ class SuppliedInputs:
         """Append the run parameters and the registered `values` (empty Records until `finalise`) to `params`."""
         for i in range(n_requests):
             self.param[i], self.fields[i] = len(params), []
-            params.append(("run" if n_requests == 1 else f"run_{i}", Record()))
+            params.append(("run" if n_requests == 1 else f"run_{i}", RecordType()))
         self.param["values"], self.fields["values"] = len(params), []
-        params.append(("values", Record()))
+        params.append(("values", RecordType()))
 
     def leaf(self, op: Supplied, ptype: Type, what: str, req_index: dict[str, int], err: type[Exception] = ValueError) -> Affine:
         """The leaf of the field `op` names in its owner's parameter; a contract violation raises `err`."""
@@ -54,10 +54,10 @@ class SuppliedInputs:
         return Affine("p", self.param[owner], f["offset"], 1)
 
     def finalise(self, params: tuple) -> tuple:
-        """`params` with every supplied Record's fields."""
+        """`params` with every supplied RecordType's fields."""
         params = list(params)
         for owner, pidx in self.param.items():
-            params[pidx] = (params[pidx][0], Record(*[(f["name"], Value(f["width"])) for f in self.fields[owner]]))
+            params[pidx] = (params[pidx][0], RecordType(*[(f["name"], Value(f["width"])) for f in self.fields[owner]]))
         return tuple(params)
 
     def layout(self, params: tuple, requests: list[dict], program=None) -> dict:

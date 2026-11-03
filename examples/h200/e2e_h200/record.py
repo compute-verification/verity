@@ -1,7 +1,7 @@
 """What a skeleton run writes: the drawn-unit replay bundle and the block record, PROVISIONAL forms until `verity/drawn-unit-bundle/v1` and
 `verity/block-record/v1` (`examples/h200/interfaces`) replace these schemas here and nowhere else.
 
-* ``bundle.json`` + ``bundle.npz``: every drawn unit (its family, template, step, slot, position and index, its committed
+* ``bundle.json`` + ``bundle.npz``: every sampled proof block (its family, template, step, slot, position and index, its committed
   output word and the replayed one) and its inputs (``u<i>_<j>`` in the npz, digested in the json), with the step's root and
   the slot and position of each of its rows (a unit at position p reads its slot's KV rows committed at steps step - p ..
   step).

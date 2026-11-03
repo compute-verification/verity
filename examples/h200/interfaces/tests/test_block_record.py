@@ -49,6 +49,13 @@ def test_integrity_bounds_are_the_runs() -> None:
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
 
 
+def test_the_integrity_bound_counts_a_sampling_term_equal_to_delta() -> None:
+    """Of 4 units with 2 sampled, 2 wrong ones escape with C(2, 2)/C(4, 2) = 1/6 exactly, so at δ = 1/6 the bound is 2
+    (core's `Stratified.count_bound`: the largest K whose sampling term is at least δ), not 1."""
+    assert R.integrity_bound(4, 2, Fraction(1, 6)) == 2
+    assert R.integrity_bound(4, 2, Fraction(1, 6) + Fraction(1, 10**9)) == 1
+
+
 def test_a_flipped_leg_verdict_is_refused() -> None:
     rec = copy.deepcopy(_load("block-record-r2-period0"))
     rec["legs"]["pouw"]["answer"]["verdict"] = "reject"
@@ -118,6 +125,20 @@ def test_six_accepting_legs_on_one_server_compose_to_accept() -> None:
     assert rec["server_time"] == [{"server": report["node"], "steps": [4, 6]}]
     week = rec["monitoring_period"]["periods"]["week"]
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
+
+
+def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:
+    """The certifier's answer names which host ran each party (``profile.placement``): its leg carries that and the
+    record still fits its schema and checks clean; a leg whose profile names no placement carries no profile."""
+    report, wipe = _accepting_report()
+    placement = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "n0", "verifier": "n0"}}
+    row = report["protocols"][R.RUNNER_KEYS["certifier"]]
+    row["answer"] = {**row["answer"], "profile": {**row["answer"]["profile"], "placement": placement}}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    assert rec["legs"]["certifier"]["answer"]["profile"] == {"placement": placement}
+    assert all("profile" not in lg["answer"] for k, lg in rec["legs"].items() if k != "certifier")
 
 
 def test_a_report_of_another_format_is_refused() -> None:

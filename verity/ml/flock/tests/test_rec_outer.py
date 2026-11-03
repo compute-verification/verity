@@ -1,10 +1,10 @@
 """`verity_flock.rec_outer`, V*'s outer statements: a level of inner openings staged as one statement of `RecOpen` instances
-whose top nodes the prover registers under the firewall's salts (the verifier's entry rebuilt from their ``b || c``) and whose
+whose top nodes the prover registers under the ZK server's salts (the verifier's entry rebuilt from their ``b || c``) and whose
 running sums the prover registers as one chain. Staged here at the smallest shape (8 lanes, one sibling: a synthetic tree of
 four plain leaves, its top two nodes) with three honest openings and one whose sibling is another node's. Composing the
 unit's circuit takes about a minute, so that test is slow; it catches what `test_rec_open` can't: the statement's ports,
-program, partition and registered rows (the verifier's ``coef`` and ``dirs``, the tops, the running sums and, with
-`link_rows`, the opened rows), with no public input, as the Lean verifier's `statement` reads them (when it is built), and an
+program, partition and registered rows (the verifier's ``coef`` and ``dirs``, the tops, the running sums, the opened rows
+and their siblings), with no public input, as the Lean verifier's `statement` reads them (when it is built), and an
 opening that does not climb to its top node found before anything is proved."""
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 from verity_flock import rec_vstar as V
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 PROGRAM = O.session_program(b"a test session")
 
 
@@ -105,7 +105,7 @@ def staged(once):
     tops = O.TopValue.build(PROGRAM, 1, {0: _top(layers[1], 2), 1: _top(layers[1], 3)})
 
     def make(d):
-        s = O.stage(level, d / "level", O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True)
+        s = O.stage(level, d / "level", O.Chain.build(PROGRAM, qs, coefs), coefs, tops)
         (d / "stage.pickle").write_bytes(pickle.dumps(s))
 
     d = once("rec-outer-staged", make, lambda: keyed.key(code=[__name__]))
@@ -126,12 +126,13 @@ def test_a_level_is_one_template_over_both_reps(staged):
     assert own["out"]["reads"] == [0, 1, 3, 2] and own["out"]["root"] == s["registered_root"] == tops.own["root"]
     assert own["out"]["value"] == s["value"] == "rec-top-L1" and own["out"]["leaves"] == s["top_rows"] == 4
     assert own["row"]["reads"] == [0, 1, 2, 3] and own["row"]["root"] == s["rows_root"] != s["registered_root"]
+    assert own["aux"]["reads"] == [0, 1, 2, 3] and own["aux"]["root"] == s["aux_root"] != s["rows_root"]
     assert own["acc"]["reads"] == [0, 1, 2, 3] and own["acc_out"]["reads"] == [1, 2, 3, 4]
     assert own["acc"]["root"] == own["acc_out"]["root"] == s["acc_root"] and own["acc"]["leaves"] == 5
     head = json.loads((d / "pub.bin").read_bytes().split(b"\n", 1)[0])
     assert {k: v["value"] for k, v in head["registered"].items()} == {
-        "row": "rec-rows-L1", "out": "rec-top-L1", "acc": O.ACC_VALUE, "acc_out": O.ACC_VALUE, "coef": O.COEF_VALUE,
-        "dirs": O.DIRS_VALUE}
+        "row": "rec-rows-L1", "aux": "rec-aux-L1", "out": "rec-top-L1", "acc": O.ACC_VALUE, "acc_out": O.ACC_VALUE,
+        "coef": O.COEF_VALUE, "dirs": O.DIRS_VALUE}
     assert head["registered"]["out"]["positions"] == [0, 1, 3, 2]
     assert head["registered"]["coef"]["positions"] == head["registered"]["dirs"]["positions"] == [0, 1, 2, 3]
     meta = json.loads((d / "circuit.txt").read_text().split("\n", 2)[1][5:])
@@ -149,7 +150,7 @@ def test_a_level_is_one_template_over_both_reps(staged):
 def test_the_top_forgeries_move_the_provers_output_row_or_its_salt_alone(staged, tmp_path):
     """`rec_vstage.forge_top` on the staged level: ``top`` on the opening whose sibling is another node's (it climbs to that
     node, which becomes its output row), ``top-salt`` on an honest one. Only the prover's ``inst.bin`` moves, by that row or
-    that salt; the verifier's ``pub.bin`` holds the ``b || c`` the firewall committed for each opening's top node, which the
+    that salt; the verifier's ``pub.bin`` holds the ``b || c`` the ZK server committed for each opening's top node, which the
     forged row (or salt) does not open."""
     from verity_flock import rec_vstage as S
 

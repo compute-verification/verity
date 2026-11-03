@@ -3,7 +3,7 @@
     python -m verity_flock.register --prover-run DIR --verifier-run DIR --lane LANE --out meta.json \\
         [--loopback-seconds S --loopback-method TEXT] [--rtt-ms MS --rtt-method TEXT] [--supersedes art:...]
 
-then ``research data put --kind bench-result/v1 --meta @meta.json --ref run_files=<the run's run files> --preserve``.
+then put in the evidence store as ``bench-result/v1`` with ``meta.json``, its run files referenced, preserved.
 Adds: the prover's and verifier's source commits and ``flock-pure-gpu`` sha256s (each run's ``job.json`` tree sha and
 ``out/binary.sha256``); the union bound over the batch's sub-batch proofs; ``net.rtt_ms`` as a network round trip (the
 coin-wait figure moves to ``live.coin_wait_per_round_ms``); ``live.loopback_round_seconds`` with its method.

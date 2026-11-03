@@ -44,7 +44,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
-from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
 #: a Boolean derive dir's word Program, the one its Program is σ-checked against node by node (its digest the derive report's
@@ -88,10 +88,6 @@ def _base(fid: str) -> str:
     return fid.split("{", 1)[0]
 
 
-def _fid(fn: Any) -> str:
-    return descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
-
-
 # ---- the table: word id -> Boolean Definition, from the Boolean Definitions' own `word` links ---------------------------------
 
 _TABLE: list = []
@@ -118,7 +114,7 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
         if not isinstance(d, CompositeDefinition) or w is None:
             continue
         if isinstance(w, FunctionDefinition):
-            exact.setdefault(_fid(w), []).append(d)
+            exact.setdefault(descriptor_id(bind(w) if isinstance(w, CompositeDefinition) else w), []).append(d)
         elif callable(w):
             by_name.setdefault(d.name, []).append(d)
     _TABLE.append((exact, by_name, errors))
@@ -137,7 +133,7 @@ _VERSIONS: dict[str, Any] = {}
 def boolean_version(fn: FunctionDefinition) -> FunctionDefinition:
     """The Boolean Definition whose word is ``fn``: the one registered Boolean Definition linked to it, its newest version when
     several versions of one name are, with ``bit_type`` of ``fn``'s signature as its own.  `NoBooleanVersion` otherwise."""
-    fid = _fid(fn)
+    fid = descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
     hit = _VERSIONS.get(fid)
     if hit is not None:
         if isinstance(hit, NoBooleanVersion):
@@ -221,7 +217,8 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
             for on_bits in True, False:
                 try:
                     sp = bind(d, **(_statics_on_bits(raw) if on_bits else raw), **more)
-                    if _fid(word_of(sp)) == fid:
+                    w = word_of(sp)
+                    if descriptor_id(bind(w) if isinstance(w, CompositeDefinition) else w) == fid:
                         cands.append(sp)
                         break
                 except (LookupError, TypeError, ValueError):
@@ -233,19 +230,19 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
         raise NoBooleanVersion({fid: why})
     names = {c.name for c in cands}
     if len(names) > 1:
-        raise NoBooleanVersion({fid: f"ambiguous: {sorted(_fid(c) for c in cands)} all name it as their word"})
+        raise NoBooleanVersion({fid: f"ambiguous: {sorted(descriptor_id(c) for c in cands)} all name it as their word"})
     best = max(cands, key=lambda c: c.version)
     params, ret = fn.signature()
     bparams, bret = best.signature()
     want = (tuple(BL.bit_type(t) for _, t in params), BL.bit_type(ret))
     if (tuple(t for _, t in bparams), bret) != want:
-        raise NoBooleanVersion({fid: f"{_fid(best)}'s signature {[t for _, t in bparams]} -> {bret!r} is not the bit form "
+        raise NoBooleanVersion({fid: f"{descriptor_id(best)}'s signature {[t for _, t in bparams]} -> {bret!r} is not the bit form "
                                      f"{list(want[0])} -> {want[1]!r} of the word signature"})
     if getattr(getattr(best, "defn", best), "sigma_of", None) is not None:
         _, missing = _sigma_callees(fn)
         if missing:
             names = ", ".join(sorted({_base(k) for k in missing}))
-            raise NoBooleanVersion({fid: f"{_fid(best)} is σ of it, and its body Calls {names} with no Boolean version",
+            raise NoBooleanVersion({fid: f"{descriptor_id(best)} is σ of it, and its body Calls {names} with no Boolean version",
                                     **missing})
     return best
 
@@ -259,7 +256,7 @@ def _bits(t: Type) -> int:
         return t.n * _bits(t.elem)
     if isinstance(t, Tuple):
         return sum(_bits(f) for f in t.fields)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return sum(_bits(f) for _, f in t.fields)
     raise TypeError(t)
 
@@ -543,8 +540,9 @@ def dry_run(program) -> dict:
             gaps.update(x.missing)
             would.update(_reachable([n.fn]))
             continue
-        e["boolean"].add(_base(_fid(v)))
-        would.update(_reachable([bind(v) if isinstance(v, CompositeDefinition) else v]))
+        v = bind(v) if isinstance(v, CompositeDefinition) else v
+        e["boolean"].add(_base(descriptor_id(v)))
+        would.update(_reachable([v]))
     rows = []
     for _, e in sorted(calls.items()):
         rows.append({"word": e["word"], "boolean": sorted(e["boolean"]) or None, "specializations": len(e["specializations"]),

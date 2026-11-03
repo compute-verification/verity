@@ -3,7 +3,7 @@ held to the registration (`m3reg.py`) and the live coin (`m3coin.py`).
 
     python examples/h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--payload BIN] [--out FILE]
 
-* **The draw.** The registration's digest is its record's. The coin's units are
+* **The sample.** The registration's digest is its record's. The coin's units are
   ``derive(coin, DOMAIN, {"registration": digest}).subset(k, population)`` again. They are the opened units, in order.
 * **The openings.** Each unit's rows and salts are its committed strings (``hm96-sha512/row/v2``). The unit's tree reaches
   its slot root, and the slot root reaches the registered step root (`slots.verify_unit`, under the registered context

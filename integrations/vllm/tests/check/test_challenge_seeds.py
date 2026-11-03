@@ -1,5 +1,5 @@
-"""Every challenge draw takes its seed from its caller: no sample over committed or snapshotted values is drawn from a default seed, and a
-command line that draws one refuses to run without `--seed`."""
+"""Every challenge draw takes its seed from its caller: no sample over committed or snapshotted values is sampled from a default seed, and a
+command line that samples one refuses to run without `--seed`."""
 from __future__ import annotations
 
 import importlib

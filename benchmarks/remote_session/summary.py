@@ -1,7 +1,7 @@
 """A run's sessions in a few lines, from its `verifier.json` and `prover.json` (`run.sh`'s outputs): each honest
 session's verdict, γ terms and costs, each kv session's verdict and the blocks it appended, released and read after the
-seed, and for each skip fraction F the sessions accepted against the rate the draws predict,
-Π_t C(U_t − F·N·L_t, s) / C(U_t, s) over the windows drawn, and the draws that landed on a dropped block.
+seed, and for each skip fraction F the sessions accepted against the rate the samples predict,
+Π_t C(U_t − F·N·L_t, s) / C(U_t, s) over the windows drawn, and the samples that landed on a dropped block.
 
     python summary.py OUT [--json]
     python summary.py OUT OUT ... [--json]      the skip sessions of several runs, pooled
@@ -85,7 +85,7 @@ def summarize(out: Path) -> dict:
 
 
 def pooled(summaries: list[dict]) -> list[dict]:
-    """The skip rows of several runs' summaries pooled by fraction, sessions whose rejection was not at a draw (a late
+    """The skip rows of several runs' summaries pooled by fraction, sessions whose rejection was not at a sample (a late
     root) left out of the rate and counted apart."""
     by = defaultdict(lambda: {"sessions": 0, "accepted": 0, "expected": 0.0, "var": 0.0, "draws": 0, "hits": 0,
                               "other_failures": 0})

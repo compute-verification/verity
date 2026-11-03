@@ -16,7 +16,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
-# harness's Lean, C-Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
+# harness's Lean, Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
 # reference, one_stage with the profile, and what they import of verity.ml (the circuits, the partition object, the
 # commitments' domains, and LMS for the challenger's signed record).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/protocols",

@@ -7,10 +7,10 @@ Program.
   kind of work the Program's gates are (`datacenter.work`), a certifier a `certifier` (trusted by its kind), the client
   `outside`, and any other leaf a `switch`, which only carries frames. A link's capacity is its β a tick over the
   cadence's tick.
-- `placement(model, hw, p, dc, registration)`: each Call on the device and at the step `placement.Placement` gives its
-  gates, the run inputs at the client, and the outputs delivered to the client. The simulator stores a registered value
-  once, at its first reader, and moves it to readers in other units (Serve_v1's tied embeddings), so a value read in
-  more than one unit is `held` there; every other registered value has its copy where it is read.
+- `placement(model, hw, p, dc, registration)`: each Call on the device and at the step `placement.StepPlacement` gives
+  its gates, the run inputs at the client, and the outputs delivered to the client. The simulator stores a registered
+  value once, at its first reader, and moves it to readers in other units (Serve_v1's tied embeddings), so a value read
+  in more than one unit is `held` there; every other registered value has its copy where it is read.
 
 Both layers derive the same crossings from one placement: the accounting layer's are census values (`crossing_pairs`
 expands each to its gates), and each counts a crossing's frames in the bucket of its read tick, but they frame them
@@ -34,7 +34,7 @@ from verity.ml.circuits.program import REGISTRATION, RUN
 from . import model as M
 from . import placement as P
 from .block import Context
-from .hardware import OUTSIDE, Hardware
+from .hardware import OUTSIDE, DeviceGraph
 
 PREMISES = {D.FLEET_CLOSED.name: D.FLEET_CLOSED}
 
@@ -65,28 +65,29 @@ def kinds(model) -> set[str]:
     return {k for w in D.work(model.program).values() for k in w}
 
 
-def datacenter(hw: Hardware, cadence: D.Cadence, kinds: set[str], rate: float = 1e9) -> D.Datacenter:
-    def device(x: int) -> D.Device:
+def datacenter(hw: DeviceGraph, cadence: D.Cadence, kinds: set[str], rate: float = 1e9) -> D.Datacenter:
+    def device(x: int) -> D.DeviceEntry:
         name = hw.leaves[x]
         if x in hw.cert:
-            return D.Device(name, "certifier")
+            return D.DeviceEntry(name, "certifier")
         if x == hw.client:
-            return D.Device(name, "outside")
+            return D.DeviceEntry(name, "outside")
         u = hw.unit(x)
         if u != OUTSIDE and x in hw.devices(u):
-            return D.Device(name, "gpu", rate={k: D.Assumption(f"{name}.{k}", rate, f"{k}/s", "declared") for k in kinds})
-        return D.Device(name, "switch")
+            return D.DeviceEntry(name, "gpu", rate={k: D.Assumption(f"{name}.{k}", rate, f"{k}/s", "declared") for k in kinds})
+        return D.DeviceEntry(name, "switch")
 
     return D.Datacenter(
         "netsim",
-        [D.Block(u, [device(x) for x in sorted(hw.units[u])]) for u in sorted(hw.units)],
+        [D.Zone(u, [device(x) for x in sorted(hw.units[u])]) for u in sorted(hw.units)],
         [device(x) for x in range(len(hw.leaves)) if hw.unit(x) == OUTSIDE],
-        [D.Link(hw.leaves[k.ends[0]], hw.leaves[k.ends[1]],
-                D.Assumption(f"{k.name}.beta", k.beta / float(cadence.tick), "bit/s", "declared")) for k in hw.links],
+        [D.LinkEntry(hw.leaves[k.ends[0]], hw.leaves[k.ends[1]],
+                     D.Assumption(f"{k.name}.beta", k.beta / float(cadence.tick), "bit/s", "declared"))
+         for k in hw.links],
         cadence)
 
 
-def placement(model, hw: Hardware, p: P.Placement, dc: D.Datacenter, registration: D.Registration) -> D.Placement:
+def placement(model, hw: DeviceGraph, p: P.StepPlacement, dc: D.Datacenter, registration: D.Registration) -> D.Placed:
     program = model.program
     body = program.root.body
     client = hw.leaves[hw.client]
@@ -103,18 +104,18 @@ def placement(model, hw: Hardware, p: P.Placement, dc: D.Datacenter, registratio
         if binding(program, v.node) == REGISTRATION and len(units) > 1:
             held[v.id] = device[min(v.reads)]
     used = {hw.leaves.index(d) for d in device.values()} | {p.leaf[g] for g in range(model.n)}
-    return D.Placement(program, dc, device, step, {hw.leaves[x]: list(p.ticks[x]) for x in used}, deliver=client,
-                       registration=registration, held=held)
+    return D.Placed(program, dc, device, step, {hw.leaves[x]: list(p.ticks[x]) for x in used}, deliver=client,
+                    registration=registration, held=held)
 
 
-def crossing_pairs(dp: D.Placement) -> set[tuple[int, str]]:
+def crossing_pairs(dp: D.Placed) -> set[tuple[int, str]]:
     """The accounting layer's crossings as (gate, reading unit), the pairs `placement.crossings` makes edges of: each
     crossing census value expanded to its gates."""
     return {(g, getattr(dp.datacenter.block_of(x.dst), "name", OUTSIDE)) for x in D.crossings(dp)
             for g in gates(dp.program, x.value)}
 
 
-def epoch(dp: D.Placement) -> D.Interval:
+def epoch(dp: D.Placed) -> D.Interval:
     """The ticks the placement uses, from the first through the last."""
     return D.Interval(0, max(t for ts in dp.ticks.values() for t in ts) + 1)
 
