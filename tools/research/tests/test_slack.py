@@ -1577,11 +1577,11 @@ def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_p
     ask = fake.add("CCHAT1", text="@circuits is the TP8 sweep done?", user=LUKE)
     assert slack.deliver(api, reg, routes, "CCHAT1", ask) == ["@circuits: rang"]
     for _ in range(2):
-        slack.deliver(api, reg, routes, "CCHAT1", ask, reminder="no 👀 or lane reply in 15 min")
+        slack.deliver(api, reg, routes, "CCHAT1", ask, reminder="no :eyes: or lane reply in 15 min")
     slack.deliver(api, reg, routes, "CCHAT1", ask, names=["top"], reminder="no lane reply in 60 min")
     where = f"from luke (a person, waiting 1 min), #chat-luke thread {ask['ts']}: "
     read = f"(a post in a private channel: research msg read --channel chat-luke --thread {ask['ts']})"
-    assert rung("circuits") == [where + read, where + "reminder (no 👀 or lane reply in 15 min): " + read]
+    assert rung("circuits") == [where + read, where + "reminder (no :eyes: or lane reply in 15 min): " + read]
     assert rung("top")[1:] == [where + "reminder (no lane reply in 60 min): " + read]
     assert all(slack.DOORBELL_RE.match(t) for n in boxes for t in rung(n))
 

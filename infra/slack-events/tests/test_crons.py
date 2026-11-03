@@ -41,6 +41,22 @@ def test_a_chat_post_with_no_eyes_and_no_lane_reply_rings_again_after_15_min_onc
     assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
 
 
+def test_a_reminder_rings_once_though_slack_reads_its_emoji_back_as_shortcodes(world, monkeypatch):
+    """Slack may return a post's emoji as `:shortcode:`s, so a reason with an emoji in it would never match its own
+    doorbell, and the reminder would ring every run.  Its reasons carry none."""
+    real = world.slack.add
+    monkeypatch.setattr(world.slack, "add", lambda ch, **m: real(ch, **{**m, "text": m.get("text", "").replace("👀", ":eyes:")}))
+    with_lane(world, "circuits")
+    post = routed(world, "how do I read a PoUW receipt?")
+    world.clock.t += REMIND_S + 1
+    for _ in range(4):
+        crons.watchdog(world.deps)
+        world.clock.t += crons.EVERY_S
+    assert world.rung("circuits") == [private(post["ts"]), private(post["ts"], REMINDER, "15 min")]
+    assert world.rung("top") == [private(post["ts"], LANE_QUIET.format(lane="circuits"), "15 min")]
+    assert all(r.isascii() for r in (REMINDER, ESCALATION, LANE_QUIET))
+
+
 def test_eyes_or_a_lane_reply_stops_the_reminder(world):
     eyed = routed(world, "@circuits is the TP8 sweep done?")
     eyed["reactions"] = [{"name": "eyes", "users": ["U0CURSOR"], "count": 1}]
