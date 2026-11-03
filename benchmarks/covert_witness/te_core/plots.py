@@ -58,10 +58,10 @@ NAMES = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-dec
 
 # ---- the data ----------------------------------------------------------------------------------------------------------
 
-def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None) -> tuple[list[dict], dict]:
-    """The valid rows `keep` keeps (default all) scored by the formalism, and the stubs, assumptions and bounds they
-    rest on."""
-    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes)
+def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None, ladder=None) -> tuple[list[dict], dict]:
+    """The valid rows `keep` keeps (default all) scored by the formalism (the scoring cap under the ladder's fit `ladder`),
+    and the stubs, assumptions and bounds they rest on."""
+    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes, ladder)
     stubs: dict[str, int] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():

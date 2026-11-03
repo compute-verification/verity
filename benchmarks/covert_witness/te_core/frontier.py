@@ -238,16 +238,21 @@ def report(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> dict:
     return out
 
 
-def formalism_rows(rows: list[dict], shapes: dict[str, dict]) -> tuple[list[dict], dict[str, str]]:
-    """Each row whose start has a shape, with its formalism quantities (`measured`), |C| in gates, ρ in every cell of
-    its start (te_core.policy's `cells`: the grid's and the reference shapes'), whether Fit holds there for the
-    training (`fit`) and Slowdown's terms there (`terms`: x0, s* and the attack side's); and each row left out, with why
-    (`no-shape`, or `unmeasured`)."""
+def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tuple[list[dict], dict[str, str]]:
+    """Each row whose start has a shape and that the scoring cap admits (te_core.policy's `eligible`, under the ladder's
+    fit `ladder`), with its formalism quantities (`measured`), |C| in gates, ρ in every cell of its start (te_core.policy's
+    `cells`: the grid's and the reference shapes'), whether Fit holds there for the training (`fit`) and Slowdown's terms
+    there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`, `over-cap` or
+    `unmeasured`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
         if shape is None:
             skipped[r["id"]] = "no-shape"
+            continue
+        if not policy.eligible((r.get("model") or {}).get("forward_gates_per_token"),
+                               r.get("start_forward_gates_per_token") or policy.w_fwd(shape), r.get("val_bpb"), ladder):
+            skipped[r["id"]] = "over-cap"
             continue
         if r["start"] not in cells:
             cells[r["start"]] = policy.cells(shape)
@@ -294,11 +299,11 @@ def formalism_targets(rows: list[dict], shapes: dict[str, dict]) -> dict[str, di
 
 
 def formalism_report(rows: list[dict], pin: str | tuple[str, ...] | None = None,
-                     shapes: dict[str, dict] | None = None, keep=None) -> dict:
+                     shapes: dict[str, dict] | None = None, keep=None, ladder=None) -> dict:
     """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`,
     with every quantity's source (the labels of the rows' measurements) and the rows it couldn't score."""
     shapes = policy.starts() if shapes is None else shapes
-    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes)
+    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes, ladder)
     labels: dict[str, dict[str, int]] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():
