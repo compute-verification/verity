@@ -217,6 +217,8 @@ def main() -> int:
     n_curv_steps = 1
     planned = n_curv_steps + warm + n_steps
     sess = hooks.session() if hooks is not None else None
+    if not hasattr(sess, "current_step"):
+        sess = None
     if hooks is not None:
         hooks.plan(planned)
 
@@ -283,8 +285,8 @@ def main() -> int:
         return torch.cat(out)
 
     @torch.no_grad()
-    def estimate(seed: int, x: torch.Tensor) -> tuple[float, float, float, float]:
-        """ĝ over the batch, over each half, and the mean of L₊ and L₋, along z_seed."""
+    def estimate(seed: int, x: torch.Tensor) -> torch.Tensor:
+        """ĝ over the batch, over each half, and the mean of L₊ and L₋, along z_seed (fp32, on the device)."""
         nonlocal fwd_tokens
         perturb(seed, eps)
         lp = seq_losses(x)
@@ -293,47 +295,53 @@ def main() -> int:
         fwd_tokens += 2 * x.shape[0] * a.ctx
         dd = (lp - lm) / (2 * eps)
         hx = x.shape[0] // 2
-        return tuple(torch.stack([dd.mean(), dd[:hx].mean(), dd[hx:].mean(), (lp + lm).mean() / 2]).tolist())
+        return torch.stack([dd.mean(), dd[:hx].mean(), dd[hx:].mean(), (lp + lm).mean() / 2]).float()
 
-    stats = {"w": 0.0, "G": 0.0, "E": 0.0, "n": 0, "gab": 0.0, "g2": 0.0, "pred": 0.0}
+    # The lr rule's state is these three fp32 values (weight, G, E[ĝ²]), carried on the device: a Python float folded
+    # over every step would carry every step's estimate into the next as te_core.capture sees it.
+    emas = torch.zeros(3, dtype=torch.float32, device=dev)
+    stats = {"n": 0, "gab": 0.0, "g2": 0.0, "pred": 0.0}
 
-    def observe(g: float, ga: float, gb: float) -> None:
-        for k, v in (("w", 1.0), ("G", ga * gb), ("E", g * g)):
-            stats[k] = a.ema * stats[k] + v
+    def observe(est: torch.Tensor) -> tuple[float, float, float, float]:
+        emas.mul_(a.ema).add_(torch.stack([torch.ones_like(est[0]), est[1] * est[2], est[0] * est[0]]))
+        g, ga, gb, lmean = est.tolist()
         stats["n"] += 1
         stats["gab"] += ga * gb
         stats["g2"] += (ga * ga + gb * gb) / 2
+        return g, ga, gb, lmean
+
+    def ema_values() -> tuple[float, float]:
+        return float(emas[1] / emas[0]), float(emas[2] / emas[0])
 
     def lr_rule() -> float:
-        return a.lr_auto * max(stats["G"] / stats["w"], 0.0) / (max(stats["E"] / stats["w"], 1e-30) * trh)
+        return float(a.lr_auto * (emas[1] / emas[0]).clamp(min=0.0) / ((emas[2] / emas[0]).clamp(min=1e-30) * trh))
 
     ema_loss = None
     for i in range(warm):
         x = data.next(a.warm_batch)
-        g, ga, gb, lmean = estimate(a.seed + 10**12 + i, x)
-        observe(g, ga, gb)
+        g, ga, gb, lmean = observe(estimate(a.seed + 10**12 + i, x))
         ema_loss = lmean if ema_loss is None else 0.99 * ema_loss + 0.01 * lmean
     lr_warm = lr_rule() if a.lr_auto is not None else a.lr
     fixed_lr = a.lr_auto is None or a.warm_batch != a.batch
     if a.lr_auto is not None:
-        g_w, e_w = stats["G"] / stats["w"], stats["E"] / stats["w"]
+        g_w, e_w = ema_values()
         e_run = g_w + (e_w - g_w) * a.warm_batch / a.batch
         if a.warm_batch != a.batch:
             lr_warm = a.lr_auto * max(g_w, 0.0) / (max(e_run, 1e-30) * trh)
         print(json.dumps({"warm": warm, "warm_batch": a.warm_batch, "G": g_w, "E": e_w, "E_at_batch": e_run,
                           "lr": lr_warm, "lr_fixed": fixed_lr, "loss": ema_loss}), flush=True)
         if not lr_warm > 0:
-            raise SystemExit(f"train: the warm steps measure G {stats['G'] / stats['w']:.3g} <= 0 along S; no lr")
+            raise SystemExit(f"train: the warm steps measure G {g_w:.3g} <= 0 along S; no lr")
 
     coeffs: list[float] = []
-    alpha_q = [0.0] * (a.subspace or 0)
+    alpha_q = torch.zeros(a.subspace or 0, dtype=prepare.DTYPES[a.coeff], device=dev)
     rounding = random.Random(a.seed)
     cps: list[dict] = []
     buckets: set[int] = set()
     j0 = None
 
     def encoded() -> bytes:
-        return prepare.encode_seedlog(names, a.seed, alpha_q if a.subspace else coeffs, a.coeff)
+        return prepare.encode_seedlog(names, a.seed, alpha_q.tolist() if a.subspace else coeffs, a.coeff)
 
     def bucket_of(j: int) -> int:
         return math.ceil((j + 1) * CHECKPOINTS / planned)
@@ -346,8 +354,9 @@ def main() -> int:
 
     def report(i: int, lr: float, extra: dict | None = None) -> None:
         n = max(stats["n"], 1)
-        row = {"step": i, "lr": lr, "loss_ema": ema_loss, "G_ema": stats["G"] / max(stats["w"], 1e-30),
-               "E_ema": stats["E"] / max(stats["w"], 1e-30), "gAgB_mean": stats["gab"] / n, "g2_mean": stats["g2"] / n,
+        g_e, e_e = ema_values()
+        row = {"step": i, "lr": lr, "loss_ema": ema_loss, "G_ema": g_e, "E_ema": e_e,
+               "gAgB_mean": stats["gab"] / n, "g2_mean": stats["g2"] / n,
                "pred_gain_nats": stats["pred"], "clipped": clipped, "s": round(time.perf_counter() - T_MAIN, 1)}
         print(json.dumps(row | (extra or {})), flush=True)
 
@@ -383,14 +392,16 @@ def main() -> int:
             lr = min(a.lr_cap * lr_warm, lr_rule())
         lr_i = lr * (1 - p) if a.schedule == "linear" else lr
         k = i % a.subspace if a.subspace else i
-        g, ga, gb, lmean = estimate(a.seed + k, x)
-        observe(g, ga, gb)
+        g, ga, gb, lmean = observe(estimate(a.seed + k, x))
         ema_loss = lmean if ema_loss is None else 0.995 * ema_loss + 0.005 * lmean
-        move = max(-max_c, min(max_c, lr_i * g))
-        clipped += move != lr_i * g
+        # a scale rather than min/max, so the move stays a function of ĝ when it is clipped
+        shrink = min(1.0, max_c / max(abs(lr_i * g), 1e-30))
+        move = lr_i * g * shrink
+        clipped += shrink < 1.0
         if a.subspace:
-            new = round_stochastic(alpha_q[k] + move, a.coeff, rounding.random())
-            c = new - alpha_q[k]
+            old = float(alpha_q[k])
+            new = round_stochastic(old + move, a.coeff, rounding.random())
+            c = new - old
             alpha_q[k] = new
         else:
             c = prepare.quantize_coefficient(move, a.coeff)
