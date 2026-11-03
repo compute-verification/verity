@@ -1773,7 +1773,7 @@ def test_a_renamed_unwitnessed_guarantee_passes_under_moved_and_its_entry_is_re_
 
 
 HIDDEN = ("theorem hidden (n : Nat) (_h : Hiding n) (hs : Small n) : verifySmall n := hs\n"
-          "theorem hidden_honest (_h : Hiding 1) : Small 1 := by unfold Small; omega\n"
+          "theorem hidden_honest (_h : Hiding 1) : Small 1 ∧ double 1 = 2 := ⟨by unfold Small; omega, rfl⟩\n"
           "theorem hidden_nontrivial : ¬ verifySmall 10 := by unfold verifySmall; omega\n")
 
 
@@ -1782,10 +1782,11 @@ HIDDEN = ("theorem hidden (n : Nat) (_h : Hiding n) (hs : Small n) : verifySmall
 def test_a_premise_witnesses_assumed_lists_is_taken_and_another_listed_one_is_still_concluded(tmp_path):
     """On a real build: `Control.hidden` reads the verifier `verifySmall` and takes `Hiding n`, a named assumption of a
     definitions module that no theorem concludes (as `Claims.Hm96Hiding` is), and `Small n`; its honest witness takes
-    `Hiding 1` and concludes `Small 1`. Without a `witnesses_assumed` entry the witness fails for taking `Hiding` and for
-    not concluding it, though the lock lists it under `assumptions`. With one, `Hiding` is taken, and `--update` keeps the
-    entry as it is. `Small`, listed under `assumptions` too, is still concluded: a witness that concludes something else
-    fails. Once no guarantee takes `Hiding` as a premise, the entry fails as stale."""
+    `Hiding 1` and concludes `Small 1` (in a conjunction, which `lifted` leaves as written). Without a `witnesses_assumed`
+    entry the witness fails for taking `Hiding` and for not concluding it, though the lock lists it under `assumptions`.
+    With one, `Hiding` is taken, and `--update` keeps the entry as it is. `Small`, listed under `assumptions` too, is
+    still concluded: a witness that concludes something else fails. Once no guarantee takes `Hiding` as a premise, the
+    entry fails as stale."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     defs, thms = pkg / "Control" / "Defs.lean", pkg / "Control" / "Thms.lean"
@@ -1820,15 +1821,15 @@ def test_a_premise_witnesses_assumed_lists_is_taken_and_another_listed_one_is_st
     A.dump(pkg, lock() | {"witnesses_assumed": {"Control.Hiding": why}})
     assert witnessing(False) == [] and witnessing(True) == [] and lock()["witnesses_assumed"] == {"Control.Hiding": why}
 
-    concluded = "(_h : Hiding 1) : Small 1 := by unfold Small; omega"
-    thms.write_text(thms.read_text().replace(concluded, "(_h : Hiding 1) : verifySmall 1 := by unfold verifySmall; omega"))
+    concluded = "Small 1 ∧ double 1 = 2 := ⟨by unfold Small"
+    other = "verifySmall 1 ∧ double 1 = 2 := ⟨by unfold verifySmall"
+    thms.write_text(thms.read_text().replace(concluded, other))
     build()
     fails = witnessing(True)
     assert [f.code for f in fails] == ["witnesses.honest-uncovered"] and \
         "conclude nothing of Control.Small at the deployed instance" in fails[0], fails
 
-    thms.write_text(thms.read_text().replace("(_h : Hiding 1) : verifySmall 1 := by unfold verifySmall; omega",
-                                             concluded).replace("(_h : Hiding n) ", "").replace("(_h : Hiding 1) ", ""))
+    thms.write_text(thms.read_text().replace(other, concluded).replace("(_h : Hiding n) ", "").replace("(_h : Hiding 1) ", ""))
     build()
     assert witnessing(True) == ["witnesses: `witnesses_assumed` lists Control.Hiding, which no guarantee the lock lists "
                                 "takes as a premise; remove the entry"]
