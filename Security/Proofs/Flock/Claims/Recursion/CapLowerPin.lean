@@ -105,7 +105,7 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
 abbrev AtPiecesP (pieces : Msg → List OpenPiece)
     (Fact : Msg → (ℕ → Coin) → List Claims.Flock.Wit → ℕ → ℕ → ℕ → (xO : Msg) → Claims.Flock.Wit →
       (p : _root_.Flock.Readable.Parsed) → 0 < p.sts.size → OpenPiece → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     JointP H D L (PartAcceptsP H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt)
       x c ws →
@@ -159,7 +159,7 @@ theorem openTieRP_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coi
 theorem openPieces_deployedP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hC : OpenCopyR H D shape untr b cmt L Bd side pieces)
     (hT : OpenTieRP H D shape untr b cmt L Bd side pieces posAt)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
     {ws : List Claims.Flock.Wit}
     (hJ : JointP H D L (PartAcceptsP H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt)
       x c ws) {s : ℕ} (hs : s < D.nS x) :

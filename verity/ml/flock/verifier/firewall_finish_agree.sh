@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The firewall's final round in Lean (firewall_finish_agree.py): one firewalled CPU `prove --zk` session (FC_FIREWALL=1
+# The ZK server's final round in Lean (firewall_finish_agree.py): one firewalled CPU `prove --zk` session (FC_FIREWALL=1
 # FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, draws
 # each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps each table's roots
 # and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish` on the requests;

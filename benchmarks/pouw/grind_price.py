@@ -272,8 +272,8 @@ def decode_lever(shape: EB.Shape, ctx: int, b: int, t_bits: int, kappa: float = 
     """A decode step's attention under each seed group. A seed binds its call's operand roots, and a step's calls run in
     order (layer ℓ + 1's operands and P·V's P exist only after the call before them), so the largest group a decode
     step has is one call: a layer's QKᵀ (or P·V) over every head and every request of the step's batch. `step` (every
-    layer's call under one seed drawn from the step's inputs) needs a premise nothing states: that a cheater can't steer
-    a later call's operands, after seeing its noise, without a deviation the draw catches."""
+    layer's call under one seed derived from the step's inputs) needs a premise nothing states: that a cheater can't steer
+    a later call's operands, after seeing its noise, without a deviation the sample catches."""
     return {"template_call": template_attention(shape, ctx, b, t_bits, kappa),
             **{f"h1_{g}": h1_attention(shape, "decode", b, ctx, t_bits, g) for g in ("head", "call", "step")}}
 

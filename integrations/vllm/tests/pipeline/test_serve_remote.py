@@ -1,4 +1,4 @@
-"""serve-openai's remote bandwidth session (`serve_remote`) on CPU: its options and refusals before the model loads, the
+"""serve-openai's PoUB session (`serve_remote`) on CPU: its options and refusals before the model loads, the
 engine's arguments under it, and, over the stand-in engine and a prover that drives the session's `Lockstep` as
 `remote.prove` does, the server's engine steps paced by the session from its first, the steps after it unaudited, the
 registered bytes a seal carries read before it, and a session that fails or outlasts the server rejected."""

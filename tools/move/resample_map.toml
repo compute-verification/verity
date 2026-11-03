@@ -1,0 +1,25 @@
+# The composition's resampled answer: what `tools/move/rename.py --map tools/move/resample_map.toml` renames (a draw is
+# a sample). `Accounting.Compose.redraw`, the window's paths with one oracle answer resampled, becomes `resample`, and
+# its lemmas follow. "Redraw" in prose about live coins (a retry never redraws) is another sense and stays, so the bare
+# words are renamed only in the files that declare and read these. Declarations keep their place in the locks' records:
+# `rename.py --moves` prints the renames that `check.py --update --moved` takes.
+[words]
+"Compose.redraw" = "Compose.resample"
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/Compose.lean", "Security/Definitions/Accounting/Assumptions/Compose.lean",
+         "Security/Proofs/Accounting/Compose.lean", "Security/Proofs/Accounting/Compose/CircuitWorkSeeded.lean",
+         "Security/Proofs/Accounting/Compose/WholeLuckOfEntropy.lean"]
+words = { "redraw" = "resample", "redraw_at" = "resample_at", "redraw_redraw" = "resample_resample", "sum_redraw" = "sum_resample" }
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

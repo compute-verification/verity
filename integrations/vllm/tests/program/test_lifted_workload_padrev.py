@@ -261,5 +261,5 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
             assert L.payload(L.SPLITS_BITS, S_t[t]) == splits_for(want[t], SMS), t
     # one cap for both is refused by name in both directions (9 for B's 4 words, 4 for A's 9): the hook takes the fixed population only
     for one_cap in (CAP, CAP_B):
-        with pytest.raises(ValueError, match="F-pad-19"):
+        with pytest.raises(ValueError, match="never a served length"):
             Program(bind(PadrevMixedS2, WL=wl.fn, EOS=EOS, CAPS=(one_cap, one_cap), ARR=arrivals, LAG=lag, H=max(a + one_cap for a in arrivals)))

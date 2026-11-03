@@ -9,7 +9,7 @@ bits, with every table read a plain And/Xor/Not circuit.
     DivFullScaleA_v3    (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>           word view: DivFullScaleA_v1
     MufuTanh_v2         (x: Array<32, Value<1>>) -> Array<32, Value<1>>              word view: MufuTanh_v1
 
-The exponent, sign and special-encoding rules around the tables are C-Flock's (`verity_flock.tail_pieces`, from
+The exponent, sign and special-encoding rules around the tables are Flock's (`verity_flock.tail_pieces`, from
 ``fa2_model.cpp`` and ``rms_triton_model.cpp``). The range scalings by 0.25 and 2^24 are not multiplies: the exponent moves,
 a subnormal is normalized by its leading-zero count (`_times_2_24`), and only `DivFullScaleA_v3` (which reads no table) rounds,
 where a * 0.25 is subnormal.
@@ -279,7 +279,7 @@ def table_word(C, name: str, idx):
     return y[:23] + exp
 
 
-# --- the bit rules (C-Flock's `tail_pieces`, the table read above) ---------------------------------------------------------
+# --- the bit rules (Flock's `tail_pieces`, the table read above) ---------------------------------------------------------
 
 def _ult_const(C, w, k: int):
     """``w < k`` for an unsigned word and a constant."""

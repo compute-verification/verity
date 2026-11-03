@@ -252,7 +252,7 @@ def test_a_context_not_a_string_refuses_the_period_as_a_refused_pass():
 
 
 def _retained(lane: Lane, sid: str, base: dict) -> bytes:
-    """Session `sid`'s pass retained in vllm #3985's form (`PearlCDeviceRun._write_retained`, `write_manifest`: the
+    """Session `sid`'s pass retained in the vLLM integration's form (`PearlCDeviceRun._write_retained`, `write_manifest`: the
     head, then ``weights`` and ``matmuls``, at indent 1 with a newline), its ``session`` `session_head`'s, the gate's
     open answer's {session, seq, root, commitment} alone, beside ``pass_index``."""
     man = lane.manifest(sid, base, 0)
@@ -279,7 +279,7 @@ def _retained(lane: Lane, sid: str, base: dict) -> bytes:
 
 
 def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_period():
-    """A retained manifest exactly as vllm #3985 writes it passes `core_check.pass_epoch` under the live inputs (``live
+    """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch` under the live inputs (``live
     coin``), and its one-epoch period credits it."""
     lane = Lane("retained")
     base, w, _ = _base(lane.rng)

@@ -4,7 +4,7 @@ splits (at step 16's statics, per head, four 64-key parts, one 16-key part and a
 at a small static (T = 40 keys in splits of 16, 16 and 8, two heads):
 
 * reads each part's operands off the row and its partial and lse off the twin, whose combine is the row's served words, so each
-  unit's Definition on its rows, parsed as C-Flock's stager parses them, is its committed output;
+  unit's Definition on its rows, parsed as Flock's stager parses them, is its committed output;
 * wires every combine slot to the output row of the part unit of its row, head and split, commits it under that row's salt, so
   the verifier's check on the public bodies holds, and refuses a partial that is not its writer's, a partial in another combine
   slot, a row whose served words are not its splits' combine, and a partition that leaves out a part's template.
@@ -40,7 +40,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
-#: DV = 32 is the least at which a combine's partial row (4 DV bytes) takes a compression before its last block, which C-Flock's
+#: DV = 32 is the least at which a combine's partial row (4 DV bytes) takes a compression before its last block, which Flock's
 #: compose needs some row of a circuit to have (the pin's sha512x3 slot)
 TOY = {"T": 40, "NS": 3, "NH": 2, "DR": 16, "DV": 32, "BN": 16, "SCALE": 0.0625}
 GLM = {"T": 272, "NS": 5, "NH": 8, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}
@@ -106,11 +106,11 @@ def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
     return SP.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Window:
+def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
     ms = members(s, tmpls, caps)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Window(*CS.population_program(defs, several=True), law or D.parse_law("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_law("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:

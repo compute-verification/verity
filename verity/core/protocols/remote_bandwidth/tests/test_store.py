@@ -1,5 +1,5 @@
 """`store`: the registered store a pinned BF16 checkpoint alone fixes, and the verifier's binding of a registration to it.
-On a small checkpoint: the arena is vLLM's 2-D weights in its module order with q/k/v and gate/up fused, each from a block
+A salt is SHA-512 in counter mode over its versioned message. On a small checkpoint: the arena is vLLM's 2-D weights in its module order with q/k/v and gate/up fused, each from a block
 boundary; its payload root, recomputed from the weights' digests in worker processes, is `audit.payload_tree`'s; a hello
 whose store is that store under the verifier's key is held and bound, and any other (another key, another checkpoint,
 another layout, a store short of the arenas) is refused with why; a pin whose files aren't the checkpoint's is refused
@@ -7,6 +7,7 @@ before anything reads them; and core's `models.json` is read as its roles' pins.
 end are `benchmarks/remote_session/tests/test_store_layout.py`'s."""
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import math
@@ -90,6 +91,16 @@ def root_of(s: store.Store, key: bytes = KEY) -> bytes:
     """`audit.payload_tree`'s root over the store's payloads, salted under `key` as the prover salts them."""
     salts = [store.store_salt(key, store.PAYLOAD_LABEL, j) for j in range(s.blocks)]
     return audit.payload_tree(NODE, s.payloads(), salts).commitment.root
+
+
+def test_a_salt_is_sha512_in_counter_mode_over_its_versioned_message():
+    """`store_salt` is the first 192 bytes of SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ SHA512(m ‖ u32be 2), m =
+    "verity/store/salt/v1\\0" ‖ key ‖ label ‖ u64be c: the format `Binding.record` names (`SALT_VERSION`)."""
+    for label, c in ((store.PAYLOAD_LABEL, 5), (b"", 2 ** 64 - 1)):
+        m = b"verity/store/salt/v1\0" + KEY + label + struct.pack(">Q", c)
+        want = b"".join(hashlib.sha512(m + struct.pack(">I", k)).digest() for k in range(3))
+        assert store.store_salt(KEY, label, c) == want
+    assert store.SALT_DOMAIN == store.SALT_VERSION.encode() + b"\0"
 
 
 def test_the_local_canonical_json_is_ml_circuits_codecs_on_the_shapes_pins_use():
@@ -189,6 +200,7 @@ def test_a_hello_whose_store_is_the_pinned_models_is_bound_and_any_other_refused
     assert b.hold(NODE, 16, root_of(s), KEY, layout) == tuple(layout)
     rec = b.record()
     assert rec["bound"] is True and rec["name"] == ROLE and rec["checkpoint_sha512"] == b.pin["checkpoint_sha512"]
+    assert rec["salt"] == store.SALT_VERSION
     assert rec["expected_root"] == rec["payload_root"] == root_of(s).hex() and rec["payload_key"] == KEY.hex()
     assert (rec["host_blocks"], rec["blocks"], rec["weights_blocks"]) == (2, 16, 6)
     assert b.hold(NODE, 16, root_of(s), KEY, None) == tuple(layout)

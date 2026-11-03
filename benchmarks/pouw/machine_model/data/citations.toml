@@ -1,0 +1,13 @@
+# The notes many lines cite, each cited in a census or rows.csv line's `runs` as @NAME, in this directory and every
+# device directory's.
+
+axioms = "note:20261017T1818Z-draft-axioms"
+census-sm120 = "note:20261015T0608Z-draft-census-sm120"
+fold-proof = "note:20261019T2200Z-draft-fold-proof"
+issue-ceiling = "note:20261016T0150Z-draft-issue-ceiling"
+mm-sheets = "note:20261019T0511Z-draft-mm-sheets"
+rt-b200-emp = "note:20261019T0520Z-draft-rt-b200-emp"
+rt-h200-emp = "note:20261019T0533Z-draft-rt-h200-emp"
+rt-isa = "note:20261019T0520Z-draft-rt-isa"
+rt2-hopper = "note:20261019T1140Z-draft-rt2-hopper"
+squaring-ceiling-final = "note:20261012T1919Z-report-squaring-ceiling-final"

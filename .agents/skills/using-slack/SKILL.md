@@ -90,8 +90,8 @@ id is missing).
 - **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to your Linear team's issue events
   (`subscribe_linear_issue`, creations and state changes), never its comments: every handle writes through one bot and
   one Linear app, so other subscriptions wake you for your own writes.
-- **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a chat thread, a thread a named
-  human posted in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
+- **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
+  in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.
 - **Timers are for schedules and absence checks, never for polling.** A run you launched rings your inbox when it ends
   (`from runs, run R rc N`), and the agent watch wakes you 10 minutes after an unread doorbell. Ask for 30 days
@@ -121,7 +121,8 @@ publishes the person as `people.d/NAME.json` in the notes, read into `collaborat
 service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to `@top`,
 and its watchdog rings again when nobody picks it up (`infra/slack-events/`'s README). Doorbells carry no text (the
 channel is private, the inboxes aren't): read with `research msg read --channel chat-NAME --thread T`, answer with
-`research msg reply --as ME --channel chat-NAME --thread T`, and subscribe to that thread. One agent answers each
+`research msg reply --as ME --channel chat-NAME --thread T`; their next reply rings you as a doorbell (no subscription
+reaches a private chat). One agent answers each
 question (the first to 👀), short and plain, with links the person can open.
 
 ## Norms

@@ -1,5 +1,5 @@
 """``bench.interaction``: a result's interaction record (measured for a live verifier, derived for a file-verified proof), the
-tolerance check against the run's own network, and the measurement protocol ``cell check`` and C-Flock's ``register`` apply."""
+tolerance check against the run's own network, and the measurement protocol ``cell check`` and Flock's ``register`` apply."""
 from __future__ import annotations
 
 import pytest

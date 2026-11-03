@@ -4,7 +4,7 @@
 frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body raw bytes
 ~~~
 
-An `openings` frame's body is the remote audit's openings frame (`verity/core/protocols/remote_bandwidth/wire.py`),
+An `openings` frame's body is PoUB's openings frame (`verity/core/protocols/remote_bandwidth/wire.py`),
 which decoding never raises past: a body it cannot read leaves its window no openings, which rejects as `malformed`.
 Every byte each side sends and receives is counted (`Conn.sent`, `Conn.received`, by message type).
 
@@ -186,9 +186,20 @@ def commitment_of(d: dict) -> coins.LiveCommitment:
     return coins.LiveCommitment.from_json(d)
 
 
-def coin_json(c: coins.LiveOpening) -> dict:
-    return c.to_json()
+def coin_json(c: coins.LiveOpening | coins.Released) -> dict:
+    return coins.released(c).to_json()
 
 
-def coin_of(d: dict) -> coins.LiveOpening:
-    return coins.LiveOpening.from_json(d)
+def coin_of(d: dict) -> coins.Released:
+    return coins.Released.from_json(d)
+
+
+def openings_json(openings) -> bytes:
+    return json.dumps([o.to_json() for o in openings], separators=(",", ":")).encode()
+
+
+def openings_of(body: bytes) -> list[coins.LiveOpening]:
+    doc = json.loads(body)
+    if type(doc) is not list:
+        raise ValueError("a session's coin openings are a list")
+    return [coins.LiveOpening.from_json(o) for o in doc]

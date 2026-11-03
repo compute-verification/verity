@@ -90,9 +90,10 @@ class Vacuous(AssertionError):
 
 
 def canonical(value: Any) -> str:
-    """The canonical JSON text of `value` (as `Flock.canon` writes it): compact, object keys sorted, strings in UTF-8 with
-    only `"`, `\\` and control characters escaped. Its domain is null, booleans, integers, strings, lists (tuples) and objects
-    with string keys; anything else, a float among them, raises `TypeError`."""
+    """The canonical JSON text of `value` (as `Flock.canon` writes it): compact, object keys sorted, and every character
+    outside printable ASCII a lowercase `\\uXXXX` escape (a surrogate pair above U+FFFF), so the text is ASCII without DEL.
+    Its domain is null, booleans, integers, strings, lists (tuples) and objects with string keys; anything else, a float
+    among them, raises `TypeError`."""
     stack = [value]
     while stack:
         x = stack.pop()
@@ -112,7 +113,7 @@ def canonical(value: Any) -> str:
             stack.extend(x.values())
         else:
             raise TypeError(f"not canonical JSON: a {type(x).__name__}")
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 #: Lake builds a path require in place, and ports share theirs (`lean/` here, the core protocol interface), so two ports'
@@ -385,9 +386,9 @@ class Stats:
 
 @contextlib.contextmanager
 def _no_local_constants() -> Iterator[None]:
-    """Hypothesis also draws, at p = 0.05 per draw, constants it scrapes from every local module the process has loaded
-    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's draws moved when a
-    module the reference imports gained a literal, or a test imported one first. Within this, it draws from its own
+    """Hypothesis also draws, at p = 0.05 per sample, constants it scrapes from every local module the process has loaded
+    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's samples moved when a
+    module the reference imports gained a literal, or a test imported one first. Within this, it samples from its own
     constants alone. `tests/test_constants.py` pins the hook, so a Hypothesis upgrade that moves it fails there."""
     from hypothesis.internal.conjecture import providers
     from hypothesis.internal.constants_ast import Constants

@@ -129,7 +129,7 @@ class Tuple(Type):
 
 
 @dataclass(frozen=True, slots=True)
-class Record(Type):
+class RecordType(Type):
     fields: tuple[tuple[str, Type], ...]
 
     def __init__(self, *pairs: tuple[str, Type], **kw: Type) -> None:
@@ -139,7 +139,7 @@ class Record(Type):
             raise TypeError("duplicate record field names")
         for _, t in items:
             if not isinstance(t, Type):
-                raise TypeError(f"Record field must be a Type, got {t!r}")
+                raise TypeError(f"RecordType field must be a Type, got {t!r}")
         object.__setattr__(self, "fields", tuple((k, t) for k, t in items))
 
     @property
@@ -180,7 +180,7 @@ def type_from_json(j: Any) -> Type:
     if tag == "Tuple":
         return Tuple(*[type_from_json(f) for f in j[1]])
     if tag == "Record":
-        return Record(*[(k, type_from_json(t)) for k, t in j[1]])
+        return RecordType(*[(k, type_from_json(t)) for k, t in j[1]])
     raise ValueError(f"unknown type tag {tag!r}")
 
 
@@ -188,9 +188,9 @@ def leaves_of(t: Type) -> int:
     return t.leaves
 
 
-def field_types(t: Tuple | Record) -> tuple[Type, ...]:
+def field_types(t: Tuple | RecordType) -> tuple[Type, ...]:
     """The field types of a tuple or a record, in order: a record's computed once a type."""
-    if not isinstance(t, Record):
+    if not isinstance(t, RecordType):
         return t.fields
     try:
         return t._types
@@ -200,7 +200,7 @@ def field_types(t: Tuple | Record) -> tuple[Type, ...]:
         return types
 
 
-def field_starts(t: Tuple | Record) -> tuple[int, ...]:
+def field_starts(t: Tuple | RecordType) -> tuple[int, ...]:
     """Each field's first leaf in a tuple or a record, then its leaf count: computed once a type."""
     try:
         return t._starts
@@ -213,12 +213,12 @@ def field_starts(t: Tuple | Record) -> tuple[int, ...]:
         return starts
 
 
-def field_at(t: Tuple | Record, leaf: int) -> int:
+def field_at(t: Tuple | RecordType, leaf: int) -> int:
     """The field of a tuple or a record whose leaves hold leaf ``leaf`` (``0 <= leaf < t.leaves``)."""
     return bisect.bisect_right(field_starts(t), leaf) - 1
 
 
-def _fields_width_set(t: Tuple | Record) -> frozenset:
+def _fields_width_set(t: Tuple | RecordType) -> frozenset:
     try:
         return t._widths
     except AttributeError:

@@ -17,7 +17,7 @@ GPU lease ends only when it exits.
   resuming process; its client (`Resumed`) is the session past its hello, its commitment the one the hello was answered
   with. Every frame is a request and its answer, so the hand-off falls between two of them.
 * **What is unchanged.** The resuming process runs the same `close` and release (`pouw_h1_window.finish`) the serving
-  process would have: the same empty calls, tables, rounds, trees and draw, each committed when it would have been, and
+  process would have: the same empty calls, tables, rounds, trees and sampling coin, each committed when it would have been, and
   each coin opened after the same roots, on the same session. Nothing opens in the gap: the next frame is the round coin
   of the first step past the last served one.
 * **The file** holds the run's salt key, which nothing else persists, so it is the prover's scratch (mode 0600, outside a
@@ -104,8 +104,10 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
     """Save `run` (`client_of`'s) to ``directory / FILE`` (mode 0600) for `resume`: everything its close and release read,
     every tensor as its host copy."""
     client = client_of(run)
-    state = {k: v for k, v in run.__dict__.items() if k not in _REBUILT}
     served = run.served
+    if served is not None:
+        served.settle()
+    state = {k: v for k, v in run.__dict__.items() if k not in _REBUILT}
     codes = {} if served is None else {w: c for w, (t, c) in served._weights.items() if run._weights.get(w, (None,))[0] is t}
     state["weights"] = {w: (codes[w] if w in codes else PH.numpy_of(t), PH.numpy_of(s)) for w, (t, s) in run._weights.items()}
     state["rounds"], state["draw"] = _record(run.rounds), _record(run.draw)

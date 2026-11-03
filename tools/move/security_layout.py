@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Security layout move (Daniel's three-tree ruling, 23 Oct), whole: `python3 tools/move/security_layout.py`, at the root of
+"""The Security layout move (`Security/` as three trees), whole: `python3 tools/move/security_layout.py`, at the root of
 a clean checkout of the tree before the move.
 
 `tools/move/rename.py --map tools/move/security_map.toml`, then the three edits rename.py doesn't make:

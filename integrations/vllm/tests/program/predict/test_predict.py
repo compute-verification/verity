@@ -324,7 +324,7 @@ def test_an_int8_rows_dtype_is_its_checkpoints():
         build_program(as_row(bf16, "float8_e4m3fn"), "step")
 
 
-#: The H200 int8 Llama-3.2-1B rows' Builds of record (the same digests
+#: The H200 int8 Llama-3.2-1B rows' traced Builds (the same digests
 #: on two H200 nodes): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
 #: each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header names
 #: (`program_digest`, and a batch's `component_digests`).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
@@ -352,12 +352,13 @@ H200_INT8 = {
 @pytest.mark.parametrize("row", sorted(H200_INT8), ids=["b1", "b4"])
 def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     """Llama-3.2-1B int8 on the H200 (`verity-int8/Llama-3.2-1B-INT8@15b0976d`, its config the checkpoint pin's, `pinned_hf_config`):
-    φ from the row's declared inputs predicts the step, every request and GP-01's workload Program its Build of record traced, and a
+    φ from the row's declared inputs predicts the step, every request and GP-01's workload Program its traced Build holds, and a
     digest that moved is named.  `test_a_batch_invariant_request_reads_its_launchs_longest_query` holds one launch's context (the FA3
     tile at TINY's shapes); this holds the whole step and request Programs at the served shapes (each int8 linear's quantizer and s8
     product, FA3's tile in each launch of the batch, the bf16 LM head, the sampler) and the batch's composition, so a change to predict,
-    the int8 linears or the workload fails here by name.  Predict builds no manifest (it reads the trace's correspondence, `aot`): the
-    manifest of record is pinned with the Programs its header names, and a moved one names the manifest it leaves behind.  About 2 min."""
+    the int8 linears or the workload fails here by name.  This builds no manifest (`predict row` does, over its own named Programs, and
+    `predict compare --predicted` holds it to the trace's): the traced manifest is pinned with the Programs its header names, and a moved
+    one names the manifest it leaves behind.  About 2 min."""
     pin = H200_INT8[row]
     w = json.loads((WORKLOADS / f"{row}.json").read_text())
     phi = S.phi_of({"row": row, "workload": w}, config=str(pinned_hf_config(w["model"], RowEngine.of(w).revision)))
@@ -373,9 +374,9 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     manifest, identities, over = pin["manifest"]
     stale = [k for k in over if k in moved]
     assert not moved, "\n".join(
-        [f"{row}: predict moved from its Build of record (re-trace the row on the H200 and pin the new digests with the predictor's)"]
+        [f"{row}: predict moved from the row's traced Build (re-trace the row on the H200 and pin the new digests with the predictor's)"]
         + [f"  {k}: Build {want[k][:16]}…, predicted {got[k][:16]}…" for k in moved]
-        + ([f"  the manifest of record {manifest[:16]}… ({identities:,} identities) is over {', '.join(stale)}"] if stale else []))
+        + ([f"  the traced manifest {manifest[:16]}… ({identities:,} identities) is over {', '.join(stale)}"] if stale else []))
 
 
 @pytest.mark.parametrize("cfg,phi_kw,fact", [

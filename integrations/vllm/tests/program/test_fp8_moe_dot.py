@@ -174,7 +174,7 @@ BOOLEAN = [bind(BM.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False,
 
 
 def _routed(word, inputs: list, E: int) -> list:
-    """`inputs` with the expert id operand drawn from [0, E) on all but every eighth instance (random ids are out of range)."""
+    """`inputs` with the expert id operand sampled from [0, E) on all but every eighth instance (random ids are out of range)."""
     names = [n for n, _ in word.signature()[0]]
     if "e" not in names:
         return inputs

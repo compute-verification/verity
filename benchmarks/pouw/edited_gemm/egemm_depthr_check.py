@@ -126,7 +126,7 @@ def key_ok_r11(a0, a1, n):
 
 
 def danger_keys(n, count, seed):
-    """key_ok_r11 keys drawn from the regions the open shape and the family lean on -- near-inverse pairs and random --
+    """key_ok_r11 keys sampled from the regions the open shape and the family lean on -- near-inverse pairs and random --
     kept to the keys key_ok_r11 admits, so a collapse here would be a real break."""
     rng = np.random.default_rng(seed)
     m = (1 << n) - 1

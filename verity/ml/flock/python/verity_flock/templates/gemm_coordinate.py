@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``gemm-coordinate``: flock-pure's pinned unit netlists (``verity_flock.lowering``) under the
+"""Flock lowering of ``gemm-coordinate``: flock-pure's pinned unit netlists (``verity_flock.lowering``) under the
 ``verity/flock-pure-block/v2`` layouts.
 
 K = 1536 is the frozen sets' K (``Chunk(3)`` for BF16, ``Fp8`` for E4M3). Any other K lowers when a row is whole BLAKE3

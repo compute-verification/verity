@@ -2,7 +2,7 @@
 functions of it.
 
     config_of(hf_config, model=..., revision=...)  -> (C, provenance)   static configuration from a checkpoint's config.json
-    weights_type(C)                                -> Record            b1.weights_type(C) plus an `lm_head` field when untied
+    weights_type(C)                                -> RecordType            b1.weights_type(C) plus an `lm_head` field when untied
     cos_sin_table(C)                               -> uint16 [MAX_POS, D]   the rotary table vLLM computes, recomputed here
     check_cos_sin(C, captured_npy)                 -> dict              gate I9: captured table within COS_SIN_MAX_ULP of analytic
 
@@ -30,7 +30,7 @@ import numpy as np
 
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.prims import BF16
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
@@ -199,8 +199,8 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
     return C, prov
 
 
-def moe_layer_weights_type(C: dict[str, Any]) -> Record:
-    """The per-layer Record of a fused-MoE decoder layer (OLMoE).  `b1.layer_weights_type(C)` with the
+def moe_layer_weights_type(C: dict[str, Any]) -> RecordType:
+    """The per-layer RecordType of a fused-MoE decoder layer (OLMoE).  `b1.layer_weights_type(C)` with the
     dense MLP (`gate_up_w`, `down_w`) replaced by the router and the expert stacks, plus the qk-norm weights when the family
     applies them (`C["QK_NORM"]`, a "hand" fact of vLLM's `OlmoeAttention`).  Shapes are vLLM d9105ea80's parameters:
     `mlp.gate.weight [E][H]`, `mlp.experts.routed_experts.w13_weight [E][2I][H]` (gate|up fused), `w2_weight [E][H][I]`.
@@ -224,7 +224,7 @@ def moe_layer_weights_type(C: dict[str, Any]) -> Record:
                ("w13", Array(E, Array(2 * I, Array(H, BF16)))),
                ("w2", Array(E, Array(H, Array(I, BF16))))]
     G = int(C.get("FP8_BLOCK") or 0)
-    return Record(*(_fp8_fields(fields, G, fp8_moe_block(G, I, H)) if G else fields))
+    return RecordType(*(_fp8_fields(fields, G, fp8_moe_block(G, I, H)) if G else fields))
 
 
 def fp8_moe_block(G: int, I_r: int, H: int) -> int:
@@ -270,8 +270,8 @@ def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str
     return out
 
 
-def layernorm_layer_weights_type(C: dict[str, Any]) -> Record:
-    """GPT-NeoX / Pythia: the per-layer Record of a LayerNorm-with-bias decoder layer whose every
+def layernorm_layer_weights_type(C: dict[str, Any]) -> RecordType:
+    """GPT-NeoX / Pythia: the per-layer RecordType of a LayerNorm-with-bias decoder layer whose every
     dense projection carries a bias (vLLM d9105ea80 `GPTNeoXLayer`): `input_layernorm.{weight,bias}` -> `ln1`, `ln1_b`;
     `attention.query_key_value.{weight,bias}` -> `qkv_w` [QKV][H], `qkv_b` [QKV]; `attention.dense.{weight,bias}` -> `o_w`
     [H][NH*D], `o_b` [H]; `post_attention_layernorm.{weight,bias}` -> `ln2`, `ln2_b`; `mlp.dense_h_to_4h.{weight,bias}` ->
@@ -280,7 +280,7 @@ def layernorm_layer_weights_type(C: dict[str, Any]) -> Record:
     bias / `up_w` fields are the family's additions.  Selected by `C["NORM"] == "layernorm"` (a hand fact of the family's
     profile: `nn.LayerNorm` with bias, `use_parallel_residual`); RMSNorm families are unchanged."""
     H, QKV, I = C["H"], C["QKV"], C["I"]
-    return Record(("ln1", Array(H, BF16)), ("ln1_b", Array(H, BF16)),
+    return RecordType(("ln1", Array(H, BF16)), ("ln1_b", Array(H, BF16)),
                   ("qkv_w", Array(QKV, Array(H, BF16))), ("qkv_b", Array(QKV, BF16)),
                   ("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("o_b", Array(H, BF16)),
                   ("ln2", Array(H, BF16)), ("ln2_b", Array(H, BF16)),
@@ -299,11 +299,11 @@ def rotary_dim(C: dict[str, Any]) -> int:
 #: the block-scaled FP8 linears of a layer (a MoE layer has the first two): base weight field -> (vLLM parameter suffix, scale field).  The scale
 #: field `<w>s` is f32 `[cdiv(N, G)][K/G]` (`weight_scale_inv`, one scale per GxG weight block, the last one partial when N ends
 #: mid-block; vLLM's `process_fp8_weight_block_strategy` only re-lays it out) and follows its weight field so every earlier leaf
-#: interval of the layer Record is unchanged.
+#: interval of the layer RecordType is unchanged.
 FP8_LINEAR_FIELDS: tuple[tuple[str, str], ...] = (("qkv_w", "qkv_ws"), ("o_w", "o_ws"), ("gate_up_w", "gate_up_ws"), ("down_w", "down_ws"))
 
 
-def dense_layer_weights_type(C: dict[str, Any]) -> Record:
+def dense_layer_weights_type(C: dict[str, Any]) -> RecordType:
     """`b1.layer_weights_type(C)` with the two family facts a dense Llama-architecture layer may add:
     * `C["QK_NORM"] == "head"` (Qwen3): `q_norm`, `k_norm` bf16 `[D]` after `qkv_w`/`qkv_b` (vLLM `self_attn.q_norm.weight`,
       `self_attn.k_norm.weight`: ONE head-width vector shared by every head);
@@ -319,7 +319,7 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
     G = int(C.get("FP8_BLOCK") or 0)
     if C.get("INT8_EXACT"):
         fields = _int8_fields(fields)
-    return Record(*(_fp8_fields(fields, G, G) if G else fields))
+    return RecordType(*(_fp8_fields(fields, G, G) if G else fields))
 
 
 def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
@@ -336,7 +336,7 @@ def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
     return out
 
 
-def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
+def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> RecordType:
     """One decoder layer of a multi-head-latent-attention MoE family (GLM-4.7-Flash or GLM-5.3 DSA): the attention's
     vLLM parameters (`fused_qkv_a_proj [Q_LORA + KV_LORA + QK_ROPE][H]`, the two latent norms, `q_b_proj`, `kv_b_proj`, `o_proj`), then
     the dense MLP of a layer below `FIRST_DENSE` (`I_DENSE`) or the MoE block: the f32 router gate and its f32 `e_score_correction_bias`,
@@ -372,7 +372,7 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
         I = int(C["I_DENSE"])
         fields += linear("gate_up_w", 2 * I, H)
         fields += linear("down_w", H, I)
-        return Record(*fields)
+        return RecordType(*fields)
     E, I, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
     fields += [("gate_w", mat(E, H, BF16 if G else F32)), ("gate_bias", Array(E, F32))]
     fields += linear("sh_gate_up_w", 2 * I * S, H)
@@ -385,16 +385,16 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
                    ("w2_ws", Array(E, mat(-(-H // g), -(-I // g), F32)))]
     else:
         fields += [("w13", Array(E, mat(2 * I, H))), ("w2", Array(E, mat(H, I)))]
-    return Record(*fields)
+    return RecordType(*fields)
 
 
-def mla_indexer_weights_type(C: dict[str, Any]) -> Record:
+def mla_indexer_weights_type(C: dict[str, Any]) -> RecordType:
     """One full GLM-5.3 DSA indexer.  Shared indexer layers have no parameters and therefore no entry in the top-level indexer array."""
     from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
     from verity.ml.definitions.registry.prims import F32
 
     H, QL, IH, ID, G = (int(C[k]) for k in ("H", "Q_LORA", "INDEX_HEADS", "INDEX_HEAD_DIM", "FP8_BLOCK"))
-    return Record(
+    return RecordType(
         ("wq_b_w", Array(IH * ID, Array(QL, E4M3))),
         ("wq_b_ws", Array(weight_blocks(IH * ID, G), Array(QL // G, F32))),
         ("wk_w", Array(ID + IH, Array(H, BF16))),
@@ -403,8 +403,8 @@ def mla_indexer_weights_type(C: dict[str, Any]) -> Record:
     )
 
 
-def mla_weights_type(C: dict[str, Any]) -> Record:
-    """The weights Record of an MLA-MoE configuration: layers below `FIRST_DENSE` as `dense_layers`, MoE layers as `layers`
+def mla_weights_type(C: dict[str, Any]) -> RecordType:
+    """The weights RecordType of an MLA-MoE configuration: layers below `FIRST_DENSE` as `dense_layers`, MoE layers as `layers`
     (index = layer - FIRST_DENSE), DSA's parameter-owning full indexers as `indexers`, the untied `lm_head`, and the rotary table."""
     H, V, NL, FD = int(C["H"]), int(C["V"]), int(C["NL"]), int(C["FIRST_DENSE"])
     fields: list[tuple[str, Any]] = [
@@ -417,12 +417,12 @@ def mla_weights_type(C: dict[str, Any]) -> Record:
         fields.append(("indexers", Array(len(indexers), mla_indexer_weights_type(C))))
     fields += [("norm", Array(H, BF16)), ("cos_sin", Array(int(C["MAX_POS"]), Array(int(C["QK_ROPE"]), BF16))),
                ("lm_head", Array(V, Array(H, BF16)))]
-    return Record(*fields)
+    return RecordType(*fields)
 
 
-def weights_type(C: dict[str, Any]) -> Record:
+def weights_type(C: dict[str, Any]) -> RecordType:
     """`b1.weights_type(C)` (embed, layers, norm, cos_sin) plus an `lm_head` field `[V][H]` when the checkpoint does not tie
-    the output projection to the embedding.  `b1.py` is frozen; tied configurations get the identical Record.
+    the output projection to the embedding.  `b1.py` is frozen; tied configurations get the identical RecordType.
     A configuration with `NUM_EXPERTS` (a fused-MoE family: OLMoE) gets `moe_layer_weights_type(C)` as
     its `layers` element instead of the dense `b1.layer_weights_type(C)`; dense configurations are unchanged.
     A configuration with `C["NORM"] == "layernorm"` (GPT-NeoX / Pythia) gets
@@ -450,11 +450,11 @@ def weights_type(C: dict[str, Any]) -> Record:
     if extra:
         # families with more than two norms per layer (Gemma-2:
         # pre-/post-feedforward RMSNorms) declare the extra `[H]` bf16 fields in `C["extra_layer_norms"]` (a hand field of
-        # the family's profile); appended to each layer Record after the base fields so every existing path
+        # the family's profile); appended to each layer RecordType after the base fields so every existing path
         # (`("layers", L, "ln1")`, ...) is unchanged.
         i = next(k for k, (n, _) in enumerate(fields) if n == "layers")
         layer = fields[i][1].elem
-        fields[i] = ("layers", Array(C["NL"], Record(*layer.fields, *[(n, Array(C["H"], BF16)) for n in extra])))
+        fields[i] = ("layers", Array(C["NL"], RecordType(*layer.fields, *[(n, Array(C["H"], BF16)) for n in extra])))
     if not C.get("tie_word_embeddings", True) and "lm_head" not in dict(fields):
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))   # guard: b1.weights_type may carry the untied field itself
     if C.get("INT8_LM_HEAD"):
@@ -468,7 +468,7 @@ def weights_type(C: dict[str, Any]) -> Record:
         # tensor.  It is an analytic table of one word (`normalizer_word(H)`, validated by `check_normalizer`, root class
         # `analytic-table` like `cos_sin`); declared as the LAST field so every existing leaf interval is unchanged.
         fields.append(("normalizer", Array(1, BF16)))
-    return Record(*fields)
+    return RecordType(*fields)
 
 
 # --- the embedding normalizer (Gemma-2) ---------------------------------------------------------------------------

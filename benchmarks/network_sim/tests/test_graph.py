@@ -37,10 +37,10 @@ def ex(g):
 
 
 def test_a_path_around_a_certifier_breaks_coverage_and_no_export_takes_it(g, ex):
-    from datacenter import Link
+    from datacenter import LinkEntry
 
     dc = ex.leaf_spine(2)
-    dc.links.append(Link("b0.gpu3", "leaf0", ex.PCIE_GPU))
+    dc.links.append(LinkEntry("b0.gpu3", "leaf0", ex.PCIE_GPU))
     assert dc.validate() == ["boundary link b0.gpu3-leaf0 passes no certifier (coverage)"]
     for export in (g.check, g.netns_plan, g.shadow_gml):
         with pytest.raises(ValueError, match="passes no certifier"):

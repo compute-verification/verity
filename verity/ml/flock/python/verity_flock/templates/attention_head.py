@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``attention-head`` (FA2 AttentionHead_v3{T, D, BN}): every tensor-core k-step of the head is one unit
+"""Flock lowering of ``attention-head`` (FA2 AttentionHead_v3{T, D, BN}): every tensor-core k-step of the head is one unit
 (``verity_flock.ir_lower.tc_units``; ``fp.tc_dot16`` = ``AmpereBF16TcDot16`` on every encoding), 4T QK steps (``acc + q . k``)
 and D per 16 visible keys PV steps (``acc + p . v``): the key and value words come from their committed rows, a key past T is
 the zero word the IR pads with, the query is a public port, and the softmax (running max, MUFU.EX2, lane sums, rescaling,

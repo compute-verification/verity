@@ -1,0 +1,24 @@
+# |C|/T₀ is a size ratio: what `tools/move/rename.py --map tools/move/size_ratio_map.toml` renames (the Glossary keeps
+# "slowdown" for wall-clock time only). `Verity.slowdown`, which Theorem 3 reads, becomes `Verity.sizeRatio`;
+# `Nci.slowdown`, the slowdown factor ρ, is another declaration and keeps its name, so the bare word is renamed only in
+# the Core files that declare and read `Verity.slowdown`. Declarations keep their place in the locks' records:
+# `rename.py --moves` prints the renames that `check.py --update --moved` takes.
+[words]
+"Verity.slowdown" = "Verity.sizeRatio"
+
+[[words_in]]
+files = ["Security/Definitions/Core/Formalism.lean", "Security/Definitions/Core/Guarantees/Formalism.lean",
+         "Security/Proofs/Core/Formalism.lean"]
+words = { "slowdown" = "sizeRatio" }
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]
