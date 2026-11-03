@@ -103,20 +103,27 @@ def test_the_published_rho_takes_only_the_kinds_valid_on_their_own(built):
     """The coordinator's 08:26Z ruling: the published ρ's max takes the token kind under reading A and decoding, the
     token kind unmeasured until the packer proposes product tiles and an infinite packer term unmeasured, never ∞;
     reduction and update are sensitivities beside it. At the console default the dense and LoRA steps (∞ under 4.4's
-    bound) and the grown adapter (∞ with its traced cut, 9.78 by reduction with its live code) publish ρ 1, nothing
-    binding, with reduction's term beside it; a row without entries is reading B's, te_core 4.3's ρ, a target, and
+    bound) and the grown adapter (∞ with its traced cut, 9.78 by reduction with its live code) publish nothing binding,
+    with reduction's term beside it: ρ 1 where decoding is measured (the live adapter's 0.65), and null, resting on
+    `unmeasured`, where no
+    valid kind is (never 1, coordinator 09:46Z); a row without entries is reading B's, te_core 4.3's ρ, a target, and
     until `READING_A` (the coordinator's 09:02Z: until 4.5's packer) so is every row."""
     default = rho_vectors.CELLS[0]
+    seen = set()
     for case in rho_vectors.CASES:
         v = by(built, case, "A", *default)
         m = formalism.from_json(built["measured"][case])
         one = formalism.published(m, v["c"], v["k"], "A")
         assert formalism.published(m, v["c"], v["k"])["reading"] == ("A" if formalism.READING_A else "B")
-        assert (one["reading"], one["rho"], one["binding_kind"]) == ("A", 1.0, "none") and not v["fit"]
         assert one["terms"]["token"] is None and one["terms"]["fresh_products"] is None
         assert one["terms"]["decoding"] == (v["terms"]["decoding"] and pytest.approx(v["terms"]["decoding"]))
+        measured = one["terms"]["decoding"] is not None
+        seen.add(measured)
+        assert (one["reading"], one["rho"], one["binding_kind"]) == ("A", 1.0 if measured else None, "none")
+        assert not v["fit"]
         assert one["sensitivities"] == pytest.approx({kind: v["terms"][kind] for kind in formalism.SENSITIVITIES})
-        assert one["rests_on"] == formalism.RESTS_ON["none"]
+        assert one["rests_on"] == formalism.RESTS_ON["none" if measured else "unmeasured"]
+    assert False in seen
     live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
     assert live["sensitivities"]["reduction"] > 9
     m = formalism.from_json(built["measured"]["dense"] | {"entries": None})
