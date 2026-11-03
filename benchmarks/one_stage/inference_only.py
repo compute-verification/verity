@@ -40,8 +40,9 @@ at most c gates and k fresh bits, and the blocks at most n. Anything the rule ca
 policy, a policy written once the serve had begun (unless ``--retroactive`` says why it's read anyway), a record with no
 inference blocks, an unpriced primitive, a closed window with no seal, or a sealed window the class doesn't take.
 With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), and a block's gates that
-differ from its own refuse too; its fresh bits, counted on the session Definition without the record's wires, are said
-beside the verdict's, not judged.
+differ from its own refuse too. That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit,
+the weights' too, is fresh to it, and its fresh bits and its verdict there (``with_theta_empty``) are said beside the
+verdict's, not judged.
 
 ``--out`` is the public verdict: the blocks padded to the grid, no window's number and no count of the windows.
 ``--private`` (the serve dir's, 0600) holds it with the exact counts and each window the class doesn't take and why.
@@ -424,9 +425,9 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             inst = count_instance(doc, row["table"], c, k, n)
             got_lean = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
             base["lean"] = got_lean if "error" in got_lean else {
-                "gates": got_lean["blocks"][0][1], "fresh_on_the_session_definition": got_lean["blocks"][0][2],
-                "agrees_on_gates": got_lean["blocks"][0][1] == row["gates"], "complies": got_lean["complies"],
-                "failure": got_lean["failure"]}
+                "gates": got_lean["blocks"][0][1], "agrees_on_gates": got_lean["blocks"][0][1] == row["gates"],
+                "with_theta_empty": {"fresh": got_lean["blocks"][0][2], "complies": got_lean["complies"],
+                                     "failure": got_lean["failure"]}}
             if "error" not in got_lean and got_lean["blocks"][0][1] != row["gates"]:
                 raise Undecided(f"nci-check --count counts {got_lean['blocks'][0][1]} gates a block, and this "
                                 f"{row['gates']}")

@@ -276,3 +276,4 @@ def test_nci_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_p
     row = IO.session_row(small, None, None)
     pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]
+    assert set(pub["lean"]["with_theta_empty"]) == {"fresh", "complies", "failure"}
