@@ -7,6 +7,7 @@ from __future__ import annotations
 import fnmatch
 import subprocess
 import tomllib
+from heapq import heapify, heappop, heappush
 from pathlib import Path
 
 from . import contract, families
@@ -17,6 +18,7 @@ SPEC = f"{HOME}/tasks.toml"
 RUNNERS = f"{HOME}/verity_graph/runners"
 #: a graph/v2 task's fields, in the order the listing writes them; a lister gives all but `key`
 TASK_FIELDS = ("id", "kind", "about", "env", "argv", "vars", "inputs", "reads", "outputs", "resources", "timeout_s", "key")
+READ_FIELDS = {"task", "output"}
 FAMILY_FIELDS = {"files": list, "kinds": list, "env": str, "about": str, "resources": dict, "timeout_s": int}
 RESOURCES = ("cores", "mem_gb", "disk_gb")
 #: what `verity graph run` writes in a task's work directory beside its outputs and reads
@@ -56,14 +58,26 @@ def commit(root: Path) -> str | None:
 
 
 def _forbid(where: str, doc: object) -> None:
+    stack = [doc]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            if FORBIDDEN in x:
+                _name(where, doc)
+            stack += x.values()
+        elif isinstance(x, list):
+            stack += x
+
+
+def _name(where: str, doc: object) -> None:
     if isinstance(doc, dict):
         if FORBIDDEN in doc:
             raise GraphError(f"{where} has an `{FORBIDDEN}` field: who is paged is drive's policy, from paths, never the graph's")
         for k, v in doc.items():
-            _forbid(f"{where}.{k}", v)
+            _name(f"{where}.{k}", v)
     elif isinstance(doc, list):
         for i, v in enumerate(doc):
-            _forbid(f"{where}[{i}]", v)
+            _name(f"{where}[{i}]", v)
 
 
 def spec(root: Path) -> dict:
@@ -143,10 +157,11 @@ def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -
         raise GraphError(f"{tid}: inputs {', '.join(missing[:5])} aren't files of the tree"
                          + ("" if missing[0] not in runner_sources(kind) else f" (kind {kind} has no runner)"))
     reads = t.get("reads", [])
-    if not isinstance(reads, list) or not all(isinstance(r, dict) and set(r) == {"task", "output"} and all(
-            isinstance(x, str) for x in r.values()) for r in reads):
+    if not isinstance(reads, list) or not all(isinstance(r, dict) and r.keys() == READ_FIELDS and isinstance(r["task"], str)
+                                              and isinstance(r["output"], str) for r in reads):
         raise GraphError(f"{tid}: reads is a list of {{task, output}}")
-    if len({(r["task"], r["output"]) for r in reads}) != len(reads):
+    pairs = sorted({(r["task"], r["output"]) for r in reads})
+    if len(pairs) != len(reads):
         raise GraphError(f"{tid}: a read is listed twice")
     outputs = t.get("outputs", [])
     if not isinstance(outputs, list) or not all(isinstance(o, dict) and set(o) == {"name", "path"} for o in outputs):
@@ -169,7 +184,7 @@ def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -
     if not isinstance(about, str) or not about:
         raise GraphError(f"{tid}: about is a non-empty string")
     return {"id": tid, "kind": kind, "about": about, "env": env, "argv": list(argv), "vars": dict(v), "inputs": inputs,
-            "reads": sorted(({"task": r["task"], "output": r["output"]} for r in reads), key=lambda r: (r["task"], r["output"])),
+            "reads": [{"task": a, "output": b} for a, b in pairs],
             "outputs": sorted(({"name": o["name"], "path": o["path"]} for o in outputs), key=lambda o: o["name"]),
             "resources": resources, "timeout_s": timeout, "key": None}
 
@@ -190,46 +205,56 @@ def order(tasks: list[dict]) -> list[dict]:
         raise GraphError(f"reads of tasks not in the graph: {'; '.join(bad[:5])}")
     done: list[dict] = []
     seen: set[str] = set()
-    ready = sorted(i for i, ds in need.items() if not ds)
+    ready = [i for i, ds in need.items() if not ds]
+    heapify(ready)
     readers: dict[str, list[str]] = {}
     for i, ds in need.items():
         for d in ds:
             readers.setdefault(d, []).append(i)
     left = {i: len(ds) for i, ds in need.items()}
     while ready:
-        i = ready.pop(0)
+        i = heappop(ready)
         done.append(by[i])
         seen.add(i)
-        for r in sorted(readers.get(i, [])):
+        for r in readers.get(i, ()):
             left[r] -= 1
             if not left[r]:
-                ready.append(r)
-        ready.sort()
+                heappush(ready, r)
     if len(done) != len(tasks):
         raise GraphError(f"the reads make a cycle through {', '.join(sorted(set(by) - seen)[:5])}")
     return done
 
 
+def _landing(e: tuple[str, str | None, str | None]) -> str:
+    """What lands at a path of a task's work directory, for a message: (path, output name, None) its output, (LOG, None, None)
+    the log, (path, task, output) a read."""
+    _p, a, b = e
+    return "the log" if a is None else f"its output {a}" if b is None else f"{a}'s {b}"
+
+
 def _check_reads(tasks: list[dict]) -> None:
-    by = {t["id"]: t for t in tasks}
+    outs = {t["id"]: {o["name"]: o["path"] for o in t["outputs"]} for t in tasks}
     for t in tasks:
-        paths = [(o["path"], f"its output {o['name']}") for o in t["outputs"]] + [(LOG, "the log")]
+        lands: list[tuple[str, str | None, str | None]] = [(o["path"], o["name"], None) for o in t["outputs"]]
+        lands.append((LOG, None, None))
         for r in t["reads"]:
-            src = by.get(r["task"])
-            out = next((o for o in (src or {}).get("outputs", []) if o["name"] == r["output"]), None)
-            if out is None:
+            src = outs.get(r["task"])
+            if (p := None if src is None else src.get(r["output"])) is None:
                 raise GraphError(f"{t['id']} reads {r['task']}'s {r['output']}, which "
                                  + ("isn't a task" if src is None else "it doesn't output"))
-            paths.append((out["path"], f"{r['task']}'s {r['output']}"))
-        at: dict[str, str] = {}
-        for p, what in paths:
-            if p in at:
-                raise GraphError(f"{t['id']}: {at[p]} and {what} both land at {p} in its work directory")
-            at[p] = what
-        for p, what in paths:
-            parts = p.split("/")
-            if up := next((q for q in ("/".join(parts[:i]) for i in range(1, len(parts))) if q in at), None):
-                raise GraphError(f"{t['id']}: {what} lands inside {at[up]} ({up}) in its work directory")
+            lands.append((p, r["task"], r["output"]))
+        at: dict[str, tuple[str, str | None, str | None]] = {}
+        for e in lands:
+            if e[0] in at:
+                raise GraphError(f"{t['id']}: {_landing(at[e[0]])} and {_landing(e)} both land at {e[0]} in its work directory")
+            at[e[0]] = e
+        for e in lands:
+            p = e[0]
+            i = p.find("/")
+            while i != -1:
+                if (up := p[:i]) in at:
+                    raise GraphError(f"{t['id']}: {_landing(e)} lands inside {_landing(at[up])} ({up}) in its work directory")
+                i = p.find("/", i + 1)
 
 
 def listing(root: Path, only: set[str] | None = None, listers: dict | None = None) -> dict:
@@ -248,17 +273,20 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
     tasks: dict[str, dict] = {}
     todo = sorted(fams if only is None else only)
     listed: set[str] = set()
+    wanted: set[str] = set()
     while todo:
         name = todo.pop(0)
         listed.add(name)
         if name not in listers:
             continue
+        kinds: dict[str, None] = {}
         for t in listers[name](root, files):
             c = complete(t, name, fams[name], s["env"], have)
             if c["id"] in tasks:
                 raise GraphError(f"{c['id']} is listed twice")
             tasks[c["id"]] = c
-        wanted = {family_of(r["task"].partition(":")[0], fams) for t in tasks.values() for r in t["reads"]}
+            kinds.update(dict.fromkeys(r["task"].partition(":")[0] for r in c["reads"]))
+        wanted.update(family_of(k, fams) for k in kinds)
         todo = sorted(set(todo) | (wanted - listed))
     return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), commit(root))
 
@@ -299,9 +327,10 @@ def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | N
     needed = sorted({p for t in ts for p in t["inputs"]} | {p for spec_files in envs.values() for p in spec_files})
     digests = {p: contract.file_digest(root / p) for p in needed}
     env_docs = {name: {"spec": sp, "digest": contract.env_digest(sp, digests)} for name, sp in envs.items()}
+    key = contract.keyer(digests)
     for t in ts:
         if not t["reads"]:
-            t["key"] = contract.key(t, digests, None, env_docs[t["env"]]["digest"])
+            t["key"] = key(t, None, env_docs[t["env"]]["digest"])
     return {"schema": contract.SCHEMA_GRAPH, "commit": at, "envs": env_docs, "files": digests, "tasks": ts}
 
 
