@@ -133,12 +133,12 @@ from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one 
 off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
 11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
 g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ
-under reading B (`reading`), at the dial's default (`rho_default`) and the console's (`rho_console`), with the kind
-it binds on (`binding_kind`), each kind's term of te_core's one bound (`rho_terms`, the kinds outside the max as
-sensitivities), the te_core that priced it (`te_core`), and, in one JSON cell (`rho_inputs`), the inputs the console's
-dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u and u_in exact), so S =
-pρ; `build` refuses a row whose cells miss `formalism.at` at a dial cell or the console's default. Its coverage (gain
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
+the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
+cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
+`build` refuses a row whose cells miss `formalism.at` at a dial cell. Beside them, `formalism.published` at the
+console's default policy: `rho_console`, its `reading`, the `te_core` that priced it, `binding_kind`, `rests_on` and
+`kinds` (the terms its max takes and the sensitivities it leaves out). Its coverage (gain
 target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
@@ -249,7 +249,9 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
 | `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
-| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with the dashboard's cells (`rho_inputs`, `rho_terms`, `binding`) and ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
+| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`) and the dashboard's cells (`published`'s), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
+| `workloads.py` | the covert workloads of the console's *Standard training under the policy* plot, each a model: one function per workload from its dials (`Dial`) to the inputs of the one bound's kinds (`KINDS`: the token kind's as the console's columns, `columns`; its fresh products, `Fresh`, and optimizer steps, `Steps`, as `menu`), every kind's term, their max and the binding kind at the three policies (`rho`, `POLICIES`: the console default, it with attention counted, and the registered serving policy), and pilot records beside the model (`Check`); `python -m te_core.workloads --json te_core/workloads.json` |
+| `workloads.json` | `workloads.py`'s reference points and checks, which the console's tests pin (`tests/test_workloads.py` fails while it's stale) |
 | `rho_vectors.py` | the one bound's test vectors (`rho_vectors.json`, `--write`): wildcard's grown adapter, a dense and a LoRA step on the tiny start at the dial's cells, under readings A and B |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |

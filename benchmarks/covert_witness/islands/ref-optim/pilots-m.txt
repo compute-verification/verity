@@ -1,0 +1,9 @@
+# pilot.sh m 384 TAG pilots-m.txt: m at 5 tokens per parameter, 384 x 1024 a step (b256: 256), one GPU
+lr010 --branches 5 --micro 48 --mat-lr 0.01
+lr015 --branches 5 --micro 48 --mat-lr 0.015
+lr020 --branches 5 --micro 48 --mat-lr 0.02
+lr030 --branches 5 --micro 48 --mat-lr 0.03
+emb003 --branches 5 --micro 48 --mat-lr 0.02 --embed-lr 0.003 --norm-lr 0.003
+emb012 --branches 5 --micro 48 --mat-lr 0.02 --embed-lr 0.012 --norm-lr 0.012
+wd025 --branches 5 --micro 48 --mat-lr 0.02 --wd 0.025
+b256 --branches 5 --micro 64 --mat-lr 0.02 --batch 256

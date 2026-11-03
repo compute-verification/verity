@@ -25,7 +25,7 @@ from .plots import NAMES, frame
 PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
 BODY_MAX = 65536
 NOTE_MAX = 500
-#: a string cell's most characters (the dashboard's 4,096 since 05:05Z)
+#: the route's cell limit, live since the dashboard's 05:05Z change
 CELL_MAX = 4096
 COLUMNS_MAX, NAME_MAX = 24, 60
 REF_TARGET = -1.0
