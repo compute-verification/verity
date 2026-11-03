@@ -429,6 +429,30 @@ def test_whole_times_decodes_forward_captured_serial_deferred_and_as_served_besi
     assert (run.hashing, run.options()) == (True, ())
 
 
+def test_whole_nvtx_ranges_each_arms_forwards_in_a_pass_of_their_own_after_the_timed_reps(monkeypatch):
+    """--whole --nvtx: after the timed reps, every arm, pearlc and stock, makes `NVTX_FORWARDS` forwards, each in its own
+    range ``call whole ARM mM #i`` holding that forward's work alone, a pearlc arm's in a fresh pass ended after them; the
+    row's times and commitments are the row without it."""
+    torch = pytest.importorskip("torch")
+    T, run, weights, xs, stock = _whole_setup(monkeypatch)
+    keys = ("ms", "pass_end_ms", "commitment", "commitments_equal", "poisoned_equal")
+    plain = T.whole(run, weights, xs, stock, reps=3)
+    T, run, weights, xs, stock = _whole_setup(monkeypatch)
+    pushed, ranges = [], []
+    monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda x: pushed.append((x, run.card.t, len(run.log))))
+    monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: ranges.append((*pushed.pop(), run.card.t, len(run.log))))
+    row = T.whole(run, weights, xs, stock, reps=3, nvtx=True)
+    assert {k: row[k] for k in keys} == {k: plain[k] for k in keys} and not pushed
+    names = [*T.WHOLE, "cutlass", "triton"]
+    assert [r[0] for r in ranges] == [f"call whole {nm} m16 #{i}" for nm in names for i in range(T.NVTX_FORWARDS)]
+    for nm in names:
+        rs = [r for r in ranges if r[0].startswith(f"call whole {nm} ")]
+        assert all(r[3] - r[1] == pytest.approx(row["ms"][nm]) for r in rs)
+        if nm in T.WHOLE:
+            assert run.log[rs[0][2] - 1][0] == "end_pass" and run.log[rs[-1][4]][0] == "end_pass"
+            assert all(e[0] != "end_pass" for e in run.log[rs[0][2]:rs[-1][4]])
+
+
 def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
     """--whole's ``pearlc-served`` captures with the whole-capture options pearl_c_vllm's served arm runs on pearl_c_sm90
     (`PearlCWholeArm.run_options` less its pearl_c_sm120-only ones), and `OPTIONS` names every whole-capture option
@@ -448,7 +472,7 @@ def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
 
 def test_whole_runs_layers_of_the_models_linears_in_the_layers_order(tmp_path, monkeypatch):
     """--whole --layers L calls L layers' linears, each its own weights, in the layer's order (`in_domain`'s), and --layers
-    is refused without --whole."""
+    and --nvtx are refused without --whole."""
     pytest.importorskip("torch")
     T, got = _timing(), []
 
@@ -460,9 +484,10 @@ def test_whole_runs_layers_of_the_models_linears_in_the_layers_order(tmp_path, m
         T.main(["--whole", "--model", "llama32_1b", "--layers", "16", "--out", str(tmp_path / "out")])
     layer = list(_llama().in_domain())
     assert e.value.code == 3 and len(layer) == 4 and got == [layer * 16]
-    with pytest.raises(SystemExit) as e:
-        T.main(["--layers", "2", "--out", str(tmp_path / "calls")])
-    assert e.value.code == 2 and not (tmp_path / "calls").exists()
+    for args in (["--layers", "2"], ["--nvtx"]):
+        with pytest.raises(SystemExit) as e:
+            T.main([*args, "--out", str(tmp_path / "calls")])
+        assert e.value.code == 2 and not (tmp_path / "calls").exists()
 
 
 @pytest.mark.parametrize("leak", ["deferred", "poison"])
