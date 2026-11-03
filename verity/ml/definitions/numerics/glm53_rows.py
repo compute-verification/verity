@@ -9,12 +9,12 @@ capture that holds a twin to the served kernel where the twin's Definition is no
 """
 from __future__ import annotations
 
-import json
 from typing import Any, Callable, Sequence
 
 import numpy as np
 
 from verity.ml.definitions.evidence import EVIDENCE
+from verity.ml.definitions.numerics.int8_rows import _float
 from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static
 from verity.ml.definitions.registry.fp8 import weight_blocks
 
@@ -73,17 +73,6 @@ PROVENANCE = {"LlBf16SplitKGemm_v1": {
     "definitions": "verity/ml/definitions/registry/ll_bf16.py: LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT} (the reference; the kernel "
                    "is checked against it, never the other way round)",
 }}
-
-
-def _float(v: Any) -> float:
-    """A float static as the spec text spells it (`2.5`, `1e-06`, `{"f64":"0x1.4p+1"}`) or as a binding holds it."""
-    if isinstance(v, str) and v.lstrip().startswith("{"):
-        v = json.loads(v)
-    if isinstance(v, dict) and set(v) == {"f64"}:
-        return float.fromhex(str(v["f64"]))
-    if isinstance(v, str):
-        return float.fromhex(v) if v.lstrip("-").startswith("0x") else float(v)
-    return float(v)
 
 
 def _flag(v: Any) -> bool:

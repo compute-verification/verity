@@ -132,15 +132,7 @@ def AttentionHeadV4(B, S, q, k, v, *extra, block=AttnBlockV4):
 def AttentionV4(B, S, q, kc, vc, *extra, head=AttentionHeadV4):
     """`Attention_v2` over `AttentionHead_v4{T, D, BN, DOT, INV, MASKED_FROM}`: GQA, head h reads KV head h // (NH/KVH); every head of the
     row shares its tile, so one MASKED_FROM.  `extra` / `head`: `Attention_v13`'s."""
-    T, NH, KVH, D = S.T, S.NH, S.KVH, S.D
-    G = NH // KVH
-    head = bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
-    outs = []
-    for g in range(KVH):
-        kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
-        vg = _Coll(Array(T, Array(D, BF16)), strided_view(vc, g * D, D, KVH * D, 1, T * D))
-        outs.append(B.batch(head, q[g * G:(g + 1) * G], kg, vg, *extra, axes=(0, None, None) + (None,) * len(extra)))
-    return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
+    return F2._check_inf_attention(B, S, q, kc, vc, head, extra)
 
 
 @composite("AttentionHead", 20, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"],
