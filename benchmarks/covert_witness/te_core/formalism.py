@@ -86,12 +86,16 @@ most that. The kinds:
   chain order's constant (its premise P-chain), which is the reference circuit's order by construction (`ORDER`:
   te_core.gates prices a GEMM MAC as a dot cell adding into one running 32-bit sum), so the term is measured on every
   run's products. Λ proved reads the step's whole-making system (io_bound's `whole_chain_of`: every product with both
-  operands affected, a class by its chain length, at its least fixed point), one factor for every subset of the
-  products; the figures are the best subset's (io_bound's `bound`), the dropped products still in |C|, and `inputs`
-  names how many it dropped and their share of the counted MACs (`subset`). Before that G drops, never |C|, every
-  product with an operand that reads an embedding's rows before any op makes them token-specific (tokens that share an
-  id share its row, so a block that pays for it gets their products free), named the same way (`gathered`). Where the
-  system has no fixed point the term is unmeasured (`FRESH_VOID`), never 0, and so it is where an op breaks P-match,
+  operands affected, a class by its chain length, at its least fixed point, solved exactly in feeding order where no
+  cycle runs through it), each subset of the products with its own factor from the classes that feed it; the figures
+  are the best subset's (io_bound's `bound`, whose subsets also drop the products fed by the classes of largest
+  made-whole share), the dropped products still in |C|, and `inputs` names how many it dropped, their share of the
+  counted MACs, the rule that dropped them and the classes only they read (`subset`). Before that G drops, never |C|,
+  every product with an operand that reads an embedding's rows before any op makes them token-specific (tokens that
+  share an id share its row, so a block that pays for it gets their products free), named the same way (`gathered`),
+  and each token-indexed product's share at the positions sequences can share (`SHARED_PREFIX`, `shared_prefix`).
+  Where every subset is fed by a cycle that diverges the term is unmeasured (`FRESH_VOID`), never 0, and so it is
+  where an op breaks P-match,
   on a trace whose product rows predate what the term reads (`FRESH_RETRACE`). Products that come without one (a model's, a hand-written set) take io_bound's
   one-class rule, named in `inputs` (`ONE_CLASS`). It is unmeasured, with io_bound's chain figure in `inputs`,
   also for a circuit that declares a tree (none does), and on a record with no product rows. A record with an op log
@@ -649,12 +653,18 @@ PRODUCTS_FROM = "4.8"
 FRESH_UNMEASURED = ("unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, "
                     f"and a recorded program's trace has them from te_core {PRODUCTS_FROM} on)")
 #: why the fresh-products kind is unmeasured where every subset of the counted products voids the proved Λ
-FRESH_VOID = ("unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound."
-              "whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, "
-              "and that compounds), so Λ has no proved value on any subset; a void is never a measured 0")
+FRESH_VOID = ("unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed "
+              "point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand "
+              "entries whole than they read, and that compounds), so Λ has no proved value on any subset; a void is "
+              "never a measured 0")
 #: the first te_core whose capture writes everything the term reads: the whole-making system's rows (each product's
 #: `fed` and `P`, the trace's `p_match`) and which operands read a gather's rows (`gathered`)
 SYSTEM_FROM = "4.12.1"
+#: the positions at the start of each sequence that G leaves out of every token-indexed product (`products_of_trace`):
+#: position 0 reads only its own token, so sequences that share their first token (a BOS, or the stream's own where
+#: windows are cut from it) compute it identically through every layer. A longer shared prefix needs the batch's
+#: tokens, which no trace keeps
+SHARED_PREFIX = 1
 #: why the fresh-products kind is unmeasured on a trace captured before `SYSTEM_FROM`
 FRESH_RETRACE = (f"unmeasured: the trace's product rows predate te_core {SYSTEM_FROM}, so they don't say which chains "
                  "make each operand whole (te_core.capture.products' fed) or which products read an embedding's rows "
@@ -760,10 +770,21 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
     Tokens that share an id share its row, so a block that pays for a row gets every such token's products of it free:
     the bound holds on any subset of the products, so G drops (never |C|) every fresh product with an operand that
     reads a gather's rows before any op makes them token-specific (the row's `gathered`), and `gathered` says how many
-    it drops of how many and their share of the fresh MACs (None: rows captured before `SYSTEM_FROM`)."""
+    it drops of how many and their share of the fresh MACs (None: rows captured before `SYSTEM_FROM`).
+
+    Sequences that share a prefix compute it identically through every layer (causal attention reads only the prefix
+    there), so a block that pays for one sequence's prefix gets the others' free. G keeps each token-indexed fresh
+    product's MACs times 1 − `SHARED_PREFIX`/n, n the sequence length (the token-indexed m, k or n of the products with
+    two of them, attention's, affected or not), and its output entries whole, which only lowers the bound;
+    `shared_prefix` says so (None: no such product, so no position reads another's tokens and a repeated token is
+    `gathered`'s). Each product keeps its operands' `fed`,
+    which `fresh_products` reads to give each subset its own whole-making factor."""
     out, kinds = [], dict.fromkeys(io_bound.KINDS, 0.0)
     flagged = all("gathered" in r for r in block["rows"])
-    fresh = dropped = macs = dropped_macs = 0.0
+    seq = max((r["dims"][d] for r in block["rows"] if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
+               for d in ("m", "k", "n") if d in r["token_dims"]), default=None)
+    keep = 1 - SHARED_PREFIX / seq if seq else 1.0
+    fresh = dropped = macs = dropped_macs = trimmed = 0.0
     for r in block["rows"]:
         n = r["count"] * steps
         kinds[product_kind(r)] += n * r["macs"]
@@ -775,15 +796,20 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
             dropped += r["count"]
             dropped_macs += n * r["macs"]
             continue
-        out.append({"macs": n * r["macs"], "outputs": n * r["outputs"], "k_dim": r["dims"]["k"],
+        scale = keep if r["token_dims"] else 1.0
+        trimmed += (1 - scale) * n * r["macs"]
+        out.append({"macs": scale * n * r["macs"], "outputs": n * r["outputs"], "k_dim": r["dims"]["k"],
                     "k_whole": r["k_whole"], "b_a": r["widths"][0], "b_b": r["widths"][1], "b_c": r["b_c"],
-                    "gates_per_mac": r["gates_per_mac"], "cell_gates": r["cell_gates"]})
+                    "gates_per_mac": r["gates_per_mac"], "cell_gates": r["cell_gates"]}
+                   | ({"fed": [list(x) for x in r["fed"]]} if "fed" in r else {}))
     order = ORDER if block["order"] == "unknown" else block["order"]
     gathered = {"dropped": int(dropped), "of": int(fresh),
                 "dropped_macs_share": dropped_macs / macs if macs else 0.0} if flagged else None
+    shared = {"length": SHARED_PREFIX, "sequence": seq, "kept": keep,
+              "trimmed_macs_share": trimmed / macs if macs else 0.0} if seq else None
     got = {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
            "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match"),
-           "gathered": gathered}
+           "gathered": gathered, "shared_prefix": shared}
     if "at" in block:
         rest = {x: v for x, v in block.items() if x != "at"}
         got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
@@ -833,6 +859,24 @@ def whole_chain(system: dict, k: float) -> dict:
                                     "counted": dict(system["counted"]), "b": system["b"]}, k)
 
 
+def traced_products(p: dict | None, block: dict | None) -> dict | None:
+    """Products ingest took from a trace's rows (`p`, `products_of_trace` of `block`) as this te_core takes them from
+    the same rows over the same traced steps (their kinds' MACs over the rows' own), whatever te_core ingested the
+    record, so the rows are read by this te_core's rules: an ingest before 4.12 kept no whole-making system, which
+    `fresh_products` reads as products of no trace (`ONE_CLASS`), 4.12's kept one that counts the products reading
+    gathered rows, which it would read as this te_core's, 4.12.1's kept them at the console's k only, though the trace
+    keeps rows at each k of the dial (`at`, which `classified_at` reads), te_core 4.8's kept the trace's order unknown,
+    which it never measures, and before 4.10 an upcast operand's product was an expansion. Taken again, rows captured
+    before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered` are measured on
+    their system, at each k their trace keeps rows at. Products a record has of its own (no `kinds_macs`), and a block
+    with no trace rows, stand."""
+    if p is None or block is None or "kinds_macs" not in p:
+        return p
+    per = sum(r["count"] * r["macs"] for r in block["rows"])
+    return products_of_trace(block, sum(p["kinds_macs"].values()) / per if per else 1.0) | {
+        k: p[k] for k in ("stand_in",) if k in p}
+
+
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
     """The fresh-products kind's term at (c, k), te_core.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
     products (`Measured.products`) and the record's |C|, its figure without P-cell (`rho_no_cell`; with it where
@@ -844,9 +888,11 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     record with an op log and no product rows has its log's (`products_of_ops`), none of which a log can count, so the
     term is unmeasured with what the log leaves unknown. The products' `stand_in`, where a run's traced steps differ in
     shape (`of_record`), is in what it read, and so is `subset` where io_bound's best subset for the term dropped
-    products (how many, of how many, their share of the counted MACs and the subset's least whole-making chain); where
-    no subset has a proved Λ the term is unmeasured (`FRESH_VOID`). `gathered` is what G dropped before that, the
-    products that read an embedding's rows before any op makes them token-specific (`products_of_trace`)."""
+    products (how many, of how many, their share of the counted MACs and the subset's least whole-making chain, and
+    on a trace's rows the rule that kept it, its e and the classes only the dropped products read); where no subset has
+    a proved Λ the term is unmeasured (`FRESH_VOID`). `gathered` is what G dropped before that, the products that read
+    an embedding's rows before any op makes them token-specific, and `shared_prefix` what it trimmed at the sequences'
+    first positions (`products_of_trace`)."""
     p = m.products
     if p is None and m.ops is not None:
         p = products_of_ops(m.ops)
@@ -860,7 +906,7 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     p = classified_at(p, k) or p
     order = p.get("order") or ORDER
     got = {"k_classified": p["k"], "order": order, "products": len(p["products"])} | {
-        x: p[x] for x in ("capture", "trace_order", "kinds_macs", "stand_in", "gathered") if x in p}
+        x: p[x] for x in ("capture", "trace_order", "kinds_macs", "stand_in", "gathered", "shared_prefix") if x in p}
     if not math.isclose(p["k"], k, rel_tol=1e-12):
         return None, (f"unmeasured: the products were classified at k = {p['k']:g} (te_core.io_bound.rows_of), not at "
                       f"this k, and keep none at it (a trace from te_core {SYSTEM_FROM} on keeps them at each k of the "
@@ -881,15 +927,19 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
                       f"(te_core.capture.products)"), got
     else:
         w = whole_chain(p["system"], k)
-        got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None}
-        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"])
+        got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None,
+                               "diverged": w["diverged"]}
+        own = all("fed" in x for x in p["products"])
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"],
+                                         made_whole=w["mu"] if own else None)
     if order == "chain":
         proved = got["io_bound"]["proved"]
         got["fresh_cell"] = proved["rho"]
         sub = proved["subset" if P_CELL else "subset_no_cell"]
         if sub is not None and sub["dropped"]:
             got["subset"] = {"dropped": sub["dropped"], "of": sub["dropped"] + len(sub["kept"]),
-                             "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]}
+                             "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]} | {
+                x: sub[x] for x in ("rule", "threshold", "e", "dropped_fed") if x in sub}
         term = proved["rho" if P_CELL else "rho_no_cell"]
         return term, FRESH_VOID if term is None else None, got
     return None, (f"unmeasured: the circuit declares its products summed in a {order}, and te_core.io_bound has the "
@@ -1275,7 +1325,8 @@ def _part(p: dict, labels: dict) -> Part:
 
 def complete(f: dict, row: dict, shape: dict) -> Measured:
     """`f`'s quantities (a `formalism` block, possibly partial), each missing one stubbed (`STUBS`) from the row and the
-    start's shape; `labels` names every quantity's source."""
+    start's shape, and a trace's products this te_core's of its rows (`traced_products`); `labels` names every
+    quantity's source."""
     labels = dict(f.get("labels", {}))
     if f.get("parts"):
         parts = tuple(_part(p, labels) for p in f["parts"])
@@ -1328,11 +1379,12 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
     if ops is None and log.get("ops"):
         ops = tiles.of_log(log)
         labels.setdefault("ops", OPS)
-    if f.get("products") is not None:
+    products = traced_products(f.get("products"), (f.get("trace") or {}).get("products"))
+    if products is not None:
         labels.setdefault("products", PRODUCTS)
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["u_in"], out["delta_bits"],
                     out["decoder_gates"], labels, t, f.get("context"), f.get("delta_t_bits"), entries, ops,
-                    f.get("products"))
+                    products)
 
 
 def decoder(f: dict, row: dict) -> tuple[float | None, str | None]:

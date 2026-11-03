@@ -5,8 +5,9 @@ a run the runtime counter measured.
         [--out FILE] -- TRAIN_ARGS...
 
 The program runs as te_core.run runs it (cw.py: prepare from the nearest directory above the script, the script as
-``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends, or
-to its end, where its last step ends as te_core.run's `close` ends it (so A may be its last step, which no step follows:
+``__main__`` with its arguments, CW_TIER at the tier the record was scored at, `tier_of`), with every tensor a fake (a
+shape and a dtype, no values), until step A + 1 ends, or to its end, where its last step ends as te_core.run's `close`
+ends it (so A may be its last step, which no step follows:
 its Δ_grad ends where its update meets the carried values, and te_core.capture.structure's cut, to the values a next
 step's forward reads, is 0). Each ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase
 (``backward`` inside `torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`,
@@ -82,6 +83,7 @@ from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
 from te_core.flops import TOKEN_INDEX
 from te_core.formalism import READ_BACKS
+from te_core.opnames import gemm_like
 
 __all__ = ["Scalar", "record"]
 
@@ -830,16 +832,42 @@ class _Graph(torch.nn.Module):
             self.__dict__[name] = getattr(rec.root, name)
 
 
+def tier_of(run: dict) -> str | None:
+    """The budget tier a run's record was scored at (evaluate.py's `evaluation.budget.tier`; te_core.run's top-level
+    `tier` is the promotion tier, not this), None for a record no evaluation scored."""
+    return ((run.get("evaluation") or {}).get("budget") or {}).get("tier")
+
+
+@contextlib.contextmanager
+def _tier(tier: str | None):
+    """CW_TIER at `tier` while the program and the prepare it re-executes run (prepare reads it at import), restored
+    after; None leaves the environment's."""
+    if tier is None:
+        yield
+        return
+    old = os.environ.get("CW_TIER")
+    os.environ["CW_TIER"] = tier
+    try:
+        yield
+    finally:
+        if old is None:
+            os.environ.pop("CW_TIER", None)
+        else:
+            os.environ["CW_TIER"] = old
+
+
 def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list[float], step_tokens: int,
-           log=None, name: str | None = None) -> StepGraph:
+           log=None, name: str | None = None, tier: str | None = None) -> StepGraph:
     """Step `step` of the program `script` run with `args` (module docstring), as a `StepGraph` whose tokens are
-    `step_tokens` (the record's count for that step)."""
+    `step_tokens` (the record's count for that step), at the budget tier `tier` (`tier_of` the record: a program that
+    plans from prepare.budget plans the run's own steps only at the run's tier)."""
     log = log if log is not None else open(os.devnull, "w")
     name = name or Path(script).parent.name
     listed: dict[str, list[dict]] = {k: [] for k in READ_BACKS}
 
     def trace(scale, windows_only=False):
-        rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
+        with _tier(tier):
+            rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
         for k, have in listed.items():
             seen = {(e["kind"], e["where"]) for e in have}
             have += [e for e in rec.listed(k) if (e["kind"], e["where"]) not in seen]
@@ -882,6 +910,16 @@ def gemm_macs(g: StepGraph) -> int:
     return sum(m.macs for m in g.matmuls)
 
 
+def recorded_forward_gemm_macs(run: dict, step: int) -> int:
+    """The counter's forward GEMMs at `step`, from its structure's op log (te_core.flops), which `forward_gemm_macs`
+    counts on the trace. The counter's whole forward (`recorded_forward_macs`) holds more that |C| counts and no
+    product is: its forward elementwise work, and a trained table's lookup by token data at the gather Definition's
+    multiplexers (12% of the forward of an 18-layer model of width 768 with a trained 32,000-row embedding)."""
+    s = run["steps"][step]
+    log = ((run.get("structures") or {}).get(s.get("struct")) or {}).get("log") or []
+    return sum(r[5] for r in log if r[0] == "fwd" and gemm_like(r[2]))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--script", type=Path, required=True)
@@ -898,14 +936,16 @@ def main(argv=None) -> int:
     run = json.loads(a.run.read_text())
     steps = run["steps"]
     wall = [float(s.get("wall_s") or 0.0) for s in steps]
+    tier = tier_of(run)
     t0 = time.perf_counter()
     with (open(a.log, "w") if a.log else open(os.devnull, "w")) as log:
         g = record(a.script, argv[split + 1:], step=a.step, starts=a.starts, wall=wall,
-                   step_tokens=int(steps[a.step]["tokens"]), log=log)
+                   step_tokens=int(steps[a.step]["tokens"]), log=log, tier=tier)
     by = steps[a.step].get("by") or {}
-    out = {"step": a.step, "structure": g.structure(), "gemm_macs": gemm_macs(g),
+    out = {"step": a.step, "tier": tier, "structure": g.structure(), "gemm_macs": gemm_macs(g),
            "recorded_gemm_macs": int(steps[a.step]["matmul_macs"]),
            "forward_gemm_macs": g.phase_macs().get("forward", 0),
+           "recorded_forward_gemm_macs": recorded_forward_gemm_macs(run, a.step),
            "recorded_forward_macs": sum(v for k, v in by.items() if k.startswith("fwd/")), "tokens": g.tokens, "axes": g.axes,
            "updated_macs": g.updated_macs(), "dependent": g.dependent[:40], "sinks": g.sinks[:40],
            "cut_bits": g.cut_bits, "beta": g.beta, "cut": g.cut[:12], "formalism": g.formalism,
@@ -916,8 +956,8 @@ def main(argv=None) -> int:
     if a.out:
         a.out.write_text(text + "\n")
     f = g.formalism or {}
-    print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_macs", "updated_macs", "cut_bits",
-                                          "seconds")}
+    print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_gemm_macs", "recorded_forward_macs",
+                                          "updated_macs", "cut_bits", "seconds")}
                      | {k: f.get(k) for k in ("affected_share", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}
                      | {k: [f"{e['kind']} at {e['where']}" for e in f.get(k, [])][:8] for k in READ_BACKS}))
     return 0
