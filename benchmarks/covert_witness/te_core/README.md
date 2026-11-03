@@ -47,8 +47,10 @@ other quantity bits.
   stored directly); a row with none of these has d unmeasured, and Fit refused (`formalism.decoder`). **Δ_t**: the
   weights in the form the update rule reads and writes, a straight-through run's fp32 latents at 32 bits a value
   (`delta_t_bits`, which only `rescore --quantities analysis` gives so far), else Δ.
-- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut at
-  32 bits or more an element, plus the carried state the token ops don't read.
+- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut, each
+  value at the width the step passes it (a message coded inside the step, a bool plane or a packed word, at its code's;
+  its encode, decode and sum are ops of C), a reduction over the tokens (a dW product, a loss) at 32 bits or more an
+  element, plus the carried state the token ops don't read.
 - **(c, k)**: a block's gates and the bits it imports; `policy.cells` gives each start's grid in decades, from one
   token's inference block to the start's server block, and its reference shapes at their exact (c, k): the inference
   block, the reference policy (c = 4096 w, k = 10 kB) and the server block.
