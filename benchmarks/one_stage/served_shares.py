@@ -44,7 +44,7 @@ CLOCKS_MHZ = {"tensor": 1830, "boost": 1980}
 RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
 #: the served models' attention and LM head shapes; their linears are `served_verdicts.DECLARED`'s
 MODELS = {"verity-int8/Llama-3.2-1B-INT8": {"heads": 32, "head_dim": 64, "hidden": 2048, "vocab": 128256}}
-#: J10-R's floor on the H200: the share of a credited call's work its b1 path forces (CMP-210)
+#: J10-R's floor on the H200: the share of a credited call's work its b1 path forces
 FLOOR = Fraction(9, 64)
 SCHEMA = "verity-bench/served-shares/v0"
 
