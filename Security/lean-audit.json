@@ -16392,36 +16392,6 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.CapabilityFloor": {
-    "∀ (C : In → Accounting.Actual.Run L) (x : In), Set.instMembership.mem 𝒜 { fst := C, snd := x } → Core C x → instLENat.le Lc (cost (C x))": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.HeldBudget": {
-    "∀ (U : Fin R.B → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.B), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.P.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.IncidenceCap": {
-    "∀ (i : Fin B.nw) (o : κ), Real.instLE.le (Finset.filter (fun q => And (Eq q.fst i) (Eq (I.occ q) o)) B.P).card.cast r": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : κ), Real.instLE.le (Finset.filter (fun q => Eq (I.occ q) o) B.P).card.cast aout": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.OperandCapJoint": {
-    "∀ (i : Fin B.nw), Eq (W.price i) βw": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : κ), Eq (O.price o) βx": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin B.nw) (o : κ), Real.instLE.le (Finset.filter (fun q => And (Eq q.fst i) (Eq (I.occ q) o)) B.P).card.cast r": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : κ), Real.instLE.le (Finset.filter (fun q => Eq (I.occ q) o) B.P).card.cast aout": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x y : Real), Real.instLE.le 0 x → Real.instLE.le 0 y → Real.instLE.le (instHAdd.hAdd (instHMul.hMul βw x) (instHMul.hMul βx y)) h → Real.instLE.le (Real.instMin.min (instHMul.hMul (instHMul.hMul r x) y) (instHMul.hMul aout y)) Q": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.OperandCapSeparate": {
-    "∀ (i : Fin B.nw), Eq (W.price i) βw": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : κ), Eq (O.price o) βx": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin B.nw) (o : κ), Real.instLE.le (Finset.filter (fun q => And (Eq q.fst i) (Eq (I.occ q) o)) B.P).card.cast r": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : κ), Real.instLE.le (Finset.filter (fun q => Eq (I.occ q) o) B.P).card.cast aout": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x y : Real), Real.instLE.le 0 x → Real.instLE.le 0 y → Real.instLE.le (instHMul.hMul βw x) hw → Real.instLE.le (instHMul.hMul βx y) hx → Real.instLE.le (Real.instMin.min (instHMul.hMul (instHMul.hMul r x) y) (instHMul.hMul aout y)) Q": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.RecomputeByGates": {
-    "∀ (c : κ), Real.instLE.le g (K.G c).card.cast": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.RecoveredBudget": {
-    "instLENat.le e.length aBlk": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
