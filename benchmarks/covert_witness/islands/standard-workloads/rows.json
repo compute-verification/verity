@@ -1,8 +1,7 @@
 {
- "reading": "B",
+ "reading": "A",
  "traces": [
-  "art:ac28254582a7fc48936b3374989e32ac6944b5d9079a4be2f6041f25db2376f2",
-  "art:b08a00a281e27c78a1bdb400d4763d797344aabf7cf3c22791ae937b61338af4"
+  "art:1a6b80484f90b72fc043321db540a73351cc0fd64f2ccefb19c59ff6d1f7f8b6"
  ],
  "rows": [
   {"workload": "standard", "model": "20M", "run": "r20261103-053241-99bf",
