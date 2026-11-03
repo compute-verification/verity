@@ -294,7 +294,7 @@ class Unary(_TrainRule):
     """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 value, as torch's CPU kernels compute
     them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2 reciprocals,
     1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is IEEE's
-    (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, one ulp off it on some CPUs (AMD EPYC Genoa)."""
+    (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some CPUs."""
     info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32", "the operand is an f32 value",
                  "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)", "one batch per step over the elements")
 

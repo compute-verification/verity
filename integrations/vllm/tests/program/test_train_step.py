@@ -51,7 +51,7 @@ def _bits(x: torch.Tensor) -> list[int]:
 
 class _IeeeSqrt(TorchDispatchMode):
     """torch with IEEE f32 `sqrt` (and `pow` 0.5, which torch computes with it), as the rules state it: torch CPU's is MKL's, which
-    on AMD EPYC Genoa (the CPU nodes) is one ulp off on 11 of `POS`'s 64 words, and IEEE's on an Intel Xeon."""
+    is not IEEE's on some CPUs."""
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         x = args[0] if args else None
