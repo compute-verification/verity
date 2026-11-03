@@ -172,6 +172,11 @@ replicas(id, location, verified_utc, detail)            verifications, which a r
 replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
 ~~~
 
+Every write finds the rows it reads, replaces or deletes through an index (each `attempt_*` table is indexed on `attempt`;
+tested). A write holds the file's lock until it commits and every process on the machine writes this one file, so a write that
+scanned a table would hold all the others off for the pass, and a refresh's run of writes (`research queue ready`'s records
+gate) would starve them until it ended.
+
 Flattening: nested objects get dotted keys, lists numeric indices (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
 blob present here; `remote` means pushed (from a listing or a recorded push/verification).
