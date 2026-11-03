@@ -836,43 +836,39 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "af10ddf2940f1e506966480b2cd60fa389a36765d6eedf89800be6c9d219c5a5"
+   "digest": "fc56565386f9cc3e8e0ff67545e725affe15717e9a4b719143072962620f327e"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "b55e195301a003628d0d720d84493287cff53682efe005f4da11a9e0df2a6110"
+   "digest": "32e6df81a98567dcc6129fe9e1f57643783db5e08224dfc92f5677784b36da2a"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "08cda41e54e5ae546d686aa0e22eef974125dd32065ba40e192c0fd0751bf450"
-  },
-  "Claims.ZKMal.RefSession.SwCausal": {
-   "owner": "@proofs",
-   "digest": "cf5311252f7dee151ff671cebf46f942c2217877fd8b4f1a2d9692acd9130274"
+   "digest": "7819f5333d7e0115cdef8648e0b574f3ab70a5593e18dc5e928a75857670beb7"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "abe776a560d13e3681a0482a2f0cb3010942ef8f1cc5536aedf4b9ffd9275d21"
+   "digest": "b85eeba53fd645f20cc0c8918c66f8267094f855edfd4cbbf98dd674ffb6097b"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "17eec3907de96ef5b35a65a984a21a0f98b0d84037cd7eecdda64dedd9a0d239"
+   "digest": "6b0b56f2298d9d30ce3c26c98e2e3a9a95d94e2291c8829fea32fdb42b84de64"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "2da7a67fbcaa714d18e3adca401ce0a1d4daeb61cad7a418dff10c46a0b6ac9d"
+   "digest": "a902da9b18c60aad44112e94ccc0543dd9b7b4a2d18b2e7e033f0cf5c34ba917"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "45c6d72df98d4b9de839a06fe60c29355a94363b17e749adbfc35bd592cc6e1a"
+   "digest": "c442821f744f68b7defcdf238360d097e4962e5a13eaea859c83df10a7fe209b"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "b82f7dabc77510ab90bb992be087be658921dd020cbbb19e20a2f2da2354b32f"
+   "digest": "ee4ab555bed8a3df7b2dd1e66da6c74be7d0b6fddd7aac08252b64a8690917ea"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "2680b4910cc2e0890bcd355175740cc5a73201e1b5b7a2f769ea50e2ff1df26a"
+   "digest": "4bed8c5c7a0e6f1993d8ffeb81f79cbcc6adf6fc966d87d69de6abb3acb6d039"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
@@ -880,7 +876,7 @@
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "36713f542c4947a01483c0e4e74c7b55421d9906ee955bd032d2a2fc197e7f7f"
+   "digest": "141bbf94787103f69027e16f6e3635a1ed285e82a2a7f10ce8b1d8ccc8a190b1"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -916,7 +912,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "ddba3b293e06bf660d30ffdc290d06c7336807646ce76b285a97c10071b374a2"
+   "digest": "bec54b91fa59ae5cbb62639748b3129980b0f42d1318b9ead626aeb3c386f82e"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -940,7 +936,7 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "29cab18d21062541cec90ae37a693479f394da117716fc8382a4529eace1e2e4"
+   "digest": "366630533dcfd4b076ca10e1b05c8d58c0608a844d030f188e1c7574479e3c96"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
@@ -2149,6 +2145,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Claims.ZKMal.RefSession.SwCausalOn": {
+   "owner": "@proofs",
+   "digest": "58f5fc986e02ce518229f5e340cab750fc87b93e00cc3626780c26938a16776e"
   }
  },
  "meaning": [
@@ -2714,8 +2714,10 @@
   "Flock.SecurityProofs.EndToEndRegisteredFlat": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
   "Flock.SecurityProofs.EndToEnd_refSetup": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20",
   "Flock.SecurityProofs.IntegrityBlock": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
+  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
   "Flock.SecurityProofs.IntegrityBlocks": "fb2e861a74fe610166c44a14c65d9cfc6742b80e602e1c1b66a7ce70439f9824",
   "Flock.SecurityProofs.IntegrityHorizon": "1d67559b6d5a8972bf15dd6e9487a9631c08027cfe36527058dd22d76a8c3a0f",
+  "Flock.SecurityProofs.IntegrityHorizonBlocks": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d",
   "Flock.SecurityProofs.IntegrityHorizonCarried": "89fbbeb7e268642019ee085f30b6bfc54063bc0970ba372d4c4a1a79f7e26037",
   "Flock.SecurityProofs.IntegrityPeriod": "320a3ed8346171425b3ea7537f61689dcef36bf45963401c24dbad1a97342ccc",
   "Flock.SecurityProofs.IntegrityPeriodLog": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
@@ -2917,9 +2919,7 @@
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
-  "Flock.SecurityProofs.IntegrityHorizonBlocks": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d"
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {
@@ -14592,11 +14592,17 @@
    "Flock.SecurityProofs.IntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Flock.SecurityProofs.IntegrityBlockCarried": {
+    "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Flock.SecurityProofs.IntegrityBlocks": {
     "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.IntegrityHorizon": {
     "∀ (t : Nat), instLTNat.lt t T → Real.instLE.le q (instHDiv.hDiv (W t).kd.cast (W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.IntegrityHorizonBlocks": {
+    "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a per-step bound that is no plain range, on `main` before the inline rule reached this branch, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.IntegrityHorizonCarried": {
     "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -16026,12 +16032,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.IntegrityBlockCarried": {
-    "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.IntegrityHorizonBlocks": {
-    "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a per-step bound that is no plain range, on `main` before the inline rule reached this branch, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
