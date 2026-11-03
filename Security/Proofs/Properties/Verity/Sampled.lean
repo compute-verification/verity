@@ -59,7 +59,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
   release has none. Where a line or a record doesn't parse as it is read, or the log has no head, the read shows no
   log.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
-  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
+  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads the files at the digests v2's parameters name and the lookup tables off the committed
+  files as v2 does (`DigestsAt`), v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
   no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
   deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
   and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
@@ -557,6 +558,17 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   read : V.read θ F = A.fileRead
   share : (V.certOf θ).ε = A.ε
 
+/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
+v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
+vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
+files as v2 reads them off the blobs (`SampledProofs.OneStageZk.tablesOf`). -/
+structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
+  circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
+    V.programDigest θ = some fun i => dg.data.getD i.val 0
+  publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
+    V.publicDigest θ = some fun i => dg.data.getD i.val 0
+  tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
+
 /-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
 registration and the evidence of the case the composition's evidence names under the sampled component's id, each read
 by its decoder in its one-stage form. -/
@@ -716,14 +728,17 @@ def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray �
     Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
-`S` holds is the one v2 sets up (`SetsUp`); the device's log as the sampled check reads it is v2's (`coinsRead`); the
-finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session the extractor is the
+`S` holds is the one v2 sets up (`SetsUp`); the files the vocabulary reads are v2's, by the digests v2's parameters
+name and the lookup tables v2 reads off the committed files (`DigestsAt`); the device's log as the sampled check reads
+it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session
+the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
 commitment opens (`Live.OpensUnder`), `error`'s condition holds the leg's per-finder premises (`FinderCR`), and the
 published `δ` is at least the session's at the read finder's published bound (`Live.delta`). -/
 structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
     Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
+  digests : ∀ θ, DigestsAt V θ
   coinsRead : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
   forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
