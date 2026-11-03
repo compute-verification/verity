@@ -7,15 +7,15 @@ this te_core and priced by te_core.formalism at the console's default and the re
 `--rows` (default `ROWS`, the island's rows.json) gives the stored traces (the island's trace.py output, chosen steps
 of the runs, refused unless traced by a te_core from `TRACED_SINCE` to this one) and a row per workload and measured
 dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
-them (`about`, and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
+them (`about`, and a `note`), `last_untraced` where the trace can't reach the run's last step (why, in its
+`input_status`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
 checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures
 (annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
 formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_default` and `rho_console` are both its ρ
 at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
-has no bound, resting on "unmeasured"), a measured fresh-products term's premises, where it binds and in `kinds`,
-with the label `PROVISIONAL` gives this te_core; reading A's ρ is never infinite, so `build` refuses one. `kinds` is
+has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
 them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
 P-cell) and reading B's token and decoding forms. `rho_inputs` holds
@@ -27,14 +27,16 @@ quantity, E's size and the harness's decoder are measured, and a stub, an assump
 assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
 `POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
 the console's default, or assumed with te_core's reason or where untraced steps that update count none, and where the
-serving block's k leaves it unmeasured.
+serving block's k leaves it unmeasured. The words the builder adds there and in the note name no code (`CODE`): the
+code is training's slowdown code, and only te_core's reasons, which the builder relays as they are, are te_core's to
+word.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
 decode loop's length is no token axis), so the counter's record is read with these substitutions (`ROUNDS`, each in
 the row's `input_status`): a round's tokens its prompts' and every generated token but the last (the counter counts
 the prompts' positions alone); every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced
-as NVFP4 (gemm/fp4); its affected gates the forward ops that read an update tensor (te_core's untraced convention); Δ
+as NVFP4 (gemm/fp4); its affected gates the forward ops that read an updated tensor (te_core's untraced convention); Δ
 the served update's bits from the run's notes (every served matrix's codes and scales with the gains in bf16, or the
 LoRA in bf16), and Δ_grad, the partial gradient and the gradient cut 0 (no backward); τ an id per prompt token and
 none per generated one; a, u and u_in te_core's stubs.
@@ -51,6 +53,7 @@ import argparse
 import dataclasses
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -91,26 +94,27 @@ TRACE_FACTS = ("tokens", "sigma", "affected_share", "token_factor", "a_bits", "u
 #: te_core labels of quantities read off the run though te_core tags them bounds: E's size and the harness's decoder
 READ = (formalism.STUBS["delta_bits"], formalism.DECODER["witness"])
 #: why `untraced` names a step of a traced structure that updates nothing, which has no fresh products
-IDLE = ("its structure updates nothing, and te_core.annotate takes such a step's trace only where it measures the step "
-        "and a traced step of the run updates something")
-#: a measured fresh-products term's label beside its premises, by the te_core whose whole-making rule it reads: 4.11's
-#: single chain, which 4.12's chain classes replace
-PROVISIONAL = {"4.11": "provisional: whole-making under te_core 4.11's single-chain rule; 4.12 lowers dense rows by "
-                       "under 1% and voids rows with adapters"}
+IDLE = ("its structure updates nothing, and the slowdown code takes such a step's trace only where the trace measures "
+        "the step and a traced step of the run updates something")
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
-          "priced as NVFP4 (gemm/fp4)"
+          "priced as an NVFP4 GEMM"
 _PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
                        "(the counter counts the prompts' alone)"
-_UNTRACED = "; a round is not traced (its decode loop's length is no token axis of the capture)"
+_UNTRACED = "; a round is not traced (the tracer has no token axis for its decode loop's length)"
 ROUNDS = {
     "C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": _PRICED, "w_fit_gates": _PER_TOKEN,
     "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples" + _UNTRACED,
-    "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16)" + _UNTRACED,
-    "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta" + _UNTRACED,
-    "u_in_points": "assumed: te_core's stub (A1'), u_in = u" + _UNTRACED,
-    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's "
-                   "untraced convention)" + _UNTRACED,
+    "a_bits": "assumed: the slowdown code's default, one token's bf16 residual stream (the model's width times 16 bits)"
+              + _UNTRACED,
+    "u_points": "assumed: the slowdown code's default (assumption A1), spread evenly up to u(1) = Δ" + _UNTRACED,
+    "u_in_points": "assumed: the slowdown code's default (assumption A1′), u_in = u" + _UNTRACED,
+    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an updated tensor (the slowdown "
+                   "code's convention for an untraced step)" + _UNTRACED,
 }
+#: a code name, which none of the builder's own words in a published string holds: they name the code only as
+#: training's slowdown code
+CODE = re.compile(r"te_core|io_bound|formalism|algorithm_policy|annotate|rows_of|capture_\w|gemm/|\w\.py\b|`|"
+                  r"\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b")
 ROUND_LABELS = {
     "tokens": "measured: each round's prompt positions (the counter's) and every generated token but the last, which "
               "the counter doesn't count, a sampled id being no data-stream position (the run's notes)",
@@ -215,9 +219,9 @@ def start(name: str) -> tuple[dict, dict]:
     return s["shape"], json.loads((fetch(s["art"], path) / path).read_text())["tensors"]
 
 
-def untraced(record: dict, structures: dict[str, dict]) -> list[str]:
+def untraced(record: dict, structures: dict[str, dict], last_why: str | None = None) -> list[str]:
     """The steps with tokens that te_core.annotate.with_structures gives none of the traced `structures` (by structure
-    id), so no Δ_grad, each with why."""
+    id), so no Δ_grad, each with why (and `last_why`, why the trace doesn't reach it, beside the program's last)."""
     got = annotate.with_structures(record, structures)
     last, out = record["steps"][-1]["step"], []
     for s, a in zip(record["steps"], got["steps"]):
@@ -227,7 +231,8 @@ def untraced(record: dict, structures: dict[str, dict]) -> list[str]:
         if sid in structures:
             why = IDLE
         elif s["step"] == last and sum(x["struct"] == sid for x in record["steps"]) == 1:
-            why = "the program's last, its structure having no other step, not traced"
+            why = "the program's last, its structure having no other step, not traced" + (
+                f", since {last_why}" if last_why else "")
         else:
             why = "no traced step shares its structure"
         out.append(f"step {s['step']}: {why}")
@@ -258,7 +263,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
         record["checkpoints"] = record["checkpoints"][-1:]
-        read["untraced"] = untraced(record, structures)
+        read["untraced"] = untraced(record, structures, row.get("last_untraced"))
     with tempfile.TemporaryDirectory(prefix="sw-ingest-") as tmp:
         d = Path(tmp) / "run"
         d.mkdir()
@@ -295,7 +300,7 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
     for key in KEYS:
         keys = LABELLED["delta_bits"] if key == "delta_t_bits" and m.delta_t_bits is None else LABELLED[key]
         bad = [m.labels.get(k) for k in keys if not _measured(m.labels.get(k))]
-        out[key] = "measured" if not bad else f"assumed: {bad[0] or 'no label from te_core'}"
+        out[key] = "measured" if not bad else f"assumed: {bad[0] or 'no label from the slowdown code'}"
         if key == "delta_grad_bits" and m.fit_delta_grad_bits is None:
             n = sum(p.steps for p in m.parts if p.tokens and p.delta_grad_bits is None)
             if gaps is not None and len(gaps) != n:
@@ -304,12 +309,12 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
                                  f"doesn't name")
             where = (f"{n} of {read['steps']} steps ({'; '.join(gaps[:3])}{f'; and {n - 3} more' if n > 3 else ''})"
                      if gaps else f"{n} of {sum(p.steps for p in m.parts)} steps in structures with no traced "
-                                  f"Delta_grad")
+                                  f"Δ_grad")
             on = held(m)
             then = (f"Fit's verdict at {' and '.join(on)} rests on it, Fit holding there with it at 0" if on else
                     "with it at 0, Fit still fails at both points, so neither rho_console nor rho_served rests on it")
             have = m.delta_grad_bits
-            out[key] = (f"assumed: unmeasured on {where}, so te_core fails Fit at every k; {then}"
+            out[key] = (f"assumed: unmeasured on {where}, so the slowdown code fails Fit at every k; {then}"
                         + (f" (the traced steps' largest {algorithm_policy.num(have)} bits)" if have is not None else ""))
     return out | (override or {})
 
@@ -329,7 +334,7 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
     if left:
         more = f"; and {len(left) - 3} more" if len(left) > 3 else ""
         said.append(f"none on {len(left)} untraced step{'s' if len(left) > 1 else ''} ({'; '.join(left[:3])}{more}), "
-                    f"te_core counting the traced steps' products alone")
+                    f"the slowdown code counting the traced steps' products alone")
     out = f"assumed: {'; and '.join(said)}" if said else "measured"
     if (off := b["served"]["unmeasured"].get("fresh_products")) is None:
         return out
@@ -373,21 +378,9 @@ def rho_cell(v: float | None) -> float | str | None:
 
 def kinds(one: dict, b: dict) -> str:
     """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
-    from the one bound `b` at its point, less any `one`'s max takes, a measured fresh-products term's premises with
-    this te_core's `PROVISIONAL` label."""
-    cell = algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
+    from the one bound `b` at its point, less any `one`'s max takes."""
+    return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
                                                            if s not in one["terms"]}})
-    head, sep, rests = cell.partition(',"rests_on":')
-    if not sep or not (prov := PROVISIONAL.get(VERSION)):
-        return cell
-    got = json.loads(rests[:-1])
-    return head + sep + json.dumps({k: f"{v}; {prov}" if k == "fresh_products" else v for k, v in got.items()}) + "}"
-
-
-def rests_on(one: dict) -> str:
-    """What formalism.published's `one` rests on, with this te_core's `PROVISIONAL` label where fresh products bind."""
-    prov = PROVISIONAL.get(VERSION) if one["binding_kind"] == "fresh_products" else None
-    return f"{one['rests_on']}; {prov}" if prov else one["rests_on"]
 
 
 def finite(x):
@@ -433,7 +426,7 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
         con = one["console"]
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
-                     con["binding_kind"], rests_on(con),
+                     con["binding_kind"], con["rests_on"],
                      kinds(con, bound["console"]),
                      rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
@@ -454,7 +447,7 @@ def note(p: dict, art: str | None = None) -> str:
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
     how = ("reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else
            "reading A, one bound over the valid kinds (null: unmeasured)")
-    return (f"Small real runs, te_core {VERSION}: formalism.published, {how}. rho_default = rho_console, binding_kind, "
+    return (f"Small real runs, training's slowdown code {VERSION}: {how}. rho_default = rho_console, binding_kind, "
             f"rests_on and kinds at the console's default: c = {algorithm_policy.num(c, 5)} gates, one full {into:,}-in, "
             f"{out:,}-out session of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. "
             f"rho_served at the registered serving block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,}). input_status: "
