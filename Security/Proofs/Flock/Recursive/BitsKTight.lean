@@ -144,7 +144,7 @@ theorem recursiveBitsK_tight (b : Brings) (aux : Msg → ℕ → _root_.Flock.Re
       FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin h1 hO hS nR_le (le_refl (2 ^ 32))
     exact (recursiveBitsK b aux nOf hd recRest decI hdecI decO hdecO x hx Ω P t ht1 hrun nR (hc []).1 (2 ^ 32)
       (fun ps => setupCalls_deployedB_le_32 _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd recRest }
-        (DeployedR.layR OpenRows.elemR) bdKS.IVStar FlockDeploy.sha512 x ps (hn.trans (le_of_eq rfl)))
+        (DeployedR.layR OpenRows.elemR) bdKS.IVStar FlockDeploy.sha512 x ps hn)
       hSB hBI hFdev hFCI hF0I).trans
       (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
   · unfold Claims.PrBad

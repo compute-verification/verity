@@ -549,16 +549,14 @@ theorem setupCalls_deployedB_le_cap (rel : _root_.Flock.Readable.Parsed → _roo
     obtain ⟨ms, s, rfl⟩ := mem_vstar_staged hx
     exact deployedSetup_staged_le
 
-/-- **`v ≤ 2^32` at the deployed brings**, at `nS x ≤ RecBudget.MAX_STATEMENTS = 16` V\* parts (`nS_le_of_partIn`):
+/-- **`v ≤ 2^32` at the deployed brings**, at `nS x ≤ 16` V\* parts (`RecBudget.MAX_STATEMENTS`, `nS_le_of_partIn`):
 `16 · 138543104 ≤ 2^32`, `recursiveBitsK`'s `hv` at `kappa_eps_deployed`'s `v`. -/
 theorem setupCalls_deployedB_le_32 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
-    (ps : List (Msg × Out)) (hn : nS x ≤ RecBudget.MAX_STATEMENTS) :
+    (ps : List (Msg × Out)) (hn : nS x ≤ 16) :
     (Claims.Recursion.setupCalls H (recBound rel (deployedB b) L IV)
-      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 32 := by
-  have hS : RecBudget.MAX_STATEMENTS = 16 := rfl
-  rw [hS] at hn
-  exact (setupCalls_deployedB_le_cap rel b L IV H x ps).trans ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
+      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 32 :=
+  (setupCalls_deployedB_le_cap rel b L IV H x ps).trans ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
 
 /-- **`v ≤ 2^55` at the deployed brings**, at `nS x ≤ 2^16` V\* parts (`lamLin2_deployedB_ge`'s `hn`):
 `2^16 · 138543104 ≤ 2^55`, `lamLin2_deployed_ge_dep`'s `hV`. -/
