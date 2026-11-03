@@ -30,6 +30,7 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import served as SV
 
+from tests.pipeline import predicted
 from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
 from tests.protocols import challenger_host as CH
@@ -129,6 +130,60 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     bare.serve(PROMPTS[0], 0)
     assert plain.close(0)["live_dump"] is None and not (tmp_path / "plain" / "prover").exists()
     bare.src.uninstall()
+
+
+@pytest.mark.slow
+def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_reads(tmp_path, monkeypatch):
+    """``--h1-receipts``: each window's `Served` registers each call's ``receipt@<c>`` once, from the producer on the served
+    weights in place (`Receipts.serving`). Rebuilt as a lanes-form K's combine reads them (`test_pouw_h1_receipts.Window`:
+    the word reference over the prover's kept rows and the served weights, at the salt and positions the window's public
+    rows carry and the roots its record names), each is the tree the record registers, and a proof block's lane partials
+    XOR to its row; a corrupted receipt is refused, its table at another root and its combine 0. The receipts are values:
+    the window keeps no receipt row, its outcome only how many calls the producer computed and in how long; a window
+    opened without receipts registers none, which the combine's reader refuses. Slow: only the window Program's real tile
+    unit (`h1window.tile_unit`, about half a minute to declare) has the receipt the combine reads, so the stand-in unit
+    the other tests serve can't show it."""
+    from verity.core.protocols.pouw import credit as CR
+
+    from tests.protocols import test_pouw_h1_receipts as TR
+
+    srv = _Server(monkeypatch)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", prover=tmp_path / "prover",
+                       receipts=True)
+    assert arm.describe()["receipts"] is True
+    raw, weights = SV.descriptor(arm.program), [m.weight.numpy() for m in arm.layers]
+
+    def window(w, prompts):
+        arm.open(w)
+        run = srv.serve(prompts, w)
+        out = arm.close(w)
+        assert out["tied"] and not run.served.refused, (out, run.served.refused)
+        record = json.loads((tmp_path / "serve" / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
+        return run, out, TR.Window(record, raw, run.served.root, run.salt, tmp_path / "prover" / f"w{w}", weights)
+
+    run, out, win = window(0, PROMPTS[0])
+    assert sorted(out["receipts"]) == ["calls", "seconds"] and out["receipts"]["calls"] == len(run.calls) == 2 * STEPS
+    for c in sorted(win.calls):
+        u0, n, (ra, rb) = win.u0[c], win.sizes[c], win.roots(c)
+        _rows, _salts, pub = CR.public_table(win.program, run.served.pub_table(c), run.salt.hex(), win.root, u0, n,
+                                             (ra.hex(), rb.hex()), None)
+        assert win.entry(pub.value)["root"] == pub.root.hex(), f"call {c}: the salt and positions its public rows carry"
+        assert run.served.registered[win.receipt(c)].rows.words is None, f"call {c}: the window keeps no receipt row"
+        tree = win.receipt_value(c)
+        assert win.held(tree), f"call {c}: its receipt@{c} is not the word reference's"
+        bad = tree.rows.words.copy()
+        bad[-1, 0] ^= 1
+        assert not win.held(win.commit(c, bad)), f"call {c}: a corrupted receipt table is refused"
+        partials, row = win.partials(c, 0), tree.rows.words[0].copy()
+        assert TR.combine_ok(partials, row) == 1, f"call {c}: its first proof block's lanes don't combine to its receipt"
+        row[0] ^= 1
+        assert TR.combine_ok(partials, row) == 0, f"call {c}: a corrupted receipt row combines"
+    arm.receipts = False
+    _run, plain, win = window(1, PROMPTS[1])
+    assert plain["receipts"] is None
+    with pytest.raises(AssertionError, match=r"registers .*receipt@0 0 times"):
+        win.entry(win.receipt(0))
+    srv.src.uninstall()
 
 
 def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout_credit_reads_from_it(tmp_path, monkeypatch):
@@ -385,7 +440,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
-                           gate=SimpleNamespace(h1_prover=None, h1_model=None, h1_weights_root=None))
+                           gate=SimpleNamespace(h1_prover=None, h1_receipts=False, h1_model=None, h1_weights_root=None))
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
@@ -677,7 +732,7 @@ def test_commit_windows_write_a_windows_line_once_its_arms_release_ends(tmp_path
 def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp_path):
     """Among them a token budget the rows-sha512 Commit's step-input port can't take (whole 512-id rows), with H1 or
     without, so H1's own 32-row rule is met by every T the Commit takes."""
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
         opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more],
@@ -708,8 +763,9 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal(*h1, *gate) is None
     assert "go together" in refusal(*h1, *gate[:2]) and "go together" in refusal(*h1, *gate[2:])
     assert "needs --protocols" in refusal(*gate)
-    assert refusal(*h1, "--h1-prover", str(tmp_path / "p")) is None
-    assert "--h1-prover keeps PoUW H1's prover state" in refusal("--h1-prover", str(tmp_path / "p"))
+    for flag in (("--h1-prover", str(tmp_path / "p")), ("--h1-receipts",)):
+        assert refusal(*h1, *flag) is None
+        assert "--h1-receipts are PoUW H1's window's: they need --protocols" in refusal(*flag)
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")

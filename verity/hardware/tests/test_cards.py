@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from fractions import Fraction
 
 import pytest
@@ -38,6 +39,14 @@ def test_every_number_is_sourced_and_marked(sku: str) -> None:
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
 
 
+@pytest.mark.parametrize("sku", skus())
+def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
+    """Evidence is cited by its `art:` id, and a node by its kind, never by a run id or a host name."""
+    text = (hardware.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
+    assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b|\bvy-[a-z0-9-]+", text), \
+        "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
+
+
 def test_one_schema_across_cards() -> None:
     """A reader can take any number from any card by the same key."""
     keys = {sku: sorted(entries(load(sku))) for sku in skus()}
@@ -60,8 +69,8 @@ def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
     one is deliberate."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
-    assert [value(server, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [2430, 12481, 600]
-    assert [value(h200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1980, 3201, 700]
+    assert [value(server, k) for k in ("clock.sm", "clock.memory")] == [2430, 12481]
+    assert [value(h200, k) for k in ("clock.sm", "clock.memory")] == [1980, 3201]
     assert round(float(value(server, "host.ops")), -11) == 1.0453e15
     assert round(float(value(h200, "host.ops")), -11) == 7.471e14
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6

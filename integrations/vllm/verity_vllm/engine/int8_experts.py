@@ -39,11 +39,15 @@ UNROUTED = -1
 
 class PlainGemm:
     """The plain arm's call on one int8 weight (``layer.weight`` [N, K], ``layer.weight_scale`` [N, 1]): `int8_ops.linear`,
-    or `int8_ops.linear_zy` over ``zy_rows`` slots, its served values then handed to ``observe``."""
+    `int8_ops.linear_zy` over ``zy_rows`` slots, or ``row_quant`` then ``gemm``, its served values then handed to
+    ``observe``."""
 
     int8_arm = E.ARM
     #: T, the slots of each call's z/y records (`int8_ops.linear_zy`), or None to serve through ``scaled_mm``
     zy_rows: int | None = None
+    #: a PoUW scheme's GEMM in place of ``scaled_mm``, ``gemm(layer, xq, s_a) -> y`` on the call's s8 rows and their
+    #: scales, serving its y in the plain arm's place (`protocols.pouw.lead.LeadRun.call`), or None
+    gemm: Any = None
     #: whether a call of no rows still reaches ``observe`` (with no rows)
     observe_empty = False
 
@@ -68,7 +72,11 @@ class PlainGemm:
                              y.reshape(0, n))
             return y
         rows = self.zy_rows
-        if rows is not None and x2.shape[0] <= rows:
+        if self.gemm is not None:
+            xq, s_a = int8_ops.row_quant(x2)
+            y = self.gemm(layer, xq, s_a)
+            self.observe(layer, xq, s_a, y)
+        elif rows is not None and x2.shape[0] <= rows:
             xq, s_a, y, zy = int8_ops.linear_zy(x2, layer.weight, layer.weight_scale, rows)
             self.observe(layer, xq, s_a, y, zy)
         else:

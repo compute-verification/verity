@@ -60,11 +60,14 @@ class Args(ctypes.Structure):
     _fields_ = [("key", ctypes.c_uint32 * 8), ("nonce", ctypes.c_uint32 * 3), ("T", ctypes.c_uint32), ("did", ctypes.c_uint64 * 8)]
 
 
-def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -> ctypes.CDLL:
+def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, headers: Sequence[Path] = ()) -> Path:
+    """``sources``' last (of `CUDA_DIR`) compiled by ``tool`` with ``flags`` into ``name``, keyed by the sources, the
+    ``headers`` it includes from elsewhere, the flags and the compiler's version; each header's directory is on the include
+    path, after ``flags`` unless they already name it."""
     h = hashlib.sha256()
     for s in sources:
         h.update(s.encode() + b"\0" + (CUDA_DIR / s).read_bytes() + b"\0")
-    for p in SHARED:
+    for p in headers:
         h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
     version = subprocess.run([tool, "--version"], capture_output=True, text=True, check=True).stdout
     h.update(" ".join(flags).encode() + b"\0" + version.encode())
@@ -72,10 +75,15 @@ def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -
     if not lib.exists():
         lib.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
-        includes = sorted({f"-I{p.parent}" for p in SHARED})
+        includes = sorted({f"-I{p.parent}" for p in headers} - set(flags))
         subprocess.run([tool, *flags, *includes, "-o", str(tmp), str(CUDA_DIR / sources[-1])], check=True)
         tmp.replace(lib)
-    return ctypes.CDLL(str(lib))
+    return lib
+
+
+def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -> ctypes.CDLL:
+    """The row tables' and registered rows' builds: `built` with the shared headers (`SHARED`), loaded."""
+    return ctypes.CDLL(str(built(tool, sources, flags, name, SHARED)))
 
 
 _u32, _u64 = (np.ctypeslib.ndpointer(t, flags="C_CONTIGUOUS") for t in (np.uint32, np.uint64))
