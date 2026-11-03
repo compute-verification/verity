@@ -68,8 +68,9 @@ Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``,
 "commitment", "evidence"}``, hex commitment and evidence, and sampled proofs', v2's and the period's ``blobs``) and
 ``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's ``policy.json``). A
 composition is handed only the directories whose answer's protocol is one of its product's subprotocols: remote's are
-sampled proofs', the inference-only case's and the period's, onsite's v1's among its own, and neither's v2's bare case. The Lean runs on files in a 0700 scratch directory under ``--private``; the period's answer is the one
-`pouw_piece.py` wrote. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
+sampled proofs', the inference-only case's and the period's, onsite's v1's among its own, and neither's v2's bare case.
+The Lean runs on files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py`
+wrote. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
 and fresh-input bits. The lines go to a private log (a reason may quote a5's ``case-error.txt`` or
