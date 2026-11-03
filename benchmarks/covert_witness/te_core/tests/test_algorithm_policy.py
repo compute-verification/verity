@@ -518,19 +518,19 @@ def made_whole(m: formalism.Measured, k_whole: float) -> formalism.Measured:
 
 
 def test_a_void_fresh_products_term_is_what_io_bound_voids_under_reading_a_where_fit_fails():
-    """te_core 4.9 measures the fresh-products term as 0 where io_bound's proved Λ is void (coordinator 13:32Z: no
-    result); `voided` finds that 0 in a published ρ at the console's default, and no measured term, unmeasured one
-    or reading B's ρ."""
+    """te_core 4.9 measured the fresh-products term as 0 where io_bound's proved Λ is void (coordinator 13:32Z: no
+    result); from te_core 4.10 that term is unmeasured (`formalism.FRESH_VOID`), never 0, so `voided` finds no void
+    0 in a published ρ at the console's default, nor in a measured term, an unmeasured one or reading B's ρ."""
     m = info()["starts"][0].rows[0]["measured"]
     void, whole = made_whole(m, 64), made_whole(m, 512)
     one = formalism.published(void, reading="A")
-    assert one["terms"]["fresh_products"] == 0 and AP.voided(void, one)
+    assert one["terms"]["fresh_products"] is None and not AP.voided(void, one)
     assert formalism.published(whole, reading="A")["terms"]["fresh_products"] > 0
     assert not AP.voided(whole, formalism.published(whole, reading="A"))
     assert not AP.voided(m, formalism.published(m, reading="A")) and not AP.voided(void, formalism.published(void))
     assert not AP.voided(void, one | {"binding_kind": "fit"})
     got = json.loads(AP.kinds(one, void=True))
-    assert got["void"] == AP.VOIDED and "rests_on" not in got and got["bound"]["fresh_products"] == 0
+    assert got["void"] == AP.VOIDED and "rests_on" not in got and got["bound"]["fresh_products"] is None
 
 
 def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
@@ -550,6 +550,8 @@ def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_
                     "terms": a["terms"] | {"token": 0.9, "decoding": 0.9}}
 
     monkeypatch.setattr(formalism, "published", published)
+    # te_core 4.10 measures no void 0 (the term is unmeasured), so the void rows are stood in
+    monkeypatch.setattr(AP, "voided", lambda m, one: m.delta_bits == 8e6)
     got = info(runs=RUNS + DOMINATED)
     for st in got["starts"]:
         for r in st.rows:
