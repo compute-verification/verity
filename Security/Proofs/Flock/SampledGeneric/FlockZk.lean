@@ -41,24 +41,24 @@ def Below {V : Type} (e f : Exp V) (a ε : ℝ≥0∞) : Prop :=
 /-- **Zero knowledge with a leak, at the factor `a`**: for every statement and witness in the relation and every
 verifier, the honest prover's view is `a`-below the simulator's at `ε x w v`, which may read the witness and the verifier
 (a collision finder's success built from them). -/
-def ZKBelow {Stmt Wit VS View : Type} (Z : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (a : ℝ≥0∞)
+def ZKBelow {Stmt Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (a : ℝ≥0∞)
     (ε : Stmt → Wit → VS → ℝ≥0∞) : Prop :=
-  ∀ x w, Rel x w → ∀ v, Below (Z.real x w v) (Z.sim x v) a (ε x w v)
+  ∀ x w, Rel x w → ∀ v, Below (Zs.real x w v) (Zs.sim x v) a (ε x w v)
 
 /-- `Zk.ZK` at `ε_zk` is `ZKBelow` at the factor `1` and the error `ε_zk(x)`. -/
-theorem ZKBelow.of_ZK {Stmt Wit VS View : Type} {Z : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
-    {εzk : Stmt → ℝ≥0∞} (h : Z.ZK Rel εzk) : ZKBelow Z Rel 1 fun x _ _ => εzk x := by
+theorem ZKBelow.of_ZK {Stmt Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
+    {εzk : Stmt → ℝ≥0∞} (h : Zs.ZK Rel εzk) : ZKBelow Zs Rel 1 fun x _ _ => εzk x := by
   intro x w hR v E
   rw [one_mul]
   exact (h x w hR v E).1
 
 /-- **The proof system on other statements**: `Z` at the statement `g x`. -/
-def zkComap {Stmt Stmt' Wit VS View : Type} (Z : Zk Stmt Wit VS View) (g : Stmt' → Stmt) : Zk Stmt' Wit VS View :=
-  ⟨fun x => Z.real (g x), fun x => Z.sim (g x)⟩
+def zkComap {Stmt Stmt' Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (g : Stmt' → Stmt) : Zk Stmt' Wit VS View :=
+  ⟨fun x => Zs.real (g x), fun x => Zs.sim (g x)⟩
 
-theorem ZKBelow.comap {Stmt Stmt' Wit VS View : Type} {Z : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
-    {a : ℝ≥0∞} {ε : Stmt → Wit → VS → ℝ≥0∞} (h : ZKBelow Z Rel a ε) (g : Stmt' → Stmt) :
-    ZKBelow (zkComap Z g) (fun x w => Rel (g x) w) a fun x => ε (g x) :=
+theorem ZKBelow.comap {Stmt Stmt' Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
+    {a : ℝ≥0∞} {ε : Stmt → Wit → VS → ℝ≥0∞} (h : ZKBelow Zs Rel a ε) (g : Stmt' → Stmt) :
+    ZKBelow (zkComap Zs g) (fun x w => Rel (g x) w) a fun x => ε (g x) :=
   fun x w hR v => h (g x) w hR v
 
 theorem avg_const_mul {C : Type} [Fintype C] (x : ℝ≥0∞) (f : C → ℝ≥0∞) :
@@ -83,27 +83,27 @@ theorem below_coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → 
 /-- **The sampled audit's zero knowledge with a leak**, `GenericSampledZK`'s two hybrids at the factor `a`: if the proof
 system is zero knowledge with a leak at the factor `a` and the error `ε` (`ZKBelow`), and the commitment is
 `ε_hide`-hiding, then against every verifier `v`, which samples after seeing the commitment, the audit's view at any trace
-`X` whose openings are witnesses of every sample's statement is `a`-below the simulator's at any fixed trace `X₀`
+`Xt` whose openings are witnesses of every sample's statement is `a`-below the simulator's at any fixed trace `X₀`
 (`auditSim`), at `a·ε_hide` plus `ε` averaged over the prover's commitment coins. -/
 theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
-    (Z : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop) (a εh : ℝ≥0∞)
+    (Zs : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop) (a εh : ℝ≥0∞)
     (ε : Com × Finset (Fin n) → Wit → VS → ℝ≥0∞) (samp : VS → Com → Finset (Fin n))
-    (wit : Tr → Rnd → Finset (Fin n) → Wit) (hZ : ZKBelow Z Rel a ε) (hH : H.Hiding εh) (X : Tr)
-    (hX : ∀ r S, Rel (H.commit X r, S) (wit X r S)) (X₀ : Tr) (v : VS) :
-    Below (auditView H Z samp wit X v) (auditSim H Z samp X₀ v) a
-      (a * εh + avg fun r => ε (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v) := by
+    (wit : Tr → Rnd → Finset (Fin n) → Wit) (hZ : ZKBelow Zs Rel a ε) (hH : H.Hiding εh) (Xt : Tr)
+    (hX : ∀ r S, Rel (H.commit Xt r, S) (wit Xt r S)) (X₀ : Tr) (v : VS) :
+    Below (auditView H Zs samp wit Xt v) (auditSim H Zs samp X₀ v) a
+      (a * εh + avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v) := by
   let F : Com → Exp (Com × Finset (Fin n) × View) := fun c =>
-    ⟨(Z.sim (c, samp v c) v).g.map fun w => (c, samp v c, w), Strategy.map _ _ (Z.sim (c, samp v c) v).s⟩
-  have h1 : Below (auditView H Z samp wit X v) ((H.exp X).andThen F) a
-      (avg fun r => ε (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v) :=
-    below_coin (fun r => Z.real (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v)
-      (fun r => Z.sim (H.commit X r, samp v (H.commit X r)) v) (fun r w => (H.commit X r, samp v (H.commit X r), w))
+    ⟨(Zs.sim (c, samp v c) v).g.map fun w => (c, samp v c, w), Strategy.map _ _ (Zs.sim (c, samp v c) v).s⟩
+  have h1 : Below (auditView H Zs samp wit Xt v) ((H.exp Xt).andThen F) a
+      (avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v) :=
+    below_coin (fun r => Zs.real (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
+      (fun r => Zs.sim (H.commit Xt r, samp v (H.commit Xt r)) v) (fun r w => (H.commit Xt r, samp v (H.commit Xt r), w))
       _ fun r => hZ _ _ (hX r _) v
-  have h2 : Close ((H.exp X).andThen F) (auditSim H Z samp X₀ v) εh := hH _ X X₀ F
+  have h2 : Close ((H.exp Xt).andThen F) (auditSim H Zs samp X₀ v) εh := hH _ Xt X₀ F
   intro E
-  calc (auditView H Z samp wit X v).pr E
-      ≤ a * ((H.exp X).andThen F).pr E + _ := h1 E
-    _ ≤ a * ((auditSim H Z samp X₀ v).pr E + εh) + _ := by gcongr; exact (h2 E).1
+  calc (auditView H Zs samp wit Xt v).pr E
+      ≤ a * ((H.exp Xt).andThen F).pr E + _ := h1 E
+    _ ≤ a * ((auditSim H Zs samp X₀ v).pr E + εh) + _ := by gcongr; exact (h2 E).1
     _ = _ := by rw [mul_add, add_assoc]
 
 /-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view drawn from uniform
@@ -272,7 +272,7 @@ theorem server_zkBelow (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs
       (fun x w v => err rel T vs L pc fc t δ₁ x w v) :=
   fun x w hR v => server_below rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk pc fc Θ x w hR v
 
-/-- **The sampled audit's zero knowledge at Flock's ZK server.** The audit commits to the trace `X` with the commitment
+/-- **The sampled audit's zero knowledge at Flock's ZK server.** The audit commits to the trace `Xt` with the commitment
 `H` (`ε_hide`-hiding), the verifier `v` samples after seeing the commitment (`samp`), and the ZK server proves the
 sample's statement `stmtOf (c, S)` from the trace's openings (`wit`). If every such statement is in the masked
 deployment's relation (`hR`) and meets the live path's premises there (`hPr`, `hLk`, `hF`, `hE`, `hEf`), the audit's
@@ -289,25 +289,25 @@ theorem audit_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : 
     (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (Θ : Type)
     {n : ℕ} {Tr Rnd Com : Type} [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com) {εh : ℝ≥0∞}
     (hH : H.Hiding εh) (stmtOf : Com × Finset (Fin n) → Claims.Msg)
-    (samp : Verifier rel Θ → Com → Finset (Fin n)) (wit : Tr → Rnd → Finset (Fin n) → Claims.Flock.Wit) (X : Tr)
-    (hR : ∀ r S, Claims.Flock.R (FlockDeploy.deployZk rel).parse (stmtOf (H.commit X r, S)) (wit X r S))
-    (hPr : ∀ r S, Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc (stmtOf (H.commit X r, S)))
-    (hLk : ∀ r S, Claims.ZKServer.LeanRelease.LinkRoundEq (Sess T) vs L (stmtOf (H.commit X r, S)) (wit X r S))
+    (samp : Verifier rel Θ → Com → Finset (Fin n)) (wit : Tr → Rnd → Finset (Fin n) → Claims.Flock.Wit) (Xt : Tr)
+    (hR : ∀ r S, Claims.Flock.R (FlockDeploy.deployZk rel).parse (stmtOf (H.commit Xt r, S)) (wit Xt r S))
+    (hPr : ∀ r S, Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc (stmtOf (H.commit Xt r, S)))
+    (hLk : ∀ r S, Claims.ZKServer.LeanRelease.LinkRoundEq (Sess T) vs L (stmtOf (H.commit Xt r, S)) (wit Xt r S))
     (hF : ∀ r S,
-      Claims.ZKServer.LeanRelease.FinalRoundEq (Sess T) vs L sha wk (stmtOf (H.commit X r, S)) (wit X r S))
+      Claims.ZKServer.LeanRelease.FinalRoundEq (Sess T) vs L sha wk (stmtOf (H.commit Xt r, S)) (wit Xt r S))
     (hE : ∀ r S,
-      Claims.ZKServer.LeanRelease.LiveRoundEq (Sess T) vs L sha wk (stmtOf (H.commit X r, S)) (wit X r S))
+      Claims.ZKServer.LeanRelease.LiveRoundEq (Sess T) vs L sha wk (stmtOf (H.commit Xt r, S)) (wit Xt r S))
     (hEf : ∀ r S,
-      Claims.ZKServer.LeanRelease.FillRoundEq (Sess T) vs L sha wk (stmtOf (H.commit X r, S)) (wit X r S))
+      Claims.ZKServer.LeanRelease.FillRoundEq (Sess T) vs L sha wk (stmtOf (H.commit Xt r, S)) (wit Xt r S))
     (X₀ : Tr) (v : Verifier rel Θ) :
-    Below (auditView H (zkComap (server rel T L wk pc fc t Θ) stmtOf) samp wit X v)
+    Below (auditView H (zkComap (server rel T L wk pc fc t Θ) stmtOf) samp wit Xt v)
       (auditSim H (zkComap (server rel T L wk pc fc t Θ) stmtOf) samp X₀ v) 2
-      (2 * εh + avg fun r => err rel T vs L pc fc t δ₁ (stmtOf (H.commit X r, samp v (H.commit X r)))
-        (wit X r (samp v (H.commit X r))) v) :=
+      (2 * εh + avg fun r => err rel T vs L pc fc t δ₁ (stmtOf (H.commit Xt r, samp v (H.commit Xt r)))
+        (wit Xt r (samp v (H.commit Xt r))) v) :=
   _root_.FlockSoundness.SampledGeneric.audit_below H (zkComap (server rel T L wk pc fc t Θ) stmtOf)
     (fun s w => LiveRel rel T vs L wk pc fc (stmtOf s) w) 2 εh
     (fun s w v => err rel T vs L pc fc t δ₁ (stmtOf s) w v) samp wit
-    ((server_zkBelow rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk pc fc Θ).comap stmtOf) hH X
+    ((server_zkBelow rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk pc fc Θ).comap stmtOf) hH Xt
     (fun r S => ⟨hR r S, hPr r S, hLk r S, hF r S, hE r S, hEf r S⟩) X₀ v
 
 end FlockSoundness.SampledGeneric.FlockZk
