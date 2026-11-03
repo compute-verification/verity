@@ -43,7 +43,7 @@ def row_words(label: str, word_bits: int, n_words: int) -> list[int]:
 
 
 def domain(n: int, label: str = "frame-v3/vectors") -> CommitmentDomain:
-    return CommitmentDomain(hashlib.sha256(label.encode()).digest(), 0, RangeIndexedDomain(n))
+    return CommitmentDomain(hashlib.sha256(label.encode()).digest(), 0, RangeIndexedDomain(n), hash="sha256")
 
 
 def _blake3_vectors() -> list[dict[str, Any]]:

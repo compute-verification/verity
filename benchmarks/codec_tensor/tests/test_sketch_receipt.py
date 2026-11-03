@@ -158,7 +158,7 @@ def test_the_chained_pass_completes_the_driver_s_messages():
                 t, a = m[name]
                 return t[:a] + v + t[a + 64:]
             assert put("receipt", seed) == rb.prefix(seed)
-            assert put("salt", seed) == RD.SALT_DOMAIN + key + seed
+            assert put("salt", seed) == RD.store.SALT_DOMAIN + key + seed
             binding = hashlib.sha512(put("binding", seed)).digest()
             assert binding == rb.binding(seed, plan)
             assert hashlib.sha512(put("domain", binding)).digest() == rb.domain(seed, plan).domain_id

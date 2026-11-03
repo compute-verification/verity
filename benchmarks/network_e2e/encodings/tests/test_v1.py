@@ -1,11 +1,11 @@
 """Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
 and a fitted one; the engine's arrival order is sent as its deviations from the warden's release order and recovered
 from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
-registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
-the decisions charged before their step's window; the strings are prefix-free (so the charge
-meets LEAK-LEAN's `BitsCount`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's
-phase 7 probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
-changes, a shortened shortfall) are among them."""
+registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries the
+decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak bound's
+`hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
+(prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a shortened
+shortfall) are among them."""
 
 from __future__ import annotations
 
@@ -370,9 +370,9 @@ def _tiny(windows: int):
 @pytest.mark.parametrize("w", (1, 2))
 def test_the_strings_are_prefix_free(w):
     """Every bit string of up to 16 bits through `decode_bits`: no accepted one is a proper prefix of another, so
-    #{accepted strings of at most c bits} ≤ 2^c (Kraft), LEAK-LEAN's `BitsCount` for the charge `bits_by_window`; and
-    each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0 (`advice.decode`'s refusals, which
-    ADV-SPEC's validity circuit makes)."""
+    #{accepted strings of at most c bits} ≤ 2^c (Kraft), the sampled leak bound's `hAs` for the charge
+    `bits_by_window`; and each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0
+    (`advice.decode`'s refusals, which ADV-SPEC's validity circuit makes)."""
     rec, reg = _tiny(w)
     accepted = {}
     for n in range(17):

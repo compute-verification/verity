@@ -36,7 +36,7 @@ theorem specP : Hidden.SpecP I.tags I.circuitFile I.publicFile I.coins I.tables 
 
 include hc in
 /-- A drawn table's statement is on the session's one circuit. -/
-theorem c_eq : x.st.c = c := Except.ok.inj (x.specP.parse.symm.trans hc)
+theorem c_eq : x.st.c = c := Except.ok.inj ((x.specP.parseF (HmOut.parse_isTmpl hc)).symm.trans hc)
 
 /-- **A drawn table's acceptance at `own`** (`TableH.acc`): its `Stmt.setupHidden … own` run and `SpecP`, with the
 layout `Hidden.hidden_layoutP` gives and its unit slots' kept rows its flat twin's (`unitRowsFlatP`); the table's
@@ -53,15 +53,16 @@ noncomputable def acc : AcceptedHP x.T.S where
   own := own
   st := x.st
   ht := ht
+  hi := HmOut.parse_isTmpl hc
   h := x.h
   pi := (Hidden.setupHidden_specP x.h).choose
   s := x.specP
-  L := Hidden.hidden_layoutP ht x.specP (Hidden.unpinned_of_rep (Hidden.parse_untyped ht x.specP.parse).1
-    (Hidden.parse_untyped ht x.specP.parse).2 (by rw [x.c_eq hc]; exact hv1.1.1))
+  L := Hidden.hidden_layoutP ht x.specP
+    ((Hidden.committed_of_commit x.specP.parse).unpinned_of_rep ht (by rw [x.c_eq hc]; exact hv1.1.1))
   hR := unitRowsFlatP ht x.specP (by rw [x.c_eq hc]; exact hv1.1)
   regs := x.regs
   hregs := x.hregs
-  hT := (Integrate.model_eq (parse_facts (Hidden.parse_untyped ht x.specP.parse).1) _ x.specP.leaf x.hwf
+  hT := (Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (x.specP.parseF (HmOut.parse_isTmpl hc))).1) _ x.specP.leaf x.hwf
     x.regs).trans x.hT.symm
 
 end TableHP

@@ -1,4 +1,4 @@
-# Honest at L = 16 on the A100 as AMPERE measured it: egemm80's e16 built with a 3-stage ring (EG80_NST=3, 0.5% faster
+# Honest at L = 16 on the A100 as measured: egemm80's e16 built with a 3-stage ring (EG80_NST=3, 0.5% faster
 # here than the default 4: 23.76), e_l7qs's mainloop on sm_80 (as a100-l32) with each k32 atom run as two IMMA.16816
 # passes, every k16 step's words absorbed, duo receipts at LAG 7 with a LOP3 tie every 4th MMA, and the linears' peel as
 # an IMMA.16832 tail a tile, 8192 x 8192 x 4096. Counts are the SASS's a mainloop MMA (egemm80.py: the k-stage loop at

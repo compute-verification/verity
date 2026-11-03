@@ -211,7 +211,7 @@ def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: i
         r = sketch_reading(rows)[0]
     q = outside * compressions
     return (q * Fraction(1, 2 ** (8 * r))
-            + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** 512))
+            + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** (8 * DIGEST_BYTES)))
             + Fraction((q + passes) ** 2, 2 ** 257))
 
 
@@ -265,7 +265,7 @@ def stated(node: hardware.NodeFigures, store_bytes: int, window_ns: int, windows
     st = honest(window_ns, windows, pass_ns, gap_ns=gap_ns, down_ns=rtt_ns // 2, up_ns=rtt_ns - rtt_ns // 2,
                 jitter_ns=jitter_ns)
     starts = (0, *st.boundaries[:-1])
-    record = audit.Record(bytes(64), bytes(64), blocks, BLOCK_BYTES, tuple(
+    record = audit.Record(bytes(DIGEST_BYTES), bytes(DIGEST_BYTES), blocks, BLOCK_BYTES, tuple(
         audit.WindowRecord(t, (blocks,) * n, b, d, d, IntegrityProfile(
             ("receipt",), (blocks * n,), {"receipt": Subset(samples)}, delta, drawn={"receipt": samples}))
         for t, (n, b, d) in enumerate(zip(st.passes, starts, st.deadlines))))

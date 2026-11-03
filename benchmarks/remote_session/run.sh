@@ -38,8 +38,10 @@
 #   ROLE=verifier PEER=PROVER_NODE PORT=7791 SESSIONS=2 taskset -c 96-127 bash benchmarks/remote_session/run.sh
 #   ROLE=prover PORT=7791 PLAN=honest,skip:0.0625 taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
-# ROLE=verifier is the audit's verifier as a service, on a machine the prover doesn't control (AGENTS.md's
-# auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
+# ROLE has no default: the verifier runs on a machine the prover doesn't control (AGENTS.md's auditor-trusted
+# devices), never on PEER, so a run says which side it is. ROLE=both runs the verifier beside the prover on this
+# machine, a test of these scripts that audits nothing.
+# ROLE=verifier is the audit's verifier as a service. It keeps the registrations in REGISTRY (default
 # ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
@@ -65,8 +67,8 @@
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
 # tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
 # run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
-# row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
-# int8 Llama-3.1-8B:
+# row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Serving int8
+# Llama-3.1-8B:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7797 SESSIONS=1 WINDOWS=7 WINDOW_MS=100 LIFETIME=4 \
 #     bash benchmarks/remote_session/run.sh                                           # on the verifier's machine
@@ -88,6 +90,11 @@
 # start the verifier then.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
+case ${ROLE:-} in
+  verifier | prover | both) export ROLE ;;
+  *) echo "ROLE is verifier or prover (both only to test these scripts on one machine), not '${ROLE:-}': the verifier" \
+       "runs on a machine the prover doesn't control, so there is no default"; exit 3 ;;
+esac
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 export PY=${PY:-$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python}
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
@@ -98,7 +105,7 @@ B=$(mktemp -d /tmp/remote-session.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B RS=benchmarks/remote_session PLAN=${PLAN:-honest} GIB=${GIB:-16} WINDOWS=${WINDOWS:-7}
 export WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_MS:-2}
 export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87} PORT=${PORT:-$((7700 + RANDOM % 200))}
-export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))} ROLE=${ROLE:-both}
+export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))}
 VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
   ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})

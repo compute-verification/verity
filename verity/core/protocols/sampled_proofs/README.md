@@ -21,7 +21,9 @@ accepts, at most the profile's count of proof blocks are incorrect. Its top stat
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
-rests on these named assumptions:
+and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
+(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until the V5 guarantees are restated
+over the statement circuit. It rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).
@@ -35,9 +37,9 @@ takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --
 composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
-which adds two premises about where it runs, `CoinsConfidential` and `OneClock` ("Where things are"). Both are prose
-only: no `.lean` file defines either.
+before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
+verifier's own draw), under three Lean premises, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
+onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -126,23 +128,31 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   the verdicts and the audit record. `Stream.outcome` holds each outcome on a draw from the coins to it, and an outcome the two don't make alike
   is a reject whose audit record fails `run`. `SampledProofs/Slots.lean` puts that draw in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
-  root's input gates (drawn `all`: the input proof block is always checked), each replay block one proof block, and the draw's
-  checked proof blocks as `(slot, index)` in class, stratum and replay-block order.
+  root's input gates (drawn `all`: the input proof block is always checked), and the draw's checked proof blocks as
+  their slots in class, stratum and block order.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
-  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The check runs
+  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. Its draw's coins are always the
+  challenger's: parameters naming no `challenger` are refused, and the check reads the coins as v1 does
+  (`OneStage.coinsOf`, `Security/Properties/Challenger.lean`'s `oneStageZkReads`). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
-  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
+  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite, remote and composition still read v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
-  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
-  The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
-  name; both are prose only:
+  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
+  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, premises in its `Assumptions/`, in the
+    lock): the challenger logs every coin it releases (`ChallengerLogsCoins`) and flips each only after what it samples
+    is recorded (`FlipsAfterRecorded`), and the verifier reads coins only from its log (`VerifierReadsLog`). Under them
+    a logged coin's sample misses a set fixed before it at most as the draw law allows (`SampleAfterRecorded`, proved).
+    None mentions a network certifier.
+
+  Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
+  ACCEL's cite by name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
@@ -521,7 +531,8 @@ is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `
 session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
 registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
 pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
-bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
+session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
+salt or path before it closed) and the bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
 failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.

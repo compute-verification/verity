@@ -77,6 +77,7 @@ from collections.abc import Iterator, Sequence
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
 from verity.ml.commitments import hm96, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
@@ -93,7 +94,7 @@ SKETCH_ROWS = 16
 ROWS = (16, 64)
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 CHALLENGE_BYTES = 32
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 PER_LEAF = 16
 OWNER = 0
 HM96 = hm96.SHA512

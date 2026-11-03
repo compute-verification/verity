@@ -101,7 +101,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
 from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
@@ -133,7 +133,7 @@ pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 pas
 (532.6 GB, eight GPUs' 62 GiB shards) at an RTX PRO 6000 node's R measured (`verity.hardware.node`) is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
@@ -451,7 +451,7 @@ class NoiseTiles:
 
     def output(self, seed: bytes, j: int) -> bytes:
         m = TILE_DOMAIN + seed + j.to_bytes(8, "big")
-        out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // 64)))
+        out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // DIGEST_BYTES)))
         return out[:self.z_bytes]
 
     def evidence(self, seed: bytes, j: int) -> bytes:

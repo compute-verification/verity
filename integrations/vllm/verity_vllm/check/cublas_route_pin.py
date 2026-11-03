@@ -26,11 +26,11 @@ def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | No
         return None, None
     departures = BC.route_departures(sr.get("engine_of_record"))
     named = ", ".join(f"{f} x{n}" for f, n in bound.items())
-    why = (f"cuBLAS route pin (rank {rank}): {named} bound at the routes of {BC.CUBLAS_ROUTES['run']}, served otherwise: {'; '.join(departures)}"
+    why = (f"cuBLAS route pin (rank {rank}): {named} bound at the routes of {BC.CUBLAS_ROUTES['run_record']}, served otherwise: {'; '.join(departures)}"
            if departures else None)
     block = {"rule": "a rank whose Program binds bf16_gemm_check.ROUTE_DEFINITIONS served under bf16_gemm_check.ROUTE_CONDITIONS (the route "
                      "pin's scan), every fact measured in the rank's process; a departure or an unrecorded fact = the rank FAILs by name",
-             "rank": int(rank), "families": bound, "pin": BC.CUBLAS_ROUTES["run"], "departures": departures, "ok": not departures, "why": why}
+             "rank": int(rank), "families": bound, "pin": BC.CUBLAS_ROUTES["run_record"], "departures": departures, "ok": not departures, "why": why}
     return block, why
 
 

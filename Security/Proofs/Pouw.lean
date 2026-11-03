@@ -7,12 +7,10 @@ import Proofs.Pouw.Credit
 import Proofs.Pouw.Deadline
 import Proofs.Pouw.EndToEndWindow.Statement
 import Proofs.Pouw.Eps1
-import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
 import Proofs.Pouw.DitherSelected
-import Proofs.Pouw.Dimension.A2WordsProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
 import Proofs.Pouw.Dimension.ForestProofs
@@ -81,6 +79,8 @@ import Proofs.Pouw.Period
 import Proofs.Pouw.Period.Accept
 import Proofs.Pouw.Period.Honest
 import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.PeriodJ10RStrata
+import Proofs.Pouw.PeriodJ10RStrata.Honest
 import Proofs.Pouw.PeriodJ10R
 import Proofs.Pouw.PeriodJ10R.Honest
 import Proofs.Pouw.PeriodJ10R.Nontrivial

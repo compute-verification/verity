@@ -18,8 +18,10 @@ What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
-holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. At
-`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20` (`p2.wide320_certificate`, `ObligationWide320`).
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. More
+challenges than a certificate's `k` keep its `eps`: at `k ≥ 320` it stays `1% + 2^-128`, and
+`p2.wide320_certificate`'s `2^-20` (`ObligationWide320`, from the open conjecture `P2RingRoundSecureWide`) is no
+run's certificate.
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
@@ -65,6 +67,7 @@ from . import protocol as pous_protocol
 from . import run as R
 from . import setup
 from .schemes import p2 as P2
+from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
@@ -87,13 +90,10 @@ def point_for(size: int, w: int = P2.POINT[0], c0: int = P2.POINT[1], k: int = K
     return R.Point(P2.P2Params(w, c0, -(-blocks // segments), segments), k, limit_ns)
 
 
-def certificate(q: P2.P2Params, k: int = K) -> Any:
-    """`PousCheck.RunProtocol.certificate`: at `k` of at least `p2.CERT_K_WIDE320` challenges, the 320-read window's
-    (`p2.wide320_certificate`, `2^19` to `2^27` blocks) where it holds `q`; else P2's registered certificate when `q`
-    is its point, segment count and all, else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks),
-    else the per-period guarantee's (`p2.wide_certificate`, to `2^27` blocks), else none."""
-    if k >= P2.CERT_K_WIDE320 and (wide := P2.wide320_certificate(q)) is not None:
-        return wide
+def certificate(q: P2.P2Params) -> Any:
+    """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
+    else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks), else the per-period guarantee's
+    (`p2.wide_certificate`, to `2^27` blocks), else none."""
     registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
     if registered is not None and registered.segments == q.segments:
         return registered
@@ -103,7 +103,7 @@ def certificate(q: P2.P2Params, k: int = K) -> Any:
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
     """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
     q = point.params
-    cert = certificate(q, point.k)
+    cert = certificate(q)
     if cert is None:
         return None, [f"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"]
     return cert, list(cert.refusals(point.k, point.limit_ns))
@@ -195,7 +195,7 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
     """The setup's own inputs from its case's `commitment` and `evidence`, read as `SetupProtocol`'s decoders read them
     (each count at most a quarter of the bytes left, nothing after the last segment); `ValueError` on bytes they refuse."""
     c, b = bytes.fromhex(setup_of["commitment"]), bytes.fromhex(setup_of["evidence"])
-    if len(c) < 64:
+    if len(c) < DIGEST_BYTES:
         raise ValueError(f"the commitment to W is 64 bytes, then the salt; {len(c)} bytes is too short")
     pos = 0
 
@@ -215,7 +215,7 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
     store = [[take(int.from_bytes(take(4), "big")) for _ in range(count())] for _ in range(count())]
     if pos != len(b):
         raise ValueError(f"{len(b) - pos} bytes follow the last segment")
-    return c[:64], c[64:], store
+    return c[:DIGEST_BYTES], c[DIGEST_BYTES:], store
 
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
@@ -228,26 +228,31 @@ def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
 
 
 @dataclass(frozen=True)
-class Period:
-    """A period's PoUS: the run protocol's answer and case, and the setup protocol's case that published its commitment."""
+class Run:
+    """A subprotocol's run over one monitoring period, PoUS's or the bandwidth audit's: its answer in the core
+    interface's canonical form, the core case its Lean replays to that answer, and, for a run on a setup (PoUS's), the
+    setup protocol's case that published its commitment."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
-    setup_case: dict[str, Any]
+    setup_case: dict[str, Any] | None = None
 
     @property
     def verdict(self) -> str:
         return self.answer["verdict"]
 
-    @property
-    def s_bits(self) -> int:
-        """The storage certified, in bits: 0 unless accepted under a certificate that covers the point."""
-        return self.answer["public"]["s_bits"] if self.verdict == "accept" else 0
+    def public(self, key: str) -> int:
+        """What the run certifies under `key` (PoUS's `s_bits`, the bandwidth audit's `q_bytes`): 0 unless accepted."""
+        return self.answer["public"][key] if self.verdict == "accept" else 0
 
     @property
     def eps(self) -> Fraction:
-        """The error `s_bits` holds at: 0 (vacuous) when nothing is certified."""
+        """The error what it certifies holds at: 0 (vacuous) when nothing is certified."""
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
+
+
+Period = Run
+"""`Run`, under the name some of its readers still use; it goes when none does."""
 
 
 @dataclass(frozen=True)
@@ -344,9 +349,9 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.Session.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
-    return Period(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
-                         setup_inputs=setup_inputs(held.setup_case)),
-                  case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
+    return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
+                      setup_inputs=setup_inputs(held.setup_case)),
+               case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
 
 
 def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
@@ -588,11 +593,11 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     q = held.point.params
     (out / "pous.json").write_text(json.dumps({
         "answer": answer, "blocks": q.blocks, "eps": str(period.eps), "lean": lean, "placement": where,
-        "s_bits": period.s_bits, "seconds": seconds, "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0},
-        "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
+        "s_bits": period.public("s_bits"), "seconds": seconds,
+        "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0}, "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit",
-           "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "point_for",
-           "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
+           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg",
+           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

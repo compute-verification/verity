@@ -1,6 +1,6 @@
-"""The Lean verifier's stratified draw against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
+"""The Lean verifier's stratified draw against core's (`verity.core.protocols.sampled_proofs.one_stage.draw`, and `Stratified`).
 
-For each program (A4 P6's six-template population, as #164's test builds it, and small and random programs):
+For each program (A4 P6's six-template population, as core's draw test builds it, and small and random programs):
 
 - the law: `flock-verify draw --program P --partition Q --stratified K` against `draw.derive`, and the population against
   `partition.units`;
@@ -13,7 +13,7 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
 - on a small program, each unit's inclusion frequency over OS draws against `k_s / n_s`;
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
-Needs core with #164 on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
+Needs core's stratified draw on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
 everything agrees.
 """
 from __future__ import annotations
