@@ -17,7 +17,8 @@
 #                replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
 #                bit off, one salt one bit off), which it must refuse (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
-#                hm96 statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers)
+#                hm96 statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers), and with INNER_FIREWALL=1
+#                its --zk behind the ZK server (flock-firewall, FC_FIREWALL=1), one session, as oprove's MODES=firewall
 #   STEP=icheck  (CPU) the replay and rec_vstar on the inner's last session, the schedule the sessions were held to against
 #                the statement's (derived again), each session's own schedule, how it ended and its message count, the coin
 #                server's record against the clear tops, and the tree-top controls rec_vstar must refuse by name
@@ -45,7 +46,8 @@
 #                inner shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
 #                --coins os and the sample held to its law, --stratified N --program --partition, on
 #                verity/flock-circuit+plain-leaves, which Lean's verify checks without --zk
-#                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
+#                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session, and INNER_FIREWALL's; M0_LEAN=1: also the hm96
+#                statement's last M0 session, --coins os --stratified N; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
 #                each forgery refused by Lean at one of its parts (a ZK server's refusal, or a session with no proof, is
@@ -60,7 +62,8 @@
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
-#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 (inner)
+#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 INNER_FIREWALL=0 (inner)
+#      M0_LEAN=0 (lean)
 #      LEAN_JOBS= LEAN_MEM_GB=48 (lean: verifications at once, default LEAN_MEM_GB / 5 up to the job's cores)
 #      REC_CIRCUIT_CACHE=$FLOCK_WORK/rec-circuits (V*'s circuit texts kept per shape, rec_circuits.py; empty: none kept)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
@@ -613,6 +616,13 @@ EOF
   again loopback zk $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt --zk
   [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $DZ/pub-$N.bin \
     --circuit $DZ/circuit.txt --sessions $LAST > $O/inner/replay-zk.txt 2>&1
+  # INNER_FIREWALL=1: the same --zk behind the ZK server, as oprove's MODES=firewall proves an outer statement: one session
+  if [ "${INNER_FIREWALL:-0}" = 1 ]; then
+    [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
+    hello_at $DZ
+    PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" WARM=0 RUNS=1 NS=1 GPU_PREEMPTIBLE= \
+      loopback zk-fw $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt --zk
+  fi
   fi
   ;;
 icheck)
@@ -975,6 +985,20 @@ lean)
     /usr/bin/time -v -o $O/lean/time-zk.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage-zk/circuit.txt \
       --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
+    if [ -d $DD/inner-zk-fw/sessions ]; then
+      ZS=$(ls -d $DD/inner-zk-fw/sessions/l* | sort | tail -1)
+      /usr/bin/time -v -o $O/lean/time-zk-fw.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage-zk/circuit.txt \
+        --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --session $ZS > $O/lean/zk-fw.log 2> $O/lean/zk-fw.err
+      echo "zk-fw lean exit $?"
+    fi
+  fi
+  # M0_LEAN=1: the same statement's plain session (the inner step's last loopback M0), --coins os and the sample held to its law
+  if [ "${M0_LEAN:-0}" = 1 ]; then
+    MS=$(ls -d $DD/inner-m0/sessions/l* | sort | tail -1)
+    /usr/bin/time -v -o $O/lean/time-m0.txt $LEAN_BIN verify --statement verity/flock-circuit --circuit $DD/stage-zk/circuit.txt \
+      --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --stratified $N --coins os \
+      --session $MS > $O/lean/m0.log 2> $O/lean/m0.err
+    echo "m0 lean exit $?"
   fi
   # the inner statement with the verifier's partition object and program (the setup AcceptsPublic states): Lean derives its
   # units from the program, each an activation of the circuit's template
@@ -992,6 +1016,8 @@ lean)
     want $l && for w in $NEGS; do PARTS="$PARTS forged-inner-$w-$l"; done
   done
   [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
+  [ "${ZK_LEAN:-0}" = 1 ] && [ -d $DD/inner-zk-fw/sessions ] && PARTS="$PARTS zk-fw"
+  [ "${M0_LEAN:-0}" = 1 ] && PARTS="$PARTS m0"
   [ "${INNER_LEAN:-0}" = 1 ] && PARTS="$PARTS inner"
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"

@@ -323,7 +323,9 @@ def read(root: Path) -> dict[str, Any]:
     for o in repeats(root, "inner")[:1]:
         for sub, stage, what in (("proxy", "inner M0", "the inner statement (plain leaves), ZK off, against the rec_live proxy"),
                                  ("m0", "baseline M0", "the non-recursive hm96 statement, ZK off, loopback serve"),
-                                 ("zk", "baseline --zk", "the non-recursive hm96 statement with --zk, loopback serve")):
+                                 ("zk", "baseline --zk", "the non-recursive hm96 statement with --zk, loopback serve"),
+                                 ("zk-fw", "baseline --zk ZK server", "the non-recursive hm96 statement with --zk behind the ZK "
+                                  "server (flock-firewall), one session, loopback serve")):
             if (o / "inner" / sub).exists():
                 rows.append(prover_row(o / "inner" / sub, stage, "inner", what))
     rows += tool_rows(repeats(root, "icheck"), "icheck", {
@@ -372,9 +374,13 @@ def read(root: Path) -> dict[str, Any]:
     ln = repeats(root, "lean")
     if ln:
         names = [n for n in _names(ln, "lean", r"time-(.+)\.txt")]
+        baseline = {"zk": "flock-verify verify --zk on the baseline --zk session",
+                    "zk-fw": "flock-verify verify --zk on the baseline --zk ZK server session",
+                    "m0": "flock-verify verify on the baseline M0 session (--coins os)"}
         rel = {f"lean {n}": (f"lean/time-{n}.txt", ("flock-verify statement on the inner statement" if n == "inner-statement"
                                                     else "flock-verify verify on the inner run (--coins os)" if n == "inner"
-                                                    else f"flock-verify verify --zk on V*'s {n} release")) for n in names}
+                                                    else baseline.get(n) or f"flock-verify verify --zk on V*'s {n} release"))
+               for n in names}
 
         def lv(o: Path, n: str) -> bool | None:
             name = n[len("lean "):]
