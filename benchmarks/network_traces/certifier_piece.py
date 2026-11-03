@@ -34,10 +34,12 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   holds two or more; one that fails or isn't recorded within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't
   make a slow endpoint pass; a tick whose D·τ covers its answer does. ``--stop-prompt N`` then puts last in the group
   a prompt whose answer the model's own EOS ends (`stop_prompt`): up to N fresh prompts of HI ids, each sent as a
-  warm-up is, until one's answer finishes on a stop within ``--tokens``. The gate's requests are greedy (temperature 0,
-  top_p 1), as a warm-up is, and serving is batch-invariant, so the group's answer to that prompt stops alike; none of
-  N stopping refuses the front, before the gate is asked. The gate's fetch,
-  ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
+  warm-up is, until one's answer finishes on a stop within ``--tokens``. The gate's requests are greedy, as a warm-up
+  is: the rehearsal's request records the gate's default temperature 0 and top_p 1, which the warden's client puts on
+  every request (`auditor.sampling_argv`). Serving is batch-invariant (served_verdicts.sh's ``VLLM_BATCH_INVARIANT=1``),
+  so the group's answer to that prompt stops alike; none of N stopping refuses the front, before the gate is asked. The
+  gate's fetch, ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays
+  on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
   tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,

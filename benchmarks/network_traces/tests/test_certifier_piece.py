@@ -709,9 +709,10 @@ def test_the_front_sends_a_span_of_prompt_lengths(tmp_path, monkeypatch):
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
-    """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
-    at it, and the warden's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
-    rehearsal's check accepting."""
+    """``--gate local``, this tree's gate in this process: the run's request records the tick, the minutes counted at
+    it and greedy sampling (temperature 0, top_p 1, which the warden's client puts on every request, as
+    ``--stop-prompt``'s warm-ups are sent), and the warden's command is the scan's schedule at it. The tunnel and the
+    rehearsal are stand-ins, the rehearsal's check accepting."""
     real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
 
     def command(req, work, url):
@@ -731,11 +732,14 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     minutes = CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT, 4000) + CP.SS.MARGIN
     assert minutes > CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT) + CP.SS.MARGIN
     (req,) = [json.loads(p.read_text()) for p in (serve / CP.PRIVATE).rglob("request.json")]
-    assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes")} == {
+    assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes", "temperature",
+                                    "top_p")} == {
         "bucket_ms": 4000, "scan": True, "prompts": {"count": CP.PROMPTS, "ids": CP.PROMPTS * CP.PROMPT_IDS},
-        "window_per_group": True, "minutes": minutes}
+        "window_per_group": True, "minutes": minutes, "temperature": 0.0, "top_p": 1.0}
     relay, warden = ran
     assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
+    at = warden.index("--temperature")
+    assert warden[at:at + 4] == ["--temperature", "0.0", "--top-p", "1.0"]
     at = warden.index("--ids")
     assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
