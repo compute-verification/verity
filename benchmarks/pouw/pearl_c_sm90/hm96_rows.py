@@ -13,17 +13,16 @@ sha512.cuh), which `build` compiles alone into a shared library with its own CUD
 torch's current stream.  It is its own pass over A, not fused into Pearl+'s row digest.
 
   python hm96_rows.py build OUT [--cuda /usr/local/cuda-13.0]     OUT/hm96_rows.so, ptxas.txt and build.json
-  python hm96_rows.py time --lib SO --out DIR --m M ... [--step-m M ... --layers L] [--model llama32_1b] [--reps 15]
+  python hm96_rows.py time --lib SO --out DIR --m M ... [--model llama32_1b] [--reps 15]
   python hm96_rows.py report HM96_JSON --timing TIMING_JSON [--whole WHOLE_JSON] [--out REPORT_JSON]
 
 `time` first holds the kernels to `reference` (rowleaf's row digest, the hm96 gates' leaf, the frame-v3 gates' leaf and node,
 the domain's pads) on `VECTORS` and on every point's A under every form, and times nothing when any leaf or root differs.
 Then, at each linear of `--model` and each M, it times the commitment's leaves and tree under each leaf form of `FORMS`
 (native_rows.cu's ``VERITY_ROWS_FORM``), eagerly and replayed as a CUDA graph, interleaved rep by rep, each sample `INNER`
-commitments between events on the current stream; and at each M of `--step-m`, a decode step's commitments over L layers
-as one graph (`time_step`).  Writes hm96.json in DIR.  `report` gives each point's µs as a share of the same (n, k, M)'s
-pearlc arms in glm53_timing's timing.json, and with whole.json each forward's added time, its calls' points summed
-(``calls-``) and a step of its shapes (``step-``), as a share of each of its arms' forward.
+commitments between events on the current stream.  Writes hm96.json in DIR.  `report` gives each point's µs as a share of
+the same (n, k, M)'s pearlc arms in glm53_timing's timing.json, and with whole.json the decode forward's added time, one
+commitment a call, as a share of each of its arms' forward.
 """
 
 from __future__ import annotations
@@ -211,8 +210,8 @@ def gate(rows: Rows) -> list[dict]:
     return out
 
 
-def graphed(f, form: str):
-    """f (called with a stream) under `form` captured as one CUDA graph: (replay, None), or (None, why not)."""
+def graphed(c: Commit, form: str):
+    """The commitment under `form` captured as one CUDA graph: (replay, None), or (None, why not)."""
     import torch
 
     os.environ["VERITY_ROWS_FORM"] = form
@@ -220,11 +219,11 @@ def graphed(f, form: str):
         side = torch.cuda.Stream()
         side.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(side):
-            f(side.cuda_stream)
+            c(side.cuda_stream)
         torch.cuda.current_stream().wait_stream(side)
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g):
-            f(torch.cuda.current_stream().cuda_stream)
+            c(torch.cuda.current_stream().cuda_stream)
         torch.cuda.synchronize()
         return g.replay, None
     except Exception as e:  # noqa: BLE001 - recorded, the arm left out
@@ -260,61 +259,11 @@ def time_point(rows: Rows, x, reps: int) -> tuple[dict, dict]:
             sample(g, form)
         else:
             errors[f"{form}-graph"] = err
-    return interleaved(arms, reps), errors
-
-
-def interleaved(arms: dict, reps: int) -> dict:
-    """Each arm's samples, every arm once a rep in an order rotated each rep."""
     names, runs = list(arms), {nm: [] for nm in arms}
     for rep in range(reps):
         for nm in names[rep % len(names):] + names[:rep % len(names)]:
             runs[nm].append(sample(*arms[nm]))
-    return runs
-
-
-def time_step(rows: Rows, model, m: int, layers: int, reps: int, gen) -> dict:
-    """A decode step's commitments, one a call of each linear of each of `layers` layers on its own A of m rows, captured
-    as one CUDA graph under each form: serially on one stream, and concurrently, the calls dealt over torch's stream pool
-    (``streams`` distinct), each forking from the capture's stream and joining it at the end.  Every call's root is held to
-    `reference` after each graph's replay."""
-    import torch
-
-    lins = [lin for _ in range(layers) for lin in model.linears()]
-    xs = [torch.randn(m, lin.k, device="cuda", generator=gen).to(torch.bfloat16) for lin in lins]
-    cs, streams = [Commit(rows, x) for x in xs], [torch.cuda.Stream() for _ in xs]
-    roots = [reference(rows_of(x.view(torch.uint8).cpu().numpy().tobytes(), m, x.shape[1]), x.shape[1])[-1][0] for x in xs]
-
-    def serial(stream: int) -> None:
-        for c in cs:
-            c(stream)
-
-    def concurrent(_stream: int) -> None:
-        cur = torch.cuda.current_stream()
-        for c, s in zip(cs, streams):
-            s.wait_stream(cur)
-            with torch.cuda.stream(s):
-                c(s.cuda_stream)
-        for s in streams:
-            cur.wait_stream(s)
-
-    arms, errors, ok = {}, {}, {}
-    for form in FORMS:
-        for nm, f in (("serial", serial), ("concurrent", concurrent)):
-            g, err = graphed(f, form)
-            if g is None:
-                errors[f"{form}-{nm}"] = err
-                continue
-            for c in cs:
-                for t in (c.leaves, *c.bufs):
-                    t.fill_(0)
-            g()
-            torch.cuda.synchronize()
-            ok[f"{form}-{nm}"] = [c.root() for c in cs] == roots
-            arms[f"{form}-{nm}"] = (g, form)
-    runs = interleaved(arms, reps) if all(ok.values()) else {}
-    return {"m": m, "layers": layers, "calls": len(cs), "shapes": [[lin.n, lin.k] for lin in lins],
-            "streams": len({s.cuda_stream for s in streams}), "roots_ok": ok,
-            "us": {nm: statistics.median(v) for nm, v in runs.items()}, "runs": runs, "errors": errors}
+    return runs, errors
 
 
 def time_main(a) -> int:
@@ -350,16 +299,7 @@ def time_main(a) -> int:
             print(f"{lin.name} n {lin.n} k {lin.k} m {m}: " + ", ".join(f"{nm} {v:.1f} us" for nm, v in us.items())
                   + "".join(f"; {nm}: {e}" for nm, e in errors.items()), flush=True)
             (out / "hm96.json").write_text(json.dumps(doc, indent=1) + "\n")
-    doc["steps"] = []
-    for m in a.step_m:
-        st = time_step(rows, model, m, a.layers, a.reps, gen)
-        doc["steps"].append(st)
-        print(f"step m {m}, {st['calls']} calls ({a.layers} layers): "
-              + ", ".join(f"{nm} {v:.1f} us" for nm, v in st["us"].items())
-              + f"; roots {'equal' if all(st['roots_ok'].values()) else 'DIFFER ' + json.dumps(st['roots_ok'])}"
-              + "".join(f"; {nm}: {e}" for nm, e in st["errors"].items()), flush=True)
-        (out / "hm96.json").write_text(json.dumps(doc, indent=1) + "\n")
-    return 0 if all(all(st["roots_ok"].values()) for st in doc["steps"]) else 1
+    return 0
 
 
 def report(hm: dict, timing: dict, whole: dict | None) -> dict:
@@ -372,15 +312,11 @@ def report(hm: dict, timing: dict, whole: dict | None) -> dict:
                        "share": {arm: {nm: us / 1e3 / v for nm, v in ms.items()} for arm, us in r["us"].items()}})
     forwards = []
     for w in (whole or {}).get("rows", []):
-        us_at = {(r["n"], r["k"]): r["us"] for r in hm["rows"] if r["m"] == w["m"]}
-        shapes = [tuple(s) for s in w["shapes"]]
-        if not shapes or any(s not in us_at for s in shapes):
+        at = [r for r in hm["rows"] if r["m"] == w["m"]]
+        if not at or w["calls"] % len(at):
             continue
-        added = {f"calls-{arm}": sum(us_at[s][arm] for s in shapes) / 1e3 for arm in us_at[shapes[0]]
-                 if all(arm in us_at[s] for s in shapes)}
-        for st in hm.get("steps", []):
-            if st["m"] == w["m"] and sorted(map(tuple, st["shapes"])) == sorted(shapes):
-                added.update({f"step-{arm}": v / 1e3 for arm, v in st["us"].items()})
+        added = {arm: w["calls"] // len(at) * sum(r["us"][arm] for r in at) / 1e3 for arm in at[0]["us"]
+                 if all(arm in r["us"] for r in at)}
         forwards.append({"m": w["m"], "calls": w["calls"], "forward_ms": w["ms"], "added_ms": added,
                          "share": {arm: {nm: v / f for nm, f in w["ms"].items()} for arm, v in added.items()}})
     return {"points": points, "forwards": forwards}
@@ -437,8 +373,6 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--out", required=True)
     t.add_argument("--model", default="llama32_1b", help="whose linears (this directory's module)")
     t.add_argument("--m", nargs="+", type=int, required=True)
-    t.add_argument("--step-m", nargs="*", type=int, default=[], help="M of each decode step timed whole (`time_step`)")
-    t.add_argument("--layers", type=int, default=1, help="--step-m: the step's layers, each its own calls of every linear")
     t.add_argument("--reps", type=int, default=15)
     r = sub.add_parser("report")
     r.add_argument("hm96")

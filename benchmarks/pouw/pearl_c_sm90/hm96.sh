@@ -6,8 +6,7 @@
 #     --env GPU_LEASE_WHO=LANE --send BUILD_RUN/out/lib/hm96_rows.so -- bash benchmarks/pouw/pearl_c_sm90/hm96.sh
 #
 # Under one lease of at most LEASE_MIN minutes (default 20): the gate and the timings at MODEL's linears (default
-# llama32_1b) and each M of MS (default "8 8192": decode's batch and prefill's step), then a decode step of LAYERS layers
-# (default 16) at each M of STEP_M (default 8) as one graph, into $OUT/hm96.json, with the card's SM
+# llama32_1b) and each M of MS (default "8 8192": decode's batch and prefill's step), into $OUT/hm96.json, with the card's SM
 # clock locked at LOCK_MHZ where given and the node allows it (h200.sh's lock: $OUT/clock.txt) and sampled every 200 ms
 # ($OUT/smi.csv).  hm96_rows.py report then reads hm96.json beside an h200.sh session's timing.json and whole.json.
 # VERITY_BENCH_VENV names the Python with torch (default /workspace/cp/venv312).  Every step's exit code is in $OUT/rc.txt.
@@ -16,8 +15,7 @@ O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pouw/pearl_c_sm90
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
-export O D PY LIB=$IN/hm96_rows.so MODEL=${MODEL:-llama32_1b} MS=${MS:-8 8192} STEP_M=${STEP_M:-8} LAYERS=${LAYERS:-16}
-export LOCK_MHZ=${LOCK_MHZ:-}
+export O D PY LIB=$IN/hm96_rows.so MODEL=${MODEL:-llama32_1b} MS=${MS:-8 8192} LOCK_MHZ=${LOCK_MHZ:-}
 : > "$O/rc.txt"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 sha256sum "$LIB" > "$O/lib.sha256"
@@ -38,8 +36,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
     -lms 200 -i "$U" > "$O/smi.csv" 2>&1 &
   smi=$!
   # shellcheck disable=SC2086
-  "$PY" "$D/hm96_rows.py" time --lib "$LIB" --model "$MODEL" --m $MS --step-m $STEP_M --layers "$LAYERS" --out "$O" \
-    > "$O/hm96.log" 2>&1
+  "$PY" "$D/hm96_rows.py" time --lib "$LIB" --model "$MODEL" --m $MS --out "$O" > "$O/hm96.log" 2>&1
   echo "hm96 rc $?" >> "$O/rc.txt"
   kill "$smi"'
 echo "lease rc $?" >> "$O/rc.txt"
