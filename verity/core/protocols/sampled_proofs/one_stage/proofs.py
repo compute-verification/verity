@@ -313,7 +313,8 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
     auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
     its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
-    line."""
+    line. `params` must name the auditor's challenger and its window (``challenger``, ``window_root``), whose signed
+    release in the evidence's ``coins`` the draw reads: v2 refuses parameters naming none."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
