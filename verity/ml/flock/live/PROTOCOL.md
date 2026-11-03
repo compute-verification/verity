@@ -1165,9 +1165,10 @@ served. `85-rec-reprice.sh` runs neither ZK server: it proves each V* statement 
 the third row's.
 
 **A stream stops at its failure budget.** `rec_live --firewall DIR --budget b` opens each recursive session on its stream
-with the failure budget b, at least 3 (`firewall.open` and Lean's `openSession` refuse a lesser one, and `rec_live` refuses
-a lesser one, or none, before it listens: a stream without a budget bounds none of its recursive sessions), the same at
-every open of the stream (`firewall.open` refuses another). A failure is a recursive
+with the failure budget b, a public parameter of the deployment and at least 1 (`firewall.open` and Lean's `openSession`
+refuse a lesser one, at which every open would be refused), the same at every open of the stream (`firewall.open` refuses
+another). `rec_live` refuses a firewall without a budget, or with one below 1, before it listens: a stream without a
+budget bounds none of its recursive sessions. A failure is a recursive
 session's stop (a missed time and a statement never opened included), or a refusal of a recursive session that had
 neither stopped nor released its last statement, on a stream that had not stopped; at the b-th, the ZK server refuses every
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
@@ -1187,9 +1188,9 @@ covers: the challenger's count is never below the ZK server's, and it holds at m
 registrations open, so neither ends past b. An honest stream is never refused an open: each of its unended recursive
 sessions covers a registration still open, since the relay releases a session's last statement before the ZK server
 delivers the session and the challenger closes its rounds, so at an open fewer than min(`rounds`, b) are unended
-(`test_an_honest_stream_is_never_refused_an_open`, in Lean and Python). That holds at every b ≥ 1, so the least b, 3, is
-the auditor's policy and not completeness's: b is how many failures stop the stream and, at min(`rounds`, b), how many of
-an honest stream's recursive sessions are unended at once. A stop shows the challenger a cut or a missing
+(`test_an_honest_stream_is_never_refused_an_open`, in Lean and Python, at `rounds` 1 to 4 and b 1 to 4). b is how many
+failures stop the stream and, at min(`rounds`, b), how many of an honest stream's recursive sessions are unended at once.
+A stop shows the challenger a cut or a missing
 proof, which is `late` or `reject`; a session the ZK server refuses after its stop sends nothing, and is no further failure
 on either side.
 
@@ -1219,12 +1220,12 @@ the interleaving across streams is fixed too. That is at most
 
 with q_j the number of forms failure j can take. A refusal of the outer send check is one symbol: it stops its session at
 the session's `Finish`, after every round of the schedule (§10.1), so a stream whose failures are all the ZK server's reveals
-`log₂ Σ_{i≤b} C(n, i)` bits (35.3 at n = 1000, b = 4), and each session one bit. Any other failure is not one symbol today:
-the challenger sees where its session was cut, inner or outer (a cut, crash or hang of the worker's, the inner phase's
-refusals, a missed time), so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's 11.19 bits, and the bound that
-holds for those is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000 and b = 4: 35.3 + 44.8 = 80.0 bits). An outer
-session is interactive: the challenger answers each message with its coins, so every message before a cut has reached it,
-and so has where the cut fell; the ZK server takes the cut's place out only for the stops it makes itself, by releasing
+`log₂ Σ_{i≤b} C(n, i)` bits (at n = 1000: 9.97 at b = 1, 35.3 at b = 4), and each session one bit. Any other failure
+is not one symbol today: the challenger sees where its session was cut, inner or outer (a cut, crash or hang of the
+worker's, the inner phase's refusals, a missed time), so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's
+11.19 bits, and the bound that holds for those is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000: 9.97 + 11.19 =
+21.2 bits at b = 1, 35.3 + 44.8 = 80.0 at b = 4). An outer session is interactive: the challenger answers each message
+with its coins, so every message before a cut has reached it, and so has where the cut fell; the ZK server takes the cut's place out only for the stops it makes itself, by releasing
 the schedule in their place. Not counted in the bound: timing
 inside a session. The release time fixes when each outer session's proofs and `Finish` leave, not the pace of its rounds
 before them, which reach `serve` as the prover makes them, nor when a stop's cut comes (a missed time's comes when the late
@@ -1245,5 +1246,5 @@ stopped recursive session. The Python relay reports such a fault as its connecti
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
 row's bound. The stream's budget bounds them: a stream has at most b failed recursive sessions before it stops, whoever
-asks for the next run, so the bound over the stream counts every retry. The auditor chooses b, at least 3. With b = 3, a
-stream whose ZK server stops three times runs nothing more.
+asks for the next run, so the bound over the stream counts every retry, and a stream whose ZK server stops b times runs
+nothing more. b is a public parameter of the deployment, so the bound is quoted at the deployed b.

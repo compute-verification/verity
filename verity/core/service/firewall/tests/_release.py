@@ -164,7 +164,7 @@ def scene(draw, kinds=("served", "budget", "unended", "served", "budget", "unend
     kind = draw(st.sampled_from(kinds))
     parts, stream = draw(VALID_PARTS), draw(STREAM)
     if kind == "served":
-        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(FW.BUDGET_MIN, FW.BUDGET_MIN + 2))),
+        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(FW.BUDGET_MIN, 4))),
                  draw(st.one_of(st.none(), valid_schedule(len(parts))))]
         k = draw(st.integers(0, len(parts)))
         ops += [again, ["finish", "r0000"]] + [["release", "r0000", p] for p in parts[:k]]
@@ -172,7 +172,7 @@ def scene(draw, kinds=("served", "budget", "unended", "served", "budget", "unend
         if draw(st.sampled_from([False, False, False, True])):
             ops.append(["slot", *ask])
     elif kind in ("budget", "unended"):
-        budget = draw(st.integers(FW.BUDGET_MIN, FW.BUDGET_MIN + 1))
+        budget = draw(st.integers(FW.BUDGET_MIN, 4))
         again = ["open", stream, parts, budget, None]
         n = draw(st.integers(budget - 1, budget))
         for i in range(n):

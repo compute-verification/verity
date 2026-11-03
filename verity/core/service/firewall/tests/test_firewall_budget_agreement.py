@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 lean = D.server_fixture(A.port("op", R.python_op, R.op_input()))
 
 
-@pytest.mark.parametrize("budget", (FW.BUDGET_MIN, FW.BUDGET_MIN + 1))
+@pytest.mark.parametrize("budget", range(FW.BUDGET_MIN, 5))
 @pytest.mark.parametrize("rounds", range(1, S.ROUNDS + 1))
 def test_an_honest_stream_on_one_state_agrees_with_the_lean_at_every_op(lean, rounds, budget, tmp_path, monkeypatch):
     """`test_firewall_release_agreement.test_an_honest_stream_is_never_refused_an_open`'s streams at R = `rounds` and b =
@@ -91,12 +91,19 @@ def seat_input(draw) -> dict:
     """`{"part", "record", "session"}`: an outer session of a scene, on a record none of whose recursive sessions has a
     release schedule (this relay refuses a scheduled session, which the Lean ZK server, keeping its times, admits); half
     the time, on a record whose last line is whole, after a holder of the slot that ended before its outcome: of any
-    session, or of another one the record opened, whose stop the seat records (a stop only of a session opened)."""
+    session, of another one the record opened, or of one opened on a stream without a budget, whose stop the seat
+    records (a stop only of a session opened) without stopping the outer session's stream at a budget of 1."""
     text, s, p, _ = draw(R.scene().filter(lambda sc: '"release": {' not in sc[0]))
     if (not text or text.endswith("\n")) and draw(st.booleans()):
         events = [json.loads(line) for line in text.splitlines() if line]
         opened = sorted({e["session"] for e in events if e["event"] == "open"} - {s})
-        holder = draw(st.sampled_from(opened)) if opened and draw(st.booleans()) else draw(R.SESSION)
+        how, holder = draw(st.sampled_from(["any", "opened", "unbudgeted"])), draw(R.SESSION)
+        if how == "opened" and opened:
+            holder = draw(st.sampled_from(opened))
+        elif how == "unbudgeted":
+            out = R.python_op({"op": ["open", "w", ["L0"], None, None], "record": text})
+            if isinstance(out["result"], str):
+                text, holder = out["record"], out["result"]
         text = R.python_op({"op": ["slot", holder, draw(R.PART)], "record": text})["record"]
     return {"part": p, "record": text, "session": s}
 

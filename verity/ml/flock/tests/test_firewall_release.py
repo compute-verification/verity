@@ -318,12 +318,13 @@ def _vector_op(fw: FW.Firewall, op: list):
 def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
-    recursive session released whole, statements that can't be one's), the budget, unended recursive sessions reaching
-    it, an honest stream that never does, the schedule, strings Python escapes, and no stop of a session not yet opened
-    (by ``stop``, or of a slot's holder that died), so that each stop counts against its stream. ``core_firewall``'s
-    ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers read and write one record."""
+    recursive session released whole, statements that can't be one's), the budget (and at b = 1 and b = 2), unended
+    recursive sessions reaching it, an honest stream that never does, the schedule, strings Python escapes, and no stop
+    of a session not yet opened (by ``stop``, or of a slot's holder that died), so that each stop counts against its
+    stream. ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
+    read and write one record."""
     v = json.loads(VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop", "budget-1", "budget-2"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]
@@ -331,14 +332,14 @@ def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
 
 
 def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp_path):
-    """A stream's ``budget`` is at least 3 and the same at every open. While its unended recursive sessions and its
+    """A stream's ``budget`` is at least 1 and the same at every open. While its unended recursive sessions and its
     failures reach it, the stream refuses an open: a stop turns an unended session into a failure, so the open stays
     refused. At its ``budget``-th failure it refuses every outer session and every open. A scheduled recursive session
     is the Lean ZK server's: this module's relay refuses it, rather than release its proofs before their time."""
     fw = FW.Firewall(tmp_path / "fw")
     log: list = []
-    with pytest.raises(ValueError, match="a failure budget is an integer of at least 3, not 2"):
-        fw.open("pouw", PARTS, budget=2)
+    with pytest.raises(ValueError, match="a failure budget is an integer of at least 1, not 0"):
+        fw.open("pouw", PARTS, budget=0)
     a, b, c = (fw.open("pouw", PARTS, budget=3) for _ in range(3))
     with pytest.raises(ValueError, match="stream pouw's budget is 3, not 4"):
         fw.open("pouw", PARTS, budget=4)
@@ -377,7 +378,7 @@ def _serve(tmp_path, sessions, fw, **kw):
         try:
             got["res"] = RL.serve("127.0.0.1:0", tmp_path / "inner", T._counter_rand(), sessions=sessions,
                                   schedule=G._schedule(), ready=lambda a: (got.update(addr=a), bound.set()), firewall=fw,
-                                  stream="pouw", **{"parts": PARTS, "budget": FW.BUDGET_MIN, **kw})
+                                  stream="pouw", **{"parts": PARTS, "budget": 3, **kw})
         except Exception as e:  # noqa: BLE001 - kept as text, so that no frame keeps serve's connection open
             got["error"] = f"{type(e).__name__}: {e}"
         finally:
@@ -418,17 +419,17 @@ def test_serve_opens_each_recursive_session_with_the_streams_budget_and_its_publ
     """`rec_live.serve` opens each recursive session with its statements in their order, the stream's ``budget`` and the
     public windows, the schedule starting when the connection was accepted (``now_ms``, injected); once the stream's
     unended recursive sessions and its failures reach its budget (here one stopped at its inner session and two finished),
-    the next connection is closed before anything is served, and ``serve`` returns. No budget, or one below 3, is refused
+    the next connection is closed before anything is served, and ``serve`` returns. No budget, or one below 1, is refused
     before ``serve`` listens, and ``--firewall`` without ``--budget`` before ``main`` serves: a stream without a budget
     bounds none of its recursive sessions."""
     fw = FW.Firewall(tmp_path / "fw")
     windows = {"windows_ms": [12000, 28000]}
     with pytest.raises(ValueError, match=r"statements in their order \(parts\)"):
         RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw)
-    with pytest.raises(ValueError, match=r"opens its stream with a failure budget \(budget, at least 3\)"):
+    with pytest.raises(ValueError, match=r"opens its stream with a failure budget \(budget, at least 1\)"):
         RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw, parts=["L0"])
-    with pytest.raises(ValueError, match="a failure budget is an integer of at least 3, not 2"):
-        RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw, parts=["L0"], budget=2)
+    with pytest.raises(ValueError, match="a failure budget is an integer of at least 1, not 0"):
+        RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw, parts=["L0"], budget=0)
     with pytest.raises(SystemExit) as e:
         RL.main(["--out", str(tmp_path / "x"), "--schedule", str(tmp_path / "none.json"), "--firewall", str(tmp_path / "fw"),
                  "--parts", "L0"])
