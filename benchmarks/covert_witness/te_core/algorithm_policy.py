@@ -793,7 +793,8 @@ def figure(p: dict, out: Path) -> Path:
                 ax.axvline(ref["p"], color="k", lw=0.8, ls="--", zorder=1)
                 ax.annotate(label + ("unmeasured" if ref["rho_default"] is None else
                                      "infinite" if math.isinf(ref["rho_default"]) else "on a stub"),
-                            (ref["p"], 1.0), xytext=(-4, 6), textcoords="offset points", ha="right", fontsize=6.5)
+                            (ref["p"], 1.0), xytext=(-3, 4), textcoords="offset points", ha="right", va="bottom",
+                            rotation=90, fontsize=6.5)
         if reached:
             least = ";\nno least S: every reached row is partial or void"
             if whole:
