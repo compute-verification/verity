@@ -370,7 +370,9 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
-                    help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit and "
+                         "verity/flock-circuit+plain-leaves, and refuses a superseded one (verity/flock-circuit@967b8d06, "
+                         "for files staged at M0 68ae79f2 or later) once every check has passed")
     ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
                     help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()
