@@ -231,14 +231,17 @@ theorem swMsgAt_innerAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
         (vs x w ν) t cs =
       0 :: FlockComplete.CutFree.innerCutBody
         (((Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
-          (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)) t j.val).rep r.val).masked
+          (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
+            ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t j.val).rep r.val).masked
           (Masked.innerLayE x j).fc)
         ((Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
-          (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)) t j.val).rep r.val)
+          (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
+            ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t j.val).rep r.val)
         _root_.Flock.Firewall.Session.INNER_CONS e := by
   have hb := Masked.runCut_innerBody_live hx ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
     (Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
-      (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)) t) hsx j r he (by rw [← hn]; exact hN)
+      (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
+        ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t) hsx j r he (by rw [← hn]; exact hN)
   unfold RefSession.swMsgAt
   rw [if_pos hK, enc_finS_eq]
   unfold Masked.encStop
@@ -443,8 +446,9 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       coinAt_inner x ops hlt.le hq1 hiq (s := rsched.size) (a := 0)
         (p := Masked.repSlot x (2 * jf.val + rf.val) (Masked.innerOff 0)) (by omega) (by omega)
         (by rw [hnr 0 (by decide)]; decide),
-      innerCutBody_one, (Masked.swSrcE_inner x _ w (vs x w ν _) t jf rf).1,
-      (Masked.swSrcE_inner x _ w (vs x w ν _) t jf rf).2,
+      innerCutBody_one,
+      (Masked.swSrcE_inner x _ w (vs x w ν _ ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t jf rf).1,
+      (Masked.swSrcE_inner x _ w (vs x w ν _ ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t jf rf).2,
       (Masked.innerTripleE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) w t jf rf rfl).1,
       (Masked.innerTripleE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
@@ -481,7 +485,8 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       coinAt_inner x ops hlt.le hq1 hiq (s := rsched.size) (a := 2)
         (p := Masked.repSlot x (2 * jf.val + rf.val) (Masked.innerOff 0) + 2) (by omega) (by omega)
         (by rw [← hL2, hnr 2 (by decide)]; decide),
-      innerCutBody_three, Masked.swSrcE_y x _ w (vs x w ν _) t jf rf hrowsAt,
+      innerCutBody_three,
+      Masked.swSrcE_y x _ w (vs x w ν _ ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t jf rf hrowsAt,
       Masked.innerYE hxs _ w t jf rf rfl hY]
     rfl
 
