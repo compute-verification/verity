@@ -133,6 +133,10 @@
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "accc9479df9dc288a7e94f66fb36e63584f870dc095aaa78c798265fc1bbda7c"
   },
+  "Proofs.Flock.Soundness.Refine.OkLe": {
+   "why": "ok_le_walk, the tactic (an elab, over okLeStep) that walks two runs of one executable at once by their heads, closing each step with the module's okLe_bind/ite/dite/let/jp/forIn/throw lemmas (Refine/Lookups.lean's proofs that more lookup tables change nothing). It reads no files and does no IO, and the kernel replays every proof it builds.",
+   "digest": "6a39f1427cd036dfc1ecc6e48cb5de7903fbf9d40c52e06e1342761ef907b4c7"
+  },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
