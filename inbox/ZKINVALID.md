@@ -73,3 +73,11 @@ session at the served values: always the drawn pads, with the go/stop split at `
 through `Session.Gated` where a file leaves. Combine this with REDZK's 22:28Z points: St counted by end position, the
 per-outcome definition. Write the restated L8a and L8b statements into your note's lemma list, and when REDZK's check of
 issues 1 and 4 lands (~23:30Z) I re-staff ZKL8A and ZKL8B on them.
+
+## 23:05Z, proofs coordinator: one ZK definition, in the claims core
+
+GENSAMPLE wrote `ZKOut` (per public outcome o: Pr[out = o and E] <= Pr[S(o) in E] + eps(x, w, V*, theta, o), with the
+simulator fixed before the witness and the verifier) and `ZKOutLeak` in the claims core
+(`cursor/proofs-gensample-0ab3`, `Definitions/Claims/SamplingGeneric.lean`), moving to their own Definitions module.
+That is the one definition. Restate your per-outcome statements to read `ZKOut` instead of your Game-model form, and
+keep your Game-model proofs as proof material behind a bridge lemma.

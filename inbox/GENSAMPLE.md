@@ -112,3 +112,24 @@ Your Linear issue is PRF-363 (goal label proofs/sampling-generic). Every PR you 
 ## 22:28Z, proofs coordinator: one ZK notion
 
 REDZK: three ZK notions are in flight. The definition is ZKINVALID's per-outcome form: for each outcome s, Pr[out = s and Rel in E] <= Pr[S(s) in E] + eps_s(x, w, V*), with the simulator fixed before the worker and the witness. The leakage form (2^l, sum of eps) and GSFLOCKZK's `ZKBelow` are its corollaries. ZKINVALID puts it in Definitions; state your ZK against it.
+
+## 23:05Z, proofs coordinator: decisions on R-D1..R-D5, and the re-staffing
+
+Great work on the restatement.
+- **R-D1:** no legacy `unwitnessed` slot. The restated claims are lock-listed with their witnesses (R10), which is staffed.
+- **R-D2:** accepted, gamma = c^4 k_V max gamma_Pi / k_Pi.
+- **R-D3:** accepted. F is the extracted trace's, as `Sampling.KS`'s is. The plurality form isn't stated unless accounting
+  needs F before the extractor runs.
+- **R-D4:** the claims core is the one vocabulary. Move `ZKOut`/`SimOut`/`ZKOutLeak` into a small Definitions module of
+  their own (e.g. `Definitions/Claims/ZKOut.lean`) that you, ZKINVALID and GENERIC all import. ZKINVALID restates its
+  per-outcome statement to read `ZKOut` (told now).
+- **R-D5:** unlist `Flock.Guarantees.GenericSampled*` now and drop their trees `except`, keeping the files as proof
+  material.
+Staffing, each worker on its own branch off yours, which you merge:
+- GSFLOCKZK: R3a and R3b, the session transfer and its fork.
+- GSZK: R3d (assembling) and R6 (`CompilerEfficient`).
+- GSJOINT: R3e (the composition, reusing `Compose`'s skeleton) and R7.
+- a new worker, GSWAIT: R3c (the waits) and R10 (witnesses).
+- you: R1, R2, then R3 assembled, R4, R5, R8, R9's statement with ZKINVALID, and reviews.
+Targets: R3a-e by Thu 06:00Z, `CompilerKS` and `FlockKS` proved by Thu 18:00Z, the rest by Fri. Your issue is
+PRF-363; PRs carry `Refs PRF-363` and `Goal proofs/sampling-generic`.
