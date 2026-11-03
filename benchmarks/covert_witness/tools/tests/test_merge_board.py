@@ -1,6 +1,6 @@
 """merge_board on a toy remote: every search branch's board, the integrator's and the integration branch's merge into
-the digest once each, in time order across midnight, with the digest's own text and lines kept, and `--push` commits a
-change once."""
+the digest once each, in time order across midnight (an entry that gives its date on that day, whenever it was
+committed), with the digest's own text and lines kept, and `--push` commits a change once."""
 from __future__ import annotations
 
 import os
@@ -18,6 +18,7 @@ TAIL = "## Board move\nWrite to your own branch."
 MERGED = f"""{HEAD}
 
 ### 2026-11-02
+2026-11-02T10:00Z gamma [TOOL] dated a day before its commit
 19:58Z integrator [TOOL] pinned
 20:10Z integrator [TOOL] on the integrator's branch alone
 20:30Z coordinator [DIGEST] written in the digest
@@ -25,6 +26,7 @@ MERGED = f"""{HEAD}
 
 ### 2026-11-03
 00:10Z alpha [NEGATIVE] after midnight
+2026-11-03 00:20Z gamma [FINDING] dated with a space
 00:30Z beta [TOOL] a lowercase board
 00:45Z beta [FINDING] stamped ahead of its commit
 
@@ -75,6 +77,8 @@ def clone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     append("cursor/te-beta-4207", f"{ISLANDS}/beta/board.md",
            "notes, not an entry\n23:50Z alpha [FINDING] before midnight\n00:30Z beta [TOOL] a lowercase board\n"
            "00:45Z beta [FINDING] stamped ahead of its commit\n", "2026-11-03T00:40:00Z")
+    append("cursor/te-gamma-4207", f"{ISLANDS}/gamma/BOARD.md", "2026-11-02T10:00Z gamma [TOOL] dated a day before its "
+           "commit\n2026-11-03 00:20Z gamma [FINDING] dated with a space\n", "2026-11-03T20:00:00Z")
     append("cursor/other-4207", f"{ISLANDS}/other/BOARD.md", "00:50Z other [FINDING] not a search branch\n",
            "2026-11-03T00:50:00Z")
     git(tmp_path, "clone", "-q", str(origin), "clone")
@@ -105,4 +109,5 @@ def test_a_new_digest_branch_starts_from_the_integration_branch(clone: Path) -> 
     new = git(clone, "ls-remote", "origin", "refs/heads/cursor/te-new-digest-4207").split()[0]
     assert git(clone, "rev-parse", f"{new}^") == git(clone, "rev-parse", f"origin/{LANE}")
     text = git(clone, "show", f"{new}:benchmarks/covert_witness/BOARD.md")
-    assert text.startswith(merge_board.NEW + "\n### 2026-11-02\n19:58Z integrator [TOOL] pinned\n")
+    assert text.startswith(merge_board.NEW + "\n### 2026-11-02\n2026-11-02T10:00Z gamma [TOOL] dated a day before its "
+                           "commit\n19:58Z integrator [TOOL] pinned\n")
