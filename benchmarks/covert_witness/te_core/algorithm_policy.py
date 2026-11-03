@@ -397,7 +397,7 @@ def served_text(cov: list[dict]) -> str:
     `SERVED`), the figure beside every headline (coordinator 08:09Z), "" without a reached cell."""
     def span(xs: list) -> str:
         fin = [x for x in xs if x is not None]
-        return (f"{min(fin):.3g} to {max(fin):.3g}" if fin else "none finite") + (", and inf" if None in xs else "")
+        return (frontier_fit.span(min(fin), max(fin)) if fin else "none finite") + (", and inf" if None in xs else "")
 
     parts = [f"{data} {span([c['rho_default'] for c in yes])} at the console's default, "
              f"{span([c.get('rho_served') for c in yes])} at the registered serving block"

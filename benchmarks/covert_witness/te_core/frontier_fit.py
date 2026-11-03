@@ -249,6 +249,23 @@ def targets(f: dict, l0: float, gains: tuple[float, ...]) -> str:
             + f"; the fit's rms is {100 * c_spread(f, at[0][1]):.3g}% in effective compute at {gains[0]:g}x")
 
 
+def span(lo: float, hi: float, unit: str = "") -> str:
+    """"`lo` to `hi`" at 3 significant digits, one figure where both round alike."""
+    a, b = f"{lo:.3g}{unit}", f"{hi:.3g}{unit}"
+    return a if a == b else f"{a} to {b}"
+
+
+def status(f: dict, spread: list[float], first: list[float], gains: tuple[float, ...]) -> str:
+    """A fit row's status: provisional or not, E at its bound 0 where the points leave it there (`fit` holds E in
+    [0, the least loss)), its points' gains (`spread`) and its rms in effective compute at its starts' first targets
+    (`first`, in %)."""
+    return ((f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}" if f["provisional"]
+             else "fit") + ("; E at its bound 0 (the least squares would put it at or below 0)" if f["E"] == 0 else "")
+            + f"; its points' gains {span(min(spread), max(spread))}"
+            + (f"; its rms in loss is {span(min(first), max(first), '%')} in effective compute at its starts' "
+               f"{gains[0]:g}x targets" if first else ""))
+
+
 def c_lo(shapes: dict[str, dict], data: str, rate: float) -> float | None:
     """The least C0 of `data`'s starts in the manifest, where its fit's domain starts."""
     c0s = [panels.c0(s, rate) for s in shapes.values() if data_of_shape(s) == data]
@@ -289,12 +306,7 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
         first = [100 * c_spread(f, t) for s in mine if gains and (t := target(f, s.l0, gains[0])) is not None]
         rows.append(row(row="fit", data=d, form=FORM, E_bpb=f["E"], A=f["A"], gamma=f["gamma"], points=f["points"],
                         C_lo_gates=num(f["C_lo"]), C_hi_gates=num(f["C_hi"]), rms_pct=num(f["rms_pct"], 3),
-                        max_abs_pct=num(f["max_abs_pct"], 3),
-                        status=(f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}"
-                                if f["provisional"] else "fit")
-                        + f"; its points' gains {min(spread):.3g} to {max(spread):.3g}"
-                        + (f"; its rms in loss is {min(first):.3g}% to {max(first):.3g}% in effective compute at its "
-                           f"starts' {gains[0]:g}x targets" if first else "")))
+                        max_abs_pct=num(f["max_abs_pct"], 3), status=status(f, spread, first, gains)))
         for x, y, r in read[d]:
             rows.append(row(row="point", data=d, C_gates=num(x), loss_bpb=round(y, 5), fit_bpb=round(loss_at(f, x), 5),
                             residual_pct=num(100 * (y / loss_at(f, x) - 1), 3), gain=num(gain(f, y, x), 4),

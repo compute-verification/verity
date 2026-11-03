@@ -43,6 +43,18 @@ def test_a_fit_takes_three_points_spanning_a_decade_and_is_provisional_on_fewer_
     assert FF.fit(scratch[:4] + on(LAW, (200, 400)))["provisional"]
 
 
+def test_a_fits_status_names_e_at_its_bound_and_gives_one_figure_where_a_range_agrees():
+    """`fit` holds E in [0, the least loss), so a law's points with E below 0 put it at 0, which the status names; a
+    range whose ends round alike is one figure."""
+    f = FF.fit(on({"E": -0.05, "A": 1.2 * C0 ** 0.08, "gamma": 0.08}, (1, 1.7, 3, 5, 9, 16, 30, 55, 100)))
+    assert f["E"] == 0 and FF.fit(on(LAW, (1, 3, 10, 30, 100)))["E"] > 0
+    assert FF.status(f, [0.9, 1.0004], [7.291, 7.288], (1.1, 2)) == (
+        f"provisional fit: 0 of its points from scratch, under {FF.FIT_TARGET}; E at its bound 0 (the least squares "
+        "would put it at or below 0); its points' gains 0.9 to 1; its rms in loss is 7.29% in effective compute at its "
+        "starts' 1.1x targets")
+    assert FF.span(1.0, 1.5) == "1 to 1.5" and FF.span(7.291, 7.288, "%") == "7.29%"
+
+
 def test_the_fit_reads_the_frontier_from_the_least_c0_up_one_point_a_bin():
     """The staircase (the least compute at each loss) from c_lo up, and in each 1/20 decade of C its least loss."""
     pts = [(0.5 * C0, 1.3, "below c_lo"), (C0, 1.2, "start"), (1.01 * C0, 1.19, "same bin, lower"),
