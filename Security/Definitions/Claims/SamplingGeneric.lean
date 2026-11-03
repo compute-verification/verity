@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.Recursion
+public import Definitions.Claims.ZKOut
 
 /-!
 # Claims: the sampled audit as a compiler, generic in the proof system for proof blocks (a draft, before it freezes)
@@ -18,10 +19,10 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    (`Sh`, `shape`) and the rounds a shape fixes, its witnesses and relation, and its extractor: coins per shape (`EC`),
    a rerun program at the judged run's coins (`ext`), and its errors per shape (`κ`, `γ`). It is knowledge sound in
    `Claims.KS`'s form (`Arg.KS`); its cost is reruns (`Arg.RerunsLe`, `Arg.RerunsExpLe`) and its own SHA-512 calls
-   (`Arg.OwnLe`), both counted by `RP.eval`. Its zero knowledge is per public outcome (`ZkArg.ZK`, `ZKOut`): at each
-   outcome (each verdict, where a session stopped), the honest view's probability of the outcome and an event is at
-   most the simulator's, given the outcome, plus an error that reads the statement, the witness, the verifier and the
-   outcome; the leak form over `n` outcomes is its corollary (`ZKOutLeak`).
+   (`Arg.OwnLe`), both counted by `RP.eval`. Its zero knowledge is the claims core's per public outcome (`ZkArg.ZK`,
+   `Claims.ZKOut`): at each outcome (each verdict, where a session stopped), the honest view's probability of the
+   outcome and an event is at most the simulator's, given the outcome, plus an error that reads the statement, the
+   witness, the verifier and the outcome.
 2. **The compiled sampled verifier** (`Compiled`, `Sampling.Deploy` without Flock): its verifier, parser, scope check,
    partition and commitment; the second stage (`stage2`: the sample and the sessions); the sampled proof blocks
    (`checked`); each one's public shape (`sh`), its session's rounds (`rounds`) and their order embedding of `A`'s
@@ -121,52 +122,7 @@ def OwnLe (H : Msg → Msg) (A : Arg Coin) (h : A.Sh → ℕ) : Prop :=
 
 end Arg
 
-/-! ### Zero knowledge with a public outcome -/
-
-/-- **A simulator given the outcome**: its coins, and its program, which also receives the protocol's public outcome
-`o ∈ St` (each verdict, and where a session stopped). -/
-structure SimOut (St : Type) where
-  C : Msg → Type
-  [fin : ∀ x, Fintype (C x)]
-  [ne : ∀ x, Nonempty (C x)]
-  prog : (x : Msg) → St → C x → SP (List (Msg × Out))
-
-attribute [instance] SimOut.fin SimOut.ne
-
-/-- The simulator given the outcome `o`, as the spec's `Simulator`. -/
-def SimOut.given {St : Type} (S : SimOut St) (o : St) : Simulator where
-  C := S.C
-  prog x c := S.prog x o c
-
-/-- **Zero knowledge with a public outcome**, per outcome (`ZKmalRx`'s one-sided form at each outcome): for `(x, w) ∈ R`,
-every verifier `V*` of the protocol's `k(x)` rounds and tape `θ`, every outcome `o` and every event, the honest
-transcript's probability of showing the outcome `o` and the event is at most the simulator's, given `o`, of the event,
-plus `ε(x, w, V*, θ, o)`. `out` reads the outcome off the transcript, so the outcome is public; the simulator is fixed
-before the witness and the verifier; `ε` is a function of the statement, the witness, the verifier and the outcome, such
-as a collision finder's success built from them (`Fork`), never an assumed bound. Over `n` outcomes it gives the leak
-form, `n` times the simulator that draws the outcome uniformly plus `Σ_o ε` (`ZKOutLeak`). -/
-def ZKOut {W St : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
-    [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
-    (out : Msg → List (Msg × Out) → St) (S : SimOut St) (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ) :
-    Prop :=
-  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (o : St) (Ev : List (Msg × Out) → Prop),
-    Pr (fun ω : N x × Ω x =>
-        out x (runStar H (P w x) Vs x ω θ).msgs = o ∧ Ev (runStar H (P w x) Vs x ω θ).msgs) ≤
-      Pr (fun c : S.C x => Ev ((S.given o).out H Vs θ x c)) + ε x w Θ Vs θ o
-
-/-- **The leak form, from the per-outcome form**: over finitely many outcomes, on every event the honest transcript's
-probability is at most the number of outcomes times the simulator's that draws the outcome uniformly, plus the sum of
-the outcomes' errors. -/
-def ZKOutLeak : Prop :=
-  ∀ {W St : Type} [Fintype St] [Nonempty St] (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
-    [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x))
-    (R : Rel W) (out : Msg → List (Msg × Out) → St) (S : SimOut St)
-    (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ),
-    ZKOut N Ω H k P R out S ε →
-    ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
-      Pr (fun ω : N x × Ω x => Ev (runStar H (P w x) Vs x ω θ).msgs) ≤
-        (Fintype.card St : ℝ) * Pr (fun p : St × S.C x => Ev ((S.given p.1).out H Vs θ x p.2)) +
-          ∑ o, ε x w Θ Vs θ o
+/-! ### Zero knowledge with a public outcome (`Claims.ZKOut`) -/
 
 /-- **A proof system for proof blocks with zero knowledge**: its honest prover at each witness, on a tape of each
 statement's own nonce and rest, its public outcome (`St`, read off a transcript by `out`), its simulator given the
