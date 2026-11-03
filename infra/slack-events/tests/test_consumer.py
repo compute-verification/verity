@@ -47,6 +47,40 @@ def test_an_unaddressed_chat_post_rings_top_after_a_routing_line_that_records_it
     assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
 
 
+def with_lane(world, lane: str) -> None:
+    path = world.people / "luke.json"
+    path.write_text(json.dumps({**json.loads(path.read_text()), "lane": lane}))
+
+
+def test_with_no_model_a_persons_unaddressed_chat_post_goes_to_their_usual_lane(world, monkeypatch):
+    """Luke usually works with @circuits (people.d's `lane`): his posts that name no lane ring it, not @top, with a routing
+    line that says why.  A post naming a lane rings that lane; someone else's post in his chat, and a lane the registry
+    doesn't have, go to @top as before; a model's pick wins over the lane."""
+    with_lane(world, "circuits")
+    post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, post), 1) == "unaddressed: @circuits"
+    [line] = world.lines(CHAT, post["ts"])
+    assert line["text"] == "sent to @circuits: no lane named; luke's usual lane" == \
+        consumer.USUAL_LANE.format(lane="circuits", person="luke")
+    assert line["metadata"]["event_payload"] == {"post": post["ts"], "names": ["circuits"]}
+    assert world.rung("circuits") == [private(post["ts"])] and world.rung("top") == []
+
+    named = world.slack.add(CHAT, text="@kernels is the hash kernel done?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, named), 1) == "rule" and world.rung("kernels") == [private(named["ts"])]
+    daniel = world.slack.add(CHAT, text="Luke, did anyone answer?", user=DANIEL)
+    assert consume(world.deps, world.event(CHAT, daniel), 1) == "unaddressed: @top"
+    assert router_lines(world, CHAT, daniel["ts"]) == [NO_MODEL]
+    with_lane(world, "nobody")
+    other = world.slack.add(CHAT, text="anyone?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, other), 1) == "unaddressed: @top"
+    assert router_lines(world, CHAT, other["ts"]) == [NO_MODEL] and len(world.rung("circuits")) == 1
+
+    with_lane(world, "circuits")
+    Model(monkeypatch, ["kernels"])
+    picked = world.slack.add(CHAT, text="who validates the TP8 kernel?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, picked), 1) == "unaddressed: @kernels"
+
+
 def test_an_addressed_chat_post_rings_the_names_it_starts_with_and_posts_no_routing_line(world):
     post = world.slack.add(CHAT, text="@circuits is the TP8 sweep done?", user=LUKE)
     assert consume(world.deps, world.event(CHAT, post), 1) == "rule"

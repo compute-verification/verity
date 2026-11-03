@@ -2,7 +2,8 @@
 what they find next time); both stamp last_success_at in the cache.
 
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
-  again, urgent, as every doorbell it rings is (a person is waiting); after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
+  again, urgent, as every doorbell it rings is (a person is waiting): the names of its routing line, else the rule's; when
+  that line sent it to the person's usual lane, @top is rung as well, once; after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
   list of the chat threads still open goes to @top's inbox.  And `stall`: an event published STALL_S ago or more with no
   message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it; and
   `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
@@ -13,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .consumer import ASK_CHANNELS, is_line_for
+from .consumer import ASK_CHANNELS, is_line_for, line_names
 from .deps import (
     CANARY_SENT,
     DEAD,
@@ -34,6 +35,7 @@ OLDEST_TTL_S = 30 * 60                                           # reconcile's f
 DAILY_AT = (16, 0)                                               # UTC hour and minute: 9 AM PDT; the run within 5 minutes after
 EVERY_S = 5 * 60                                                 # the watchdog's schedule (vercel.json)
 REMINDER = "no 👀 or lane reply in 15 min"
+LANE_QUIET = "no answer in 15 min from @{lane}, their usual lane"   # @top's reminder for a post sent to a person's usual lane
 ESCALATION = "no lane reply in 60 min"
 ESCALATED = "router: no lane has replied in 60 min; sent to @top"
 DAILY_HEAD = "from watchdog, chat threads still open (daily):"
@@ -84,8 +86,9 @@ def watchdog(deps: Deps) -> dict:
     rs, api, now = deps.rs, deps.slack, deps.clock()
     reg, ids = chats(deps)
     handles = {h["handle"] for h in reg["handles"]}
-    counts, still_open = {"reminded": 0, "escalated": 0}, []
+    counts, still_open = {"reminded": 0, "escalated": 0, "lane_unanswered": 0}, []
     for ch in ids:
+        key = rs.key_of(reg, ch)
         for thread in threads(deps, ch, now - WINDOW_S):
             root = thread[0]["ts"]
             for p in (m for m in thread if by_person(deps, m, reg)):
@@ -107,8 +110,16 @@ def watchdog(deps: Deps) -> dict:
                                  unfurl_links="false")
                         counts["escalated"] += 1
                 elif not any(r.get("name") == "eyes" for r in p.get("reactions") or []):
-                    rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), reminder=REMINDER, urgent=True)
+                    line = next((m for m in thread if is_line_for(m, p["ts"], reg, rs)), None)
+                    names = line_names(line, reg) if line else None
+                    rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=names, reminder=REMINDER,
+                               urgent=True)
                     counts["reminded"] += 1
+                    lane = rs.usual_lane(p, reg, key)
+                    if lane and names and lane in names and rs.CHAT_WATCHER not in names:
+                        lines = rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=[rs.CHAT_WATCHER],
+                                           reminder=LANE_QUIET.format(lane=lane), urgent=True)
+                        counts["lane_unanswered"] += any(": rang" in s for s in lines)
     if _daily_due(now):
         counts["daily"] = daily(deps, reg, still_open, now)
     counts["canary"] = canary(deps, now)

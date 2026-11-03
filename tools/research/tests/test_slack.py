@@ -1425,6 +1425,32 @@ def test_chat_expect_publishes_someone_invited_with_no_channel_and_open_takes_th
     assert rc == 2 and "#chat-luke is open already (Luke Example)" in err
 
 
+def test_chat_lane_records_the_lane_a_person_usually_works_with_checked_against_the_handles(fake, registry, people_d, capsys):
+    """`--lane HANDLE` (expect, open) records the lane the person usually works with, which must be a handle; a rerun or
+    `open` taking an expected person over keeps it, `--lane ''` clears it, and `list` shows it.  `usual_lane` reads it
+    for that person's own posts in their chat only."""
+    rc, _, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--lane", "@nobody")
+    assert rc == 2 and "unknown handle @nobody; the registry has @infra" in err and not people_d.exists()
+    assert run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--lane", "@circuits")[0] == 0
+    assert json.loads((people_d / "luke.json").read_text())["lane"] == "circuits"
+    chat_users(fake)
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
+    rec = json.loads((people_d / "luke.json").read_text())
+    assert rec["lane"] == "circuits" and rec["channel"]["id"] == "CCHAT1"
+    assert run(capsys, "chat", "list")[1].endswith(", usual lane @circuits\n")
+    reg = slack.load_registry(registry)
+    assert slack.usual_lane({"user": LUKE, "text": "x"}, reg, "chat-luke") == "circuits"
+    assert slack.usual_lane({"user": "UDANIEL", "text": "x"}, reg, "chat-luke") is None              # not his post
+    assert slack.usual_lane({"user": LUKE, "text": "x"}, reg, "ask-the-team") is None                # not his chat
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE, "--lane", "kernels")[0] == 0
+    assert json.loads((people_d / "luke.json").read_text())["lane"] == "kernels"
+    assert run(capsys, "chat", "open", "luke", "--user", LUKE, "--lane", "")[0] == 0
+    assert "lane" not in json.loads((people_d / "luke.json").read_text())
+    assert slack.usual_lane({"user": LUKE, "text": "x"}, slack.load_registry(registry), "chat-luke") is None
+    rc, _, err = run(capsys, "chat", "open", "luke", "--user", LUKE, "--lane", "nobody")
+    assert rc == 2 and "unknown handle @nobody" in err and "lane" not in json.loads((people_d / "luke.json").read_text())
+
+
 def test_an_expected_person_is_closed_without_an_archive_and_the_newer_copy_counts():
     luke = chat_person("chat-luke", None, "Luke", channel={"key": "chat-luke", "id": None}, status="expected",
                        email="luke@example.org", expected="2026-10-19T17:30Z", opened=None)
@@ -1566,7 +1592,7 @@ def test_a_persons_doorbell_says_how_long_they_have_waited_and_still_rings_once(
     once-per-post check, the hourly cap's count and `read --as`'s urgent-first order read it as any other doorbell."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
-    now = [1700001080.0]
+    now = [1700001090.0]                                                                  # 18 min 10 s after the post
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(now[0], timezone.utc))
     box = inbox(fake, routes_dirs, "top")
     reg, routes, api = slack.load_registry(registry), slack.Routes(), slack.Slack(TOKEN)

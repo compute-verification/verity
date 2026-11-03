@@ -34,10 +34,11 @@ Notes are records, never messages.
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg deliver --channel ask-the-team|chat-NAME --event JSON|@PATH|-  # a person's post there: its doorbells name the
                                                                    # channel; a chat's doorbells carry no text (`chat_targets`)
-  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--cursor-bot U...]
-                                                                   # a person's private #chat-NAME; the person goes to people.d
+  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--lane HANDLE] [--cursor-bot U...]
+                                                                   # a person's private #chat-NAME; the person goes to people.d;
+                                                                   # --lane: the lane their unaddressed posts go to ('' clears it)
   research msg chat close NAME | chat list                         # archive it and mark it closed; each chat in people.d
-  research msg chat expect NAME --email E [--note T]               # someone invited to the workspace: people.d, no channel
+  research msg chat expect NAME --email E [--note T] [--lane HANDLE]  # someone invited to the workspace: people.d, no channel
                                                                    # yet; the Slack events service opens it at their team_join
   research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
   research msg slack-app export|diff|apply [--app-id ID] [--manifest PATH]   # the app's manifest: live, against the repo's, update
@@ -3147,6 +3148,26 @@ def publish_person(api: Slack, r: dict, message: str) -> None:
         print(publish_route(notes_root(), r, message, PEOPLE_DIR, name))
 
 
+def person_lane(ns: argparse.Namespace, reg: dict, prev: dict | None) -> dict:
+    """A person record's `lane`, the handle they usually work with: `--lane`'s, which must be a registry handle (`''` clears
+    it), else `prev`'s.  Empty when there is none, so a record without one keeps its shape."""
+    lane = getattr(ns, "lane", None)
+    if lane is None:
+        lane = (prev or {}).get("lane")
+    elif lane:
+        lane = entry(reg, lane)["handle"]
+    return {"lane": lane} if lane else {}
+
+
+def usual_lane(msg: dict, reg: dict, key: str | None) -> str | None:
+    """The lane the person of the chat `key` usually works with (their people.d record's `lane`), when `msg` is that
+    person's own post and the lane is a registry handle; else None."""
+    r = (chat_channels(reg).get(key or "") or {}).get("person") or {}
+    lane, handles = r.get("lane"), {h["handle"] for h in reg["handles"]}
+    mine = bool(person(msg, reg)) and bool(r.get("slack_user")) and msg.get("user") == r["slack_user"]
+    return lane if mine and isinstance(lane, str) and lane in handles else None
+
+
 def chat_expect(ns: argparse.Namespace, reg: dict, book: ChatPeople) -> int:
     """`chat expect NAME --email E`: people.d/NAME.json with status `expected`, their email and no channel, which no command
     routes by.  A rerun updates the email or the note; a chat already open refuses."""
@@ -3162,9 +3183,9 @@ def chat_expect(ns: argparse.Namespace, reg: dict, book: ChatPeople) -> int:
         raise SlackError(f"{email} is #{clash['channel']['key']}'s already (`research msg chat list`)")
     live = prev if is_expected(prev) else None
     rec = {"schema": PERSON_SCHEMA, "name": (live or {}).get("name") or ns.name.capitalize(), "slack_user": None,
-           "email": email, "note": ns.note or (live or {}).get("note") or f"asks the lanes in #{key}", "status": EXPECTED,
-           "channel": {"key": key, "id": None}, "expected": (live or {}).get("expected") or _now_stamp(), "opened": None,
-           "closed": None}
+           "email": email, "note": ns.note or (live or {}).get("note") or f"asks the lanes in #{key}",
+           **person_lane(ns, reg, live), "status": EXPECTED, "channel": {"key": key, "id": None},
+           "expected": (live or {}).get("expected") or _now_stamp(), "opened": None, "closed": None}
     check_collaborators({**reg, "collaborators": [*reg.get("collaborators", []),
                                                   {k: rec[k] for k in ("name", "slack_user", "note", "email")}]},
                         PEOPLE_DIR, {h["handle"] for h in reg["handles"]})
@@ -3185,8 +3206,9 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     every command takes them into `collaborators` (`with_people`): no registry change.  A rerun reuses the channel and the
     record (after a Slack Connect invite is accepted, it records their Slack id).  `close NAME` archives the channel and
     marks the record closed; `list` reads people.d.  `expect NAME --email E` publishes someone Daniel invited to the
-    workspace, with no channel yet: the Slack events service runs `chat open` for them when they join (`team_join`).  `reg`
-    is the registry without people.d."""
+    workspace, with no channel yet: the Slack events service runs `chat open` for them when they join (`team_join`).
+    `--lane HANDLE` (open, expect) records the lane the person usually works with, which the Slack events service rings in
+    place of CHAT_WATCHER for their posts that name no lane (`usual_lane`).  `reg` is the registry without people.d."""
     book = ChatPeople()
     if ns.verb == "list":
         for n in list(book.local):
@@ -3196,7 +3218,8 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
             state = f"closed {r['closed']}" if r.get("closed") else f"expected since {r['expected']}, no channel yet" \
                 if is_expected(r) else f"open since {r['opened']}"
             print(f"#{r['channel']['key']} ({r['channel']['id'] or 'no channel'}): {r['name']} "
-                  f"({r.get('slack_user') or 'no Slack id yet'}, {r.get('email') or 'no email'}), {state}")
+                  f"({r.get('slack_user') or 'no Slack id yet'}, {r.get('email') or 'no email'}), {state}"
+                  + (f", usual lane @{r['lane']}" if r.get("lane") else ""))
         if not rows:
             print(f"no chat channels in {book.root / PEOPLE_DIR}")
         return 0
@@ -3259,7 +3282,7 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     name = (user or {}).get("real_name") or ((user or {}).get("profile") or {}).get("real_name") or (live or {}).get("name") \
         or ns.name.capitalize()
     rec = {"schema": PERSON_SCHEMA, "name": name, "slack_user": uid or (live or {}).get("slack_user"), "email": email,
-           "note": ns.note or (prev or {}).get("note") or f"asks the lanes in #{key}",
+           "note": ns.note or (prev or {}).get("note") or f"asks the lanes in #{key}", **person_lane(ns, reg, prev),
            "channel": {"key": key, "id": None}, "opened": (live or {}).get("opened") or _now_stamp(), "closed": None}
     human = any(p.get("slack_user") == rec["slack_user"] for p in reg.get("humans", []) if rec["slack_user"])
     if not human:
@@ -4217,6 +4240,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    "Connect); expect: the address Daniel invited")
     p.add_argument("--start-here", default=None, metavar="URL", help="open: a link to bookmark in the channel as Start here")
     p.add_argument("--note", default=None, metavar="TEXT", help="open, expect: who they are (default: kept, or a stub)")
+    p.add_argument("--lane", default=None, metavar="HANDLE",
+                   help="open, expect: the lane they usually work with, which their posts that name no lane ring in place of "
+                        f"@{CHAT_WATCHER} (default: kept; '' clears it)")
     p.add_argument("--cursor-bot", default=None, metavar="U...", help="open: Cursor's bot user (default: users.list's bot named cursor)")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
