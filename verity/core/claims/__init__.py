@@ -516,6 +516,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
+    # the training formalism v1's assumptions (Security/Definitions/Nci/Assumptions/Formalism.lean): A1 is
+    # `Nci.Formalism.Assumptions.CutCost`, A2 `Nci.Formalism.Assumptions.EfficiencyFloor`
+    Entry("training-cut-cost", "assumption",
+          "A1, cut cost: every set I of at most c gates of the trained circuit reads at least u(max_T x_T(I)) + a·m(I) "
+          "computed bits |in(I) \\ in(C)|, u the update profile and a the cut cost; refuted by exhibiting a block that "
+          "violates it", "A1 cut cost", "conjectured"),
+    Entry("training-efficiency-floor", "assumption",
+          "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
+          "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "
+          "empirical, falsified by a measured run", "A2 efficiency floor", "measured"),
 )}
 
 
