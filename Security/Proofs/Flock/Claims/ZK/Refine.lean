@@ -404,7 +404,8 @@ theorem withStops_swMsgAt_pre (S : RefSession) (Rf : (x : Msg) → (Fin (refK x)
   have h₀ : ∀ k : Fin (refK x), k.val < j → S.pad ((List.ofFn c).take j) k = c k := fun k hk => S.pad_take c j k hk
   refine ((S.withStops Rf stop).swMsgAt_take_pre x (S.wt x w) (vs x w ν) t c j hj).trans ?_
   exact S.withStops_enc_swCut Rf stop vs Ok hRf hsc x w ν t c _ c₁ j h₀ fun hr =>
-    ⟨(h₁ hr).1, S.stopsOk_pad Rf Ok hRf hOk _ (hl.trans_le hj.le) c (hl ▸ h₀) (hl ▸ hr), (h₁ hr).2⟩
+    ⟨(h₁ hr).1, S.stopsOk_pad Rf Ok hRf hOk ((List.ofFn c).take j) (hl.trans_le hj.le) c
+      (fun k hk => h₀ k (lt_of_lt_of_eq hk hl)) ((congrArg (Rf x c) hl).trans hr), (h₁ hr).2⟩
 
 /-- **The session with stops' message after a prefix of `c`, before the last coin** (`Causal`): the stop where the rule
 stops `c` at round `j`, else round `j` at any `c₁` that agrees with `c` before `j`. -/
