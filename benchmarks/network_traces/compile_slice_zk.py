@@ -95,6 +95,10 @@ from verity.core.protocols.certifier import charge_chain as CC  # noqa: E402
 from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
 from verity.core.protocols.certifier import compile_slice_v3 as V3  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
+from verity.core.protocols.certifier.head_check import BIT  # noqa: E402
+from verity.ml.circuits.boolean.trace import part as _part  # noqa: E402
+from verity.ml.circuits.defs import bind  # noqa: E402
+from verity.ml.circuits.types import Array  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
@@ -421,7 +425,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
     verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in WZ.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -720,6 +724,22 @@ def rescan(a) -> int:
 V3_DEMOS = {"demo": V3.demo, "demo_async": V3.demo_async}
 
 
+def _v3_words_sig(S):
+    bits = V3.row_bits(S)
+    return tuple((r, Array(CS._words_of(bits[r]), BIT)) for r in V3.ROWS), Array(16, BIT)
+
+
+def _v3_words_build(C, S, *rows):
+    bits = V3.row_bits(S)
+    return V3._build(C, S, *[x[:bits[r]] for r, x in zip(V3.ROWS, rows)])
+
+
+#: CompileSlice_v3 on input rows zero-padded to whole u16 words (the stager's rows), its gates CompileSlice_v3's: the
+#: advice and ingress rows, which CompileSlice_v3 holds at their exact widths, carry unread padding bits
+V3_WORDS = _part("CompileSliceWords", V3.STATICS, _v3_words_sig, _v3_words_build, "CompileSlice_v3 on whole-word rows",
+                version=3, register=False)
+
+
 def load3(name: str) -> SimpleNamespace:
     """CompileSlice_v3's class `name` (the module's docstring) and its slice."""
     if name in V3_DEMOS:
@@ -748,7 +768,7 @@ def cost3(a) -> int:
     if word != V3.ACCEPT or a.dry:
         return 0 if word == V3.ACCEPT else 1
     M = WZ._one_stage()
-    defn, bits = V3.unit(**x.st), V3.row_bits(x.S)
+    defn, bits = bind(V3_WORDS, **x.st), {r: CS._words_of(b) for r, b in V3.row_bits(x.S).items()}
     probe = stager(M, x, 1, out / "probe", defn, bits)
     n = population(probe.st.meta, ("honest",))
     log(f"probe: k_log {probe.st.meta['k_log']}, vus_per_block {probe.st.meta['vus_per_block']}, lowered in "
