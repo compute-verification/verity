@@ -5,11 +5,14 @@ a run the runtime counter measured.
         [--out FILE] -- TRAIN_ARGS...
 
 The program runs as te_core.run runs it (cw.py: prepare from the nearest directory above the script, the script as
-``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends. Each
-ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase (``backward`` inside
-`torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`, else ``forward``) and its
-step, cut as the harness cuts a standalone program's: at each `TrainData.next` once the step in progress has read tokens
-(`te_core.flops.TOKEN_INDEX`), or at `hooks.step()`'s boundaries. prepare's start, data and output calls are stubbed:
+``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends, or
+to its end, where its last step ends as te_core.run's `close` ends it (so A may be its last step, which no step follows:
+its Δ_grad ends where its update meets the carried values, and te_core.capture.structure's cut, to the values a next
+step's forward reads, is 0). Each ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase
+(``backward`` inside `torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`,
+else ``forward``) and its step, cut as the harness cuts a standalone program's: at each `TrainData.next` once the step
+in progress has read tokens (`te_core.flops.TOKEN_INDEX`), or at `hooks.step()`'s boundaries. prepare's start, data
+and output calls are stubbed:
 
 - `start_record`, `load_theta` and `load_start`: the start's record (``--starts``), θ as fakes of its tensors, the model
   built from its config as prepare builds it;
@@ -42,8 +45,9 @@ reached by read-backs from two or more earlier steps is listed too (`formalism["
 keeps such state as a device tensor (a 0-dim fp32 tensor updated in place), which the graph carries as one value. An op
 whose output size is set by values (``nonzero``, ``unique``, ``masked_select``, ``x[mask]``) is taken at its largest. The run is
 recorded again with ctx halved (prepare.EVAL_CTX and every window), for its token axes, or, when that changes its steps (a
-plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). `record(...)` returns step A's
-`StepGraph`; the CLI writes its structure (te_core.flops's record form) and its forward's GEMM MACs beside the record's
+plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). The measured step's quantities
+keep its matrix products as te_core.io_bound reads them (`formalism["products"]`, te_core.capture.products' rows).
+`record(...)` returns step A's `StepGraph`; the CLI writes its structure (te_core.flops's record form) and its forward's GEMM MACs beside the record's
 forward MACs (its backward's differ by the recompute the GPU's fused attention runs and the math backend doesn't).
 """
 from __future__ import annotations
@@ -71,6 +75,7 @@ from torch.overrides import TorchFunctionMode
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils.weak import WeakTensorKeyDictionary
 
+from te_core.capture import products
 from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
 from te_core.flops import TOKEN_INDEX
@@ -342,6 +347,11 @@ class _Recorder:
             self.step = 0
         yield self.step
         self._end()
+
+    def close(self) -> None:
+        """The program returned: its last step ends (te_core.run's `close`)."""
+        if not self.explicit and self.step >= 0 and self.read_tokens:
+            self._end()
 
     @contextlib.contextmanager
     def phase(self, name: str):
@@ -778,17 +788,20 @@ def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: l
                 sdpa_kernel([SDPBackend.MATH]), fake, _Function(rec), _Dispatch(rec):
             sys.modules["__main__"] = main
             try:
-                _exec_lifted(script, main.__dict__)
+                try:
+                    _exec_lifted(script, main.__dict__)
+                except SystemExit as e:
+                    if e.code not in (None, 0):
+                        raise CaptureRefused("trace", None, f"the program exited {e.code} at step {rec.step}") from e
+                rec.close()
             except _Stop:
                 pass
-            except SystemExit as e:
-                if e.code not in (None, 0):
-                    raise CaptureRefused("trace", None, f"the program exited {e.code} at step {rec.step}") from e
     finally:
         sys.argv, sys.path[:] = argv0, path0
         sys.modules["__main__"] = main0
     if rec.step < stop:
-        raise CaptureRefused("trace", None, f"the program ended at step {rec.step}, before step {stop} ended")
+        raise CaptureRefused("trace", None, f"the program ended after {max(rec.step, 0)} steps, before step {stop - 1} "
+                                            f"ended")
     return rec
 
 
@@ -818,10 +831,12 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
         return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
 
     def flagged(g: StepGraph) -> StepGraph:
+        rows = products.rows(g) if g.formalism is not None else None
         if g.circuit is not None:
             g.circuit.read_backs = {k: list(v) for k, v in listed.items()}
+            g.circuit.products = rows
         if g.formalism is not None:
-            g.formalism = g.formalism | listed
+            g.formalism = g.formalism | listed | {"products": rows}
         return g
 
     base = trace(1)
