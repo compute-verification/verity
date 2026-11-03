@@ -116,9 +116,7 @@ theorem streamAt_repBase {x : Msg} {s0 : FlockDeploy.Ins} {spec : SessionSpec}
   rw [Masked.repBase_eq hs k]
   unfold streamAt roundsOf FlockComplete.repStartZk
   rw [take_map_range _ (by omega)]
-  first
-  | omega
-  | rw [Nat.add_comm]
+  omega
 
 variable (L₁ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -248,8 +246,11 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
       (askOf q₀ (Masked.layE x j).fc (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + e) a)).isOk = true := by
     rw [hfi] <;> rfl
   unfold finOf
-  simp only [hxs, List.tail_cons, hq1, hloc, hrk, hq₀]
-  rw [hLayT, hie]
+  simp only [hxs, List.tail_cons, hq1]
+  generalize CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q = L at hloc ⊢
+  subst hloc hie
+  simp only [hrk, hq₀]
+  rw [hLayT]
   split
   · rename_i hA
     rw [huniq _ hA.choose_spec, hfi] <;> rfl
