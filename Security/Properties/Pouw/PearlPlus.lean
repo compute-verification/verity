@@ -31,11 +31,11 @@ namespace Properties.Pouw.PearlPlus
 open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
 
 /-- The fixed operand's noise the replay uses for tile `tid` of pass `p`: its weight's, once per pass and weight. -/
-def noiseOf (p : Pass) (tid : Nat) : Reject WeightNoise :=
+def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
   match p.tile? tid with
   | some (pos, _, _) =>
     let u := p.records[pos]!.matmul
-    weightNoise p.salt ((p.weightRoots.lookup u.weight).getD ByteArray.empty) u.k
+    fixedNoise p.salt ((p.weightRoots.lookup u.weight).getD ByteArray.empty) u.k
   | none => throw "tile does not match the verifier's own enumeration"
 
 /-! ## The run -/
@@ -83,7 +83,7 @@ def LoadedGivesUp : Prop :=
 /-! ## A tile -/
 
 /-- The tile's operands and checked values, as `checkTile` forms them from its openings. -/
-def formed (p : Pass) (wn : Reject WeightNoise) (rows cols : List Nat) (u : Matmul) (o : TileOpening) :
+def formed (p : Pass) (wn : Reject FixedNoise) (rows cols : List Nat) (u : Matmul) (o : TileOpening) :
     Reject (Ops × Checked) := do
   let ops ← encode p.salt ((p.weightRoots.lookup u.weight).getD ByteArray.empty) (← wn) u.index u.k rows
     (o.a.map (openedValue ·.value)) cols (o.b.map (openedValue ·.value))
@@ -96,7 +96,7 @@ its rows keep the per-row rules and its credited cells' replayed debit is within
 call with y, the tile's real rows open against the y root and each word is the unscale of the tile's U
 (`Rule.yReason`). -/
 def TileAcceptMeans : Prop :=
-  ∀ (p : Pass) (wn : Reject WeightNoise) (tid : Nat) (o : TileOpening), checkTile p wn tid o = none →
+  ∀ (p : Pass) (wn : Reject FixedNoise) (tid : Nat) (o : TileOpening), checkTile p wn tid o = none →
     ∃ pos rows cols ops ch, p.tile? tid = some (pos, rows, cols) ∧
       let r := p.records[pos]!
       let u := r.matmul

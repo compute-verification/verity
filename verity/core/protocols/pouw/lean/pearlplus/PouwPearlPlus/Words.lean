@@ -186,7 +186,7 @@ def parseRow (row : ByteArray) (k : Nat) : Reject (Array Nat) := do
       (row[4 * i + 3]!.toNat <<< 24))
 
 /-- What one fixed operand's noise reads, once per weight and epoch: seed_B, F_A and F_B as columns, and G. -/
-structure WeightNoise where
+structure FixedNoise where
   seedB : ByteArray
   fa : Array (Array Nat)
   fb : Array (Array Nat)
@@ -195,7 +195,7 @@ structure WeightNoise where
   gram : Array (Array Nat)
   deriving Inhabited
 
-def weightNoise (salt rootB : ByteArray) (k : Nat) : Reject WeightNoise := do
+def fixedNoise (salt rootB : ByteArray) (k : Nat) : Reject FixedNoise := do
   let sb := seedB salt rootB
   let fa ← basis sb 0 k
   let fb ← basis sb 1 k
@@ -207,14 +207,14 @@ def weightNoise (salt rootB : ByteArray) (k : Nat) : Reject WeightNoise := do
 def bf16OfCode (c : Nat) : Reject Nat := do toBf16 (← ofFp8 c)
 
 /-- `peel_factors_a`: P_A rows, [bf16(E′) ‖ RNE_bf16(A′·F_B)]. -/
-def peelA (wn : WeightNoise) (side : Formed) : Reject (Array (Array Nat)) :=
+def peelA (wn : FixedNoise) (side : Formed) : Reject (Array (Array Nat)) :=
   (side.codes.zip side.ep).mapM fun (row, ep) => do
     let be ← ep.mapM bf16OfCode
     let fused ← wn.fbCols.mapM fun c => do toBf16 (← chain row c)
     pure (be ++ fused)
 
 /-- `peel_factors_b`: P_B rows, [RNE_bf16(be·G − B̃·F_A) ‖ −be], be·G the FP32 FMA chain from +0 in p order. -/
-def peelB (wn : WeightNoise) (side : Formed) : Reject (Array (Array Nat)) :=
+def peelB (wn : FixedNoise) (side : Formed) : Reject (Array (Array Nat)) :=
   (side.codes.zip side.ep).mapM fun (row, ep) => do
     let be ← ep.mapM bf16OfCode
     let mid ← (Array.range R).mapM fun q => do
@@ -234,7 +234,7 @@ structure Ops where
 
 /-- `PearlC.encode(ctx, noise, a_rows, b_rows, tile)` on the tile's opened rows (values less their salts): `none` where
 Pearl rejects. -/
-def encode (salt rootB : ByteArray) (wn : WeightNoise) (index k : Nat) (rows : List Nat) (aRows : List ByteArray)
+def encode (salt rootB : ByteArray) (wn : FixedNoise) (index k : Nat) (rows : List Nat) (aRows : List ByteArray)
     (cols : List Nat) (bRows : List ByteArray) : Reject Ops := do
   let ea ← (rows.zip aRows).toArray.mapM fun (i, r) => sampleLine (lineKey (rowSeed salt rootB index i r)) 0 0 0 NORM_E
   let a ← formV1 (← aRows.toArray.mapM (parseRow · k)) ea wn.fa

@@ -78,7 +78,7 @@ def plan (i : Input) : Except Refusal Plan := do
 /-- The verdict of every tile of `pl.todo`, in order, replayed in parallel: the fixed operand's noise once per pass and
 weight, then each tile on it. -/
 def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
-  let mut noise : List ((Nat × Nat) × Task (Except String WeightNoise)) := []
+  let mut noise : List ((Nat × Nat) × Task (Except String FixedNoise)) := []
   let mut tasks : Array (Task TileVerdict) := #[]
   for (i, tid) in pl.todo do
     let p := pl.passes[i]!
@@ -89,7 +89,7 @@ def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : Li
       | some t => pure t
       | none =>
         let rootB := (p.weightRoots.lookup u.weight).getD ByteArray.empty
-        let t := Task.spawn fun _ => weightNoise p.salt rootB u.k
+        let t := Task.spawn fun _ => fixedNoise p.salt rootB u.k
         noise := ((i, u.weight), t) :: noise
         pure t
     tasks := tasks.push <| t.map fun wn =>

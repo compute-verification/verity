@@ -17,7 +17,7 @@ import PouwCommit.Rows
 5. on a call that commits y, the tile's real rows open against the call's y root at their positions (`y opening`), and
    each word is the unscale of the tile's U (`Rule.yReason`).
 
-`wn` is the fixed operand's noise (`Words.weightNoise`), once per pass and weight; its failure is the tile's
+`wn` is the fixed operand's noise (`Words.fixedNoise`), once per pass and weight; its failure is the tile's
 `inadmissible inputs`, where Python's `encode` meets it.
 -/
 
@@ -63,7 +63,7 @@ def words32 (b : ByteArray) : Array Nat :=
     b[4 * i]!.toNat ||| (b[4 * i + 1]!.toNat <<< 8) ||| (b[4 * i + 2]!.toNat <<< 16) ||| (b[4 * i + 3]!.toNat <<< 24)
 
 /-- The verdict on tile `tid` of pass `p`: `none` (it passes) or the reason it fails. -/
-def checkTile (p : Pass) (wn : Except String WeightNoise) (tid : Nat) (o : TileOpening) : Option String := Id.run do
+def checkTile (p : Pass) (wn : Except String FixedNoise) (tid : Nat) (o : TileOpening) : Option String := Id.run do
   let some (pos, rows, cols) := p.tile? tid | return some "tile does not match the verifier's own enumeration"
   let r := p.records[pos]!
   let u := r.matmul
