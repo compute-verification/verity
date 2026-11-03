@@ -210,9 +210,10 @@ private def headerLine (b : ByteArray) : ByteArray := Id.run do
     if b[i]! == 10 then return b.extract 0 i
   return b
 
+/-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
 private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
+  Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
