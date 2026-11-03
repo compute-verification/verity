@@ -4291,7 +4291,8 @@ class RecordsGate:
 
     def _locks(self, pr: PR) -> dict[str, str]:
         """{package: its lock's path} for each lock the head's change against the landing branch (`self.into`) touches and the
-        head still has."""
+        head still has, the auditor's fixtures (`LEAN_FIXTURES`) aside: no records run reads one (`lean_changed.py --records`
+        matches no package there), and the controls write their records."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/records/main",
              f"+refs/pull/{pr.number}/head:refs/queue/records/pr")
         self.into = into_at(self.repo, "refs/queue/records/main")
@@ -4300,7 +4301,7 @@ class RecordsGate:
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
         files = _out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/base...{pr.head}").splitlines()
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
-                and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
+                and not f.startswith(LEAN_FIXTURES) and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
     def _read(self) -> None:
         """Bring this store's attempts of the last `RECORDS_LOOKBACK_S` up to date from its remote."""
