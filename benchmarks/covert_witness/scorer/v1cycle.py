@@ -14,9 +14,9 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    integrator's te_core VERSION captures alike (CAPTURES). A new capture (`next_capture`) traces into its own cache,
    and until it has traced as many runs in scope as TE40_WT's and as many of v3's (`replaces`), the refresh scores
    on LAST's re-score commit and TE40_WT's traces; then TE40_WT moves to it.
-2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too with TE_TRACE_PILOT=1) traced, measured
-   and ingested again in shards of TRACE_SHARD runs over the CPU pool (`research run --on auto`),
-   the runs traced at earlier refreshes kept.
+2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too under CAPTURE_FINAL's capture or with
+   TE_TRACE_PILOT=1) traced, measured and ingested again in shards of TRACE_SHARD runs over the CPU pool (`research
+   run --on auto`), at most TRACE_MAX_SHARDS a refresh, the runs traced at earlier refreshes kept.
 3. Runs its `python -m te_core.rescore` on that ledger at PINS: per checkpoint of every valid record, v3's and the
    pilot's, measured, formalism v2's quantities measured on its traced step (t literal), Fit per kind of block and rho
    (c/(c - d) where every part fits, else Slowdown's bound, a target) on te_core.policy's (c, k) grid with the frozen
@@ -24,7 +24,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    frontier.md/json, formalism.jsonl and compare.md/json; then `--tail frozen` and `--quantities analysis`, which go
    to the evidence store only (01:22Z).
 4. Once the builder's v2 is on that te_core (`policy_panels`), runs its `python -m te_core.algorithm_policy
-   --publish` on the same ledger, which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
+   --publish` on the same ledger, with ladder-v3's points files as `--ladder-points` (`ladder_points`, 07:57Z),
+   which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
    te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), PUT until
    algorithm-policy is PUT with gain, gain_target and start_effective_gates on its rows (`fb_retired`; 05:22Z,
    07:48Z), then stored only. A refused PUT is reported, not fatal. te_core's five old panels stay in the re-score's
@@ -366,6 +367,30 @@ def v3_starts(commit: str) -> list[str]:
 #: what marks the builder's v2 in te_core.algorithm_policy (gains at 1.1, 2 and 11, coordinator 04:35Z)
 AP_V2 = "gain_target"
 FIT = "frontier-fit"
+#: where ladder-v3 writes the v3 ladder's points (coordinator 07:57Z: every cycle passes them as --ladder-points), and
+#: the schemas te_core.frontier_fit's `ladder_points` reads
+LADDER = ("cursor/te-ladder-v3-4207", "benchmarks/covert_witness/islands/ladder-v3")
+LADDER_SCHEMAS = ("te-ladder/F/v1", "te-ladder/fit/v1", "te-ladder/report/v2")
+
+
+def ladder_points(out: Path) -> list[Path]:
+    """The ladder's points files on LADDER's branch, each JSON file of its directory whose schema `ladder_points` reads
+    (or that carries its `F` or `compute_optimal`), written into `out`, and TE_LADDER_POINTS's paths (os.pathsep)."""
+    ref, where = LADDER
+    subprocess.run(["git", "-C", str(RESCORE_WT), "fetch", "-q", "origin", ref], check=False, capture_output=True)
+    names = subprocess.run(["git", "-C", str(RESCORE_WT), "ls-tree", "-r", "--name-only", f"origin/{ref}", "--", where],
+                           capture_output=True, text=True, check=False).stdout.split()
+    found = [Path(p) for p in os.environ.get("TE_LADDER_POINTS", "").split(os.pathsep) if p]
+    for name in (n for n in names if n.endswith(".json")):
+        try:
+            doc = json.loads(git("show", f"origin/{ref}:{name}"))
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            continue
+        if isinstance(doc, dict) and (doc.get("schema") in LADDER_SCHEMAS or "F" in doc or "compute_optimal" in doc):
+            out.mkdir(parents=True, exist_ok=True)
+            (out / Path(name).name).write_text(json.dumps(doc))
+            found.append(out / Path(name).name)
+    return found
 
 
 def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
@@ -378,8 +403,9 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     if AP_V2 not in src("algorithm_policy.py"):
         return {"algorithm-policy": "not run (the builder's v2 isn't on this te_core yet)"}
     d = out / "algorithm-policy"
+    ladder = ladder_points(out / "ladder")
     r = subprocess.run([sys.executable, "-m", "te_core.algorithm_policy", *ledger_args(d, root),
-                        *(["--publish"] if put else [])],
+                        *(x for p in ladder for x in ("--ladder-points", str(p))), *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
     d.mkdir(parents=True, exist_ok=True)
     (d / "run.log").write_text(r.stdout + r.stderr)
@@ -392,6 +418,7 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
             res[url.rstrip("/").rsplit("/", 1)[-1]] = status[:200]
     board = next((x.removeprefix("board: ") for x in r.stdout.splitlines() if x.startswith("board: coverage")), None)
     res["coverage"] = [board] if board else coverage(d, r.stdout)
+    res["ladder"] = [p.name for p in ladder]
     return res
 
 
@@ -524,7 +551,9 @@ def main() -> int:
             "pilot_start": sum(v == "pilot-start" for v in (fr.get("skipped") or {}).values()),
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
-        meta["algorithm_policy"] = {k: v for k, v in policy.items() if k != "coverage"}
+        meta["algorithm_policy"] = {k: v for k, v in policy.items() if k not in ("coverage", "ladder")}
+        if "ladder" in policy:
+            meta["ladder_points"] = policy["ladder"]
         apc = out / "algorithm-policy" / "console" / "algorithm-policy.json"
         if apc.exists():
             q = json.loads(apc.read_text())
@@ -713,8 +742,12 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                   f"{'/'.join(cells.get('te_core') or ['–'])}"
                   + (", rho_console at c = 5,120 x 2 x 45e6 x 740 gates, k = 65,536 bits" if cells.get("rho_console")
                      else "") + ", rho_default)" if cells else "")
+    ladder = meta.get("ladder_points")
+    ladder_said = ("" if ladder is None else f" (v3's fit with ladder-v3's points: {', '.join(ladder)})" if ladder
+                   else f" (no ladder points file on {LADDER[0]} yet, so v3's fit has only its starts)")
     ap_said = "; ".join(f"training/{k} {'PUT ' if v[:1].isdigit() else ''}{v}"
-                        + (cells_said if k == "algorithm-policy" else "") for k, v in ap.items())
+                        + (cells_said if k == "algorithm-policy" else ladder_said if k == FIT else "")
+                        for k, v in ap.items())
     return (f"{head}te_core {meta['te_core'][:10]} ({meta['te_core_version']}){nx_said}, formalism v2's quantities "
             f"measured on each record's traced step, t literal, the frozen tail always charged{dt}: {meta['records']} valid "
             f"records measured at the pin's commits and the pilot's, {meta['night2_records']} from night 2, "
