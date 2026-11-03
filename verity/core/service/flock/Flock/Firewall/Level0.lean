@@ -215,16 +215,17 @@ def Slots.name (R : Slots) (name : String) (sid n : Nat) : Slots :=
 def Slots.drawn (R : Slots) (sid : Nat) : Bool := R.slots.any (·.owner == sid)
 
 /-- **The session named `name` may have its tables' level 0 drawn on `k` witnesses**: its number; else why not: a name no
-live session has, `k` other than its count of tables, or a session the loop already drew level 0 for. -/
+live session has, a session the loop already drew level 0 for (whatever witnesses come after the draw), or `k` other
+than its count of tables. -/
 def Slots.admit (R : Slots) (name : String) (k : Nat) : Except String Nat :=
   match R.sessions.find? (·.1 == name) with
   | none => .error s!"a level-0 request for a session the loop is not serving (id {name})"
   | some (_, sid) =>
     let n := ((R.tables.find? (·.1 == sid)).map (·.2)).getD 0
-    if k != n then
-      .error s!"a level-0 request of {k} tables' witnesses for a session with {n} tables: the loop draws level 0 only on every table's witness"
-    else if R.drawn sid then
+    if R.drawn sid then
       .error "a second level-0 request for this session: the loop draws its tables' level 0 once, after every table's witness"
+    else if k != n then
+      .error s!"a level-0 request of {k} tables' witnesses for a session with {n} tables: the loop draws level 0 only on every table's witness"
     else .ok sid
 
 /-- **The level 0s `ls` drawn for the session named `name`**, table `i`'s at `ls[i]`, kept for it; else why not
