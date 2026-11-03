@@ -11,12 +11,13 @@ there ρ (te_core.formalism.at at the dial's (c, k): c/(c − d) where Fit holds
 Slowdown's bound, a target, basis `target`), and its constrained cost over H is S = p·ρ.
 
 The panel (`COLUMNS`) has one row per run (its run id) and end loss it reaches, taken at that first checkpoint: the
-start (te_core.panels' label, C0 and l0), the end loss, C, H and p, the inputs ρ is computed from there (`INPUTS`, as
+start (te_core.panels' label, C0 and l0), the end loss, C and p, the inputs ρ is computed from there (`INPUTS`, as
 note:training-20261102T2334Z-draft-rho-inputs-and-formula has them), which of those are stubs, bounds, assumptions or
 estimates rather than measured (`estimated`, from the record's labels: `KINDS`), ρ and its basis at the dial's default
 (te_core.panels' `DEFAULT`: c = 4,096 tokens of the start's forward, k = 80,000 bits), and the run's method, family,
-record (run id@step) and data. `page_rho` is the formula the console's dial runs on a row's columns alone, and `build`
-refuses a row whose columns don't reproduce te_core.formalism.at's ρ and basis at the default.
+record (run id@step) and data. The route takes at most 24 columns, so H (C/p) and the target (`target`, from l0 and
+the end loss) aren't columns of their own. `page_rho` is the formula the console's dial runs on a row's columns alone,
+and `build` refuses a row whose columns don't reproduce te_core.formalism.at's ρ and basis at the default.
 
 Its console copy (`cut`) is the whole table when it fits the panels route (te_core.console), else, per start, target
 and family, the rows on the lower-left (p, rho_default) front plus the family's least-p and least-delta rows, with the
@@ -40,6 +41,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 from . import VERSION, console, formalism, frontier, panels, plots, rescore
 
@@ -48,8 +50,8 @@ PANEL = f"training/{NAME}"
 #: the inputs of ρ at any (c, k), each at the run's checkpoint (the draft note's)
 INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "u_in_points", "delta_bits",
           "delta_t_bits", "d_gates", "delta_grad_bits"]
-COLUMNS = ["start", "start_compute_gates", "start_loss", "end_loss", "target_pct", "C_gates", "H_gates", "p", *INPUTS,
-           "estimated", "rho_default", "basis_default", "method", "family", "record", "data"]
+COLUMNS = ["start", "start_compute_gates", "start_loss", "end_loss", "C_gates", "p", *INPUTS, "estimated",
+           "rho_default", "basis_default", "method", "family", "record", "data"]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the ρ inputs in the console's copy, and of its other numbers
 INPUT_DIGITS, DIGITS = 6, 4
@@ -73,6 +75,11 @@ MARKERS = ("o", "s", "^", "D", "v", "P")
 def default(w_fwd: float) -> tuple[float, float]:
     """The dial's default (c, k) for a start whose forward is `w_fwd` gates a token."""
     return panels.DEFAULT[0] * w_fwd, 8.0 * panels.DEFAULT[1]
+
+
+def target(start_loss: float, end_loss: float) -> float:
+    """The row's end loss as te_core.frontier's target it is, in percent of l0 (-0.5, -1, -2, -5)."""
+    return -100 * min(frontier.TARGETS, key=lambda t: abs(end_loss - start_loss * (1 - t)))
 
 
 def num(v: float, digits: int = INPUT_DIGITS) -> str:
@@ -158,7 +165,7 @@ def build(scored: list[dict], shapes: dict[str, dict], source: str, data: str = 
                 m = r["measured"]
                 v = formalism.at(m, *default(w_fwd))
                 basis = "fit" if v["fit"] else "target"
-                row = [*head, end, -100 * t, r["gates"], h, r["gates"] / h, *inputs(m, w_fwd), estimated(m),
+                row = [*head, end, r["gates"], r["gates"] / h, *inputs(m, w_fwd), estimated(m),
                        None if math.isinf(v["rho"]) else v["rho"], basis, plots.method(r), r.get("family"),
                        f"{r.get('run_id') or r['id']}@{r.get('checkpoint_step')}", data]
                 again, b = page_rho(dict(zip(COLUMNS, row)), *default(w_fwd))
@@ -201,7 +208,8 @@ def kept(rows: list[list]) -> list[list]:
     ix = {c: i for i, c in enumerate(COLUMNS)}
     groups: dict[tuple, list[int]] = {}
     for i, r in enumerate(rows):
-        groups.setdefault(tuple(r[ix[c]] for c in ("start", "target_pct", "family")), []).append(i)
+        key = (r[ix["start"]], target(r[ix["start_loss"]], r[ix["end_loss"]]), r[ix["family"]])
+        groups.setdefault(key, []).append(i)
     keep = set()
     for g in groups.values():
         rho = {i: rows[i][ix["rho_default"]] if rows[i][ix["rho_default"]] is not None else math.inf for i in g}
@@ -217,8 +225,9 @@ def checked(q: dict) -> dict:
     if len(q["note"]) > console.NOTE_MAX:
         raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
     if bad := console.refused(q):
-        raise ValueError(f"{PANEL}: the panels route refuses {len(bad)} cells ({'; '.join(bad[:3])}): make each a "
-                         f"number, a string of at most {console.CELL_MAX} characters or null")
+        raise ValueError(f"{PANEL}: the panels route refuses it ({'; '.join(bad[:3])}; te_core.console.refused): at "
+                         f"most {console.COLUMNS_MAX} columns, each cell a number, a string of at most "
+                         f"{console.CELL_MAX} characters or null")
     return q
 
 
@@ -247,51 +256,58 @@ def store(path: Path, meta: dict) -> str:
     return json.loads(out)["id"]
 
 
+def finite(p: dict) -> list[dict]:
+    """`p`'s rows with a finite rho_default, as dicts, each with its `target_pct`."""
+    return [d | {"target_pct": target(d["start_loss"], d["end_loss"])} for d in plots.frame(p)
+            if d["rho_default"] is not None]
+
+
 def figure(p: dict, out: Path) -> Path:
     """p against ρ at the default dial, log-log, one panel per target, a colour per family and a marker per start,
     with the iso-S diagonals S = p ρ at `LEVELS`."""
-    rows = [d for d in plots.frame(p) if d["rho_default"] is not None]
+    rows = finite(p)
     families = sorted({d["family"] or "?" for d in rows})
     starts = list(dict.fromkeys(d["start"] for d in rows))
     targets = [-100 * t for t in frontier.TARGETS]
-    fig, axes = plt.subplots(2, 2, figsize=(11, 9.5), sharex=True, sharey=True)
-    hi = max([d["p"] for d in rows] + [d["rho_default"] for d in rows] + [10.0]) * 2
-    xs = [10 ** (i / 20) for i in range(0, int(20 * math.log10(hi)) + 1)]
+    xhi = 10 ** math.ceil(math.log10(1.5 * max([d["p"] for d in rows] + [5.0])))
+    yhi = 10 ** math.ceil(math.log10(1.5 * max([d["rho_default"] for d in rows] + [float(max(LEVELS))])))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 10), sharex=True, sharey=True)
+    xs = [10 ** (i / 20) for i in range(-2, int(20 * math.log10(xhi)) + 1)]
     for ax, tp in zip(axes.flat, targets):
         mine = [d for d in rows if d["target_pct"] == tp]
         for s in LEVELS:
             ax.plot(xs, [s / x for x in xs], color="0.75", lw=0.7, zorder=0)
-            ax.annotate(f"S = {s:,}", (1.05, s / 1.05 if s > 1 else 1.05), fontsize=6, color="0.45")
+            ax.annotate(f"S = {s:,}", (1.0, s), xytext=(2, 2), textcoords="offset points", fontsize=6, color="0.45")
         for d in mine:
-            ax.plot(d["p"], d["rho_default"], MARKERS[starts.index(d["start"]) % len(MARKERS)], ms=4.5, alpha=0.75,
+            ax.plot(d["p"], d["rho_default"], MARKERS[starts.index(d["start"]) % len(MARKERS)], ms=4.5, alpha=0.7,
                     color=f"C{families.index(d['family'] or '?') % 10}", mec="k" if d["basis_default"] == "fit" else
                     "none", mew=0.6)
         if mine:
             best = min(mine, key=lambda d: d["p"] * d["rho_default"])
             ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
-            ax.set_title(f"end loss {tp:g}% ({len(mine)} runs; least S {best['p'] * best['rho_default']:.3g}, "
-                         f"{best['method']})", fontsize=8)
+            ax.set_title(f"end loss {tp:g}%: {len(mine)} runs; least S {best['p'] * best['rho_default']:.3g} "
+                         f"({best['start']}, {best['method']})", fontsize=8)
         else:
             ax.set_title(f"end loss {tp:g}%: no run reaches it", fontsize=8)
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.set_xlim(0.9, hi)
-        ax.set_ylim(0.9, hi)
+        ax.set_xlim(0.8, xhi)
+        ax.set_ylim(0.8, yhi)
         ax.grid(alpha=0.2, which="major")
     for ax in axes[1]:
         ax.set_xlabel("p = C/H, the algorithm's inefficiency")
     for ax in axes[:, 0]:
         ax.set_ylabel(f"rho at c = {panels.DEFAULT[0]} w_fwd, k = {8 * panels.DEFAULT[1]:,} bits")
-    for i, f in enumerate(families):
-        axes[0, 0].plot([], [], "o", color=f"C{i % 10}", label=f)
-    for i, s in enumerate(starts):
-        axes[0, 0].plot([], [], MARKERS[i % len(MARKERS)], color="0.3", label=s)
-    axes[0, 0].plot([], [], "o", mfc="none", mec="red", ms=9, label="least S at the end loss")
-    axes[0, 0].plot([], [], "o", color="0.6", mec="k", label="basis fit (black edge)")
-    axes[0, 0].legend(fontsize=6, loc="upper right", ncol=2)
+    keys = [Line2D([], [], marker="o", ls="none", color=f"C{i % 10}", label=f) for i, f in enumerate(families)]
+    keys += [Line2D([], [], marker=MARKERS[i % len(MARKERS)], ls="none", color="0.3", label=s)
+             for i, s in enumerate(starts)]
+    keys.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="red", ms=9, label="least S at the end loss"))
+    if any(d["basis_default"] == "fit" for d in rows):
+        keys.append(Line2D([], [], marker="o", ls="none", color="0.6", mec="k", label="basis fit (black edge)"))
+    fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 6), fontsize=7, bbox_to_anchor=(0.5, 0.025))
     fig.suptitle(f"{p['title']} (grey: iso-S, S = p rho)", fontsize=10)
     fig.text(0.01, 0.005, p["note"], fontsize=5.5, wrap=True, va="bottom")
-    fig.tight_layout(rect=(0, 0.04, 1, 0.97))
+    fig.tight_layout(rect=(0, 0.09, 1, 0.97))
     path = out / f"{NAME}.png"
     fig.savefig(path, dpi=130)
     plt.close(fig)
@@ -300,7 +316,7 @@ def figure(p: dict, out: Path) -> Path:
 
 def summary(p: dict) -> str:
     """Per start and end loss, the runs that reach it and the least S, and each family's least S there."""
-    rows = [d for d in plots.frame(p) if d["rho_default"] is not None]
+    rows = finite(p)
     lines = ["| start | end loss | runs | least S (p, rho, basis; method) | each family's least S |", "|---|---|---|---|---|"]
     for s in dict.fromkeys(d["start"] for d in rows):
         for tp in dict.fromkeys(d["target_pct"] for d in rows if d["start"] == s):

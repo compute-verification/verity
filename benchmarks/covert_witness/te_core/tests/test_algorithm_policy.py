@@ -100,7 +100,7 @@ def test_one_row_per_run_and_end_loss_at_its_first_checkpoint(tmp_path, monkeypa
     p = got["panel"]
     assert (p["id"], p["kind"], p["columns"]) == (AP.PANEL, "table", AP.COLUMNS) and p["source"] and p["updated_at"]
     ds = plots.frame(p)
-    at = {(d["record"], d["target_pct"]): d for d in ds}
+    at = {(d["record"], AP.target(d["start_loss"], d["end_loss"])): d for d in ds}
     assert set(at) == {("ref@1", -0.5), ("lora@2", -0.5), ("mezo@1", -0.5), ("qat@1", -0.5), ("ref@2", -1),
                        ("lora@2", -1), ("ref@3", -2), ("ref2@1", -0.5), ("ref2@1", -1)}
     for (rec, tp), d in at.items():
@@ -108,13 +108,14 @@ def test_one_row_per_run_and_end_loss_at_its_first_checkpoint(tmp_path, monkeypa
         end = L0[start] * (1 + tp / 100)
         reach = [r for r in ledger_rows() if r["start"] == start and r["val_bpb"] <= end]
         assert d["end_loss"] == pytest.approx(end) and d["start_loss"] == L0[start]
-        assert d["H_gates"] == min(r["formalism"]["parts"][0]["gates"] for r in reach)
-        assert d["p"] == pytest.approx(d["C_gates"] / d["H_gates"]) and d["p"] >= 1
-        assert d["start"] == plots.start_label(SHAPE if start == "s1" else SHAPE2) and d["data"] == "v2.3-pilot"
+        assert d["C_gates"] / d["p"] == pytest.approx(min(r["formalism"]["parts"][0]["gates"] for r in reach))
+        assert d["p"] >= 1 and d["data"] == "v2.3-pilot"
+        assert d["start"] == plots.start_label(SHAPE if start == "s1" else SHAPE2)
         assert d["w_fwd_gates"] == pytest.approx(panels.w_fwd(SHAPE)) and d["w_gates"] == pytest.approx(W)
     assert [at[("lora@2", -0.5)][k] for k in ("C_gates", "p", "method", "family")] == [3e15, 3, "lowrank/lora", "adapter"]
-    assert at[("ref@2", -1)]["p"] == 1 and at[("ref2@1", -1)]["H_gates"] == 1e14
+    assert at[("ref@2", -1)]["p"] == 1 and at[("ref2@1", -1)]["C_gates"] / at[("ref2@1", -1)]["p"] == 1e14
     q = got["console"]
+    assert len(q["columns"]) <= console.COLUMNS_MAX
     assert q["rows"] == [AP.rounded(r) for r in p["rows"]] and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
@@ -124,7 +125,7 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores(tmp_path, monkeypatch):
     """rho_default and basis_default are the dial's formula on the published columns; Fit's update application reads
     delta_t (qat's latents fail it where mezo, the same but for them, fits)."""
     _, got = run(tmp_path, monkeypatch)
-    ds = {d["record"]: d for d in plots.frame(got["console"]) if d["target_pct"] == -0.5}
+    ds = {d["record"]: d for d in plots.frame(got["console"]) if AP.target(d["start_loss"], d["end_loss"]) == -0.5}
     for d in ds.values():
         rho, basis = dial(d, *AP.default(d["w_fwd_gates"]))
         assert basis == d["basis_default"] and rho == pytest.approx(d["rho_default"], rel=1e-3)
@@ -175,8 +176,8 @@ def test_profiles_are_compact_strings():
 
 
 def row(start, tp, family, p, rho, delta, rec) -> list:
-    d = dict.fromkeys(AP.COLUMNS) | {"start": start, "target_pct": tp, "family": family, "p": p, "rho_default": rho,
-                                    "delta_bits": delta, "record": rec}
+    d = dict.fromkeys(AP.COLUMNS) | {"start": start, "start_loss": 1.2, "end_loss": 1.2 * (1 + tp / 100),
+                                    "family": family, "p": p, "rho_default": rho, "delta_bits": delta, "record": rec}
     return [d[c] for c in AP.COLUMNS]
 
 
