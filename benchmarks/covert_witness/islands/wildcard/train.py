@@ -1034,7 +1034,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         emb = ["embed"] if a.embed_lr and "embed" in mats else []
         if a.method == "muon" and mats:
             muon = [n for n in mats if n not in emb]
-            opts.append((Muon([params[n] for n in muon], lr=a.lr, wd=a.wd), a.lr))
+            opts.append((Muon([params[n] for n in muon], lr=a.lr, wd=a.wd if a.muon_wd is None else a.muon_wd), a.lr))
             extra = sum(ns_flops(tuple(params[n].shape)) for n in muon)
             adam_names = emb + gains
         else:
@@ -1637,6 +1637,8 @@ def main() -> int:
                     help="the tied embedding's own AdamW rate when it trains (0: it goes with the other matrices)")
     ap.add_argument("--beta2", type=float, default=0.95)
     ap.add_argument("--wd", type=float, default=0.0)
+    ap.add_argument("--muon-wd", type=float, default=None,
+                    help="muon: the block matrices' decoupled weight decay alone (the embedding and gains keep --wd)")
     ap.add_argument("--clip", type=float, default=1.0)
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--schedule", default="linear", choices=("linear", "wsd", "const"))
