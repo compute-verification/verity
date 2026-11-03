@@ -246,7 +246,7 @@ def test_a_rounds_delta_is_the_served_update_and_its_tau_the_prompts_ids_over_th
 
 
 def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_a_long_note_or_a_long_body():
-    p = {"note": "n", "source": "s", "columns": ["a", "b"], "rows": [["x" * console.CELL_MAX, 1.5]]}
+    p = {"title": "t", "note": "n", "source": "s", "columns": ["a", "b"], "rows": [["x" * console.CELL_MAX, 1.5]]}
     assert not SW.refused(p)
     long = "x" * (console.CELL_MAX + 1)
     assert SW.refused(p | {"rows": [[long, 1.5]]}) == [f"row 0's a is {long!r:.40}"]
