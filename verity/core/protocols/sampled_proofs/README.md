@@ -287,11 +287,16 @@ A program's weights, constants and tables are values: committed once, at registr
 only inside a proof (`one_stage.registered`).
 
 - A registered value is a root parameter of the program, as rows of `words` leaves in the parameter's leaf order, each
-  leaf `word_bits` bits (16 or 32, `width`). Each row is committed as the circuit statement commits that port's row
-  (`hm96-sha512/row/v1`, or for a bit-row port its format, `Registered.commit`'s `schema`), with a 192-byte salt drawn
-  once from the operating system, and its root is the frame-v3-sha512 root over the rows under the value's `domain`.
-  The prover keeps the rows and salts. The row layout and the domain's binding are in `one_stage.registered`'s module
-  docstring.
+  leaf `word_bits` bits: its leaf width rounded up to whole u16 words, 16 or 32 (`width`). Row `r` is committed as the
+  circuit statement commits that port's row: `hm96-sha512/row/v1` over `sha512/row/v1` of its u16 words (`row_words`:
+  each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 chunks, as a C-Flock port row and
+  its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
+  used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
+  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
+  {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
+  and salts. A value a bit-row port reads is committed in that port's format (`Registered.commit`'s `schema`):
+  `hm96-sha512/row/v2` over `sha512/row/v2`, or `hm96-sha512/row-seg/v1` over `sha512/row-seg/v1`, of its leaves' bit
+  row (`row_words` unpadded), each leaf framed under that schema, under the same domain.
 - `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus
   `"word_bits"` when it is not 16), digest `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly
   when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
@@ -343,16 +348,13 @@ only inside a proof (`one_stage.registered`).
   position, and refuses a statement that names no `registered` entry for such a port or names one it was not given,
   and one whose proof blocks it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - Served trees (`served.register_served`): a served root is a hiding commitment that binds nothing on its own, so every
-  served path registers each tree a proof block reads as a registered value (`ServedTree`: value, root, leaves, words,
-  `word_bits`, domain, its row format `row_schema`, for an earlier run's output its `(record digest, port)`, and for an
-  earlier record's registered value it reuses, with no tree of its own, its `(record digest, value)`), writes the
-  verifier's `--registered` file from it, and verifies with `flock-verify --zk --registered`: the premise
+  served path registers each tree a proof block reads as a registered value (`ServedTree`, whose fields `served`'s
+  docstring gives), writes the verifier's `--registered` file from it, and verifies with `flock-verify --zk --registered`: the premise
   `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`. The positions are the path's own public Program
   and `Q_template_instance` query, which the session's `--program` and `--partition` (the returned `partition`) carry;
   rows are fixed slots padded with zeros. A tree's domain is its value's registered-value domain or, for an output or a
   reused value, the earlier port's or entry's (R7 holds the record to it: `registration.check(..., outputs=)`), and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
-  no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
-  R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no proof block
+  no rows, a row format other than `row/v1` (`served.SCHEMAS`), a root the log registered otherwise (R7-held) and a tree no proof block
   reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.
 - The audit record holds `session_registered`, the roots the verifier opened the reads against, to the
   registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
