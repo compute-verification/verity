@@ -120,7 +120,7 @@ def main() -> int:
         F.cross_entropy = lambda *args, **kwargs: torch.zeros(())
     if a.variant == "rebind_coin":
         os.urandom = lambda n: bytes(n)
-    prepare.submit(Path(a.out), a.start, "probe", blob, model, {}, [], sorted(model))
+    prepare.submit(Path(a.out), a.start, blob, model, {}, [], sorted(model))
     F.cross_entropy, os.urandom = loss, coin
     return 0
 

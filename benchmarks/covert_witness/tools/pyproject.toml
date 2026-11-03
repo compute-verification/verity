@@ -1,0 +1,5 @@
+# The training-efficiency search's tools (merge_board.py), stdlib only. Not a package: its tests run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/covert_witness/tools`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

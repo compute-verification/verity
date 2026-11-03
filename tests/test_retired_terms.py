@@ -16,7 +16,11 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
 their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
-record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
+record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. The training
+formalism's retired terms (`GLOSSARY.md`, Training: the older definitions, covers, (Γ, α), counted products, the
+earlier statement's bound, and v1's Dep and dependent share) are the scan's `training` group: they stay under the prefixes ``TRAINING_PENDING`` names, each
+with its owner, until it restates them, and the program format's input nodes and out(S) keep their names in its own docs
+(``CIRCUITS_HOME``).
 """
 from __future__ import annotations
 
@@ -68,13 +72,27 @@ DOC_TERMS = {
     "hm96 rows, outside the commitments' docs": "hiding commitments",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
-    "physical block": "server-time block",
+    "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
+    "dampener, compute dampener": "the slowdown ρ (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "receiver form, input node": "in(S), the values S reads that no gate of S computes (the sender form); inputs are values, "
+                                 "not nodes",
+    "out(S)": "the values meant, in words (a proof block's out(S) stays in the program format's docs)",
+    "(Γ, α), width(θ)": "the policy (c, k, n): |I| ≤ c and |in(I) ∖ θ| ≤ k",
+    "covering bound, covering argument, covering form, (c, k) cover": "a (c, k)-partition, and the theorem Slowdown under A1",
+    "multiplication block": "a token block (MAC blocks only measure the cut cost a)",
+    "counted product, updated multiplication, updated product": "the affected gates A, every gate downstream of the update",
+    "deep share, per MAC β, r sweep": "the token share σ, the update profiles u(x) and u_in(x) and the reachable share x₀",
+    "slowdown lower bound, overhead lower bound, slowdown(𝒢, T_𝒢": "the slowdown ρ(C), and Security's H(ℓ*)·min ρp",
+    "necessary subcomputation": "the affected gates A, the gates that depend on θ′",
+    "pricing argument, bounding strategy, inference block yield, server block yield, straddle term":
+        "A1, A1′ and A2, and the theorems Fit, Slowdown and Security",
+    "reference training algorithm": "the honest cost H(ℓ*), the least compute of any method",
+    "Dep, dependent share": "the affected gates A; the token share σ (the training formalism v2)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -86,9 +104,30 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
-                       rf"|\bcommit{_SPACE}periods?\b")
+                       rf"|\bcommit{_SPACE}periods?\b"
+                       rf"|(?P<training>(?i:\b(?:receiver{_SPACE}forms?|input{_SPACE}nodes?"
+                       rf"|covering{_SPACE}(?:bounds?|arguments?|forms?)|multiplication{_SPACE}blocks?"
+                       rf"|counted{_SPACE}products?|updated{_SPACE}(?:multiplications?|products?)|deep{_SPACE}shares?"
+                       rf"|per-MAC{_SPACE}β|r{_SPACE}sweeps?|(?:slowdown|overhead){_SPACE}lower{_SPACE}bounds?"
+                       rf"|necessary{_SPACE}subcomputations?|pricing{_SPACE}arguments?|bounding{_SPACE}strateg(?:y|ies)"
+                       rf"|(?:inference|server)-block{_SPACE}yields?|straddle{_SPACE}terms?"
+                       rf"|reference{_SPACE}training{_SPACE}algorithms?|(?-i:Dep)|dependent{_SPACE}shares?)\b)"
+                       rf"|\bout\([A-Z]\)|\(Γ,{_SPACE}?α\)|width\(θ\)|\(c,{_SPACE}?k\)-covers?\b|\bslowdown\(𝒢|\bT_𝒢)")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
+#: The program format's own docs and code, where input nodes and a proof block's out(S) keep their names.
+CIRCUITS_HOME = "verity/ml/circuits/"
+#: Where the training formalism's retired terms (the `training` group) may stay until their owner restates them, by
+#: path prefix: the owner, and what they restate.
+TRAINING_PENDING: dict[str, str] = {
+    "Security/": "@training's Lean worker restates the Lean and its docs in the formalism",
+    "benchmarks/covert_witness/": "@training's harness workers rewrite it on the formalism",
+    "benchmarks/learning_frontier/te_core/": "@training's harness workers rewrite it on the formalism",
+    "benchmarks/rho/": "@training: the earlier statement's calculator, restated or retired with the harness",
+    "benchmarks/nci/": "@training: the earlier statement's board and covering calculators, restated or retired with the "
+                       "harness",
+    "benchmarks/circuit_properties/": "@training: the earlier statement's counted products, restated with the harness",
+}
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -251,6 +290,9 @@ def doc_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, st
                 continue
             if f.startswith(HM96_HOME) and m[0].lower().startswith("hm96"):
                 continue
+            if m["training"] and (f.startswith(tuple(TRAINING_PENDING))
+                                  or f.startswith(CIRCUITS_HOME) and m[0].lower().startswith(("input", "out("))):
+                continue
             if spelling := next((s for a, b, s in allowed if a <= m.start() and m.end() <= b), None):
                 used.add(spelling)
                 continue
@@ -395,6 +437,36 @@ def test_the_doc_scan_reads_the_training_terms():
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]
+
+
+def test_the_doc_scan_reads_the_formalism_terms():
+    """The training formalism's retired terms, on toy files: under a TRAINING_PENDING prefix they stay and the older terms
+    don't, the program format keeps its input nodes and out(S), and covers, MAC blocks, wires and sweeps in other senses,
+    a Lean name in a code span and αΓ stay."""
+    docs = {
+        "a.md": "The receiver form of in(S), out(S) and input\nnodes; a (c, k)-cover and the covering bound's forms.\n"
+                "Policy (Γ, α), block size width(θ); multiplication blocks; counted products and updated multiplications.\n"
+                "The deep share, per-MAC β and the r sweep; the slowdown lower bound, slowdown(𝒢, 𝒜, η) and T_𝒢.\n"
+                "A necessary subcomputation, a pricing argument, the bounding strategy, inference-block yields, the straddle\n"
+                "term and the reference training algorithm.\n"
+                "A MAC block measures a; tests cover it; a wire, a sweep over r, the `Nci.Cover` module and αΓ stay.\n"
+                "Dep and the dependent shares; a package's dep stays.\n",
+        "Security/Definitions/Nci/README.md": "The covering bound.\n",
+        "benchmarks/covert_witness/README.md": "Counted products.\n",
+        "benchmarks/learning_frontier/te_core/README.md": "The r sweep.\n",
+        "benchmarks/nci/x.md": "A covering bound and a leg.\n",
+        "verity/ml/circuits/PROTOCOL.md": "An input node, and out(S) for a proof block; a pricing argument.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "receiver form"), ("a.md", 1, "out(S)"), ("a.md", 1, "input nodes"), ("a.md", 2, "(c, k)-cover"),
+        ("a.md", 2, "covering bound"), ("a.md", 3, "(Γ, α)"), ("a.md", 3, "width(θ)"), ("a.md", 3, "multiplication blocks"),
+        ("a.md", 3, "counted products"), ("a.md", 3, "updated multiplications"), ("a.md", 4, "deep share"),
+        ("a.md", 4, "per-MAC β"), ("a.md", 4, "r sweep"), ("a.md", 4, "slowdown lower bound"), ("a.md", 4, "slowdown(𝒢"),
+        ("a.md", 4, "T_𝒢"), ("a.md", 5, "necessary subcomputation"), ("a.md", 5, "pricing argument"),
+        ("a.md", 5, "bounding strategy"), ("a.md", 5, "inference-block yields"), ("a.md", 5, "straddle term"),
+        ("a.md", 6, "reference training algorithm"), ("a.md", 8, "Dep"), ("a.md", 8, "dependent shares"),
+        ("benchmarks/nci/x.md", 1, "leg"),
+        ("verity/ml/circuits/PROTOCOL.md", 1, "pricing argument")]
 
 
 def test_the_doc_scan_reads_the_incorrect_terms():
