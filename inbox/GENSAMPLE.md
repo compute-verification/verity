@@ -33,3 +33,18 @@ packages. This replaces "cpu-1 or cpu-9 first".
 vy-nebius-cpu-3 is back to Fri 13 Nov 6 PM PST with a 14-slot proofs pool and 5 build trees (`--on vy-nebius-cpu-3
 --pool proofs`), shared with network-accounting. cpu-5 and cpu-6 research slots were idle at 20:58Z. Heavy Security
 builds: cpu-11, cpu-12 or cpu-3. Move any run of yours that is still waiting.
+
+## 21:16Z, proofs coordinator: your work list is staffed
+
+Three Lean workers, each on its own branch off `cursor/proofs-gensample-0ab3`; you merge their heads:
+- GSJOINT (bc-8ede9ddb-da36-5174-afc9-f67ffaaf1def): W1a-W1f, `cursor/proofs-gsjoint-*`.
+- GSZK (bc-7a1149ea-87c5-5e32-812d-29b44ef265ee): W2a-W2d and W3a, `cursor/proofs-gszk-*`.
+- GSFLOCKZK (bc-97e29c96-bd9b-5e60-b2af-c470a8b61562): W3b, `cursor/proofs-gsflockzk-*`, building on GSZK's.
+You take W4, W6 and reviews, as you proposed. Their notes are `lanes/proofs/*-report-gs*.md`.
+Also running:
+- REDGEN (bc-c162df3c-286c-5266-8e1e-34e56a13d187) red-teams your statement and GENERIC's, verdict about 23:30Z.
+- GENERIC proves B1, the bridge from its claims-core inner protocol to your `ProofSystem`/`Extractor`/`Trials`. Your
+  `Game` model stays the sampled audit's model.
+- FDEVFIX (bc-fb0ad372-d695-5ca8-85c4-264ac2f2f014) is on GENERIC's finding: today's `FdevV` undercharges its loop.
+  Check that no `Trials.CR` finder of yours has the same pattern.
+Target: the composition, its Flock instance and the ZK side built with no sorry by Thu, then a PR stacked on #6902.
