@@ -13,7 +13,8 @@ Modes:
   is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero, or
   with `--qat-block B` on that share's runs of B consecutive entries with the largest sum of |V|; a sparse submission
   over its E cap (`--max-e-bytes`, else its class's) is re-cut from its latent at a smaller share until it fits
-  (`cut_to_keep`).
+  (`cut_to_keep`). `--qat-norm-bits B` codes the trained norm gains the same way, as a latent delta at B-bit round to
+  nearest (one scale a vector), instead of in full.
   `--qat fp` trains the weights unquantized, as ptq does;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
@@ -92,7 +93,7 @@ class Schedule:
 
 
 #: what an arm may set (`--arms`); the rest is the run's
-ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
+ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
             "norms", "lr", "norm_lr", "seed"}
 
 
@@ -549,6 +550,9 @@ def main() -> int:
     ap.add_argument("--qat-keep", type=float, default=0.05, help="qat sparse: the share of each group kept (nonzero)")
     ap.add_argument("--qat-block", type=int, default=1,
                     help="qat sparse: keep runs of this many consecutive entries (row-major), chosen by their sum of |V|")
+    ap.add_argument("--qat-norm-bits", type=int, default=0,
+                    help="qat: train the norm gains as a latent delta coded at this many bits (rtn, one scale a "
+                         "vector) in every step, as the matrices are; 0: in full")
     ap.add_argument("--xz", choices=("1", "9e", "min"), default="1",
                     help="--emit quan: the submitted E's xz preset (9e, or min: the smallest of qformat.XZ_TRIES, through "
                          "qformat.recompress; checkpoints stay preset 1)")
@@ -623,9 +627,10 @@ def main() -> int:
             with torch.no_grad():
                 for n in names:
                     params[n].copy_(theta_dev[n])
-        # qat: the quantized tensors (every trained matrix) train a latent delta V; their weights are θ + Q(V), rebuilt
-        # each step
+        # qat: the quantized tensors (every trained matrix, and with --qat-norm-bits every trained vector) train a latent
+        # delta V; their weights are θ + Q(V), rebuilt each step
         quantized = [n for n in names if params[n].ndim == 2] if a.mode == "qat" and x.qat != QAT_FP else []
+        quantized += [n for n in names if params[n].ndim == 1] if quantized and x.qat_norm_bits else []
         latent = {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
         dgrad = delta_grad(*(sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized)))
         opt_of = {n: latent.get(n, params[n]) for n in names}
@@ -641,7 +646,8 @@ def main() -> int:
         @torch.no_grad()
         def materialize(x=x, latent=latent, qarrays=qarrays, quantized=quantized) -> None:
             for n in quantized:
-                q = qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep, x.qat_block)
+                q = (qf.rtn(latent[n], x.qat_norm_bits, 0) if latent[n].ndim == 1 else
+                     qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep, x.qat_block))
                 qarrays[n] = q
                 params[n].data.copy_((theta_dev[n].float() + q.value()).to(theta_dev[n].dtype))
 
@@ -759,7 +765,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         while r is best and a.emit == "quan" and cap and r["latent"] and len(qblob) > cap and keep > 1e-5:
             keep *= min(0.97, cap / len(qblob))
             qarrays = {n: qat_quant(v.to(dev), "sparse", r["x"].qat_group, r["x"].qat_mult, keep, r["x"].qat_block)
-                       for n, v in r["latent"].items()}
+                       if v.ndim == 2 else qarrays[n] for n, v in r["latent"].items()}
             qblob, xz1_bytes = code_blob(a, qarrays, r["rest"], theta)
         rebuilt = qf.decode(theta, qblob, dev)
         trained = {n: (theta[n].to(dev).float() + q.value()).to(theta[n].dtype).cpu() for n, q in qarrays.items()}
