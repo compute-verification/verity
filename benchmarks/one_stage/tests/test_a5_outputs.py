@@ -1,9 +1,7 @@
-"""a5's output class (`a5.output_closure`): a window's units whose outputs are served out are proved whole beside a work
-sample, on the closure the verifier's own map gives every sample. Over several coin seeds the stream's sample of record (the Lean
-`Select.select`, agreeing with the Python) draws its k units uniformly and proves the sampled proof blocks and the whole class, and
-its outcome is accepted with the Lean's `Run.run` agreeing; the proved set less one output unit, and the sample with its
-closure dropped, are refused (`a5.output_negatives`); a class that mixes a member, a law that is not a streamed work law,
-and a class outside the population are refused before the sample (`a5.output_refusal`). A toy window of one template."""
+"""a5's output class (`a5.output_units`): a window's units whose outputs are served out would be proved whole beside a work
+sample only on a closure map, which the stream refuses (`closure`), so a5 refuses a window with an output class before the
+sample (`a5.output_refusal`). The stream refuses the class's closure map before reading a coin, and the same registration's
+work sample without one is accepted, the Lean's `Run.run` agreeing. A toy window of one template."""
 
 from __future__ import annotations
 
@@ -29,7 +27,7 @@ XOR8 = PrimitiveDefinition("A5OutputsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8
                            register=False)
 PAIR = bind(CompositeDefinition("A5OutputsTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
                                 lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
-N, K, CAP = 32, 4, 8
+N, K = 32, 4
 OUTPUTS = [[16, 32]]
 QUERY = P.template_instances_query((PAIR,))
 TABLE = {P.template_id(PAIR): 1}
@@ -56,8 +54,8 @@ class Clock:
         return self.now
 
 
-def args(outputs=OUTPUTS, coins=None, verifier_coins=True) -> SimpleNamespace:
-    return SimpleNamespace(outputs=outputs, coins=coins, verifier_coins=verifier_coins)
+def args(outputs=OUTPUTS) -> SimpleNamespace:
+    return SimpleNamespace(outputs=outputs)
 
 
 def program() -> Program:
@@ -94,51 +92,24 @@ def seeded(seed: int):
     return lambda n: rng.randbytes(n)
 
 
-@pytest.mark.parametrize("seed", range(6))
-def test_every_draw_proves_the_output_class_whole_beside_its_uniform_k_and_is_accepted(seed):
-    """The stream's sample of record on the verifier's coins, with the class's closure map: k drawn (the work law over one
-    template of work 1 is the uniform k-subset), the closure every output unit not sampled, so the sample proves the sampled
-    proof blocks and the whole class and nothing else; the outcome is accepted, the Lean's run agreeing."""
-    closure = A5.output_closure(args(), N)
-    assert closure is not None and set(closure) == set(range(N)) and all(cs == OUTS for cs in closure.values())
+def test_an_output_class_is_refused_before_the_sample():
+    assert A5.output_refusal(args()) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}
+    assert A5.output_refusal(args(outputs=None)) is None and A5.output_refusal(args(outputs=[])) is None
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
+    """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read; the same
+    registration's sample of record without it draws k (the work law over one template of work 1 is the uniform
+    k-subset), proves exactly those, and is accepted, the Lean's run agreeing."""
     coins = AC.VerifierCoins(seeded(seed))
     stream = stream_of(coins)
-    draw = stream.select(register(stream), closure=closure)
-    units, proved = draw.draw["units"], D.proved(draw.draw)
-    assert draw.draw["law"] == "work" and len(units) == K
-    assert set(OUTS) <= set(proved) and set(proved) == set(units) | set(OUTS)
-    assert sorted(draw.draw.get("closure", [])) == sorted(set(OUTS) - set(units))
+    reg = register(stream)
+    with pytest.raises(S.Refused) as e:
+        stream.select(reg, closure={u: OUTS for u in range(N)})
+    assert e.value.verdict.codes == ("closure",) and bytes(coins.read) == b""
+    draw = stream.select(reg)
+    units = draw.draw["units"]
+    assert draw.draw["law"] == "work" and len(units) == K and "closure" not in draw.draw and D.proved(draw.draw) == units
     got, audit = outcome(stream, draw, None)
     assert got.accepted and audit["accepted"] and "run" not in audit["checks"] and audit["verifiers"]["agree"]
-    neg = A5.output_negatives(args(), draw.draw, proved)
-    assert sorted(neg) == ["draw-without-the-output-closure", "output-unit-left-out-of-the-proved-set"]
-    assert all(n["refused"] for n in neg.values()), neg
-
-
-def test_the_honest_verifier_coin_negatives_hold_with_the_closure():
-    """`a5_coins.verifier_negatives` selects under the same closure map, so its replay draws the honest draw and each
-    negative is refused for its own reason."""
-    closure = A5.output_closure(args(), N)
-    coins = AC.VerifierCoins(seeded(7))
-    stream = stream_of(coins)
-    draw = stream.select(register(stream), closure=closure)
-    got, _ = outcome(stream, draw, None)
-    assert got.accepted
-    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT, closure)
-    assert all(n["refused"] for n in neg.values()), neg
-
-
-def mine(members: list[tuple[int, int]]) -> SimpleNamespace:
-    return SimpleNamespace(population=N, members=[SimpleNamespace(base=b, n=n) for b, n in members])
-
-
-def test_an_output_class_is_refused_unless_a_streamed_work_draw_over_whole_members():
-    whole = mine([(b, CAP) for b in range(0, N, CAP)])
-    work = {"law": "work"}
-    assert A5.output_refusal(args(), whole, work) is None
-    assert A5.output_refusal(args(outputs=None), whole, {"law": "subset"}) is None
-    assert A5.output_refusal(args(), whole, {"law": "subset"}) == {"output-class-needs-a-streamed-work-draw": "subset"}
-    assert A5.output_refusal(args(verifier_coins=False), whole, work) == {"output-class-needs-a-streamed-work-draw": "work"}
-    assert A5.output_refusal(args(outputs=[[12, 32]]), whole, work) == {"output-class-mixes-a-member": [1]}
-    assert A5.output_refusal(args(outputs=[[16, 33]]), whole, work) == {"output-class-outside-the-population": 32}
-    assert A5.output_closure(args(outputs=None), N) is None
