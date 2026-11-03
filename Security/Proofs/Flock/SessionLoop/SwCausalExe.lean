@@ -12,6 +12,7 @@ along the coins up to the round that frees it:
   a history of at most `repBase + jj` openings (`freedAt_le_body`, `piopV_length_eq`).
 * `Loop.freeWord_congr`: where every round that frees a pad does so after at most `t` openings, the word `freeWord`
   reads there is one at two coin vectors that agree below `t` (`freedAt_unique`).
+* `Loop.vsWord_vsOf_l0`: no round frees a pad from level 0's on (`freeWord_ligAt`), so there `vsOf` is the honest values.
 -/
 
 set_option synthInstance.maxSize 100000
@@ -180,18 +181,16 @@ theorem freeWord_le {x : Msg} {w : Flock.Wit} (hSv : Serves x)
   freeWord_congr (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real hP bx
     (fun _ _ hF => freedAt_le L₀ src real hSv hP _ hF hjj hi) hcc
 
-/-- **`freeWord` at a pad the PIOP never absorbs is none at every coins** (`freedAt_place`). -/
-theorem freeWord_lig {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w)
-    (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {ν : CoinLayer.Nonce}
-    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
-    {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
+/-- **`freeWord` at a pad the PIOP never absorbs is none at every coins**: no round frees it (`freedAt_place`). -/
+theorem freeWord_lig {x : Msg} {w : Flock.Wit} (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {c : Fin (refK x) → FlockDeploy.Coin}
+    {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
     (hi : ∀ P, P < (absorbed (layE x j)).size - nLig (layE x j) → (absorbed (layE x j))[P]! ≠ i) :
-    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i :=
-  freeWord_congr (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real hP bx (t := 0)
-    (fun _ _ hF => by
-      obtain ⟨P, hPs, hPi⟩ := freedAt_place L₀ src real _ hF
-      exact absurd hPi (hi P hPs))
-    fun _ hk => absurd hk (Nat.not_lt_zero _)
+    freeWord _ bx x w ν c s j r i = none := by
+  unfold freeWord
+  exact dif_neg fun ⟨_, _, _, hF⟩ => by
+    obtain ⟨P, hPs, hPi⟩ := freedAt_place L₀ src real _ hF
+    exact hi P hPs hPi
 
 end Words
 
@@ -795,18 +794,44 @@ theorem freeWord_at {x : Msg} {w : Flock.Wit} (hSv : Serves x)
   exact freeWord_le L₀ src real hSv hP bx hjj (place_hi (layE x j) (by rw [e]; exact hi)) hcc
 
 /-- `freeWord_lig` at a pad past the PIOP's values (`place_lig`). -/
-theorem freeWord_ligAt {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w)
-    (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {ν : CoinLayer.Nonce}
-    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
-    {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
+theorem freeWord_ligAt {x : Msg} {w : Flock.Wit} (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {c : Fin (refK x) → FlockDeploy.Coin}
+    {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
     (hi : 195 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6) ≤ i) :
-    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i := by
-  refine freeWord_lig L₀ src real hP bx (place_lig (layE x j) ?_)
+    freeWord _ bx x w ν c s j r i = none := by
+  refine freeWord_lig L₀ src real bx (place_lig (layE x j) ?_)
   have hs := absorbed_size (layE x j)
   have hfa : (layE x j).fa = 128 + 2 * ((stAt x j).m - 6) := rfl
   have hlc : (layE x j).nLc = (stAt x j).c.kLog - 6 := rfl
   rw [hfa, hlc] at hs
   omega
+
+/-- **`vsOf` is the honest values from level 0's pads on**: no round frees a pad past the PIOP's values
+(`freeWord_ligAt`), so where the loop serves the statement `vsOf` takes the table's own value there, as the honest values
+do, and where it doesn't `vsOf` is the honest values. -/
+theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (x : Msg) (w : Flock.Wit)
+    (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {i : ℕ}
+    (hi : (layE x j).zp 64 ≤ i) :
+    vsWord (vsOf _ bx) x w ν c τ j r i =
+      vsWord (CoinLayer.session loopNr Masked.dataE).honestVals x w ν c τ j r i := by
+  by_cases hSv : Serves x
+  · have hzp : (layE x j).zp 64 = 131 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6) + 64 :=
+      pl_zp _ _ _ 64
+    have hfc : (layE x j).fc = 130 + 2 * ((stAt x j).m - 6) := pl_fc _ _ _
+    have hne : i ≠ (layE x j).fc := by omega
+    have hl : 195 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6) ≤ i := by omega
+    by_cases hE : i < (tabC PE x j).z.nE
+    · rw [vsWord_vsOf _ bx hSv w ν c τ j r hE, ite_eq_right hne, vsOfWord, freeWord_ligAt L₀ src real bx hl]
+      dsimp only
+      unfold vsWord
+      rw [dite_eq_left hE]
+      first
+        | exact dif_pos hE
+        | rfl
+    · unfold vsWord
+      rw [dite_eq_right hE, dite_eq_right hE]
+  · unfold vsWord
+    rw [vsOf_of_not_serves _ bx hSv]
 
 /-- **The switched sources agree where read**, at coins agreeing below `n`, where table `j`'s rows hold at its base at
 both: each field the honest sources' (`repOk`) or the worker's values along coins that agree up to the PIOP round that
@@ -846,6 +871,9 @@ theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
           ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω l + (p l).1, (p l).2)) j
           r).masked k :=
     fun hfc hH hF => swMasked_congr _ bx hSv wt ω p _ _ j r hfc hH hF
+  have hL : ∀ {k : ℕ}, 195 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6) ≤ k →
+      freeWord _ bx x w ν c sn j r k = freeWord _ bx x w ν c' sn j r k := fun h =>
+    (freeWord_ligAt L₀ src real bx h).trans (freeWord_ligAt L₀ src real bx h).symm
   have bsv : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
       (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
         ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
@@ -913,9 +941,9 @@ theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
       ((stAt x j).c.kLog - 6)) (by place_tac) (place_zp (by place_tac)) fun k hk => hcc k (by omega))
   · rw [bsv c, bsv c']
     exact hA.sv k hk hn
-  · exact hM (by place_tac) (hA.ood hn) (freeWord_ligAt L₀ src real hP bx (by place_tac))
-  · exact hM (by place_tac) (hA.msg i hi hn t ht) (freeWord_ligAt L₀ src real hP bx (by place_tac))
-  · exact hM (by place_tac) (hA.E hn a ha t ht) (freeWord_ligAt L₀ src real hP bx (by place_tac))
+  · exact hM (by place_tac) (hA.ood hn) (hL (by place_tac))
+  · exact hM (by place_tac) (hA.msg i hi hn t ht) (hL (by place_tac))
+  · exact hM (by place_tac) (hA.E hn a ha t ht) (hL (by place_tac))
   · obtain ⟨h1, h2, h3⟩ := hA.y1 hn
     obtain ⟨b1, b2, b3⟩ := brs c
     obtain ⟨b1', b2', b3'⟩ := brs c'
