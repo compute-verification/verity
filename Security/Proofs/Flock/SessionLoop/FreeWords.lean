@@ -234,12 +234,12 @@ def StepRel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) : ForInStep τ�
   | _, _ => False
 
 /-- **Two loops alike step by step end alike**: where each pair of steps from states alike in `R` is alike, at the
-first loop's run past the step (its rest and its end, which `Z` describes), both loops end at states alike in `R`. -/
-theorem forIn_rel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) (Z : τ₁ → Prop)
+first loop's run past the step (its rest and its end, which `Rest` describes), both loops end at states alike in `R`. -/
+theorem forIn_rel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) (Rest : τ₁ → Prop)
     (g₁ : ℕ → τ₁ → V (ForInStep τ₁)) (g₂ : ℕ → τ₂ → V (ForInStep τ₂))
     (hg : ∀ (i : ℕ) (l : List ℕ) (x₁ : τ₁) (x₂ : τ₂) (y₁ : ForInStep τ₁) (y₂ : ForInStep τ₂) (z₁ : τ₁),
-      R x₁ x₂ → Z z₁ → g₁ i x₁ = .ok y₁ → g₂ i x₂ = .ok y₂ → forIn (i :: l) x₁ g₁ = .ok z₁ → StepRel R y₁ y₂) :
-    ∀ (l : List ℕ) (x₁ : τ₁) (x₂ : τ₂) (z₁ : τ₁) (z₂ : τ₂), R x₁ x₂ → Z z₁ →
+      R x₁ x₂ → Rest z₁ → g₁ i x₁ = .ok y₁ → g₂ i x₂ = .ok y₂ → forIn (i :: l) x₁ g₁ = .ok z₁ → StepRel R y₁ y₂) :
+    ∀ (l : List ℕ) (x₁ : τ₁) (x₂ : τ₂) (z₁ : τ₁) (z₂ : τ₂), R x₁ x₂ → Rest z₁ →
       forIn l x₁ g₁ = .ok z₁ → forIn l x₂ g₂ = .ok z₂ → R z₁ z₂
   | [], x₁, x₂, z₁, z₂, hR, _, h₁, h₂ => by cases h₁; cases h₂; exact hR
   | i :: l, x₁, x₂, z₁, z₂, hR, hZ, h₁, h₂ => by
@@ -262,7 +262,7 @@ theorem forIn_rel {τ₁ τ₂ : Type} (R : τ₁ → τ₂ → Prop) (Z : τ₁
         | yield a =>
           cases y₂ with
           | done b => exact (hs : False).elim
-          | yield b => exact forIn_rel R Z g₁ g₂ hg l a b z₁ z₂ hs hZ h₁ h₂
+          | yield b => exact forIn_rel R Rest g₁ g₂ hg l a b z₁ z₂ hs hZ h₁ h₂
 
 /-- The state of `roundFree`'s loop: the round's return, once it returned, the frame's state, the round's release so
 far, the free offsets so far and the position in the round. -/
@@ -346,7 +346,7 @@ theorem inFree_false {free : Array ℕ} {i : ℕ} (h : ∀ f ∈ free, i < f ∨
   intro k hk
   rcases h free[k] (Array.getElem_mem hk) with h' | h' <;> simp <;> omega
 
-theorem get!_of_lt {X : ByteArray} {i : ℕ} (h : i < X.size) : X.get! i = X.data[i] := by
+theorem get!_of_lt {D : ByteArray} {i : ℕ} (h : i < D.size) : D.get! i = D.data[i] := by
   simp [ByteArray.get!, h]
 
 theorem u64OfLE_congr {d d' : ByteArray} {o : ℕ} (h : ∀ i < 8, d.get! (o + i) = d'.get! (o + i)) :
@@ -355,15 +355,15 @@ theorem u64OfLE_congr {d d' : ByteArray} {o : ℕ} (h : ∀ i < 8, d.get! (o + i
   refine List.foldl_ext _ _ _ fun a b hb => ?_
   rw [h b (List.mem_range'_1.1 hb).2]
 
-theorem extract_congr {X X' : ByteArray} (hsz : X.size = X'.size) {a b : ℕ} (hb : b ≤ X.size)
-    (h : ∀ i, a ≤ i → i < b → X.get! i = X'.get! i) : X.extract a b = X'.extract a b := by
+theorem extract_congr {D D' : ByteArray} (hsz : D.size = D'.size) {a b : ℕ} (hb : b ≤ D.size)
+    (h : ∀ i, a ≤ i → i < b → D.get! i = D'.get! i) : D.extract a b = D'.extract a b := by
   apply ByteArray.ext
   rw [ByteArray.data_extract, ByteArray.data_extract]
   refine Array.ext (by simp only [Array.size_extract, ByteArray.size] at hsz ⊢; rw [hsz]) fun i h1 h2 => ?_
   rw [Array.getElem_extract, Array.getElem_extract]
   simp only [Array.size_extract] at h1
-  have hi : a + i < X.size := by simp only [ByteArray.size] at hb ⊢; omega
-  have hi' : a + i < X'.size := by rw [← hsz]; exact hi
+  have hi : a + i < D.size := by simp only [ByteArray.size] at hb ⊢; omega
+  have hi' : a + i < D'.size := by rw [← hsz]; exact hi
   have e := h (a + i) (by omega) (by simp only [ByteArray.size] at hb; omega)
   rw [get!_of_lt hi, get!_of_lt hi'] at e
   exact e
@@ -404,13 +404,13 @@ theorem fwd_step {x : St} {y : ForInStep St} (hx : Fwd x) (h : GrowStep x y) :
 
 /-- **Two runs of a round's loop alike step by step end alike** (`forIn_rel`), the first's free offsets behind its
 position at every step. -/
-theorem forIn_rel_grows {g₁ g₂ : ℕ → St → V (ForInStep St)} (Z : St → Prop) {l : List ℕ} {x₁ x₂ z₁ z₂ : St}
+theorem forIn_rel_grows {g₁ g₂ : ℕ → St → V (ForInStep St)} (Rest : St → Prop) {l : List ℕ} {x₁ x₂ z₁ z₂ : St}
     (h₁ : forIn l x₁ g₁ = .ok z₁) (h₂ : forIn l x₂ g₂ = .ok z₂) (hG : Grows g₁)
     (hg : ∀ (i : ℕ) (l : List ℕ) (x₁ x₂ : St) (y₁ y₂ : ForInStep St) (z₁ : St),
-      Rel0 x₁ x₂ → Fwd x₁ → Z z₁ → g₁ i x₁ = .ok y₁ → g₂ i x₂ = .ok y₂ → forIn (i :: l) x₁ g₁ = .ok z₁ →
+      Rel0 x₁ x₂ → Fwd x₁ → Rest z₁ → g₁ i x₁ = .ok y₁ → g₂ i x₂ = .ok y₂ → forIn (i :: l) x₁ g₁ = .ok z₁ →
         StepRel Rel0 y₁ y₂)
-    (hR : Rel0 x₁ x₂) (hF : Fwd x₁) (hZ : Z z₁) : Rel0 z₁ z₂ :=
-  (forIn_rel (fun a b => Rel0 a b ∧ Fwd a) Z g₁ g₂ (fun i l x₁ x₂ y₁ y₂ z₁ hR hZ hy₁ hy₂ hrun => by
+    (hR : Rel0 x₁ x₂) (hF : Fwd x₁) (hZ : Rest z₁) : Rel0 z₁ z₂ :=
+  (forIn_rel (fun a b => Rel0 a b ∧ Fwd a) Rest g₁ g₂ (fun i l x₁ x₂ y₁ y₂ z₁ hR hZ hy₁ hy₂ hrun => by
     have hs := hg i l x₁ x₂ y₁ y₂ z₁ hR.1 hR.2 hZ hy₁ hy₂ hrun
     have hf := fwd_step hR.2 (hG i x₁ y₁ hy₁)
     cases y₁ <;> cases y₂ <;> first | exact (hs : False).elim | exact ⟨hs, hf⟩) l x₁ x₂ z₁ z₂ ⟨hR, hF⟩ hZ h₁ h₂).1
