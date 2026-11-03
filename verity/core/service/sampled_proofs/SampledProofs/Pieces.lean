@@ -30,10 +30,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
-* `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
-* `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
+* `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
+* `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
-* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 * `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
