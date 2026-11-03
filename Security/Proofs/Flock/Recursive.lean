@@ -73,9 +73,15 @@ import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls
+import Proofs.Flock.Recursive.Loop
+import Proofs.Flock.Recursive.LoopZK
+import Proofs.Flock.Recursive.StopCountStream
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
-(`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
+(`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
+and a recursive session's stops, in `StopLeak`, and a recursive session's view cut at the stop its run reached, from the
+firewall's rules, in `StopCount` and its proof, `StopCountProof`, with a stream's stops counted together in
+`StopCountStream`), its zero knowledge at the operating
 system's salts (`OsSalts`), its soundness at the compiled inner
 protocol with the compile lemma open (`Compile`), the compile premise at a class whose schedule is `fast100`'s
 (`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
@@ -88,7 +94,9 @@ V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), V*'s outer session
 in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) and their zero knowledge, (ii)'s
 `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the firewall's code
 and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
-statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`), `FirewallSends`'
+statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`) and at V*'s statements
+run by the session loop's switched prover (`Loop`), `RecursiveZK` there with the session released at a stop the coins
+fix, its simulator reading only V*'s public statements (`LoopZK`), `FirewallSends`'
 template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
 honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
