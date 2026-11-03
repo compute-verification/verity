@@ -109,7 +109,7 @@ def T₀ [Fintype Sa] [Nonempty Sa] (x : Msg) : SeqTape where
 /-- Where session `j` starts: after the prefix's `kI x + 1` rounds and the sessions before `j`. -/
 def start (x : Msg) : ℕ → ℕ
   | 0 => G.kI x + 1
-  | j + 1 => G.start x j + G.n x j
+  | j + 1 => start x j + G.n x j
 
 /-- The recursion as a run in parts: the prefix, then the sessions. -/
 def lay [Fintype Sa] [Nonempty Sa] (x : Msg) : Layout W WS ((G.T₀ x).N × (G.T₀ x).Ω) where

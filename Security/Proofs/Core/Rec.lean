@@ -105,7 +105,6 @@ theorem zkmalAt_prefix {W R : Type} [Fintype R] [Nonempty R] (H : Msg → Msg) (
     rw [runStar_msgs, hV]
     refine congrArg Ev (interact_prefixRun Hl My cS _ kI nC (dI ω.1.1) (dS ω.1) stg ω.1.2 ω.2 _
       (fun h hh => ?_) (fun h hh => (hP ω h).2 hh))
-    dsimp only
     rw [(hP ω h).1 hh, leafPm, dif_pos hh]
   have hsim : Pr (fun c : (Fin kI → Sa) × (Fin nC → Sa) => Ev (spOut H Vs θ x (prog c))) =
       Pr (fun q : (Fin kI → Sa) × (Fin nC → Sa) => Ev (prefixRun Hl My cS
@@ -142,11 +141,9 @@ theorem S₀_eval (H : Msg → Msg) [AddCommGroup Gp] (x : Msg) (ask : List Msg 
   show (SP.eval H ask (spRun (G.zeroMsg x c) (G.kI x + 1) [])).1 = _
   rw [spRun_eval]
   refine interact_prefixRun _ _ _ ask _ _ _ _ _ c.1 c.2 _ (fun h hh => ?_) (fun h hh => ?_)
-  · dsimp only
-    rw [zeroMsg, dif_pos hh, leafPm, dif_pos hh, zero_add]
+  · rw [zeroMsg, dif_pos hh, leafPm, dif_pos hh, zero_add]
     rfl
-  · dsimp only
-    rw [zeroMsg, dif_neg (show ¬ h.length < G.kI x by omega), Rec.queries_eval]
+  · rw [zeroMsg, dif_neg (show ¬ h.length < G.kI x by omega), Rec.queries_eval]
     simp only [OC.eval, zero_add]
 
 
