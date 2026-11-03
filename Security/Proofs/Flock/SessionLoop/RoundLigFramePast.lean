@@ -138,7 +138,7 @@ theorem sched_past {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : Byt
   have hps : p < sched.size := by omega
   have hsz : L.size = sched.size := by
     rw [hL, Array.size_append, hls]
-    simp only [Array.size_toArray, List.length_map, List.length_drop, Array.length_toList]
+    simp only [List.size_toArray, List.length_map, List.length_drop, Array.length_toList]
     omega
   have hpL : p < L.size := by rw [hsz]; exact hps
   obtain ⟨fs, k, n', hb, hG, hkn, hn0', hn64⟩ := hQ p hpL hp1
@@ -169,7 +169,6 @@ theorem sched_past {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : Byt
     apply ByteArray.ext
     apply Array.ext'
     rw [hr1, Claims.ZKServer.data_append', Claims.ZKServer.sq_enc]
-    rfl
   have hn2 : (sched.getD p (.empty, 0)).2 = n' := by
     rw [hcnt, hbytes]
     exact Sched.count_header _ k n' hn64
