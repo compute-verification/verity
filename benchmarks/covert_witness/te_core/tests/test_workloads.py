@@ -12,8 +12,8 @@ te_core.formalism.fresh_products on the model's products, which match io_bound's
 in a chain as the standard algorithm's are, so at the console's policy it is measured on every dense point and binds
 wherever Fit fails and its term exceeds 1: its term io_bound's figure without P-cell, resting on P-width and P-chain
 (coordinator 12:09Z), Λ's whole-making factor io_bound.whole_chain_of on the model's own whole-making system
-(`Classes`), which is io_bound's captured steps' exactly and has no fixed point on an adapter's, so a LoRA's term is
-unmeasured wherever it counts a product (coordinator 15:50Z); the token and decoding kinds
+(`Classes`), which is io_bound's captured steps' exactly and has no fixed point on an adapter's that counts a product,
+so a LoRA's term is unmeasured wherever it counts one (coordinator 15:50Z); the token and decoding kinds
 need a trace's entries and op log, so they are unmeasured on every model and on every record made a model, while an
 island row's published rho beside it has its trace's; the shapes, u(1), Delta, Delta_grad, a and a
 training token's gates are what the 45M pilot's traces and the standard-workloads island's rows (s-t20 and m-t20)
@@ -128,8 +128,8 @@ def test_rho_is_one_only_where_every_valid_kind_is_measured(monkeypatch):
     exceeds 1, and a ρ the measured kinds give is partial only while one is unmeasured. A model has no trace, so here
     the token and decoding kinds are given terms of 0.5: standard training binds on its fresh products, not partial;
     the default LoRA reads null, its whole-making system having no fixed point (formalism's FRESH_VOID; coordinator
-    15:50Z); rank 1 on W_q in one layer, whose products all escape, reads 1, a term of 0 needing no Λ though its
-    system is void too; and a dense step whose products count nothing reads 1."""
+    15:50Z); rank 1 on W_q in one layer, whose products all escape, reads 1, a term of 0 needing no Λ, its system's e
+    0 (it has no cycle); and a dense step whose products count nothing reads 1."""
     real = formalism.bound
 
     def traced(m, c, k, kinds=formalism.KINDS):
@@ -141,13 +141,14 @@ def test_rho_is_one_only_where_every_valid_kind_is_measured(monkeypatch):
     c, k = policy.CONSOLE
     std = W.rho(W.model("standard", **settings("standard", "default")), c, k)
     assert std["basis"] == std["binding_kind"] == "fresh_products" and not std["partial"] and std["rho"] > 1
-    void = {"e": None, "whole_chain": None}
     lora = W.rho(W.model("lora", **settings("lora", "default")), c, k)
     assert lora["rho"] is None and lora["basis"] == "unmeasured" and not lora["partial"]
-    assert lora["why"] == {"fresh_products": formalism.FRESH_VOID} and lora["whole_making"] == void
+    assert lora["why"] == {"fresh_products": formalism.FRESH_VOID}
+    assert lora["whole_making"] == {"e": None, "whole_chain": None, "diverged": [8, 64, 512, 1024, 1408, 65536]}
     escaped = W.rho(W.model("lora", **settings("lora", "rank 1 on W_q, one layer")), c, k)
     assert escaped["rho"] == 1 and escaped["basis"] == "none" and not escaped["partial"] and not escaped["why"]
-    assert escaped["terms"]["fresh_products"] == 0 and escaped["whole_making"] == void
+    assert escaped["terms"]["fresh_products"] == 0
+    assert escaped["whole_making"] == {"e": 0, "whole_chain": 1.0, "diverged": []}
     monkeypatch.setattr(W, "products", lambda m, c, k: [])
     one = W.rho(W.model("standard", **settings("standard", "default")), c, k)
     assert one["rho"] == 1 and one["basis"] == "none" and one["binding_kind"] is None
@@ -184,10 +185,10 @@ def test_the_fresh_products_bind_where_they_exceed_one_and_the_rest_are_null(ref
     console's policy, so the fresh-products kind is measured there; where Fit fails and its term exceeds 1, rho is
     that term, binding fresh_products, partial, the token and decoding kinds unmeasured; where Fit holds, Fit's
     c/(c - d). Standard dense at the console default reads about 2.65e5, with 5.0e6 under P-cell beside it (12:09Z).
-    An adapter's system has no fixed point, so on every LoRA point, RL's two among them, that counts a product the
-    term and its figure under P-cell are unmeasured, never a number (formalism's FRESH_VOID); the two whose products
-    all escape (rank 1 on W_q in one layer, RL's LoRA in one layer) have a term of 0 at any Λ. Each reads null,
-    never 1, the token and decoding kinds unmeasured."""
+    An adapter's system has a cycle that diverges wherever it counts a product, so on every such LoRA point, RL's
+    among them, the term and its figure under P-cell are unmeasured, never a number (formalism's FRESH_VOID); the two
+    whose products all escape (rank 1 on W_q in one layer, RL's LoRA in one layer) have a term of 0 at any Λ, their
+    systems' e 0. Each reads null, never 1, the token and decoding kinds unmeasured."""
     c, k = policy.CONSOLE
     at = {(name, pname): p["rho"]["default"] for name, pname, p in points(ref)}
     adapters = {(w.name, pname) for w in W.WORKLOADS.values() for pname, s in w.points if W.model(w.name, **s).adapter}
@@ -198,7 +199,9 @@ def test_the_fresh_products_bind_where_they_exceed_one_and_the_rest_are_null(ref
     for where, r in at.items():
         term = r["terms"]["fresh_products"]
         if where in adapters:
-            assert r["whole_making"] == {"e": None, "whole_chain": None}, where
+            whole = r["whole_making"]
+            assert (whole["e"], whole["whole_chain"]) == ((0, 1.0) if where in escaped else (None, None)), where
+            assert bool(whole["diverged"]) == (where not in escaped), where
             assert r["rho"] is None and r["basis"] == "unmeasured" and not r["partial"], where
             f = r["fresh"]
             if where in escaped:
@@ -270,7 +273,9 @@ def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
     is beside it as fresh_cell, formalism's sensitivity, never below. The products carry the model's whole-making
     system (`Classes`), so formalism solves it by io_bound.whole_chain_of, the theorem a traced step's term takes, and
     never falls back on io_bound's one-class rule (`formalism.ONE_CLASS`): at the console's policy every dense
-    point's system has a fixed point and every adapter's has none (coordinator 15:50Z)."""
+    point's system has a fixed point, and every adapter's that counts a product has none (coordinator 15:50Z). A model
+    lists no product written with elementwise ops (`elementwise_products`), since it states each as a matrix
+    product."""
     assert ref["io_bound"] == W.IO_BOUND and W.ORDER == formalism.ORDER == "chain" and not formalism.P_CELL
     assert W.SENSITIVITIES is formalism.SENSITIVITIES and "fresh_cell" in formalism.CELL_SENSITIVITIES
     c, k = policy.CONSOLE
@@ -280,12 +285,13 @@ def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
             r = rhos(ref, w.name, pname)
             me = W.with_products(m, c, k)
             assert me.products == {"k": k, "order": "chain", "products": W.products(m, c, k),
-                                   "system": m.system.system(k)}, (w.name, pname)
+                                   "system": m.system.system(k), "elementwise_products": []}, (w.name, pname)
             term, why, got = formalism.fresh_products(me, c, k)
             whole = formalism.whole_chain(m.system.system(k), k)
-            assert got["whole_making"] == {"e": whole["e"], "whole_chain": finite(whole["whole_chain"])} \
+            assert got["whole_making"] == {"e": whole["e"], "whole_chain": finite(whole["whole_chain"]),
+                                           "diverged": whole["diverged"]} \
                 == r["whole_making"] != formalism.ONE_CLASS, (w.name, pname)
-            assert (whole["e"] is None) == m.adapter, (w.name, pname)
+            assert (whole["e"] is None) == (m.adapter and bool(W.products(m, c, k))), (w.name, pname)
             b = got["io_bound"]["proved"]
             direct = io_bound.bound(W.products(m, c, k), c, k, m.measured.gates, whole["whole_chain"])["proved"]
             assert direct["rho_no_cell"] == b["rho_no_cell"] and direct["rho"] == b["rho"], (w.name, pname)
@@ -337,7 +343,8 @@ def test_the_serving_block_is_a_headline_beside_the_rows(ref):
         console = rhos(ref, name, "default")
         if name in ("lora", "rl"):
             assert got["rho"] is None and got["basis"] == "unmeasured" and not got["partial"], name
-            assert got["whole_making"] == {"e": None, "whole_chain": None}, name
+            whole = got["whole_making"]
+            assert whole["e"] is whole["whole_chain"] is None and whole["diverged"], name
             assert got["terms"]["fresh_products"] is got["sensitivities"]["fresh_cell"] is None, name
             assert (console["rho"] is None) == (name == "lora"), name
             continue
@@ -367,8 +374,8 @@ def test_the_whole_making_system_is_io_bounds_45m_dense_step():
     te_core.io_bound.chain_classes reads a captured step's graph (the io-bound note's §2.2), is io_bound's 45M dense
     step's exactly (its fixture: Muon training on 2 sequences of 256 tokens), formalism.system_of on the fixture's
     product rows, attention's 64-long chains feeding every counted operand (whole_chain 1.0887); so
-    formalism.fresh_products on the fixture's products with the model's system gives io_bound's figures, 163,708
-    without P-cell and 2,870,251 with it."""
+    formalism.fresh_products on the fixture's products with the model's system gives io_bound's figures, 163,341
+    without P-cell and 2,869,161 with it (test_formalism's, with G without each sequence's first position)."""
     c, k = policy.CONSOLE
     rows = json.loads(FIXTURE_45M.read_text())
     dense = W.model("standard", **TINY, optimizer="muon")
@@ -376,7 +383,7 @@ def test_the_whole_making_system_is_io_bounds_45m_dense_step():
     me = replace(dense.measured, parts=(replace(dense.measured.parts[0], gates=rows["gates"]),),
                  products=formalism.products_of_trace(rows) | {"system": dense.system.system(k)})
     term, why, got = formalism.fresh_products(me, c, k)
-    assert why is None and round(term) == 163_708 and round(got["fresh_cell"]) == 2_870_251
+    assert why is None and round(term) == 163_341 and round(got["fresh_cell"]) == 2_869_161
     assert got["whole_making"]["whole_chain"] == pytest.approx(1.08874665, rel=1e-6)
 
 

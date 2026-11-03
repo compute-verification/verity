@@ -9,7 +9,9 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 import models
 from te_core.capture import capture_run, capture_step
-from te_core.flops import Counter
+from te_core.capture.script import recorded_forward_gemm_macs
+from te_core.flops import Counter, gather_macs
+from te_core.opnames import gemm_like
 
 N = 3
 
@@ -67,3 +69,26 @@ def test_the_capture_and_the_counter_agree_step_for_step(make):
     for i in range(N):
         assert [cnt["steps"][i][k] for k in keys] == [cap["steps"][i][k] for k in keys], i
     assert cnt["totals"]["macs"] == cap["totals"]["macs"]
+
+
+def test_the_counters_forward_is_the_traces_forward_gemms_and_a_trained_lookup_and_elementwise_work():
+    """Once the embedding trains, the counter's forward holds its lookup by token ids at the gather Definition's
+    multiplexers, which |C| counts and no product is, so a trace's forward GEMMs fall short of the counter's whole
+    forward by it and the forward's elementwise work; they are the counter's forward GEMMs exactly
+    (`recorded_forward_gemm_macs`). Before the first update the table is θ's and its lookup computes nothing."""
+    torch.manual_seed(0)
+    model, new = full()
+    adamw = lambda: torch.optim.AdamW([p for p in model.parameters() if p.requires_grad])  # noqa: E731
+    g0 = capture_step(model, adamw(), models.lm_loss, BATCH, updated=new)
+    g1 = g0.with_updated(g0.trained | new)
+    cnt = counted(model, adamw(), new)
+    lookup = gather_macs("embedding", tuple(model.emb.weight.shape), None, BATCH[0].numel() * model.emb.weight.shape[1])
+    for i, g in ((0, g0), (1, g1)):
+        step = cnt["steps"][i]
+        log = [r for r in cnt["structures"][step["struct"]]["log"] if r[0] == "fwd"]
+        forward = sum(v for k, v in step["by"].items() if k.startswith("fwd/"))
+        assert recorded_forward_gemm_macs(cnt, i) == g.phase_macs()["forward"] > 0, i
+        assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if i else []), i
+        assert forward == g.phase_macs()["forward"] + (lookup if i else 0) + sum(
+            r[5] for r in log if not gemm_like(r[2]) and r[2] != "embedding"), i
+    assert lookup > 0

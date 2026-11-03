@@ -1252,7 +1252,9 @@ def with_products(m: Model, c: float, k: float) -> formalism.Measured:
     its whole-making system there (`Classes.system`), which te_core.formalism.fresh_products solves as a traced step's."""
     p = {"k": float(k), "order": ORDER, "products": products(m, c, k)}
     if m.system is not None:
-        p["system"] = m.system.system(k)
+        #: a model states every product as a matrix product, so it lists none written with elementwise ops; formalism
+        #: reads a system without the list as a capture that never looked
+        p["system"], p["elementwise_products"] = m.system.system(k), []
     return replace(m.measured, products=p)
 
 

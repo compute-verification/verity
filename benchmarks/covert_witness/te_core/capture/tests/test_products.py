@@ -4,6 +4,7 @@ recorded from the start (te_core.capture.script), whose weights the measured ste
 previous step's update wrote, has the rows of the same step captured by capture_step, and those are io_bound.rows_of's."""
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -128,7 +129,7 @@ def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_o
                                                   affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
                             u_in=0.0, delta_bits=0.0, products=p)
     term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
-    assert (term is None and "breaks P-match" in why and "expand (fan-out 16" in why) if broken else why is None
+    assert (term is None and f"breaks the premise that {formalism.P_MATCH}" in why and "expand (fan-out 16" in why) if broken else why is None
 
 
 class Embedded(nn.Module):
@@ -182,6 +183,236 @@ def test_products_that_read_an_embeddings_rows_before_a_position_makes_them_toke
     assert p["gathered"]["of"] == sum(r["count"] for r in got["rows"] if formalism.product_kind(r) == "fresh")
     assert len(p["products"]) == sum(formalism.product_kind(r) == "fresh" and not any(r["gathered"])
                                      for r in got["rows"])
+
+
+def _product(form: str, u, v):
+    """u @ v as a GEMM, as a broadcast multiplication and a sum, or as v's entries gathered, multiplied and added by
+    index (a sparse matrix holding every entry of v)."""
+    if form == "matmul":
+        return u @ v
+    if form == "broadcast":
+        return (u.unsqueeze(-1) * v).sum(-2)
+    if form.startswith("hidden-"):
+        return _Hidden.apply(u, v, form.removeprefix("hidden-"))
+    rows, cols = (x.flatten() for x in torch.meshgrid(torch.arange(v.shape[0]), torch.arange(v.shape[1]), indexing="ij"))
+    return torch.zeros(*u.shape[:-1], v.shape[1], dtype=u.dtype).index_add(-1, cols, u[..., rows] * v.flatten())
+
+
+def _through(t, how: str):
+    """`t` as it is, or passed through a map (neg twice), a scaling and an addition, or a copy in place."""
+    if how == "neg":
+        return t.neg().neg()
+    if how == "scale":
+        return t * 1.0 + 0.0
+    if how == "copy":
+        buf = torch.empty_like(t)
+        buf.copy_(t)
+        return buf
+    return t
+
+
+def _hide(u, v, how: str):
+    """u @ v as a broadcast multiplication and a sum, the broadcast passed through `how` first (`_through`, or a
+    multiplication by ones, which don't depend on θ′)."""
+    e = u.unsqueeze(-1).expand(*u.shape, v.shape[-1])
+    e = u.unsqueeze(-1) * torch.ones(v.shape[-1], dtype=u.dtype) if how == "ones" else _through(e, how)
+    return (e * v).sum(-2)
+
+
+class _Hidden(torch.autograd.Function):
+    """u @ v written by `_hide` in the forward and the backward both, so no op autograd writes shows the product."""
+
+    @staticmethod
+    def forward(ctx, u, v, how):
+        ctx.save_for_backward(u, v)
+        ctx.how = how
+        return _hide(u, v, how)
+
+    @staticmethod
+    def backward(ctx, g):
+        u, v = ctx.saved_tensors
+        return (_hide(g, v.t(), ctx.how), _hide(u.reshape(-1, u.shape[-1]).t(), g.reshape(-1, g.shape[-1]), ctx.how),
+                None)
+
+
+class Adapted(nn.Module):
+    """Two stacked rank-16 adapters on frozen 512 x 512 matrices, the adapters' products written `form`; `sparse` adds
+    a trained sparse matrix with one entry per row, applied by gather, multiplication and index_add, so no entry of
+    its operand is read twice, the gather's rows and the product each passed through `how` (`_through`)."""
+
+    def __init__(self, form: str, d: int = 512, r: int = 16, how: str = "plain") -> None:
+        super().__init__()
+        self.form, self.how = form, how
+        self.w = nn.ParameterList(nn.Parameter(torch.randn(d, d) / d ** 0.5, requires_grad=False) for _ in range(2))
+        self.a = nn.ParameterList(nn.Parameter(torch.randn(d, r) / d ** 0.5) for _ in range(2))
+        self.b = nn.ParameterList(nn.Parameter(torch.randn(r, d) / r ** 0.5) for _ in range(2))
+        self.vals = nn.Parameter(torch.randn(d) / d ** 0.5)
+        self.register_buffer("rows", torch.randperm(d))
+        self.register_buffer("cols", torch.randint(0, d, (d,)))
+
+    def forward(self, x):
+        for w, a, b in zip(self.w, self.a, self.b):
+            if self.form == "sparse":
+                rows = _through(x.index_select(-1, self.rows), self.how)
+                s = torch.zeros_like(x).index_add(-1, self.cols, _through(rows * self.vals, self.how))
+                x = x @ w + (x @ a) @ b + s
+            else:
+                x = x @ w + _product(self.form, _product(self.form, x, a), b)
+        return x
+
+
+@pytest.mark.parametrize("form, flagged", (("matmul", []), ("broadcast", ["mul"]), ("index", ["mul"]),
+                                           ("sparse", ["index_add"])))
+def test_products_written_with_elementwise_ops_are_found_and_never_priced(form, flagged):
+    """A bf16 step of two stacked rank-16 adapters over 8 x 256 tokens. Written with @, three of its products are fresh
+    (50.3M MACs, the second layer's down projection and both up projections) and the step's whole-making system counts
+    the class of K = 512, with nothing written elementwise. Written as broadcast multiplications and sums, or as
+    gathers, multiplications and index_adds, the adapters' products are no rows, so none is fresh and the system has
+    no class; the capture finds each (their multiplications, each broadcasting both operands, in the forward and the
+    backward), and the fresh-products term is unmeasured naming them, never priced as elementwise work. A sparse
+    product whose gather reads each entry once is found at its sum by index, in the forward and the backward; the
+    first layer's reads the frozen input, so its product is θ's and not one."""
+    torch.manual_seed(0)
+    m = Adapted(form).to(torch.bfloat16)
+    x = torch.randn(8, 256, 512, dtype=torch.bfloat16)
+    g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
+                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone()))
+    k = policy.CONSOLE[1]
+    got = products.rows(g, k)
+    found = got["elementwise_products"]
+    assert [x["op"] for x in found] == flagged
+    fresh = [r for r in got["rows"] if formalism.product_kind(r) == "fresh"]
+    if form in ("matmul", "sparse"):
+        assert sum(r["count"] for r in fresh) == 3 and sum(r["count"] * r["macs"] for r in fresh) == 50_331_648
+    else:
+        assert fresh == [] and found[0]["count"] == 9 and found[0]["macs"] == 150_994_944
+    if form == "sparse":
+        assert found[0]["count"] == 2 and found[0]["macs"] == 2 * 8 * 256 * 512
+    p = formalism.products_of([(1, g)], k)
+    assert p["elementwise_products"] == found
+    assert [e["k"] for e in p["system"]["classes"]] == ([16, 512, 2048] if form in ("matmul", "sparse") else [])
+    assert p["system"]["counted"] == ([[512.0, 1.0]] if form in ("matmul", "sparse") else [])
+    m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=8 * 256, token_gates=got["gates"],
+                                                  affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
+                            u_in=0.0, delta_bits=0.0, products=p)
+    for q in (p, formalism.products_of_trace(got)):
+        term, why, inputs = formalism.fresh_products(dataclasses.replace(m_, products=q), *policy.CONSOLE)
+        if flagged:
+            assert term is None and why.startswith("unmeasured: the traced step writes matrix products as elementwise")
+            assert all(f"{op} (" in why for op in flagged) and inputs["elementwise_products"] == found
+        else:
+            assert "elementwise" not in (why or "")
+
+
+def test_a_trace_captured_before_the_elementwise_check_is_unmeasured_until_retraced():
+    """A trace's rows from a capture that didn't look for products written elementwise may hide some, so its
+    fresh-products term is unmeasured with the reason that says to retrace, whatever its rows give."""
+    torch.manual_seed(0)
+    m = Adapted("matmul", d=64, r=4)
+    x = torch.randn(2, 8, 64)
+    g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
+                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone()))
+    got = products.rows(g, policy.CONSOLE[1])
+    old = {x: v for x, v in got.items() if x != "elementwise_products"} | {"capture": "4.12.1"}
+    m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=16, token_gates=got["gates"],
+                                                  affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
+                            u_in=0.0, delta_bits=0.0, products=formalism.products_of_trace(old))
+    term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
+    assert term is None and why == formalism.FRESH_UNCHECKED
+    _, why, _ = formalism.fresh_products(dataclasses.replace(m_, products=formalism.products_of_trace(got)),
+                                         *policy.CONSOLE)
+    assert why != formalism.FRESH_UNCHECKED
+    _, why, _ = formalism.fresh_products(dataclasses.replace(m_, products=formalism.products_of_trace(
+        got | {"capture": "4.12.7"})), *policy.CONSOLE)
+    assert why == formalism.FRESH_UNCHECKED
+
+
+def _elementwise(m, x, y=None) -> list[dict]:
+    g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
+                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone() if y is None else y))
+    return products.rows(g, policy.CONSOLE[1])["elementwise_products"]
+
+
+@pytest.mark.parametrize("how", ("plain", "neg", "scale", "ones", "copy"))
+def test_a_broadcast_product_is_found_whatever_its_broadcast_passes_through(how):
+    """The adapters' products as custom autograd functions that write each, forward and backward, as a broadcast
+    multiplication and a sum, the broadcast first passed through a map, a scaling and an addition, a multiplication by
+    ones, or a copy in place. 4.12.7's check lost a broadcast at any op but a view and found none of these; a value's
+    entries are its sources' (`products._sources`), so each is found as the plain form is, all ten products."""
+    torch.manual_seed(0)
+    found = _elementwise(Adapted(f"hidden-{how}").to(torch.bfloat16), torch.randn(2, 16, 512, dtype=torch.bfloat16))
+    assert found == [{"op": "mul", "count": 10, "macs": 2_621_440}]
+
+
+@pytest.mark.parametrize("how", ("plain", "neg", "scale", "copy"))
+def test_a_sparse_product_is_found_whatever_its_rows_pass_through(how):
+    """sparse's gather, multiplication and index_add, the gathered rows and their product each passed through a map,
+    a scaling and an addition, or a copy in place before the sum by index: found at both of its sums, as written
+    plainly."""
+    torch.manual_seed(0)
+    found = _elementwise(Adapted("sparse", how=how).to(torch.bfloat16), torch.randn(2, 16, 512, dtype=torch.bfloat16))
+    assert found == [{"op": "index_add", "count": 2, "macs": 2 * 2 * 16 * 512}]
+
+
+class Looked(nn.Module):
+    """A trained embedding of 64 rows of 32, looked up `form`, then a norm, a layer and a head."""
+
+    def __init__(self, form: str) -> None:
+        super().__init__()
+        self.form = form
+        self.emb = nn.Embedding(64, 32)
+        self.g = nn.Parameter(torch.ones(32))
+        self.w = nn.Linear(32, 32, bias=False)
+        self.head = nn.Linear(32, 64, bias=False)
+
+    def forward(self, tok):
+        x = (self.emb(tok) if self.form == "embedding" else self.emb.weight[tok] if self.form == "index" else
+             self.emb(tok + 0))
+        h = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * self.g
+        return self.head(x + self.w(h))
+
+
+@pytest.mark.parametrize("form, found", (("embedding", []), ("index", []),
+                                         ("computed", [{"op": "mul", "count": 3, "macs": 3 * 16_384}])))
+def test_an_embeddings_rows_are_no_broadcast(form, found):
+    """512 tokens of a 64-row embedding: its rows repeat as the tokens do, which is the data and no broadcast, so the
+    norm's multiplication of a token's row by its scale is elementwise (4.12.7's check took it for a product once a
+    step had more tokens than the table has rows, which every large-batch dense step does). A lookup is a module
+    tensor's rows by a graph input (`products._lookup`): an index the program computes is none, so there it is found."""
+    torch.manual_seed(0)
+    tok = torch.randint(0, 64, (8, 64))
+    m = Looked(form)
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1),
+                     lambda mm, b: tF.cross_entropy(mm(b[0]).flatten(0, 1), b[1].flatten()), (tok, tok.clone()))
+    assert products.rows(g, policy.CONSOLE[1])["elementwise_products"] == found
+
+
+class Lanes(nn.Module):
+    """A token's value spread over 8 lanes by constants, as the wildcard adapter's decoder unpacks a packed word, times
+    the token's own scale (`same`) or a trained vector of the lanes (`outer`), then a head."""
+
+    def __init__(self, form: str) -> None:
+        super().__init__()
+        self.form = form
+        self.w = nn.Linear(32, 32, bias=False)
+        self.lanes = nn.Parameter(torch.randn(8))
+        self.head = nn.Linear(8, 8, bias=False)
+        self.register_buffer("freqs", torch.arange(1.0, 9.0))
+
+    def forward(self, x):
+        h = self.w(x)
+        code = torch.sin(h.sum(-1, keepdim=True) * self.freqs)
+        return self.head(code * (h.pow(2).mean(-1, keepdim=True) if self.form == "same" else self.lanes))
+
+
+@pytest.mark.parametrize("form, found", (("same", []), ("outer", [{"op": "mul", "count": 1, "macs": 2 * 16 * 8}])))
+def test_two_broadcasts_along_the_same_dim_are_elementwise(form, found):
+    """A token's code over 8 lanes times its own scale: both are broadcasts along the lanes, so neither is one along a
+    dim the other isn't, and the multiplication is elementwise (`products._flats`), where its entries alone would make
+    it a product (4.12.9's check first found the wildcard adapter's decoder so). Times a trained vector of the lanes,
+    it is an outer product, found."""
+    torch.manual_seed(0)
+    assert _elementwise(Lanes(form), torch.randn(2, 16, 32), torch.randn(2, 16, 8)) == found
 
 
 class MatVec(nn.Module):
