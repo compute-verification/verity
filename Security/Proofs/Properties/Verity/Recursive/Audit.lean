@@ -1,5 +1,6 @@
 import Proofs.Properties.Verity.Recursive.Target
 import Proofs.Flock.Claims.Recursion.CallsClosed
+import Proofs.Flock.Claims.Recursion.LamDeployedTight
 import Proofs.Flock.Recursive.KSProved
 import Proofs.Flock.Recursive.FirewallZK
 
@@ -12,11 +13,11 @@ component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`)
 
 * `SampledProofsRecursive Acc` is `sampledProofsRecursive`'s bound at every deployment `RecursiveKS` is stated at
   (`Dep.deployed`: the deployed weights, and any brings, coin-server record and decoders meeting the list-decoding spec)
-  and every composite `k`, at the verdict `Acc`, with the call bounds `nI₀`, `vS₀` and the level `λ = 100` fixed. The
+  and every composite `k`, at the verdict `Acc`, with the call bounds `nI₀`, `vS₀` and the level `λ = 135.7` fixed. The
   guarantee takes it at the recursive configuration's verdict, `RecVerdict`.
 * It follows from `RecursiveKS`, read by name (`sampledProofsRecursive_of_ks`): an accepted play shows an accepted run of
-  the deployed recursive verifier (`verdict_run`), and `RecDeploy.lamLin2_R_ge_in` reads the call bounds and `λ₂ ≥ 100`
-  off that run (`calls_lam`).
+  the deployed recursive verifier (`verdict_run`), off which `RecDeploy.lamLin2_R_ge_in` reads the call bounds and
+  `RecDeploy.lamLin2_deployedB_ge_tight` reads `λ₂ ≥ 135.7` (`calls_lam`).
 
 The form is dense only: `recursive/v1` refuses every other, and `RecursiveKSAt` covers the dense statements
 (`DenseAt`). Candidate 3's Holo statement is `Flock.Guarantees.RecursiveAuditHolo`.
@@ -46,11 +47,12 @@ def nI₀ : Msg → ℕ := fun _ => 2 ^ 28 + (SetupCount.innerB + 2 ^ 24)
 def vS₀ : Msg → ℕ := fun _ => 2 ^ 55
 
 /-- **The call bounds and the level at an accepted statement**: where some run of the deployed recursive verifier
-accepts `x`, the inner verifier's calls are at most `nI₀ x` on every run, V\*'s setup calls at most `vS₀ x`, and route
-2C's `λ₂` at those counts is at least `100` (`RecDeploy.lamLin2_R_ge_in`, every premise read from the run). -/
+accepts `x`, the inner verifier's calls are at most `nI₀ x` on every run, V\*'s setup calls at most `vS₀ x`
+(`RecDeploy.lamLin2_R_ge_in`), and route 2C's `λ₂` at those counts is at least `135.7`
+(`RecDeploy.lamLin2_deployedB_ge_tight`), every premise read from the run. -/
 theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     (∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI₀ x) ∧
-      (100 : ℝ) ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI₀ x) (vS₀ x) ∧
+      (135.7 : ℝ) ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI₀ x) (vS₀ x) ∧
       ∀ ps, (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS₀ x := by
   obtain ⟨Ω, P, ω, r, hacc⟩ := h
   have hacc' : (Claims.run FlockDeploy.sha512 P (RecDeploy.V (boundAt q.wE q.w).IVStar
@@ -59,13 +61,21 @@ theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } (DeployedR.layR OpenRows.elemR) DeployedR.rdR
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols q.wE FlockDeploy.joinR
     rowInDeployed DeployedR.finalR q.w q.decI FlockDeploy.sha512 hacc' ps
-  exact ⟨(H []).1, (H []).2.1, fun ps => (H ps).2.2⟩
+  obtain ⟨s, spec, sts, hin⟩ := plainIn_of_run_acc hacc'
+  have hO := partIn_of_run_acc hacc'
+  have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 55 :=
+    le_trans (Nat.add_le_add_left (Nat.add_le_add_right SetupCount.innerB_le (2 ^ 24)) (2 ^ 28)) (by norm_num)
+  exact ⟨(H []).1, lamLin2_deployedB_ge_tight _root_.Flock.Readable.relation
+    { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } (DeployedR.layR OpenRows.elemR)
+    (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols
+    q.wE FlockDeploy.joinR rowInDeployed DeployedR.finalR q.w q.decI hin hO (nS_le_of_partIn hO)
+    (innerSetupIns_le_acc hacc') hc, fun ps => (H ps).2.2⟩
 
 /-- **Sampled proofs at the recursive configuration, at the deployment `q` and the verdict `Acc`**: for decoders meeting
 the list-decoding spec, at every composite `k` (as `Verity.SoundnessOf` quantifies it), the parameters `θ`, the
 committed files `F`, the commitment `c`, a strategy `σ` and its recursive session `S` at `k` (`SessionIn`), the
 probability that `Acc` at `k` holds of the play's outcome while sampled proofs' claim at `k` fails on the extracted
-transcript is at most `Dep.errAt` at `S`, the call bounds `nI₀`, `vS₀` and `λ = 100`. Its
+transcript is at most `Dep.errAt` at `S`, the call bounds `nI₀`, `vS₀` and `λ = 135.7`. Its
 hypotheses are `sampledProofsRecursive`'s: `K₀` covers the claim's `ε` share and the draw misses any `K₀` units with
 probability at most `δs`; the vocabulary's extractor is the recursive configuration's (`Dep.extract`); the reading
 `readX` of a witness in the recursive relation is correct at, and opened on, every drawn unit, and `collOf` turns two
@@ -93,7 +103,7 @@ def SampledProofsRecursiveAt
     (∀ ξ ω r, LiveCoins q.Bd.IVStar q.st (S.x ξ)
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen) →
     Game.prob (fun o => Acc V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
-      q.errAt V S collOf dColl nI₀ vS₀ δs 100
+      q.errAt V S collOf dColl nI₀ vS₀ δs 135.7
 
 /-- **Sampled proofs at the recursive configuration, at the verdict `Acc`**: `SampledProofsRecursiveAt` at every
 deployment `RecursiveKS` is stated at, at every composite. -/
@@ -113,7 +123,7 @@ theorem sampledProofsRecursive_at (q : Dep)
       q.aux q.nOf q.hd q.recRest) :
     SampledProofsRecursiveAt RecVerdict q := by
   intro hdecI hdecO ι d α _ V k θ F c σ S readX collOf dColl K₀ δs hK₀ hdraw hX hread hcoll hlive
-  exact sampledProofsRecursive q hKS hdecI hdecO nI₀ vS₀ 100 (fun _ h => (calls_lam q h).1)
+  exact sampledProofsRecursive q hKS hdecI hdecO nI₀ vS₀ 135.7 (fun _ h => (calls_lam q h).1)
     (fun _ h => (calls_lam q h).2.2) (fun _ h => (calls_lam q h).2.1) V k θ F c σ S readX collOf dColl K₀ δs hK₀
     hdraw hX hread hcoll hlive
 
@@ -133,9 +143,10 @@ that the play is accepted while sampled proofs' claim fails on the extracted tra
 `δs + t'·2^{-λ} + min(bits, √(2n))·√(E[bindBudget]/2^256)`, `n` the units, where the finders built from the strategy
 meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
 
-Its `λ` is `λ₂ = 100`: route 2C's level (`Claims.Recursion.lamLin2`) at the inner calls `nI₀ = 2^28 + (c_B + 2^24)` and
-V\*'s setup calls `vS₀ = 2^55`, both read off the accepted run (`RecDeploy.lamLin2_R_ge_in`). The bound record's level
-(`Claims.Recursion.lam`), which no theorem evaluates at the deployment, is one (i) doesn't use. -/
+Its `λ` is `λ₂ = 135.7`: route 2C's level (`Claims.Recursion.lamLin2`) at the inner calls `nI₀ = 2^28 + (c_B + 2^24)`
+and V\*'s setup calls `vS₀ = 2^55`, read off the accepted run with the deployed caps (`RecDeploy.lamLin2_R_ge_in`,
+`RecDeploy.lamLin2_deployedB_ge_tight`). The bound record's level (`Claims.Recursion.lam`), which no theorem evaluates
+at the deployment, is one (i) doesn't use. -/
 def RecursiveAuditC3 : Prop :=
   Verity.Recursive.SampledProofsRecursive Verity.Recursive.RecVerdict ∧ RecursiveFirewallPrivate
 

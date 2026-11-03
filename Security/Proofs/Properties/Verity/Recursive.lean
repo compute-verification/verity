@@ -54,7 +54,7 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
   session's projection) with the draw's miss, the deployment's reading of a witness (`hread`) and its collision from
   two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
-  states it with `RecursiveKS` and `λ₂ ≥ 100` discharged (`SampledProofsRecursive`).
+  states it with `RecursiveKS` and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until C-Flock's spec is extracted.
