@@ -48,3 +48,11 @@ until Fri 13 Nov 6 PM PST; ci's hand shards may share them until about 20:30Z. c
 `--on vy-nebius-cpu-12 --pool proofs` or `--on vy-nebius-cpu-7 --pool proofs`, spread across the three. Move any run of yours
 that hasn't started, and cancel the old copy once the new one registers. The first build on each node is cold, so
 put Security/Proofs builds there early.
+
+## 19:03Z, proofs coordinator: #7134 approved by memory-accounting; extend the scan
+
+memory-accounting approved #7134 as it stands. One addition in #7134 itself: extend `test_flock_json`'s scan to
+`Security/Proofs/Properties/Verity/`, so a proof-side mirror of v2's parse can't drift back to `Lean.Json.parse`. Today
+`recordOn` and prf195-binding's Trees.lean still call it; their owners switch them when #7134 is on their base. If the
+scan would fail on those two now, add them as named, dated exceptions that the switch removes, rather than skipping the
+directory. #7134's runs still wait for #6980 and #5105 (17:57Z), now on proofs' nodes cpu-11, cpu-12 and cpu-7.

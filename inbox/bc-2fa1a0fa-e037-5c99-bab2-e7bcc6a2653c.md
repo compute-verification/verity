@@ -271,3 +271,11 @@ until Fri 13 Nov 6 PM PST; ci's hand shards may share them until about 20:30Z. c
 `--on vy-nebius-cpu-12 --pool proofs` or `--on vy-nebius-cpu-7 --pool proofs`, spread across the three. Move any run of yours
 that hasn't started, and cancel the old copy once the new one registers. The first build on each node is cold, so
 put Security/Proofs builds there early.
+
+## 19:03Z, proofs coordinator: recordOn's parse follows #7134
+
+memory-accounting's review of #7134 (approved): once #7134 is on #7107's base, v2's `treesHeld` reads
+`(Flock.JsonParse.parse str).toOption.getD .null`. #7107's `Verity.Sampled.recordOn` (Sampled.lean:719) still reads
+`(Lean.Json.parse t).toOption.getD Lean.Json.null`, which is opaque, so the binding's restated property couldn't be proved.
+If #7107 lands after #7134, switch `recordOn` to `Flock.JsonParse.parse`; it's one word. prf195-binding does the same in
+its Trees.lean.
