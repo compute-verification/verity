@@ -28,7 +28,8 @@ released after the registration's digest.
   the same bytes, on them with any bytes after. An accepted draw opens as many coins as it read, which vary with the
   coins, and a session's sample holds a fixed number. So at a session whose law and population are v2's, a sample whose
   bytes start with `ξ` draws v2's units (`draw_of_drew`), at the session widened by a projection's coins too
-  (`extend_draw`, `coupled_draw`).
+  (`extend_draw`, `coupled_draw`). At a session whose bytes are `coinBytes` of the sample's coins, that is a sample
+  whose first coins are the play's (`coupled_draw_coins`).
 -/
 
 namespace Verity.Sampled
@@ -505,5 +506,22 @@ theorem coupled_draw {V : Vocab d α} {k : Verity.Registration.Composite} (K : C
   obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw hR hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hω =>
     (extend_draw A _ ω).trans (draw_of_drew hd A ω.1 hL hn (List.IsPrefix.trans hs hω))⟩
+
+/-- **The draw at a sample whose first coins are the play's**: at a session whose bytes are `coinBytes` of the sample's
+coins `κ` (A3's source), every sample whose first coins are the play's coins of `dr`'s family released after `dr`'s
+digest draws exactly `units`. -/
+theorem coupled_draw_coins {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
+    (hv : Verity.CaseAccepts k _root_.SampledProofs.OneStageZk.protocol o.sent) (hl : V.Logged .sampled o)
+    {m B : ℕ} (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m B (κ ω) 0)) :
+    ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.law = L → A.n = n →
+        freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
+        (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hv hl
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hp => h ω hL hn (by rw [hsrc]; exact fresh_prefix_coinBytes hp)⟩
 
 end Verity.Sampled
