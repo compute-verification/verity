@@ -186,6 +186,7 @@ def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_exe
                          "agree": n, "pending": [], "disagree": [], "missing": [], "executor_only": []}
     assert one not in h.q.load_state()["drive"].get("executor", {})
 
+    h.clock += 1                                                # the next record is the newer by drive's clock
     two = _land(h, 2)
     h.tick()
     keys = _list(fake, two)

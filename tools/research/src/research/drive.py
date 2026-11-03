@@ -1434,15 +1434,16 @@ class Driver:
         self._shadow_record(tip, {"incomplete": why, "check": rec.get("check", ""), "run": rec.get("run", "")})
 
     def _shadow_record(self, tip: str, value: dict) -> None:
-        """``value`` as ``tip``'s `executor_shadow` label, written through to the store's remote; a store that refuses it is
-        logged, never raised: a shadow never stops drive."""
+        """``value`` as ``tip``'s `executor_shadow` label at drive's clock (`shadow_records` orders tips by it), written through
+        to the store's remote; a store that refuses it is logged, never raised: a shadow never stops drive."""
         from .store.cli import _label_write_through
 
         target = f"commit:{tip}"
         said = "no store"
         if self.q.store is not None:
             try:
-                self.q.store.add_label(target, vocab.EXECUTOR_SHADOW, value, "drive", ref=value.get("run") or None)
+                self.q.store.add_label(target, vocab.EXECUTOR_SHADOW, value, "drive", ref=value.get("run") or None,
+                                       ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.now())))
                 said, _ = _label_write_through(self.q.store, target)
             except Exception as e:  # noqa: BLE001
                 said = f"not recorded: {type(e).__name__}: {e}"
