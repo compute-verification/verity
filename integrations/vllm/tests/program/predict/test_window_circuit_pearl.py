@@ -1,10 +1,10 @@
 """verity_vllm.program.predict.window_circuit with Pearl+'s tables (`window_class.PearlTables`): the class circuit cut at its
-linears, each linear but the LM head one `LinearARow_v1` unit held to its row of its round's A table of its K and
-`LinearOut_v1` units taking its y from its round's y value of its K, and `window_rows` filling them. Pinned on TINY's bf16
-checkpoint on the H200 (`test_window_rows`) at `test_window_circuit`'s class (2 slots, 4 prompt ids, 2 outputs: 5
-positions, rounds 0 and 1) and grain, Pearl+'s y in rows of 16 words. A position's linears are q/k/v (N = 128), o (64) and
-gate/up (256) at K = 64 and down (64) at K = 128, of each of TINY's 2 layers; its LM head (`Gemm_v2{64, 256}`, gate/up's
-shape) stays computed.
+linears, each linear but the LM head round s's call c, one `LinearARow_v1` unit held to its row of the call's A rows and one
+`LinearOut_v1` unit reading its row of the call's y and handing it on in rows of W, and `window_rows` filling them with
+the rows Pearl+'s call commits. Pinned on TINY's bf16 checkpoint on the H200 (`test_window_rows`) at `test_window_circuit`'s
+class (2 slots, 4 prompt ids, 2 outputs: 5 positions, rounds 0 and 1) and grain, y handed on in rows of 16 words. A
+position's cut linears are, of each of TINY's 2 layers, q/k/v (K = 64, N = 128), o (64, 64), gate/up (64, 256) and down
+(128, 64), calls 0 to 7 in node order; its LM head (`Gemm_v2{64, 256}`, gate/up's shape) stays computed.
 """
 from __future__ import annotations
 
@@ -24,7 +24,10 @@ from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
+from verity_vllm.program.predict.window_builder import Row
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
+from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.schemes import SCHEMES
@@ -34,8 +37,8 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF
 
 PEARL = PearlTables(words=16)
-#: each position's linears' N by K, in node order: layer 0's q/k/v, o and gate/up, then layer 1's, and their down_projs
-CALLS = {64: (128, 64, 256, 128, 64, 256), 128: (64, 64)}
+#: each position's cut linears' K and N, calls 0 to 7 in node order: each layer's q/k/v, o, gate/up and down
+CALLS = ((64, 128), (64, 64), (64, 256), (128, 64)) * 2
 #: a call's rows by round: round 0 both slots' prompts of 4, round 1 a row a slot
 M = {0: 8, 1: 2}
 
@@ -58,44 +61,58 @@ def _value_rows(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
     return out
 
 
-def _calls(low) -> list[tuple[int, int, int, int, int]]:
-    """Each slot's cut linears in node order: ``(slot, node, position, K, c)``, c its index among its position's of that K."""
-    pos, nodes, out = WR.positions(low.fn), low.fn.body.nodes, []
+def _calls(low) -> list[tuple[int, int, int, int]]:
+    """Each slot's cut linears in node order: ``(slot, node, position, c)``, c its call, its index among its position's."""
+    pos, out = WR.positions(low.fn), []
     for k, P in enumerate(low.programs):
-        seen: dict[tuple[int, int], int] = {}
+        seen: dict[int, int] = {}
         for j in sorted(P.arows):
-            p, K = pos[j], nodes[j].fn.bindings["K"]
-            seen[(p, K)] = seen.get((p, K), -1) + 1
-            out.append((k, j, p, K, seen[(p, K)]))
+            seen[pos[j]] = seen.get(pos[j], -1) + 1
+            out.append((k, j, pos[j], seen[pos[j]]))
     return out
 
 
-def test_pearls_tables_are_named_by_round_and_k_and_a_calls_rows_are_its_rounds():
-    """Round s's A table and y value of contraction K are ``pearl-a/<s>/k<K>`` and ``pearl-y/<s>/k<K>``, and a call's rows
-    under the fixed load are round 0's every slot's prompt and a later round's a row a slot. Pearl+'s y rows are a positive
-    number of words, and its scheme one of PoUW's."""
-    assert (PEARL.a(1, 64), PEARL.y(0, 128)) == ("pearl-a/1/k64", "pearl-y/0/k128")
+def test_pearls_tables_are_named_by_round_and_call_at_the_rows_its_calls_commit():
+    """Round s's call c's A rows and y are ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``. A call's rows under the fixed load
+    are round 0's every slot's prompt and a later round's a row a slot, and its A rows those then zero rows up to a multiple
+    of Pearl+'s `ROW_ALIGN` (its m₁₆). Its y is handed on in rows of a positive number of words, and its scheme is one of
+    PoUW's."""
+    assert (PEARL.a(1, 3), PEARL.y(0, 5)) == ("pearl-a/1/3", "pearl-y/0/5")
     assert [PEARL.rows(CLASS, s) for s in range(3)] == [8, 2, 2] and PEARL.scheme in SCHEMES
+    assert [PEARL.a_rows(cls, 0) for cls in (CLASS, WindowClass(4, 4, 2), WindowClass(2, 9, 2))] == [16, 16, 32] == [
+        -(-m // ROW_ALIGN) * ROW_ALIGN for m in (8, 16, 18)]
     with pytest.raises(ValueError, match="a positive number of words, not 0"):
         PearlTables(words=0)
     with pytest.raises(ValueError, match="'pearl-x' is no PoUW scheme"):
         PearlTables(scheme="pearl-x")
 
 
+def test_a_calls_y_is_handed_on_in_the_fewest_doublings_of_words_its_unit_fits(low):
+    """Each call's W is the least of ``words`` doubled that divides its N and leaves its `LinearOut_v1` (its y row and
+    N / W output rows) within the grain's rows: 16 for every call of TINY at 256 rows, gate/up's 256 words in rows of 32 at
+    12 rows and of 128 at 3, and a call no W fits is refused by name."""
+    assert WC.linears(low.fn, 16, 256, provable=False).calls == tuple((K, N, 16) for K, N in CALLS)
+    assert WC.linears(low.fn, 16, 12, provable=False).calls == tuple((K, N, 32 if N == 256 else 16) for K, N in CALLS)
+    assert WC.linears(low.fn, 16, 3, provable=False).calls == tuple((K, N, N // 2) for K, N in CALLS)
+    with pytest.raises(Unexpressible, match=r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), \(128, 64\)\], whose "
+                                            r"y no rows of Pearl\+'s 16 words doubled hand on in one unit within 1 rows$"):
+        WC.linears(low.fn, 16, 1, provable=False)
+
+
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):
-    """Each linear is one `LinearARow_v1{K, R, ROUND}` unit, its x its writers' R rows (q/k/v's and gate/up's the norm's
-    one, o's the attention's 4 heads', down's SiluMul's one), and N / 16 `LinearOut_v1{16, K, ROUND}` units, a template a
-    round and K, and no `Gemm_v2` but the LM head's: its 16 slices a position, all of which the token selects' group units
-    read, and its ``x0``, though gate/up is its shape. Every other template is the uncut circuit's at its count, and no
-    input is free."""
+    """Each linear is one `LinearARow_v1{K, R, ROUND, CALL}` unit, its x its writers' R rows (q/k/v's and gate/up's the
+    norm's one, o's the attention's 4 heads', down's SiluMul's one), and one `LinearOut_v1{N, 16, ROUND, CALL}` unit, a
+    template each a round's call, and no `Gemm_v2` but the LM head's: its 16 slices a position, all of which the token
+    selects' group units read, and its ``x0``, though gate/up is its shape. Every other template is the uncut circuit's at
+    its count, and no input is free."""
     c = low.circuit
     n = {_label(fn): k for fn, k in c.templates}
     plain = {_label(fn): k for fn, k in WC.lower(_registered(), CLASS, None, GRAIN, provable=False).circuit.templates}
     want = {"Gemm_v2{K=64,N=16}": 16 * 10, "Gemm_v2{K=64,N=1}": 10}
     for s, m in M.items():
-        want |= {f"LinearARow_v1{{K=64,R=1,ROUND={s}}}": 4 * m, f"LinearARow_v1{{K=64,R=4,ROUND={s}}}": 2 * m,
-                 f"LinearARow_v1{{K=128,R=1,ROUND={s}}}": 2 * m, f"LinearOut_v1{{N=16,K=64,ROUND={s}}}": 56 * m,
-                 f"LinearOut_v1{{N=16,K=128,ROUND={s}}}": 8 * m}
+        for ci, (K, N) in enumerate(CALLS):
+            want[f"LinearARow_v1{{K={K},R={4 if ci % 4 == 1 else 1},ROUND={s},CALL={ci}}}"] = m
+            want[f"LinearOut_v1{{N={N},W=16,ROUND={s},CALL={ci}}}"] = m
     assert {t: k for t, k in n.items() if t.startswith(("Linear", "Gemm"))} == want
     assert {t: k for t, k in n.items() if not t.startswith(("Linear", "Gemm"))} == {
         t: k for t, k in plain.items() if not t.startswith("Gemm")}
@@ -106,30 +123,31 @@ def test_the_cut_replaces_every_linear_but_the_lm_head(low):
     assert IF.input_count(c.description(), **held(c))["free"] == 0
 
 
-def test_each_cut_linear_reads_its_a_row_and_its_y_at_the_fixed_loads_rows(low):
+def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
     """Slot k's position p is round 0's row 4k + p below the prompt and round 1's row k past it (`FixedLoad.at`). Each cut
-    linear's A row (``o0``, x widened) is held to row c·m + i of its round's A table of its K, c its index among its
-    position's linears of that K in node order, and its y units' ``y`` read the N / 16 rows from o·m + i·N / 16 of its
-    round's y value of its K, o the rows of 16 its position's earlier linears of that K make: each call's m × N y
-    row-major, call after call. Every row of every value is read by exactly one unit, and the circuit's program takes them
-    as its values, round by round and K by K the A table then the y value, ahead of its units' parameters."""
+    linear, round s's call c, holds its A row (``o0``, x widened) to row i of the call's A rows and reads its ``y`` as row
+    i of the call's y, i its position's row, and its readers read y as its unit's N / 16 output rows in order. Every real
+    row of every value is read by exactly one unit, the A rows' filler rows by none, and the circuit's program takes them
+    as its values, round by round and call by call the A rows then the y, ahead of its units' parameters."""
     c, want = low.circuit, {}
-    for k, j, p, K, ci in _calls(low):
-        P, N = low.programs[k], low.fn.body.nodes[j].fn.bindings["N"]
+    for k, j, p, ci in _calls(low):
+        P, (K, N) = low.programs[k], CALLS[ci]
         s, i = (0, 4 * k + p) if p < CLASS.prompt else (1, k)
-        a, ((_lo, _hi, y),) = P.arows[j], P.outs[j]
-        want[(a.tid, "o0", a.unit)] = (f"pearl-a/{s}/k{K}", ci * M[s] + i)
-        o, q = sum(CALLS[K][:ci]) // 16, N // 16
-        want |= {(y.tid, "y", y.unit + r): (f"pearl-y/{s}/k{K}", o * M[s] + i * q + r) for r in range(q)}
+        a, y = P.arows[j], P.ys[j]
+        want[(a.tid, "o0", a.unit)], want[(y.tid, "y", y.unit)] = (PEARL.a(s, ci), i), (PEARL.y(s, ci), i)
+        assert (a.words, y.words) == (2 * K, 2 * N)
+        assert P.outs[j] == [(16 * o, 16 * (o + 1), Row(y.tid, y.unit, f"o{o}", 16)) for o in range(N // 16)]
     got = _value_rows(c)
     assert got == want
     rows: dict[str, list[int]] = {}
     for v, r in got.values():
         rows.setdefault(v, []).append(r)
-    words = {v: 2 * int(v.rsplit("k", 1)[1]) if v.startswith("pearl-a/") else 16 for v in rows}
-    assert all(sorted(r) == list(range(c.registered.params[v] // words[v])) for v, r in rows.items())
-    assert c.registered.values == tuple(v for s in M for K in CALLS for v in (f"pearl-a/{s}/k{K}", f"pearl-y/{s}/k{K}"))
-    assert [n for n, _ in c.program()[0].fn.signature()[0][:8]] == list(c.registered.values)
+    for s, m in M.items():
+        for ci, (K, N) in enumerate(CALLS):
+            assert sorted(rows[PEARL.a(s, ci)]) == sorted(rows[PEARL.y(s, ci)]) == list(range(m))
+            assert (c.registered.params[PEARL.a(s, ci)], c.registered.params[PEARL.y(s, ci)]) == (16 * 2 * K, m * 2 * N)
+    assert c.registered.values == tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
+    assert [n for n, _ in c.program()[0].fn.signature()[0][:32]] == list(c.registered.values)
 
 
 def test_each_tables_readers_are_templates_of_their_own(low):
@@ -145,20 +163,21 @@ def test_each_tables_readers_are_templates_of_their_own(low):
 
 
 def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
-    """`census` is a row a round's call: its round, its index among the round's calls of its K, K and N, the round's rows
-    and its multiply-adds, its rows of the A table and of the y value, and PoUW's scheme; none is tied (`UNTIED`). Its
-    multiply-adds are the circuit description's own, its `LinearOut_v1{W, K, ROUND}` units times W·K, and an uncut
-    circuit has no census."""
+    """`census` is a row a round's call: its round and call, K, N and W, the round's rows and its multiply-adds, its A rows'
+    value and rows (m₁₆) and its y's (m), and PoUW's scheme; none is tied (`UNTIED`). Its multiply-adds are the circuit
+    description's own, each call's `LinearARow_v1` units times its K and its `LinearOut_v1`'s N, and an uncut circuit has
+    no census."""
     cen = WC.census(low)
-    assert [(r["round"], r["call"], r["k"], r["n"], r["rows"]) for r in cen] == [
-        (s, ci, K, N, M[s]) for s in M for K, ns in CALLS.items() for ci, N in enumerate(ns)]
+    assert [(r["round"], r["call"], r["k"], r["n"], r["w"], r["rows"]) for r in cen] == [
+        (s, ci, K, N, 16, M[s]) for s in M for ci, (K, N) in enumerate(CALLS)]
     for r in cen:
-        m, o = r["rows"], sum(CALLS[r["k"]][:r["call"]]) // 16
+        s, ci, m = r["round"], r["call"], r["rows"]
         assert r["macs"] == m * r["n"] * r["k"] and (r["scheme"], r["tied"], r["untied"]) == (PEARL.scheme, False, WC.UNTIED)
-        assert r["a"] == {"value": PEARL.a(r["round"], r["k"]), "rows": [r["call"] * m, (r["call"] + 1) * m]}
-        assert r["y"] == {"value": PEARL.y(r["round"], r["k"]), "rows": [o * m, (o + r["n"] // 16) * m]}
-    assert sum(r["macs"] for r in cen) == sum(n * fn.bindings["N"] * fn.bindings["K"] for fn, n in low.circuit.templates
-                                               if fn.name == "LinearOut") == 737280
+        assert (r["a"], r["y"]) == ({"value": PEARL.a(s, ci), "rows": 16}, {"value": PEARL.y(s, ci), "rows": m})
+    fns = {(fn.name, fn.bindings["ROUND"], fn.bindings["CALL"]): (fn, n) for fn, n in low.circuit.templates
+           if fn.name in ("LinearARow", "LinearOut")}
+    assert sum(r["macs"] for r in cen) == sum(n * fn.bindings["K"] * fns[("LinearOut", s, ci)][0].bindings["N"]
+                                              for (name, s, ci), (fn, n) in fns.items() if name == "LinearARow") == 737280
     assert WC.census(WC.lower(_registered(), CLASS, None, GRAIN, wired=False)) == []
 
 
@@ -179,25 +198,27 @@ def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_re
     (_registered, GRAIN, PEARL, WindowClass(2, 4, 2, lanes=1), "Pearl\\+'s tables are read at a fixed load's rows, every "
                                                                "slot at the window's one boundary"),
     (_registered, GRAIN, PearlTables(words=48), CLASS, r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), "
-                                                       r"\(128, 64\)\], whose y isn't rows of Pearl\+'s 48 words")])
+                                                       r"\(128, 64\)\], whose y no rows of Pearl\+'s 48 words doubled hand "
+                                                       r"on in one unit within 256 rows that C-Flock proves")])
 def test_a_circuit_pearls_tables_cant_cut_is_refused(registered, grain, tables, cls, why):
     """Refused by name: an int8 linear (TINY's exact-int8 checkpoint), a class of two boundaries (its slots aren't all
-    admitted at round 0), and y rows of a width that doesn't divide every linear's N."""
+    admitted at round 0), and y rows of a width no doubling of which divides a linear's N."""
     with pytest.raises(Unexpressible, match=why):
         WC.lower(registered(), cls, None, grain, wired=False, tables=tables)
 
 
 def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves():
-    """At `test_window_circuit`'s smallest provable model, class and grain, with y rows of 64 words (128 bytes, as at
-    Llama 3.2 1B's head dimension), every template of the cut circuit is a proof block C-Flock's composer takes
-    (`interface.check_proof_block`): the A rows (256 and 512 words) and the y rows are past 111 bytes."""
+    """At `test_window_circuit`'s smallest provable model (2 heads of 64 and a KV head, so q/k/v's N is 256), class and
+    grain, with y handed on in rows of 64 words (128 bytes, as at Llama 3.2 1B's head dimension), every template of the cut
+    circuit is a proof block C-Flock's composer takes (`interface.check_proof_block`): the A rows (256 and 512 words) and
+    the y rows (2N words) are past 111 bytes."""
     c = WC.class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN, tables=PearlTables(words=64))
     n = {_label(fn): k for fn, k in c.templates}
     P = PROVABLE_CLASS.positions * PROVABLE_CLASS.slots
-    assert {t: k for t, k in n.items() if t.startswith(("Linear", "Gemm"))} == {
-        "LinearARow_v1{K=128,R=1,ROUND=0}": 4 * P, "LinearARow_v1{K=128,R=2,ROUND=0}": 2 * P,
-        "LinearARow_v1{K=256,R=1,ROUND=0}": 2 * P, "LinearOut_v1{N=64,K=128,ROUND=0}": 28 * P,
-        "LinearOut_v1{N=64,K=256,ROUND=0}": 4 * P, "Gemm_v2{K=128,N=64}": 8 * P, "Gemm_v2{K=128,N=1}": P}
+    want = {"Gemm_v2{K=128,N=64}": 8 * P, "Gemm_v2{K=128,N=1}": P}
+    for ci, (K, N, R) in enumerate(((128, 256, 1), (128, 128, 2), (128, 512, 1), (256, 128, 1)) * 2):
+        want |= {f"LinearARow_v1{{K={K},R={R},ROUND=0,CALL={ci}}}": P, f"LinearOut_v1{{N={N},W=64,ROUND=0,CALL={ci}}}": P}
+    assert {t: k for t, k in n.items() if t.startswith(("Linear", "Gemm"))} == want
     assert all(IF.check_proof_block(fn, c.cuts.get(IF.descriptor_id(fn))) <= 27 for fn, _ in c.templates)
 
 
@@ -228,51 +249,53 @@ def _widened(x: np.ndarray) -> np.ndarray:
     return (np.asarray(x, np.uint32) << 16).astype("<u4").view("<u2")
 
 
-def test_a_cut_linears_a_row_is_its_x_widened_and_its_y_units_hold_its_value(low, filled):
-    """Each cut linear's `LinearARow_v1` row is its Definition on the node's x, x's bf16 widened to FP32 exactly, and its
-    `LinearOut_v1` units' output rows are the node's value, which their input rows are too (the rows the window commits by
-    reference from the y value)."""
+def test_a_cut_linears_a_row_is_its_x_widened_and_its_y_unit_holds_its_value(low, filled):
+    """Each cut linear's `LinearARow_v1` row is its Definition on the node's x, x's bf16 widened to FP32 exactly; its
+    `LinearOut_v1` unit's output rows are the node's value in rows of 16, and its input row the value widened (the row the
+    window commits by reference from the call's y)."""
     _w, _v, slots, rows = filled
     for k, j, *_ in _calls(low):
         P, s = low.programs[k], slots[k]
-        x, a, ((_lo, _hi, y),) = s.operand(low.fn.body.nodes[j].args[0]), P.arows[j], P.outs[j]
+        x, a, y = s.operand(low.fn.body.nodes[j].args[0]), P.arows[j], P.ys[j]
         got = rows.outs[a.tid][0][a.unit]
         assert np.array_equal(got, _widened(x))
         assert np.array_equal(got, np.asarray(evaluate_batch(rows.fns[a.tid], x[None])).astype("<u4").view("<u2").reshape(-1))
-        q, w = len(WR._words(s.values[j])) // 16, WR._words(s.values[j])
-        assert np.array_equal(rows.outs[y.tid][0][y.unit:y.unit + q].reshape(-1), w)
-        assert np.array_equal(rows.given[y.tid]["y"][y.unit:y.unit + q].reshape(-1), w)
+        w = WR._words(s.values[j])
+        assert np.array_equal(np.concatenate([rows.outs[y.tid][o][y.unit] for o in range(len(w) // 16)]), w)
+        assert np.array_equal(rows.given[y.tid]["y"][y.unit], _widened(w))
     assert len(_calls(low)) == 2 * 5 * 8 and len(low.cut) == 5 * 8
 
 
 def _pearl_values(low, slots) -> dict[str, np.ndarray]:
-    """Pearl+'s tables of the fixed load from the model's values: round s's A table's row c·m + i the c-th linear of K of
-    the position at round s's row i (`FixedLoad.at`), its x widened, and its y value's N / 16 rows from o·m + i·N / 16 that
-    linear's value."""
+    """Pearl+'s tables of the fixed load as each call commits them, from the model's values: round s's call c's A rows each
+    of its m rows the x of the position at round s's row i (`FixedLoad.at`) widened to FP32, then zero rows up to its
+    m₁₆, and its y each row that call's value so widened (`served_y.f32_rows`, the rows Pearl+'s verifier opens)."""
     out: dict[str, np.ndarray] = {}
-    for k, j, p, K, ci in _calls(low):
-        s, i = PEARL.at(CLASS, k, p)
-        m, N, sl = M[s], low.fn.body.nodes[j].fn.bindings["N"], slots[k]
-        a = out.setdefault(PEARL.a(s, K), np.zeros((len(CALLS[K]) * m, 2 * K), np.uint16))
-        a[ci * m + i] = _widened(sl.operand(low.fn.body.nodes[j].args[0]))
-        y = out.setdefault(PEARL.y(s, K), np.zeros((sum(CALLS[K]) // 16 * m, 16), np.uint16))
-        o, q = sum(CALLS[K][:ci]) // 16, N // 16
-        y[o * m + i * q:o * m + (i + 1) * q] = WR._words(sl.values[j]).reshape(q, 16)
+    for k, j, p, ci in _calls(low):
+        (K, N), (s, i), sl = CALLS[ci], PEARL.at(CLASS, k, p), slots[k]
+        a = out.setdefault(PEARL.a(s, ci), np.zeros((PEARL.a_rows(CLASS, s), 2 * K), np.uint16))
+        y = out.setdefault(PEARL.y(s, ci), np.zeros((M[s], 2 * N), np.uint16))
+        for v, at, n in ((a, sl.operand(low.fn.body.nodes[j].args[0]), K), (y, WR._words(sl.values[j]), N)):
+            (row,) = SY.f32_rows(np.asarray(at, "<u2").tobytes(), n)
+            v[i] = np.frombuffer(row, "<u2")
     return out
 
 
 def test_pearls_values_are_the_rows_the_cut_linears_make(low, filled):
-    """`Rows.value` gives each of Pearl+'s values as the cut circuit's proof blocks make it: round s's A table each cut
-    linear's A row, and its y value each one's y, at the fixed load's rows; every row is some unit's. It refuses a y value
-    read as another width."""
+    """`Rows.value` gives each of Pearl+'s values as the cut circuit's proof blocks make it, which is as Pearl+'s calls
+    commit them: a call's A rows each its cut linear's A row at the fixed load's rows, then the filler rows no unit makes
+    (``empty``: Pearl+'s are zero), and its y each one's y widened, every row some unit's. It refuses a y read as another
+    width."""
     _w, _v, slots, rows = filled
     want = _pearl_values(low, slots)
     assert sorted(want) == sorted(low.circuit.registered.values)
     for name, v in want.items():
-        assert np.array_equal(rows.value(name, len(v), np.full(v.shape[1], 0xFFFF, np.uint16)), v), name
-    with pytest.raises(ValueError, match="reads 'pearl-y/0/k64' other than as an output row of 8 words or an input row a "
+        assert np.array_equal(rows.value(name, len(v), np.zeros(v.shape[1], np.uint16)), v), name
+        made = (rows.value(name, len(v), np.full(v.shape[1], 0xFFFF, np.uint16)) != 0xFFFF).any(axis=1)
+        assert made.sum() == M[int(name.split("/")[1])], name
+    with pytest.raises(ValueError, match="reads 'pearl-y/0/1' other than as an output row of 8 words or an input row a "
                                          "node's value gives"):
-        rows.value(PEARL.y(0, 64), 896, np.zeros(8, np.uint16))
+        rows.value(PEARL.y(0, 1), 8, np.zeros(8, np.uint16))
 
 
 def test_a_cut_linear_served_under_other_statics_is_taken_as_served(low, filled):
@@ -298,7 +321,7 @@ def test_a_cut_linear_served_under_other_statics_is_taken_as_served(low, filled)
 def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low, filled):
     """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under the committer's key), each
     `LinearARow_v1` and `LinearOut_v1` unit's output rows are its Definition on the inputs the window commits, x by its
-    writers' wires and y by reference from the y value's rows, and the window closes over them. What no cheaper test
+    writers' wires and y by reference from the call's y rows, and the window closes over them. What no cheaper test
     reaches: the window resolving the cut's wires and committing a registered read of an input row by reference. Slow (a
     minute and more) for the window's members, which trace the embedding read's population Program."""
     _w, values, slots, rows = filled
@@ -315,11 +338,12 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
     bad = {}
     for fn, n in c.templates:
         if fn.name in ("LinearARow", "LinearOut"):
-            tid = descriptor_id(fn)
-            ins = [np.ascontiguousarray(x).view("<u2").reshape(n, -1) for x in win.input_words(tid, 0, n)]
+            tid, widths = descriptor_id(fn), [ty.homogeneous_width() for _, ty in fn.signature()[0]]
+            ins = [np.ascontiguousarray(x).view("<u2").reshape(n, -1).view(f"<u{w // 8}")
+                   for x, w in zip(win.input_words(tid, 0, n), widths)]
             want = np.asarray(evaluate_batch(fn, *ins, kernel="reference")).reshape(n, -1)
             want = want.astype("<u4").view("<u2").reshape(n, -1) if fn.name == "LinearARow" else want.astype(np.uint16)
-            if (u := np.flatnonzero((want != rows.outs[tid][0]).any(axis=1))).size:
+            if (u := np.flatnonzero((want != np.concatenate(rows.outs[tid], axis=1)).any(axis=1))).size:
                 bad[tid] = u.tolist()
     assert bad == {}
     assert win.close(salt_key=bytes(32)) is not None

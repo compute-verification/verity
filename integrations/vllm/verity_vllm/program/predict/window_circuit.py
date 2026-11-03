@@ -91,11 +91,12 @@ units' and a later round's the select before it, `io_shell.SelectCollect_v2{...,
 template (one stratum a template) has a reader of every table.
 
 Given Pearl+'s tables (`PearlTables`, `window_class`), the circuit is cut at its linears, whose products PoUW credits:
-each `Gemm_v2{K, N}` but an LM head (a GEMM a token select reads, which stays computed) is one unit
-`LinearARow_v1{K, R, ROUND}` (`registry.linear_cut`), reading its x as its writers' R rows, its output held to its row of
-round s's A table of its K, and N / W units `LinearOut_v1{W, K, ROUND}`, W = ``tables.words``, each taking a row of its y
-from round s's y value of its K, which its readers read as they would its slices. Each table's readers are again templates
-of their own (ROUND and K bound), and `census` counts the cut linears by shape.
+each `Gemm_v2{K, N}` but an LM head (a GEMM a token select reads, which stays computed) is round s's call c, the c-th cut
+linear of its position's forward, and is one unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_cut`), reading its
+x as its writers' R rows, its output held to its row of the call's A rows, and one unit `LinearOut_v1{N, W, ROUND, CALL}`
+reading its row of the call's y and handing it on as N / W rows of W words (`linears`), which its readers read as they
+would its slices. Each call's readers of each of its tables are a template of their own (ROUND and CALL bound), and
+`census` counts the cut linears by shape.
 
 A reader port that reads m writer rows is cut m ways (`interface.Layout.cut`, `window_builder._Builder.settle`), a row of
 it a writer row, so no unit copies rows together: a template's port is read at one row count, its rows its outer elements
@@ -114,8 +115,8 @@ digit, then the run), and like entries that follow on merge, at one step and the
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary than
 its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), with H1's tables a window that
 isn't the fixed load, a class of more than one boundary or whose round 0 passes a table's rows a call, and a position whose
-int8 linears of the tables' K aren't their calls a round, with Pearl+'s an int8 linear, a position whose linears of each K
-aren't the first position's, and a linear whose N isn't rows of ``words``, a request whose Program would read
+int8 linears of the tables' K aren't their calls a round, with Pearl+'s an int8 linear, a position whose linears aren't
+the first position's, and a linear whose y no rows of ``words`` doubled hand on in one unit, a request whose Program would read
 more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request
 a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16
 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port read at two row counts
@@ -192,34 +193,55 @@ class _Keys:
 @dataclass(frozen=True)
 class Linears:
     """A class Program's linears as a cut at them takes them (`PearlTables`): ``heads`` its LM heads' nodes (GEMMs a token
-    select reads, which stay computed) and ``calls`` each position's other GEMMs' N by K, in order, the same at every
-    position."""
+    select reads, which stay computed) and ``calls`` each position's other GEMMs in order, the same at every position, each
+    ``(K, N, W)``: its shape and the words of each row it hands its y on in."""
     heads: frozenset[int]
-    calls: dict[int, tuple[int, ...]]
+    calls: tuple[tuple[int, int, int], ...]
 
 
-def linears(fn: Any, words: int) -> Linears:
-    """The class Program ``fn``'s `Linears`, refused where it has an int8 linear, a position's linears of each K aren't the
-    first position's, an N isn't rows of Pearl+'s y of ``words`` words, or there is none to cut."""
+def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
+    """Whether `LinearOut_v1{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block C-Flock proves."""
+    if N // W + 1 > rows:
+        return False
+    if provable:
+        try:
+            IF.check_proof_block(bind(LC.LinearOut, N=N, W=W, ROUND=0, CALL=0))
+        except ValueError:
+            return False
+    return True
+
+
+def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
+    """The class Program ``fn``'s `Linears`, each call's W the least of ``words`` doubled that divides its N and leaves its
+    `LinearOut_v1` within ``rows`` rows and, unless not ``provable``, a proof block C-Flock's composer proves
+    (`interface.check_proof_block`; a call's y row is read whole). Refused where it has an int8 linear, a position's
+    linears aren't the first position's, an N has no such W, or there is none to cut."""
     nodes = fn.body.nodes
     if (q := next((n for n in nodes if n.fn.name == "Int8RowQuant"), None)) is not None:
         raise Unexpressible(f"{q.fn.id}: an int8 linear, and Pearl+'s tables cut BF16 linears (`Gemm_v2`) alone")
     heads = frozenset(idx for n in nodes if n.fn.name == "TokenSelect"
                       for space, idx, _lo, _hi in runs(n.args[0].refs) if space == "n")
-    by: list[dict[int, list[int]]] = []
+    by: list[list[tuple[int, int]]] = []
     for j, n in enumerate(nodes):
         if n.fn.name == "Embedding":
-            by.append({})
+            by.append([])
         elif n.fn.name == "Gemm" and j not in heads and by:
-            by[-1].setdefault(n.fn.bindings["K"], []).append(n.fn.bindings["N"])
+            by[-1].append((n.fn.bindings["K"], n.fn.bindings["N"]))
     if not by or not by[0]:
         raise Unexpressible(f"{fn.id}: no BF16 linear (`Gemm_v2`) but its LM heads, so nothing for Pearl+'s tables to cut")
     if (p := next((p for p, d in enumerate(by) if d != by[0]), None)) is not None:
-        raise Unexpressible(f"{fn.id}: position {p}'s linears' N by K {by[p]}, not position 0's {by[0]}: a cut reads every "
-                            "position's at the same rows of its round's tables")
-    if bad := sorted({(k, n) for k, ns in by[0].items() for n in ns if n % words}):
-        raise Unexpressible(f"{fn.id}: linears (K, N) {bad}, whose y isn't rows of Pearl+'s {words} words")
-    return Linears(heads, {k: tuple(ns) for k, ns in sorted(by[0].items())})
+        raise Unexpressible(f"{fn.id}: position {p}'s linears (K, N) {by[p]}, not position 0's {by[0]}: a cut reads every "
+                            "position's call c at the same rows of its round's call c")
+    calls = []
+    for K, N in by[0]:
+        W = words
+        while N % W == 0 and not _hands_on(N, W, rows, provable):
+            W *= 2
+        calls.append((K, N, W))
+    if bad := sorted({(K, N) for K, N, W in calls if N % W}):
+        raise Unexpressible(f"{fn.id}: linears (K, N) {bad}, whose y no rows of Pearl+'s {words} words doubled hand on in "
+                            f"one unit within {rows} rows" + (" that C-Flock proves" if provable else ""))
+    return Linears(heads, tuple(calls))
 
 
 class _Program:
@@ -270,10 +292,12 @@ class _Program:
         #: (`Int8RowQuant_v5`'s ``o2``, the node's words whole), which no reader reads
         self.quants: list[int] = []
         self.packed: dict[int, Row] = {}
-        #: with Pearl+'s tables: each position's linears cut so far by K, and each cut linear's A row (`LinearARow_v1`'s
-        #: ``o0``), x widened, which no reader reads
-        self.linears: list[dict[int, int]] = []
+        #: with Pearl+'s tables: each position's linears cut so far, each cut linear's A row (`LinearARow_v1`'s ``o0``), x
+        #: widened, which no reader reads, and its y row (`LinearOut_v1`'s ``y``), y widened, which the window commits by
+        #: reference from the call's y
+        self.linears: list[int] = []
         self.arows: dict[int, Row] = {}
+        self.ys: dict[int, Row] = {}
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -400,7 +424,7 @@ class _Program:
             self.b.value(rows[0].tid, rows[0].out, rows[0].unit, self.tables.ids(s), i, self.tables.m)
             self.quants.append(0)
         elif self.cut is not None:
-            self.linears.append({})
+            self.linears.append(0)
         return rows
 
     def _one(self, j: int, node: Any, fn: Any = None) -> tuple[str, int]:
@@ -511,29 +535,28 @@ class _Program:
         self.gemms[j] = (node.fn, xs, lo)
 
     def _cut(self, j: int, node: Any) -> None:
-        """A linear `Gemm_v2{K, N}` cut at (`PearlTables`): one unit `LinearARow_v1{K, R, ROUND}` reading its x as the R rows its
-        writers hold it in, its A row held to row c·m + i of its round's A table of K, and N / W units
-        `LinearOut_v1{W, K, ROUND}` reading its y as rows o·m + i·N / W on of its round's y value of K, W = ``words``, which
-        its readers read: c its index among its position's linears of that K, o the rows of W words its earlier ones make,
-        m a call's rows of the round and i its position's row (`FixedLoad.at`). Its weights are read nowhere."""
-        t, cut, K, N = self.tables, self.cut, node.fn.bindings["K"], node.fn.bindings["N"]
-        xs, W = self.rows(node.args[0].refs), t.words
+        """A linear `Gemm_v2{K, N}` cut at (`PearlTables`), round s's call c, c its index among its position's cut linears:
+        one unit `LinearARow_v1{K, R, ROUND, CALL}` reading its x as the R rows its writers hold it in, its A row held to row
+        i of the call's A rows, and one unit `LinearOut_v1{N, W, ROUND, CALL}` reading row i of the call's y, which its
+        readers read as its N / W output rows of W words (`linears`): i its position's row (`FixedLoad.at`). Its weights are
+        read nowhere."""
+        t, calls, K, N = self.tables, self.cut.calls, node.fn.bindings["K"], node.fn.bindings["N"]
+        xs, c = self.rows(node.args[0].refs), self.linears[-1]
         if K % len(xs):
             raise Unexpressible(f"{node.fn.id}: its x is {len(xs)} writer rows, which don't divide its {K} values")
+        if c >= len(calls) or calls[c][:2] != (K, N):
+            raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) is its position's cut linear {c}, not the layout's "
+                                f"(K, N) {[call[:2] for call in calls]}")
+        self.linears[-1], W = c + 1, calls[c][2]
         s, i = t.at(self.cls, self.slot_index, self.position - 1)
-        m, calls, c = t.rows(self.cls, s), cut.calls[K], self.linears[-1].get(K, 0)
-        if c >= len(calls) or calls[c] != N:
-            raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) is its position's linear {c} of K = {K}, not the "
-                                f"layout's {calls}")
-        self.linears[-1][K] = c + 1
-        tid, u = self.b.unit(bind(LC.LinearARow, K=K, R=len(xs), ROUND=s))
+        tid, u = self.b.unit(bind(LC.LinearARow, K=K, R=len(xs), ROUND=s, CALL=c))
         self.b.feed(tid, "x", u, 1, xs)
-        self.b.value(tid, "o0", u, t.a(s, K), c * m + i, len(calls) * m)
+        self.b.value(tid, "o0", u, t.a(s, c), i, t.a_rows(self.cls, s))
         self.arows[j] = Row(tid, u, "o0", 2 * K)
-        q, o = N // W, sum(calls[:c]) // W
-        ytid, yu = self.b.unit(bind(LC.LinearOut, N=W, K=K, ROUND=s), q)
-        self.b.value(ytid, "y", yu, t.y(s, K), o * m + i * q, sum(calls) // W * m, q)
-        self.outs[j] = [(0, N, Row(ytid, yu, "o0", W))]
+        ytid, yu = self.b.unit(bind(LC.LinearOut, N=N, W=W, ROUND=s, CALL=c))
+        self.b.value(ytid, "y", yu, t.y(s, c), i, t.rows(self.cls, s))
+        self.ys[j] = Row(ytid, yu, "y", 2 * N)
+        self.outs[j] = [(k * W, (k + 1) * W, Row(ytid, yu, f"o{k}", W)) for k in range(N // W)]
 
     def _ScaledMmS8(self, j: int, node: Any) -> None:
         b = node.fn.bindings
@@ -812,7 +835,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
     b, fn = _Builder(grain, programs, provable), class_program(registered, cls).program.fn
-    layout = linears(fn, tables.words) if isinstance(tables, PearlTables) else None
+    layout = linears(fn, tables.words, grain.rows, provable) if isinstance(tables, PearlTables) else None
     progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry, tables, layout) for k in range(programs)]
     for (j, node), r in product(enumerate(fn.body.nodes), progs):
         r.lower(j, node)
@@ -822,8 +845,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         if isinstance(tables, Tables) and set(r.quants) != {tables.calls}:
             raise Unexpressible(f"{r.name}: int8 linears of K = {tables.k} by position {r.quants}, not H1's {tables.calls} "
                                 "calls a round")
-        if layout is not None and any(d != {k: len(v) for k, v in layout.calls.items()} for d in r.linears):
-            raise Unexpressible(f"{r.name}: linears cut by position {r.linears}, not the layout's {layout.calls}")
+        if layout is not None and set(r.linears) != {len(layout.calls)}:
+            raise Unexpressible(f"{r.name}: linears cut by position {r.linears}, not the layout's {len(layout.calls)} calls")
     if wired:
         b.settle()
     roots, openings = b.merged()
@@ -831,7 +854,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     if isinstance(tables, Tables):
         held = tuple(v for s in range(cls.outputs) for v in (tables.a(s), tables.ids(s)))
     elif layout is not None:
-        held = tuple(v for s in range(cls.outputs) for k in layout.calls for v in (tables.a(s, k), tables.y(s, k)))
+        held = tuple(v for s in range(cls.outputs) for c in range(len(layout.calls)) for v in (tables.a(s, c), tables.y(s, c)))
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
@@ -844,29 +867,27 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
 
 
 #: why a cut linear's y is untied: the prover's registered value, held to nothing PoUW credits
-UNTIED = ("PoUW's verifier holds neither its credited A rows to the A table nor its credited product to the y value yet, so "
-          "the y the circuit reads is the prover's")
+UNTIED = ("Pearl+'s verifier holds its own trees of each call's A rows and y (row-seg rows under PoUW's bindings) to its "
+          "credited product, and the circuit reads the window's registered values of them (row/v2 rows under the "
+          "registration's domain); nothing holds the two to each other yet, so the y the circuit reads is the prover's")
 
 
 def census(lowered: Lowered) -> list[dict[str, Any]]:
-    """The cut linears of ``lowered``'s class (`PearlTables`), a row a round's call: its round, its index among the round's
-    calls of its K, its K and N, its rows (the round's, `PearlTables.rows`) and multiply-adds, its rows of the A table and of
-    the y value, PoUW's scheme whose credited product a tie would hold y to, and whether one does (none yet: `UNTIED`).
-    Empty for a circuit not cut. A circuit's own description gives the same multiply-adds: its `LinearOut_v1{W, K, ROUND}`
-    units times W·K."""
+    """The cut linears of ``lowered``'s class (`PearlTables`), a row a round's call: its round and call (its index among a
+    position's cut linears), its K, N and W, its rows (the round's, `PearlTables.rows`) and multiply-adds, its A rows' value
+    and rows (`PearlTables.a_rows`) and its y's, PoUW's scheme whose credited product a tie would hold y to, and whether one
+    does (none yet: `UNTIED`). Empty for a circuit not cut. A circuit's own description gives the same multiply-adds: each
+    call's `LinearARow_v1{K, R, ROUND, CALL}` units times K and its `LinearOut_v1{N, W, ROUND, CALL}`'s N."""
     P = lowered.programs[0]
     if P.cut is None:
         return []
-    t, cls, W, out = P.tables, P.cls, P.tables.words, []
+    t, cls, out = P.tables, P.cls, []
     for s in range(cls.outputs):
         m = t.rows(cls, s)
-        for k, calls in P.cut.calls.items():
-            for c, n in enumerate(calls):
-                o = sum(calls[:c]) // W
-                out.append({"round": s, "call": c, "k": k, "n": n, "rows": m, "macs": m * n * k,
-                            "a": {"value": t.a(s, k), "rows": [c * m, (c + 1) * m]},
-                            "y": {"value": t.y(s, k), "rows": [o * m, (o + n // W) * m]},
-                            "scheme": t.scheme, "tied": False, "untied": UNTIED})
+        for c, (k, n, w) in enumerate(P.cut.calls):
+            out.append({"round": s, "call": c, "k": k, "n": n, "w": w, "rows": m, "macs": m * n * k,
+                        "a": {"value": t.a(s, c), "rows": t.a_rows(cls, s)}, "y": {"value": t.y(s, c), "rows": m},
+                        "scheme": t.scheme, "tied": False, "untied": UNTIED})
     return out
 
 

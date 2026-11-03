@@ -1,24 +1,27 @@
-"""A linear of a circuit cut at its linears, whose product PoUW credits: the circuit holds the linear's A row to PoUW's table
-of them and takes its y as a registered value, computing neither.
+"""A linear of a circuit cut at its linears, whose product PoUW credits: the circuit holds the linear's A row to the rows
+PoUW's call of it commits and takes its y as that call commits it, computing neither.
 
-    LinearARow_v1{K,R,ROUND}   (x: Array<R, Array<K/R, BF16>>) -> Array<K, F32>     its A row: each of x's K elements widened
-    LinearOut_v1{N,K,ROUND}    (y: Array<N, BF16>) -> Array<N, BF16>                 y as registered, with no gate
-    each _v2                   σ of its _v1 (`verity.ml.definitions.boolean.sigma_lift`)
+    LinearARow_v1{K,R,ROUND,CALL}   (x: Array<R, Array<K/R, BF16>>) -> Array<K, F32>   its A row: each of x's K elements widened
+    LinearOut_v1{N,W,ROUND,CALL}    (y: Array<N, F32>) -> N/W × Array<W, BF16>         y: each committed word's high half, no gate
+    each _v2                        σ of its _v1 (`verity.ml.definitions.boolean.sigma_lift`)
 
 **The A row** is the FP32 input row Pearl-C's A rows are (`verity.core.protocols.pouw.circuit.pc8`): the call's x widened to
 FP32, exact (`Bf16ToF32_v1` on each element, the encoding << 16), x read as R rows of K/R elements in order, so a cut reads
-it as its writers hold it (one row after a norm, a head's at o_proj). **y** is the linear's output as its registered value
-holds it, which the unit hands on unchanged: its output row is its input row, and it has no other.
+it as its writers hold it (one row after a norm, a head's at o_proj). **y** is read as the call commits it, a row of its N
+BF16 words each widened to FP32 exactly as its A rows are, and the unit hands on each word's high half, its BF16 encoding
+(`U32Hi16_v1`, a wire), as N / W rows of W words, so each reader of y reads whole rows of it (a head's at q/k/v): its
+output rows are its input row's high halves in order, and it has no gate.
 
-ROUND, which no gate reads, is the round of the table a unit reads, and LinearOut's K, which no gate reads either, the
-contraction of its linear: each round's readers of each K's tables are templates of their own, so a sample stratified by
+ROUND and CALL, which no gate reads, are the round and the call (the linear's place among its forward's cut linears) of
+the tables a unit reads: each call's readers of each of its tables are a template of their own, so a sample stratified by
 template has a reader of every table.
 """
 from __future__ import annotations
 
 from verity.ml.circuits.defs import composite
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.ops.scalar import U32Hi16
+from verity.ml.circuits.refs import Coll, tuple_of
+from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.boolean import sigma_lift
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.int8_exact import row_parts_refusal
@@ -28,42 +31,52 @@ __all__ = ["LinearARow", "LinearARowV2", "LinearOut", "LinearOutV2"]
 
 A_CONFORMANCE = ("protocol-defined; a cut linear's A row, its x's BF16 elements widened to FP32 exactly (Bf16ToF32_v1 each): "
                  "the FP32 input row Pearl-C's A rows are (verity.core.protocols.pouw.circuit.pc8)")
-OUT_CONFORMANCE = "protocol-defined; a cut linear's y as its registered value holds it: its one output row is its one input row"
+OUT_CONFORMANCE = ("protocol-defined; a cut linear's y as its call commits it, each BF16 word widened to FP32: its N / W "
+                   "output rows are its one input row's high halves (U32Hi16_v1 each) in order")
 
 
-def _round(b: dict) -> str | None:
-    if "ROUND" in b and not (type(b["ROUND"]) is int and b["ROUND"] >= 0):
-        return f"ROUND={b['ROUND']!r}: a round is a natural number"
+def _naturals(b: dict) -> str | None:
+    for name in ("ROUND", "CALL"):
+        if name in b and not (type(b[name]) is int and b[name] >= 0):
+            return f"{name}={b[name]!r}: a round and a call are natural numbers"
     return None
 
 
 def _a_refusal(b: dict) -> str | None:
-    """`bind`'s refusal for `LinearARow_v1`: x is R rows of K/R elements (`int8_exact.row_parts_refusal`), and ROUND a natural
-    number."""
-    return row_parts_refusal(b) or _round(b)
+    """`bind`'s refusal for `LinearARow_v1`: x is R rows of K/R elements (`int8_exact.row_parts_refusal`), and ROUND and
+    CALL natural numbers."""
+    return row_parts_refusal(b) or _naturals(b)
 
 
 def _out_refusal(b: dict) -> str | None:
-    """`bind`'s refusal for `LinearOut_v1`: N and K positive integers, and ROUND a natural number."""
-    for name in ("N", "K"):
-        if name in b and not (type(b[name]) is int and b[name] >= 1):
-            return f"{name}={b[name]!r}: y's elements and its linear's contraction are positive integers"
-    return _round(b)
+    """`bind`'s refusal for `LinearOut_v1`: y's N words are handed on in rows of W, so N and W are positive integers and W
+    divides N, and ROUND and CALL natural numbers."""
+    N, W = b.get("N"), b.get("W")
+    for name, v in (("N", N), ("W", W)):
+        if v is not None and (type(v) is not int or v < 1):
+            return f"{name}={v!r}: y's N words are handed on in rows of W, so N and W are positive integers"
+    if N is not None and W is not None and N % W:
+        return f"N={N}, W={W}: y's N words are handed on in rows of W, so W divides N"
+    return _naturals(b)
 
 
-@composite("LinearARow", 1, ["K", "R", "ROUND"], lambda S: ((("x", Array(S.R, Array(S.K // S.R, BF16))),), Array(S.K, F32)),
-           conformance=A_CONFORMANCE, refuse=_a_refusal)
+@composite("LinearARow", 1, ["K", "R", "ROUND", "CALL"],
+           lambda S: ((("x", Array(S.R, Array(S.K // S.R, BF16))),), Array(S.K, F32)), conformance=A_CONFORMANCE,
+           refuse=_a_refusal)
 def LinearARow(B, S, x):
     """The A row of x: each of its K elements widened to FP32 (`Bf16ToF32_v1`), x viewed as one array of K by reference.
-    ``ROUND``, the round of the A table the row is held to, is read by no gate."""
+    ``ROUND`` and ``CALL``, the call whose A rows the row is held to, are read by no gate."""
     return B.batch(P.Bf16ToF32, Coll(Array(S.K, BF16), x.refs), axes=(0,))
 
 
-@composite("LinearOut", 1, ["N", "K", "ROUND"], lambda S: ((("y", Array(S.N, BF16)),), Array(S.N, BF16)),
+@composite("LinearOut", 1, ["N", "W", "ROUND", "CALL"],
+           lambda S: ((("y", Array(S.N, F32)),), Tuple(*[Array(S.W, BF16)] * (S.N // S.W))),
            conformance=OUT_CONFORMANCE, refuse=_out_refusal)
 def LinearOut(B, S, y):
-    """y itself, with no gate. ``K`` and ``ROUND``, the table y is read from, are read by no gate."""
-    return y
+    """y's BF16 encodings, each committed word's high half (`U32Hi16_v1`, a wire), as N / W rows of W in order. ``ROUND``
+    and ``CALL``, the call whose y is read, are read by no gate."""
+    h = B.batch(U32Hi16, y, axes=(0,))
+    return tuple_of(*(h[k * S.W:(k + 1) * S.W] for k in range(S.N // S.W)))
 
 
 LinearARowV2 = sigma_lift(LinearARow, 2)

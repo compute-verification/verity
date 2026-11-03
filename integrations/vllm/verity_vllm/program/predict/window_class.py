@@ -17,16 +17,16 @@ class's alone, and a window that isn't that load is refused (`takes`). The circu
 them as its program's, the outputs of the Commit record's registration of them.
 
 Given Pearl+'s tables (`PearlTables`), the circuit is cut at its linears: PoUW credits each linear's product, so the circuit
-computes none but the LM head's. Each cut linear is a unit `LinearARow_v1{K, R, ROUND}` (`registry.linear_cut`) whose
-output, x widened to FP32, is held to its row of round s's A table of its K, ``pearl-a/<s>/k<K>``, and units
-`LinearOut_v1{W, K, ROUND}` that take its y from round s's y value of its K, ``pearl-y/<s>/k<K>``, in rows of W words, and
-hand them on to its readers. A round's calls of one K are its positions' linears of that K in order, each of the fixed
-load's m rows of the round (`PearlTables.rows`), and the y value holds each call's m × N y row-major, call after call. So
-a position's A row is row c·m + i of its round's A table, c its linear's index among its position's of that K and i its
-position's row (`FixedLoad.at`), and its y the N / W rows from row o·m + i·N / W of the y value, o the rows of W words its
-position's earlier linears of that K make. The circuit's program takes them as its values, round by round and K by K the A
-table then the y value. Its census (`window_circuit.census`) counts each cut linear by shape, and none is tied to PoUW's
-credited product yet.
+computes none but the LM head's. A round's forward calls Pearl+ once a cut linear, and each call commits tables of its own,
+which the circuit reads as the call commits them: round s's call c, the c-th cut linear of a position's forward, has its A
+rows ``pearl-a/<s>/<c>`` (x widened to FP32, the round's m rows of the fixed load, `PearlTables.rows`, then zero rows up to
+the call's `PearlTables.a_rows`) and its y ``pearl-y/<s>/<c>`` (its N BF16 words a row widened to FP32, the round's m rows).
+Each cut linear is a unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_cut`) whose output, x widened to FP32, is
+held to row i of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v1{N, W, ROUND, CALL}`
+that reads row i of its call's y and hands its BF16 words on to its readers in rows of W (`PearlTables.words`, doubled
+where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
+call by call the A rows then the y. Its census (`window_circuit.census`) counts each cut linear by shape, and none is tied
+to PoUW's credited product yet.
 """
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.core.protocols.pouw.schemes import SCHEMES
+
+from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -149,34 +151,42 @@ class Tables(FixedLoad):
 
 @dataclass(frozen=True)
 class PearlTables(FixedLoad):
-    """Pearl+'s tables of a window, which its circuit cut at its linears reads (module docstring), by round s and contraction
-    K: the A table, the A rows of the round's linears of K (x widened to FP32, K words a row; `linear_cut.LinearARow`), and
-    the y value, their y in rows of ``words`` BF16 (`linear_cut.LinearOut`), each of a call's `rows` rows, call after call.
-    ``scheme`` is PoUW's scheme whose credited product a tie would hold y to (`window_circuit.census`)."""
+    """Pearl+'s tables of a window, which its circuit cut at its linears reads (module docstring), each call's as Pearl+'s
+    call of it commits them: round s's call c, the c-th cut linear of the round's forward, has its A rows (x widened to FP32,
+    K words a row; `linear_cut.LinearARow`), its `rows` rows then zero rows up to `a_rows`, and its y (each BF16 word widened
+    to FP32, N words a row; `linear_cut.LinearOut`), its `rows` rows. A cut linear hands its y on to its readers in rows of
+    ``words``, doubled where its unit would be no proof block (`window_circuit.linears`). ``scheme`` is PoUW's scheme whose
+    credited product a tie would hold y to (`window_circuit.census`)."""
     WHAT = "Pearl+'s tables"
     words: int = 64
     scheme: str = "pearl-c-h100-v1-h3"
 
     def __post_init__(self) -> None:
         if type(self.words) is not int or self.words < 1:
-            raise ValueError(f"Pearl+'s y rows are a positive number of words, not {self.words!r}")
+            raise ValueError(f"a cut linear hands its y on in rows of a positive number of words, not {self.words!r}")
         if self.scheme not in SCHEMES:
             raise ValueError(f"{self.scheme!r} is no PoUW scheme ({', '.join(SCHEMES)})")
 
     @staticmethod
-    def a(s: int, k: int) -> str:
-        """Round ``s``'s A table of contraction ``k``."""
-        return f"pearl-a/{s}/k{k}"
+    def a(s: int, c: int) -> str:
+        """Round ``s``'s call ``c``'s A rows."""
+        return f"pearl-a/{s}/{c}"
 
     @staticmethod
-    def y(s: int, k: int) -> str:
-        """Round ``s``'s y value of contraction ``k``."""
-        return f"pearl-y/{s}/k{k}"
+    def y(s: int, c: int) -> str:
+        """Round ``s``'s call ``c``'s y."""
+        return f"pearl-y/{s}/{c}"
 
     @staticmethod
     def rows(cls: WindowClass, s: int) -> int:
         """A round-``s`` call's rows under the fixed load: round 0 every slot's prompt, a later round a row a slot."""
         return cls.slots * cls.prompt if s == 0 else cls.slots
+
+    @staticmethod
+    def a_rows(cls: WindowClass, s: int) -> int:
+        """A round-``s`` call's A rows: its `rows` and then zero rows up to a multiple of Pearl+'s `ROW_ALIGN`, as the device
+        stages and commits a call's A (its m₁₆)."""
+        return -(-PearlTables.rows(cls, s) // ROW_ALIGN) * ROW_ALIGN
 
 
 def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None,

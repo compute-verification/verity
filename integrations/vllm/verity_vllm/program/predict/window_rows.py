@@ -14,9 +14,10 @@ attention isn't the class Program's one-row decode's, though at as few keys as o
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
 cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum; a quantizer that is
 `Int8RowQuant_v5` holds the value's words whole as its H1 leaf row too (`_Program.packed`). A circuit cut at its linears
-(Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v1` units hold it as
-their output rows and as their input rows, which the window commits by reference from the y value that `Rows.value` makes
-of them, and a served y is taken under any statics of its Definition, which the circuit never computes (`Slot`'s ``cut``).
+(Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v1` unit holds it as
+its output rows and, each word widened to FP32, as its input row, which the window commits by reference from the call's y
+that `Rows.value` makes of them, and a served y is taken under any statics of its Definition, which the circuit never
+computes (`Slot`'s ``cut``).
 Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
@@ -426,7 +427,8 @@ class Rows:
         ports = {(o.reader, p) for o in (c.registered.openings if c.registered else ()) for p in o.ports}
         self.inputs = {t: {p: np.zeros((n[t], w), dtype=np.uint16) for p, w in lay.rows if (t, p) in ports}
                        for t, lay in self.lays.items()}
-        #: input rows a node's value gives, which the window commits by reference (a cut linear's y), by template and port
+        #: input rows a node's value gives, which the window commits by reference (a cut linear's y widened), by template and
+        #: port
         self.given: dict[str, dict[str, np.ndarray]] = {}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
@@ -450,10 +452,11 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
-                if j in P.arows:
-                    (port, words), = self.lays[r.tid].rows
-                    given = self.given.setdefault(r.tid, {}).setdefault(port, np.zeros((self.n[r.tid], words), np.uint16))
-                    given[r.unit:r.unit + (hi - lo) // r.words] = w[lo:hi].reshape(-1, words)
+            if (r := P.ys.get(j)) is not None:
+                if 2 * len(w) != r.words:
+                    raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not the {r.words // 2} bf16 its y row widens")
+                given = self.given.setdefault(r.tid, {}).setdefault(r.out, np.zeros((self.n[r.tid], r.words), np.uint16))
+                given[r.unit] = np.stack([np.zeros_like(w), w], axis=1).reshape(r.words)
             if (r := P.packed.get(j)) is not None:
                 if len(w) != r.words:
                     raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not its leaf row {r}'s {r.words}")
