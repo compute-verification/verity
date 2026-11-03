@@ -47,37 +47,89 @@ def test_the_vectors_are_the_bound_on_their_inputs():
     assert close(data, json.loads(json.dumps(iob.vectors()))), "stale: python -m te_core.io_bound vectors"
 
 
+FIGURES = ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "blocks_no_cell", "rho_no_cell")
+
+
 def test_each_vectors_term_solves_its_cap():
-    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ = Σ_P (G_P − Λ·L_P)⁺ at each Λ, the
-    blocks the larger, ρ = N·c/|C|."""
-    forms, subsets = Counter(), 0
+    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ = Σ_P (G_P − Λ·L_P)⁺ at each Λ on
+    the products it keeps (every one for the numerical Λ, the best subset's for the proved one, `proved_subset`, and
+    `proved_subset_no_cell` for the figure without P-cell), the blocks the larger, ρ = N·c/|C| with every product in
+    |C|; with nothing counted every figure is 0, and where no subset has a proved Λ the proved ones are null."""
+    forms, subsets, dropped = Counter(), 0, 0
     for v in json.loads(iob.VECTORS.read_text())["vectors"]:
         i, cap, term = v["inputs"], v["cap"], v["term"]
-        G = term["share"] * i["C_gates"]
+        ps, c, k, C = i["products"], i["c"], i["k"], i["C_gates"]
         assert 0 <= term["share"] < 1, v["name"]
         lin = [(p["gates_per_mac"] * p["macs"], p["gates_per_mac"] * m * p["b_c"] * p["outputs"])
-               for p, m in zip(i["products"], cap["mu"])]
+               for p, m in zip(ps, cap["mu"])]
         assert sum(x for _, x in lin) == pytest.approx(cap["L"], rel=1e-12)
-        for lam in ("proved", "numerical"):
-            n, lv = term[f"{lam}_blocks"], cap[f"lam_{lam}"]
-            if not i["products"] or lv is None:   # nothing counted, or Λ void
-                assert n == 0 and term[f"{lam}_rho"] == 0
+        if not ps:
+            assert all(term[f"{lam}_{x}"] == 0 for lam in ("proved", "numerical") for x in FIGURES)
+            continue
+        if cap["lam_proved"] is None:
+            assert all(term[f"proved_{x}"] is None for x in FIGURES), v["name"]
+            assert term["proved_subset"] is None and term["proved_subset_no_cell"] is None
+        for lam, sub in (("numerical", None), ("proved", "proved_subset"), ("proved", "proved_subset_no_cell")):
+            if lam == "proved" and cap["lam_proved"] is None:
                 continue
-            gamma, B = lv * cap["gamma0"], lv * i["k"] / 2 * math.sqrt(cap["Q"])
-            root, linear = term[f"{lam}_blocks_root"], term[f"{lam}_blocks_linear"]
-            assert root * gamma + B * math.sqrt(root) == pytest.approx(G, rel=1e-9), v["name"]
-            net = sum(max(0.0, g - lv * x) for g, x in lin)
-            assert linear == pytest.approx(net / gamma, rel=1e-12), v["name"]
-            subsets += net > max(0.0, G - lv * cap["L"]) * (1 + 1e-9)
-            assert n == max(root, linear)
-            forms["linear" if linear > root else "root"] += 1
-            assert term[f"{lam}_rho"] == pytest.approx(n * i["c"] / i["C_gates"], rel=1e-12)
-            assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * i["c"] / i["C_gates"], rel=1e-12)
+            kept = term[sub]["kept"] if sub else list(range(len(ps)))
+            lv = term[sub]["lam"] if sub else cap["lam_numerical"]
+            if sub:
+                dropped += bool(term[sub]["dropped"])
+                assert term[sub]["dropped"] == len(ps) - len(kept)
+                assert term[sub]["dropped_macs_share"] == pytest.approx(
+                    1 - sum(ps[j]["macs"] for j in kept) / sum(p["macs"] for p in ps), abs=1e-15)
+            G = sum(ps[j]["gates_per_mac"] * ps[j]["macs"] for j in kept)
+            gamma = lv * max(ps[j]["gates_per_mac"] * cap["alpha"][j] for j in kept)
+            B = lv * k / 2 * math.sqrt(sum(ps[j]["gates_per_mac"] ** 2 * ps[j]["outputs"] /
+                                           (ps[j]["b_a"] * ps[j]["b_b"]) for j in kept))
+            net = sum(max(0.0, lin[j][0] - lv * lin[j][1]) for j in kept)
+            if sub != "proved_subset_no_cell":
+                root, linear, n = (term[f"{lam}_{x}"] for x in ("blocks_root", "blocks_linear", "blocks"))
+                assert root * gamma + B * math.sqrt(root) == pytest.approx(G, rel=1e-9), v["name"]
+                assert linear == pytest.approx(net / gamma, rel=1e-12), v["name"]
+                subsets += net > max(0.0, G - lv * sum(lin[j][1] for j in kept)) * (1 + 1e-9)
+                assert n == max(root, linear)
+                forms["linear" if linear > root else "root"] += 1
+                assert term[f"{lam}_rho"] == pytest.approx(n * c / C, rel=1e-12)
+                assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * c / C, rel=1e-12)
+            if sub != "proved_subset":
+                g_cell = gamma + k * max(ps[j]["cell_gates"] for j in kept)
+                n = term[f"{lam}_blocks_no_cell"]
+                assert n == pytest.approx(max(iob.blocks(G, g_cell, B), net / g_cell), rel=1e-12), v["name"]
+                assert term[f"{lam}_rho_no_cell"] == pytest.approx(n * c / C, rel=1e-12)
             assert term[f"{lam}_rho_no_cell"] <= term[f"{lam}_rho"] <= term[f"{lam}_rho_main"]
-        assert term["proved_rho"] <= term["numerical_rho"]
-    assert forms["linear"] and forms["root"] and subsets   # both forms, and a linear form that drops a product
+        if cap["lam_proved"] is not None:
+            assert term["proved_rho"] <= term["numerical_rho"]
+    # both forms, a linear form that drops a product, and a best subset that drops one
+    assert forms["linear"] and forms["root"] and subsets and dropped
     void = [v for v in json.loads(iob.VECTORS.read_text())["vectors"] if v["cap"]["lam_proved"] is None]
     assert [v["cap"]["whole_chain"] for v in void] == [None]
+
+
+def test_a_short_chain_product_drops_from_the_proved_bound_and_never_voids_it():
+    """A product whose whole-making chain is too short for Λ (a rank-1 adapter's, r = k/(3K²b) past 1/4) beside
+    products whose chains are long enough, or none: the proved bound is the others' alone at the same |C|, and the
+    subset names what it dropped; with only short chains no subset has a proved Λ, and the figures are None, never 0
+    (nothing counted is 0)."""
+    c, k = iob.CONSOLE
+    bf16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
+    square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": 512} | bf16
+    free = {"macs": 1e14, "outputs": 1e14 / 1024, "k_dim": 1024, "k_whole": None} | bf16
+    adapter = {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16
+    C = 1e18
+    alone = iob.bound([square, free], c, k, C)["proved"]
+    got = iob.bound([square, free, adapter], c, k, C)["proved"]
+    share = adapter["macs"] / (square["macs"] + free["macs"] + adapter["macs"])
+    for fig, sub in (("rho", "subset"), ("rho_no_cell", "subset_no_cell")):
+        assert got[fig] == pytest.approx(alone[fig], rel=1e-12) and got[fig] > 0
+        assert (got[sub]["k_whole_min"], got[sub]["kept"], got[sub]["dropped"]) == (512, [0, 1], 1)
+        assert got[sub]["dropped_macs_share"] == pytest.approx(share, rel=1e-12)
+    assert alone["subset"]["dropped"] == 0
+    void = iob.bound([adapter, square | {"k_whole": 64}], c, k, C)["proved"]
+    assert all(void[x] is None for x in FIGURES) and void["subset"] is None
+    assert iob.bound([adapter, free], c, k, C)["proved"]["subset"]["kept"] == [1]
+    assert iob.bound([], c, k, C)["proved"]["rho"] == 0
 
 
 # -- the closed forms ---------------------------------------------------------------------------------------------------
@@ -287,9 +339,13 @@ def test_dense_counts_its_block_products_but_not_the_first_layers_or_newton_schu
     assert 0.5 < m["tiny"]["kinds"]["fresh"]["share"] < 1 and m["tiny"]["bound"]["proved"]["rho"] > 0
     # at the console's k a block holds a whole 64 × 64 weight: layer 0's q, k, v come whole from the embedding's rows
     # (64 < 3^{3/2}·√(k/32)), so later layers' operands are cheap too, and 64-long chains make operands whole faster
-    # than a block reads them (r = 1/3): the proved bound is void
+    # than a block reads them (r = 1/3): Λ is void on every product, so the proved bound is the products whose
+    # chains are at least d_ff = 192 long (and those with none), the rest still in |C|
     assert m["console"]["kinds"]["expansion"]["share"] > m["tiny"]["kinds"]["expansion"]["share"]
-    assert m["console"]["bound"]["proved"]["lam"] is None and m["console"]["bound"]["proved"]["rho"] == 0
+    proved = m["console"]["bound"]["proved"]
+    assert m["console"]["bound"]["whole_chain"] is None and proved["lam"] is not None and proved["rho_no_cell"] > 0
+    for sub in ("subset", "subset_no_cell"):
+        assert proved[sub]["k_whole_min"] == 192 and 0 < proved[sub]["dropped_macs_share"] < 1
 
 
 def test_lora_counts_only_its_adapters():

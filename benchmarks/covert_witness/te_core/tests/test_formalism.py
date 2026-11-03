@@ -775,17 +775,52 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     one = F.bound(m, c, k)
     assert one["terms"]["fresh_products"] == b["proved"]["rho_no_cell"] and one["binding"] == "fresh_products"
     assert one["sensitivities"]["fresh_cell"] == b["proved"]["rho"]
-    assert one["inputs"]["fresh_products"]["capture"] == products.CAPTURE
+    assert one["inputs"]["fresh_products"]["capture"] == products.CAPTURE and "subset" not in one["inputs"]["fresh_products"]
 
 
-@pytest.mark.parametrize("name, fresh", (("dense_blocks", 0.00923), ("lora_blocks", 0.00093),
-                                         ("wildcard_adapter", 0.0)))
-def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name, fresh):
+def test_a_rank_one_adapter_product_beside_the_45m_dense_steps_moves_its_term_by_at_most_its_own_share():
+    """The 45M dense step's products (its fixture rows) with one rank-1 adapter product added, its K = 1 chain too
+    short for a proved Λ (r = k/(3K²b) past 1/4), which on every product would void the step's term: the best subset
+    drops it, so the term moves by at most the adapter's share of |C| (its gates in |C|, never in G), and the term
+    says what it dropped; with only such products the term is unmeasured, never a measured 0."""
+    rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    got = F.products_of_trace(rows)
+    c, k = policy.CONSOLE
+    adapter = {"macs": 2 * 512 * 512.0, "outputs": 2 * 512 * 512.0, "k_dim": 1, "k_whole": 1, "b_a": 16, "b_b": 16,
+               "b_c": 32, "gates_per_mac": 1480.125, "cell_gates": 23682.0}
+    C, extra = rows["gates"], adapter["macs"] * adapter["gates_per_mac"]
+
+    def term(products, gates):
+        m = replace(one_segment(), parts=(F.Part(gates=gates, tokens=512, token_gates=gates, affected_gates=gates / 2),),
+                    products=got | {"products": products})
+        return F.fresh_products(m, c, k)
+
+    alone, _, _ = term(got["products"], C)
+    added, why, inputs = term([*got["products"], adapter], C + extra)
+    assert why is None and alone == pytest.approx(165_020.69, rel=1e-6)
+    assert alone * (1 - extra / (C + extra)) * (1 - 1e-12) <= added <= alone
+    n = len(got["products"]) + 1
+    assert inputs["subset"]["dropped"] == 1 and inputs["subset"]["of"] == n
+    assert inputs["subset"]["dropped_macs_share"] == pytest.approx(
+        adapter["macs"] / (adapter["macs"] + sum(p["macs"] for p in got["products"])), rel=1e-12)
+    void, why, inputs = term([adapter, adapter | {"k_whole": 64, "k_dim": 64}], C)
+    assert void is None and why == F.FRESH_VOID and inputs["fresh_cell"] is None and "subset" not in inputs
+    b = F.bound(replace(one_segment(), products=got | {"products": [adapter]}), c, k)
+    assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == F.FRESH_VOID
+    assert b["sensitivities"]["fresh_cell"] is None and b["unmeasured"]["fresh_cell"] == F.FRESH_VOID
+
+
+@pytest.mark.parametrize("name, fresh, dropped", (("dense_blocks", 0.00923, (1, 4, 0.353)),
+                                                  ("lora_blocks", 0.00093, (3, 5, 0.667)),
+                                                  ("wildcard_adapter", 0.0, None)))
+def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name, fresh, dropped):
     """Each fixture's product rows (the `.products.json` beside its circuit, te_core.capture.products of the step the
-    circuit traces): the capture's version, the console's k, the order unknown, the circuit's tokens and |C|, and by
-    kind every product the op log places, with the fresh share of their MACs each case shows (dense blocks 0.92%, LoRA
-    0.09%, the adapter none). The term is measured, the reference circuit's chain standing for the trace's unknown
-    order: io_bound's figure without P-cell, 0 on the tiny start (its short chains void the proved Λ)."""
+    circuit traces, at te_core 4.8): the capture's version, the console's k, the order unknown, the circuit's tokens
+    and |C|, and by kind every product the op log places, with the fresh share of their MACs each case shows (dense
+    blocks 0.92%, LoRA 0.09%, the adapter none). The term is measured, the reference circuit's chain standing for the
+    trace's unknown order: io_bound's figure without P-cell. On the tiny start Λ is void on all its fresh products (its
+    64-long chains), so the term is the best subset's, the products whose chains are at least 1,024 long, and says how
+    many it dropped (dense blocks 1 of 4, 35% of their MACs; LoRA 3 of 5, 67%); with nothing counted it is 0."""
     from te_core.capture.circuit import StepCircuit, measure
 
     block = json.loads((FIXTURES / f"{name}.products.json").read_text())
@@ -799,9 +834,17 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name, fre
     assert got["kinds_macs"]["fresh"] / total == pytest.approx(fresh, abs=5e-6)
     assert bool(got["products"]) == (fresh > 0)
     b = F.bound(replace(one_segment(), products=got), 1e11, policy.CONSOLE[1])
-    proved = b["inputs"]["fresh_products"]["io_bound"]["proved"]
-    assert b["terms"]["fresh_products"] == proved["rho_no_cell"] == 0 and "fresh_products" not in b["unmeasured"]
-    assert b["inputs"]["fresh_products"]["kinds_macs"] == got["kinds_macs"]
+    fp = b["inputs"]["fresh_products"]
+    proved = fp["io_bound"]["proved"]
+    assert b["terms"]["fresh_products"] == proved["rho_no_cell"] and "fresh_products" not in b["unmeasured"]
+    assert fp["kinds_macs"] == got["kinds_macs"]
+    if dropped is None:
+        assert proved["rho_no_cell"] == 0 and "subset" not in fp
+        return
+    assert fp["io_bound"]["whole_chain"] is None and proved["rho_no_cell"] > 0
+    sub = fp["subset"]
+    assert (sub["dropped"], sub["of"], sub["k_whole_min"]) == (*dropped[:2], 1024)
+    assert sub["dropped_macs_share"] == pytest.approx(dropped[2], abs=5e-4)
 
 
 def test_a_records_trace_rows_are_its_traced_steps_products():

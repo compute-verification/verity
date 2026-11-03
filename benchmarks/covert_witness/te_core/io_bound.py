@@ -43,8 +43,9 @@ splitting its b_C bits: `feed` = √(b_C/(b_C − b)) for b ≤ b_C/2, else 2√
 from chains it runs itself, their own operands read or made whole in turn, number at most e·k/b, e the least root of
 e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sources sharing arrays), worth `whole_chain` =
 (1 + e)^{3/2}. K is the shortest chain that makes a counted operand whole by itself (`Row.k_whole`: an operand that
-also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root
-and the proved bound is void. Proved: Λ = SHARE·feed·whole_chain, at the counted products' widest operand. Each
+also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root,
+and the proved bound is taken on the subset of the products whose chains are long enough (`bound`). Proved:
+Λ = SHARE·feed·whole_chain, at the kept products' widest operand and shortest whole-making chain. Each
 factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
 width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
@@ -130,43 +131,84 @@ def blocks(G: float, gamma: float, B: float) -> float:
     return s * s
 
 
-def bound(products: list[dict], c: float, k: float, C: float) -> dict:
-    """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
-    each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
-    no chain makes an operand whole by itself): the cap's terms, Λ proved and numerical, and for each the blocks and ρ
-    with P-cell (the larger of the root form's, `blocks_root`, and the linear form's on its best subset,
-    `blocks_linear`), without the chain-start terms (`rho_main`) and without P-cell. A void Λ (`whole_chain` past
-    r = 1/4) is None, its blocks and ρ 0."""
-    ps = [p for p in products if p["macs"]]
+def _lam_proved(ps: list[dict], k: float) -> float:
+    """Λ proved on the products `ps`: SHARE·feed·whole_chain at their widest operand and shortest whole-making chain;
+    ∞ where void."""
+    fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
+    whole = [p["k_whole"] for p in ps if p.get("k_whole")]
+    wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
+    return SHARE * fd * wc
+
+
+def _figures(ps: list[dict], lam: float, c: float, k: float, C: float) -> dict:
+    """The blocks and ρ at Λ = `lam` on the products `ps` of a step of |C| = `C` gates (`bound`)."""
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     lin = [(p["gates_per_mac"] * p["macs"], p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] *
             p["outputs"]) for p in ps]
+    gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
+    Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
+    cell = max(p["cell_gates"] for p in ps)
+    gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
+    net = sum(max(0.0, g - lam * x) for g, x in lin)
+    root, linear = blocks(G, gamma, B), net / gamma
+    n = max(root, linear)
+    n_cell = max(blocks(G, gamma + k * cell, B), net / (gamma + k * cell))
+    return {"lam": lam, "gamma": gamma, "B": B, "blocks_root": root, "blocks_linear": linear, "blocks": n,
+            "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell, "rho_no_cell": n_cell * c / C}
+
+
+def bound(products: list[dict], c: float, k: float, C: float) -> dict:
+    """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
+    each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
+    no chain makes an operand whole by itself): the cap's terms on them all (`whole_chain` None where void), Λ proved
+    and numerical, and for each the blocks and ρ with P-cell (the larger of the root form's, `blocks_root`, and the
+    linear form's on its best subset, `blocks_linear`), without the chain-start terms (`rho_main`) and without P-cell.
+
+    Both forms hold on any subset of the products, so the proved figures are each the best over the subsets that keep
+    the products whose whole-making chain is at least a threshold, one threshold for each `k_whole` among them and one
+    keeping only those with none, every product's gates still in |C| (a product with a short chain would otherwise
+    void Λ for the whole step): `subset` (with P-cell) and `subset_no_cell` give the threshold (`k_whole_min`, None:
+    only products with no whole-making chain), the products kept (`kept`, indices into the counted ones), how many are
+    dropped and their share of the counted MACs, and that subset's Λ. Where every subset's Λ is void (`whole_chain`
+    past r = 1/4) the proved figures are None, never 0; with no counted product they are 0."""
+    ps = [p for p in products if p["macs"]]
+    G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
     zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks_root": 0.0, "blocks_linear": 0.0, "blocks": 0.0, "rho": 0.0,
             "rho_main": 0.0, "blocks_no_cell": 0.0, "rho_no_cell": 0.0}
     if not ps:
-        return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0, "proved": zero,
-                      "numerical": zero}
-    gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
-    Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
-    L = sum(x for _, x in lin)
-    fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
+        return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0,
+                      "proved": zero | {"subset": None, "subset_no_cell": None}, "numerical": zero}
     whole = [p["k_whole"] for p in ps if p.get("k_whole")]
     wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
-    cell = max(p["cell_gates"] for p in ps)
-    out |= {"gamma0": gamma0, "Q": Q, "L": L, "feed": fd, "whole_chain": wc if math.isfinite(wc) else None}
-    for name, lam in (("proved", SHARE * fd * wc), ("numerical", SHARE)):
-        if not math.isfinite(lam):
-            out[name] = zero | {"lam": None, "gamma": None, "B": None}
+    out |= {"gamma0": max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps),
+            "Q": sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps),
+            "L": sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps),
+            "feed": max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps),
+            "whole_chain": wc if math.isfinite(wc) else None, "numerical": _figures(ps, SHARE, c, k, C)}
+    macs = sum(p["macs"] for p in ps)
+    best: dict[str, dict] = {}
+    for t in [*sorted(set(whole)), math.inf]:
+        kept = [i for i, p in enumerate(ps) if (p.get("k_whole") or math.inf) >= t]
+        if not kept:
             continue
-        gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
-        net = sum(max(0.0, g - lam * x) for g, x in lin)
-        root, linear = blocks(G, gamma, B), net / gamma
-        n = max(root, linear)
-        n_cell = max(blocks(G, gamma + k * cell, B), net / (gamma + k * cell))
-        out[name] = {"lam": lam, "gamma": gamma, "B": B, "blocks_root": root, "blocks_linear": linear, "blocks": n,
-                     "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell,
-                     "rho_no_cell": n_cell * c / C}
+        sub = [ps[i] for i in kept]
+        lam = _lam_proved(sub, k)
+        if not math.isfinite(lam):
+            continue
+        f = _figures(sub, lam, c, k, C)
+        f["subset"] = {"k_whole_min": t if math.isfinite(t) else None, "kept": kept, "dropped": len(ps) - len(kept),
+                       "dropped_macs_share": 1 - sum(p["macs"] for p in sub) / macs, "lam": lam}
+        for fig in ("blocks", "blocks_no_cell"):
+            if fig not in best or f[fig] > best[fig][fig]:
+                best[fig] = f
+    if not best:
+        out["proved"] = dict.fromkeys(zero) | {"subset": None, "subset_no_cell": None}
+        return out
+    cell, no_cell = best["blocks"], best["blocks_no_cell"]
+    out["proved"] = {x: cell[x] for x in zero if x not in ("blocks_no_cell", "rho_no_cell")} | {
+        "blocks_no_cell": no_cell["blocks_no_cell"], "rho_no_cell": no_cell["rho_no_cell"],
+        "subset": cell["subset"], "subset_no_cell": no_cell["subset"]}
     return out
 
 
@@ -729,7 +771,10 @@ def vectors() -> dict:
         ("short and long chains: the linear form keeps the long", CONSOLE, 1e18,
          [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16, "k_whole": None} | bf16, square]),
         ("operands made whole from K = 128 chains", CONSOLE, 1e18, [square | {"k_whole": 128}]),
-        ("operands made whole from K = 64 chains: proved bound void", CONSOLE, 1e18, [square | {"k_whole": 64}]),
+        ("operands made whole from K = 64 chains: no subset has a proved bound", CONSOLE, 1e18,
+         [square | {"k_whole": 64}]),
+        ("a rank-1 adapter's product beside a square one: the best subset drops it", CONSOLE, 1e18,
+         [square, {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16]),
         ("mixed widths", CONSOLE, 1e18, [{"macs": 4e14, "outputs": 4e14 / 512, "k_dim": 512, "k_whole": 512} | bf16,
                                          {"macs": 2e14, "outputs": 2e14 / 1408, "k_dim": 1408, "k_whole": 512, "b_a": 8,
                                           "b_b": 16, "b_c": ACC_BITS, "gates_per_mac": 9128 / 32, "cell_gates": 9128.0}]),
@@ -745,11 +790,14 @@ def vectors() -> dict:
                "feed": b["feed"], "whole_chain": b["whole_chain"], "lam_proved": b["proved"]["lam"],
                "lam_numerical": b["numerical"]["lam"]}
         term = {f"{lam}_{x}": b[lam][x] for lam in ("proved", "numerical")
-                for x in ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "rho_no_cell")} | \
-            {"share": b["share"]}
+                for x in ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "blocks_no_cell", "rho_no_cell")} | \
+            {"share": b["share"], "proved_subset": b["proved"]["subset"],
+             "proved_subset_no_cell": b["proved"]["subset_no_cell"]}
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": ps}, "cap": cap, "term": term})
-    return {"about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms, "
-                     "`term` the blocks and ρ (python -m te_core.io_bound vectors)", "vectors": out}
+    return {"about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms on "
+                     "every product, `term` the blocks and ρ, the proved ones on their best subsets "
+                     "(`proved_subset`, `proved_subset_no_cell`; null where no subset has a proved Λ) "
+                     "(python -m te_core.io_bound vectors)", "vectors": out}
 
 
 def main(argv=None) -> int:
