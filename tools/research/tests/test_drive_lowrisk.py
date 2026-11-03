@@ -303,6 +303,21 @@ def test_the_lanes_merge_rebuilds_conflicted_pins_as_the_sync_does(world, monkey
     assert h.d._clean_merge(d, e) == (None, "conflict in q.txt")
 
 
+def test_the_lanes_merge_ports_the_lean_a_member_adds_as_the_sync_does(world, monkeypatch, tmp_path):
+    """Above a Lean check it moves, the lane merges each member again: once the tree has Lean's module system, the merged
+    tree's `.lean` files that aren't modules are ported, as the sync's merge ported them, so the moved check holds the tree it
+    checked."""
+    from test_queue_ported import _port, _tooling
+
+    h = _lane(world, monkeypatch)
+    a = world.change(_tooling(tmp_path / "argv"))
+    b = world.change({"Lib/New.lean": "import Lib.Old\n"}, base=a)
+    _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    merged, why = h.d._clean_merge(a, b)
+    assert merged and why == "", why
+    assert _git(h.d.repo, "show", f"{merged}:Lib/New.lean") + "\n" == _port("import Lib.Old\n")
+
+
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
     """A hand check's run is of the commit it runs on, which a landing off `next` takes off it: (a) can't be shown for it."""
     h = _lane(world, monkeypatch)
