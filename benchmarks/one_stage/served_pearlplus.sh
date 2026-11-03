@@ -5,7 +5,8 @@
 #   bash benchmarks/one_stage/served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR
 # Everything but PIECE_DIR's files goes to SERVE_DIR/private/pearlplus, each step's log among it:
 #   1. benchmarks/harness/setup/pearl_c_sm90.sh builds pearl_c_sm90's cubin and its debit cubin (debit/debit_sm90.cubin)
-#      from this tree, with their SASS gates;
+#      from this tree, with the SASS gates build.sh enforces; the cubin line also names the harness's .FTZ and FP32 MUFU
+#      gate's verdict (harness_gate.json), which build.sh records and doesn't enforce, its pins being sm_120a's;
 #   2. under `gpu-lease 1` (PEARLPLUS_LEASE_MIN, default 30), `served_passes.py serve` serves PEARLPLUS_SPEC's Pearl-C arm
 #      (default benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml: pouw:pearl-c-h100-v1-h3 over Llama 3.2 1B's
 #      BF16 checkpoint) a warm-up, then PEARLPLUS_REQUESTS requests (default 32) of PEARLPLUS_PROMPT_TOKENS seeded random
@@ -70,8 +71,13 @@ rc=$?
 if [ "$rc" = 0 ] && [ -s "$Q/setup.paths" ]; then
   { read -r PEARLC_KERNEL; read -r PEARLC_CUBIN; } < "$Q/setup.paths"
   export PEARLC_KERNEL PEARLC_CUBIN
-  say "cubin: pearl_c_sm90.sh built it and its SASS gates passed after $(took "$t") (cubin sha256" \
-    "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), debit cubin $(sha256sum "${PEARLC_CUBIN%/*}/debit/debit_sm90.cubin" | cut -c1-16))"
+  harness=$("$TPY" -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+print("pass" if d.get("ok") else "FAIL, " + str(d.get("error")).split(".cubin: ", 1)[-1][:160])' \
+    "${PEARLC_CUBIN%/*}/harness_gate.json" 2>/dev/null) || harness="no harness_gate.json read"
+  say "cubin: pearl_c_sm90.sh built it and the SASS gates build.sh enforces passed after $(took "$t") (cubin sha256" \
+    "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), debit cubin $(sha256sum "${PEARLC_CUBIN%/*}/debit/debit_sm90.cubin" | cut -c1-16));" \
+    "the harness's .FTZ and FP32 MUFU gate, recorded and not enforced on sm_90a: $harness"
 else
   say "cubin: pearl_c_sm90.sh failed (exit $rc after $(took "$t")): $(tail -1 "$Q/setup.log" | cut -c1-400)"
 fi
