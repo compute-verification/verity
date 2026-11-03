@@ -103,7 +103,8 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     rw [show encs ([] : List Frame) ++ (Frame.sq 2 2).enc = (Frame.sq 2 2).enc by simp [encs]] at e
     exact e.symm
   rw [dropDom_l0Body h1 (by omega)]
-  congr 1
+  -- `congr 1` would retry `rfl` at default transparency on the two bodies, which exhausts `whnf`
+  refine congrArg (List.cons _) ?_
   -- the table and extra lanes are the tape's
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by rw [hreal] at hre; exact hre
   have hg := (hS0.realOf ν t j r hre').2.2.2
