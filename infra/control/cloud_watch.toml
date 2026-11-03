@@ -78,6 +78,12 @@ json = "t"                           # each sweep (60 s) rewrites it
 period_s = 300
 
 [[loop]]
+name = "Executor serve"
+started_by = "/data/infra/executor_serve.sh"
+file = "/data/executor/alive"          # touched each minute a serve runs, or while /data/executor/stopped holds it
+period_s = 300
+
+[[loop]]
 name = "Control disk relay"
 started_by = "/data/infra/control-disk/run.sh (control_disk.sh)"
 file = "/data/infra/control-disk/seen.json"
