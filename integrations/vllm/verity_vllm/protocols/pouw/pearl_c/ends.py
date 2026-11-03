@@ -53,6 +53,8 @@ class PassEnds:
     retain_behind: bool = True
     #: the retained passes being completed behind their steps, oldest first (`retained_ends`)
     _behind: tuple = ()
+    #: the stream a device's retained calls are completed on behind the calls (`_retained`), made at the first
+    _retain_side: Any = None
 
     def end(self, lag: bool = False, behind: bool = False) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
@@ -136,8 +138,9 @@ class PassEnds:
     def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
         and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
-        behind the call, `write_behind`, joined by the pass's end).  On a device the record is decided from the bytes the
-        rows' write lands (`screen.excluded_host`), and y's root from its tree's, so the call waits for neither."""
+        behind the call, `write_behind`, joined by the pass's end).  On a device the call's buffers are copied as they are on
+        its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
+        host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`)."""
         import torch
         d = cur.retain / "calls"
         if not d.is_dir():
@@ -145,30 +148,48 @@ class PassEnds:
             d.mkdir(mode=0o700, exist_ok=True)
         if y is not None:
             (cur.retain / "y").mkdir(mode=0o700, exist_ok=True)
-        unit = (mm, m, mm.shape.k)
-        rows, rec = xa.to(torch.bfloat16), len(cur.records)
-        if xa.is_cuda:
-            held = staged(flags[:m])
-            cur.records.append(None)
-            first = (d / f"{mm.index}.rows.bf16", rows.view(torch.uint8), False,
-                     lambda host, ex=self.weights[mm.weight].excluded: cur.records.__setitem__(
-                         rec, PW.UnitRecord(*unit, excluded_host(held.numpy(), host.numpy().view("<u2").reshape(-1, mm.shape.k)), ex)))
+        unit, ex, rec = (mm, m, mm.shape.k), self.weights[mm.weight].excluded, len(cur.records)
+        files = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
+        paths = (d / f"{mm.index}.rows.bf16", d / f"{mm.index}.tree",
+                 cur.retain / "y" / f"{mm.index}.rows.bf16", cur.retain / "y" / f"{mm.index}.tree")
+
+        def y_root(host: Any) -> None:
+            files["y"]["root"] = host[-self.nb:].numpy().tobytes().hex()
+
+        if not xa.is_cuda:
+            cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]), ex))
+            out = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
+            if y is not None:
+                out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index), True, y_root)]
+            got = write_behind(tuple(out), cur.writes)
         else:
-            cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
-                                             self.weights[mm.weight].excluded))
-            first = (d / f"{mm.index}.rows.bf16", rows.view(torch.uint8), False)
-        out = [first, (d / f"{mm.index}.tree", tree, True)]
-        files = {"rows": None, "tree": None}
-        if y is not None:
-            files["y"] = {"root": None, "rows": None, "tree": None}
-            out += [(cur.retain / "y" / f"{mm.index}.rows.bf16", y, False),
-                    (cur.retain / "y" / f"{mm.index}.tree", SY.y_tree(self, y, mm.index), True,
-                     lambda host, y=files["y"]: y.__setitem__("root", host[-self.nb:].numpy().tobytes().hex()))]
-        got = write_behind(tuple(out), cur.writes)
+            side = self._retain_stream(xa.device)
+            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()])
+            side.wait_stream(torch.cuda.current_stream(xa.device))
+            cur.records.append(None)
+            with torch.cuda.stream(side):
+                for t in kept:
+                    t.record_stream(side)
+                rows, a_tree, held, *ys = kept
+                held = staged(held, fresh=True)
+
+                def record(host: Any) -> None:
+                    words = host.numpy().view("<u2").reshape(-1, mm.shape.k)
+                    cur.records[rec] = PW.UnitRecord(*unit, excluded_host(held.numpy(), words), ex)
+                out = [(paths[0], rows.view(torch.uint8), False, record), (paths[1], a_tree, True)]
+                if ys:
+                    out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index), True, y_root)]
+                got = write_behind(tuple(out), cur.writes, fresh=True)
         files.update(rows=got[0], tree=got[1])
         if y is not None:
             files["y"].update(rows=got[2], tree=got[3])
         cur.files.append(files)
+
+    def _retain_stream(self, device: Any) -> Any:
+        if self._retain_side is None:
+            import torch
+            self._retain_side = torch.cuda.Stream(device=device)
+        return self._retain_side
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, root: bytes, tree: Any, count: int,
                         out: dict[str, Any]) -> Callable[[], None]:

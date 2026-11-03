@@ -360,12 +360,13 @@ class _Copies:
         import torch
         self.stream, self.arena = torch.cuda.Stream(device=device), _Arena(RING_BYTES, ARENA_RINGS)
 
-    def start(self, srcs: list[Any]) -> tuple[list[Any], list[Callable[[], None]], Any]:
+    def start(self, srcs: list[Any], fresh: bool = False) -> tuple[list[Any], list[Callable[[], None]], Any]:
         """Each source's bytes as they are now on the current stream, copied to host memory behind it: (the host tensors,
-        each one's give-back, the event after the copies)."""
+        each one's give-back, the event after the copies).  `fresh`: nothing writes the sources after this, so they are
+        read as they are, not copied on the device first."""
         import torch
         current = torch.cuda.current_stream(srcs[0].device)
-        kept = [s.clone() for s in srcs]
+        kept = srcs if fresh else [s.clone() for s in srcs]
         self.stream.wait_stream(current)
         hosts, gives = [], []
         with torch.cuda.stream(self.stream):
@@ -388,14 +389,15 @@ def _copies(device: Any) -> _Copies:
     return _copiers[key]
 
 
-def staged(t: Any) -> Any:
+def staged(t: Any, fresh: bool = False) -> Any:
     """`t`'s bytes as they are now on the current stream, in host memory of their own: from a device, a copy behind the
-    stream, done once the next `write_behind`'s copies are (its writes read them after those)."""
+    stream, done once the next `write_behind`'s copies are (its writes read them after those); `fresh` as
+    `_Copies.start`'s."""
     import torch
     if not t.is_cuda:
         return t.clone()
     cp = _copies(t.device)
-    src = t.contiguous().clone()
+    src = t.contiguous() if fresh else t.contiguous().clone()
     cp.stream.wait_stream(torch.cuda.current_stream(t.device))
     with torch.cuda.stream(cp.stream):
         host = torch.empty(src.shape, dtype=src.dtype, pin_memory=True)
@@ -404,16 +406,17 @@ def staged(t: Any) -> Any:
     return host
 
 
-def write_behind(files: tuple[tuple, ...], pending: list[Future]) -> list[dict]:
+def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = False) -> list[dict]:
     """`_write`'s entries for tensors' bytes, each file (path, tensor, digest[, then]), with the files written behind the
     caller: the bytes are copied as they are now on the current stream (a device's to the host on a stream of its own, through
     `_Copies`' arena, with no wait on the caller's), and `WRITE_THREADS` threads write the files, each write's future appended
     to `pending`, which the pass's end joins (`joined`) before its manifest names them; a digest's ``sha256`` lands in its
-    entry with its write, and a file's ``then`` is called with its bytes (a uint8 host tensor) once they are written."""
+    entry with its write, and a file's ``then`` is called with its bytes (a uint8 host tensor) once they are written.
+    `fresh`: nothing writes the tensors after this (`_Copies.start`)."""
     import torch
     srcs = [t.contiguous().reshape(-1).view(torch.uint8) for _, t, *_ in files]
     if srcs and srcs[0].is_cuda:
-        hosts, gives, done = _copies(srcs[0].device).start(srcs)
+        hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh)
     else:
         hosts, gives, done = [s.clone() for s in srcs], [lambda: None] * len(srcs), None
     global _writers
