@@ -45,6 +45,10 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
 - `--grow 1 --adapter r [--adapter-z q]`: a bottleneck adapter after the last block, as a grown block with zero
   attention and r live MLP hidden units (SwiGLU down to r, w_down back up, both trained), the r units optionally
   handed to w_down at q bits each.
+- `--prefix P` with a `--set` of every block's prefix_k, prefix_v and prefix_gate: prefix tuning, P learned key/value
+  pairs in every block behind a
+  zero per-head gate (model.py's `prefix`, a harness extension that must be in the measurement commit), E the model
+  with them (`encode_model`).
 
 Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
 harness's script mode:
@@ -702,6 +706,28 @@ def grow(net, rec: dict, theta: dict, n: int, seed: int, adapter: int = 0) -> tu
     config = net.config = {**rec["config"], "n_layer": L + n}
     start = {**theta, **{k: p.detach().cpu().clone() for k, p in net.params().items() if k not in theta}}
     GROWN.update(config=config, start=L, adapter=adapter, new=sorted(k for k in start if k not in theta))
+    return {**rec, **prepare.model_record(rec, config, start)}, start
+
+
+def add_prefix(net, rec: dict, theta: dict, n: int, seed: int) -> tuple[dict, dict]:
+    """θ's model given model.py's `prefix` n in place: every block's n learned key/value pairs in model.py's own init,
+    behind a per-head gate of zero, so the model computes θ's function; as grow, (the record, its starting tensors)."""
+    import inspect
+
+    from model import LM, Linear
+
+    if "prefix" not in inspect.signature(LM).parameters:
+        raise SystemExit("wildcard: --prefix needs model.py's `prefix` in the measurement commit (cursor/te-prefix-82af)")
+    d, h = net.inner.size.d_model, net.inner.size.n_head
+    torch.manual_seed(seed)
+    with torch.device(prepare.DEVICE):
+        for blk in net.inner.blocks:
+            blk.prefix_k, blk.prefix_v = Linear(d, n, 0.02), Linear(d, n, 0.02)
+            blk.prefix_gate = torch.nn.Parameter(torch.zeros(h))
+    config = net.config = {**rec["config"], "prefix": n}
+    start = {**theta, **{k: p.detach().cpu().clone() for k, p in net.params().items() if k not in theta}}
+    GROWN.update(config=config, start=rec["config"]["n_layer"], adapter=0,
+                 new=sorted(k for k in start if k not in theta))
     return {**rec, **prepare.model_record(rec, config, start)}, start
 
 
@@ -1559,6 +1585,9 @@ def main() -> int:
                          "(attention all zero; train its mlp_norm, w_gate, w_up and w_down)")
     ap.add_argument("--adapter-z", type=int, default=0,
                     help="hand an --adapter's live hidden units to its w_down as a code of this many bits each")
+    ap.add_argument("--prefix", type=int, default=0,
+                    help="prefix tuning: this many zero-gated learned key/value pairs in every block (add_prefix); E is "
+                         "the model with them (`encode_model`)")
     ap.add_argument("--confine", action="store_true",
                     help="after every step, project each trained wo and w_down's update onto the p<keep> cut's span, so "
                          "the whole effect lies in what the cut hands on; everything trained must be in the block "
@@ -1610,8 +1639,12 @@ def main() -> int:
         raise SystemExit("wildcard: --adapter r is one grown block (--grow 1, no --suite) with 0 < r < d_ff live units")
     if a.adapter_z and (not a.adapter or a.adapter % 8):
         raise SystemExit("wildcard: --adapter-z codes an --adapter's live units, r a multiple of 8 (whole bytes)")
+    if a.prefix and (a.grow or a.lora_rank or a.ia3 or a.suite):
+        raise SystemExit("wildcard: --prefix is its own update (no --grow, --lora-rank, --ia3 or --suite)")
     if a.grow:
         rec, theta = grow(net, rec, start_theta, a.grow, 7919 + a.data_seed, a.adapter)
+    if a.prefix:
+        rec, theta = add_prefix(net, rec, start_theta, a.prefix, 7919 + a.data_seed)
     params = net.params()
     tuned = resolve_set(a.tset, rec, params)
     shape = prepare.deep_share(rec, set(tuned))
