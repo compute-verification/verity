@@ -39,6 +39,8 @@ VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
+#: the registration's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
+STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 #: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
 REGISTERED_ROOTS = {
     "cs": {"value": "cs_table", "root": "0ad0988e660c21c93f2fbf0c69a90f7d8059b6b82e1d04ae1571d07b2353d898"
@@ -50,8 +52,6 @@ REGISTERED_ROOTS = {
 }
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
 DRAWN = (0, 2, 6, 7, 8, 9, 13, 15, 18, 22, 25, 26, 27, 29, 30, 31)
-#: the registration's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
-STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
