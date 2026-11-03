@@ -75,6 +75,7 @@ import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls
 import Proofs.Flock.Recursive.Loop
 import Proofs.Flock.Recursive.LoopZK
+import Proofs.Flock.Recursive.FirewallSalted
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
@@ -93,7 +94,8 @@ in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) 
 and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
 statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`) and at V*'s statements
 run by the session loop's switched prover (`Loop`), `RecursiveZK` there with the session released at a stop the coins
-fix, its simulator reading only V*'s public statements (`LoopZK`), `FirewallSends`'
+fix, its simulator reading only V*'s public statements (`LoopZK`), `FirewallZK`'s bound when each digest reads the
+salts the firewall answered before it (`FirewallSalted`), `FirewallSends`'
 template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
 honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
