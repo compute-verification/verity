@@ -5,11 +5,12 @@ import Proofs.Flock.Recursive.FirewallAdaptive
 /-!
 # `RecursiveZKLoop` at any worker that reads its answers
 
-`Flock.Guarantees.RecursiveZKLoopAny` is `RecursiveZKLoop` with no premise on the inner worker: its next request is any
-function of what `flock-firewall live` answered it so far, the salts it drew included (`FirewallAdaptive.Worker`), so
-it takes no `FirewallSends`. The live firewall then sends the schedule's transcript filled with commit strings whose
+`Flock.Guarantees.RecursiveZKLoopAnySum` is `RecursiveZKLoop` with no premise on the inner worker: its next request is
+any function of what `flock-firewall live` answered it so far, the salts it drew included (`FirewallAdaptive.Worker`),
+so it takes no `FirewallSends`. The live firewall then sends the schedule's transcript filled with commit strings whose
 digests read only the salts before them, cut at a stop (`Flock.SecurityProofs.adaptOut_any`); V*'s statements read the
-commitments the firewall sent, and run only when the inner session finished.
+commitments the firewall sent, and run only when the inner session finished. The view is released at one stop of the
+inner session or of V*'s statements.
 
 * `LoopAny.holes_fillAll`, `LoopAny.fillAll_take_holes`: a template filled from a list holds the list's first commit
   strings, and reads no more of it than its holes.
@@ -20,11 +21,14 @@ commitments the firewall sent, and run only when the inner session finished.
   `LoopSessions.view_le` at `OuterZK.loop_zkmalR`.
 * `LoopAny.anyReal_eq`, `LoopAny.prCoin_anyReal`: the real view is that view cut at the session's stop, at every coin
   and so in law at the split coins (`LoopAny.splitSalts`), the two stops joined (`LoopAny.anyStop`).
-* `Flock.SecurityProofs.RecursiveZKLoopAny`: `prCoin_cut_le` over `anySent_le` at the joined stop.
 * `LoopAny.sumCut_toSum`, `LoopAny.prCoin_anyReal_sum`: where the release reads no stop at an unfinished session's
-  view, the joined stop is one of the inner session's or one of the audit's (`LoopAny.toSum`), a finished session
-  stopping after its last send (`LoopAny.anyStop_last`).
+  view (`ReleaseReadsNoStop`), the joined stop is one of the inner session's or one of the audit's (`LoopAny.toSum`),
+  a finished session stopping after its last send (`LoopAny.anyStop_last`).
 * `Flock.SecurityProofs.RecursiveZKLoopAnySum`: `prCoin_cut_le` over `anySent_le` at that stop.
+* `LoopAny.releaseReadsNoStop_loopRelease`: the deployed release (`loopRelease`), V*'s statements' view truncated at
+  the stop, reads no stop at an unfinished session's view, whose statements' view is empty.
+* `LoopAny.card_loopStops`: at the deployed release the stops are `RecStops`' over every statement, the inner session
+  statement `0` with the transcript's messages: `1 + Σ_p (M p + 1)`.
 -/
 
 namespace FlockSoundness.Discharge.Recursion.LoopAny
@@ -180,6 +184,30 @@ def innerCut {Ωa : Type} {K : ℕ} (c : Fin (K + 1) × Bool)
 def fwFilled (s : Flock.Firewall.Schedule) (l : Fin (fwHoles s) → ByteArray) : Array Flock.Firewall.Sent :=
   (FirewallRun.fillAll (FirewallTemplate.tmpl s s.tables) (List.ofFn l)).toArray
 
+/-- **A view cut at one stop of the inner session or the audit**: at `.inl k`, the inner session's first `k` sends,
+unfinished, released at the stop `s₀`; at `.inr c`, all of them, finished, released at the audit's stop `c`. -/
+def sumCut {Ωa St W : Type} {K : ℕ} (s₀ : St)
+    (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) :
+    Fin (K + 1) ⊕ St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W
+  | .inl k, v => cut s₀ (innerCut (k, false) v)
+  | .inr c, v => cut c (innerCut (Fin.last K, true) v)
+
+/-- Obligation (the release reads no stop where the inner session didn't finish): at such a view, which holds no
+statement's view, `cut c` is `cut s₀` for every stop `c`. -/
+def ReleaseReadsNoStop {Ωa St W : Type}
+    (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St) : Prop :=
+  ∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
+    cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), [])
+
+/-- **The deployed release**: V*'s statements' view truncated at the stop, `M p` statement `p`'s message count. At
+none, every message of every statement; at the first statement to stop, `q`, after its `k`-th message, every message
+of each statement before `q` and `k` of `q`'s. The tape and what the firewall sent are released whole. -/
+def loopRelease {Ωa : Type} {n : ℕ} (M : Fin n → ℕ) :
+    Flock.SecurityProofs.RecStops M → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) →
+      Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out)
+  | none, v => v
+  | some ⟨q, k⟩, v => (v.1, v.2.1, v.2.2.take (∑ p ∈ Finset.univ.filter (· < q), M p + k))
+
 /-- **The recursive audit at the session loop is zero knowledge at any worker, released at a stop.**
 `RecursiveZKLoop` with no premise on the inner worker. The auditor's tape is `Ωa` and the worker's randomness `Ωp`.
 The inner worker `w a p` sends `flock-firewall live` (`Flock.Firewall.liveWith` at the pinned schedule `s`, modelled by
@@ -200,7 +228,9 @@ It takes, each an obligation:
 * the worker's values satisfy V*'s circuits wherever the inner session finished: at every such tape, randomness and
   salts, each statement parses and its witness satisfies its circuit (`OuterZK.LoopSessions.Honest` at
   `Claims.Flock.R`);
-* V*'s statements fix each one's simulator randomness, `CB j` (`OuterZK.LoopSessions.Sized`).
+* V*'s statements fix each one's simulator randomness, `CB j` (`OuterZK.LoopSessions.Sized`);
+* the release reads no stop where the inner session didn't finish (`ReleaseReadsNoStop`), which the deployed release
+  meets (`LoopAny.releaseReadsNoStop_loopRelease`).
 
 It takes no `FirewallSends`: whatever the worker, the firewall sends the schedule's transcript filled with commit
 strings whose digests read only the salts before them, cut after one of its messages, and finishes only having sent it
@@ -208,18 +238,23 @@ all (`Flock.SecurityProofs.adaptOut_any`).
 
 The simulator draws the tape, fills the schedule's transcript (`fwFilled`) with `fwHoles s` ideal commit strings, which
 read no message, runs the simulator of V*'s public statements at the tape and the ideal commitments (`loopIdeal`), and
-cuts what it sent at a uniform stop of the inner session (`innerCut`): it reads no request, message, witness, value or
-randomness of the worker.
+releases what it sent at a uniform stop (`sumCut`): it reads no request, message, witness, value or randomness of the
+worker.
 
-**Where the audit stops.** What the auditor is released is the whole view cut at a stop: `cut s`, for a stop `s` of a
-public family `St`, reads only the stop and the whole view. The audit stops at `stop u`, which may depend on anything:
-the coins, any further coins `Ωk`, and the witness. Every event of the released view
-`cut (stop u) (anyReal … u.1)` is at most `|St| · 2(|T| + 1)` times as likely as at the simulator's view cut at a
-uniform stop and a uniform stop of the inner session, `T` the schedule's transcript, plus
+**Where the audit stops.** What the auditor is released is its whole view cut at the audit's stop: `cut c`, for a stop
+`c` of a public family `St`, reads only the stop and the view. The audit stops at `stop u`, which may depend on
+anything: the coins, any further coins `Ωk`, and the witness. The inner session stops after `k` of the `|T|` messages
+of the schedule's transcript `T`, wherever the worker and the firewall stop it, and V*'s statements run only if it
+finished; where it didn't, the release reads no stop. So the stops are the inner session's `k` where it didn't finish,
+released at `s₀`, and the audit's where it did (`sumCut`): every event of the released view
+`cut (stop u) (anyReal … u.1)` is at most `|T| + 1 + |St|` times as likely as at the simulator's view released at a
+uniform such stop, plus
 $$\varepsilon_V + n_h \cdot \delta_{K^*},$$
-added once: the stops leak at most `log₂ |St| + log₂ (2(|T| + 1))` bits. `ε_V` and `δ_{K*}` are `RecursiveZKLoop`'s,
-and `n_h` is `fwHoles s`, the transcript's commit strings. -/
-def RecursiveZKLoopAny : Prop :=
+added once: the stops leak at most `log₂ (|T| + 1 + |St|)` bits. `ε_V` and `δ_{K*}` are `RecursiveZKLoop`'s, and `n_h`
+is `fwHoles s`, the transcript's commit strings. At the deployed release (`loopRelease`, `s₀` none), `St` is V*'s
+statements' `RecStops`, and `|T| + 1 + |St|` is `1 + Σ_p (M p + 1)` over every statement, the inner session statement
+`0` with its `|T|` messages (`LoopAny.card_loopStops`). -/
+def RecursiveZKLoopAnySum : Prop :=
   ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]
     [Fintype Ωk] [Nonempty Ωk]
     -- the loop's session: the workers' values, the simulator's rewinds, the release and the frames' source
@@ -248,62 +283,9 @@ def RecursiveZKLoopAny : Prop :=
           FirewallAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
         anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2) →
     (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
-    ∀ (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
-      (stop : (((Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
-        ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)
-      (E : W → Prop),
-      prCoin (fun u => E (cut (stop u) (anyReal vs L₀ src s w N r m stmt wit Vs θ u.1))) ≤
-        (Fintype.card (St × (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) × Bool)) : ℝ≥0∞) *
-            prCoin (fun c : (St × (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) × Bool)) ×
-                ((Ωa × (Fin (fwHoles s) → ZkView.Bits × ZkView.Salt)) × OuterZK.LoopSessions.SimCoins CB m) =>
-              E (cut c.1.1 (innerCut c.1.2 (loopIdeal t L₀ src (fwFilled s) m stmt CB Vs θ c.2)))) +
-          (OuterZK.LoopSessions.atWorker m stmt wit).err Claims.ZKMal.CoinOpen.shaH OuterZK.loopK
-            ((OuterZK.loopRef L₀ src).swP vs).prover (OuterZK.loopEps L₀ src t) (4 * t * 3 ^ t) Vs
-            (fun x => θ x.1 x.2.1) +
-          fwHoles s * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
-
-/-- **A view cut at one stop of the inner session or the audit**: at `.inl k`, the inner session's first `k` sends,
-unfinished, released at the stop `s₀`; at `.inr c`, all of them, finished, released at the audit's stop `c`. -/
-def sumCut {Ωa St W : Type} {K : ℕ} (s₀ : St)
-    (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) :
-    Fin (K + 1) ⊕ St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W
-  | .inl k, v => cut s₀ (innerCut (k, false) v)
-  | .inr c, v => cut c (innerCut (Fin.last K, true) v)
-
-/-- **`RecursiveZKLoopAny` at a release that reads the audit's stop only once the inner session finished.** Its setting
-and premises, at a release `cut` such that, at a view of an unfinished inner session, which holds no statement's view,
-`cut c` is `cut s₀` for every stop `c`. The stops are then the inner session's where it didn't finish and the audit's
-where it did (`sumCut`): every event of the released view `cut (stop u) (anyReal … u.1)` is at most `|T| + 1 + |St|`
-times as likely as at the simulator's view released at a uniform such stop, plus the same
-$$\varepsilon_V + n_h \cdot \delta_{K^*},$$
-added once. The stops leak at most `log₂ (|T| + 1 + |St|)` bits: with `St` the stops of V*'s statements
-(`RecStops`), `RecStops`' count over the inner session, its message count `|T|`, and V*'s statements. -/
-def RecursiveZKLoopAnySum : Prop :=
-  ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]
-    [Fintype Ωk] [Nonempty Ωk]
-    (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
-    (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
-      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (s : Flock.Firewall.Schedule) (w : Ωa → Ωp → FirewallAdaptive.Worker) (N r : ℕ)
-    (m : ℕ) (stmt : ℕ → Ωa × (Fin (fwHoles s) → ByteArray) → Claims.Msg)
-    (wit : ℕ → OuterZK.WCtx Ωa Ωp (fwHoles s) → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
-    [∀ j, Nonempty (CB j)]
-    (Vs : Claims.VStar Θ) (θ : Ωa → (Fin (fwHoles s) → ByteArray) → Θ),
-    0 < t →
-    Claims.ZKServer.Loop.finS.Tables →
-    Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) →
-    Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal → Claims.ZKServer.Loop.finS.SwCausal vs →
-    Claims.ZKServer.Loop.finS.TapeOK →
-    (OuterZK.LoopSessions.atWorker m stmt wit).Honest
-      (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
-      (fun u : {u : (Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256) //
-          FirewallAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
-        anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2) →
-    (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
+    -- the release at the audit's stops, and the stop it is at where the inner session didn't finish
     ∀ (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St),
-      (∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
-        cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), [])) →
+      ReleaseReadsNoStop cut s₀ →
     ∀ (stop : (((Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)
       (E : W → Prop),
@@ -427,8 +409,7 @@ theorem anyStop_last {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
 and a finished session stops after its last send. -/
 theorem sumCut_toSum {Ωa St W : Type} {K : ℕ} (s₀ : St)
     (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
-    (hcut : ∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
-      cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), []))
+    (hcut : Flock.Guarantees.ReleaseReadsNoStop cut s₀)
     (c : St × (Fin (K + 1) × Bool)) (hc : c.2.2 = true → c.2.1 = Fin.last K)
     (v : Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out)) :
     Flock.Guarantees.sumCut s₀ cut (toSum c) v = cut c.1 (Flock.Guarantees.innerCut c.2 v) := by
@@ -439,6 +420,23 @@ theorem sumCut_toSum {Ωa St W : Type} {K : ℕ} (s₀ : St)
     have hk : k = Fin.last K := hc rfl
     subst hk
     rfl
+
+/-- **The deployed release reads no stop where the inner session didn't finish**: V*'s statements' view is empty
+there, and so is every truncation of it. -/
+theorem releaseReadsNoStop_loopRelease {Ωa : Type} {n : ℕ} (M : Fin n → ℕ) :
+    Flock.Guarantees.ReleaseReadsNoStop (Flock.Guarantees.loopRelease (Ωa := Ωa) M) none := by
+  rintro (_ | ⟨q, k⟩) a sent <;> simp [Flock.Guarantees.loopRelease]
+
+/-- **The stops at the deployed release are `RecStops`' over every statement**: the inner session's `K + 1` where it
+didn't finish and V*'s statements' `RecStops M` where it did are as many as the stops of every statement, the inner
+session statement `0` with its `K` messages, `1 + Σ_p (M p + 1)` (`card_recStops`). -/
+theorem card_loopStops {n : ℕ} (K : ℕ) (M : Fin n → ℕ) :
+    Fintype.card (Fin (K + 1) ⊕ Flock.SecurityProofs.RecStops M) =
+      Fintype.card (Flock.SecurityProofs.RecStops (Fin.cons K M : Fin (n + 1) → ℕ)) := by
+  rw [Fintype.card_sum, Fintype.card_fin, Flock.SecurityProofs.card_recStops, Flock.SecurityProofs.card_recStops,
+    Fin.sum_univ_succ]
+  simp only [Fin.cons_zero, Fin.cons_succ]
+  omega
 
 end FlockSoundness.Discharge.Recursion.LoopAny
 
@@ -732,8 +730,7 @@ theorem prCoin_anyReal_sum {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype �
           adaptFinished s (w u.1.1 u.1.2) N (Flock.Guarantees.saltsOf u.2) = true} =>
         Flock.Guarantees.anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2))
     (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St)
-    (hcut : ∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
-      cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), []))
+    (hcut : Flock.Guarantees.ReleaseReadsNoStop cut s₀)
     (stop : (((Ωa × Ωp) × (Fin (Flock.Guarantees.fwHoles s + r) → Fin 192 → Fin 256)) ×
         Claims.Sampling.unitTape.at 0 ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand
           m) × Ωk → St)
@@ -759,24 +756,6 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The recursive audit at the session loop is zero knowledge at any worker, released at a stop.** -/
-theorem RecursiveZKLoopAny : Flock.Guarantees.RecursiveZKLoopAny := by
-  intro Ωa Ωp Θ St Ωk W _ _ _ _ _ _ _ _ vs t L₀ src s w N r m stmt wit CB _ _ Vs θ ht hS hV hD hc hsc hT hH hsz
-    cut stop E
-  choose dg σ _ hσ using fun (a : Ωa) (p : Ωp) => adaptOut_any s (w a p) N (Flock.Guarantees.fwHoles s + r)
-  exact (LoopAny.prCoin_anyReal vs t L₀ src s w N r m stmt wit CB Vs θ dg σ
-      (fun a p b => hσ a p (Flock.Guarantees.saltsOf b) List.length_ofFn) hH cut stop E).trans_le
-    ((prCoin_cut_le (OuterZK.anySent vs t L₀ src (Flock.Guarantees.fwFilled s) m stmt wit CB Vs θ
-        (fun a p i pre => dg a p i (List.ofFn fun j => ZkView.saltBytes (pre j))))
-      (Flock.Guarantees.loopIdeal t L₀ src (Flock.Guarantees.fwFilled s) m stmt CB Vs θ)
-      (fun (c : St × (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) × Bool)) v =>
-        cut c.1 (Flock.Guarantees.innerCut c.2 v))
-      (LoopAny.anyStop (K := (FirewallTemplate.tmpl s s.tables).length) (S := OuterZK.LoopSessions.SimCoins CB m)
-        stop σ)
-      (fun E' => OuterZK.anySent_le vs t ht hS hV hD hc hsc hT L₀ src (Flock.Guarantees.fwFilled s) m stmt wit CB
-        Vs θ hsz (fun a p i pre => dg a p i (List.ofFn fun j => ZkView.saltBytes (pre j))) E') E).trans_eq
-      (add_assoc _ _ _).symm)
-
-/-- **The same at a release that reads the audit's stop only once the inner session finished.** -/
 theorem RecursiveZKLoopAnySum : Flock.Guarantees.RecursiveZKLoopAnySum := by
   intro Ωa Ωp Θ St Ωk W _ _ _ _ _ _ _ _ vs t L₀ src s w N r m stmt wit CB _ _ Vs θ ht hS hV hD hc hsc hT hH hsz
     cut s₀ hcut stop E
