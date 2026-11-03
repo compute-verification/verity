@@ -29,7 +29,9 @@ k = Σ k_P has Σ g_P·α_P(k_P) ≤ max_P g_P·α_P(k) (α grows as k^{3/2}), �
     G = Σ g_P·M_P ≤ Λ·(N·Γ₀ + (k/2)·√(N·Q)),    G ≤ Λ·(N·Γ₀ + L),
     Γ₀ = max_P g_P·α_P,    Q = Σ_P g_P²·|O_P|/(b_A·b_B),    L = Σ_P g_P·μ_P·b_C·|O_P|.
 
-N is at least the larger of ((√(B² + 4ΓG) − B)/(2Γ))² and (G − Λ·L)/Γ, with Γ = Λ·Γ₀ and B = Λ·(k/2)·√Q (`blocks`),
+Both hold on any subset of the products, with Γ₀ and Λ at most the whole set's. The linear form's best subset keeps
+the products whose work exceeds their chain starts' allowance, G_P > Λ·L_P (chains longer than Λ·μ·b_C), so N is at
+least the larger of ((√(B² + 4ΓG) − B)/(2Γ))² and Σ_P (G_P − Λ·L_P)⁺/Γ, with Γ = Λ·Γ₀ and B = Λ·(k/2)·√Q (`blocks`),
 and ρ = N·c/|C| at the best partition is at least that times c/|C| (`bound`). The linear form binds where blocks start
 few chains each (long chains: a dense step's), the root form where they start many (a rank-16 adapter's). Dropping
 both gives ρ ≥ σ·c/Γ, σ = G/|C| the counted share (`rho_main`).
@@ -41,8 +43,9 @@ splitting its b_C bits: `feed` = √(b_C/(b_C − b)) for b ≤ b_C/2, else 2√
 from chains it runs itself, their own operands read or made whole in turn, number at most e·k/b, e the least root of
 e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sources sharing arrays), worth `whole_chain` =
 (1 + e)^{3/2}. K is the shortest chain that makes a counted operand whole by itself (`Row.k_whole`: an operand that
-also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root
-and the proved bound is void. Proved: Λ = SHARE·feed·whole_chain, at the counted products' widest operand. Each
+also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root,
+and the proved bound is taken on the subset of the products whose chains are long enough (`bound`). Proved:
+Λ = SHARE·feed·whole_chain, at the kept products' widest operand and shortest whole-making chain. Each
 factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
 width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
@@ -128,40 +131,84 @@ def blocks(G: float, gamma: float, B: float) -> float:
     return s * s
 
 
+def _lam_proved(ps: list[dict], k: float) -> float:
+    """Λ proved on the products `ps`: SHARE·feed·whole_chain at their widest operand and shortest whole-making chain;
+    ∞ where void."""
+    fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
+    whole = [p["k_whole"] for p in ps if p.get("k_whole")]
+    wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
+    return SHARE * fd * wc
+
+
+def _figures(ps: list[dict], lam: float, c: float, k: float, C: float) -> dict:
+    """The blocks and ρ at Λ = `lam` on the products `ps` of a step of |C| = `C` gates (`bound`)."""
+    G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
+    lin = [(p["gates_per_mac"] * p["macs"], p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] *
+            p["outputs"]) for p in ps]
+    gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
+    Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
+    cell = max(p["cell_gates"] for p in ps)
+    gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
+    net = sum(max(0.0, g - lam * x) for g, x in lin)
+    root, linear = blocks(G, gamma, B), net / gamma
+    n = max(root, linear)
+    n_cell = max(blocks(G, gamma + k * cell, B), net / (gamma + k * cell))
+    return {"lam": lam, "gamma": gamma, "B": B, "blocks_root": root, "blocks_linear": linear, "blocks": n,
+            "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell, "rho_no_cell": n_cell * c / C}
+
+
 def bound(products: list[dict], c: float, k: float, C: float) -> dict:
     """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
     each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
-    no chain makes an operand whole by itself): the cap's terms, Λ proved and numerical, and for each the blocks and ρ
-    with P-cell (the larger of the root form's, `blocks_root`, and the linear form's, `blocks_linear`), without the
-    chain-start terms (`rho_main`) and without P-cell. A void Λ (`whole_chain` past r = 1/4) is None, its blocks and ρ
-    0."""
+    no chain makes an operand whole by itself): the cap's terms on them all (`whole_chain` None where void), Λ proved
+    and numerical, and for each the blocks and ρ with P-cell (the larger of the root form's, `blocks_root`, and the
+    linear form's on its best subset, `blocks_linear`), without the chain-start terms (`rho_main`) and without P-cell.
+
+    Both forms hold on any subset of the products, so the proved figures are each the best over the subsets that keep
+    the products whose whole-making chain is at least a threshold, one threshold for each `k_whole` among them and one
+    keeping only those with none, every product's gates still in |C| (a product with a short chain would otherwise
+    void Λ for the whole step): `subset` (with P-cell) and `subset_no_cell` give the threshold (`k_whole_min`, None:
+    only products with no whole-making chain), the products kept (`kept`, indices into the counted ones), how many are
+    dropped and their share of the counted MACs, and that subset's Λ. Where every subset's Λ is void (`whole_chain`
+    past r = 1/4) the proved figures are None, never 0; with no counted product they are 0."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
     zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks_root": 0.0, "blocks_linear": 0.0, "blocks": 0.0, "rho": 0.0,
             "rho_main": 0.0, "blocks_no_cell": 0.0, "rho_no_cell": 0.0}
     if not ps:
-        return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0, "proved": zero,
-                      "numerical": zero}
-    gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
-    Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
-    L = sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps)
-    fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
+        return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0,
+                      "proved": zero | {"subset": None, "subset_no_cell": None}, "numerical": zero}
     whole = [p["k_whole"] for p in ps if p.get("k_whole")]
     wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
-    cell = max(p["cell_gates"] for p in ps)
-    out |= {"gamma0": gamma0, "Q": Q, "L": L, "feed": fd, "whole_chain": wc if math.isfinite(wc) else None}
-    for name, lam in (("proved", SHARE * fd * wc), ("numerical", SHARE)):
-        if not math.isfinite(lam):
-            out[name] = zero | {"lam": None, "gamma": None, "B": None}
+    out |= {"gamma0": max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps),
+            "Q": sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps),
+            "L": sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps),
+            "feed": max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps),
+            "whole_chain": wc if math.isfinite(wc) else None, "numerical": _figures(ps, SHARE, c, k, C)}
+    macs = sum(p["macs"] for p in ps)
+    best: dict[str, dict] = {}
+    for t in [*sorted(set(whole)), math.inf]:
+        kept = [i for i, p in enumerate(ps) if (p.get("k_whole") or math.inf) >= t]
+        if not kept:
             continue
-        gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
-        root, linear = blocks(G, gamma, B), max(0.0, (G - lam * L) / gamma)
-        n = max(root, linear)
-        n_cell = max(blocks(G, gamma + k * cell, B), (G - lam * L) / (gamma + k * cell))
-        out[name] = {"lam": lam, "gamma": gamma, "B": B, "blocks_root": root, "blocks_linear": linear, "blocks": n,
-                     "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell,
-                     "rho_no_cell": n_cell * c / C}
+        sub = [ps[i] for i in kept]
+        lam = _lam_proved(sub, k)
+        if not math.isfinite(lam):
+            continue
+        f = _figures(sub, lam, c, k, C)
+        f["subset"] = {"k_whole_min": t if math.isfinite(t) else None, "kept": kept, "dropped": len(ps) - len(kept),
+                       "dropped_macs_share": 1 - sum(p["macs"] for p in sub) / macs, "lam": lam}
+        for fig in ("blocks", "blocks_no_cell"):
+            if fig not in best or f[fig] > best[fig][fig]:
+                best[fig] = f
+    if not best:
+        out["proved"] = dict.fromkeys(zero) | {"subset": None, "subset_no_cell": None}
+        return out
+    cell, no_cell = best["blocks"], best["blocks_no_cell"]
+    out["proved"] = {x: cell[x] for x in zero if x not in ("blocks_no_cell", "rho_no_cell")} | {
+        "blocks_no_cell": no_cell["blocks_no_cell"], "rho_no_cell": no_cell["rho_no_cell"],
+        "subset": cell["subset"], "subset_no_cell": no_cell["subset"]}
     return out
 
 
@@ -317,13 +364,14 @@ class _Rates:
       GEMM result) are paid at their width;
     - a gather by token data is 0: its rows repeat over the tokens that share an index;
     - a token-indexed GEMM result with an affected parameter side is 4·K²·b_tok·b_par/k at policy k, its sides at their
-      widths: by LW, x rows and y columns of K entries read in k bits make at most x·y entries, so a block making E of
+      passed widths (`_passed_width`): by LW, x rows and y columns of K entries read in k bits make at most x·y entries, so a block making E of
       them whole pays 2K·√(b_tok·b_par·E) bits, at least that an entry within k (the result's width b once
       K² ≥ k/(4b): K ≥ 32 at the console's k and 16 bits, which a rank-16 adapter's second product is not). A token side
       cheaper than its width (a gather's rows) makes whole columns of the result, which a consumer's chains use at most
       k²/(K·b·b_C) MACs a block, within its α once K ≥ 3^{3/2}·√(k/b_C) (235 at the console's k); below that the
       result is priced as if the weight were θ. With a parameter side outside the update it is its token side's rate
-      times K/n (a frozen weight widening n > K passes fewer bits an entry than its width, narrowing restores them);
+      times K/n (a frozen weight widening n > K passes fewer bits an entry than its width, narrowing restores them).
+      A token side's rate is compared with its passed width, as `paid` compares an operand's;
     - an attention product is rate(A)·K/n + rate(B)·K/m;
     - a view or cast keeps its argument's rate, a repeating view spreads it, a concatenation sums its parts', and any
       other op takes the largest rate(input)·numel(input)/numel(output) over its affected inputs (a broadcast gain passes
@@ -382,12 +430,19 @@ class _Rates:
         token_a = "m" in td or "n" not in td
         param, r_tok, spread = (B, ra, d["n"]) if token_a else (A, rb, d["m"])
         tok = A if token_a else B
-        if st.reads_affected(n, param) and (r_tok >= 0.999 * _width(tok) or d["k"] >= 3 ** 1.5 * math.sqrt(self.k / ACC_BITS)):
-            return 4 * d["k"] ** 2 * _width(tok) * _width(param) / self.k
+        b_tok, b_par = _passed_width(st, n, tok), _passed_width(st, n, param)
+        if st.reads_affected(n, param) and (is_paid(r_tok, b_tok) or d["k"] >= 3 ** 1.5 * math.sqrt(self.k / ACC_BITS)):
+            return 4 * d["k"] ** 2 * b_tok * b_par / self.k
         return r_tok * d["k"] / max(spread, 1)
 
-    def paid(self, a) -> bool:
-        return self.rate.get(a, 0.0) >= 0.999 * _width(a)
+    def paid(self, n, a) -> bool:
+        return is_paid(self.rate.get(a, 0.0), _passed_width(self.st, n, a))
+
+
+def is_paid(rate: float, width: float) -> bool:
+    """Whether an operand a block pays `rate` bits an entry of is paid at its passed width `width` (P-width): a cast
+    keeps its argument's rate, and a block can cut before it, so a widened operand is paid at the narrower width."""
+    return rate >= 0.999 * width
 
 
 def _passed_width(st: _Step, n, a) -> int:
@@ -458,9 +513,10 @@ def rows_of(graph, gemm_dtype: str | None = None, k: float = CONSOLE[1]) -> list
     (each depends on θ′, the step's dependent slots), passed widths (`_passed_width`), rates (`_Rates`) and shortest
     whole-making chain (`_chain_ks`), and its kind:
 
-    - ``fresh``: both operands affected and paid at their width (the bound counts it);
+    - ``fresh``: both operands affected and paid at their passed width (the bound counts it; an operand widened by a
+      cast, such as ``x.float()`` of a bf16 x, keeps its argument's rate and is paid at the narrower width it passed);
     - ``theta``: one operand affected; the other is θ or computed from θ and token data, so a block reads it for nothing;
-    - ``expansion``: both affected, one paid below its width (a gather's rows, a frozen widening product, a gain);
+    - ``expansion``: both affected, one paid below its passed width (a gather's rows, a frozen widening product, a gain);
     - ``attention``: two token-indexed dims among m, k and n (module docstring);
     - ``self``: both operands one array (P-share);
     - ``unaffected``: neither operand affected.
@@ -485,7 +541,7 @@ def rows_of(graph, gemm_dtype: str | None = None, k: float = CONSOLE[1]) -> list
             kind = "self"
         elif not all(aff):
             kind = "theta"
-        elif rates.paid(A) and rates.paid(B):
+        elif rates.paid(n, A) and rates.paid(n, B):
             kind = "fresh"
         else:
             kind = "expansion"
@@ -712,8 +768,13 @@ def vectors() -> dict:
         ("one product, square, panel", (2.545e14, PANEL_K), 1e18, [square]),
         ("short chains, K = 16, none whole by itself", CONSOLE, 1e17,
          [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16, "k_whole": None} | bf16]),
+        ("short and long chains: the linear form keeps the long", CONSOLE, 1e18,
+         [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16, "k_whole": None} | bf16, square]),
         ("operands made whole from K = 128 chains", CONSOLE, 1e18, [square | {"k_whole": 128}]),
-        ("operands made whole from K = 64 chains: proved bound void", CONSOLE, 1e18, [square | {"k_whole": 64}]),
+        ("operands made whole from K = 64 chains: no subset has a proved bound", CONSOLE, 1e18,
+         [square | {"k_whole": 64}]),
+        ("a rank-1 adapter's product beside a square one: the best subset drops it", CONSOLE, 1e18,
+         [square, {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16]),
         ("mixed widths", CONSOLE, 1e18, [{"macs": 4e14, "outputs": 4e14 / 512, "k_dim": 512, "k_whole": 512} | bf16,
                                          {"macs": 2e14, "outputs": 2e14 / 1408, "k_dim": 1408, "k_whole": 512, "b_a": 8,
                                           "b_b": 16, "b_c": ACC_BITS, "gates_per_mac": 9128 / 32, "cell_gates": 9128.0}]),
@@ -729,11 +790,14 @@ def vectors() -> dict:
                "feed": b["feed"], "whole_chain": b["whole_chain"], "lam_proved": b["proved"]["lam"],
                "lam_numerical": b["numerical"]["lam"]}
         term = {f"{lam}_{x}": b[lam][x] for lam in ("proved", "numerical")
-                for x in ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "rho_no_cell")} | \
-            {"share": b["share"]}
+                for x in ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "blocks_no_cell", "rho_no_cell")} | \
+            {"share": b["share"], "proved_subset": b["proved"]["subset"],
+             "proved_subset_no_cell": b["proved"]["subset_no_cell"]}
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": ps}, "cap": cap, "term": term})
-    return {"about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms, "
-                     "`term` the blocks and ρ (python -m te_core.io_bound vectors)", "vectors": out}
+    return {"about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms on "
+                     "every product, `term` the blocks and ρ, the proved ones on their best subsets "
+                     "(`proved_subset`, `proved_subset_no_cell`; null where no subset has a proved Λ) "
+                     "(python -m te_core.io_bound vectors)", "vectors": out}
 
 
 def main(argv=None) -> int:

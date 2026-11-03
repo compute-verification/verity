@@ -568,7 +568,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     corr_digest = correspondence_digest(corr_doc)
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
                            registered=ctx.registered_inputs.names if ctx.registered_values else (),
-                           theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
+                           theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + getattr(ctx.ep, "theta", ()))
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None

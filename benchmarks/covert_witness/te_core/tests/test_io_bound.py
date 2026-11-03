@@ -47,32 +47,89 @@ def test_the_vectors_are_the_bound_on_their_inputs():
     assert close(data, json.loads(json.dumps(iob.vectors()))), "stale: python -m te_core.io_bound vectors"
 
 
+FIGURES = ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "blocks_no_cell", "rho_no_cell")
+
+
 def test_each_vectors_term_solves_its_cap():
-    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ + Λ·L = G at each Λ, the blocks the
-    larger, ρ = N·c/|C|."""
-    forms = Counter()
+    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ = Σ_P (G_P − Λ·L_P)⁺ at each Λ on
+    the products it keeps (every one for the numerical Λ, the best subset's for the proved one, `proved_subset`, and
+    `proved_subset_no_cell` for the figure without P-cell), the blocks the larger, ρ = N·c/|C| with every product in
+    |C|; with nothing counted every figure is 0, and where no subset has a proved Λ the proved ones are null."""
+    forms, subsets, dropped = Counter(), 0, 0
     for v in json.loads(iob.VECTORS.read_text())["vectors"]:
         i, cap, term = v["inputs"], v["cap"], v["term"]
-        G = term["share"] * i["C_gates"]
+        ps, c, k, C = i["products"], i["c"], i["k"], i["C_gates"]
         assert 0 <= term["share"] < 1, v["name"]
-        for lam in ("proved", "numerical"):
-            n, lv = term[f"{lam}_blocks"], cap[f"lam_{lam}"]
-            if not i["products"] or lv is None:   # nothing counted, or Λ void
-                assert n == 0 and term[f"{lam}_rho"] == 0
+        lin = [(p["gates_per_mac"] * p["macs"], p["gates_per_mac"] * m * p["b_c"] * p["outputs"])
+               for p, m in zip(ps, cap["mu"])]
+        assert sum(x for _, x in lin) == pytest.approx(cap["L"], rel=1e-12)
+        if not ps:
+            assert all(term[f"{lam}_{x}"] == 0 for lam in ("proved", "numerical") for x in FIGURES)
+            continue
+        if cap["lam_proved"] is None:
+            assert all(term[f"proved_{x}"] is None for x in FIGURES), v["name"]
+            assert term["proved_subset"] is None and term["proved_subset_no_cell"] is None
+        for lam, sub in (("numerical", None), ("proved", "proved_subset"), ("proved", "proved_subset_no_cell")):
+            if lam == "proved" and cap["lam_proved"] is None:
                 continue
-            gamma, B = lv * cap["gamma0"], lv * i["k"] / 2 * math.sqrt(cap["Q"])
-            root, linear = term[f"{lam}_blocks_root"], term[f"{lam}_blocks_linear"]
-            assert root * gamma + B * math.sqrt(root) == pytest.approx(G, rel=1e-9), v["name"]
-            assert linear == pytest.approx(max(0.0, (G - lv * cap["L"]) / gamma), rel=1e-12), v["name"]
-            assert n == max(root, linear)
-            forms["linear" if linear > root else "root"] += 1
-            assert term[f"{lam}_rho"] == pytest.approx(n * i["c"] / i["C_gates"], rel=1e-12)
-            assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * i["c"] / i["C_gates"], rel=1e-12)
+            kept = term[sub]["kept"] if sub else list(range(len(ps)))
+            lv = term[sub]["lam"] if sub else cap["lam_numerical"]
+            if sub:
+                dropped += bool(term[sub]["dropped"])
+                assert term[sub]["dropped"] == len(ps) - len(kept)
+                assert term[sub]["dropped_macs_share"] == pytest.approx(
+                    1 - sum(ps[j]["macs"] for j in kept) / sum(p["macs"] for p in ps), abs=1e-15)
+            G = sum(ps[j]["gates_per_mac"] * ps[j]["macs"] for j in kept)
+            gamma = lv * max(ps[j]["gates_per_mac"] * cap["alpha"][j] for j in kept)
+            B = lv * k / 2 * math.sqrt(sum(ps[j]["gates_per_mac"] ** 2 * ps[j]["outputs"] /
+                                           (ps[j]["b_a"] * ps[j]["b_b"]) for j in kept))
+            net = sum(max(0.0, lin[j][0] - lv * lin[j][1]) for j in kept)
+            if sub != "proved_subset_no_cell":
+                root, linear, n = (term[f"{lam}_{x}"] for x in ("blocks_root", "blocks_linear", "blocks"))
+                assert root * gamma + B * math.sqrt(root) == pytest.approx(G, rel=1e-9), v["name"]
+                assert linear == pytest.approx(net / gamma, rel=1e-12), v["name"]
+                subsets += net > max(0.0, G - lv * sum(lin[j][1] for j in kept)) * (1 + 1e-9)
+                assert n == max(root, linear)
+                forms["linear" if linear > root else "root"] += 1
+                assert term[f"{lam}_rho"] == pytest.approx(n * c / C, rel=1e-12)
+                assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * c / C, rel=1e-12)
+            if sub != "proved_subset":
+                g_cell = gamma + k * max(ps[j]["cell_gates"] for j in kept)
+                n = term[f"{lam}_blocks_no_cell"]
+                assert n == pytest.approx(max(iob.blocks(G, g_cell, B), net / g_cell), rel=1e-12), v["name"]
+                assert term[f"{lam}_rho_no_cell"] == pytest.approx(n * c / C, rel=1e-12)
             assert term[f"{lam}_rho_no_cell"] <= term[f"{lam}_rho"] <= term[f"{lam}_rho_main"]
-        assert term["proved_rho"] <= term["numerical_rho"]
-    assert forms["linear"] and forms["root"]   # the vectors exercise both forms
+        if cap["lam_proved"] is not None:
+            assert term["proved_rho"] <= term["numerical_rho"]
+    # both forms, a linear form that drops a product, and a best subset that drops one
+    assert forms["linear"] and forms["root"] and subsets and dropped
     void = [v for v in json.loads(iob.VECTORS.read_text())["vectors"] if v["cap"]["lam_proved"] is None]
     assert [v["cap"]["whole_chain"] for v in void] == [None]
+
+
+def test_a_short_chain_product_drops_from_the_proved_bound_and_never_voids_it():
+    """A product whose whole-making chain is too short for Λ (a rank-1 adapter's, r = k/(3K²b) past 1/4) beside
+    products whose chains are long enough, or none: the proved bound is the others' alone at the same |C|, and the
+    subset names what it dropped; with only short chains no subset has a proved Λ, and the figures are None, never 0
+    (nothing counted is 0)."""
+    c, k = iob.CONSOLE
+    bf16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
+    square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": 512} | bf16
+    free = {"macs": 1e14, "outputs": 1e14 / 1024, "k_dim": 1024, "k_whole": None} | bf16
+    adapter = {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16
+    C = 1e18
+    alone = iob.bound([square, free], c, k, C)["proved"]
+    got = iob.bound([square, free, adapter], c, k, C)["proved"]
+    share = adapter["macs"] / (square["macs"] + free["macs"] + adapter["macs"])
+    for fig, sub in (("rho", "subset"), ("rho_no_cell", "subset_no_cell")):
+        assert got[fig] == pytest.approx(alone[fig], rel=1e-12) and got[fig] > 0
+        assert (got[sub]["k_whole_min"], got[sub]["kept"], got[sub]["dropped"]) == (512, [0, 1], 1)
+        assert got[sub]["dropped_macs_share"] == pytest.approx(share, rel=1e-12)
+    assert alone["subset"]["dropped"] == 0
+    void = iob.bound([adapter, square | {"k_whole": 64}], c, k, C)["proved"]
+    assert all(void[x] is None for x in FIGURES) and void["subset"] is None
+    assert iob.bound([adapter, free], c, k, C)["proved"]["subset"]["kept"] == [1]
+    assert iob.bound([], c, k, C)["proved"]["rho"] == 0
 
 
 # -- the closed forms ---------------------------------------------------------------------------------------------------
@@ -200,6 +257,25 @@ def test_products_splitting_one_blocks_bits():
         assert lhs <= rhs * (1 + 1e-12)
 
 
+def test_the_linear_form_is_its_best_subsets():
+    """Products of one width, none made whole (Γ₀ and Λ the same on every subset): the linear form on the set is at
+    least on any subset, so chains shorter than Λ·μ·b_C (48 at the console's k and Λ = SHARE·feed) don't lower it."""
+    rng = random.Random(7)
+    bf16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0, "k_whole": None}
+    for _ in range(300):
+        ps = []
+        for _ in range(rng.randint(1, 5)):
+            macs, K = 10 ** rng.uniform(10, 15), rng.choice((4, 16, 48, 64, 512, 65536))
+            ps.append({"macs": macs, "outputs": macs / K, "k_dim": K} | bf16)
+        whole = iob.bound(ps, *iob.CONSOLE, 1e18)
+        for r in range(1, len(ps)):
+            for sub in itertools.combinations(ps, r):
+                part = iob.bound(list(sub), *iob.CONSOLE, 1e18)
+                for lam in ("proved", "numerical"):
+                    assert part[lam]["blocks_linear"] <= whole[lam]["blocks_linear"] * (1 + 1e-12)
+    assert iob.SHARE * iob.feed(16) * iob.mu(65536, 16, 16) * 32 == pytest.approx(48)
+
+
 def test_a_linear_layers_three_products_do_at_most_share_of_one():
     """Forward X·W, dX = dY·W and dW = dY·X sharing a block's bits: at most 2/√3 of one product's α, reached."""
     rng = random.Random(5)
@@ -263,9 +339,13 @@ def test_dense_counts_its_block_products_but_not_the_first_layers_or_newton_schu
     assert 0.5 < m["tiny"]["kinds"]["fresh"]["share"] < 1 and m["tiny"]["bound"]["proved"]["rho"] > 0
     # at the console's k a block holds a whole 64 × 64 weight: layer 0's q, k, v come whole from the embedding's rows
     # (64 < 3^{3/2}·√(k/32)), so later layers' operands are cheap too, and 64-long chains make operands whole faster
-    # than a block reads them (r = 1/3): the proved bound is void
+    # than a block reads them (r = 1/3): Λ is void on every product, so the proved bound is the products whose
+    # chains are at least d_ff = 192 long (and those with none), the rest still in |C|
     assert m["console"]["kinds"]["expansion"]["share"] > m["tiny"]["kinds"]["expansion"]["share"]
-    assert m["console"]["bound"]["proved"]["lam"] is None and m["console"]["bound"]["proved"]["rho"] == 0
+    proved = m["console"]["bound"]["proved"]
+    assert m["console"]["bound"]["whole_chain"] is None and proved["lam"] is not None and proved["rho_no_cell"] > 0
+    for sub in ("subset", "subset_no_cell"):
+        assert proved[sub]["k_whole_min"] == 192 and 0 < proved[sub]["dropped_macs_share"] < 1
 
 
 def test_lora_counts_only_its_adapters():
@@ -349,3 +429,59 @@ def test_a_short_chain_through_a_trained_weight_makes_its_outputs_cheap(r, kind)
     first, a, b, last = [x for x in iob.rows_of(g) if x.phase == "forward"]
     assert (first.kind, a.kind, b.kind, last.kind) == ("theta", "fresh", "fresh", kind)
     assert last.rates[0] == pytest.approx(min(32, 4 * r * r * 32 * 32 / iob.CONSOLE[1])) and last.k_whole == r
+
+
+class _Cast(nn.Module):
+    """Two trained layers whose second product reads its operands through `cast` (None: as they are) and casts its
+    result back to the layers' dtype."""
+
+    def __init__(self, d: int, cast) -> None:
+        super().__init__()
+        self.first = nn.Linear(d, d, bias=False)
+        self.last = nn.Linear(d, d, bias=False)
+        self.cast = cast
+
+    def forward(self, x):
+        h, w = self.first(x), self.last.weight
+        if self.cast is None:
+            return F.linear(h, w)
+        return F.linear(h.to(self.cast), w.to(self.cast)).to(x.dtype)
+
+
+def _cast_rows(dtype, cast, k: float = 64):
+    from te_core.capture import products
+
+    torch.manual_seed(0)
+    m = _Cast(16, cast).to(dtype)
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: F.mse_loss(mm(b[0]), b[1]),
+                     (torch.empty(6, 16, dtype=dtype), torch.empty(6, 16, dtype=dtype)))
+    return iob.rows_of(g, "bfloat16", k), products.rows(g, k, "bfloat16")
+
+
+def test_a_widening_cast_keeps_its_products_count_and_a_narrowing_one_pays_its_narrower_width():
+    """An operand widened by a cast (bf16 → fp32, `x.float()`) keeps its argument's rate, and a block can cut before
+    the cast, so it is paid at the width it passed: every product of the step counts exactly as the uncast step's,
+    through io_bound.rows_of and through the capture's rows (`product_kind` reads their rates and widths, so a row a
+    capture wrote with `paid` false at the cast's width counts too). An operand narrowed by a cast (fp32 → bf16) pays
+    its narrower width."""
+    from te_core import formalism
+
+    def counted(rows):
+        return sorted(json.dumps({"phase": r.phase, "kind": r.kind} | r.product(), sort_keys=True) for r in rows)
+
+    plain, plain_rows = _cast_rows(torch.bfloat16, None)
+    wide, wide_rows = _cast_rows(torch.bfloat16, torch.float32)
+    assert counted(wide) == counted(plain)
+    last = [r for r in wide if r.kind == "fresh" and r.phase == "forward"]
+    assert len(last) == 1 and last[0].widths == (16, 16) and last[0].rates == (16.0, 16.0)
+    assert sum(r.kind == "fresh" for r in wide) == sum(r.kind == "fresh" for r in plain) > 1
+    for got, rows in ((wide_rows, wide), (plain_rows, plain)):
+        assert sorted(formalism.product_kind(r) for r in got["rows"] for _ in range(r["count"])) == \
+            sorted(r.kind for r in rows)
+        assert all(r["paid"] == [iob.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])] for r in got["rows"])
+        old = [r | {"paid": [False, False]} for r in got["rows"]]
+        assert [formalism.product_kind(r) for r in old] == [formalism.product_kind(r) for r in got["rows"]]
+    narrow, _ = _cast_rows(torch.float32, torch.bfloat16)
+    last = [r for r in narrow if r.kind == "fresh" and r.phase == "forward" and r.dims["m"] * r.dims["n"] == 6 * 16]
+    assert [(r.widths, r.rates) for r in last] == [((16, 16), (16.0, 16.0))]
+    assert [r.product()["b_a"] for r in narrow if r.kind == "fresh"] == [16] * sum(r.kind == "fresh" for r in narrow)

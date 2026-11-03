@@ -171,8 +171,9 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   island is recorded (`island_recorded`). Nothing caps E's size, format or depth. A failed check makes the ledger's records invalid. A step the island declares (`prepare.declare_step`) is a
   counterexample family the harness checks by rebuilding sampled steps with `prepare.decode`, bit for bit, within c MACs
   (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is recorded beside the harness's
-  count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `lora2`, `seedlog`, `sparse`, `quant`) and read only θ and
-  E; the witness records E's rebuild cost in MACs (`prepare.rebuild_macs`), and each curve point's (the harness's
+  count, and is that count's matmuls and attention (`te_core/tests/test_meter.py`), so an island sizes its steps by it.
+  Decoders are fixed (`prepare.decode`: `full`, `lora`, `lora2`, `seedlog`, `sparse`, `quant`) and read only θ and E;
+  the witness records E's rebuild cost in MACs (`prepare.rebuild_macs`), and each curve point's (the harness's
   checkpoints).
 - **Pinned version** (`pin.py`, `pinned.json` on `cursor/covert-witness-4207`): the one commit whose fixed side measures
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's

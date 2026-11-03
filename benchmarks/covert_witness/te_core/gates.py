@@ -78,6 +78,15 @@ def per_mac(kind: str, width: int = 16) -> float:
     return sum(gates(d) / k for d, k in PRICES[kind])
 
 
+def per_and(kind: str) -> float:
+    """A counted MAC of `kind`'s gates (AND + XOR + NOT) over its AND gates alone."""
+    return per_mac(kind) / sum(DEFINITIONS[d][1] / k for d, k in PRICES[kind])
+
+
+#: the unit of every gate count, as the training panels' titles state it (coordinator 08:09Z item 3)
+UNIT = f"gates: AND + XOR + NOT, {per_and('gemm/bf16'):.1f}x a bf16 GEMM's AND count"
+
+
 def kind_of(phase: str, role: str, op: str, dtype: str | None = None) -> tuple[str, str]:
     """(kind, assumption) of a counted op: its class by te_core.flops's name sets, its dtype the record's or `ASSUMED`'s
     (the assumption names it; "" when the record gave the dtype)."""

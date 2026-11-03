@@ -170,6 +170,15 @@ def test_a_boolean_mask_index_is_taken_at_its_largest():
     assert shapes == [(10, 4), (10, 4), (40,)]
 
 
-def test_a_program_that_ends_before_the_step_after_is_refused(starts):
-    with pytest.raises(CaptureRefused, match="before step 2 ended"):
-        recorded(starts, "--update", "inplace", "--steps", "2")
+@pytest.mark.parametrize("update", ["inplace", "adamw", "inplace --windows"])
+def test_a_programs_last_step_ends_at_its_end(starts, update):
+    """The last step ends when the program returns, as te_core.run's `close` ends it, and measures as a step with one
+    after it (no next step reads its new values, so only 4.0's cut is 0); a step past the program's end is refused."""
+    last, mid = (recorded(starts, "--update", *update.split(), "--steps", str(n)) for n in (2, 4))
+    assert last.updated_macs() == mid.updated_macs() == T * FWD and last.cut_bits == 0 < mid.cut_bits
+    keep = ("sigma", "affected_share", "token_factor", "delta_grad_bits", "grad_cut_bits", "partial_cut_bits", "u1_bits")
+    assert {k: last.formalism[k] for k in keep} == {k: mid.formalism[k] for k in keep}
+    assert last.formalism["delta_grad_bits"] > 0
+    with pytest.raises(CaptureRefused, match="the program ended after 2 steps, before step 2 ended"):
+        script.record(PROGRAM, ["--batch", str(B), "--update", *update.split(), "--steps", "2"], step=2, starts=starts,
+                      wall=[0.1] * 8, step_tokens=T)

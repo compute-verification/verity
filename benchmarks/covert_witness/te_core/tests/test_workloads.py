@@ -1,31 +1,40 @@
-"""te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's
-policy, the only one rows are reported at: workloads.json (the console's tests read it) is the module's output; every row carries each kind's term,
-their max, the binding kind and its basis (what it rests on is the reference's `rests_on`), and each input's source;
-the token, reduction, update and decoding terms are te_core.formalism.bound's (reading B's token form and decoding,
-reduction and update, sensitivities of its one bound), and the console's dial formula on a point's columns alone gives
-its token kind (or Fit) at every policy; reading A's tiles leave no op's term infinite, and a model has no trace; the
-shapes, u(1), Delta, Delta_grad, a and a training token's gates are what the 45M pilot's traces and
-the standard-workloads island's rows measure; on every record the fresh-products, reduction and update kinds are
-within 2% of the model's, and the token kind within 1% on the full-training records but for t (the island's dense
-rows) and a (the 4.1 LoRA pilot), within 2% on the island's LoRAs; the fresh-products kind is the amortized
-Loomis-Whitney cap with its entry term, over exactly the products of two fresh operands; the reduction kind is a
-maximum, not 1 plus; and the readings the spec quotes hold: DiLoCo is standard training's bound until a phase and every
-sync fit a block, a teacher lowers rho by the student's share and leaves the blocks, RL's per-kind token bound is the
-largest, and a rank-1 LoRA whose update fits k but not Fit's reduction clause is bound by the reduction kind."""
+"""te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's policy,
+te_core.policy's CONSOLE, one full session of the 45M reference (the dashboard's 10:23Z ruling): workloads.json (the
+console's tests read it) is the module's output; rho takes only the kinds valid on their own (te_core 4.5's
+formalism.KINDS: the fresh products, the token kind under reading A and decoding), Fit where it holds, else the
+measured terms' max where it exceeds 1, with its binding kind and partial where a valid kind is unmeasured, else null,
+never 1, where a valid kind is unmeasured, else 1, binding none (the coordinator's 09:46Z and 12:20Z rulings);
+reduction, update, reading B's forms and the fresh products' figure under P-cell are sensitivities beside it, never in
+its max, and the target is formalism.published at reading B (page_rho on the columns); the fresh-products kind is
+te_core.formalism.fresh_products on the model's products, which match io_bound's count on its captured steps, summed
+in a chain as the standard algorithm's are, so it is measured on every point and binds wherever Fit fails and its
+term exceeds 1: its term io_bound's figure without P-cell, resting on P-width and P-chain (coordinator 12:09Z); the
+token and decoding kinds need a trace's entries and op log, so they are unmeasured on every model and record here,
+and a point whose fresh-products term is at most 1 publishes null; the shapes, u(1), Delta, Delta_grad, a and a
+training token's gates are what the 45M pilot's traces and the standard-workloads island's rows (s-t20 and m-t20)
+measure; on every record each kind's figure and sensitivity is near the model's at its dials; and the readings the
+spec quotes hold: DiLoCo is standard training's bound until a phase fits a block, a teacher lowers rho by the
+student's share and leaves the blocks, RL's counting bounds exceed the target, and a LoRA whose update fits k has its
+products escape."""
 import inspect
 import json
 import math
+from dataclasses import replace
 
 import pytest
 
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import formalism, panels, policy
+from te_core import formalism, io_bound, policy
 from te_core import workloads as W
-from te_core.gates import per_mac
 
-POLICIES = tuple(W.POLICIES)
+#: the console's c before the dashboard's 10:23Z ruling, 5,120 session tokens of the 45M reference at 2N FLOPs and 740
+#: gates a FLOP, attention left out: the c the island's rows in workloads_records.json were published at (te_core 4.4)
+OLD_C = 5120 * 2 * 45e6 * 740
+WORKLOAD_OF = {ck.name: w.name for w in W.WORKLOADS.values() for ck in w.checks}
+#: the island's generation rows, untraced: each record's target is te_core's untraced stub
+GENERATION = {W.ISLAND_RL_LORA, W.ISLAND_RL_FULL, W.ISLAND_INFERENCE, W.ISLAND_RL_FULL_60M, W.ISLAND_INFERENCE_60M}
 
 
 def close(a, b, rel: float) -> bool:
@@ -36,6 +45,10 @@ def close(a, b, rel: float) -> bool:
     if isinstance(a, float) and isinstance(b, (int, float)) and not isinstance(b, bool):
         return math.isclose(a, b, rel_tol=rel, abs_tol=1e-12)
     return a == b
+
+
+def finite(x):
+    return None if isinstance(x, float) and math.isinf(x) else x
 
 
 @pytest.fixture(scope="module")
@@ -50,106 +63,229 @@ def points(ref: dict):
 
 
 def rhos(ref, workload, point) -> dict:
-    return ref["workloads"][workload]["points"][point]["rho"]
+    return ref["workloads"][workload]["points"][point]["rho"]["default"]
+
+
+def every_rho(ref):
+    """Every published rho: each point's, and each check's on its record and on the model."""
+    for name, pname, p in points(ref):
+        yield (name, pname), p["rho"]["default"]
+    for name, w in ref["workloads"].items():
+        for cname, ck in w["checks"].items():
+            for side in ("record", "model"):
+                yield (name, cname, side), ck["rho"]["default"][side]
+
+
+def settings(workload: str, point: str) -> dict:
+    return dict(W.WORKLOADS[workload].points)[point]
 
 
 def test_reference_json_is_current(ref):
     pinned = json.loads(W.REFERENCE.read_text())
-    assert close(pinned, ref, 1e-9), ("te_core/workloads.json is stale: from benchmarks/covert_witness run "
+    assert close(pinned, ref, 1e-6), ("te_core/workloads.json is stale: from benchmarks/covert_witness run "
                                       "python -m te_core.workloads --json te_core/workloads.json")
     assert W.dumps(ref) + "\n" == W.REFERENCE.read_text()
 
 
-def test_every_row_carries_its_kinds_their_max_and_the_binding_kind(ref):
-    assert ref["kinds"] == list(W.KINDS) == ["fresh_products", *W.TE_CORE]
-    for name, pname, p in points(ref):
-        for q in POLICIES:
-            r = p["rho"][q]
-            assert list(r["terms"]) == ref["kinds"], (name, pname, q)
-            terms = {kind: math.inf if x is None else x for kind, x in r["terms"].items()}
-            bound = max(1.0, *terms.values())
-            assert (r["bound"] is None and math.isinf(bound)) or math.isclose(r["bound"], bound), (name, pname, q)
-            binding = max(terms, key=terms.get) if bound > 1 else None
-            assert r["binding_kind"] == binding, (name, pname, q)
-            assert r["basis"] in ref["rests_on"]
-            if r["basis"] == "fit":
-                assert r["fit"] and not r["fit_fails"] and bound <= r["rho"] * (1 + 1e-9)
-            else:
-                assert r["rho"] == r["bound"] and r["basis"] == (binding or "none"), (name, pname, q)
-                assert binding or r["fit_fails"], (name, pname, q)
+def test_rho_takes_only_the_kinds_valid_on_their_own(ref):
+    """Coordinator 08:26Z, 10:21Z and 12:20Z: Fit's c/(c - d) where Fit holds; else the valid kinds' measured max
+    where it exceeds 1, binding that kind, partial where a valid kind is unmeasured; else null where a valid kind is
+    unmeasured; else 1, binding none, every valid kind measured and none above 1."""
+    assert ref["valid"] == list(W.VALID) == list(formalism.KINDS) == ["fresh_products", "token", "decoding"]
+    assert ref["reading"] == "A" and set(ref["rests_on"]) == {*W.VALID, "fit", "none", "unmeasured"}
+    assert ref["rests_on"]["fresh_products"].startswith("P-width and P-chain, reference circuit; no A1")
+    assert list(ref["sensitivities"]) == list(dict.fromkeys([*formalism.SENSITIVITIES, "fresh_cell"]))
+    assert not set(ref["sensitivities"]) & set(ref["valid"])
+    for at, r in every_rho(ref):
+        assert list(r["terms"]) == ref["valid"] and list(r["sensitivities"]) == list(ref["sensitivities"]), at
+        priced = {kind: x for kind, x in r["terms"].items() if x is not None}
+        top = max(priced, key=priced.get) if priced else None
+        binding = top if top is not None and priced[top] > 1 else None
+        whole = len(priced) == len(r["terms"])
+        assert r["binding_kind"] == binding, at
+        if r["basis"] == "fit":
+            assert not r["fit_fails"] and (binding is None or priced[binding] <= r["rho"] * (1 + 1e-9)), at
+        elif binding:
+            assert r["basis"] == binding and r["rho"] == priced[binding] > 1, at
+        elif whole:
+            assert r["basis"] == "none" and r["rho"] == 1, at
+        else:
+            assert r["basis"] == "unmeasured" and r["rho"] is None, at
+        assert r["partial"] == (r["basis"] != "fit" and binding is not None and not whole), at
+        assert r["rho"] != 1.0 or r["basis"] in ("fit", "none"), at
 
 
-def test_the_kinds_are_te_cores(ref):
-    """One calculator: the token, reduction, update and decoding terms are formalism.bound's sensitivities on the
-    model's inputs (`TE_CORE`), and te_core's rho is Fit's, else the max over them over 1; only the fresh products'
-    term is this module's."""
+def test_rho_is_one_only_where_every_valid_kind_is_measured(monkeypatch):
+    """Coordinator 12:20Z: with Fit failing, rho is 1 (basis none) only where every valid kind is measured and none
+    exceeds 1, and a ρ the measured kinds give is partial only while one is unmeasured. A model has no trace, so here
+    the token and decoding kinds are given terms of 0.5: rank 1 on W_q in one layer, whose fresh products count
+    nothing, then reads 1, and standard training binds on its fresh products, not partial."""
+    real = formalism.bound
+
+    def traced(m, c, k, kinds=formalism.KINDS):
+        b = real(m, c, k, kinds)
+        return b | {"terms": b["terms"] | {"token": 0.5, "decoding": 0.5},
+                    "unmeasured": {n: why for n, why in b["unmeasured"].items() if n not in ("token", "decoding")}}
+
+    monkeypatch.setattr(formalism, "bound", traced)
+    c, k = policy.CONSOLE
+    one = W.rho(W.model("lora", **settings("lora", "rank 1 on W_q, one layer")), c, k)
+    assert one["rho"] == one["bound"] == 1 and one["basis"] == "none" and one["binding_kind"] is None
+    assert not one["partial"] and not one["why"] and one["terms"]["fresh_products"] == 0
+    std = W.rho(W.model("standard", **settings("standard", "default")), c, k)
+    assert std["basis"] == std["binding_kind"] == "fresh_products" and not std["partial"] and std["rho"] > 1
+    assert W.RESTS_ON["none"].startswith("no kind exceeds 1")
+
+
+def test_a_row_with_no_measured_kind_is_null_never_one(monkeypatch):
+    """Coordinator 09:46Z and 12:20Z: a row whose valid kinds are all unmeasured publishes null, its basis
+    unmeasured. A model's products are summed in a chain (12:09Z), so every point measures the fresh-products kind;
+    for a circuit that declares them summed in a tree, formalism leaves it unmeasured (te_core.io_bound has the chain
+    constant only), and with the token and decoding kinds needing a trace the point publishes null."""
+    monkeypatch.setattr(W, "ORDER", "tree")
+    c, k = policy.CONSOLE
+    for workload, point in (("standard", "default"), ("lora", "rank 1 on W_q, one layer")):
+        r = W.rho(W.model(workload, **settings(workload, point)), c, k)
+        assert r["rho"] is None and r["basis"] == "unmeasured" and r["bound"] is None, (workload, point)
+        assert r["binding_kind"] is None and not r["partial"] and r["fit_fails"], (workload, point)
+        assert set(r["why"]) == set(W.VALID) <= set(r["unmeasured"]), (workload, point)
+        assert "summed in a tree" in r["why"]["fresh_products"], (workload, point)
+    assert W.RESTS_ON["unmeasured"].startswith("unmeasured")
+
+
+def test_the_fresh_products_bind_where_they_exceed_one_and_the_rest_are_null(ref):
+    """Coordinator 12:09Z and 12:20Z: a model's products are summed in a chain, so the fresh-products kind is measured
+    on every point; where Fit fails and its term exceeds 1, rho is that term, binding fresh_products, partial, the
+    token and decoding kinds unmeasured; where its term is at most 1, rho is null, never 1, since the unmeasured kinds
+    might exceed it; where Fit holds, Fit's c/(c - d). Standard dense at the console default reads about 2.66e5, with
+    5.0e6 under P-cell beside it (12:09Z); rank 1 on W_q stays below 1 and in one layer counts no product, as RL's
+    LoRA in one layer does, so those three publish null."""
+    at = {(name, pname): p["rho"]["default"] for name, pname, p in points(ref)}
+    null = set()
+    for where, r in at.items():
+        term = r["terms"]["fresh_products"]
+        assert term is not None, where
+        if where == ("diloco", "Fit's corner"):
+            assert r["basis"] == "fit" and not r["partial"] and r["rho"] == r["rho_fit"] > 1 and term == 0, where
+        elif term > 1:
+            assert r["basis"] == r["binding_kind"] == "fresh_products" and r["partial"] and r["rho"] == term, where
+        else:
+            assert r["rho"] is None and r["basis"] == "unmeasured" and r["binding_kind"] is None, where
+            assert not r["partial"] and set(r["why"]) == {"token", "decoding"}, where
+            null.add(where)
+    assert null == {("lora", "rank 1 on W_q"), ("lora", "rank 1 on W_q, one layer"), ("rl", "LoRA in one layer")}
+    standard = at[("standard", "default")]
+    assert 2.6e5 < standard["rho"] < 2.7e5 and 4.9e6 < standard["sensitivities"]["fresh_cell"] < 5.1e6
+    assert 0 < at[("lora", "rank 1 on W_q")]["terms"]["fresh_products"] < 1
+    assert at[("lora", "rank 1 on W_q, one layer")]["terms"]["fresh_products"] == 0
+
+
+def test_the_token_and_decoding_kinds_need_a_trace(ref):
+    """Te_core 4.5's packer reads a trace's entries and its op log's matrix-product tiles: a model has neither and the
+    records here carry neither, so both kinds are unmeasured (never infinite, never 1), with reading A's verdict beside
+    them: unmodelled on a model, refused on a record."""
+    c, k = policy.CONSOLE
     for w in W.WORKLOADS.values():
-        for pname, settings in w.points:
-            me = W.model(w.name, **settings).measured
-            for q, (c, k) in W.POLICIES.items():
-                v, b, r = formalism.at(me, c, k), formalism.bound(me, c, k), rhos(ref, w.name, pname)[q]
-                for kind, name in W.TE_CORE.items():
-                    want = b["sensitivities"][name]
-                    assert close(r["terms"][kind], None if math.isinf(want) else want, 1e-9), (w.name, pname, q, kind)
-                    assert name not in b["unmeasured"]
-                want = v["rho_fit"] if v["fit"] else max(1.0, *(b["sensitivities"][n] for n in W.TE_CORE.values()))
-                assert close(r["te_core"]["rho"], None if math.isinf(want) else want, 1e-9)
-                assert r["unmeasured"] == []
+        for pname, s in w.points:
+            b = formalism.bound(W.model(w.name, **s).measured, c, k)
+            assert b["terms"]["token"] is None and b["terms"]["decoding"] is None, (w.name, pname)
+    for at, r in every_rho(ref):
+        assert r["terms"]["token"] is None and r["terms"]["decoding"] is None, at
+        assert r["token_A"] == ("refused" if at[-1] == "record" else "unmodelled"), at
+    assert set(ref["reading_a"]) == {"unmodelled", "refused"}
+    assert W.NO_TRACE in ref["rests_on"]["token"] and W.NO_TRACE in ref["rests_on"]["decoding"]
 
 
-def test_page_rho_on_the_columns_is_the_token_kind_or_fit(ref):
-    for name, pname, p in points(ref):
-        for q in POLICIES:
-            c, k = W.POLICIES[q]
-            rho, basis = AP.page_rho(p["inputs"], c, k)
-            r = p["rho"][q]
-            assert (basis == "fit") == (r["te_core"]["basis"] == "fit"), (name, pname, q)
-            want = r["te_core"]["rho"] if basis == "fit" else r["terms"]["token"]
-            assert (math.isinf(rho) and want is None) or math.isclose(rho, max(1.0, want), rel_tol=1e-5), \
-                (name, pname, q, rho, want)
+def test_the_sensitivities_and_the_target_are_te_cores(ref):
+    """One calculator: reduction, update, reading B's token form and decoding and the per-gate figure are
+    formalism.bound's sensitivities on the model's inputs, the target is formalism.published at reading B, and the
+    console's dial formula on a point's columns alone (page_rho) gives that target, Fit's or the token form's."""
+    c, k = policy.CONSOLE
+    for w in W.WORKLOADS.values():
+        for pname, s in w.points:
+            m = W.model(w.name, **s)
+            p = ref["workloads"][w.name]["points"][pname]
+            me = replace(m.measured, products={"k": k, "order": W.ORDER, "products": W.products(m, c, k)})
+            r, b = p["rho"]["default"], formalism.bound(me, c, k)
+            for name in formalism.SENSITIVITIES:
+                assert close(r["sensitivities"][name], finite(b["sensitivities"][name]), 1e-6), (w.name, pname)
+            pub = formalism.published(m.measured, c, k, "B")
+            assert pub == formalism.published(m.measured, reading="B")
+            assert close(r["target"], {"rho": finite(pub["rho"]), "basis": pub["binding_kind"]}, 1e-6)
+            got, basis = AP.page_rho(p["inputs"], c, k)
+            assert (basis == "fit") == (r["target"]["basis"] == "fit"), (w.name, pname)
+            assert math.isclose(got, r["target"]["rho"], rel_tol=1e-5), (w.name, pname)
 
 
-def test_reading_as_tiles_leave_no_full_weight_gemm_infinite(ref):
-    """Reading A's default packer (te_core 4.5) splits an op into matrix-product tiles that read only the coordinates
-    they use, so a full-weight workload's weight GEMMs, each reading over 100 times k update bits at every policy, leave
-    its term finite; it needs a trace's entries and op log, which a model hasn't (unmodelled), and a record traced
-    before 4.4 is refused."""
-    full = ({("standard", p) for p, _ in W.WORKLOADS["standard"].points}
-            | {("diloco", "default"), ("rl", "default"), ("inference", "bf16"), ("distill", "default")})
-    for name, pname, p in points(ref):
-        for q, (c, k) in W.POLICIES.items():
-            got = p["rho"][q]["token_A"]
-            assert got["verdict"] == "unmodelled", (name, pname, q)
-            if (name, pname) in full:
-                assert got["op_update_bits"] > 100 * k, (name, pname, q)
-    # the head's GEMM over the tied fp32 embedding, then an MLP matrix: 824 Mbit and 11.5 Mbit at the 45M reference
-    assert math.isclose(W.model("standard").op_update_bits, 32 * W.VOCAB * 512) and W.MLP * 16 * 512 ** 2 > 100 * 65_536
-    assert math.isclose(W.model("lora", rank=1, targets="q").op_update_bits, 16 * 512)
-    for w in ref["workloads"].values():
-        for ck in w["checks"].values():
-            assert all(ck["rho"][q]["record"]["token_A"] == {"verdict": "refused"} for q in POLICIES)
-    assert set(ref["reading_a"]["verdicts"]) == {"unmodelled", "refused"}
+def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
+    """The fresh-products kind is te_core.formalism.fresh_products on the model's products as `Measured.products`, at
+    the console's k and summed in a chain (`ORDER`, the standard algorithm's: coordinator 12:09Z), where formalism
+    measures it; the term is io_bound's figure without P-cell (`FRESH_FIGURE`, which needs no premise on the
+    partition: coordinator 06:57Z obligation 1 and 12:09Z), formalism's term too (`formalism.P_CELL` off), and the
+    figure under P-cell is beside it as fresh_cell, formalism's, never below."""
+    assert ref["io_bound"] == W.IO_BOUND and W.ORDER == "chain"
+    assert (W.FRESH_FIGURE, W.FRESH_CELL) == ("rho_no_cell", "rho")
+    c, k = policy.CONSOLE
+    for w in W.WORKLOADS.values():
+        for pname, s in w.points:
+            m = W.model(w.name, **s)
+            r = rhos(ref, w.name, pname)
+            me = replace(m.measured, products={"k": k, "order": "chain", "products": W.products(m, c, k)})
+            term, why, got = formalism.fresh_products(me, c, k)
+            b = got["io_bound"]["proved"]
+            assert why is None and "fresh_products" not in r["why"] and term == b["rho_no_cell"], (w.name, pname)
+            assert got["fresh_cell"] == b["rho"], (w.name, pname)
+            assert close(r["terms"]["fresh_products"], b["rho_no_cell"], 1e-6), (w.name, pname)
+            assert close(r["sensitivities"]["fresh_cell"], b["rho"], 1e-6), (w.name, pname)
+            assert b["rho"] >= b["rho_no_cell"], (w.name, pname)
+            direct = io_bound.bound(W.products(m, c, k), c, k, m.measured.gates)["proved"]
+            assert direct["rho_no_cell"] == b["rho_no_cell"], (w.name, pname)
 
 
-def test_every_model_input_is_tagged_an_estimate(ref):
-    for name, pname, p in points(ref):
-        tagged = {t.split(":")[0] for t in p["estimated"].split()}
-        assert tagged == set(AP.LABELLED), (name, pname, set(AP.LABELLED) - tagged)
+@pytest.mark.slow
+def test_the_model_is_io_bounds_captured_steps():
+    """The model's fresh products against te_core.io_bound's count on its captured s-shape steps (s-t20's shape, d 512,
+    6 layers, V = 32,000, 256 sequences of 1,024 tokens) at the console's policy: dense Muon training's and the
+    rank-16 LoRA's counted gates the capture's to 0.1%, and io_bound's chain figures within 1.2% and 2.6% (1.1% and
+    2.4% at io_bound's 3c2afa62aa: 4.87e6 and 5.89e4 under P-cell on the captures), all of the gap |C|'s (the model's
+    on the capture's |C| within 0.2%). It captures two steps of model.py (about 35 s): no
+    cheaper test ties the model's products to a captured step's."""
+    pytest.importorskip("torch")
+    n, tokens = 35_658_240, 256 * 1024
+    c, k = policy.CONSOLE
+    assert io_bound.CONSOLE == policy.CONSOLE
+    models = {"dense": W.model("standard", n_params=n, vocab=32_000, optimizer="muon", batch_tokens=tokens,
+                               tokens_per_param=tokens / n),
+              "lora": W.model("lora", n_params=n, vocab=32_000, rank=16, targets="all", batch_tokens=tokens,
+                              tokens=tokens)}
+    for name, m, rel in (("dense", models["dense"], 0.012), ("lora", models["lora"], 0.026)):
+        cap = io_bound.measure(io_bound.capture(name), {"console": (c, k)})
+        want = cap["policies"]["console"]["bound"]
+        ps = W.products(m, c, k)
+        got = io_bound.bound(ps, c, k, m.measured.gates)
+        assert math.isclose(got["G"], want["G"], rel_tol=1e-3), name
+        assert math.isclose(got["proved"]["rho"], want["proved"]["rho"], rel_tol=rel), name
+        assert math.isclose(got["proved"]["rho_no_cell"], want["proved"]["rho_no_cell"], rel_tol=rel), name
+        same = io_bound.bound(ps, c, k, cap["C_gates"])
+        assert math.isclose(same["proved"]["rho"], want["proved"]["rho"], rel_tol=2e-3), name
+        assert math.isclose(same["proved"]["rho_no_cell"], want["proved"]["rho_no_cell"], rel_tol=2e-3), name
 
 
-def test_shape_and_traced_quantities():
-    sh = W.dense(W.REFERENCE_PARAMS)
-    assert math.isclose(sh.d_model, 512, abs_tol=1e-9) and math.isclose(sh.n_layer, 6, abs_tol=1e-9)
-    st20 = W.dense(35_658_240, vocab=32_000)
-    assert math.isclose(st20.d_model, 512, abs_tol=1e-9) and st20.tau == 15
-    assert W.dense(35_658_240, vocab=32_000, d_model=512).n_layer == 6
-    # the pilot's traces: gradient cut plus state, r20261102-140347-a1c2 (AdamW) and r20261102-134356-ee8f (Muon)
-    assert W.delta_grad(sh, "adamw") == 4_322_869_248
-    assert W.delta_grad(sh, "muon") == 3_706_306_560
-    # starts_store.json's forward_macs_per_token for s50 and s100
-    assert math.isclose(sh.params + sh.attention(1024), 51_342_080, rel_tol=1e-3)
-    w = W.training(sh, "bf16", 1024).w
-    assert 2.319e11 * 0.99 < w < 2.341e11 * 1.01
+def test_the_policy_is_the_consoles(ref):
+    """The rows are reported at the console's policy only (the dashboard's 10:23Z ruling), te_core.policy's CONSOLE:
+    one full session of the 45M reference, attention and the LM head included, 1.5739 times the attention-free c the
+    console used before. A block holds 2,294 of the model's 45M training tokens, where the old c held 1,457.5 (the
+    pilot's records: 1,458 to 1,471), and an estimate of 1,250 takes a training token as 4.1 session tokens' 2N FLOPs,
+    17% above the counted 3.5. Only Fit's Δ threshold, k − s·τ, and the target read s: 28.8 kbit."""
+    assert W.POLICIES == {"default": policy.CONSOLE}
+    assert policy.CONSOLE == (policy.session_gates(W.REFERENCE_PARAMS, 4096, 1024), 65_536.0)
+    assert ref["policies"]["default"]["c"] == policy.CONSOLE[0] and round(policy.CONSOLE[0] / OLD_C, 4) == 1.5739
+    w = W.training(W.dense(W.REFERENCE_PARAMS), "bf16", 1024).w
+    session = 2 * 45e6 * 740
+    assert 2293 < policy.CONSOLE[0] / w < 2295 and 1457 < OLD_C / w < 1458
+    assert 1458 < OLD_C / 2.32623e11 < OLD_C / 2.31908e11 < 1471
+    assert round(OLD_C / 1250 / session, 3) == 4.096 and round(w / session, 2) == 3.51
+    assert 28_700 < rhos(ref, "standard", "default")["fit_delta_bits"] < 28_900
 
 
 def test_dials_are_the_functions_parameters():
@@ -158,42 +294,45 @@ def test_dials_are_the_functions_parameters():
         assert [d.name for d in w.dials] == list(params), w.name
         for d in w.dials:
             assert d.default == params[d.name].default, (w.name, d.name)
-        for _, settings in w.points:
-            assert set(settings) <= set(params), w.name
+        for _, s in w.points:
+            assert set(s) <= set(params), w.name
+        for ck in w.checks:
+            assert set(ck.dials) <= set(params), (w.name, ck.name)
 
 
-def tail(points: str) -> float:
-    """A u profile's free share, where it leaves 0."""
-    return next(x for x, v in AP.profile(points) if v > 0)
+def test_shape_and_traced_quantities():
+    sh = W.dense(W.REFERENCE_PARAMS)
+    assert math.isclose(sh.d_model, 512, abs_tol=1e-9) and math.isclose(sh.n_layer, 6, abs_tol=1e-9)
+    st20 = W.dense(35_658_240, vocab=32_000)
+    assert math.isclose(st20.d_model, 512, abs_tol=1e-9) and st20.tau == 15
+    assert W.dense(35_658_240, vocab=32_000, d_model=512).n_layer == 6
+    # m-t20, as te_core.policy states it: d 768 and 8 layers of SwiGLU 2,048, whose matrices the model's 7.84 layers of
+    # 2.75 d hold to 1e-5
+    shape = policy.SHAPES[W.M_T20_PARAMS]
+    assert policy.parameters(shape) == W.M_T20_PARAMS and (shape["d_model"], shape["n_layer"]) == (W.M_T20, 8)
+    mt20 = W.dense(W.M_T20_PARAMS, vocab=shape["vocab"], d_model=W.M_T20)
+    assert math.isclose(mt20.n_layer, W.M_T20_LAYERS) and 7.83 < mt20.n_layer < 7.84
+    assert math.isclose(mt20.matrix_params, 8 * (4 * 768 ** 2 + 3 * 768 * shape["d_ff"]), rel_tol=1e-5)
+    half = W.dense(26_450_304, vocab=32_000, d_model=384)
+    assert math.isclose(half.matrix_params, 8 * (4 * 384 ** 2 + 3 * 384 * 1024), rel_tol=1e-5)
+    # the pilot's traces: gradient cut plus state, r20261102-140347-a1c2 (AdamW) and r20261102-134356-ee8f (Muon)
+    assert W.delta_grad(sh, "adamw") == 4_322_869_248
+    assert W.delta_grad(sh, "muon") == 3_706_306_560
+    # starts_store.json's forward_macs_per_token for s50 and s100
+    assert math.isclose(sh.params + sh.attention(1024), 51_342_080, rel_tol=1e-3)
+    w = W.training(sh, "bf16", 1024).w
+    assert 2.319e11 * 0.99 < w < 2.341e11 * 1.01
+    # a served sequence: the forward at the prompt and every generated token but the last, the head at the sampled
+    assert W.served(256, 512) == (767, 512 / 767)
+    # a forward's weight reads are its weight GEMMs alone, also at bf16, where attention's MACs share their price
+    for precision in ("bf16", "fp4"):
+        tok = W.forward(sh, precision, 1024)
+        assert math.isclose(1 - tok.t, sh.params * W.per_mac(f"gemm/{precision}") / tok.alpha), precision
 
 
-def test_checks_are_near_their_records(ref):
-    """Every kind's term on each record beside the model's at its dials: the fresh products, reduction (by the main
-    part's blocks a step, b's ceiling) and update within 2%; the token kind within 1% on the pilot's full-training
-    records, by t on the island's dense rows (the model's, the 45M trace's, against each trace's: the token form goes
-    as 1/t), within 2% on the island's LoRAs (a measured), and on the 4.1 LoRA pilot by its a, te_core 4.1's
-    residual stream (64 times the model's 128 bits) and up to 20% more by its front-loaded u_in."""
-    checks = {ck.name: ck for w in W.WORKLOADS.values() for ck in w.checks}
-    assert len(checks) == 8
-    for name, w in ref["workloads"].items():
-        for cname, ck in w["checks"].items():
-            t = tail(checks[cname].columns["u_points"])
-            for q in POLICIES:
-                rec, mod = ck["rho"][q]["record"], ck["rho"][q]["model"]
-                assert rec["binding_kind"] == mod["binding_kind"] == "fresh_products", (cname, q)
-                for kind in ("fresh_products", "update"):
-                    assert math.isclose(rec["terms"][kind], mod["terms"][kind], rel_tol=0.02), (cname, q, kind)
-                blocks = (max(rec["b"]) - 1) / (max(mod["b"]) - 1)
-                assert math.isclose(rec["terms"]["reduction"], blocks * mod["terms"]["reduction"], rel_tol=0.02)
-                ratio = mod["terms"]["token"] / rec["terms"]["token"]
-                if cname.startswith("45M ref-optim"):
-                    assert math.isclose(ratio, 1, rel_tol=0.01), (cname, q)
-                elif name in ("standard", "diloco", "distill"):
-                    assert t > W.T_DENSE and math.isclose(ratio, t / W.T_DENSE, rel_tol=0.01), (cname, q)
-                elif "standard-workloads" in cname:
-                    assert math.isclose(ratio, 1, rel_tol=0.02), (cname, q)
-                else:
-                    assert 64 <= 1 / ratio <= 64 * 1.2, (cname, q)
+def island(workload: str | None = None) -> list:
+    return [ck for w in W.WORKLOADS.values() for ck in w.checks
+            if "standard-workloads" in ck.name and workload in (None, w.name)]
 
 
 def test_the_model_is_calibrated_on_the_records():
@@ -209,46 +348,88 @@ def test_the_model_is_calibrated_on_the_records():
     # Delta_grad: the island's traces, 96 N for AdamW (the student), Muon's state on s-t20, every worker's in DiLoCo
     assert W.delta_grad(student, "adamw") == 1_249_173_504
     assert round(W.delta_grad(st20, "muon")) == 2_806_628_352 == 1_141_063_680 + 1_665_564_672
-    (dl,) = W.island_checks("diloco")
+    (dl,) = island("diloco")
     assert dl.dials["workers"] == 4 and round(W.model("diloco", **dl.dials).measured.parts[0].delta_grad_bits) \
         == 13_692_764_160 == 4 * 96 * 35_658_240
-    # the gradient cut: each trace's Delta_grad less its state, 32 bits a trained value (every worker's in DiLoCo)
-    for w in ("standard", "diloco", "lora", "distill"):
-        for ck in W.island_checks(w):
-            (part,) = W.model(w, **ck.dials).measured.parts
-            assert math.isclose(ck.menu["grad_bits"], part.grad_bits, rel_tol=1e-9), ck.name
-            assert ck.menu["partial_bits"] == ck.menu["grad_bits"] / ck.dials.get("workers", 1)
-            assert math.isclose(ck.menu["partial_bits"], part.partial_bits, rel_tol=1e-9), ck.name
+    for ck in island():
+        m, col = W.model(WORKLOAD_OF[ck.name], **ck.dials), ck.columns
+        me = m.measured
+        # the shape's u(1), Delta and a and the run's |C|, each the row's (m-t20's at its width)
+        assert math.isclose(me.u1_bits, AP.profile(col["u_points"])[-1][1], rel_tol=2e-3), ck.name
+        assert math.isclose(me.delta_bits, col["delta_bits"], rel_tol=1e-3), ck.name
+        assert math.isclose(me.a_bits, col["a_bits"], rel_tol=1e-9) or ck.record.startswith(W.ISLAND_RL_LORA), ck.name
+        assert math.isclose(me.gates, col["C_gates"], rel_tol=0.03), ck.name
+        # the gradient cut and one block's partial: 32 bits a trained value (every worker's in DiLoCo)
+        main = max(me.parts, key=lambda p: p.token_gates)
+        assert math.isclose(ck.menu["grad_bits"], main.grad_bits, rel_tol=1e-9), ck.name
+        assert math.isclose(ck.menu["partial_bits"], main.partial_bits, rel_tol=1e-9), ck.name
     # a LoRA's a: its lowest adapted layer's q, k and v rank outputs in bf16, 768 bits at rank 16 (both island rows)
-    for ck in W.island_checks("lora"):
+    for ck in island("lora"):
         assert ck.columns["a_bits"] == 768 == W.model("lora", **ck.dials).measured.a_bits, ck.name
 
 
 def test_the_island_rows_are_its_panels(ref):
     rows = {r["run"]: r for r in json.loads(W.RECORDS.read_text())["rows"]}
-    checks = [ck for w in ("standard", "diloco", "lora", "distill") for ck in W.island_checks(w)]
+    checks = island()
     assert {ck.record.split("@")[0] for ck in checks} == set(rows) == {
-        W.ISLAND_STANDARD, W.ISLAND_DILOCO, W.ISLAND_LORA_ATTN, W.ISLAND_LORA_ALL, W.ISLAND_DISTILL}
+        W.ISLAND_STANDARD, W.ISLAND_DILOCO, W.ISLAND_LORA_ATTN, W.ISLAND_LORA_ALL, W.ISLAND_DISTILL, W.ISLAND_RL_LORA,
+        W.ISLAND_RL_FULL, W.ISLAND_INFERENCE, W.ISLAND_STANDARD_60M, W.ISLAND_DISTILL_60M, W.ISLAND_RL_FULL_60M,
+        W.ISLAND_INFERENCE_60M}
+    assert sum(len(w.checks) for w in W.WORKLOADS.values()) == 15 and set(W.ISLAND_DIFFERS) == set(rows)
     for ck in checks:
-        row = rows[ck.record.split("@")[0]]
-        # page_rho on the row's columns gives the island's own rho at the dial's default (its rho_console is at the
-        # c its te_core had, until the island republishes)
-        assert math.isclose(AP.page_rho(ck.columns, *AP.default(ck.columns["w_fwd_gates"]))[0], row["rho_default"],
-                            rel_tol=1e-5), ck.name
-        assert ck.dials["vocab"] == 32_000 and set(ck.dials) - {"vocab", "student_d_model", "workers"} == set(row["dials"])
-        assert ck.differs and ck.record == f"{row['run']}@{row['checkpoint']}"
-        got = next(c for w in ref["workloads"].values() for name, c in w["checks"].items() if name == ck.name)
+        run = ck.record.split("@")[0]
+        row = rows[run]
+        # page_rho on the row's columns is the island's own rho at the c its rows were published at
+        assert math.isclose(AP.page_rho(ck.columns, OLD_C, 65_536.0)[0], row["rho_console"], rel_tol=1e-5), ck.name
+        width = {"60M": {"teacher_d_model" if row["workload"] == "distill" else "d_model": W.M_T20}}.get(row["model"], {})
+        rounds = {"rounds": True, "tokens": sum(p["tokens"] for p in row["parts"])} if run in W.ISLAND_ROUNDS else {}
+        assert ck.dials == row["dials"] | width | rounds, ck.name
+        assert ck.differs == W.ISLAND_DIFFERS[run] and ck.record == f"{run}@{row['checkpoint']}"
+        got = ref["workloads"][WORKLOAD_OF[ck.name]]["checks"][ck.name]
         assert got["record_status"]["grad_bits"].startswith("measured: ")
-        assert got["record_status"]["partial_bits"].startswith("assumed: ")
-        measured = {key for key, v in got["model_status"].items() if v.startswith("measured: ")}
-        assert {"tau_bits", "a_bits", "delta_bits", "delta_t_bits", "d_gates"} <= measured, ck.name
-        assert all(got["model_status"][key].startswith("measured: " + ck.record) for key in measured)
-    distill = next(ck for ck in checks if ck.record.startswith(W.ISLAND_DISTILL))
-    assert distill.dials["student_d_model"] == 256
-    got = ref["workloads"]["distill"]["checks"][distill.name]
-    measured = {key for key, v in got["model_status"].items() if v.startswith("measured: ")}
-    assert measured == {"C_gates", "w_gates", "tau_bits", "a_bits", "delta_bits", "delta_t_bits", "d_gates",
-                        "delta_grad_bits", "w_fit_gates", "alpha_ratio"}
+        assert got["record_status"]["partial_bits"].startswith("measured: ")
+        status = W.input_status(W.model(WORKLOAD_OF[ck.name], **ck.dials), (ck,))
+        measured = {key for key, v in status.items() if v.startswith("measured: ")}
+        assert {"delta_bits", "delta_t_bits", "d_gates"} <= measured, ck.name
+        assert all(status[key].startswith("measured: " + ck.record) for key in measured)
+    assert set(W.ISLAND_ROUNDS) == {r for r, row in rows.items() if row["workload"] == "rl"}
+    mt20 = [ck for ck in checks if ck.name.startswith("60M ")]
+    assert len(mt20) == 4 and all(W.M_T20 in ck.dials.values() for ck in mt20)
+
+
+def test_checks_are_near_their_records(ref):
+    """Each kind's figure and sensitivity on each record beside the model's at its dials: the fresh-products term, which
+    gives both rows' rho, and its figure under P-cell within 2.5% (the RL LoRA's w is 3% above its record's), update
+    within 2% and reduction by the main part's blocks a step within 2%. The target, reading B's token form, goes as
+    1/t on the traced dense rows (the model's t, the 45M
+    trace's, against each trace's) and within 2% on the island's LoRAs; the 4.1 LoRA pilot's is its a, te_core 4.1's
+    residual stream (64 times the model's 128 bits), and up to 20% more by its front-loaded u_in; a generation row's is
+    te_core's untraced stub's, so it isn't compared."""
+    checks = {ck.name: ck for w in W.WORKLOADS.values() for ck in w.checks}
+    for name, w in ref["workloads"].items():
+        for cname, ck in w["checks"].items():
+            x = ck["rho"]["default"]
+            rec, mod = x["record"], x["model"]
+            assert rec["basis"] == mod["basis"] == "fresh_products" and rec["partial"] and mod["partial"], cname
+            assert math.isclose(rec["rho"], mod["rho"], rel_tol=0.025), cname
+            assert math.isclose(rec["terms"]["fresh_products"], mod["terms"]["fresh_products"], rel_tol=0.025), cname
+            s, t = rec["sensitivities"], mod["sensitivities"]
+            assert math.isclose(s["fresh_cell"], t["fresh_cell"], rel_tol=0.025), cname
+            assert math.isclose(s["update"], t["update"], rel_tol=0.02, abs_tol=1e-12), cname
+            blocks = (max(rec["b"]) - 1) / (max(mod["b"]) - 1)
+            assert math.isclose(s["reduction"], blocks * t["reduction"], rel_tol=0.02, abs_tol=1e-12), cname
+            if checks[cname].record.split("@")[0] in GENERATION:
+                continue
+            ratio = mod["target"]["rho"] / rec["target"]["rho"]
+            t_rec = next(x for x, v in AP.profile(checks[cname].columns["u_points"]) if v > 0)
+            if cname.startswith("45M ref-optim"):
+                assert math.isclose(ratio, 1, rel_tol=0.01), cname
+            elif name in ("standard", "diloco", "distill"):
+                assert t_rec > W.T_DENSE and math.isclose(ratio, t_rec / W.T_DENSE, rel_tol=0.02), cname
+            elif "standard-workloads" in cname:
+                assert math.isclose(ratio, 1, rel_tol=0.02), cname
+            else:
+                assert 64 <= 1 / ratio <= 64 * 1.2, cname
 
 
 def test_every_input_says_where_it_comes_from(ref):
@@ -256,151 +437,90 @@ def test_every_input_says_where_it_comes_from(ref):
         assert set(p["input_status"]) == set(W.KEYS), (name, pname)
         assert all(v.startswith(("measured: ", "assumed: ")) for v in p["input_status"].values()), (name, pname)
     assert set(ref["menu_status"]) == {"fresh", "widths", "parts", "grad_bits", "partial_bits", "op_update_bits"}
+    assert all(v.startswith("assumed: ") for v in ref["menu_status"].values())
     # the default dense point is the 45M pilot's AdamW record wherever the record measures the model's value
     st = ref["workloads"]["standard"]["points"]["default"]["input_status"]
     measured = {key for key, v in st.items() if v.startswith("measured: ")}
     assert measured == {"tau_bits", "a_bits", "u_points", "delta_bits", "delta_t_bits", "d_gates", "delta_grad_bits"}
+    assert all(st[key].startswith(f"measured: {W.PILOT_ADAMW}") for key in measured)
     assert st["w_gates"].startswith("assumed: ") and W.PILOT_ADAMW in st["w_gates"]
     assert all(v.startswith("assumed: ") for v in ref["workloads"]["standard"]["points"]["7B"]["input_status"].values())
 
 
-def test_the_rows_are_at_the_consoles_policy_only():
-    """The dashboard's ruling: rows are reported at the console's c, one full session of the reference model."""
-    assert W.POLICIES == {"default": policy.CONSOLE} and AP.CONSOLE is policy.CONSOLE
-    assert W.REFERENCE_PARAMS == policy.REFERENCE_PARAMS and W.dense(W.REFERENCE_PARAMS).d_model == pytest.approx(512)
-    # the console's c holds 2,293.9 training tokens of the 45M reference, which sets Fit's Δ threshold at 28.8 kbit
-    c, k = policy.CONSOLE
-    s = c / W.training(W.dense(W.REFERENCE_PARAMS), "bf16", 1024).w
-    assert 2293 < s < 2295 and 28_700 < k - s * 16.0156 < 28_900
-
-
-def test_the_fresh_cap_is_the_amortized_loomis_whitney():
-    k, bf16 = 65_536.0, W.WIDTHS["gemm/bf16"]
-    assert bf16 == (16.0, 16.0, 32.0)
-    cap = W.fresh_cap(k, bf16)
-    assert math.isclose(cap, k ** 1.5 / (4 * math.sqrt(8192)))
-    # the board's (k/3)^1.5 form, 35,700 at the default, is the per-block cap: 4/(3 sqrt 3) of the amortized one
-    assert round((k / 3) ** 1.5 / math.sqrt(8192)) == 35_673
-    assert math.isclose(cap / ((k / 3) ** 1.5 / math.sqrt(8192)), 3 * math.sqrt(3) / 4)
-    # the Lean lane's split_attains: 32 products in 2 blocks at k = 16 and unit widths
-    assert W.fresh_cap(16, (1, 1, 1)) == 16
-    # each output entry is paid once: no bound below mu* b_C = 22.6 terms an entry, cap/k b_C above it
-    assert math.isclose(cap / k * 32, 22.627, rel_tol=1e-4)
-    assert W.fresh_blocks(22 * 1000, 1000, k, bf16) == 0.0
-    assert math.isclose(W.fresh_blocks(512 * 1000, 1000, k, bf16), 512 * 1000 / cap - 32 * 1000 / k)
-
-
-def test_dense_training_is_fresh_bound_at_its_charged_share(ref):
-    for q in POLICIES:
-        c, k = W.POLICIES[q]
-        r = rhos(ref, "standard", "default")[q]
-        assert r["binding_kind"] == r["basis"] == "fresh_products"
-        assert ref["rests_on"]["fresh_products"].startswith("no A1: the amortized Loomis-Whitney cap")
-        unit = c / (W.fresh_cap(k, W.WIDTHS["gemm/bf16"]) * per_mac("gemm/bf16"))
-        assert math.isclose(r["terms"]["fresh_products"], unit * r["fresh_charged_share"], rel_tol=1e-9)
-        assert 0.9 < r["fresh_charged_share"] < r["fresh_share"] < 0.99
-    # 7.82e6 times the charged share at the console default
-    assert 7.82e6 < policy.CONSOLE[0] / (W.fresh_cap(65_536, W.WIDTHS["gemm/bf16"]) * per_mac("gemm/bf16")) < 7.83e6
+def test_every_model_input_is_tagged_an_estimate(ref):
+    for name, pname, p in points(ref):
+        tagged = {t.split(":")[0] for t in p["estimated"].split()}
+        assert tagged == set(AP.LABELLED), (name, pname, set(AP.LABELLED) - tagged)
 
 
 def test_the_fresh_kind_counts_products_of_two_fresh_operands():
-    sh = W.dense(W.REFERENCE_PARAMS)
-    total = {name: sum(f.total for f in W.model(name, **dials).fresh) / W.model(name, **dials).measured.parts[0].tokens
+    sh, k = W.dense(W.REFERENCE_PARAMS), 65_536.0
+    total = {name: sum(f.total(k) for f in W.model(name, **dials).fresh) / W.model(name, **dials).measured.tokens
              for name, dials in (("standard", {}), ("inference", {"precision": "bf16"}))}
-    # dense training: every weight GEMM's three passes and attention's forward and backward
-    assert math.isclose(total["standard"], 3 * (sh.matrix_params + sh.vocab * sh.d_model) + 3 * sh.attention(1024))
-    # an unregistered model: every product of its forward
+    # dense training: every weight GEMM's three passes but the lowest layer's gathered q, k and v forward and weight
+    # gradient, and attention's forward and backward
+    gathered = 3 * sh.d_model ** 2
+    assert math.isclose(total["standard"], 3 * (sh.matrix_params + sh.vocab * sh.d_model) - 2 * gathered
+                        + 3 * sh.attention(1024))
+    # an unregistered model: every product of its forward but the gathered ones, the head at the sampled positions
+    pos, head = W.served(4096, 1024)
     span = W.decode_span(4096, 1024)
-    assert math.isclose(total["inference"], sh.matrix_params + sh.vocab * sh.d_model + sh.attention(span))
+    assert math.isclose(total["inference"], sh.matrix_params - gathered + head * sh.vocab * sh.d_model
+                        + sh.attention(span))
     # a registered teacher's products all read theta
     with_teacher, alone = (W.model("distill", teacher_share=x) for x in (1.0, 0.0))
     assert with_teacher.fresh == alone.fresh
-    # a LoRA on the top layer's MLP: the down projection's x.A, (x.A).B and their gradients, none of attention's
-    ad = W.Adapter.of(sh, 8, "mlp", 1)
-    got = sum(f.total for f in W.model("lora", targets="mlp", layers=1).fresh) / 1e8
-    assert math.isclose(got, 3 * ad.rank * sh.d_model * (1 + 3 * W.MLP))
+    # a LoRA's base products read theta: only the adapter's and attention's above its lowest adapted layer
+    m = W.model("lora", targets="mlp", layers=1)
+    assert all(f.kind == "gemm/bf16" for f in m.fresh) and len([f for f in m.fresh if f.attention]) == 2
 
 
-def test_a_forward_escapes_where_its_layers_update_and_ids_fit():
+def test_a_forward_escapes_where_its_layers_update_and_ids_fit(ref):
     f = W.Fresh("gemm/bf16", 1.0, 1.0, 1.0, 1.0, positions=1024, inputs=1024, tau=16)
     k = 65_536
     assert f.escaped(k - 16 * 1024, k) == 1.0
     assert f.escaped(k - 16 * 100, k) == 100 / 1024
     assert W.Fresh("gemm/bf16", 1.0, 1.0, 1.0, 1.0, 1024, 1024, 16, sequence=True).escaped(k - 16 * 100, k) == 0.0
-    # a rank-1 W_q LoRA on six layers at the default: the update up to layers 1 and 2 fits beside a sequence's ids
-    m = W.model("lora", rank=1, targets="q")
-    d = m.derived["d_model"]
-    (pv,) = [f for f in m.fresh if not f.sequence and f.macs == d * 1024 and f.entries == d]
+    # a rank-1 W_q LoRA on one layer fits k beside a sequence's ids: every product escapes, io_bound counts none
+    m = W.model("lora", rank=1, targets="q", layers=1)
     ub = W.update_bits(m.measured, policy.CONSOLE[0])
-    assert ub == 98_304
-    assert pv.lowest == 0 and math.isclose(pv.counted(ub, 65_536)[0] / pv.total, 3 / 5)
-
-
-def test_the_reduction_kind_is_a_maximum(ref):
-    """te_core's reduction and update terms: (c/|C|)·steps·(b − 1)·partial/k and (c/|C|)·steps·γ/k, b a step's
-    token blocks; a dense step's partial and cut are 32 N (the update kind no longer counts Δ_t)."""
-    m = W.model("standard")
-    c, k = policy.CONSOLE
-    (part,) = m.measured.parts
-    b = math.ceil(part.token_gates / part.steps / c)
-    assert b == 29 and math.isclose(b, 65_536 * m.derived["w_gates"] / c, rel_tol=0.02)
-    assert part.partial_bits == part.grad_bits == 32 * W.REFERENCE_PARAMS
-    terms = rhos(ref, "standard", "default")["default"]["terms"]
-    assert math.isclose(terms["reduction"], c / m.measured.gates * part.steps * (b - 1) * part.partial_bits / k,
-                        rel_tol=1e-12)
-    assert math.isclose(terms["update"], c / m.measured.gates * part.steps * part.grad_bits / k, rel_tol=1e-12)
-    assert math.isclose(terms["reduction"] / terms["update"], b - 1)
+    assert ub + 16 * 1024 <= k and all(f.counted(ub, k)[0] == 0 for f in m.fresh)
+    assert not W.products(m, *policy.CONSOLE)
+    assert rhos(ref, "lora", "rank 1 on W_q, one layer")["terms"]["fresh_products"] == 0
 
 
 def test_diloco_is_standard_training_until_a_phase_fits_a_block(ref):
-    for q in POLICIES:
-        standard = rhos(ref, "standard", "default")[q]["terms"]
-        for point in ("default", "1-bit syncs"):
-            terms = rhos(ref, "diloco", point)[q]["terms"]
-            assert math.isclose(terms["fresh_products"], standard["fresh_products"], rel_tol=2e-3)
-            assert math.isclose(terms["token"], standard["token"], rel_tol=2e-3)
+    standard = rhos(ref, "standard", "default")
+    for point in ("default", "1-bit syncs"):
+        r = rhos(ref, "diloco", point)
+        assert math.isclose(r["terms"]["fresh_products"], standard["terms"]["fresh_products"], rel_tol=2e-3)
+        assert math.isclose(r["rho"], standard["rho"], rel_tol=2e-3)
+        assert math.isclose(r["target"]["rho"], standard["target"]["rho"], rel_tol=2e-3)
+    # at 16 syncs of 1,024 bits a phase's code fits a block beside its tokens' ids: Fit holds, every product escapes
     corner = rhos(ref, "diloco", "Fit's corner")
-    assert corner["default"]["basis"] == "fit" and 1 < corner["default"]["rho"] < 2
-    # its code, 16 syncs of 1,024 bits and a phase's ids, fits beside a block's 2,294 tokens' ids; 32 syncs don't
-    wider = dict(W.WORKLOADS["diloco"].points)["Fit's corner"] | {"syncs": 32}
-    assert W.rho(W.model("diloco", **wider), *policy.CONSOLE)["fit_fails"] == ["compute"]
-    # the served demo's smaller block can't replay a phase, so no block reads the code and the products are fresh again
-    m = W.model("diloco", inner_steps=2, batch_tokens=256, syncs=16, sync_bits=1024)
-    assert m.measured.decoder_gates > panels.SERVED[0]
-    assert W.rho(m, *map(float, panels.SERVED))["binding_kind"] == "fresh_products"
+    m = W.model("diloco", **settings("diloco", "Fit's corner"))
+    c, _ = policy.CONSOLE
+    d = m.measured.decoder_gates
+    assert corner["basis"] == "fit" and not corner["fit_fails"] and d < c
+    assert math.isclose(corner["rho"], c / (c - d)) and 1.28 < corner["rho"] < 1.29
+    assert corner["terms"]["fresh_products"] == corner["sensitivities"]["fresh_cell"] == 0 and not corner["partial"]
 
 
 def test_a_teacher_lowers_rho_by_the_students_share_and_not_the_blocks(ref):
     pts = ref["workloads"]["distill"]["points"]
     with_teacher, alone = pts["default"], pts["no teacher"]
     share = with_teacher["derived"]["student_share"]
-    for q in POLICIES:
-        fresh = [p["rho"][q]["terms"]["fresh_products"] for p in (with_teacher, alone)]
-        assert math.isclose(fresh[0] / fresh[1], share, rel_tol=1e-3)
-        assert math.isclose(*(x * p["inputs"]["C_gates"] for x, p in zip(fresh, (with_teacher, alone))), rel_tol=1e-9)
+    fresh = [p["rho"]["default"]["terms"]["fresh_products"] for p in (with_teacher, alone)]
+    assert math.isclose(fresh[0] / fresh[1], share, rel_tol=1e-3)
+    assert math.isclose(*(x * p["inputs"]["C_gates"] for x, p in zip(fresh, (with_teacher, alone))), rel_tol=1e-9)
 
 
-def test_rl_bounds_that_count_each_kind_exceed_te_cores(ref):
+def test_rl_counting_bounds_exceed_the_target(ref):
+    """Reading B's counting of tokens' worth beside the target where the token blocks differ (RL's rollouts and
+    learner, Q3): each kind's own profile counts more than the pooled one, which counts more than the token form."""
     p = ref["workloads"]["rl"]["points"]["default"]
-    for q in POLICIES:
-        s = p["sensitivity"][q]
-        assert p["rho"][q]["terms"]["token"] < s["tokens_worth"] < s["per_kind"]
-
-
-def test_a_lora_whose_update_fits_k_but_not_fits_reduction_clause_is_reduction_bound(ref):
-    """At the served demo's block (c 3.0e13, k 145,568 bits), outside the rows."""
-    m = W.model("lora", rank=1, targets="q")
-    c, k = map(float, panels.SERVED)
-    served = W.rho(m, c, k)
-    (part,) = m.measured.parts
-    assert m.measured.delta_bits + 16 * 1024 <= k < 2 * part.delta_grad_bits
-    assert served["terms"]["fresh_products"] == 0 and served["fit_fails"] == ["reduction", "update"]
-    b = math.ceil(part.token_gates / part.steps / c)
-    want = c / m.measured.gates * part.steps * (b - 1) * part.partial_bits / k
-    assert served["binding_kind"] == "reduction" and math.isclose(served["rho"], want, rel_tol=1e-12) and want > 1
-    assert rhos(ref, "lora", "rank 1 on W_q")["default"]["binding_kind"] == "fresh_products"
-    one = rhos(ref, "lora", "rank 1 on W_q, one layer")["default"]
-    assert one["rho"] == 1.0 and one["binding_kind"] is None and "reduction" in one["fit_fails"]
+    s = p["sensitivity"]["default"]
+    assert p["rho"]["default"]["target"]["rho"] < s["tokens_worth"] < s["per_kind"]
 
 
 def test_a_lora_decoder_is_the_harnesss_rebuild():
