@@ -138,6 +138,14 @@ theorem withStops_causal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → 
   rw [hRf x c c' i h]
   exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x wt ω p c c' i h)
 
+theorem withStops_swCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
+    (vs : S.SwVals) (hRf : S.StopsCausal Rf) (hc : S.SwCausal vs) : (S.withStops Rf stop).SwCausal vs := by
+  intro x w ν ω s p c c' i h
+  show (if Rf x c i = true then stop else if i = 0 then S.enc x c i _ else dropDom (S.enc x c i _)) =
+    (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
+  rw [hRf x c c' i h]
+  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω s p c c' i h)
+
 theorem withStops_swCausalOn (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (hRf : S.StopsCausal Rf)
     (hc : S.SwCausalOn Ok vs) : (S.withStops Rf stop).SwCausalOn Ok vs := by
