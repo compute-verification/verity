@@ -15,6 +15,7 @@ those of the messages `msgs`, each reading the strings before it.
 
 * `firewallSends_of_accepts`: `FirewallAccepts s reqs msgs tables → FirewallSends s reqs msgs (firewallT s tables)`, by
   `FirewallTemplate.sends_of_one` at the zero salts and `firewallStrings`' unfolding.
+* `tables_eq_of_accepts`: there `tables` is the schedule's order `s.tables`, the only one the firewall takes.
 * `recursiveFirewallPrivate_of_accepts`: `RecursiveFirewallPrivate`'s two ways with `FirewallAccepts` in place of
   `FirewallSends`, its simulated view at `firewallT s tables`, which reads only the schedule and the table order.
 * `liveSends`, `liveSends_of_accepts`: the deployed send check, `flock-firewall live` (`FirewallLive.liveRun`), sends
@@ -88,6 +89,17 @@ theorem firewallSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Fl
     (fun _ => Flock.Guarantees.zeroSalt) (fun _ => Flock.Firewall.Contract.sha512_size _) hfin ho hh ys).trans ?_
   refine congrArg (fun l => ((FirewallRun.fillAll (FirewallTemplate.tmpl s tables) l).toArray, true)) ?_
   exact congrArg List.ofFn (funext fun i => (firewallStrings_eq (msgs P w r a p) ys i).symm)
+
+/-- **The table order is the schedule's**: under `FirewallAccepts s reqs msgs tables`, `tables` is `s.tables`, the only
+order the firewall takes Commit's tables in (`FirewallTemplate.namesOf_run`), so `firewallT s tables` reads the schedule
+alone. -/
+theorem tables_eq_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
+    (h : Flock.Guarantees.FirewallAccepts s reqs msgs tables) (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp)
+    (l : Fin nh → ByteArray) : tables = s.tables := by
+  obtain ⟨hfin, ho, -⟩ := h P w r a p l
+  exact ho.symm.trans (FirewallTemplate.namesOf_run s _ _ hfin)
 
 /-- **(ii) at the firewall and V*'s code, from the honest worker's half**: `RecursiveFirewallPrivate`'s two ways with
 `FirewallAccepts` in place of `FirewallSends`, the simulated view filling the schedule's transcript `firewallT s tables`
