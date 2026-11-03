@@ -164,7 +164,8 @@ def quant_pair(A: torch.Tensor, B: torch.Tensor, bits_a: int, bits_b: int):
     c = B.pow(2).mean(0).sqrt()
     c = torch.where(c > 0, c, torch.ones_like(c))
     ac = A * c[:, None]
-    G = float(ac.pow(2).mean(1).sqrt().max()) or 1.0
+    G = ac.pow(2).mean(1).sqrt().max()
+    G = torch.where(G > 0, G, torch.ones_like(G))
     qa, va = qcodes(ac / G, bits_a, A.shape[1])
     qb, vb = qcodes(B / c[None, :], bits_b, B.numel())
     return qa, qb, G, va * (G / c)[:, None], vb * c[None, :]
@@ -822,7 +823,7 @@ def encode(ads: dict, params: dict, norms: list[str], theta: dict, a) -> bytes:
                 entries[n] = ad.entry()
                 continue
             qa, qb, G, _, _ = quant_pair(ad.A, ad.B, *ad.bits)
-            entries[n] = {"kind": "lora", "a": qa, "b": qb, "scale": ad.s * G}
+            entries[n] = {"kind": "lora", "a": qa, "b": qb, "scale": ad.s * float(G)}
         for n in norms:
             d = params[n].detach().float() - theta[n].to(params[n].device).float()
             entries[n] = ({"kind": "delta", "q": qcodes(d, a.norm_bits, d.numel(), uniform=True)[0]} if a.norm_bits
@@ -832,9 +833,10 @@ def encode(ads: dict, params: dict, norms: list[str], theta: dict, a) -> bytes:
     for n, ad in ads.items():
         A, B, s = ad.A.detach().float(), ad.B.detach().float(), ad.s
         if a.dtype == "f16":
-            ma, mb = float(A.abs().max()), float(B.abs().max())
-            if ma > 0 and mb > 0:
-                A, B, s = A / ma, B / mb, s * ma * mb
+            ma, mb = A.abs().amax(), B.abs().amax()
+            ok = (ma > 0) & (mb > 0)
+            ma, mb = torch.where(ok, ma, 1.0), torch.where(ok, mb, 1.0)
+            A, B, s = A / ma, B / mb, s * float(ma * mb)
         out[n] = (A, B, s)
     return prepare.encode_lora(out, a.dtype, full)
 
