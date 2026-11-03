@@ -47,9 +47,9 @@ strategy of the period's game projects to. This module states its C-Flock side.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
   parameters and committed files, each one v2 sets up, with the deployment's writer, device bytes and bound
   parameters. Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
-  no loss term, and at each session the extractor at the projected strategy, the leg's per-finder premises in
-  `error`'s condition, and a published `δ` at least the session's. Where there is no session the sampled verdict never
-  accepts.
+  no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
+  deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
+  and a published `δ` at least the session's. Where there is no session the sampled verdict never accepts.
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
@@ -80,10 +80,11 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
-derives (the files' parse, the public file over the circuit's empty public input ports, the population and its strata,
-the registration's descriptor and query, the law and the draw's size, and the session's plan, writer and digest), the
-device's byte stream the draw reads, A3 at those bytes, the verify command's tags and `live-verifier` at the writer as
-fields, and the bound's parameters. -/
+derives (the files' parse, the public file over the circuit's empty public input ports, the circuit's ports named once
+with one domain at each root, the population and its strata, the registration's descriptor and query and the
+population's order, the law and the draw's size, and the session's plan, writer and digest), the device's byte stream
+the draw reads, A3 at those bytes, the verify command's tags and `live-verifier` at the writer as fields, and the
+bound's parameters. -/
 structure Live where
   /-- the population: the public file's proof blocks -/
   n : ℕ
@@ -104,12 +105,18 @@ structure Live where
   pubO : Flock.Public
   hpubO : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pubO
   hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true
+  /-- the circuit names each of its ports once -/
+  hdup : Flock.Registered.dupName D.unroll = none
+  /-- two ports with one root at the public file's leaf map have one domain -/
+  hroots : Flock.Bridge.RootFixesDomainL D.unroll (Flock.Bridge.LeafMap.ofPublic D.unroll pub n)
   hn : pub.n = n
   hnO : pubO.n = n
   /-- the statement's descriptor -/
   desc : Claims.Msg
   /-- the registration's query -/
   qr : Lean.Json
+  /-- the registration's population is the public file's proof blocks, in order -/
+  hpop : Flock.Bridge.PopMatches desc qr n
   /-- the population's strata sizes, in slot order: the registration's templates -/
   ns : List ℕ
   hns : ns.sum = n
@@ -391,6 +398,14 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
       ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
         (Flock.Bridge.stmtOf A.P A.κ A.kd A.desc ⟨"", 0, []⟩ A.roots)))
 
+/-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
+gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
+session's roots (`Flock.Bridge.posOf`, `Cd`, `roots`) opens the gate to every value whose first bit it is. -/
+def OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+  ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
+    A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
+      ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
+
 end Live
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
@@ -628,8 +643,9 @@ def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray �
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
 `S` holds is the one v2 sets up (`SetsUp`); the device's log as the sampled check reads it is v2's (`coinsRead`); the
 finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session the extractor is the
-session's at the projected strategy (`Live.extract`), `error`'s condition holds the leg's per-finder premises
-(`FinderCR`), and the published `δ` is at least the session's at the read finder's published bound (`Live.delta`). -/
+session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
+commitment opens (`Live.OpensUnder`), `error`'s condition holds the leg's per-finder premises (`FinderCR`), and the
+published `δ` is at least the session's at the read finder's published bound (`Live.delta`). -/
 structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
     Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
@@ -639,6 +655,7 @@ structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Arr
   loss : ∀ θ x, V.loss .sampled θ x = 0
   extract : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     HEq (V.extract θ F c σ) ((K.live A θ F c σ).extract (K.project A θ F c σ))
+  opens : ∀ θ F A, S θ F = some A → ∀ c, A.OpensUnder (V.read θ F) (V.Opens θ F c)
   finderCR : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     V.finderCR .sampled θ F c σ → FinderCR V K A θ F c σ
   delta : ∀ θ F A, S θ F = some A → ∀ t, A.delta t (V.crBound θ .sampled t) ≤ V.delta θ .sampled t
