@@ -33,6 +33,11 @@ reads the log (`ReadsLog`, `drawRead_coinsRead`).
   parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
   draw's law is the session's wherever its population is (`lawAt_of_lawOf`), and the draw's piece of `CouplingTarget`
   needs only the population.
+* **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
+  `coupled_draw_tied`, `coupled_draw_coins_tied`): v2 refuses a record whose population isn't its program's proof
+  blocks in order (`popHeld`), and the session's population (`Live.hpop`) reads the same layout. So at a session whose
+  descriptor and query are v2's verifier's (`PopTied`, which `SetsUp` doesn't state) the draw's population is the
+  session's, and the draw's piece asks nothing of the session but its coins.
 
 Each fact about one of the challenger's monadic functions is a Hoare triple proved by `mvcgen`, read back at an `.ok`
 result (`of_triple`, in `SampledLog`).
@@ -582,5 +587,102 @@ theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Comp
   obtain ⟨p₀, hp₀, -⟩ := hA.params
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
+
+/-! ## The session's population -/
+
+/-- **v2's check at the coins `ξ` accepts only where the record's population is its program's** (`popHeld`). -/
+theorem popHeld_of_checkBlobsAt {p : _root_.SampledProofs.OneStageZk.Params}
+    {c : _root_.SampledProofs.OneStage.Commitment} {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence}
+    {bs : Core.Blobs} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    _root_.SampledProofs.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
+  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
+  try simp only [] at h
+  split at h
+  · cases h
+  · rename_i hr
+    cases hp : _root_.SampledProofs.OneStageZk.popHeld p.base.verifier c.record with
+    | ok u => rfl
+    | error err =>
+      exfalso
+      first
+        | (simp only [hp, bind_ok, reduceCtorEq, false_and, and_false, exists_false, exists_const] at hr; done)
+        | simp [hp, bind_ok] at hr
+
+/-- **The population `popHeld` passes is one the program holds**: under the verifier's query, the program's proof
+blocks are the record's population units in order (`Slots.popOk`). -/
+theorem popOk_of_popHeld {v : _root_.SampledProofs.Registration.Verifier} {record : Json} {n : ℕ}
+    (h : _root_.SampledProofs.OneStageZk.popHeld v record = .ok ())
+    (hn : _root_.SampledProofs.nat? (_root_.SampledProofs.getD record "population") = some n) :
+    _root_.SampledProofs.Slots.popOk v.program v.query n = true := by
+  unfold _root_.SampledProofs.OneStageZk.popHeld at h
+  simp only [hn] at h
+  by_cases hp : _root_.SampledProofs.Slots.popOk v.program v.query n = true
+  · exact hp
+  · rw [if_neg hp] at h
+    cases h
+
+/-- **The session's population is the one the program holds** where the session's descriptor parses to v2's program
+and its query is v2's: `Live.hpop` and `Slots.popOk` read one layout's population. -/
+theorem n_of_popOk {A : Live} {v : _root_.SampledProofs.Registration.Verifier} {n : ℕ}
+    (hd : _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok v.program) (hq : A.qr = v.query)
+    (h : _root_.SampledProofs.Slots.popOk v.program v.query n = true) : A.n = n := by
+  unfold _root_.SampledProofs.Slots.popOk at h
+  split at h
+  · cases h
+  · rename_i l hl
+    have h1 := Flock.Bridge.popOf_units (l := l) A.hpop hd (by rw [hq]; exact hl)
+    have h2 := of_decide_eq_true h
+    have := congrArg List.length (h1.symm.trans h2)
+    simpa only [List.length_map, List.length_range] using this
+
+/-- **The session's descriptor and query are v2's verifier's** on the parameters `θ`: the tie under which the
+session's population is the draw's (`n_of_popTied`). `SetsUp` doesn't state it. -/
+def PopTied (θ : ByteArray) (A : Live) : Prop :=
+  ∃ p, ParamsAt θ p ∧ _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
+    A.qr = p.base.verifier.query
+
+/-- **The session's population is the draw's**: a draw v2 made in a composition composite `k` accepted, on the
+parameters `θ`, ran over the population of a session tied to v2's verifier there, since v2 refuses a record whose
+population isn't its program's proof blocks in order (`popHeld`). -/
+theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity.Registration.Composite}
+    {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
+    (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units) : A.n = n := by
+  obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
+  obtain ⟨p', hp', hdesc, hq⟩ := ht
+  rw [← hθ] at hp'
+  rw [paramsAt_case hS hcase hacc hp'] at hdesc hq
+  obtain ⟨_, _, _, -, hn, -, -, -⟩ := hL
+  obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
+  exact n_of_popOk hdesc hq (popOk_of_popHeld (popHeld_of_checkBlobsAt hck) hn)
+
+/-- **The draw's piece of `CouplingTarget` at a session tied to v2's verifier**: `coupled_draw_setsUp`, with the
+session's population read off `PopTied`, so the piece asks nothing of the session but its coins. -/
+theorem coupled_draw_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
+    ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T,
+        (freshCoins dr.label dr.after o.log).flatten <+:
+          bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω.1 0)) →
+        (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_setsUp K A θ F c σ hA hR hθ hv hl
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hp => h ω (n_of_popTied ht hv.2.1 hθ hd) hp⟩
+
+/-- `coupled_draw_coins_setsUp` at a session tied to v2's verifier. -/
+theorem coupled_draw_coins_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
+    (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
+    (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m B (κ ω) 0)) :
+    ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T,
+        freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
+        (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins_setsUp K A θ F c σ hA hR hθ hv hl κ hsrc
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hp => h ω (n_of_popTied ht hv.2.1 hθ hd) hp⟩
 
 end Verity.Sampled
