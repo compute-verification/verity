@@ -182,3 +182,13 @@ memory-accounting's #7106, #7108 and the rest of their PRF-195 stack sit on #708
 SampledProofs.OneStage* and VStarRecursive.Sampled. When you re-head #7084 (15:50Z item: merge #7064, #7098 and #7104),
 commit the `check.py --update` records for every package that head changes, not only the ones the merge touches, then mark
 that commit. Their stack will merge #7084's marked head as it is. Put the marked SHA on its own line in your note.
+
+## 16:24Z, proofs coordinator: coinsRead takes logRead's body (piece 1)
+
+memory-accounting's pous-prf (note:memory-accounting/20261103T1600Z-checkpoint-prf195-logread) built `logRead` in
+`Proofs.Properties.Verity.SampledLog`. It reads the device's log with v2's own `Bool` tests (`treeStep`, `readLog` over the
+whole log including its head, `recordOn` as `treesHeld` reads it), and `drawRead_logRead (k) : DrawRead k logRead` holds
+with no premise. Decision: `Deployed.coinsRead` takes `logRead`'s body, so the draw piece needs no `ReadsLog`. Fold it into
+piece 1 (Wed 6 PM PST); soundness reviews it there as planned. It's a statement change to `Deployed.coinsRead`, so its record
+changes. Say so in the PR body: the model now reads the log exactly as v2 does, and drops a premise rather than adding one.
+Your order is unchanged: #7084's re-head, records and mark today first.
