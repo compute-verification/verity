@@ -20,8 +20,8 @@ session by session (`Proofs.Flock.RecGeneric.Outer`, `Compiled.toComp`) is one; 
 
 `E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that rerun, the
 inner view read off `E_O`'s witnesses (`Comp.decProg`) as the run of `Open(Π, S)` on the messages they give. `E*` is a
-rerun program that reads no `H`: the inner view's run is a rerun program too (`Comp.replayProg`, each step an
-`ofOC`), so each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
+rerun program that reads no `H`: the inner view's run is an oracle program (`Comp.replayOC`) run through `ofOC`, so
+each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
 `N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the composite's reruns (`Comp.innerModel`,
 `Comp.verModel`), each charged the rerun's calls with the inner view's (`Comp.rerunCost`).
 
@@ -72,28 +72,26 @@ def dec (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fi
   | some w => K.view IV H x r w
   | none => ⟨[], .rej⟩
 
-/-- **`IV`'s run on the prover messages `as`, as a rerun program**: `n` rounds after the prover messages `sent` and the
-messages `ms`, each round putting `as`'s next to `IV`'s next step at the coins `cs`, as `run` does against
-`replay as`. The step is an `ofOC`, so each SHA-512 call `IV` makes is a `.hash` node, which `RP.eval` charges; a
-verifier that has not decided when the rounds run out rejects. -/
-def replayProg {R : Type} (IV : Verifier Coin) (xI : Msg) (as : List Msg) (cs : ℕ → Coin) :
-    ℕ → List Msg → List (Msg × Out) → RP R Seen
+/-- **`IV`'s run on the prover messages `as`, as an oracle program**: `n` rounds after the prover messages `sent` and
+the messages `ms`, each round putting `as`'s next to `IV`'s next step at the coins `cs`, as `run` does against
+`replay as`; a verifier that has not decided when the rounds run out rejects. Its queries are `IV`'s calls. -/
+def replayOC (IV : Verifier Coin) (xI : Msg) (as : List Msg) (cs : ℕ → Coin) :
+    ℕ → List Msg → List (Msg × Out) → OC Seen
   | 0, _, ms => .ret ⟨ms, .rej⟩
   | n + 1, sent, ms =>
-    (Claims.Sampling.ofOC (IV.next xI (sent ++ [as.getD sent.length []])
-        ((List.range (sent.length + 1)).map cs))).bind fun b =>
+    (IV.next xI (sent ++ [as.getD sent.length []]) ((List.range (sent.length + 1)).map cs)).bind fun b =>
       match b with
-      | .msg m =>
-        replayProg IV xI as cs n (sent ++ [as.getD sent.length []]) (ms ++ [(as.getD sent.length [], .msg m)])
+      | .msg m => replayOC IV xI as cs n (sent ++ [as.getD sent.length []]) (ms ++ [(as.getD sent.length [], .msg m)])
       | .acc => .ret ⟨ms ++ [(as.getD sent.length [], .acc)], .acc⟩
       | .rej => .ret ⟨ms ++ [(as.getD sent.length [], .rej)], .rej⟩
 
 /-- **The inner view `E_O`'s output gives, as a rerun program**: `IV`'s run, at the compiled verifier's first coins, of
-the inner messages the witnesses give (`replayProg`, `dec`'s view at every `H`); a rejected view where `E_O` gave up. -/
+the inner messages the witnesses give (`replayOC`, `dec`'s view at every `H`), through `ofOC`, so each SHA-512 call `IV`
+makes is a `.hash` node, which `RP.eval` charges; a rejected view where `E_O` gave up. -/
 def decProg (K : Comp Coin) (IV : Verifier Coin) (x : Msg) (r : Fin (K.V.k x) → Coin) :
     Option K.WO → RP (Fin (K.V.k x) → Coin) Seen
-  | some w =>
-    replayProg IV (K.xI x) (K.msgs x w) (coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq r i.val) (IV.k (K.xI x)) [] []
+  | some w => Claims.Sampling.ofOC (replayOC IV (K.xI x) (K.msgs x w)
+      (coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq r i.val) (IV.k (K.xI x)) [] [])
   | none => .ret ⟨[], .rej⟩
 
 /-- **The outer stage at a draw**: `E_O` at the draw's run coins and its own coins, then the inner view its output gives
