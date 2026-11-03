@@ -91,7 +91,7 @@ EVAL_CTX = 1024
 #: about 10 GPU-minutes of m's dense AdamW at its measured 1.49e14 FLOP/s (learning_frontier, RTX PRO 6000)
 TRAIN_FLOP_BUDGET = 9e16
 #: the budget is checked on 2x the MACs the harness counts (te_core), which include the elementwise and optimizer work
-#: `train_flops` leaves out: 1.06-1.09x of `train_flops` on the reference island
+#: `train_flops` leaves out (its matmuls and attention are the harness's count)
 HARNESS_FLOP_SLACK = 1.1
 #: the candidate's steps' wall seconds as the harness times them (its own loading, encoding and evaluation excluded), on one
 #: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
@@ -383,20 +383,36 @@ def deep_share(rec: dict, changed: set[str]) -> dict:
                           "layers from the head down to the lowest updated one"}
 
 
+def attention_width(rec: dict) -> int:
+    c = rec["config"]
+    return c["d_model"] if c["family"] == "lf" else c["hf"]["num_attention_heads"] * c["hf"].get(
+        "head_dim", c["d_model"] // c["hf"]["num_attention_heads"])
+
+
 def attention_flops(rec: dict, ctx: int) -> int:
     """Forward FLOPs per token of the score and value matmuls, causal: 2 · 2 · d_attn · (ctx + 1) / 2 per layer."""
-    c = rec["config"]
-    d_attn = c["d_model"] if c["family"] == "lf" else c["hf"]["num_attention_heads"] * c["hf"].get(
-        "head_dim", c["d_model"] // c["hf"]["num_attention_heads"])
-    return 2 * d_attn * (ctx + 1)
+    return 2 * attention_width(rec) * (ctx + 1)
+
+
+def attention_macs(rec: dict, ctx: int) -> tuple[int, int]:
+    """Per token and layer, a training pass's attention MACs as the harness counts them (te_core.flops reads torch's
+    flop formulas, halved): (forward, backward), the whole ctx x ctx square in each of the forward's two products and
+    flash attention's five backward ones, at any head split."""
+    from torch.utils import flop_counter
+
+    q = (1, 1, ctx, attention_width(rec))
+    return (flop_counter.sdpa_flop_count(q, q, q) // 2 // ctx,
+            flop_counter.sdpa_backward_flop_count(q, q, q, q) // 2 // ctx)
 
 
 def train_flops(rec: dict, trainable: dict, steps: list[dict]) -> dict:
-    """Analytic training FLOPs of a step log. A `train` pass: the forward (base and adapters) plus, at and above the lowest
-    trained node, every weight matmul's input gradient, the full-trained matrices' weight gradients, the adapters' backward
-    (4 · r · (d_in + d_out) per token at each matmul, 4 · r · d_out at the lookup) and the attention's (twice its forward);
-    a `forward` pass: the forward; `extra`: as logged. A tied embedding's adapter is used at the lookup and the head, so it
-    is priced at both, and its lowest trained node is the lookup (layer 0), as `deep_share` places it."""
+    """Analytic training FLOPs of a step log. A `train` pass: the forward (base and adapters) plus every weight matmul's
+    input gradient above the lowest trained node (none at its own position, whose input needs none), the full-trained
+    matrices' weight gradients, the adapters' backward (4 · r · (d_in + d_out) per token at each matmul, 4 · r · d_out at
+    the lookup) and attention's backward in each block at or above that node, with attention priced in both passes as
+    the harness counts it (`attention_macs`); a `forward` pass: the forward; `extra`: as logged. A tied embedding's
+    adapter is used at the lookup and the head, so it is priced at both, and its lowest trained node is the lookup
+    (layer 0), as `deep_share` places it."""
     nodes = positions(rec)
     by_param = {}
     for n in nodes:
@@ -417,15 +433,15 @@ def train_flops(rec: dict, trainable: dict, steps: list[dict]) -> dict:
         return adapters[p] * sum(x["d_in"] + x["d_out"] if x["flops"] else x["d_out"] for x in by_param[p])
 
     def per_token(op: str, ctx: int) -> int:
-        attn = attention_flops(rec, ctx)
-        fwd = sum(n["flops"] for n in nodes) + sum(2 * adapter_entries(p) for p in adapters) + L * attn
+        attn_fwd, attn_bwd = (2 * m for m in attention_macs(rec, ctx))
+        fwd = sum(n["flops"] for n in nodes) + sum(2 * adapter_entries(p) for p in adapters) + L * attn_fwd
         if op == "forward" or first is None:
             return fwd
         above = [n for n in nodes if (n["layer"], n["stage"]) >= first]
-        bwd = sum(n["flops"] for n in above)
+        bwd = sum(n["flops"] for n in above if (n["layer"], n["stage"]) > first)
         bwd += sum(n["flops"] for n in above if n["param"] in full)
         bwd += sum(4 * adapter_entries(p) for p in adapters)
-        bwd += sum(2 * attn for layer in range(1, L + 1) if (layer, 1) >= first)
+        bwd += sum(attn_bwd for layer in range(1, L + 1) if (layer, 1) >= first)
         return fwd + bwd
 
     total, tokens, cache = 0, {"train": 0, "forward": 0}, {}
