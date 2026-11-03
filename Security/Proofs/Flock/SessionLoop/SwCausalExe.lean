@@ -830,7 +830,8 @@ theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (
       rw [vsWord_vsOf _ bx hg.1 w hg.2 ν c τ j r hE, ite_eq_right hne]
       refine ((vsOfWord_of_none _ bx _ _ _ (freeWord_ligAt L₀ src real bx hl)).trans (dite_eq_left hE')).trans ?_
       unfold vsWord
-      exact (dite_eq_left hE).symm
+      rw [dite_eq_left hE]
+      rfl
     · unfold vsWord
       rw [dite_eq_right hE, dite_eq_right hE]
   · unfold vsWord
