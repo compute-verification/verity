@@ -44,7 +44,7 @@ def unbound_bits(buckets: int, allocation: int, frame_bits: int) -> float:
 def accepted_bound_bits(content_bits: float, sync_bits: float, windows: int, jitter_classes: int = 1,
                         steps: int = 0) -> float:
     """Lean `SecurityProofs.EncardAccSeqsLeSync`: accepted sequences number at most `#Ac · #Sync^W · D^n`, which is
-    `A_c + W·log2 #Sync + n·log2 D` bits. It is 0 for a fixed clock and J
+    `A_c + W·log2 #Sync + n·log2 D` bits. It is 0 for a fixed clock without jitter (`JitterBounded`, d_jit = 1)
     (`SecurityProofs.EncardAccSeqsLeFixedClock`)."""
     return content_bits + windows * sync_bits + steps * math.log2(jitter_classes)
 

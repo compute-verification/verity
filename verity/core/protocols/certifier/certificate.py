@@ -52,11 +52,12 @@ certificate's encoding don't carry it. The tag is the message's own, distinct fr
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
 
 **The clock certificate** (`CertifiedClock`, `Issuer.salted_clock`): beside each egress record the certifier signs the
-sync its shaper ran the window under (`schedule.ClockSync`, δ and ρ = p/q in lowest terms), hidden as a record digest
-is, under the same message, so it names the same key, session and execution phase:
+sync its shaper ran the window under (`schedule.ClockSync`, Δ_sync and r_sync = num/den in lowest terms), hidden as a
+record digest is, under the same message, so it names the same key, session and execution phase:
 
-    clock digest  = tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)   (`clock_digest`)
-    signed digest = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ clock digest )                         (`clock_commitment`)
+    clock digest  = tagged_sha512("verity-network-certifier/clock/v1", u64be Δ_sync ‖ u64be num ‖ u64be den)
+                                                                                    (`clock_digest`)
+    signed digest = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ clock digest )          (`clock_commitment`)
 
 `salt_c` is 64 fresh bytes of the certifier's own coins, as a record's, and never one an earlier clock certificate of
 the issuer has: under one salt two windows of one sync would sign one digest, which shows that their syncs are equal.
@@ -297,8 +298,8 @@ def certificate_message(key_id: bytes, session: bytes, link: str, direction: Dir
 
 
 def clock_digest(sync: ClockSync) -> bytes:
-    """The digest a clock certificate signs: tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖
-    u64be q) of the sync (δ, ρ = p/q in lowest terms)."""
+    """The digest a clock certificate signs: tagged_sha512("verity-network-certifier/clock/v1", u64be Δ_sync ‖
+    u64be num ‖ u64be den) of the sync (Δ_sync, r_sync = num/den in lowest terms)."""
     if type(sync) is not ClockSync:
         raise ValueError(f"a clock digest is of a schedule.ClockSync, not a {type(sync).__name__}")
     return tagged_sha512(CLOCK_TAG, _u(sync.delta, 8, "δ") + _u(sync.rho.numerator, 8, "p")

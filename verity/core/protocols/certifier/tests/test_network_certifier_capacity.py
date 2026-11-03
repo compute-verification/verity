@@ -88,7 +88,8 @@ def test_accepted_count_le_sync_advice():
 
 
 def test_fractional_rate_count_le_sync_advice():
-    """The same bound when ρ is below one frame per bucket: `eligible` spaces a session's frames ⌊λ/ρ⌋ apart."""
+    """The same bound when r_sync is below one frame per bucket: `eligible` spaces a session's frames ⌊λ/r_sync⌋
+    apart."""
     assert [eligible(LogicalFrame(b"", 5, i), ClockSync(1, Fraction(1, 3))) for i in range(4)] == [6, 9, 12, 15]
     assert [eligible(LogicalFrame(b"", 0, i), ClockSync(0, Fraction(2, 3))) for i in range(4)] == [0, 1, 3, 4]
     sync_set = SyncSet((0, 1), (Fraction(1, 2), 1))
