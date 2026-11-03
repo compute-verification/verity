@@ -33,12 +33,20 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - t (`tail_share`): the share of that work in ops that read no update value at all, wherever they sit (attention's
   products, dW, elementwise products of activations); `frozen_tail_share`: only the contiguous ones between the
   forward's last update read and the backward's first (frozen layers above the highest update).
-- Δ_grad = `grad_cut_bits` + `state_bits`: the narrowest cut, at the accumulator's width (32 bits an element at least),
-  between the step's token side and where its weight-shaped token-dependent values (gradients, the update) meet a
-  carried value or reach step R + 1, plus the carried values the step's token ops don't read (optimizer moments, error
-  feedback).
+- Δ_grad = `grad_cut_bits` + `state_bits`: the narrowest cut between the step's token side and where its weight-shaped
+  token-dependent values (gradients, the update) meet a carried value or reach step R + 1, plus the carried values the
+  step's token ops don't read (optimizer moments, error feedback). The cut prices each value at the width the circuit
+  passes it, its dtype's (a torch.bool plane 1 bit an entry, int8 and uint8 8, f16 16, a packed word its packing), so
+  a message coded inside the step is measured at its coded width. Its encode, decode and sum are traced ops, counted in
+  |C| by the rule every op is (te_core.gates): their products at the elementwise price, an integer one at bf16's for
+  want of a Definition, and their comparisons, casts, shifts, masks and sums at nothing. The values a reduction over
+  the step's tokens makes (a dW product, a loss) are priced at the accumulator's width, 32 bits an element at least,
+  since a block holding part of the tokens passes the accumulator's partial.
 - `update_cut_bits`: the narrowest cut between the carried values and every update value any token op of the step
   reads: the trace's own encoding of θ' (compare 8 |E|).
+- `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
+  (te_core.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
+  listed them for, which te_core.formalism refuses as unchecked.
 """
 from __future__ import annotations
 
@@ -83,14 +91,22 @@ class StepCircuit:
     token_key: np.ndarray
     region: int
     step_tokens: int
+    #: the recording's read-backs that decide what the graph can't carry (te_core.capture.script's `data_dependent` and
+    #: `carried_scalars`), which `measure` returns; None for a circuit no recording listed them for
+    read_backs: dict | None = None
 
     def save(self, path: Path) -> None:
-        np.savez_compressed(path, **{f.name: getattr(self, f.name) for f in fields(self)})
+        arrays = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "read_backs"}
+        if self.read_backs is not None:
+            arrays["read_backs"] = np.array(json.dumps(self.read_backs))
+        np.savez_compressed(path, **arrays)
 
     @classmethod
     def load(cls, path: Path) -> "StepCircuit":
         z = np.load(path, allow_pickle=False)
-        return cls(**{f.name: (int(z[f.name]) if f.name in ("region", "step_tokens") else z[f.name]) for f in fields(cls)})
+        out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens") else z[f.name])
+               for f in fields(cls) if f.name != "read_backs"}
+        return cls(**out, read_backs=json.loads(str(z["read_backs"])) if "read_backs" in z.files else None)
 
     def __len__(self) -> int:
         return len(self.phase)
@@ -376,9 +392,10 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
             stack.extend(p for p in preds[v] if p in U)
     state = sum(int(c.bits[v]) for v in carried if v not in weightlike)
     G = ~tok & tokdep & dep
-    gcap = {v: int(c.bits[v]) // max(int(c.width[v]), 1) * max(ACCUMULATOR_BITS, int(c.width[v]))
-            for v in np.nonzero(G)[0].tolist()}
-    g_entries = {v for v in gcap if any(tokdep[p] and not G[p] for p in preds[v])}
+    g_vals = np.nonzero(G)[0].tolist()
+    g_entries = {v for v in g_vals if any(tokdep[p] and not G[p] for p in preds[v])}
+    gcap = {v: int(c.bits[v]) // max(int(c.width[v]), 1) * max(ACCUMULATOR_BITS, int(c.width[v])) if v in g_entries
+            else int(c.bits[v]) for v in g_vals}
     g_sinks = {v for v in gcap if c.read_next[v]}
     for v in np.nonzero(reads_upd)[0].tolist():
         g_sinks.update(p for p in preds[v] if p in gcap)
@@ -392,7 +409,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
             "a_x": [a_x[0], a_x[-1]] if a_x else None,
             "u_in": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
             "group_gates": g_total, "update_cut_bits": update_cut, "grad_cut_bits": grad_cut, "state_bits": state,
-            "delta_grad_bits": None if grad_cut is None else grad_cut + state}
+            "delta_grad_bits": None if grad_cut is None else grad_cut + state} | (c.read_backs or {})
 
 
 def main(argv=None) -> int:

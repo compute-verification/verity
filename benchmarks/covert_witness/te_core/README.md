@@ -41,16 +41,21 @@ other quantity bits.
   program order, computing the token from its inputs; u(1) its per-token update. **t**: the share of that work in ops
   that read no θ' value at all. **u(x)** (A1's): the update bits for any share x, 0 up to t (a block handed the cut
   values does those ops), then u_in. Where Δ counts, both are at most Δ (a block can read the update code instead).
-- **Δ**: the bits that describe θ' given θ, 8 |E| for the submitted E, by a decoder of **d** gates (a stub at 0 until
-  measured). **Δ_t**: the weights in the form the update rule reads and writes, a straight-through run's fp32 latents
-  at 32 bits a value (`delta_t_bits`, which only `rescore --quantities analysis` gives so far), else Δ.
-- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut at
-  32 bits or more an element, plus the carried state the token ops don't read.
+- **Δ**: the bits that describe θ' given θ, 8 |E| for the submitted E, by a decoder of **d** gates: the record's
+  measured d (a submission's `notes.decoder` or its checkpoint's, `ledger.notes_decoder`), else the witness's rebuild,
+  `prepare.rebuild_macs` multiply-adds at F32Fma_v4's gates each, and 0 only where E has no decoder (a dense update
+  stored directly); a row with none of these has d unmeasured, and Fit refused (`formalism.decoder`). **Δ_t**: the
+  weights in the form the update rule reads and writes, a straight-through run's fp32 latents at 32 bits a value
+  (`delta_t_bits`, which only `rescore --quantities analysis` gives so far), else Δ.
+- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut, each
+  value at the width the step passes it (a message coded inside the step, a bool plane or a packed word, at its code's;
+  its encode, decode and sum are ops of C), a reduction over the tokens (a dW product, a loss) at 32 bits or more an
+  element, plus the carried state the token ops don't read.
 - **(c, k)**: a block's gates and the bits it imports; `policy.cells` gives each start's grid in decades, from one
   token's inference block to the start's server block, and its reference shapes at their exact (c, k): the inference
   block, the reference policy (c = 4096 w, k = 10 kB) and the server block.
 - **Fit** (checked): for training, three kinds of block, compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k and update
-  application Δ_t + Δ_grad ≤ k (a part with no token blocks has only the compute kind); where every part fits,
+  application Δ_t + Δ_grad ≤ k (a part with no token blocks has only the compute kind), and d < c; where all hold,
   ρ = c/(c − d).
 - **Slowdown** (the counting lemma at A \ R, a target until Lean proves it): its token form ρ ≥ σ(1 − x₀)·s/s\*
   (with the largest per-token affected count where token blocks vary), at the assumptions' upper bounds
@@ -68,6 +73,12 @@ other quantity bits.
   bounds from that witness. A row without a trace gets labelled stubs (`formalism.STUBS`, and `formalism.V23` for a row
   ingested before 4.0), and `rescore --quantities analysis` the per-record quantities of covert_witness's
   `analysis/rescore_v1.py` instead, which has no formula of its own; every row's `labels` name each quantity's source.
+- **Refused rows**: a trace the capture can't vouch for is refused, never scored (`formalism.refusal`,
+  `formalism.Refused`; `frontier.formalism_rows` and `rescore` list each with its reason): one with a data-dependent
+  read-back (Python control flow on a value read from a tensor, which the trace's stand-in decides), one with a Python
+  number carried across steps (its Δ_grad grows with the step; a program keeps such state as a device tensor), one
+  traced before 4.2 (it has no read-back lists: trace it again), and one whose E is nonempty while its traced step
+  shows no update (an affected share of 0 or u(1) = 0) or no step through its checkpoint reads θ'.
 - **Counterexample family X**: a decoder from `codecs/` (a `codecs.Plan`) plus per-step encodings E_t, each rebuilding
   its step's updated weights from θ bit for bit within c (`prepare.declare_step` for a covert_witness script, decoded by
   `prepare.decode`). Families are checked and recorded with each run; the formalism doesn't read them.
@@ -96,27 +107,30 @@ other quantity bits.
 values; `plots` writes five panels (P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each
 `<name>.json` and its PNG, which are off the console; `console` cuts each to the panels route's limits and holds one
 panel's PUT; `rescore` scores v2.3's records in one command, on the measured quantities beside the analysis's (module
-docstring). The console's two training panels read the ledger and the quantities through `rescore`'s loading
-(`rescore.arguments`, `rescore.load`), so they score the measured quantities unless told otherwise (`--charge-context`
-charges the context, as `rescore`'s), the pin's records and the pilot's unless `--pin` names the commits.
-`training/frontier-branches` is `panels`'s: held-out bits per byte against total training compute in gates, the best
-unconstrained learner (the frontier, from scratch or continuing a start, at C0 + |C|) and per branch point (each start,
-`on_frontier` when the frontier passes through it) the best unconstrained and constrained learners starting from it
-(honest at C0 + |C|; throttled at C0 + |C|ρ per (c, k) of its dial, with S = W\*/H). Its dial is c in tokens of the
-start's forward (and `c_gates`) by k, with the reference policy and the served demo's measured block marked (`mark`);
-every curve is on one data (`data`: `v3` or `v2.3-pilot`), and the console's copy shows v3 once any start has v3
-points, else the pilot. Its `candidate` rows, every checkpoint on a throttled curve at some cell, carry the inputs the
-console's dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the
-dial's k), and `build` refuses one whose columns miss `formalism.at` at a cell; every row's `method_key` is its
-`training/methods` key. `training/algorithm-policy` is `algorithm_policy`'s: per run and end loss it reaches
-(`frontier`'s targets), at its first checkpoint reaching it, the algorithm's inefficiency p = C/H (H the least |C| of
-any valid checkpoint from the start on the same data reaching that loss) against the policy's slowdown ρ, with the
-inputs the console's dial recomputes ρ from at any (c, k), so S = pρ. Every scoring command (`frontier`, `plots`,
-`rescore`, `panels`, `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its
-model's forward gates per token are at most the greater of its start's and the compute-optimal model's at its loss
-under the ladder's fit (`rescore`'s, `panels`'s and `algorithm_policy`'s `--ladder-fit FILE`, `policy.ladder_fit`),
-and twice its start's where there is no fit or the fit doesn't reach its loss (`policy.CAP_FALLBACK`), so a grown
-model is still scored; the rest are left out as `over-cap`.
+docstring). The console's training panels, `training/algorithm-policy` and `training/frontier-fit`, are both PUT by
+`python -m te_core.algorithm_policy --out DIR --publish`. They read the ledger and the quantities through `rescore`'s
+loading (`rescore.arguments`, `rescore.load`), so they score the measured quantities unless told otherwise
+(`--charge-context` charges the context, as `rescore`'s, and the dial can't reproduce it), the pin's records and the
+pilot's unless `--pin` names the commits. `training/frontier-fit` is `frontier_fit`'s: per data (`v3` or
+`v2.3-pilot`), L(C) = E + A·C^(−γ) fitted to its unconstrained frontier, the least held-out bits per byte at each total
+training compute in gates (from scratch: the pilot's pretraining runs, or the v3 ladder's from `--ladder-points` and
+`--ladder-fit`; each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their
+residuals; a data with neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then
+converts its from-scratch losses or prices C0. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and
+gain target g (1.1, 2 and 11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's
+first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any
+checkpoint from the start on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against
+the policy's slowdown ρ, and the inputs the console's dial recomputes ρ from at any (c, k) (te_core 4.x's per-part
+Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ; `build` refuses a row whose columns miss
+`formalism.at` at a dial cell. Its coverage (gain target by data by decade of ρ) names the cells nothing reaches, and
+counts the valid checkpoints `formalism.refusal` refuses, which no cell holds (`tables/refused.json` gives each one's
+reason). `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
+`page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
+`algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
+token are at most the greater of its start's and the compute-optimal model's at its loss under the ladder's fit (their
+`--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or the fit doesn't reach its
+loss (`policy.CAP_FALLBACK`), so a grown model is still scored; the rest are left out as `over-cap`.
 
 ## What the integrator calls
 
@@ -150,8 +164,9 @@ python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--ref
 python -m te_core.frontier [--json OUT]              # W*, honest and S per target and (c, k) cell
 python -m te_core.rescore --out DIR [--quantities measured|analysis|stubs]  # v2.3's records, one command
 python -m te_core.plots --out DIR [--policy reference|inference|server|c1e14/k1e4] [--drop 0.01] [--from-scratch F.json]
-python -m te_core.panels frontier-branches --out DIR [--publish] [--ladder-fit FIT.json]   # a console training panel
-python -m te_core.algorithm_policy --out DIR [--publish] [--ladder-fit FIT.json]   # the other; stores the full table if cut
+python -m te_core.algorithm_policy --out DIR [--publish] [--ladder-points F.json] [--ladder-fit FIT.json]  # both training panels
+python -m te_core.frontier_fit --out DIR [--publish] [--ladder-points F.json] [--ladder-fit FIT.json]      # training/frontier-fit alone
+python -m te_core.panels frontier-branches --out DIR [--ladder-fit FIT.json]   # retired from the console, not PUT
 python -m te_core.policy [START ...]                 # each start's reference shapes and (c, k) grid
 python -m te_core.gates [--check]                     # gates per MAC by op; --check recompiles the Definitions
 ~~~
@@ -185,8 +200,9 @@ A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`;
 5. **Ingest**: `python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M --parent ID --run-id R`
    writes one submission record per checkpoint, with the program's arguments; `--structures TRACED.json` (structure
    id -> traced structure, `capture.script`) gives its steps their U, D and the formalism's measured quantities
-   (`frontier.measured`); `--readouts` judges its read-outs against the start's tensors. Reference (honest) runs add
-   `--reference`.
+   (`frontier.measured`); `--readouts` judges its read-outs against the start's tensors; `--meta META.json` (else the
+   run's own or its parent directory's `meta.json`, checked to be this run's submission) gives each checkpoint its
+   measured decoder. Reference (honest) runs add `--reference`.
 6. **The frontier**: `python -m te_core.frontier`. Its promotion candidates (`frontier.candidates`) are promoted only
    on the sealed promotion set, one bit each: covert_witness's `promote.py --tier T`, run as the scorer.
 
@@ -212,8 +228,9 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 24 columns; `refused`), and one panel's PUT |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
-| `panels.py` | a console training panel, `training/frontier-branches`: the frontier, each branch point's honest and throttled curves and ρ's candidates, its console cut, figure and PUT |
-| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run and end loss, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), its console cut, figure and PUT |
+| `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
+| `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`) |
+| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |

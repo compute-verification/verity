@@ -44,7 +44,9 @@ def build(subs, launch, starts, counted, g):
 
 
 TRACE = {"tau_ids": 1.125, "tau_other_bits": 0.0, "a_bits": 512 * 16.0, "u1_bits": 4e8, "tail_share": 0.3,
-         "u_in": [[0.0, 0.0], [0.0, 1e8], [0.5, 4e8], [1.0, 4e8]], "frozen_tail_share": 0.1, "update_cut_bits": 4e8}
+         "u_in": [[0.0, 0.0], [0.0, 1e8], [0.5, 4e8], [1.0, 4e8]], "frozen_tail_share": 0.1, "update_cut_bits": 4e8,
+         "affected_share": 0.85, "data_dependent": [], "carried_scalars": []}
+CLIP = {"kind": "a comparison of a read-back float", "where": "train.py:399", "steps": [0, 4], "count": 5}
 
 
 def ledger_rows():
@@ -60,12 +62,12 @@ def ledger_rows():
     return out
 
 
-def run(tmp_path, monkeypatch, *extra):
+def run(tmp_path, monkeypatch, *extra, index=ledger_rows):
     man = tmp_path / "starts_store.json"
     man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}}}))
     fake = tmp_path / "rescore_v1.py"
     fake.write_text(ANALYSIS)
-    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(ledger_rows),
+    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(index),
                                                                       "root": tmp_path})())
     out = tmp_path / "out"
     assert rescore.main(["--out", str(out), "--pin", "pin", "--manifest", str(man), "--analysis", str(fake),
@@ -140,6 +142,42 @@ def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
     assert not (out / "analysis-gates.json").exists()
 
 
+def test_the_analysis_reads_the_pinned_versions_records_so_the_pilot_keeps_its_quantities(tmp_path):
+    """The scorer's regimes (scorer.py's `regime_of`): `current` for the pin's version, `pin V` for an earlier pinned
+    version's (v2.3's, the pilot's, once v3 is pinned), `paired` and `earlier`; the analysis reads the first two."""
+    regimes = ("current", "pin 2.3", "paired", "earlier")
+    scorer, ledger = tmp_path / "scorer", tmp_path / "ledger"
+    scorer.mkdir()
+    ledger.mkdir()
+    (scorer / "submissions.json").write_text(json.dumps([{"id": f"te:s{i}", "regime": g, "macs": 1}
+                                                         for i, g in enumerate(regimes)]))
+    (scorer / "index.jsonl").write_text("".join(json.dumps({"source": "launch.py", "id": f"te:s{i}", "run": f"run{i}"})
+                                                + "\n" for i in range(len(regimes))))
+    (scorer / "starts.json").write_text("{}")
+    (ledger / "index.jsonl").write_text("".join(json.dumps({"run_id": f"run{i}", "macs": 1, "macs_log": {"ops": {}}})
+                                                + "\n" for i in range(len(regimes))))
+    subs, _, _, counted = rescore.load_analysis(rescore.ANALYSIS).load(scorer, ledger)
+    assert [x["regime"] for x in subs] == ["current", "pin 2.3"]
+    assert sorted(counted) == [("run0", 1), ("run1", 1)]
+
+
+def test_the_analysis_leaves_out_a_grown_model(tmp_path):
+    """ref-data's grow-muon trains a block its start doesn't hold (here blocks.1.*; on s100, blocks.6.*): the analysis
+    prices from the start's positions and shapes alone, so that record and its checkpoints are left out, and a record
+    on the start's own tensors is priced beside it."""
+    tensors = {"embed": ["bf16", [16, 8]], "norm": ["bf16", [8]], "blocks.0.attn_norm": ["bf16", [8]],
+               "blocks.0.wq": ["bf16", [8, 8]]}
+    starts = {"s1": {"config": {"family": "lf", "n_layer": 1, "d_model": 8, "ctx": 4}, "tensors": tensors}}
+    trainable = {"plain": {"full": ["blocks.0.wq"]}, "grown": {"full": ["blocks.0.wq", "blocks.1.wq"]}}
+    launch = {f"te:{k}": {"run": f"run-{k}", "start": "s1", "trainable": repr(t), "direction": "ref-data",
+                          "mechanism": "grow-muon" if k == "grown" else "window"} for k, t in trainable.items()}
+    subs = [{"id": i, "start": "s1", "cp": 1, "macs": 1e6, "E_bytes": 100, "val_bpb": 1.0} for i in launch]
+    records, cps = rescore.load_analysis(rescore.ANALYSIS).build(subs, launch, starts, {},
+                                                                 {"mm": 1.0, "qk": 1.0, "pv": 1.0, "adamw": 8.0})
+    assert list(records) == ["te:plain"] and [c["id"] for c in cps] == ["te:plain"]
+    assert records["te:plain"]["family"] == "data" and cps[0]["delta"] == 800
+
+
 def test_charge_context_charges_each_run_its_facts_place(tmp_path, monkeypatch):
     """--charge-context: r0's run changes the embedding, so its K/V are affected from layer 0 and, with a = d_model·16
     at the reference policy's k, ρ is infinite there; r1's run has no changed tensors in the facts, so it keeps v2's ρ,
@@ -191,3 +229,22 @@ def test_measured_rows_are_scored_beside_the_analysis(tmp_path, monkeypatch, tai
     routed = [e["routes"]["measured"] for e in c["S"] if e["measured"]["id"]]
     assert routed and all(w["id"] in {"r0", "r1"} and w["factors"] for w in routed)
     assert "| s1 |" in (out / "compare.md").read_text()
+
+
+def test_a_refused_row_is_listed_with_its_reason_and_never_scored(tmp_path, monkeypatch):
+    """seed-mezo's 04:15Z LOOPHOLE: r1's capture lists a clip on a read-back loss, so its measured quantities are
+    refused: frontier.json lists it under `refused` with the reason, formalism.jsonl carries it, and no S, panel or
+    comparison reads it."""
+    def index():
+        out = ledger_rows()
+        out[1]["formalism"]["trace"] = out[1]["formalism"]["trace"] | {"data_dependent": [CLIP]}
+        return out
+
+    out, _ = run(tmp_path, monkeypatch, "--tail", "literal", index=index)
+    fr = json.loads((out / "frontier.json").read_text())
+    assert fr["refused"] == {"r1": formalism.refusal(index()[1])} and fr["refused"]["r1"].startswith("data-dependent")
+    assert fr["skipped"]["r1"].startswith("refused: data-dependent: not measured") and fr["scored"] == 1
+    kept = {k["id"]: k for k in map(json.loads, (out / "formalism.jsonl").read_text().splitlines())}
+    assert kept["r1"]["refused"] == fr["refused"]["r1"] and kept["r0"]["refused"] is None
+    routes = {e["of"]["id"] for s in fr["starts"].values() for t in s["targets"] for e in t["cells"].values() if e["of"]}
+    assert routes <= {"r0"} and [r["id"] for r in json.loads((out / "compare.json").read_text())["rows"]] == ["r0"]

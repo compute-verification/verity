@@ -50,6 +50,15 @@ whether it depends on θ' (the carried values) and on the step's tokens, and the
 reads. `circuit.measure` reads the formalism's quantities from it, each defined in the module's docstring; `script
 --circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again.
 
+A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
+stand-in's. The recording lists each such read-back by its source line and steps, in `formalism["data_dependent"]` (a
+comparison, a truth test or an integer conversion of a read-back float; an integer or boolean read-back; `numpy()` of a
+tensor) and `formalism["carried_scalars"]` (an op reached by read-backs from two or more earlier steps: a Python float
+folded over steps, whose Δ_grad grows with the step), and a saved circuit keeps both lists. te_core's formalism refuses a
+trace with either list nonempty, or without the lists, and never scores it. A program keeps a running value as a device
+tensor (a 0-dim fp32 tensor updated in place) and branches with `torch.where` or `clamp`, which the graph carries.
+The recorder's session has `current_step()` and `progress_bucket()`, as the harness's does.
+
 ## Refusals
 
 `CaptureRefused(reason, op, message, where)` names the op and the user's source line:
@@ -69,7 +78,7 @@ reads. `circuit.measure` reads the formalism's quantities from it, each defined 
   nodes, an upper bound otherwise (an up projection feeding its own layer's down projection).
 - Dependence follows the graph's dataflow: a value computed from θ, constants and token data alone is a cache, even
   when the program carries it from step to step. A Python scalar read from a tensor carries its tensor's dependence only
-  in a recorded program (`te_core.capture.script`).
+  in a recorded program (`te_core.capture.script`), and is listed there wherever Python decides anything from it.
 - The cut prices a value at its dtype's width: a sign kept as a float costs 32 bits per element, as a bool one.
 - The traced optimizer step is its first, with its state created in the graph; later steps run the same ops.
 - Attention is traced on SDPA's math backend, so its scalings show as elementwise multiplications, which a flash kernel
