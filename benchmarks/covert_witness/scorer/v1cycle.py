@@ -8,8 +8,7 @@ The score is te_core's alone (coordinator 20:15Z: one codebase, `te_core.rescore
 v2 te_core; 01:22Z: on te_core 4.0). One refresh:
 
 1. Checks out, detached in RESCORE_WT, the newest commit touching te_core, analysis/rescore_v1.py or the pin and
-   starts (RESCORE_PATHS) on cursor/covert-witness-4207 or cursor/training-efficiency-4207 whose te_core is 4.x or
-   later, or RESCORE_AHEAD holding it (merged with it when it doesn't, if they merge cleanly). Its pinned.json names
+   starts (RESCORE_PATHS) on cursor/covert-witness-4207 (RESCORE_REFS) whose te_core is 4.x or later, or RESCORE_AHEAD holding it (merged with it when it doesn't, if they merge cleanly). Its pinned.json names
    the records scored (PINS: the pin, same_version and the pilot, trace40.pins). TE40_WT's capture traces while the
    integrator's te_core VERSION captures alike (CAPTURES). A new capture (`next_capture`) traces into its own cache,
    and until it has traced as many runs in scope as TE40_WT's and as many of v3's (`replaces`), the refresh scores
