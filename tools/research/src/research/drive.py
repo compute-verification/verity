@@ -81,7 +81,12 @@ from its first second and counts, is followed and covers as drive's own.  Each l
 time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
 circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (policy.toml's `off_gate`: `_gating`), its base the last
 verified `checked` commit, below the tip, for ratchet-gate to judge the
-landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
+landings above, or above ratchet-gate's own base (`--ratchet-base JUDGED`, `_ratchet_base`): the tip of the newest run whose
+ratchet-gate ended with a verdict (`postland["ratchet_judged"]`: passed, or failed naming each change it fails,
+`_ratchet_judged`), once a revert undid each of those, so a red step elsewhere, which holds `verified`, doesn't make each run
+re-judge every landing since; while one stands, the base that run judged above; the last verified commit when none was
+judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at
+once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
 shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
@@ -122,7 +127,9 @@ verdict, or a Lean check still running.
 The Lean checks and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no tick
 waits on train.sh, which takes minutes to print a Lean check's run ids.  A later
 tick reads the ids from its log (`launched`, `_resolve`); until then the launch counts as running for every rule that counts
-running checks (the hold on `next`, `max_lean_checks`, the waits), and a train.sh that exits without them registered no run.
+running checks (the hold on `next`, `max_lean_checks`, the waits), and a train.sh that exits without them registered no run:
+drive rings `CI` and `TOP` at once with its reason's last line (`_launch_failed`), the same reason at the same commit again only
+every `LAUNCH_RING_EVERY_S` while each tick launches it again, and the behind-ring counts those failures.
 
 State (launches, refusals told, alarms rung, step durations) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
@@ -248,6 +255,10 @@ SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES = 1.5, 10, 3
 STUCK_S = 2 * 3600
 #: how often an alarm rings again while its subject stays past its bound (`Driver._due`)
 ALARM_EVERY_S = 3600
+#: how often a launch that registered no run rings again for the same commit and reason (`Driver._launch_failed`)
+LAUNCH_RING_EVERY_S = 3600
+#: the note `Driver._resolve` puts after a detached train.sh's output's tail: where its whole log is
+LOG_NOTE_RE = re.compile(r" \(log (\S+)\)$")
 #: the step a Lean change's Lean check before a review landing runs (`train.sh TOP MACHINES --deferred lean-audit`)
 LEAN_STEP = "lean-audit"
 #: a Lake package's lock, which a Lean check may regenerate (`merge.LOCK`)
@@ -301,8 +312,9 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
                  base: str | None = None, cc_records: bool = False,
-                 cc_records_from: str | None = None, shard_plan: str | None = None) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
+                 cc_records_from: str | None = None, shard_plan: str | None = None,
+                 ratchet_base: str | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
     [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
@@ -313,7 +325,8 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
                  *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
-                 *(["--base", base] if base else []), *(["--shard", shard] if shard else []),
+                 *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else []),
+                 *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
                  *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
@@ -485,6 +498,12 @@ def _ids(rec: dict) -> str:
     """A launch record's run ids, for a message, while its train.sh runs detached too."""
     return " ".join(rec.get("ids") or ()) or ("(launching)" if rec.get("launch") or rec.get("shards") else
                                               "(the executor)" if rec.get("tasks") else "(no run)")
+
+
+def _no_run(failed: dict) -> str:
+    """A record of `Driver._launch_failed`, for a message: how often its launch registered no run, since when."""
+    n = failed["n"]
+    return f"registered no run {n} time{'s' * (n != 1)} since {datetime.fromtimestamp(failed['since'], UTC):%H:%M}Z"
 
 
 def launched(launch: dict) -> tuple[list[str] | None, str]:
@@ -1034,10 +1053,11 @@ class Driver:
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
-                    shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None:
+                    shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
-                          cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan))
+                          cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
+                          ratchet_base=ratchet_base))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
         self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
@@ -1105,12 +1125,12 @@ class Driver:
             self._ev[v.attempt] = self.evidence(self.repo, v.attempt.split())
         return self._ev[v.attempt]
 
-    def _undone(self, c: str) -> bool:
-        """Whether a revert on the landing branch (`Queue.into`) above ``c`` undid it (and no revert of that revert redid it): a
-        hand revert, or drive's own before a restart lost its record."""
+    def _undone(self, c: str, to: str | None = None) -> bool:
+        """Whether a revert on the landing branch (`Queue.into`) above ``c``, at or below ``to`` when given, undid it (and no
+        revert of that revert redid it): a hand revert, or drive's own before a restart lost its record."""
         by = {}
         for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--format=%H%x00%B%x1e",
-                                                          f"{c}..{self.q.base}").split("\x1e"))):
+                                                          f"{c}..{to or self.q.base}").split("\x1e"))):
             h, body = rec.split("\x00", 1)
             by.update(dict.fromkeys(REVERTS_RE.findall(body), h))
         n = 0
@@ -1191,8 +1211,8 @@ class Driver:
         """The post-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
         named red at once (`_red`), and cancelled once only its `TAIL` is left.  A pass verifies its tip only when every step it
-        ran passed in it (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run is told to
-        `CI`, and launched again."""
+        ran passed in it (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run rings `CI` and
+        `TOP` (`_launch_failed`), and is launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
         if "tasks" in run:
@@ -1204,11 +1224,12 @@ class Driver:
             pl["run"] = None
             if run.get("resend"):
                 pl["resend"] = True
-            self.refuse(drive, f"launch:postland:{run['tip']}", f"train.sh {run['tip'][:12]} {self.on} --deferred "
-                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} registered no run: {tail}")
+            self._launch_failed(drive, "postland", run["tip"], f"train.sh {run['tip'][:12]} {self.on} --deferred "
+                                f"{','.join(pl.get('steps') or AFTER_LANDING)}", tail)
             return
         if "launch" in run:
             return
+        (drive.get("launch_failed") or {}).pop("postland", None)
         tip = run["tip"]
         states = self._states(run["ids"])
         if self._lost(run, states):
@@ -1475,9 +1496,8 @@ class Driver:
             pl["run"] = None
             if run.get("resend"):
                 pl["resend"] = True
-            self.refuse(drive, f"launch:postland:{run['tip']}", f"train.sh {run['tip'][:12]} {self.on} --deferred "
-                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard {k}/{n} "
-                                                                f"registered no run: {tail}")
+            self._launch_failed(drive, "postland", run["tip"], f"train.sh {run['tip'][:12]} {self.on} --deferred "
+                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard {k}/{n}", tail)
             return False
         if any("launch" in rec for rec in shards):
             return False
@@ -1662,6 +1682,7 @@ class Driver:
         dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
         fails: dict[str, tuple[Path, dict]] = {}
         stopped: set[str] = set()
+        judged: tuple[Path, dict] | None = None
         for d in dirs:
             for name, s in suite_rows(d).items():
                 if s["status"] == "failed":
@@ -1670,6 +1691,8 @@ class Driver:
                     self._green(pl, f"suite {name}", tip)
             for st in step_records(d):
                 step = st.get("step") or ""
+                if step == RATCHET_STEP and not not_run(st) and st.get("status") in ("passed", "failed"):
+                    judged = (d, st)
                 if not_run(st):
                     stopped.add(step)
                 elif st.get("status") == "failed":
@@ -1690,6 +1713,8 @@ class Driver:
             for key, (d, rec) in fails.items():
                 self._name(drive, pl, run, key, d, rec, sorted(stopped), expired.get(key, ()))
             self._start_bisect(pl)
+        if judged:
+            self._ratchet_judged(pl, run, *judged)
         return len(fails)
 
     def _green(self, pl: dict, key: str, tip: str, how: str = "passed") -> None:
@@ -1711,6 +1736,35 @@ class Driver:
             return g
         vs = pl.get("verified_as")
         return pl["verified"] if not vs or step in (vs.get("steps") or ()) else None
+
+    def _ratchet_judged(self, pl: dict, run: dict, d: Path, st: dict) -> None:
+        """``run``'s ratchet-gate step ended with a verdict at its tip: passed, or failed naming each change it fails
+        (`ratchet_failures`, whose culprit `_name` takes).  The tip becomes `postland["ratchet_judged"]` ({"tip", "base": the
+        commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base` reads it.  A
+        failure that names no change, or one this clone doesn't hold, is no verdict."""
+        failed: list[str] = []
+        if st.get("status") == "failed":
+            named = [c for _, c, _ in ratchet_failures(d, st)]
+            failed = [_git(self.repo, "rev-parse", "--verify", "-q", f"{c}^{{commit}}", check=False).stdout.strip() for c in named]
+            if not named or not all(failed):
+                return
+        tip = run["tip"]
+        if (old := pl.get("ratchet_judged")) and old["tip"] != tip and self._ancestor(tip, old["tip"]):
+            return
+        pl["ratchet_judged"] = {"tip": tip, "base": run.get("ratchet_base"), "failed": failed}
+
+    def _ratchet_base(self, pl: dict, tip: str, below: str | None) -> str | None:
+        """ratchet-gate's base in an after-landing run of ``tip`` (`train.sh --ratchet-base`): the newest tip whose run's
+        ratchet-gate gave a verdict (`ratchet_judged`) once a revert at or below ``tip`` undid each change it failed, so a
+        reverted culprit's revert lies above the base and is judged; while one stands, the base that run's gate judged above,
+        so the gate fails it again.  Either only strictly below ``tip`` and at or above ``below`` (the run's `--base`); else,
+        none judged or a revert or reset that left it off ``tip``'s history, ``below``."""
+        j = pl.get("ratchet_judged") or {}
+        undone = all(self._undone(c, tip) for c in j.get("failed") or ())
+        for c in (j.get("tip") if undone else None, j.get("base")):
+            if c and c != tip and self._ancestor(c, tip) and (not below or self._ancestor(below, c)):
+                return c
+        return below
 
     def _own(self, m: Member) -> set[str]:
         """The files ``m``'s merge onto `next` changes, read once per tick."""
@@ -1775,7 +1829,8 @@ class Driver:
         gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
         if gate:
             r["first"] = f"`{gate[0][0]} ({gate[0][1]}): failed: {gate[0][2][:200]}`"
-        # the gate judges every merge above the landed branch's verified tip and names the one it fails, wherever the step last passed
+        # the gate judges every merge above its base (at or above the verified tip) and names the one it fails, wherever the step
+        # last passed
         if (base := self._base_of(pl, key, step, tip) or (pl.get("verified") if gate else None)) is None:
             self._ring(drive, r, key, f"it never passed in an after-landing run since `{self.q.into}` {pl['verified'][:12]}, so no "
                                       "landing can be named. Reverted nothing")
@@ -2021,8 +2076,9 @@ class Driver:
 
     def _behind(self, drive: dict) -> None:
         """Ring, every `BEHIND_EVERY_S`, while the oldest landing no after-landing run has verified landed more than `BEHIND_S`
-        ago, unless a run that started under `POSTLAND_RUN_S` ago checks `main` with nothing red: then verification is only
-        under way (a cold run is ~4 h).  While something unreverted is red it rings who acts on each red (`_red_owners`: the
+        ago, unless a run that started under `POSTLAND_RUN_S` ago checks `main` with nothing red and no launch of it that
+        registered no run (`_launch_failed`, which the ring then counts): then verification is only under way (a cold run is
+        ~4 h).  While something unreverted is red it rings who acts on each red (`_red_owners`: the
         culprit's lane and the owner of what failed), else `CI` and `TOP`.  Drive's tick, not top's hourly sweep, rings it: drive holds the last verified
         `main`, its landings since and what is red."""
         if not (pl := drive.get("postland")) or self.dry_run or self.q.shadow:
@@ -2035,7 +2091,11 @@ class Driver:
         at = pl.setdefault("landed_at", {})
         since = min(at.get(p) or int(_out(self.repo, "log", "-1", "--format=%ct", p)) for p in pending)
         run, red, now = pl.get("run"), pl.get("red") or {}, self.now()
-        if now - since < BEHIND_S or (run and not red and now - run.get("at", now) < POSTLAND_RUN_S):
+        # a launch that keeps registering no run is no run under way, however recently the last one started
+        failed = (drive.get("launch_failed") or {}).get("postland")
+        if not failed or failed["tip"] != (run["tip"] if run else main) or (run and run.get("ids")):
+            failed = None
+        if now - since < BEHIND_S or (run and not red and not failed and now - run.get("at", now) < POSTLAND_RUN_S):
             return
         if now - pl.get("rang_behind", 0) < BEHIND_EVERY_S:
             return
@@ -2046,7 +2106,8 @@ class Driver:
         reds = "; ".join(f"{k}{culprit[k]}" for k in red if k in ours) or "nothing named red"
         reds += "".join(f"; {k} has not run at {run['tip'][:12]} yet (last red at {r['tip'][:12]}, run {' '.join(r['ids'])}"
                         f"{culprit[k].replace(' (', ', ', 1) or ')'}" for k, r in red.items() if k not in ours)
-        state = (f"its run {_ids(run)} of {run['tip'][:12]} has run {(now - run.get('at', now)) / 3600:.1f} h" if run else
+        state = (f"its launch {_no_run(failed)}: {failed['why']}" if failed else
+                 f"its run {_ids(run)} of {run['tip'][:12]} has run {(now - run.get('at', now)) / 3600:.1f} h" if run else
                  "no after-landing run is going")
         text = (f"`{self.q.into}`'s last verified commit {pl['verified'][:12]} is {(now - since) / 3600:.1f} h behind its tip {main[:12]} "
                 f"({len(pending)} landing(s) unverified); {state}; red: {reds}")
@@ -2090,10 +2151,13 @@ class Driver:
                  "no_cache": self.after_landing_no_cache, "circuit_cache": self.after_landing_no_cache, "no_regenerate": True}
         skip = [s for s, off in (("lean-agreement", not extra["agreement"]), ("lean-changed", extra["no_cache"])) if off]
         # ratchet-gate judges the landings above the run's base and fails one at or above the tip: the baseline's tip is the
-        # verified `main` itself, so its base is the tip's first parent
+        # verified `main` itself, so its base is the tip's first parent; above it, the last tip its gate judged (`_ratchet_base`)
         below = (pl["verified"] if pl["verified"] != main else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
-        flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
+        ratchet = self._ratchet_base(pl, main, below)
+        rb = {"ratchet_base": ratchet} if ratchet != below else {}
+        flags = ((f" --base {below[:12]}" if below else "") + (f" --ratchet-base {ratchet[:12]}" if rb else "")
+                 + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on))
         auto = isinstance(n, str)
         records = (auto or n > 1) and "circuit-check" in pl["steps"]
         if self.dry_run or q.shadow:
@@ -2110,12 +2174,12 @@ class Driver:
             n = plan["n"] if plan else 1
         shard = (lambda k: {"shard": f"auto:{k}/{n}", "shard_plan": plan["file"]}) if plan else (lambda k: {"shard": f"{k}/{n}"})
         if n == 1 and not plan:
-            rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
+            rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **rb, **extra))
         else:
             if len(self.on.split(",")) < n:
                 q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
                       "shards: they share them")
-            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, **cc, **shard(k)))
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **rb, **extra, **cc, **shard(k)))
                    for k, on in enumerate(shard_machines(self.on, n), 1)]
             rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
@@ -2123,16 +2187,17 @@ class Driver:
                     self.cancel(self.repo, ids, f"drive: a shard of the post-landing run of {main[:12]} registered no run")
                 rec = None
         if rec is None:
-            self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                                                          + (f" (as {n} shards)" if n > 1 else "") + f" registered no run: {tail}")
+            self._launch_failed(drive, "postland", main, f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
+                                + (f" (as {n} shards)" if n > 1 else ""), tail)
             return
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
-                     **({"plan": plan["digest"]} if plan else {}),
+                     **({"plan": plan["digest"]} if plan else {}), **({"ratchet_base": ratchet} if ratchet else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
         self._shadow_list(drive, main)
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
+              + (f"; ratchet-gate judges those above {ratchet[:12]}" if rb else "")
               + (f"; circuit-check's records {cc['cc_records_from']}" if cc else "") + _of_plan(plan, "; shards"))
 
     def _plan(self, drive: dict, pl: dict, tip: str, steps: str) -> dict | None:
@@ -2625,6 +2690,40 @@ class Driver:
                              f"marked ready {STUCK_S // 3600} h ago or more and not landed on `{q.into}`: "
                              + "; ".join(f"{', '.join(x for _, x in xs)}, held by {h}" for h, xs in held.items()), who)
 
+    # -- launches that registered no run.  `drive["launch_failed"]`: {"postland" | "lean:COMMIT" | "bisect:COMMIT": {"tip",
+    #    "n": how often since "since", "last", "why": the latest reason's last line, "rang": {reason: when it last rang}}}, a
+    #    record dropped once its launch registers a run, and a day after its last failure
+
+    def _launch_failed(self, drive: dict, key: str, tip: str, what: str, tail: str) -> None:
+        """``what``, a post-landing run's or a Lean check's train.sh at ``tip``, registered no run (``tail``, its output's tail):
+        count it under ``key`` and ring `CI` and `TOP` at once with the reason's last line, the behind-ring's path, not
+        `refuse`'s once-to-`CI`; the same reason at the same ``tip`` rings again only `LAUNCH_RING_EVERY_S` later, as each
+        tick launches it again.  With --shadow or --dry-run, only log it."""
+        m = LOG_NOTE_RE.search(tail)
+        lines = [x.strip() for x in (tail[: m.start()] if m else tail).splitlines() if x.strip()]
+        why = lines[-1] if lines else "it printed nothing"
+        if len(lines) > 1 and lines[0].startswith("no run ids "):
+            why = f"{lines[0].split(': ', 1)[0]}: {why}"
+        now, recs = self.now(), drive.setdefault("launch_failed", {})
+        for k in [k for k, r in recs.items() if now - r.get("last", now) > 86400]:
+            del recs[k]
+        rec = recs.get(key)
+        if not rec or rec["tip"] != tip:
+            rec = recs[key] = {"tip": tip, "n": 0, "since": now, "rang": {}}
+        rec.update(n=rec["n"] + 1, last=now, why=why)
+        if (at := rec["rang"].get(why)) is not None and now - at < LAUNCH_RING_EVERY_S:
+            return
+        to = (CI, TOP)
+        text = f"{what} {_no_run(rec)}" + (f" (log {m[1]})" if m else "") + f": {why}"
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would ring {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+            return
+        if self.post(f"{' '.join(to)} queue: {text}", to):
+            rec["rang"][why] = now
+            self.q.log(f"research queue drive: rang {' '.join(to)}: {text}")
+        else:
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+
     # -- refusals
 
     def refuse(self, drive: dict, key: str, text: str, *handles: str | None) -> None:
@@ -2785,8 +2884,9 @@ class Driver:
     #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
     #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
     #    `research queue baseline`), "verified_run" (the ids of the run that verified it; none for ci's baseline), "gated" and
-    #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`) and
-    #    "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
+    #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`),
+    #    "ratchet_judged" (the newest tip whose run's ratchet-gate ended with a verdict: `_ratchet_judged`) and "bisect" (a failed
+    #    after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): move `main` to a fully checked `checked`
@@ -2978,11 +3078,11 @@ class Driver:
             if (tail := self._resolve(run, f"bisecting `main` {tip[:12]}'s failed {steps}: #{cands[run['i']].pr}'s landing "
                                            f"{c[:12]}")) is not None:
                 b["run"] = None
-                self.refuse(drive, f"launch:bisect:{c}", f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} "
-                                                         f"registered no run: {tail}")
+                self._launch_failed(drive, f"bisect:{c}", c, f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])}", tail)
                 return
             if "launch" in run:
                 return
+            (drive.get("launch_failed") or {}).pop(f"bisect:{c}", None)
             states = self._states(run["ids"])
             lost = self._lost(run, states)
             if not lost and any(st in ACTIVE for st, *_ in states.values()):
@@ -3033,8 +3133,7 @@ class Driver:
             return
         rec, tail = self._started(self.launch_postland(self.repo, c, self.on, ",".join(b["steps"]), base=base, **extra))
         if rec is None:
-            self.refuse(drive, f"launch:bisect:{c}", f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} registered no "
-                                                     f"run: {tail}")
+            self._launch_failed(drive, f"bisect:{c}", c, f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])}", tail)
             return
         b["run"] = {**rec, "i": mid, "at": self.now()}
         self.q.log(f"research queue drive: bisecting `main` {tip[:12]}'s failed {steps}: #{cands[mid].pr}'s landing "
@@ -3304,9 +3403,10 @@ class Driver:
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
         """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), else (None,
-        why).  A git without `--attr-source` merges without them, which conflicts more."""
-        from .queue import repinned
+        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), and the merged
+        tree's Lean on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
+        `--attr-source` merges without the drivers, which conflicts more."""
+        from .queue import ported, repinned
 
         args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
         r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
@@ -3314,12 +3414,14 @@ class Driver:
             r = _git(self.repo, *args, check=False)
         if r.returncode == 1:
             files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
-            if tree := repinned(self.repo, r.stdout.split()[0], tip, head, files):
-                return tree, ""
-            return None, f"conflict in {', '.join(files) or 'a file'}"
-        if r.returncode:
+            if not (tree := repinned(self.repo, r.stdout.split()[0], tip, head, files)):
+                return None, f"conflict in {', '.join(files) or 'a file'}"
+        elif r.returncode:
             return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
-        return r.stdout.split()[0], ""
+        else:
+            tree = r.stdout.split()[0]
+        tree, _, _, why = ported(self.repo, tree)
+        return tree, why
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
         """(how many members at the bottom of ``chain`` land on their verdicts, why the next one doesn't): each has its ready mark
@@ -3568,7 +3670,7 @@ class Driver:
         records = {f: _out(self.repo, "ls-tree", lock, "--", f).split("\t")[0].split()
                    for f in changed(self.repo, chain[t].commit, lock)}
         top, images = lock, {}
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             index = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
             for m in chain[t + 1:]:
                 parents = _out(self.repo, "rev-list", "--parents", "-n", "1", m.commit).split()[1:]
@@ -3658,10 +3760,10 @@ class Driver:
         # a running check below stays: its prefix is on `next`, and it may land it
         rec, tail = self._started(self.launch_lean(self.repo, top.commit, self.on))
         if rec is None:
-            why = f"train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} registered no run: {tail}"
+            what = f"train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP}"
             if by:
-                raise QueueError(f"lean-check: {why}")
-            self.refuse(drive, f"launch:lean:{top.commit}", why)
+                raise QueueError(f"lean-check: {what} registered no run: {tail}")
+            self._launch_failed(drive, f"lean:{top.commit}", top.commit, what, tail)
             return
         drive["lean"][top.commit] = {**rec, "at": self.now(), "members": [[x.pr, x.head] for x in chain[: t + 1]],
                                      "tree": self._tree(top.commit), "state": None, **({"stacked": True} if stacked else {}),
@@ -3747,7 +3849,7 @@ class Driver:
         again) when none started, run again once on the other machines of `on` (`_elsewhere`) when lost or failed by its
         machine (killed, out of disk or memory: `_machine_fault`), else failed.  A check whose commit is no longer on `next`, nor a commit of it with the same
         prefix and tree (`_rekey_lean`), is dropped, and cancelled, once its train.sh has printed its run ids (`_resolve`); one
-        whose train.sh registered no run is dropped, told to `CI`, and launched again."""
+        whose train.sh registered no run is dropped, rung to `CI` and `TOP` (`_launch_failed`), and launched again."""
         lean = drive.setdefault("lean", {})
         chain = self._chain()[1]
         self._rekey_lean(drive, chain)
@@ -3758,11 +3860,11 @@ class Driver:
                     rec.update(state="failed", why=f"its resend registered no run: {tail}")
                 else:
                     del lean[c]
-                    self.refuse(drive, f"launch:lean:{c}", f"train.sh {c[:12]} {self.on} --deferred {LEAN_STEP} registered no run: "
-                                                           f"{tail}")
+                    self._launch_failed(drive, f"lean:{c}", c, f"train.sh {c[:12]} {self.on} --deferred {LEAN_STEP}", tail)
                 continue
             if "launch" in rec:
                 continue
+            (drive.get("launch_failed") or {}).pop(f"lean:{c}", None)
             if c not in on_next:
                 if rec.get("state") is None and not (self.dry_run or self.q.shadow):
                     if live := [rid for rid, (st, *_) in self._states(rec["ids"]).items() if st in ACTIVE]:

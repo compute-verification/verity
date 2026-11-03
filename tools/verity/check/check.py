@@ -28,7 +28,8 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
                                                             upstream build and inputs when the commit changes verity/ml/flock/
-                                                            against --base REF (default origin/main), and presigned URLs for
+                                                            against --base REF (default origin/main; also ratchet-gate's base
+                                                            unless --ratchet-base REF is given), and presigned URLs for
                                                             the pinned Lean dependency bundles; with --on, in a free check slot of M
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
@@ -174,11 +175,13 @@ doesn't name:
                     run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
                     vouches for nothing: the audit decides
     ratchet-gate    `integrations/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
-                    commit in the run's `check-base.txt`, which `--record --on` sends: its --base REF's; else origin/main)
+                    commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
+                    --ratchet-base REF's and its --base REF's; else origin/main)
                     grows the vLLM integration's lint ratchets.  On a train each `Queue: #N` merge is judged against the one
                     below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`), which drive takes as
                     the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
-                    run sends the last verified `main`, below the tip); one that names no commit here skips it.  Off the
+                    run sends one below the tip: the tip of the last run whose ratchet-gate gave a verdict, else the last
+                    verified `main`); one that names no commit here skips it.  Off the
                     gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
                     job, runs it
 
@@ -354,6 +357,8 @@ LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 SHARD_PARTS = "check-shard-parts.json"
 #: the commit a `--record --on` check's --base REF names, among its inputs: ratchet-gate judges the merges above it
 BASE_FILE = "check-base.txt"
+#: the commit a `--record --on` check's --ratchet-base REF names, among its inputs: ratchet-gate's base in place of `BASE_FILE`'s
+RATCHET_BASE_FILE = "check-ratchet-base.txt"
 #: an auto shard's plan (`shards.py`), among its inputs (unrecorded: `--shard-plan-file`)
 AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
@@ -1010,10 +1015,10 @@ def nested_record(argv: list[str]) -> str:
 
 
 def record(argv: list[str]) -> int:
-    """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
-    pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
-    REF (default origin/main, fetched first), or whenever --agreement is given, with `--on` REF's commit (`BASE_FILE`,
-    ratchet-gate's base), and the newest recorded checks' verdicts (`gather_verdicts`) unless it is given a pack or
+    """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--ratchet-base RREF] [--agreement]`: `research run --tool check` on this
+    clean commit, with the pinned upstream build and inputs (fetched from the store) when the commit changes a path
+    `tools/verity/check/tool.py` names against REF (default origin/main, fetched first), or whenever --agreement is given, with
+    `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the newest recorded checks' verdicts (`gather_verdicts`) unless it is given a pack or
     --no-cache without --circuit-cache. A commit that can't land on REF as it is (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
@@ -1021,7 +1026,7 @@ def record(argv: list[str]) -> int:
     gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
     machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h).
     `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
-    on = base = pool = timeout = plan_file = None
+    on = base = ratchet_base = pool = timeout = plan_file = None
     agreement = priority = False
     rest = []
     it = iter(argv)
@@ -1032,6 +1037,8 @@ def record(argv: list[str]) -> int:
             pool = next(it)
         elif x == "--base":
             base = next(it)
+        elif x == "--ratchet-base":
+            ratchet_base = next(it)
         elif x == "--agreement":
             agreement = True
         elif x == "--priority":
@@ -1159,6 +1166,9 @@ def record(argv: list[str]) -> int:
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
         (d / BASE_FILE).write_text(f"{_rev(base) or base}\n")
         cmd += ["--send", str(d / BASE_FILE)]
+        if ratchet_base is not None:
+            (d / RATCHET_BASE_FILE).write_text(f"{_rev(ratchet_base) or ratchet_base}\n")
+            cmd += ["--send", str(d / RATCHET_BASE_FILE)]
     try:
         if both:
             procs = []
@@ -1407,16 +1417,17 @@ def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None
 
 
 def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
-    """ratchet-gate's command: `ratchet_gate.py BASE HEAD` as BASE has it, BASE being the commit in the run's `BASE_FILE`
-    (`--record --on` sends it) else origin/main, with its verdicts kept under the check's cache unless ``cache`` is off.  A
-    BASE at or above HEAD would judge nothing, so the step fails (`_step`: a reason that isn't a skip)."""
-    sent = out / "inputs" / BASE_FILE
-    named = sent.read_text().strip() if sent.is_file() else "origin/main"
+    """ratchet-gate's command: `ratchet_gate.py BASE HEAD` as BASE has it, BASE being the commit in the run's `RATCHET_BASE_FILE`,
+    else its `BASE_FILE` (`--record --on` sends them), else origin/main, with its verdicts kept under the check's cache unless
+    ``cache`` is off.  A BASE at or above HEAD would judge nothing, so the step fails (`_step`: a reason that isn't a skip)."""
+    sent = next((f for f in (out / "inputs" / RATCHET_BASE_FILE, out / "inputs" / BASE_FILE) if f.is_file()), None)
+    named = sent.read_text().strip() if sent else "origin/main"
     if not (base := _rev(f"{named}^{{commit}}")):
         return f"skipped: no base: {named} names no commit here"
     if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", base], cwd=ROOT, capture_output=True).returncode == 0:
         return (f"failed: its base {named} is HEAD or above it, so no change lies above the base to judge: check this commit "
-                "against one below it (`--record --base REF`; drive's after-landing run sends the last verified `main`)")
+                "against one below it (`--record --base REF` or `--ratchet-base REF`; drive's after-landing run sends one below "
+                "its tip)")
     keep = str(cache_dir() / "ratchet-gate") if cache else ""
     script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/ratchet_gate.py" && '
               'RATCHET_GATE_CACHE="$3" "$4" "$g/ratchet_gate.py" "$1" HEAD')

@@ -40,7 +40,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # tools/verity/check/move_check.py: test_drive_moves commits them into its origin, so the sync regenerates, certifies and
 # restacks a move with the scripts it runs from the tree.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
-          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
+          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/check/settings.py",
