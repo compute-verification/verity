@@ -72,8 +72,9 @@ theorem gate_perOutcome {Ω Ωf Ωc V P : Type} [Fintype Ω] [Fintype Ωf] [Fint
     {view d : Ω → V} {cut : Ω → P} {go : Ω → Bool} {simFull : Ωf → V} {simCut : Ωc → P} {ε : Bool → ℝ≥0∞}
     (hcut : Within cut simCut (ε false)) (hd : Within d simFull (ε true)) (hgo : AgreesWhere go view d) :
     PerOutcome go (gated go view cut) (gatedSim simFull simCut) ε := by
-  refine perOutcome_of_split (B := fun b ω => if b then .inl (d ω) else .inr (cut ω)) (fun ω => ?_) fun b E => ?_
-  · show (if go ω then .inl (view ω) else .inr (cut ω)) = if go ω then .inl (d ω) else .inr (cut ω)
+  refine perOutcome_of_split (B := fun b => gated (fun _ => b) d cut) (fun ω => ?_) fun b E => ?_
+  · show gated go view cut ω = gated (fun _ => go ω) d cut ω
+    unfold gated
     cases hg : go ω
     · rfl
     · rw [hgo ω hg]
