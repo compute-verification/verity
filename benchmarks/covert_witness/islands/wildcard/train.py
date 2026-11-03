@@ -48,7 +48,7 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
 - `--prefix P` with a `--set` of every block's prefix_k, prefix_v and prefix_gate: prefix tuning, P learned key/value
   pairs in every block behind a zero per-head gate. `--block-adapter r` with a `--set` of every block's adapter_norm,
   adapter_down and adapter_up: Pfeiffer's bottleneck adapter of r units after every block's MLP, its up-projection from
-  zero. Both are model.py's extensions (`prefix`, `adapter`), which must be in the measurement commit; E is the model
+  zero, its units optionally handed up at q bits each (`--block-adapter-z q`). Both are model.py's extensions (`prefix`, `adapter`), which must be in the measurement commit; E is the model
   with them (`encode_model`).
 
 Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
@@ -992,6 +992,10 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     opts, extra, factors, scales = [], 0, {}, {}
     if GROWN.get("adapter"):
         bottleneck(net, params, tuned, GROWN["adapter"], a.adapter_z, a.method)
+    if a.block_adapter_z:
+        for blk in net.inner.blocks:
+            blk.adapter_up.register_forward_pre_hook(
+                lambda m, inp: (Coded.apply(inp[0], a.block_adapter_z, a.block_adapter_z, a.block_adapter, 0, False, 0),))
     if a.ia3:
         if a.lora_rank or a.confine or GROWN or not mats:
             raise SystemExit("wildcard: --ia3 scales the output channels of --set's matrices of θ; it takes no "
@@ -1598,6 +1602,8 @@ def main() -> int:
     ap.add_argument("--block-adapter", type=int, default=0,
                     help="a bottleneck adapter of this many units after every block's MLP, its up-projection from zero "
                          "(`extend`); E is the model with them (`encode_model`)")
+    ap.add_argument("--block-adapter-z", type=int, default=0,
+                    help="hand every --block-adapter's units to its up-projection as a code of this many bits each")
     ap.add_argument("--confine", action="store_true",
                     help="after every step, project each trained wo and w_down's update onto the p<keep> cut's span, so "
                          "the whole effect lies in what the cut hands on; everything trained must be in the block "
@@ -1649,6 +1655,8 @@ def main() -> int:
         raise SystemExit("wildcard: --adapter r is one grown block (--grow 1, no --suite) with 0 < r < d_ff live units")
     if a.adapter_z and (not a.adapter or a.adapter % 8):
         raise SystemExit("wildcard: --adapter-z codes an --adapter's live units, r a multiple of 8 (whole bytes)")
+    if a.block_adapter_z and (not a.block_adapter or a.block_adapter % 8):
+        raise SystemExit("wildcard: --block-adapter-z codes a --block-adapter's units, r a multiple of 8 (whole bytes)")
     ext = {k: n for k, n in (("prefix", a.prefix), ("adapter", a.block_adapter)) if n}
     if len(ext) > 1 or ext and (a.grow or a.lora_rank or a.ia3 or a.suite):
         raise SystemExit("wildcard: --prefix and --block-adapter are each their own update (no --grow, --lora-rank, "
