@@ -2,8 +2,9 @@
 
     python drive.py [--queue ~/.research/lowrank/v3/queue.txt] [--stop 2026-11-04T08:00Z] [--max 2]
 
-Each queue line is `ISLAND START ; NOTE ; TRAIN_ARGS` (`#` comments; the note's first word is the mechanism tag). A line
-launches once (keyed by its text), with `launch.py START --island ISLAND --note NOTE --node NODE --no-wait` from this
+Each queue line is `ISLAND START [--long 'HH:MMZ who'] ; NOTE ; TRAIN_ARGS` (`#` comments; the note's first word is the
+mechanism tag; `--long` names the board line that assigns the long tier). A line launches once (keyed by its text), with
+`launch.py START --island ISLAND --note NOTE --node NODE [--long ...] --no-wait` from this
 checkout, whose island must be clean (the run ships HEAD's), once START is in the starts_store.json of the pinned
 commit launch.py ships (`pin.py`; a later start waits for it); NODE is whichever of `--nodes` holds fewer of the queue's
 runs in flight, ties going to the one launched to longer ago. An ended run is never collected (only the scorer collects:
@@ -36,15 +37,19 @@ RUNS = Path.home() / ".research" / "runs"
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
 
 
-def parse(line: str) -> tuple[str, str, str, list[str]] | None:
+def parse(line: str) -> tuple[str, str, str, list[str], str | None] | None:
+    """ISLAND START [--long 'HH:MMZ who'] ; NOTE ; TRAIN_ARGS: the island, start, note, train args and the long tier's
+    board line (None: the search tier)."""
     line = line.strip()
     if not line or line.startswith("#"):
         return None
     # a note may hold `;`: the island and start end at the first, the train args start after the last
     head, rest = line.split(";", 1)
     note, args = rest.rsplit(";", 1)
-    island, start = head.split()
-    return island, start, note.strip(), shlex.split(args)
+    island, start, *tier = shlex.split(head)
+    if tier and (tier[0] != "--long" or len(tier) != 2):
+        raise ValueError(f"after the start, only --long 'HH:MMZ who': {tier}")
+    return island, start, note.strip(), shlex.split(args), tier[1] if tier else None
 
 
 def utc() -> dt.datetime:
@@ -109,7 +114,7 @@ def main() -> int:
             state = json.loads(st.read_text()).get("state") if st.exists() else None
             if state not in DONE:
                 continue
-            _, start, note, _ = parse(key)
+            _, start, note, *_ = parse(key)
             res = row(s["run"], start, note)
             if res.get("witness", 0) is None and res["failure"] is None and tries.get(key, 0) < 19:
                 # a fetch refused under the disk floor or cut short is retried on the next pass, its slot held
@@ -140,11 +145,12 @@ def main() -> int:
             if (p is None or key in seen or utc() >= a.stop or len(flying) >= a.max or not clean(p[0])
                     or p[1] not in starts):
                 continue
-            island, start, note, args = p
+            island, start, note, args, long = p
             load = {n: sum(1 for s in flying.values() if s.get("node") == n) for n in nodes}
             node = min(nodes, key=lambda n: (load[n], last.get(n, "")))
             r = subprocess.run([sys.executable, str(LAUNCH), start, "--island", island, "--note", note, "--node", node,
-                                "--no-wait", "--", *args], capture_output=True, text=True, env=env, cwd=REPO)
+                                *(["--long", long] if long else []), "--no-wait", "--", *args],
+                               capture_output=True, text=True, env=env, cwd=REPO)
             rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
             run = rows[0].get("run") if rows else None
             if not run:
