@@ -15,13 +15,13 @@ For a block `I`: `Standard.wholeOut I`, the output entries whose whole chain `I`
 `Standard.hadB I`, the operand entries it holds or reads every bit of; `Standard.hadCones I`, their values; and
 `System.hadValues F I`, the values a set `F` of products has in `I`.
 
-Four premises, facts of the given circuit, named as io_bound's are:
+Four premises, facts of the given circuit, named as training's slowdown code names them, are:
 
 * **Values** (`System.Values`): two operand entries' cones are equal or disjoint, and none is empty.
 * **P-share** (`System.Shared`) at constants `c_j`: in every inference block, any set `F` of class `j`'s products has
   `Σ_{p ∈ F} |hadA_p| |hadB_p| ≤ c_j |hadValues F|²`. It holds at `c_j = 1/4` where no two products read the same pair
   of values and no value is read on both sides of the class's products, and at `c_j = 1` where only the first holds (a
-  product of an array with itself); io_bound's `c_j = 1/3` is Motzkin–Straus at clique number 3.
+  product of an array with itself); the `c_j = 1/3` of training's slowdown code is Motzkin–Straus at clique number 3.
 * **P-width, extended** (`System.WidthExtended`) at width `b`: every value of a system product that an inference block
   has, the block pays at its width, reading `b` bits of its cone beyond `θ`, or makes whole, holding the whole chain of
   one of the output entries it is made from. A value obtained for less any other way, a gather's rows repeated over the
@@ -32,7 +32,7 @@ Four premises, facts of the given circuit, named as io_bound's are:
 
 The theorems (`Nci.Products.Guarantees.ClassBound`, `WholeCap`, `WholeBound`) read the system at a **post-fixed point**
 (`System.PostFixed`), `r_j (1 + Σ_i A_ij μ_i)² ≤ μ_j` for every class with `r_j = c_j k / (K_j² b)`, of which
-io_bound's `whole_chain_of` computes the least, and a product's **whole-making factor** `e = Σ_i A_ij μ_i` at its class
+training's slowdown code computes the least, and a product's **whole-making factor** `e = Σ_i A_ij μ_i` at its class
 `j` (`wholeFactor`).
 `wholeBound` is the products kind's bound on `ρ` that the cap with operands made whole gives: `chainBlocks N
 (α' + w k) (β' √O) · c / |C|` in cells of at most `w` MACs, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and

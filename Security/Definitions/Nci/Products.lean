@@ -25,24 +25,24 @@ Three premises, facts of the given circuit:
   disjoint from the MACs, and each entry's final value in its MACs; and each MAC connected (a set holding some of a
   MAC's gates but not all has a read across it). A product by a fast algorithm (Strassen's) has no such MACs and stays
   outside.
-* **Widths as passed** (`Standard.Passed`), at the policy's `(c, k)`, io_bound's P-width: an inference block that holds
-  or reads every bit of `A_il` reads at least `b_A` bits of `A_il`'s cone beyond `θ`, and of `B_lj`'s at least `b_B`;
-  and an inference block that holds a whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates
-  outside the block, or holds that many of `C_ij`'s final bits. The first charges an operand through reads of its cone,
-  the same whether the block reads the operand or computes it itself. An operand or a partial sum passed narrower stays
-  outside, as does an operand some inference block gets for fewer reads of its cone than its width: one in `θ`, which
-  costs nothing to read, one computed from registered values, or one it computes whole from values outside the cone,
-  such as an activation whose earlier product's chain the block runs itself, reading that product's operands. P-width's
-  side that reads partial sums in, in cells, is `Standard.Received`.
-* **Chains** (`Standard.Chained`), at `b_C`, io_bound's P-chain with each link `b_C` gates wide: each entry's partial
-  sum runs along its MACs in the order of `l`, MAC `(i, l, j)` after the first reading at least `b_C` gates of MAC
-  `(i, l - 1, j)`. A product whose partial sums run in another order is the same product with `l` renumbered; one whose
-  entries are sums of several chains (split-K) stays outside.
+* **Widths as passed** (`Standard.Passed`), at the policy's `(c, k)`, P-width in training's slowdown code: an inference
+  block that holds or reads every bit of `A_il` reads at least `b_A` bits of `A_il`'s cone beyond `θ`, and of `B_lj`'s
+  at least `b_B`; and an inference block that holds a whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates
+  to its gates outside the block, or holds that many of `C_ij`'s final bits. The first charges an operand through reads
+  of its cone, the same whether the block reads the operand or computes it itself. An operand or a partial sum passed
+  narrower stays outside, as does an operand some inference block gets for fewer reads of its cone than its width: one
+  in `θ`, which costs nothing to read, one computed from registered values, or one it computes whole from values
+  outside the cone, such as an activation whose earlier product's chain the block runs itself, reading that product's
+  operands. P-width's side that reads partial sums in, in cells, is `Standard.Received`.
+* **Chains** (`Standard.Chained`), at `b_C`, P-chain in training's slowdown code with each link `b_C` gates wide: each
+  entry's partial sum runs along its MACs in the order of `l`, MAC `(i, l, j)` after the first reading at least `b_C`
+  gates of MAC `(i, l - 1, j)`. A product whose partial sums run in another order is the same product with `l`
+  renumbered; one whose entries are sums of several chains (split-K) stays outside.
 
 `outBits` is the bits of `C`'s final values `Σ_ij |out_ij|`, `handed C G I` the gates of `G` in `I` that a gate of `G`
-outside `I` reads, and `Unsplit P` the word level, a partition `P` that splits no MAC: io_bound's P-cell with each MAC
-its own cell, which P-cell at any cell size implies. `capAt k b_A b_B b_C μ` is the cap a block at the weight `μ > 0`,
-`max (k² / (16 μ b_A b_B b_C)) ((μ + 1) k)` products, and `bound` the products kind's bound on `ρ`,
+outside `I` reads, and `Unsplit P` the word level, a partition `P` that splits no MAC: P-cell (`Standard.UnsplitCells`)
+with each MAC its own cell, which P-cell at any cell size implies. `capAt k b_A b_B b_C μ` is the cap a block at the
+weight `μ > 0`, `max (k² / (16 μ b_A b_B b_C)) ((μ + 1) k)` products, and `bound` the products kind's bound on `ρ`,
 `((ni nl nj - μ Σ_ij |out_ij|) / |C|) / (capAt / c)`.
 -/
 
@@ -90,13 +90,13 @@ def cones : Finset (Fin d.D.N) :=
 /-- The bits of `C`'s final values, `Σ_ij |out_ij|`. -/
 def outBits : ℕ := ∑ p : Fin ni × Fin nj, (S.out p.1 p.2).card
 
-/-- **The word level**, io_bound's P-cell with each MAC its own cell, which P-cell at any cell size implies: the
-partition `P` splits no MAC, each lying in one of its blocks. -/
+/-- **The word level**, P-cell (`Standard.UnsplitCells`) with each MAC its own cell, which P-cell at any cell size
+implies: the partition `P` splits no MAC, each lying in one of its blocks. -/
 def Unsplit {m : ℕ} (P : Partition d.D m) : Prop := ∀ i l j, ∃ u, S.mac i l j ⊆ P.gates u
 
-/-- **Chains** at `b_C`, io_bound's P-chain with each link `b_C` gates wide, a fact of the given circuit: each entry's
-partial sum runs along its MACs in the order of `l`, MAC `(i, l, j)` after the first reading at least `b_C` gates of
-MAC `(i, l - 1, j)`. -/
+/-- **Chains** at `b_C`, P-chain in training's slowdown code with each link `b_C` gates wide, a fact of the given
+circuit: each entry's partial sum runs along its MACs in the order of `l`, MAC `(i, l, j)` after the first reading at
+least `b_C` gates of MAC `(i, l - 1, j)`. -/
 def Chained (bC : ℕ) : Prop :=
   ∀ i (l l' : Fin nl) j, l'.val + 1 = l.val →
     bC ≤ ((S.mac i l' j).filter fun h => ∃ g ∈ S.mac i l j, h ∈ d.D.reads g).card
@@ -123,10 +123,11 @@ structure Algorithm : Prop extends S.Wiring where
   mac_connected : ∀ i l j (X : Finset (Fin d.D.N)), X ⊆ S.mac i l j → X.Nonempty → X ≠ S.mac i l j →
     ∃ h ∈ S.mac i l j, ∃ g ∈ S.mac i l j, h ∈ d.D.reads g ∧ (h ∈ X ↔ g ∉ X)
 
-/-- **Widths as passed** at the policy's `(c, k)`, io_bound's P-width with its side that reads partial sums in left to
-`Standard.Received`, a fact of the given circuit: an inference block that holds or reads every bit of `A_il` reads at
-least `b_A` bits of its cone beyond `θ`, and of `B_lj`'s at least `b_B`; and one that holds a whole MAC of `C_ij` hands
-at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or holds that many of `C_ij`'s final bits. -/
+/-- **Widths as passed** at the policy's `(c, k)`, P-width in training's slowdown code with its side that reads partial
+sums in left to `Standard.Received`, a fact of the given circuit: an inference block that holds or reads every bit of
+`A_il` reads at least `b_A` bits of its cone beyond `θ`, and of `B_lj`'s at least `b_B`; and one that holds a whole MAC
+of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or holds that many of `C_ij`'s
+final bits. -/
 structure Passed (c k bA bB bC : ℕ) : Prop where
   operandA : ∀ I, InferenceBlock d c k I → ∀ i l, S.opA i l ⊆ I ∪ d.D.into I →
     bA ≤ (d.unregistered I ∩ S.coneA i l).card

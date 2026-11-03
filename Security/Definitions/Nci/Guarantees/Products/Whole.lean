@@ -27,16 +27,18 @@ inference block reads beyond `θ`, `b` an operand's width, `μ` a post-fixed poi
   `ρ ≥ max_{q ∈ G} chainBlocks N_q (α'_q + w_q k) (β'_q √O_q) c / |C|` (`wholeBound`), a partition-level bound
   (`Nci.Formalism.PartitionBound`). It holds on any subset, so the counted set may leave out any product, the products
   that read a gather's rows before any token-mixing step among them. It bounds by one product at a time: the sum over
-  products, several in one block (io_bound's `Λ`, `SHARE`), is `Nci.Products.Guarantees.SumBound`
-  (`Definitions.Nci.Guarantees.Products.Sum`).
+  products, several in one block (the `Λ` and `SHARE` of training's slowdown code), is
+  `Nci.Products.Guarantees.SumBound`, and with P-cell `SumCellBound` (`Definitions.Nci.Guarantees.Products.Sum`).
 
 The class bound counts at the MACs, `K_j` long chains of `b`-bit operands, whatever cells compute them: a cell of `w`
 MACs enters only the split allowance, so a GEMM gadget's dot product of 16 MACs costs the cap `16 k` and leaves the
-post-fixed point where it is. The premises are named as io_bound's: Values; P-share (`System.Shared`); P-width extended
+post-fixed point where it is. The premises are named as training's slowdown code names them: Values; P-share
+(`System.Shared`); P-width extended
 (`System.WidthExtended`), which takes the place of widths as passed's operand side (`Standard.Passed`, P-width) for the
 system's products; P-match (`System.Matched`); the products' wiring (`Standard.Wiring`) and cells (`Standard.Cells`);
 and the partial sums received at their width (`Standard.Received`, P-width's read side with P-chain). None reads P-cell
-(`Standard.Unsplit`), P-chain's order of each chain's MACs (`Standard.Chained`) or a MAC's own connectivity
+(`Standard.UnsplitCells`) or its word level (`Standard.Unsplit`), P-chain's order of each chain's MACs
+(`Standard.Chained`) or a MAC's own connectivity
 (`Standard.Algorithm`). The post-fixed point (`System.PostFixed`) is a condition on numbers the theorems take, not a
 fact of the circuit.
 

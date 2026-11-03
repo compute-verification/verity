@@ -4,9 +4,10 @@ import Definitions.Nci.Products
 /-!
 # Products of two fresh operands: the amortized cap and the bound on `ρ` it gives
 
-The theorems about a product `C = A · B` by the standard algorithm with its widths as passed, io_bound's P-width
-(`Definitions.Nci.Products`), proved in `Nci.Products.SecurityProofs`. Each is about every partition `𝓘` of the
-declaration into `m` inference blocks, each block reading at most `k` bits beyond `θ`, and charges only those reads.
+The theorems about a product `C = A · B` by the standard algorithm with its widths as passed, P-width as training's
+slowdown code names it (`Definitions.Nci.Products`), proved in `Nci.Products.SecurityProofs`. Each is about every
+partition `𝓘` of the declaration into `m` inference blocks, each block reading at most `k` bits beyond `θ`, and charges
+only those reads.
 `N = ni nl nj` is the number of products and `E = Σ_ij |out_ij|` the bits of `C`'s final values.
 
 * **The fresh-products cap** (`Cap`), at the bit level: a partition may split a MAC's gates across blocks and pass any
@@ -56,8 +57,8 @@ def WordCap : Prop :=
     ((ni * nl * nj : ℕ) : ℝ) ≤ m * ((k : ℝ) * √(k : ℝ) / (4 * √((bA : ℝ) * bB * bC))) +
       √(k : ℝ) / (4 * √((bA : ℝ) * bB * bC)) * S.outBits
 
-/-- **The cap along chains**: when every MAC lies in one block (`Standard.Unsplit`, P-cell) and each entry's partial
-sum runs along its MACs (`Standard.Chained`, P-chain),
+/-- **The cap along chains**: when every MAC lies in one block (`Standard.Unsplit`, P-cell's word level) and each
+entry's partial sum runs along its MACs (`Standard.Chained`, P-chain),
 `ni nl nj ≤ m (k/3) √(k/3) / √(b_A b_B b_C) + (k/2) / √(b_A b_B) · √(m ni nj)`. -/
 def ChainCap : Prop :=
   ∀ (d : Declaration) (ni nl nj : ℕ) (S : Standard d ni nl nj) (c k bA bB bC m : ℕ) (P : Partition d.D m),
