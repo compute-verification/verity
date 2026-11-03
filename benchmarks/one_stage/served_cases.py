@@ -1,10 +1,11 @@
 """A served window's cases, each on the window's registration record R and beside its own Lean answer, in the directory
-form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case and the
-inference-only case from its records audit, PoUW's period case held to the same record, and with ``--v2`` one-stage
-v2's case too:
+form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case (onsite's), remote's
+sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its records audit,
+PoUW's period case held to the same record, and with ``--v2`` one-stage v2's bare case too:
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
-                    [--log FILE] [--period DIR] [--v1-exe PATH] [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
+                    [--log FILE] [--period DIR] [--v1-exe PATH] [--sampled-exe PATH] [--inference-only-exe PATH]
+                    [--v2 [--v2-exe PATH]]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
@@ -17,8 +18,14 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
   (`a5.write_case`: the registration record, the evidence the audit's record was handed, the sessions' verdicts among
   it, and the verifier's params), exactly those three, and none when a5 wrote its ``case-error.txt`` instead (which says
-  why). It is the sampled proofs subprotocol both composites name (`Core.Remote.components`, `Core.Onsite.components`).
-  Its answer is `sampled-proofs-one-stage check` on the case.
+  why). It is onsite's sampled proofs subprotocol (`Core.Onsite.components`); remote's refuses it by name
+  (`VStar.Recursive.Sampled.V1_REFUSED`). Its answer is `sampled-proofs-one-stage check` on the case.
+* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): remote's sampled proofs subprotocol
+  (`Core.Remote.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with ``form`` ``one-stage`` in its
+  params and its evidence (`with_form`), which the dispatcher splits off before one-stage v2's decoders read the rest:
+  its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
+  None when v2's case is refused, which the refusal says, and remote's composite then names sampled proofs missing. Its
+  answer is `vstar-recursive sampled check` on the case and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
   policy's check as a core protocol, `inference-only`):
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
@@ -53,14 +60,15 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   (`a5.case_v2`: v1's case with the verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused
   when it commits to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
   ``case-v2-error.txt`` says why: v2 verifies one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk
-  check` on the case and its blobs. Neither composite names v2, so its case is made only when asked.
+  check` on the case and its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so
+  it is made only when asked.
 
-Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``inference-only/``, ``pouw-period/``,
-``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and
-evidence, and v2's and the period's ``blobs``) and ``answer.json``, its Lean answer line (and, given
-``--from-division``, the inference-only case's ``policy.json``). A composition is handed only the directories whose
-answer's protocol is one of its product's subprotocols: remote's are v1's, the inference-only case's and the period's,
-never v2's. The Lean runs on files in a 0700 scratch directory under ``--private``; the period's answer is the one
+Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
+``inference-only/``, ``pouw-period/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params",
+"commitment", "evidence"}``, hex commitment and evidence, and sampled proofs', v2's and the period's ``blobs``) and
+``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's ``policy.json``). A
+composition is handed only the directories whose answer's protocol is one of its product's subprotocols: remote's are
+sampled proofs', the inference-only case's and the period's, onsite's v1's among its own, and neither's v2's bare case. The Lean runs on files in a 0700 scratch directory under ``--private``; the period's answer is the one
 `pouw_piece.py` wrote. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
@@ -94,12 +102,19 @@ from verity.ml.circuits import codec
 ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
+SAMPLED = "verity/sampled-proofs/v1"
+SAMPLED_LEAN = (ROOT / "verity/core/service/vstar/recursive", "vstar-recursive")
+#: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
+SAMPLED_CMD = ("sampled",)
+#: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
+ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
 INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
 NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "nci_reference.py"
 PERIOD = PC.ID
-DIRS = {V1: "sampled-proofs-v1", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period", V2: "sampled-proofs-v2"}
+DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
+        V2: "sampled-proofs-v2"}
 #: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
 #: "file", "digest"}``, its file under the log's directory), and the period case `served_pouw.sh` has `pouw_piece.py` write.
 H1_LOG = Path("h1/log.jsonl")
@@ -169,6 +184,25 @@ def v2_case(audit: Path) -> dict[str, Any]:
     gone = [b for b in case["blobs"] if not Path(b).is_file()]
     _need(not gone, f"v2's case names {len(gone)} blob(s) that aren't files, the first {gone[:1]}")
     return case
+
+
+def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
+    """``case`` as sampled proofs reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
+    which the dispatcher splits off before that form's decoders read the rest."""
+    try:
+        evidence = json.loads(bytes.fromhex(case["evidence"]))
+    except (KeyError, TypeError, ValueError) as e:
+        raise Refused(f"the case's evidence is not JSON: {type(e).__name__}: {e}") from None
+    _need(isinstance(case.get("params"), Mapping) and isinstance(evidence, dict)
+          and "form" not in case["params"] and "form" not in evidence,
+          "the case's params and evidence must be objects that name no form")
+    return {**case, "evidence": codec.canonical_json(evidence | {"form": form}).hex(),
+            "params": {**case["params"], "form": form}}
+
+
+def sampled_case(audit: Path) -> dict[str, Any]:
+    """Remote's sampled proofs case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
+    return with_form(v2_case(audit))
 
 
 def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
@@ -337,9 +371,10 @@ def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe
     return max(Fraction(bits, gates) for gates, bits in blocks), max(gates for gates, _ in blocks)
 
 
-def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path) -> tuple[dict[str, Any], str]:
-    """``exe check`` (`CoreProtocol.Cli`) on ``case`` and its blobs, its files in a 0700 directory under ``scratch``:
-    the answer and its line."""
+def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
+                cmd: Sequence[str] = ()) -> tuple[dict[str, Any], str]:
+    """``exe check`` (`CoreProtocol.Cli`; with ``cmd``, the command ahead of ``check``, as ``vstar-recursive sampled``)
+    on ``case`` and its blobs, its files in a 0700 directory under ``scratch``: the answer and its line."""
     scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
     with tempfile.TemporaryDirectory(prefix="case-", dir=scratch) as d:
         os.chmod(d, 0o700)
@@ -348,7 +383,8 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path) 
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = subprocess.run([str(exe), "check", *map(str, files), *case.get("blobs", ())], capture_output=True, text=True)
+        p = subprocess.run([str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())], capture_output=True,
+                           text=True)
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])
@@ -414,7 +450,7 @@ def produce(a: argparse.Namespace) -> int:
         v1 = window_case(audit)
         rec, digest = record_of(v1)
     except Refused as e:
-        for id in [V1, INFERENCE_ONLY] + ([PERIOD] if period else []) + ([V2] if a.v2 else []):
+        for id in [V1, SAMPLED, INFERENCE_ONLY] + ([PERIOD] if period else []) + ([V2] if a.v2 else []):
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
 
@@ -430,16 +466,17 @@ def produce(a: argparse.Namespace) -> int:
         bad = 1
         print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
 
-    def one(id: str, make, exe) -> None:
+    def one(id: str, make, exe, cmd: Sequence[str] = ()) -> None:
         try:
             case = make()
-            answer, line = lean_answer(exe(), case, private / "scratch")
+            answer, line = lean_answer(exe(), case, private / "scratch", cmd)
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
             return refused(id, e)
         written(id, case, line, answer.get("verdict"))
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
+    one(SAMPLED, lambda: sampled_case(audit), functools.cache(lambda: a.sampled_exe or build(*SAMPLED_LEAN)), SAMPLED_CMD)
     inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*INFERENCE_ONLY_LEAN))
 
     def inference_only() -> dict[str, Any]:
@@ -490,6 +527,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--period", type=Path, help="PoUW's period case, pouw_piece.py period's --out (default with "
                     f"--serve-dir: its {PERIOD_PIECE} when it holds a case)")
     ap.add_argument("--v1-exe", help=f"{V1_LEAN[1]} (default: built here)")
+    ap.add_argument("--sampled-exe", help=f"{SAMPLED_LEAN[1]}, sampled proofs' as its {SAMPLED_CMD[0]} command "
+                    "(default: built here)")
     ap.add_argument("--inference-only-exe", help=f"{INFERENCE_ONLY_LEAN[1]} (default: built here)")
     ap.add_argument("--v2", action="store_true", help="one-stage v2's case too (v2_case), in sampled-proofs-v2/")
     ap.add_argument("--v2-exe", help=f"{PF.V2_EXE}, with --v2 (default: built here)")
