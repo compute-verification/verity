@@ -1,7 +1,8 @@
 """te_core.standard_workloads builds `training/standard-workloads`: a row per workload and measured dial setting, whose
 ρ is formalism.published's under the builder's `READING`, A (with its binding kind, what it rests on and its kinds as
 published gives them, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
-infinite) at the console's default (rho_default and rho_console) and the registered serving block (rho_served), whose
+infinite, a measured fresh-products term's premises with its te_core's provisional label) at the console's default
+(rho_default and rho_console) and the registered serving block (rho_served), whose
 rho_inputs give the dial's ρ at both (page_rho) and whose input_status says which inputs te_core measured (an
 unmeasured Δ_grad's steps and whether Fit's verdict rests on it, and the fresh-products kind's input); a generation
 run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; it reads traces from te_core 4.4 on; and
@@ -34,6 +35,17 @@ CODED = ["fwd", "updated", "mm", json.dumps([[8, 2 * U], [2 * U, U]]), 1, 8 * 2 
 ROUND_LOG = [CODED, ["fwd", "act", "mm", json.dumps([[8, U], [U, 8]]), 1, 8 * U * 8],
              ["fwd", "theta", "mm", json.dumps([[8, U], [U, 2 * U]]), 1, 8 * U * 2 * U],
              ["fwd", "updated", "mul", json.dumps([[8, U], [U]]), 1, 8 * U]]
+#: a traced step's product of two fresh operands at the console's k, its whole-making chain long enough (k_whole)
+PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 8, "n": 8},
+           "token_dims": ["m"], "macs": 256, "outputs": 32, "affected": [True, True], "widths": [16, 16],
+           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 1024,
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0}
+
+
+def products_rows(*rows, steps: float = 1.0) -> dict:
+    """`rows` as a run's products (formalism.products_of_trace): a traced step's, times `steps`."""
+    return formalism.products_of_trace({"capture": formalism.PRODUCTS_FROM, "k": float(policy.CONSOLE[1]),
+                                        "order": "unknown", "tokens": 8, "gates": None, "rows": list(rows)}, steps)
 
 
 def record(round_tokens: int = 6, round_log=ROUND_LOG) -> dict:
@@ -252,40 +264,60 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     the console's), and still measured where the term's best subset drops a product whose whole-making chain is too
     short (published's `fresh_subset` says so); assumed where the dominant traced step's stand in for steps of another
     shape, or with te_core's reason where unmeasured (an op log's, a round untraced, and a void: no subset with a
-    proved bound, never a measured 0)."""
+    proved bound, never a measured 0); and assumed where untraced steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
-    row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 8, "n": 8},
-           "token_dims": ["m"], "macs": 256, "outputs": 32, "affected": [True, True], "widths": [16, 16],
-           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 1024,
-           "gates_per_mac": 1480.0, "cell_gates": 23682.0}
-
-    def of(*rs):
-        return formalism.products_of_trace({"capture": formalism.PRODUCTS_FROM, "k": float(policy.CONSOLE[1]),
-                                            "order": "unknown", "tokens": 8, "gates": None, "rows": list(rs)})
 
     def bounds(p):
         return {name: formalism.bound(dataclasses.replace(m, products=p), c, k) for name, (c, k) in SW.POINTS.items()}
 
-    rows, short = of(row), row | {"k_whole": 8}
+    rows, short = products_rows(PRODUCT), PRODUCT | {"k_whole": 8}
     b = bounds(rows)
     off = b["served"]["unmeasured"]["fresh_products"]
     assert "fresh_products" not in b["console"]["unmeasured"]
     assert off.startswith(f"unmeasured: the products were classified at k = {policy.CONSOLE[1]:g}")
     assert SW.products(b) == f"measured at the console's default; at the serving block, {off}"
-    assert SW.products(bounds(of(row, short))) == SW.products(b)
-    one = formalism.published(dataclasses.replace(m, products=of(row, short)), reading=SW.READING)
+    assert SW.products(bounds(products_rows(PRODUCT, short))) == SW.products(b)
+    one = formalism.published(dataclasses.replace(m, products=products_rows(PRODUCT, short)), reading=SW.READING)
     assert one["terms"]["fresh_products"] > 0 and (one["fresh_subset"]["dropped"], one["fresh_subset"]["of"]) == (1, 2)
-    assert bounds(of(short))["console"]["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
-    assert SW.products(bounds(of(short))) == f"assumed: {formalism.FRESH_VOID}"
+    assert bounds(products_rows(short))["console"]["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
+    assert SW.products(bounds(products_rows(short))) == f"assumed: {formalism.FRESH_VOID}"
     stand = rows | {"stand_in": {"structures": ["a", "c"], "step_tokens": [4, 8], "traced_tokens": 8,
                                  "why": formalism.STAND_IN}}
-    assert SW.products(bounds(stand)) == (
-        f"assumed: the run's traced steps differ in shape, so the dominant traced step's products stand in for all of "
-        f"them, scaled by tokens (2 traced structures); at the serving block, {off}")
+    shapes = ("the run's traced steps differ in shape, so the dominant traced step's products stand in for all of them, "
+              "scaled by tokens (2 traced structures)")
+    assert SW.products(bounds(stand)) == f"assumed: {shapes}; at the serving block, {off}"
+    last = "step 9: the program's last, its structure having no other step, not traced"
+    alone = "te_core counting the traced steps' products alone"
+    assert SW.products(b, left=[last]) == f"assumed: none on 1 untraced step ({last}), {alone}; at the serving block, {off}"
+    assert SW.products(bounds(stand), left=[last] * 4) == (
+        f"assumed: {shapes}; and none on 4 untraced steps ({last}; {last}; {last}; and 1 more), {alone}; at the serving "
+        f"block, {off}")
     why = bounds(None)["console"]["unmeasured"]["fresh_products"]
     assert SW.products(bounds(None)) == f"assumed: {why}"
     assert SW.products(bounds(None), rounds=True) == f"assumed: {why}{SW._UNTRACED}"
+
+
+def test_a_measured_fresh_products_term_carries_its_te_cores_provisional_label_where_it_has_one(monkeypatch):
+    """A measured fresh-products term's premises carry `PROVISIONAL`'s label for the te_core that priced it (4.11's
+    single-chain whole-making rule), in `kinds` and in `rests_on` where the term binds, and no label under a te_core
+    without one; a row's products input names its untraced steps but a step whose structure updates nothing."""
+    fx = json.loads(PINNED.read_text())
+    m = dataclasses.replace(formalism.from_json(fx["measured"]), products=products_rows(PRODUCT, steps=1e9))
+    last = "step 9: the program's last, its structure having no other step, not traced"
+    fx |= {"read": fx["read"] | {"untraced": [f"step 0: {SW.IDLE}", last]}}
+    one = formalism.published(m, *SW.POINTS["console"], SW.READING)
+    premises = formalism.RESTS_ON_CELL["fresh_products"]
+    assert one["binding_kind"] == "fresh_products" and one["rests_on"] == premises
+    monkeypatch.setattr(SW, "VERSION", "4.11")
+    _, _, cells = build(m, fx, monkeypatch)
+    prov = SW.PROVISIONAL["4.11"]
+    assert cells["binding_kind"] == "fresh_products" and cells["rests_on"] == f"{premises}; {prov}"
+    assert json.loads(cells["kinds"])["rests_on"] == {"fresh_products": f"{premises}; {prov}"}
+    assert json.loads(cells["input_status"])["products"].startswith(f"assumed: none on 1 untraced step ({last}),")
+    monkeypatch.setattr(SW, "VERSION", "4.12")
+    _, _, cells = build(m, fx, monkeypatch)
+    assert cells["rests_on"] == premises and json.loads(cells["kinds"])["rests_on"] == {"fresh_products": premises}
 
 
 def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_priced_as_nvfp4():

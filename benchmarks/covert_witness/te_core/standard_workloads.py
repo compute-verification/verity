@@ -14,7 +14,8 @@ formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_defaul
 at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
-has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
+has no bound, resting on "unmeasured"), a measured fresh-products term's premises, where it binds and in `kinds`,
+with the label `PROVISIONAL` gives this te_core; reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
 them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
 P-cell) and reading B's token and decoding forms. `rho_inputs` holds
@@ -25,7 +26,8 @@ measured tokens (`token_dials`).
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
 assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
 `POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
-the console's default, or assumed with te_core's reason, and where the serving block's k leaves it unmeasured.
+the console's default, or assumed with te_core's reason or where untraced steps that update count none, and where the
+serving block's k leaves it unmeasured.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
@@ -88,6 +90,13 @@ TRACE_FACTS = ("tokens", "sigma", "affected_share", "token_factor", "a_bits", "u
                "delta_grad_bits", "state_bits")
 #: te_core labels of quantities read off the run though te_core tags them bounds: E's size and the harness's decoder
 READ = (formalism.STUBS["delta_bits"], formalism.DECODER["witness"])
+#: why `untraced` names a step of a traced structure that updates nothing, which has no fresh products
+IDLE = ("its structure updates nothing, and te_core.annotate takes such a step's trace only where it measures the step "
+        "and a traced step of the run updates something")
+#: a measured fresh-products term's label beside its premises, by the te_core whose whole-making rule it reads: 4.11's
+#: single chain, which 4.12's chain classes replace
+PROVISIONAL = {"4.11": "provisional: whole-making under te_core 4.11's single-chain rule; 4.12 lowers dense rows by "
+                       "under 1% and voids rows with adapters"}
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
           "priced as NVFP4 (gemm/fp4)"
 _PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
@@ -216,8 +225,7 @@ def untraced(record: dict, structures: dict[str, dict]) -> list[str]:
         if not s.get("tokens") or a["struct"] != sid:
             continue
         if sid in structures:
-            why = ("its structure updates nothing, and te_core.annotate takes such a step's trace only where it "
-                   "measures the step and a traced step of the run updates something")
+            why = IDLE
         elif s["step"] == last and sum(x["struct"] == sid for x in record["steps"]) == 1:
             why = "the program's last, its structure having no other step, not traced"
         else:
@@ -306,20 +314,26 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
     return out | (override or {})
 
 
-def products(b: dict[str, dict], rounds: bool = False) -> str:
+def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> str:
     """The fresh-products kind's input, the run's products of two fresh operands, as the one bound `b` read them at
-    each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where unmeasured, or where
-    the dominant traced step's stand in for steps of another shape, formalism.STAND_IN); and where unmeasured at the
-    serving block, te_core's reason."""
+    each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where unmeasured, where
+    the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where `left`, `untraced`'s
+    steps but those that update nothing, have none, te_core counting the traced steps' alone); and where unmeasured
+    at the serving block, te_core's reason."""
     con = b["console"]
     if (why := con["unmeasured"].get("fresh_products")) is not None:
         return f"assumed: {why}" + (_UNTRACED if rounds else "")
     stand = con["inputs"]["fresh_products"].get("stand_in")
-    out = (f"assumed: {formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced "
-           f"structures)" if stand else "measured")
+    said = [f"{formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced structures)"
+            ] if stand else []
+    if left:
+        more = f"; and {len(left) - 3} more" if len(left) > 3 else ""
+        said.append(f"none on {len(left)} untraced step{'s' if len(left) > 1 else ''} ({'; '.join(left[:3])}{more}), "
+                    f"te_core counting the traced steps' products alone")
+    out = f"assumed: {'; and '.join(said)}" if said else "measured"
     if (off := b["served"]["unmeasured"].get("fresh_products")) is None:
         return out
-    return out + ("" if stand else " at the console's default") + f"; at the serving block, {off}"
+    return out + ("" if said else " at the console's default") + f"; at the serving block, {off}"
 
 
 def token_dials(dials: dict, tokens: float) -> list[str]:
@@ -359,9 +373,21 @@ def rho_cell(v: float | None) -> float | str | None:
 
 def kinds(one: dict, b: dict) -> str:
     """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
-    from the one bound `b` at its point, less any `one`'s max takes."""
-    return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
+    from the one bound `b` at its point, less any `one`'s max takes, a measured fresh-products term's premises with
+    this te_core's `PROVISIONAL` label."""
+    cell = algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
                                                            if s not in one["terms"]}})
+    head, sep, rests = cell.partition(',"rests_on":')
+    if not sep or not (prov := PROVISIONAL.get(VERSION)):
+        return cell
+    got = json.loads(rests[:-1])
+    return head + sep + json.dumps({k: f"{v}; {prov}" if k == "fresh_products" else v for k, v in got.items()}) + "}"
+
+
+def rests_on(one: dict) -> str:
+    """What formalism.published's `one` rests on, with this te_core's `PROVISIONAL` label where fresh products bind."""
+    prov = PROVISIONAL.get(VERSION) if one["binding_kind"] == "fresh_products" else None
+    return f"{one['rests_on']}; {prov}" if prov else one["rests_on"]
 
 
 def finite(x):
@@ -400,13 +426,14 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
                    and math.isinf(v["rho"])]:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: reading A's rho is infinite at "
                              f"{' and '.join(inf)}, which no row publishes")
-        st["products"] = products(bound, bool(r.get("rounds")))
+        left = [g for g in read.get("untraced", []) if not g.endswith(IDLE)]
+        st["products"] = products(bound, bool(r.get("rounds")), left)
         said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
         run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
         con = one["console"]
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
-                     con["binding_kind"], con["rests_on"],
+                     con["binding_kind"], rests_on(con),
                      kinds(con, bound["console"]),
                      rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
