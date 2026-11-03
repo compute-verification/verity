@@ -1,0 +1,35 @@
+{
+ "reading": "A",
+ "traces": [
+  "art:1a6b80484f90b72fc043321db540a73351cc0fd64f2ccefb19c59ff6d1f7f8b6"
+ ],
+ "rows": [
+  {"workload": "standard", "model": "20M", "run": "r20261103-053241-99bf",
+   "art": "art:98886dbb131c581aba78ca63656a9164ebed620572592f38300e5724b7764f35",
+   "about": "the ref-optim island's record: ladder-v3 ref-optim continued from s-t20, Muon on the matrices and AdamW on the embedding and gains, WSD",
+   "dials": {"n_params": 35658240, "precision": "bf16", "seq_len": 1024, "batch_tokens": 131072, "optimizer": "muon",
+             "tokens_per_param": 4.23084}},
+  {"workload": "diloco", "model": "20M", "run": "r20261103-064814-40d6",
+   "art": "art:34893d2444f595acfe4cc4ef4419e61d9d74dfa7522f6af4fc7d57ce07941ae0",
+   "about": "M = 4 workers, 50 local AdamW steps each a phase; the outer step Nesterov SGD (lr 0.7, momentum 0.9) on the mean pseudo-gradient, passed in f32; reduction fan-in b = M = 4",
+   "dials": {"n_params": 35658240, "precision": "bf16", "seq_len": 1024, "batch_tokens": 65536, "optimizer": "adamw",
+             "inner_steps": 50, "syncs": 8, "sync_bits": 1141063680}},
+  {"workload": "lora", "model": "20M", "run": "r20261103-053921-7400",
+   "art": "art:52437c4f0b351e5eb8773407f6e0322a048e905431709117ff0c0f0a2a3a6bfa",
+   "about": "the e1mb island's record: a rank-16 LoRA on every layer's attention matrices",
+   "dials": {"n_params": 35658240, "rank": 16, "targets": "attn", "layers": null, "adapter_bits": 16,
+             "optimizer": "adamw", "seq_len": 1024, "batch_tokens": 65536, "tokens": 247136256}},
+  {"workload": "lora", "model": "20M", "run": "r20261103-053912-3133",
+   "art": "art:dcb71035bad834c4910275841ec62bef7490ce80de4532798aa34465ced2a1e6",
+   "about": "the e1mb island's record: a rank-16 LoRA on every layer's matrices",
+   "note": "invalid: 3,001.1 GPU-seconds of its 3,000",
+   "dials": {"n_params": 35658240, "rank": 16, "targets": "all", "layers": null, "adapter_bits": 16,
+             "optimizer": "adamw", "seq_len": 1024, "batch_tokens": 65536, "tokens": 242253824}},
+  {"workload": "distill", "model": "20M", "run": "r20261103-064849-6854",
+   "art": "art:e2787bc18892ae133f6e90e154295ad7976d6044b9a2a504c0fc7f96fcff51d8",
+   "about": "a half-width student (d_model 256, 6 layers) from scratch on the teacher's logits",
+   "dials": {"student_params": 13012224, "teacher_params": 35658240, "teacher_share": 1.0,
+             "teacher_precision": "bf16", "seq_len": 1024, "batch_tokens": 32768, "optimizer": "adamw",
+             "tokens_per_param": 1.51094}}
+ ]
+}

@@ -7,7 +7,8 @@ A body is at most `BODY_MAX` bytes (compact JSON, no NaN), a note at most `NOTE_
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
 it. The console's training panels are `training/algorithm-policy` and `training/frontier-fit` (te_core.algorithm_policy
-PUTs both with `put`): te_core.plots' five panels are off it, so nothing here PUTs them. `put` PUTs one panel to
+PUTs both with `put`) and `training/standard-workloads` (te_core.standard_workloads'): te_core.plots' five panels are
+off it, so nothing here PUTs them. `put` PUTs one panel to
 `PANELS_URL`/<id> with a
 Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status.
 """

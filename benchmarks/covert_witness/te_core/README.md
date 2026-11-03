@@ -142,6 +142,12 @@ the dial) is retired from the console and no longer PUT; `panels` still holds th
 token are at most the greater of its start's and the compute-optimal model's at its loss under the ladder's fit (their
 `--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or the fit doesn't reach its
 loss (`policy.CAP_FALLBACK`), so a grown model is still scored; the rest are left out as `over-cap`.
+`training/standard-workloads` is `standard_workloads`'s, PUT by `python -m te_core.standard_workloads --out DIR
+--publish`: the standard covert workloads (dense, DiLoCo, RL, inference, LoRA, distillation), each a small real run from a
+registered start named in `islands/standard-workloads/rows.json`, measured by this te_core (its traced structures where
+the island traced them; a generation run's rounds alone, priced as NVFP4) and priced by the one bound (`formalism.at`
+under reading A where the trace has `entries`, else B) at the dial's default and the console's default session, with
+each kind's term under both readings and each input labelled measured or assumed and why. It is not scored against H.
 
 ## What the integrator calls
 
@@ -177,6 +183,7 @@ python -m te_core.rescore --out DIR [--quantities measured|analysis|stubs]  # v2
 python -m te_core.plots --out DIR [--policy reference|inference|server|c1e14/k1e4] [--drop 0.01] [--from-scratch F.json]
 python -m te_core.algorithm_policy --out DIR [--publish] [--ladder-points F.json] [--ladder-fit FIT.json]  # both training panels
 python -m te_core.frontier_fit --out DIR [--publish] [--ladder-points F.json] [--ladder-fit FIT.json]      # training/frontier-fit alone
+python -m te_core.standard_workloads --out DIR [--publish] [--rows F.json]   # training/standard-workloads
 python -m te_core.panels frontier-branches --out DIR [--ladder-fit FIT.json]   # retired from the console, not PUT
 python -m te_core.policy [START ...]                 # each start's reference shapes and (c, k) grid
 python -m te_core.gates [--check]                     # gates per MAC by op; --check recompiles the Definitions
@@ -244,6 +251,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels |
 | `workloads.py` | the covert workloads of the console's *Standard training under the policy* plot, each a model: one function per workload from its dials (`Dial`) to the inputs of the one bound's kinds (`KINDS`: the token kind's as the console's columns, `columns`; its fresh products, `Fresh`, and optimizer steps, `Steps`, as `menu`), every kind's term, their max and the binding kind at the three policies (`rho`, `POLICIES`: the console default, it with attention counted, and the registered serving policy), measured records beside the model with every kind's term on each (`Check`, `recorded`), and each input's source, measured with its record or assumed with why (`input_status`); `python -m te_core.workloads --json te_core/workloads.json` |
 | `workloads.json` | `workloads.py`'s reference points and checks, which the console's tests pin (`tests/test_workloads.py` fails while it's stale) |
+| `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ by the one bound under its reading with every kind's term (`bounds`, `binding`), its token-form inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s token form at both dial points) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT |
 | `rho_vectors.py` | the one bound's test vectors (`rho_vectors.json`, `--write`): wildcard's grown adapter, a dense and a LoRA step on the tiny start at the dial's cells, under readings A and B |
 | `workloads_records.json` | the standard-workloads island's measured rows that `workloads.py` checks the model on: each row's panel cells (dials, run, `rho_inputs`, `input_status`) and its traced step's facts |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
