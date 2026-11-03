@@ -735,6 +735,9 @@ class Held:
     def path(self, position: int) -> bytes:
         return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
 
+    def entry(self):
+        return {"value": self.name, "root": self.root.hex(), "leaves": self.leaves, "words": self.words, "domain": "ef" * 64}
+
     def statement(self, positions):
         return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
                 {"value": self.name, "positions": list(positions), "paths": [self.path(p).hex() for p in positions]})
@@ -766,9 +769,10 @@ REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM"
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 
-def registered(n: int = 12, cap: int = 4) -> tuple[I.Window, Held]:
+def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = ()) -> tuple[I.Window, Held]:
     w = Held("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
-    circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2}, reads=(READ,)))
+    circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,),
+                                                                        values=held))
     win = I.Window(circuit, RUN, LAW, cap, registered={"w": w})
     ins, _ = values(n)
     ins[2] = w.rows[np.arange(n) // 2].view(np.uint8)
@@ -847,6 +851,32 @@ def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
     for bad in (("v",), ("w", "w")):
         with pytest.raises(ValueError, match="each once"):
             replace(circuit, registered=replace(reg, values=bad))
+
+
+def test_a_window_registers_its_circuits_values_by_their_entries_chained_after_the_last_record(tmp_path):
+    """With values, `Window.write` registers each by its committed value's entry, in the circuit's order, chained after
+    ``previous``, and names the record v2 (core's ``record`` makes it ``verity/registration/v2`` with entries); without,
+    none and v1. A value with no committed value is refused before anything is written."""
+    got = {}
+
+    def record(*_x, **k):
+        got.clear()
+        got.update(k)
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
+                         "digest": staticmethod(lambda rec: "d")})
+    win, w = registered(held=("w",))
+    doc = win.write(win.close(salt_key=bytes(32)), tmp_path / "v2", {"by": "test"}, registrar=reg, previous="ab" * 64)
+    assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, "f2")
+    plain, _ = registered()
+    doc = plain.write(plain.close(salt_key=bytes(32)), tmp_path / "v1", {"by": "test"}, registrar=reg)
+    assert (got["registered"], got["previous"], doc["registration"]) == ([], None, "f1")
+    unheld, _ = registered(params={"v": 8}, held=("v",))
+    c = unheld.close(salt_key=bytes(32))
+    with pytest.raises(ValueError, match=r"values \['v'\] have no committed value"):
+        unheld.write(c, tmp_path / "unheld", {"by": "test"}, registrar=reg)
+    assert not (tmp_path / "unheld").exists()
 
 
 def test_a_read_covers_whole_members_and_reads_whole_rows():

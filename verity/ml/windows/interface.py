@@ -2091,22 +2091,30 @@ class Window:
                               blocks=blocks.doc(sum(self.circuit.units.values()), self.window.partition_digest) if blocks else None)
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
-              kind: str = "served", index_salt: bytes | None = None) -> dict[str, Any]:
+              kind: str = "served", index_salt: bytes | None = None, previous: str | None = None) -> dict[str, Any]:
         """The window's files (`rows.write`, its prover-only ``index.json`` the labels, bound by their hiding leaf under
         ``index_salt``) and ``circuit.json``, the registration core's record made by ``registrar`` (core's
-        ``one_stage.registration``), its window naming ``provenance``, the circuit record's SHA-512, the advice binding and
+        ``one_stage.registration``), chained after ``previous`` (the digest of the prover's last record; None for its
+        first), its window naming ``provenance``, the circuit record's SHA-512, the advice binding and
         each registered value's root by parameter (``registered_roots``, which `input_count` holds to the verifier's pins);
+        with the circuit's values (`Registered.values`), a ``verity/registration/v2`` record registering each by its
+        committed value's entry, as one-stage's R7 holds its program's parameters;
         each member reading a registered value, its header naming each table row's position and path (`close`), each path
         and each row it reads by reference written once for the window (`rows.write`)."""
+        held = self.registered or {}
+        if missing := [v for v in program_values(self.circuit.registered) if v[0] not in held]:
+            raise ValueError(f"the circuit's values {[v for v, _n, _w in missing]} have no committed value: give each in "
+                             "the window's registered")
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
         (d / "circuit.json").write_bytes(body)
-        roots = {p: v.root.hex() for p, v in sorted((self.registered or {}).items())}
+        roots = {p: v.root.hex() for p, v in sorted(held.items())}
         bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {}),
                  **({"registered_roots": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
-                        index_salt=index_salt)
+                        index_salt=index_salt, previous=previous,
+                        entries=[held[v].entry() for v, _n, _w in program_values(self.circuit.registered)])
 
 
 class Integration(Protocol):
