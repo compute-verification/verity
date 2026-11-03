@@ -19,12 +19,10 @@ what `RefSession.SwVals` reads, once each pad index has one round that frees it.
 * **`Loop.vsOf L bx`**: at each pad index, `freeWord`'s word where the frame frees one there; at `final_c`'s index the
   c_eval of the round-1c values at the coins' zerocheck point (`zcE`), as the firewall's finish computes it; at every
   other index the table's own value (`Table.vals`).
-* **`Loop.takesVals_vsOf`**: at `SessionLoopZKDeployed`'s release with the loop's own inner rounds (`withInner`), at
-  its premises on the statement and the loop's inputs, `phased bx post` meets `TakesVals` at `vsOf bx`, whatever `post`
-  reads, at every `bx` that never reads `Hello`'s answer (`Loop.HelloBlind`).
 * **`Loop.finalCFixed_vsOf`**: `vsOf bx`'s `final_c` is its round-1c values' c_eval (`Loop.FinalCFixed`), at every
   coins, by construction: no round frees `final_c`'s pad.
 
+`Loop.takesVals_vsOf` (`SessionLoop/VsOfTakes`) proves that `phased bx post` meets `TakesVals` at `vsOf bx`.
 `Loop.HelloBlind` is not yet a premise of any guarantee. `Loop.blind` hands the worker `Hello`'s answer read as a coin
 (`ZkServer.lift` maps `CoinLayer.rd` over the whole history), while `TakesVals` reads `vs` at the coins the later answers
 open, so at a worker that reads `Hello`'s answer no `vs` meets it: the verifier chooses that answer, and two answers
@@ -158,36 +156,6 @@ theorem finalCFixed_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) : FinalCFi
   rw [vsWord_vsOf L bx x w ν c τ j r (hr1c i hi), ite_eq_right (Nat.ne_of_lt (hlt i hi))]
 
 end VsOf
-
-/-- **A pad-blind worker of the algebraic phase meets `TakesVals` at its own values**: at `SessionLoopZKDeployed`'s
-release with the loop's own inner rounds (`withInner`), at its premises on the statement and the loop's inputs, at
-every algebraic phase's worker `bx` that never reads `Hello`'s answer (`HelloBlind`) and any worker `post` after the
-phase, `phased bx post` meets `TakesVals` at `vsOf bx`. Each pad index has one round that frees it: an earlier round of
-a live history passed the frame's check, so it frees the scheduled round's words (`passes_frames`,
-`roundFree_alike_ok`), and the frame's state before a round reads only the coins (`Loop.progOf`, `Loop.freshOf`); and
-there the word is `bx`'s at the nonce, what the workers see and the coins after `Hello` (`phased_eq`). -/
-theorem takesVals_vsOf
-    (L₁ : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
-    (src : Msg → Flock.Wit →
-      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit →
-      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (Tab × Array ByteArray))
-    (fin : Msg → Flock.Wit →
-      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      List (Msg × Msg) → Array ByteArray)
-    (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
-    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
-    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
-    (hSrc : Loop.Src (LeanRelease.withInner Masked.dataE L₁ real fin) src x w)
-    (bx : AlgWorker (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real))
-    (hH : HelloBlind _ bx)
-    (post : (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real).toSrv.Worker) :
-    TakesVals (vsOf _ bx) (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real)
-      (phased _ bx post) x w := by
-  sorry
 
 end Loop
 
