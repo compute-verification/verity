@@ -880,8 +880,8 @@ def bindings(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None
 def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
     """Which of ``n`` zygotes makes the targets ``tasks`` leave to be made where they are checked (`_prepare`), by the binding
     that they are made through: each binding to the zygote whose bindings took the least CPU to build so far (``seconds``:
-    `units.built_apart`'s, or its record's; a second for a record a full build stored), the longest first, so the bodies those
-    targets share are built by one zygote."""
+    `units.built_apart`'s, or the ones kept beside its record; a second for a record a full build stored), the longest first,
+    so the bodies those targets share are built by one zygote."""
     vias = {_info(t)["via"] for t in tasks if "make" in _info(t)}
     load, out = [0.0] * n, {}
     cost = {e.name: e.seconds if e.seconds is not None else 1.0 for e in plan.entries if e.name in vias}
