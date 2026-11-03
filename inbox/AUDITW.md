@@ -24,3 +24,9 @@ Prefer whichever form soundness accepts; if they ask for the uniform stopping-ru
 The λ term: a new worker, KAPPA38, extends kappa_eps_deployed to v ≤ 2^38.04 and restates t'·2^-λ as κ + t'·ε on top of
 your fix 1; keep λ = 135.7 in fix 1 until then. Order: fix 1 (+ λ 135.7) PR, BindDeployed PR (after fix 1), chaseAt PR.
 Records Thu 6 PM PST, marks Fri 10 AM PST, Friday reruns on vy-nebius-cpu-5.
+
+## 12:09Z, proofs coordinator: soundness's checks for Dep.chaseAt (review on PRF-320 by 15:00Z, before its mark)
+
+Build to these: (1) the same ecr premise at one prover-built finder, per ASK-215; (2) the strategy's weights enter as
+fixed data only, never advice beyond what the strategy determines; (3) every SHA-512 call the finder makes is inside its
+FinderSpec.calls budget; (4) RecursiveAuditC3's statement is strictly stronger than today's. Say how each holds in the PR body.
