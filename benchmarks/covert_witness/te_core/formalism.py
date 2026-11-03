@@ -112,11 +112,8 @@ per consumed token at ⌈log2 V⌉ bits, plus `tau_other_bits`), a, u_in, u and 
 under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of θ' (`trace.update_cut_bits`) is the
 carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
 "u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "labels"}, which `of_record` passes
-<<<<<<< HEAD
 through field by field. The trace's Δ_grad leaves θ' out of its carried state (a latent the step quantizes is θ' as the
 step reads it), so Δ_t + Δ_grad counts the latents once.
-=======
-through field by field.
 
 **The decoder** (`decoder`; seed-mezo's 04:15Z finding): d is the block's `decoder_gates` where it gives one,
 else the gates the record's program reports for the checkpoint's E (`output.decoder_gates`, ingest's from the
@@ -133,7 +130,6 @@ never scored, with the reason, when
   trace carries every earlier step's read-back, so its Δ_grad grows with the step;
 - E is not empty (Δ > 0, or E's size unknown) but the trace shows no update: its affected share is 0, or u(1) is 0.
 Any row with a nonempty E whose prefix has no affected gates (no step through its checkpoint reads θ') is refused too.
->>>>>>> 6a0d0067ee
 """
 from __future__ import annotations
 

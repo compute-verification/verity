@@ -9,7 +9,8 @@ and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the u
 it. The console's training panels are `training/algorithm-policy` and `training/frontier-fit` (te_core.algorithm_policy
 PUTs both with `put`): te_core.plots' five panels are off it, so nothing here PUTs them. `put` PUTs one panel to
 `PANELS_URL`/<id> with a
-Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status.
+Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status; `served` GETs the
+panels the route serves for a producer.
 """
 from __future__ import annotations
 
@@ -26,7 +27,7 @@ BODY_MAX = 65536
 NOTE_MAX = 500
 #: the route's cell limit, live since the dashboard's 05:05Z change
 CELL_MAX = 4096
-COLUMNS_MAX, NAME_MAX = 24, 60
+COLUMNS_MAX, NAME_MAX, SOURCE_MAX = 24, 60, 300
 REF_TARGET = -1.0
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LOSSES = ("loss", "loss_lo", "loss_hi", "l0")
@@ -52,13 +53,15 @@ def body(p: dict) -> bytes:
 
 
 def refused(p: dict) -> list[str]:
-    """What the route refuses in `p`: its columns are 1 to `COLUMNS_MAX` distinct names of at most `NAME_MAX`
-    characters, and a row has one cell per column, each a number, a string of at most `CELL_MAX` characters, or null
-    (a boolean is none of them)."""
+    """What the route refuses in `p`: its source is 1 to `SOURCE_MAX` characters, its columns are 1 to `COLUMNS_MAX`
+    distinct names of at most `NAME_MAX` characters, and a row has one cell per column, each a number, a string of at
+    most `CELL_MAX` characters, or null (a boolean is none of them)."""
     def ok(v):
         return v is None or isinstance(v, (int, float)) and not isinstance(v, bool) or \
             isinstance(v, str) and len(v) <= CELL_MAX
-    cols, out = p["columns"], []
+    cols, out, source = p["columns"], [], p.get("source") or ""
+    if not 1 <= len(source) <= SOURCE_MAX:
+        out.append(f"its source is {len(source)} characters, not 1 to {SOURCE_MAX}")
     if not 1 <= len(cols) <= COLUMNS_MAX or len(set(cols)) < len(cols) or any(len(c) > NAME_MAX for c in cols):
         out.append(f"its {len(cols)} columns aren't 1 to {COLUMNS_MAX} distinct names of at most {NAME_MAX} "
                    "characters")
@@ -182,6 +185,17 @@ def put(p: dict) -> str:
             return str(r.status)
     except urllib.error.HTTPError as e:
         return f"{e.code} {e.read()[:400].decode(errors='replace')}"
+
+
+def served(producer: str = "training") -> dict[str, dict]:
+    """The panels the route serves for `producer`, by id (GET `PANELS_URL`?producer=, the same token as `put`)."""
+    import urllib.request
+
+    from research.slack import oidc_token
+    req = urllib.request.Request(f"{PANELS_URL}?producer={producer}",  # noqa: S310 (a fixed https URL)
+                                 headers={"Authorization": f"Bearer {oidc_token(PANELS_URL)}"})
+    with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310
+        return {x["panel"]["id"]: x["panel"] for x in json.loads(r.read())["panels"]}
 
 
 def main(argv=None) -> int:
