@@ -1134,6 +1134,33 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
+    """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits none of
+    the given-up rows' cells.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
+    pass published their root, the verdict refuses before it takes its coin."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins = published(path)
+    assert VP.volunteer(path, coins, 1)["ok"]
+    good = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4)
+    assert good["answer"]["verdict"] == "accept", good["line"]
+    p = VR.load(path, coins)
+    assert any(r.voluntary_a or r.voluntary_b for r in p.records)
+    kept = sum(r.k_kept * (r.real_rows - len(r.excluded_a) - len(r.voluntary_a)) *
+               (r.matmul.shape.n - len(r.excluded_b) - len(r.voluntary_b)) for r in p.records)
+    whole = sum(r.k_kept * (r.real_rows - len(r.excluded_a)) * (r.matmul.shape.n - len(r.excluded_b)) for r in p.records)
+    assert good["answer"]["public"]["work"]["macs"] == kept < whole
+    assert good["answer"]["public"]["work"]["credited"] == VR.credit_at_assumption([p], 3, VR.DELTA)["credited"]
+    man = json.loads(path.read_text())
+    u = next(u for u in man["matmuls"] if u.get("voluntary_a"))
+    for given, why in (([i for i in range(u["real_rows"]) if i not in u["excluded_a"]][:CW.voluntary_cap(u["m"]) + 1],
+                        "more voluntary rows than V-EX allows"),
+                       ([], "not the ones whose root the pass published")):
+        path.write_text(json.dumps({**man, "matmuls": [{**x, "voluntary_a": given} if x is u else x for x in man["matmuls"]]}))
+        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4)
+        assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, r["line"]
+
+
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
     given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the
