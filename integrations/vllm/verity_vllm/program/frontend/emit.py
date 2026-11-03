@@ -24,7 +24,8 @@ import torch
 from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
 from verity.ml.circuits.types import RecordType
 from verity_vllm.program.frontend.value_types import flat_types
-from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA
+from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
+from verity_vllm.program.prune import kept_records
 
 _ROW_RE = re.compile(r"\[(\d+)\]")
 _COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather",    # op name -> collective kind (operands in rank order);
@@ -508,9 +509,21 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             "occurrences": occurrences, "calls": calls}
 
 
+def kept_correspondence(ctx, body, *, rank: tuple[int, int] | None, registered: bool, emit: bool = True):
+    """`(body, doc, digest, hints)`: the flat `body` in the registered compiler's form when `registered` (`prune.kept_records`),
+    its runtime correspondence with the kept Calls and that document's digest, and the kept node hints.  `doc` and `digest` are
+    None when not `emit` (a graph no serving runtime executes)."""
+    doc = emit_correspondence(ctx, body, rank=rank) if emit else None
+    body, calls, hints = kept_records(body, None if doc is None else doc["calls"], ctx.node_hints, registered=registered)
+    if doc is None:
+        return body, None, None, hints
+    doc["calls"] = calls
+    return body, doc, correspondence_digest(doc), hints
+
+
 def attach(program, doc: dict) -> None:
     """Write `doc` under the one namespace of `program.annotations` (annotations are excluded from `program_digest`)."""
     program.annotations[NAMESPACE] = doc
 
 
-__all__ = ["emit_correspondence", "attach", "NAMESPACE"]
+__all__ = ["emit_correspondence", "kept_correspondence", "attach", "NAMESPACE"]
