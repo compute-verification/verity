@@ -524,15 +524,24 @@ def submit(a, *args, **kw) -> None:
     prepare.submit(Path(a.out), a.start, *([a.klass] if getattr(prepare, "CLASSES", None) else []), *args, **kw)
 
 
-QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)|shrink(\d)")
+QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)|shrink(\d)|stride(\d+)")
 #: a qat arm that trains the weights unquantized; its checkpoints encode `--variants` of them, as ptq's do
 QAT_FP = "fp"
 
 
 def qat_bits(scheme: str) -> int:
-    """A qat scheme's code width: 1 for sign, 2 for tern and sparse, else its digit."""
+    """A qat scheme's code width: 1 for sign, 2 for tern, sparse and stride{S}, else its digit."""
     m = QAT_SCHEME.fullmatch(scheme)
-    return 1 if scheme == "sign" else 2 if scheme in ("tern", "sparse") else int(m.group(1) or m.group(2))
+    return (1 if scheme == "sign" else 2 if scheme in ("tern", "sparse") or m.group(3) else
+            int(m.group(1) or m.group(2)))
+
+
+def stride_support(shape: tuple, s: int, device) -> torch.Tensor:
+    """The fixed support of `stride{S}`: entry (r, c) of a matrix when (c − r) mod S is 0, so each row and column holds
+    a S-th of the entries, staggered from row to row; it reads only the shape."""
+    r = torch.arange(shape[0], device=device)[:, None]
+    c = torch.arange(shape[1], device=device)[None, :]
+    return (c - r) % s == 0
 
 
 @torch.no_grad()
@@ -543,7 +552,9 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float
     are the ceil(keep · group / B) runs of B consecutive entries with the largest sum of |V|, so the support costs the
     entropy coder a B-th as much a kept entry. `shrink{b}`: soft threshold, so an entry enters the support at zero rather
     than at the full scale: r = |V| less the ceil(keep · group)-th largest |V| (at least 0), rounded at `mult` times the
-    mean of r's positive entries to 0..qmax (b-bit levels -qmax..qmax), with V's sign."""
+    mean of r's positive entries to 0..qmax (b-bit levels -qmax..qmax), with V's sign. `stride{S}`: sign(V) on the fixed
+    support `stride_support` (an S-th of each matrix, staggered), at `mult` times its mean |V|, zero off it; the support
+    reads only the shape, so the coder spends about a bit a support entry."""
     g = v.numel() if group < 0 else qf.groups_of(v, group)
     vg = v.reshape(-1, g)
     if scheme == "sparse":
@@ -561,6 +572,11 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float
             kept = (a >= a.kthvalue(g - n_keep + 1, dim=1, keepdim=True).values) & (a > 0)
         s = qf._f16(mult * (a * kept).sum(1) / kept.sum(1).clamp(min=1))
         k = torch.where(kept, torch.where(vg >= 0, 2, 0), 1).to(torch.uint8)
+        return qf.QArray(torch.tensor([-1.0, 0.0, 1.0, 0.0], dtype=torch.float16), s, k.view(-1), 2, g, tuple(v.shape))
+    if scheme.startswith("stride"):
+        sup = stride_support(tuple(v.shape), int(scheme[6:]), v.device).reshape(vg.shape)
+        s = qf._f16(mult * (vg.abs() * sup).sum(1) / sup.sum(1).clamp(min=1))
+        k = torch.where(sup, torch.where(vg >= 0, 2, 0), 1).to(torch.uint8)
         return qf.QArray(torch.tensor([-1.0, 0.0, 1.0, 0.0], dtype=torch.float16), s, k.view(-1), 2, g, tuple(v.shape))
     bits = qat_bits(scheme)
     qmax = 2 ** (bits - 1) - 1
@@ -868,7 +884,7 @@ def main() -> int:
                     help="all | blocks | blockmats | top{K} (the top K blocks and the final norm) | name regexes, comma-separated")
     ap.add_argument("--variants", default="fp,rtn4g128,rtn3g128,rtn2g128,sign,tern0.7", help="ptq")
     ap.add_argument("--norm-bits", type=int, default=8, help="ptq: the norm gains' rtn bits")
-    ap.add_argument("--qat", default="tern", help="qat: sign | tern | sparse | shrink{b} | rtn{b} | fp (unquantized; its "
+    ap.add_argument("--qat", default="tern", help="qat: sign | tern | sparse | shrink{b} | stride{S} | rtn{b} | fp (unquantized; its "
                                                   "checkpoints encode --variants, as ptq's do)")
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
