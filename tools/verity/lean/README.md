@@ -472,7 +472,8 @@ record before Lake unpacks the modules whose input hashes match, and the rest co
 ArkLib. A miss, a mismatch, a missing read credential (the `LEAN_CACHE_*` variables, else
 `~/.config/verity/lean-cache-read.env`), the kill switch or `LEAN_CACHE=off` means building from source. The audit never
 reads it: `lake_env()` sets `LEAN_CACHE=off`, and check's audit and a records run restore only from their node's own Lake
-cache, which only a passing run there fills (`lean_audit.LakeArtifacts`, keyed by `module_keys.py`). `cache.py`'s
+cache, which only a passing run there fills (`lean_audit.LakeArtifacts`): each build reads a copy staged for it of the
+modules whose key (`module_keys.py`, the task graph's key of its compile) it indexes, and builds the rest. `cache.py`'s
 docstring has the bucket's layout and how integration publishes (as root, outside the build's sandbox, from a clean
 checkout of `origin/main`), and `run_daily.py`'s the daily publish.
 

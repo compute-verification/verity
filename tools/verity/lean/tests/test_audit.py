@@ -2608,7 +2608,7 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
 def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
     """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
     step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
-    never written), holding the modules the cache indexes under their sha256 keys, and gone once the build ends."""
+    never written), holding the modules the cache indexes under their keys, and gone once the build ends."""
     mk = A.sibling("module_keys")
     pkg, store = tmp_path / "p", tmp_path / "store"
     (pkg / "P").mkdir(parents=True)
@@ -2617,13 +2617,12 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
     (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
     (pkg / "P.lean").write_text("theorem p : True := trivial\n")
-    k = mk.keys(pkg)["P"]
     (store / "artifacts").mkdir(parents=True)
     (store / "artifacts" / ("a" * 16 + ".olean")).write_bytes(b"P")
     (store / mk.INDEX).mkdir()
-    (store / mk.INDEX / f"{k.key}.json").write_text(json.dumps({
+    mk.entry_path(store, mk.key("P", mk.keys(pkg), {})).write_text(json.dumps({
         "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
-        "sha256": {"a" * 16 + ".olean": hashlib.sha256(b"P").hexdigest()}}))
+        "digests": {"a" * 16 + ".olean": mk.C.digest(b"P")}}))
     cache = store / mk.STAGE / f"{os.getpid()}-p"
     seen = []
 
