@@ -1,5 +1,5 @@
 """te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's policy,
-te_core.policy's CONSOLE, one full session of the 45M reference (the dashboard's 10:23Z ruling): workloads.json (the
+te_core.policy's CONSOLE, one full session of the 45M reference (the dashboard's 10:22Z ruling): workloads.json (the
 console's tests read it) is the module's output, with each workload's default point at the registered serving block
 beside the rows; rho is formalism.published's on the model's products, read as is, and takes only the kinds valid on
 their own (te_core 4.5's formalism.KINDS: the fresh products, the token kind under reading A and decoding), Fit where
@@ -32,7 +32,7 @@ from te_core import algorithm_policy as AP
 from te_core import formalism, io_bound, panels, policy
 from te_core import workloads as W
 
-#: the console's c before the dashboard's 10:23Z ruling, 5,120 session tokens of the 45M reference at 2N FLOPs and 740
+#: the console's c before the dashboard's 10:22Z ruling, 5,120 session tokens of the 45M reference at 2N FLOPs and 740
 #: gates a FLOP, attention left out
 OLD_C = 5120 * 2 * 45e6 * 740
 WORKLOAD_OF = {ck.name: w.name for w in W.WORKLOADS.values() for ck in w.checks}
@@ -276,11 +276,13 @@ def test_the_serving_block_is_a_headline_beside_the_rows(ref):
     SERVED: c = 3.009e13 gates, k = 145,568 bits), is a headline beside the rows, which stay at the console's policy:
     the same rule on the same model, lower than the console's on every default, a block there holding 17.8 times
     less work and reading 2.2 times the bits. Standard pretraining reads 6.39e3 there, with 8.22e4 under P-cell,
-    against 2.66e5 and 5.01e6 at the console's policy."""
+    against 2.66e5 and 5.01e6 at the console's policy. Its caption and the policy's name modules, never the
+    package."""
     s = ref["serving_block"]
     assert W.SERVED == panels.SERVED == (30_087_822_237_972, 145_568) and (s["c"], s["k"]) == W.SERVED
     assert W.POLICIES == {"default": policy.CONSOLE} and set(ref["policies"]) == {"default"}
     assert s["block"] == W.SERVED_NOTE and set(s["defaults"]) == set(W.WORKLOADS)
+    assert "te_core" not in s["block"] and "te_core" not in ref["policies"]["default"]["what"]
     for name, got in s["defaults"].items():
         r = W.rho(W.model(name, **settings(name, "default")), *W.SERVED)
         assert close(got, json.loads(json.dumps({key: r[key] for key in W.CHECKED})), 1e-12), name
@@ -322,7 +324,7 @@ def test_the_model_is_io_bounds_captured_steps():
 
 
 def test_the_policy_is_the_consoles(ref):
-    """The rows are reported at the console's policy only (the dashboard's 10:23Z ruling), te_core.policy's CONSOLE:
+    """The rows are reported at the console's policy only (the dashboard's 10:22Z ruling), te_core.policy's CONSOLE:
     one full session of the 45M reference, attention and the LM head included, 1.5739 times the attention-free c the
     console used before. A block holds 2,294 of the model's 45M training tokens, where the old c held 1,457.5 (the
     pilot's records: 1,458 to 1,471), and an estimate of 1,250 takes a training token as 4.1 session tokens' 2N FLOPs,

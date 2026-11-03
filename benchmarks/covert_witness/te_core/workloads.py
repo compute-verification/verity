@@ -66,7 +66,7 @@ publishes: a target, not a bound. A DiLoCo sync has no tokens, so no term prices
 
 The conventions every workload shares:
 
-- **Policy** (`POLICIES`): the console's only, the one the dashboard reports rows at (its 10:23Z ruling): `default`,
+- **Policy** (`POLICIES`): the console's only, the one the dashboard reports rows at (its 10:22Z ruling): `default`,
   te_core.policy's `CONSOLE`, one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention
   and the LM head included (`policy.session_gates`, 5.36682e14 gates, 1.5739 times the 5,120 x 2 x 45e6 x 740 that
   left attention out), and k = 65,536 bits. It holds c/w = 2,294 of the model's 45M training tokens (w = 2.3396e11
@@ -285,17 +285,18 @@ def decode_span(prompt: float, generated: float) -> float:
     return (prompt * prompt + generated * prompt + generated * generated / 2) / (prompt + generated)
 
 
-#: the policy the rows are reported at, the console's only (the dashboard's 10:23Z ruling): te_core.policy's `CONSOLE`
+#: the policy the rows are reported at, the console's only (the dashboard's 10:22Z ruling): te_core.policy's `CONSOLE`.
+#: The captions below are headings a reader sees, so they name modules, never the package
 POLICIES = {"default": policy.CONSOLE}
 POLICY_NOTES = {
-    "default": "the console's policy (te_core.policy.CONSOLE, the dashboard's 10:23Z ruling): one full session of the "
+    "default": "the console's policy (policy.CONSOLE, the dashboard's 10:22Z ruling): one full session of the "
                "45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included "
                "(policy.session_gates), k = 65,536 bits",
 }
 #: the registered serving block, rehearsal 2's measured session (te_core.panels' `SERVED`, c gates and k bits): each
 #: workload's default point there is a headline beside the rows (`serving_block`), never a row
 SERVED = panels.SERVED
-SERVED_NOTE = ("the registered serving block, rehearsal 2's measured session (te_core.panels.SERVED): one slot's 35-step "
+SERVED_NOTE = ("the registered serving block, rehearsal 2's measured session (panels.SERVED): one slot's 35-step "
                "session of Llama-3.2-1B int8 under vLLM, c in one-bit gates (a lower bound: its 133 BitAtx32_v1 "
                "activations a block are unpriced) and k its fresh bits; a headline beside the rows, which are at the "
                "console's policy only")

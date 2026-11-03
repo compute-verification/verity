@@ -8,11 +8,11 @@
   "default": {
    "c": 536682000000000.0,
    "k": 65536.0,
-   "what": "the console's policy (te_core.policy.CONSOLE, the dashboard's 10:23Z ruling): one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits"
+   "what": "the console's policy (policy.CONSOLE, the dashboard's 10:22Z ruling): one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits"
   }
  },
  "serving_block": {
-  "block": "the registered serving block, rehearsal 2's measured session (te_core.panels.SERVED): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced) and k its fresh bits; a headline beside the rows, which are at the console's policy only",
+  "block": "the registered serving block, rehearsal 2's measured session (panels.SERVED): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced) and k its fresh bits; a headline beside the rows, which are at the console's policy only",
   "c": 30087822237972,
   "k": 145568,
   "defaults": {
