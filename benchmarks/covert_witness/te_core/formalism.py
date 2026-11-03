@@ -859,6 +859,24 @@ def whole_chain(system: dict, k: float) -> dict:
                                     "counted": dict(system["counted"]), "b": system["b"]}, k)
 
 
+def traced_products(p: dict | None, block: dict | None) -> dict | None:
+    """Products ingest took from a trace's rows (`p`, `products_of_trace` of `block`) as this te_core takes them from
+    the same rows over the same traced steps (their kinds' MACs over the rows' own), whatever te_core ingested the
+    record, so the rows are read by this te_core's rules: an ingest before 4.12 kept no whole-making system, which
+    `fresh_products` reads as products of no trace (`ONE_CLASS`), 4.12's kept one that counts the products reading
+    gathered rows, which it would read as this te_core's, 4.12.1's kept them at the console's k only, though the trace
+    keeps rows at each k of the dial (`at`, which `classified_at` reads), te_core 4.8's kept the trace's order unknown,
+    which it never measures, and before 4.10 an upcast operand's product was an expansion. Taken again, rows captured
+    before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered` are measured on
+    their system, at each k their trace keeps rows at. Products a record has of its own (no `kinds_macs`), and a block
+    with no trace rows, stand."""
+    if p is None or block is None or "kinds_macs" not in p:
+        return p
+    per = sum(r["count"] * r["macs"] for r in block["rows"])
+    return products_of_trace(block, sum(p["kinds_macs"].values()) / per if per else 1.0) | {
+        k: p[k] for k in ("stand_in",) if k in p}
+
+
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
     """The fresh-products kind's term at (c, k), te_core.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
     products (`Measured.products`) and the record's |C|, its figure without P-cell (`rho_no_cell`; with it where
@@ -1307,7 +1325,8 @@ def _part(p: dict, labels: dict) -> Part:
 
 def complete(f: dict, row: dict, shape: dict) -> Measured:
     """`f`'s quantities (a `formalism` block, possibly partial), each missing one stubbed (`STUBS`) from the row and the
-    start's shape; `labels` names every quantity's source."""
+    start's shape, and a trace's products this te_core's of its rows (`traced_products`); `labels` names every
+    quantity's source."""
     labels = dict(f.get("labels", {}))
     if f.get("parts"):
         parts = tuple(_part(p, labels) for p in f["parts"])
@@ -1360,11 +1379,12 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
     if ops is None and log.get("ops"):
         ops = tiles.of_log(log)
         labels.setdefault("ops", OPS)
-    if f.get("products") is not None:
+    products = traced_products(f.get("products"), (f.get("trace") or {}).get("products"))
+    if products is not None:
         labels.setdefault("products", PRODUCTS)
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["u_in"], out["delta_bits"],
                     out["decoder_gates"], labels, t, f.get("context"), f.get("delta_t_bits"), entries, ops,
-                    f.get("products"))
+                    products)
 
 
 def decoder(f: dict, row: dict) -> tuple[float | None, str | None]:
