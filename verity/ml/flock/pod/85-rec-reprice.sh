@@ -352,7 +352,7 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
     TREE_FROM=local
     challenger_end $O/inner/challenger; echo "challenger exit $?"
     if [ $rc = 0 ]; then
-      python3 verity/ml/flock/pod/rec_inner.py tree-held --challenger $O/inner/challenger $DD/inner/s* \
+      python3 verity/ml/flock/pod/rec_inner.py tree-held --challenger $O/inner/challenger $DD/inner/s[0-9]* \
         > $O/inner/tree-held.json || rc=1
       cat $O/inner/tree-held.json
     fi
