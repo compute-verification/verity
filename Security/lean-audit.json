@@ -2527,6 +2527,18 @@
    "honest": ["Flock.SecurityProofs.RecStopsOfRun_honest"],
    "nontrivial": "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
   },
+  "Flock.SecurityProofs.UnrelLeBudget": {
+   "honest": ["Flock.SecurityProofs.UnrelLeBudget_honest"],
+   "nontrivial": "Flock.SecurityProofs.UnrelLeBudget_nontrivial"
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget": {
+   "honest": ["Flock.SecurityProofs.UnreleasedLeBudget_honest"],
+   "nontrivial": "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
+  },
+  "Flock.SecurityProofs.StreamStopBudget": {
+   "honest": ["Flock.SecurityProofs.StreamStopBudget_honest"],
+   "nontrivial": "Flock.SecurityProofs.StreamStopBudget_nontrivial"
+  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
@@ -6790,6 +6802,60 @@
    ],
    "assumptions": [],
    "type_hash": "0e7c61e7cf8c6b4569aa536ba814bf87f8d5ab897f2fa13b12e49372fa921f46"
+  },
+  "Flock.SecurityProofs.UnrelLeBudget": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.UnrelLeBudget : Flock.Guarantees.UnrelLeBudget"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.UnrelLeBudget_honest": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.UnrelLeBudget_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.UnreleasedLeBudget : Flock.Guarantees.UnreleasedLeBudget"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget_honest": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.StreamStopBudget": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.StreamStopBudget : Flock.Guarantees.StreamStopBudget"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.StreamStopBudget_honest": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.StreamStopBudget_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Flock.SecurityProofs.RecursionClaimsStated": {
    "owner": "@proofs",
@@ -13548,7 +13614,16 @@
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.RecStopsOfRun": "frozen (no-function): a recursive session's stops at the firewall's rules (Flock.StopCount.run: Firewall.Record's ops, admit, slot, stop, release, Decision.after, in any order), proved at every run, message counts and session with no premise: what reached the auditor of each statement is cutAt's at the run's stop (recStop, one of StopLeak's RecStops), each statement is admitted at most once, a session that stops has a statement not released, and proofs leave at their release time; it reads Flock.StopCount (Security/Proofs/Flock/Recursive/StopCount.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.RecStopsOfRun_honest": "completeness: RecStopsOfRun's honest lemma (its witnesses entry): at an honest run of the record's ops (a scheduled session of one statement, its inner session finished, its outer session admitted, released at its release time), the session runs through, every message reached the auditor and nothing is left unreleased, so RecStopsOfRun is not vacuous there.",
-   "Flock.SecurityProofs.RecStopsOfRun_nontrivial": "completeness: RecStopsOfRun's nontrivial lemma (its witnesses entry): at a firewall without admit (Flock.StopCount.Witness.stepAll), a statement's message reaches the auditor before the inner session's, which is no cut at the run's stop, a counterexample for another firewall, not a property of the deployed one."
+   "Flock.SecurityProofs.RecStopsOfRun_nontrivial": "completeness: RecStopsOfRun's nontrivial lemma (its witnesses entry): at a firewall without admit (Flock.StopCount.Witness.stepAll), a statement's message reaches the auditor before the inner session's, which is no cut at the run's stop, a counterexample for another firewall, not a property of the deployed one.",
+   "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (Security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
+   "Flock.SecurityProofs.UnrelLeBudget_honest": "completeness: UnrelLeBudget's honest lemma (its witnesses entry): at an honest stream of the record's ops at budget 1 (a session finished, admitted in the slot and released, then the next one opened), one of its sessions is left unreleased, the budget reached, so UnrelLeBudget is not vacuous there.",
+   "Flock.SecurityProofs.UnrelLeBudget_nontrivial": "completeness: UnrelLeBudget's nontrivial lemma (its witnesses entry): at a firewall without rule 4's refusals (Flock.StopCount.Witness.openMade, every open made), a stream at budget 1 leaves two sessions unreleased, a counterexample for another firewall, not a property of the deployed one.",
+   "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (Security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
+   "Flock.SecurityProofs.UnreleasedLeBudget_honest": "completeness: UnreleasedLeBudget's honest lemma (its witnesses entry): at an honest run at budget 1 (a session runs through, its statement accepted and released, then the next one opens), the next is left unreleased, the budget reached, so UnreleasedLeBudget is not vacuous there.",
+   "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial": "completeness: UnreleasedLeBudget's nontrivial lemma (its witnesses entry): at a firewall without rule 4's refusals (Flock.StopCount.Witness.openMade), a run whose stream at budget 1 opens two sessions leaves both unreleased, a counterexample for another firewall, not a property of the deployed one.",
+   "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (Security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
+   "Flock.SecurityProofs.StreamStopBudget_honest": "completeness: StreamStopBudget's honest lemma (its witnesses entry): at an honest run at budget 1 (a session runs through, then the next one opens), the first session's stop is none and the second's is one, the budget reached, so StreamStopBudget is not vacuous there.",
+   "Flock.SecurityProofs.StreamStopBudget_nontrivial": "completeness: StreamStopBudget's nontrivial lemma (its witnesses entry): at a firewall without rule 4's refusals (Flock.StopCount.Witness.openMade), both sessions of a stream at budget 1 stop, no Pattern at 1, a counterexample for another firewall, not a property of the deployed one."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
