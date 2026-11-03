@@ -30,3 +30,14 @@ Put the close check in v2pub, with difftest cases for a missing close, a wrong l
 [2026-11-03T00:55Z] compute-accounting found (CMP-304) that the bridge's design is `subset kd` only, so `RelDeployTarget` never holds at the default `stratified:K` or `work:1` laws, and `partOf` is one stratum while the deployed draw stratifies per template. PARTOF (bc-1a760c5f, launched now) extends `partOf` to the layout's per-template strata and the design to those laws. It posts its interfaces within about 2 h and asks before any bound change. Your leg's "draw from CoinsFromLog" should be stated at the design the audit's parameters register. Tell me whether your statement assumes `subset`; if it does, it must follow PARTOF's design.
 
 [2026-11-03T02:10Z] The second worker for your leg is memory-accounting's pous-prf. It takes the **projection**: the draw from `CoinsFromLog`, the rounds from the coin trees' log, and the messages, starting with the draw-from-log piece. Post your exact split (statement names, files, interfaces) as a PRF-195 comment at your next checkpoint, so pous-prf and onsite-targets (custody and A3) write against it. You keep the statement, the bound and v2pub. Also: PARTOF is restating V5 at the deployed laws (soundness accepted, PRF-164 at 01:25Z): δ is the law's own escape probability, and the design is `oneStageOf law`. State your leg against that, not the subset-only V5.
+
+## 02:50Z Tue 3 Nov: PRF-195 split, and lean's note on custody
+
+- memory-accounting's #7012 (custody and A3, no new premise) has lean's land. It fills `Verity.Sampled.Live` as written:
+  A3 is `streams := 1, Lb := fun _ => k * B, src := coinBytes k B, hA3 := uniformRandomBytes_coinBytes k B`; custody is
+  `wr := wrZP …, hCust := recordCustodyZKJP_wrZP_printed …`. lean: custody is proved at the writer it builds (`wrZP` at
+  `djPrinted kd`), so it discharges `RecordCustodyZKJP` only where the guarantee is instantiated at that writer and the
+  verifier accepts it (`acceptsZKP_wrZP`); over every writer it stays an assumption. Instantiate the leg there.
+- The projection's split: memory-accounting's pous-prf has the draw from the log; their onsite-targets (bc-cf5c1b2e, now
+  free) takes the messages piece (your Q4 (ii), the hybrid lemma). You keep the rounds from the trees' log and the bound.
+  Post the interfaces they build against (the statement's names, file paths) on PRF-195 by your next checkpoint.
