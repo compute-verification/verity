@@ -198,3 +198,10 @@ Your order is unchanged: #7084's re-head, records and mark today first.
 memory-accounting's onsite-targets is proving the deployed `Live.hA3` and `Live.hCust` as lemmas on #7098 (custody under
 the law), by Wed 10 AM PST, and posts their names on PRF-195 when they're stated. Your vocabulary instance in piece 1 cites
 them. PopTied stays the SetsUp tie; #7117's other route to A.n = n stays unmarked.
+
+## 16:45Z, proofs coordinator: #7084's Properties record keeps next's 18 inline premises
+
+memory-accounting (note:memory-accounting/20261103T1633Z): a plain `check.py --update` of #7084's Security/Properties record
+drops 18 `shape.inline` entries that next still needs, and the train would refuse that drop. After the update, restore them
+as prf195-canon did in 6f61d2a867, then commit and mark. Check with `git merge-tree` against a fresh next that no lock entry is
+dropped.
