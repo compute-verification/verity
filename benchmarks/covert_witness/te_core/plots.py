@@ -188,8 +188,14 @@ def picked(st: Start, g: float | None, drop: float) -> tuple[float | None, float
 
 
 def panel(name: str, title: str, columns: list[str], rows: list[list], note: str, ctx: dict) -> dict:
+    """A console panel body; an infinite value (ρ, W* or S where every checkpoint reaching a level has an infinite ρ
+    in the cell) is null, which its note says."""
+    out = [[None if isinstance(x, float) and not math.isfinite(x) else x for x in r] for r in rows]
+    if out != rows:
+        note += (" Null also stands for infinite: every checkpoint reaching the level has an infinite rho in the cell "
+                 "(no block there does any of its unreachable work).")
     return {"id": f"training/{name}", "title": title, "kind": "table", "updated_at": ctx["stamp"],
-            "source": ctx["source"], "note": note + ctx["tail"], "columns": columns, "rows": rows}
+            "source": ctx["source"], "note": note + ctx["tail"], "columns": columns, "rows": out}
 
 
 def frame(p: dict) -> list[dict]:
@@ -217,15 +223,17 @@ def p1_panel(sts: list[Start], ctx) -> dict:
         emit("honest", "", staircase([(r["gates"], r["val_bpb"], r) for r in st.on]))
         for key in [st.ref, *band]:
             emit("covert" if key == st.ref else "covert-policy", key,
-                 staircase([(r["gates"] * r["rho"][key], r["val_bpb"], r) for r in st.on]))
+                 staircase([(r["gates"] * r["rho"][key], r["val_bpb"], r) for r in st.on
+                            if math.isfinite(r["rho"][key])]))
         if st.f:
             emit("scratch", "", staircase([(c, l, None) for c, l in ctx["fs"][st.name]]))
     return panel("p1-loss-vs-compute", "Loss against compute spent after the start", P1_COLUMNS, rows,
                  "Each curve is the least compute reaching each loss (its staircase) over every checkpoint of every "
                  "valid record (19:50Z): honest = |C|, covert = |C| rho at the reference policy, covert-policy = at each "
-                 "grid cell (c1e<i>/k1e<j>: gates, bits) within a decade of it, scratch = the from-scratch curve F. "
-                 "loss = held-out bits per byte; target_pct = the deepest target the point reaches; compute_frac null "
-                 "where C0 is a stub.", ctx)
+                 "grid cell (c1e<i>/k1e<j>: gates, bits) within a decade of it, scratch = the from-scratch curve F; a "
+                 "checkpoint whose rho is infinite in a cell (no block there does any of its unreachable work) is on no "
+                 "covert curve of that cell. loss = held-out bits per byte; target_pct = the deepest target the point "
+                 "reaches; compute_frac null where C0 is a stub.", ctx)
 
 
 def at_reference(st: Start, l_star: float, key: str) -> tuple[dict, dict]:
@@ -296,15 +304,17 @@ def p4_panel(sts: list[Start], g, drop, ctx) -> dict:
                 if a not in best or r["gates"] * r["rho"][st.ref] < best[a]["gates"] * best[a]["rho"][st.ref]:
                     best[a] = r
             for a, r in sorted(best.items()):
-                s = r["rho"][st.ref]
+                s = r["rho"][st.ref] if math.isfinite(r["rho"][st.ref]) else None
                 rows.append([*st.head, tp, gv, a, r.get("family"), r["id"], r.get("checkpoint_step"), r["gates"] / h, s,
-                             r["gates"] * s / h, basis(r, st.ref), 1, r["measured"].delta_bits,
+                             s and r["gates"] * s / h, basis(r, st.ref), 1, r["measured"].delta_bits,
                              r["measured"].delta_grad_bits, r["gates"], r["measured"].sigma, *terms(r, st.ref)])
     return panel("p4-decomposition", "p against s per algorithm at the reference policy", columns, rows,
                  "One point per algorithm (direction/mechanism) reaching the level: its checkpoint with the least |C| rho "
                  "at the reference policy; p = |C|/H with H over every checkpoint of every valid record, s = rho "
-                 "(c/(c - d) by Fit, else Slowdown's bound floored at 1), S = p s; sigma = its token blocks' share of "
-                 "|C|; x0, s_star the claim's bounds, x0_known, s_star_known the attack side's. One seed per point.", ctx)
+                 "(c/(c - d) by Fit, else Slowdown's bound floored at 1), S = p s, both null where the bound is "
+                 "infinite (s_star 0: no block of the policy does any of the unreachable work); sigma = its token "
+                 "blocks' share of |C|; x0, s_star the claim's bounds, x0_known, s_star_known the attack side's. One "
+                 "seed per point.", ctx)
 
 
 def a2_panel(sts: list[Start], ctx) -> dict:
@@ -460,9 +470,10 @@ def draw_p4(p: dict, sts: list[Start], g, drop, out: Path, stubs, pin) -> Path:
     fig, axes = plt.subplots(1, len(sts), figsize=(4.6 * len(sts), 4.4 + 1.4), squeeze=False)
     for ax, st in zip(axes[0], sts):
         tp, gv, l = picked(st, g, drop)
-        pts = [r for r in rows if r["start_id"] == st.name and r["target_pct"] == tp and r["g"] == gv]
+        pts = [r for r in rows if r["start_id"] == st.name and r["target_pct"] == tp and r["g"] == gv
+               and r["s"] is not None]
         if not pts:
-            ax.text(0.5, 0.5, f"no record reaches l* = {l:.4f}", ha="center", transform=ax.transAxes)
+            ax.text(0.5, 0.5, f"no record reaches l* = {l:.4f} at a finite rho", ha="center", transform=ax.transAxes)
         else:
             ps, ss = [r["p"] for r in pts], [r["s"] for r in pts]
             lo, hi = min(min(ps), min(ss), 1) / 2, max(max(ps), max(ss)) * 2

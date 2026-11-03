@@ -8,9 +8,12 @@ import pytest
 from te_core import VERSION, frontier, launch
 from te_core.ledger import Ledger
 from te_core.run import file_sha256
-from te_core.score import K_BITS, R
 
 PIN = "a" * 40
+#: a start's shape (te_core.policy), the small start's
+SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters": 45_029_888, "tokens": 154_206_208,
+         "forward_macs_per_token": 51_342_080}
+CELL = "reference"
 
 
 class Clock:
@@ -22,13 +25,18 @@ class Clock:
 
 
 def sub(led, **kw):
-    keys = [f"{k}/r{r}" for k in K_BITS for r in R]
+    """A submission whose formalism block makes its |C| `macs` gates with no affected gates (ρ = 1 everywhere); `rho`
+    is its ρ in `CELL` for `scored`."""
     body = {"macs": 100, "val_bpb": 1.0, "tier": 0, "start": "small", "start_bpb": 1.1, "mechanism": "dense",
             "reference": False, "program_sha256": "", "invalid": [], "run_te_core": VERSION,
             "measurement_commit": PIN} | kw
-    for name, default in (("rho", 1.0), ("beta", 1.6), ("phi", 0.5)):
-        body[name] = dict.fromkeys(keys, kw.get(name, default))
+    body.setdefault("formalism", {"parts": [{"gates": body["macs"], "tokens": 10, "affected_gates": 0.0}], "u1_bits": 1e6})
     return led.append("submission", body)
+
+
+def scored(rows):
+    """The valid rows as `frontier.target` reads them: |C| in gates (`macs` here), ρ in `CELL`."""
+    return [r | {"gates": r["macs"], "rho": {CELL: r.get("rho", 1.0)}} for r in frontier.valid(rows, PIN)]
 
 
 def test_records_are_append_only_and_per_agent(tmp_path):
@@ -99,26 +107,21 @@ def test_launch_gates(tmp_path):
         launch.launch(a, prog, 0, node_file=only_h200, direction="d", mechanism="m", dry_run=True, clock=clock)
 
 
-def test_frontier_elites_targets_and_promotion_candidates(tmp_path):
+def test_frontier_elites_and_promotion_candidates(tmp_path):
     a = Ledger(tmp_path, "agent-a")
     ref = sub(a, macs=100, val_bpb=1.08, reference=True, mechanism="reference", direction="ref-optim")
-    cheap = sub(a, macs=50, val_bpb=1.085, rho=1.0, mechanism="lowrank", beta=0.01)
-    good = sub(a, macs=80, val_bpb=1.05, rho=4.0, mechanism="dense")
-    dominated = sub(a, macs=500, val_bpb=1.10, rho=4.0, mechanism="dense")
+    cheap = sub(a, macs=50, val_bpb=1.085, mechanism="lowrank")
+    good = sub(a, macs=80, val_bpb=1.05, mechanism="dense")
+    dominated = sub(a, macs=500, val_bpb=1.10, mechanism="dense")
     bad = sub(a, macs=1, val_bpb=0.5, invalid=["no step"])
     other = sub(a, macs=1, val_bpb=0.5, measurement_commit="b" * 40)
     rows = Ledger(tmp_path).index()
-    rep = frontier.report(rows, PIN)
-    key = "10kB/r10"
-    assert [f["id"] for f in rep[key]["frontier"]] == [cheap["id"], ref["id"], good["id"]]
-    assert dominated["id"] not in {e["id"] for e in rep[key]["elites"]}
-    assert rep[key]["coverage"]["filled"] == 3
-    t = next(x for x in rep[key]["targets"] if x["drop"] == 0.01)
-    assert t["l_star"] == pytest.approx(1.1 * 0.99)
-    assert t["honest"] == 50 and t["w_star"] == 50 and t["honest_reference"] == 100
-    assert t["effective_slowdown"] == pytest.approx(1.0)
-    assert set(frontier.candidates(rows, 1, PIN)) == {ref["id"], cheap["id"], good["id"]}
-    assert "| 10kB/r10 |" in frontier.markdown(rep)
+    on, skipped = frontier.formalism_rows(frontier.valid(rows, PIN), {"small": SHAPE})
+    assert not skipped and all(r["rho"][CELL] == 1.0 for r in on)
+    assert [r["id"] for r in frontier.pareto(on, CELL)] == [cheap["id"], good["id"]]
+    assert dominated["id"] not in {r["id"] for r in frontier.elites(on, CELL).values()}
+    assert set(frontier.candidates(rows, 1, PIN, {"small": SHAPE})) == {ref["id"], cheap["id"], good["id"]}
+    assert frontier.candidates(rows, 1, PIN, {}) == []  # no start shape: nothing the formalism scores
     assert frontier.status(rows, PIN) == {bad["id"]: "invalid", other["id"]: "other-version"}
 
 
@@ -153,7 +156,7 @@ def test_an_agents_relaunch_at_a_new_pin_counts_and_a_copy_of_an_old_pins_e_does
 
 def test_a_later_ingest_of_a_run_supersedes_its_earlier_rows_and_is_not_a_duplicate_of_its_own_e():
     def row(name, ts, run_id="r1", e="e1", agent="a"):
-        return {"id": name, "written_ts": ts, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": "3.8",
+        return {"id": name, "written_ts": ts, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": "4.0",
                 "families": [], "run_id": run_id, "checkpoint_step": 3, "agent": agent, "output": {"e_sha256": e}}
 
     rows = [row("first", 1), row("other-run", 2, run_id="r2", e="e2"), row("again", 3, agent="scorer")]
@@ -181,17 +184,21 @@ def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
     assert frontier.pinned() == (PIN, "b" * 40)
 
 
-def test_a_run_with_covered_steps_counts_once_rho_is_priced_by_thresholds():
-    covered = [{"covers": [0, 1], "beta": {"0": 1e-6, "1": 32.0}}]
-    rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": ingest, "families": fams}
-            for name, ingest, fams in [("plain", "2.3", []), ("old-priced", "2.3", covered),
-                                       ("repriced", "3.0", covered), ("repriced-later", "3.10", covered)]]
-    assert frontier.status(rows, PIN) == {"old-priced": "re-ingest"}
-    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["plain", "repriced", "repriced-later"]
+def test_a_row_is_measured_once_its_run_is_ingested_with_its_traced_circuit():
+    """Every row before 4.0 holds stubs for what the formalism measures, as does a 4.0 row with an updated step the
+    capture didn't trace or with no trace in its block; all stay valid (scored on their labelled stubs)."""
+    rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": ingest,
+             "annotation": {"untraced": untraced}, "formalism": {"trace": {}} if trace else {}}
+            for name, ingest, untraced, trace in [("old", "3.13", 0, True), ("older", "2.3", 0, False),
+                                                  ("traced", "4.0", 0, True), ("later", "4.10", 0, True),
+                                                  ("untraced", "4.0", 3, True), ("stubs", "4.0", 0, False)]]
+    assert frontier.status(rows, PIN) == {}
+    assert [r["id"] for r in rows if frontier.measured(r)] == ["traced", "later"]
 
 
-def at_one_percent(rows, key="10kB/r10"):
-    return next(t for t in frontier.report(rows, PIN)[key]["targets"] if t["drop"] == 0.01)  # l* = 1.1 x 0.99
+def at_one_percent(rows):
+    t = frontier.target(scored(rows), 1.1 * 0.99, [CELL])
+    return t | t["cells"][CELL]
 
 
 def test_honest_and_w_star_read_every_checkpoint_of_every_record(tmp_path):
@@ -205,7 +212,7 @@ def test_honest_and_w_star_read_every_checkpoint_of_every_record(tmp_path):
     t = at_one_percent(Ledger(tmp_path).index())
     assert t["honest"] == 10 and t["honest_of"]["id"] == cov_mid["id"] and "bound" not in t
     assert t["honest_reference"] == 20 and t["honest_reference_of"]["id"] == ref_mid["id"]
-    assert t["w_star"] == 20 and t["w_star_of"]["id"] == ref_mid["id"]  # 20 x 1 < 10 x 5
+    assert t["w_star"] == 20 and t["of"]["id"] == ref_mid["id"]  # 20 x 1 < 10 x 5
     assert t["effective_slowdown"] == pytest.approx(2.0)
 
 
@@ -215,8 +222,9 @@ def test_w_star_over_honest_is_never_below_one(tmp_path):
     for i in range(200):
         sub(a, run_id=f"r{i % 23}", checkpoint_step=i // 23, macs=rng.randint(1, 1000), val_bpb=rng.uniform(1.0, 1.1),
             rho=rng.choice([1.0, 1.0, rng.uniform(1.0, 50.0)]), direction=rng.choice(["ref-optim", "sparse", "wildcard"]))
-    rep = frontier.report(Ledger(tmp_path).index(), PIN)
-    slowdowns = [t["effective_slowdown"] for v in rep.values() for t in v["targets"]]
+    on = scored(Ledger(tmp_path).index())
+    slowdowns = [frontier.target(on, 1.1 * (1 - f), [CELL])["cells"][CELL]["effective_slowdown"]
+                 for f in frontier.TARGETS]
     assert all(s is not None for s in slowdowns) and min(slowdowns) >= 1.0
 
 
@@ -225,19 +233,19 @@ def test_a_target_only_a_mid_schedule_checkpoint_reaches_is_scored_like_any_othe
     mid = sub(a, run_id="long", checkpoint_step=3, macs=30, val_bpb=1.085, direction="sparse")
     sub(a, run_id="long", checkpoint_step=9, macs=90, val_bpb=1.095, direction="sparse")
     t = at_one_percent(Ledger(tmp_path).index())
-    assert t["honest"] == 30 and t["honest_of"]["id"] == mid["id"] and t["w_star_of"]["id"] == mid["id"]
+    assert t["honest"] == 30 and t["honest_of"]["id"] == mid["id"] and t["of"]["id"] == mid["id"]
     assert t["honest_reference"] is None and t["effective_slowdown"] == pytest.approx(1.0)
-    assert "upper bound" not in frontier.markdown(frontier.report(Ledger(tmp_path).index(), PIN))
 
 
-def test_a_tied_lookup_record_and_a_read_out_leak_are_left_out(tmp_path):
+def test_a_read_out_leak_is_left_out_and_a_tied_lookup_record_is_not(tmp_path):
+    """4.0 reads a tied embedding's update at its lookup's update-dependent rows, so the 13:32Z tied-lookup rule is
+    retired; a read-out leak, given by `--facts` for an older row, still is."""
     a = Ledger(tmp_path, "agent-a")
     top = sub(a, run_id="top", changed=["embed", "blocks.1.attn.weight"], layers=2)
-    below = sub(a, run_id="below", changed=["embed", "blocks.0.mlp.weight"], layers=2)
     leak = sub(a, run_id="leak", readout_leaks=[{"step": 0, "tokens": 8, "consumed": 2, "exited": 2}])
     old = sub(a, run_id="old")
     rows = Ledger(tmp_path).index()
-    assert frontier.status(rows, PIN) == {top["id"]: "tied-lookup", leak["id"]: "read-out-leak"}
-    rows = frontier.with_facts(rows, {"old": {"changed": ["embed"], "layers": 2}})
-    assert frontier.status(rows, PIN)[old["id"]] == "tied-lookup"
-    assert [r["id"] for r in frontier.valid(rows, PIN)] == [below["id"]]
+    assert frontier.status(rows, PIN) == {leak["id"]: "read-out-leak"}
+    rows = frontier.with_facts(rows, {"old": {"readout_leaks": [{"step": 1}]}})
+    assert frontier.status(rows, PIN) == {leak["id"]: "read-out-leak", old["id"]: "read-out-leak"}
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == [top["id"]]

@@ -67,9 +67,9 @@ scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its 
   `training/frontier-branches` (loss against total training compute: the frontier and each start's honest and throttled
   branches), is `python -m te_core.panels frontier-branches --out DIR --publish`.
   **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score and panels over the pin's
-  valid records, each with the
-  formalism block built from `analysis/rescore_v1.py`'s per-record quantities (from the scorer's directory), or the
-  stubs with `--stubs`.
+  valid records, on the quantities measured on each record's traced step (te_core 4.0's default; `--charge-context`
+  charges earlier tokens' affected keys and values), or `analysis/rescore_v1.py`'s per-record quantities with
+  `--quantities analysis` (from the scorer's directory), or the stubs with `--stubs`.
 
 **Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
 its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves
@@ -195,7 +195,7 @@ node from one; `prep.sh` prepares a node (`data_v3.py verify --keep`, `prepare.r
 store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
 `analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2, analytically: gates, token blocks' gates, σ, the affected
-gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
+gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore --quantities analysis` scores them. Its docstring
 lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in

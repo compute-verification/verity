@@ -2,7 +2,7 @@
 Boolean gates, every line a frontier (at each loss, the least compute anything reached under that line's rules).
 
     python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
-                                               [te_core.rescore's ledger and analysis options]
+                                               [te_core.rescore's ledger and quantities options]
 
 Its rows (`COLUMNS`) are the points of three kinds of curve, each on one data (`data`: `v3`, harness v3's OLMo 2 mix,
 or `v2.3-pilot`, the v2.3 harness's FineWeb-Edu; a loss on one is no loss on the other, so every curve is per data):
@@ -19,7 +19,8 @@ or `v2.3-pilot`, the v2.3 harness's FineWeb-Edu; a loss on one is no loss on the
   block of the start's own forward (`TOKENS_PER_BLOCK`, c = n·w; `c_gates` = n·w) by k (`K_BYTES`; bits in the rows),
   and two cells are marked (`mark`): the default (`DEFAULT`, `reference`) and the served demo's measured block
   (`SERVED`, `served demo`, at its gates in the start's tokens). A dial cell whose curve is the honest one (ρ = 1 at
-  every point of it, so S = 1 at every loss) has no rows.
+  every point of it, so S = 1 at every loss) has no rows, and a checkpoint whose ρ is infinite in a cell (no block
+  there does any of its unreachable work) is on no throttled curve of that cell.
 
 It reads the valid records of the pin and of the pilot (pin.py's `pilot`, `frontier.pinned(pilot=True)`) unless `--pin`
 names the commits, and only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit
@@ -160,7 +161,8 @@ class Branch:
         for r in on:
             r["dial"] = dial(r["measured"], self.w)
         self.honest = plots.staircase([(r["gates"], r["val_bpb"], r) for r in on])
-        self.throttled = {key: plots.staircase([(r["gates"] * r["dial"][key]["rho"], r["val_bpb"], r) for r in on])
+        self.throttled = {key: plots.staircase([(r["gates"] * r["dial"][key]["rho"], r["val_bpb"], r) for r in on
+                                                if math.isfinite(r["dial"][key]["rho"])])
                           for key in self.cells}
         self.on_frontier = False
 
@@ -394,7 +396,7 @@ def main(argv=None) -> int:
     scored, _ = plots.load(d["rows"], pin, shapes, d["keep"], d["ladder"])
     runs = pretraining(a.pretraining or fetch(PRETRAINING))
     source = a.source or (f"python -m te_core.panels {NAME} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
-                          f"{len(scored)} valid checkpoints, quantities {'rescore_v1' if d['use'] else 'stubs'})")
+                          f"{len(scored)} valid checkpoints, quantities {d['quantities']})")
     p, info = build(scored, shapes, runs, source)
     q = cut(p, info["ratio"], info["headline"])
     (a.out / f"{NAME}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
