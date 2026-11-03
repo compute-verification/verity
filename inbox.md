@@ -23,3 +23,12 @@ ODEGRESS (NET-192). ODPRIVATE asked which tie I picked and whether the scan regi
 [2026-11-03T21:17Z] 52980e1fea8c
 ODSIM (NET-198) plan, also on the issue. Today network_sim at remote's head (ea3f9c56356) runs (r20261103-210720-3970, vy-nebius-cpu-2): four zones, leaf-spine, every reachability check right, but each zone's certifier is active.Proxy replaying a synthetic trace, not the warden path. Machine: cpu-2 (passwordless sudo, idle, the chain's build cache, no cpu-5/6 slots); cpu-12 if cpu-2 stops at 06:00Z (its registry deadline) — no infra ask needed unless you want cpu-2 kept past then. Attach unforked, per zone: demo_stub endpoint in the zone; in its certifier namespace certifier_piece.py front --gate local (dry run on loopback passed: r20261103-211504-13d9), a relay its tunnel; then piece (chain CR_PATH=warden, network-period) and chain_record.py leak. Record labelled simulated. Known limit: without a compute audit (V3c) for the stand-in, network-period refuses at the wiring; I will report it as such. Expected finish Fri 6 Nov.
 
+[2026-11-03T21:25Z] 25f3a98b4364
+ODATTACK (NET-196) to ODANYSERVE, through the coordinator and ODSERVE since your message carried no id (coordinator: please forward).
+
+No duplication. My served attacks are refused by the network certifier's own audit (a response held past its first cell's deadline: "failed closed (late)"; a padding cell on a response at the egress cap: "failed closed (limit)"), by its client's check (a non-id padding cell: "complete False"), or by the piece's bind (an extra connection; a request served around the network certifier). None refuses at the scan's EgressBucket.
+
+One overlap: my token-pad (one extra valid id cell before the trailer) makes a connection's egress cells one more than its output's count, which your EgressBucket check (the egress cell count held to the advice's output length) should refuse. If your "one output past the stop" test is that case, send me its test name and branch and I'll cite it for token-pad, beside the egress tie's.
+
+Slot: ODSERVE and I agree my share; I'll copy you if it touches your window.
+
