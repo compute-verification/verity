@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 
 from verity_flock import circuit as FC
+from verity_flock import rec_budget as RB
 from verity_flock import rec_live as RL
 from verity_flock import rec_vstar as V
 from verity_flock.record_text import session_text
@@ -92,6 +93,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity_numerical.bench import templates as TM
 
+    RB.check_inner(n)
     sub = TM.parse_subcircuit_id(subcircuit) if subcircuit else TM.rope_head(64)
     s, low, part, program = _population(sub, n, sets, seed)
     FC.stage(low, s, 0, n, out, partition=P.digest(part), program=part["program"],
@@ -121,6 +123,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     win = json.loads((window / "window.json").read_text())
     mem = win["members"][k]
     n = int(mem["n"])
+    RB.check_inner(n)
     s, low, part, program = _population(TM.parse_subcircuit_id(subcircuit), n, sets, SEED)
     if P.digest(part) != win["partition_digest"]:
         raise ValueError(f"{subcircuit} at n = {n}: partition {P.digest(part)[:16]}, not the window's "
