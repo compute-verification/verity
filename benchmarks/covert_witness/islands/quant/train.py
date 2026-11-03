@@ -521,14 +521,20 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float
     return qf.QArray(cb.to(torch.float16), s, (k + qmax).to(torch.uint8).view(-1), bits, g, tuple(v.shape))
 
 
+def has_encoder() -> None:
+    """Refuse `--declare` and `--emit quan` at the start unless prepare has a CWQUAN1 encoder (no tensor work, so a
+    re-trace's setup reads nothing back; `check_decoder` compares the bytes after the steps)."""
+    if not hasattr(prepare, "encode_quant"):
+        raise SystemExit("quant: --declare and --emit quan need prepare.encode_quant (CWQUAN1 in prepare)")
+
+
 def check_decoder(theta: dict, name: str) -> None:
     """Refuse `--declare` and `--emit quan` unless prepare encodes CWQUAN1 byte for byte as qformat.encode does and
-    prepare.decode reads it as qformat.decode does."""
+    prepare.decode reads it as qformat.decode does. It reads bytes back, so it runs after the steps."""
     q = qat_quant(torch.randn(theta[name].shape, generator=torch.Generator().manual_seed(0)), "tern", -1, 1.0)
     entries, one = {name: {"kind": "delta", "q": q}}, {name: theta[name]}
     blob = qf.encode(entries, one)
-    if not hasattr(prepare, "encode_quant"):
-        raise SystemExit("quant: --declare and --emit quan need prepare.encode_quant (CWQUAN1 in prepare)")
+    has_encoder()
     if prepare.encode_quant(entries, one) != blob:
         raise SystemExit("quant: prepare.encode_quant writes CWQUAN1 differently from islands/quant/qformat.py")
     try:
@@ -608,7 +614,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
     dev = prepare.DEVICE
     params = net.params()
     if a.emit == "quan":
-        check_decoder(theta, min((n for n, p in params.items() if p.ndim == 2), key=lambda n: params[n].numel()))
+        has_encoder()
     for p in params.values():
         p.requires_grad_(False)
     all_norms = sorted(n for n, p in params.items() if p.ndim == 1)
@@ -745,6 +751,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
             opt.close()
         del factors, opt
     t_train = time.perf_counter() - t0
+    if a.emit == "quan":
+        check_decoder(theta, min((n for n, p in params.items() if p.ndim == 2), key=lambda n: params[n].numel()))
     best = min(results, key=lambda r: r["loss"])
     blob = emit(*best["pieces"])
     model = prepare.decode(theta, blob)
@@ -873,7 +881,7 @@ def main() -> int:
     mats = [n for n in names if params[n].ndim == 2 and n != embed]
     rest = [n for n in names if n not in mats]
     if a.declare or a.emit == "quan":
-        check_decoder(theta, min(mats or names, key=lambda n: params[n].numel()))
+        has_encoder()
     theta_dev = {n: theta[n].to(dev) for n in names}
     trainable = {"full": names}
     tokens = a.batch * prepare.EVAL_CTX
@@ -1031,6 +1039,8 @@ def main() -> int:
             sampler.close()
         del latent, opt_of, muon, adam, voter, opts, sampler
     t_train = time.perf_counter() - t0
+    if a.declare or a.emit == "quan":
+        check_decoder(theta, min(mats or names, key=lambda n: params[n].numel()))
     if a.mode == "qat":
         blob, model, notes_v = finish_qat(a, results, theta, names, cycle, dev)
     else:
