@@ -570,8 +570,9 @@ extracts. `PartOpensB` makes every holder of a
 round hold the run's commit string there, which the readers read, so each part's check reaches the readers' messages.
 
 `Bridge` is a lemma on the way, not a premise. At the deployed bound record (`bdCover`, `γ`'s weight `wCover` at
-`IVStar`) (P3) holds and the route is `ksBoundRouteCols_cover`. No theorem evaluates its level
-(`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed
+`IVStar`) (P3) holds and the route is `ksBoundRouteCols_cover`. Its level (`Claims.Recursion.lam`) is superseded: the
+recursion's error at the deployment is `κ + t·ε` (`RecDeploy.recursiveBitsK_deployed`). Route 2C's bound λ₂
+(`lamLin2`) evaluates to at least 135.7 at the deployed
 records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
 `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/

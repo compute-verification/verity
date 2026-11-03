@@ -754,12 +754,14 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
 coins of their coin kinds in the run's order (`holoCTs`: the link points, then the coins of the stages' shapes,
 `holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
-`RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
-`Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
-bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
-and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
-(`Flock.SecurityProofs.RecursiveKS`) but does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
-statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `verity/sampled-proofs/recursive/v1`
+`RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits and doesn't use the recursion's knowledge form,
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`), which is proved
+(`Flock.SecurityProofs.RecursiveKS`) but does not reach the Holo statements (i) is about. Its error there is
+`κ + t·ε`, `κ` once a session and `ε` per SHA-512 call of the prover's run: at most `2^{−167.7} + t·2^{−174.95}` at
+the deployment's sizes, under the named SHA-512 collision assumptions (`RecDeploy.recursiveBitsK_deployed`). It
+supersedes `Claims.Recursion.KS` and its level `Claims.Recursion.lam`. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `BitsLin2` at the dense
+statements follows from `KSLin2` (`bitsLin2On_of_ksLin2On`). The dense form, which `verity/sampled-proofs/recursive/v1`
 accepts, is `RecursiveAuditC3`, at `λ₂ = 100`.
 -/
 def RecursiveAuditHolo : Prop :=

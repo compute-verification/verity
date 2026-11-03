@@ -189,8 +189,11 @@ Protocols and claims:
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
-  `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
-  under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
+  `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. The recursion's error is κ + t·ε
+  (`RecDeploy.recursiveBitsK_deployed`: κ = 2⁻¹⁶⁷·⁷ a session, ε = 2⁻¹⁷⁴·⁹⁵ a SHA-512 call; `RecursiveKSDeployed` adds
+  less than 2⁻¹⁸² a session), and every table, README or claim that cites it gives that error pooled over every session
+  against a stated adversary's compute for a stated period (against the world's compute, 2⁻⁹²·² a year), never a
+  per-session figure alone. `Claims.Recursion.lam` is superseded.
 - `Flock.Guarantees.RecursiveAuditHolo` may rest on `registrant-holds-openings`; in Lean the salt is a binder
   applied at the salts the prover's workers committed under, never `∃ salt` or a `Classical.choose` of one.
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed

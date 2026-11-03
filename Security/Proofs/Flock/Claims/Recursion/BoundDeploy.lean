@@ -123,8 +123,9 @@ noncomputable def recBoundAt (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 
 /-- **`KSBound` at the deployment**, the guarantee option (d) states: at SHA-512, the compiled record `deployRec` whose
 inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound record (`bdDeployed`) and the deployed
-outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. No theorem
-evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
+outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. Its level
+(`Claims.Recursion.lam`) is superseded: the recursion's error at the deployment is `κ + t·ε`
+(`RecDeploy.recursiveBitsK_deployed`). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
 statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/

@@ -134,8 +134,9 @@ that the play is accepted while sampled proofs' claim fails on the extracted tra
 elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
 
 Its `λ` is `λ₂ = 100`: route 2C's level (`Claims.Recursion.lamLin2`) at the inner calls `nI₀ = 2^28 + (c_B + 2^24)` and
-V\*'s setup calls `vS₀ = 2^55`, both read off the accepted run (`RecDeploy.lamLin2_R_ge_in`). The bound record's level
-(`Claims.Recursion.lam`), which no theorem evaluates at the deployment, is one (i) doesn't use. -/
+V\*'s setup calls `vS₀ = 2^55`, both read off the accepted run (`RecDeploy.lamLin2_R_ge_in`). (i) reads `RecursiveKS`
+at that level, not at its error at the deployment, `κ + t·ε` (`RecDeploy.recursiveBitsK_deployed`), which supersedes
+the bound record's level (`Claims.Recursion.lam`). -/
 def RecursiveAuditC3 : Prop :=
   Verity.Recursive.SampledProofsRecursive Verity.Recursive.RecVerdict ∧ RecursiveFirewallPrivate
 

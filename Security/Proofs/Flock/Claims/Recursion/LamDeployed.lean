@@ -37,8 +37,9 @@ It bounds a number and establishes no security level by itself: `KSLin2` at the 
 (`KSLin2On` at `DenseAt`) is proved with no hypothesis at the deployed reader's record, the coin server's
 (`Flock.Guarantees.RecursiveKS`), while `ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
 `PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements are candidate 3's own model. `BitsLin2` at the dense
-statements, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from `KSLin2On` (`bitsLin2On_of_ksLin2On`). The proved level at
-the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor.
+statements, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from `KSLin2On` (`bitsLin2On_of_ksLin2On`), and so does the
+recursion's error there, `Pr[acc ∧ ¬R] ≤ κ + t·ε` with `κ` once a session, at most `2^{−167.7} + t·2^{−174.95}` at the
+deployment's sizes (`recursiveBitsK_deployed`), which supersedes `Claims.Recursion.lam`.
 -/
 
 namespace RecDeploy

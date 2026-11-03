@@ -235,8 +235,9 @@ theorem ksA_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readab
     (partCallsTrue_layoutOf _ _ _) hPub hFin hD hH hS
 
 /-- **`KSFlock` at `deployRec` from V\*'s parts at the registered ports**: `ksA_deployed_concrete` at every inner decoder
-that meets the spec, as `KSA` is `KS`. No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment.
-Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
+that meets the spec, as `KSA` is `KS`. Its level (`Claims.Recursion.lam`) is superseded: the recursion's error at the
+deployment is `κ + t·ε` (`RecDeploy.recursiveBitsK_deployed`). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
+135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
 `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
