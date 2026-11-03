@@ -167,3 +167,10 @@ still due Thu 02:00Z:
 memory-accounting's prf195-opens proves the coupling at that term against your definitions, so post the game's
 names (refusal, hidingTerm) on PRF-195 as soon as the statement is pushed, before its proofs. Priorities are unchanged:
 #7084 today, then #6980 and piece 1 by Wed 6 PM PST, then (A).
+
+## 15:50Z, proofs coordinator: re-head #7084 onto next's new PRs
+
+The 15:34Z sync put #7064 (9ae345e386), #7098 (4d045c3ee6), #7104 (f3f2e317) and #7037 (0f68485153) on next (04a9cff3). There is no merge driver for the generated files `verity/core/protocols/pous/lean/TRUSTED.sha256`, `verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json` and `verity/ml/flock/tests/fixtures/randomness_lean.json`, so a head that regenerated them now conflicts with next.
+
+For #7084 at 52a748d2: merge #7064, #7098 and #7104 before you mark it today.
+Merge those PRs' heads into your branch (never next), take either side of each generated file and then regenerate it by its own command (TRUSTED.sha256 by its README command; the two fixtures by the commands their tests name), check with `git merge-tree --write-tree origin/next HEAD` on a fresh fetch that nothing conflicts, rerun only the records the merge touches (`--on vy-nebius-cpu-9 --pool research` or `--on vy-nebius-cpu-4 --pool proofs`), and mark the new head. A mark at the old head would be refused at the next sync.
