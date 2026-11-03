@@ -280,10 +280,12 @@ words = { "Draw.pooled" = "Sample.pooled", "Draw.Coins" = "Sample.Coins" }
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
-# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, and move_check's own
-# tests, which spell `SampleIsCoin` as a name already taken.
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, move_check's own
+# tests, which spell `SampleIsCoin` as a name already taken, and the Lean tools' fixtures, locks as they were on a past
+# tree, which their tests read as such (`Remote.Draw.Coins` in the merge fixtures).
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
-           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py"]
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py",
+           "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
 # `(τ : Transcript)`: `Pouw.PearlC.Transcript` in the two `TileCheck` modules. `Gates.Declared`: the gate model's
