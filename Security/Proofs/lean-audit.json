@@ -73,6 +73,7 @@
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Challenger.Session",
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Binding",
