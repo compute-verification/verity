@@ -5,6 +5,8 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
     python benchmarks/network_traces/compile_slice_zk.py rescan --from PROVE_OUT --out DIR
+    python benchmarks/network_traces/compile_slice_zk.py cost3 --bin flock-circuit --lean flock-verify --out DIR
+      [--class corpus|demo|demo_async] [--points 1] [--dry]
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
@@ -63,6 +65,11 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   kept, the pieces recomputed from its slice, kinds and partition (a salt the run sampled isn't, so a found salt reads
   leaked).
 * **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
+* **cost3**: `compile_slice_v3.CompileSlice_v3`'s cost at a class (``--class``): its honest units, the reference's
+  rows registered (`compile_slice_v3.arguments`), checked to compile (`ACCEPT`), staged under derived salts and proved by
+  `a8.cost`'s sessions. v3 is the pool slice's (prefix caching on): ``corpus``, corpus-smallkv's first seven steps (CN
+  24, CU 25, CD 1, SW 12, DA 7), its one class of real arrivals; ``demo`` and ``demo_async``, its demonstration classes.
+  No negatives, bindings or scan: those are `prove`'s, on CompileSlice_v1.
 """
 from __future__ import annotations
 
@@ -82,9 +89,11 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import n2_zk as N2  # noqa: E402
+import warden_zk as WZ  # noqa: E402
 from verity.core.protocols.certifier import arith_encode as AE  # noqa: E402
 from verity.core.protocols.certifier import charge_chain as CC  # noqa: E402
 from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
+from verity.core.protocols.certifier import compile_slice_v3 as V3  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
@@ -303,11 +312,12 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
     return out
 
 
-def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
-    """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder."""
-    defn = CS.unit(**x.st)
-    bits = CS.row_bits(x.S)
-    rows = [(r, M.V2, bits[r], [r]) for r in CS.row_names(x.S)]
+def stager(M, x: SimpleNamespace, n: int, out: Path, defn=None, bits: dict[str, int] | None = None) -> SimpleNamespace:
+    """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder:
+    `defn` on input rows `bits` (by default CompileSlice_v1's at the slice's statics)."""
+    if defn is None:
+        defn, bits = CS.unit(**x.st), {r: CS.row_bits(x.S)[r] for r in CS.row_names(x.S)}
+    rows = [(r, M.V2, b, [r]) for r, b in bits.items()]
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
@@ -356,7 +366,7 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
     if not 25 <= k_log + nbl <= M.a7.M_MAX:
         raise SystemExit(f"m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
-    data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r in CS.row_names(sg.S)}
+    data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r, *_ in sg.rows}
     set_name = f"{st.iset.name}-slice"
     got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
@@ -584,7 +594,7 @@ def prove(a) -> int:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         return 0 if all(expected(x, u.kind, u.case.flags) for u in units) else 1
-    M = N2._one_stage()
+    M = WZ._one_stage()
     out = Path(a.out)
     CS.CompileSlice.build = CS._build
     probe = stager(M, x, len(a.kinds), out / "probe")
@@ -680,7 +690,7 @@ def rescan(a) -> int:
     each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
-    vdir, M = src / "slice" / "verifier", N2._one_stage()
+    vdir, M = src / "slice" / "verifier", WZ._one_stage()
     x = load(summary["slice"]["name"], summary["statics"].get("G"))
     part = json.loads((vdir / "partition.json").read_text())
     ch = chain(x, part["program"], M.P.digest(part))
@@ -707,9 +717,72 @@ def rescan(a) -> int:
     return 0 if ok else 1
 
 
+V3_DEMOS = {"demo": V3.demo, "demo_async": V3.demo_async}
+
+
+def load3(name: str) -> SimpleNamespace:
+    """CompileSlice_v3's class `name` (the module's docstring) and its slice."""
+    if name in V3_DEMOS:
+        st, sl = V3_DEMOS[name]()
+    else:
+        fx = json.loads(FIXTURE.read_text())
+        st = V3.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], fx["Q"], fx["D"], fx["P"], fx["K"], fx["CN"],
+                        fx["CTW"], fx["CU"], CD=1, SW=12, DA=len(fx["decisions"]))
+        sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"],
+                      tuple(map(tuple, fx.get("tokens", ()))))
+    return SimpleNamespace(name=name, st=st, S=SimpleNamespace(**st), sl=sl)
+
+
+def cost3(a) -> int:
+    x, out = load3(a.cls), Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    args = V3.arguments(x.S, x.sl)
+    words = {r: CS.words(args[r]) for r in V3.ROWS}
+    t = time.time()
+    word, = V3.run(x.st, [args])
+    summary: dict = {"unit": "CompileSlice_v3", "class": a.cls, "statics": x.st, "row_bits": V3.row_bits(x.S),
+                     "free_bits": V3.free_width(x.S), "verdict": word, "evaluate_s": round(time.time() - t, 1)}
+    log(f"v3 {a.cls}: verdict {hex(word)} (ACCEPT {hex(V3.ACCEPT)}), rows {summary['row_bits']}, free bits "
+        f"{summary['free_bits']}, evaluated in {summary['evaluate_s']} s")
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    if word != V3.ACCEPT or a.dry:
+        return 0 if word == V3.ACCEPT else 1
+    M = WZ._one_stage()
+    defn, bits = V3.unit(**x.st), V3.row_bits(x.S)
+    probe = stager(M, x, 1, out / "probe", defn, bits)
+    n = population(probe.st.meta, ("honest",))
+    log(f"probe: k_log {probe.st.meta['k_log']}, vus_per_block {probe.st.meta['vus_per_block']}, lowered in "
+        f"{probe.lower_s} s; {n} units")
+    sg = probe if n == 1 else stager(M, x, n, out / "stager", defn, bits)
+    summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
+                         "pin": sg.st.pin, "n": n}
+    m = stage(M, sg, [SimpleNamespace(words=words)] * n, os.urandom(32), {})
+    summary["staged"] = {k: m[k] for k in ("n", "ands", "unit_nnz", "stage_s")} | {"k_log": m["meta"]["k_log"]}
+    log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, {m['stage_s']} s")
+    if m["oks"] != [V3.ACCEPT] * n:
+        raise SystemExit(f"the staged verdict words {sorted(set(m['oks']))} aren't ACCEPT")
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points or [1], arms=["fw"],
+                         cold=1)
+    summary["cost"] = rows = M.a8.cost(av, m, out / "cost", a.port)
+    summary["ok"] = ok = bool(rows) and all(r["accepted"] for r in rows) and all(r["lean"]["accepted"] for r in rows
+                                                                                 if "lean" in r)
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log("done: " + ("ok" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="compile_slice_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
+    c = sub.add_parser("cost3", help="CompileSlice_v3's honest units at a class, proved --zk behind the ZK server")
+    c.add_argument("--bin")
+    c.add_argument("--lean")
+    c.add_argument("--out", required=True)
+    c.add_argument("--port", type=int, default=7781)
+    c.add_argument("--delta", type=float, default=2.0 ** -20)
+    c.add_argument("--class", dest="cls", choices=("corpus", *V3_DEMOS), default="corpus")
+    c.add_argument("--points", default="1", help="the k proof blocks each cost session samples, comma-separated")
+    c.add_argument("--dry", action="store_true", help="the class's reference and the circuit's verdict only")
     r = sub.add_parser("rescan", help="a finished prove's scan taken again from its summary and verifier files")
     r.add_argument("--from", required=True, help="the prove's --out")
     r.add_argument("--out", required=True)
@@ -730,6 +803,10 @@ def main(argv=None) -> int:
     if a.command == "rescan":
         return rescan(a)
     a.points = [int(k) for k in a.points.split(",") if k]
+    if a.command == "cost3":
+        if not a.dry and not (a.bin and a.lean):
+            raise SystemExit("cost3 needs --bin and --lean, or --dry")
+        return cost3(a)
     kinds = tuple(REFUSED[a.slice])
     a.kinds = tuple(k for k in a.kinds.split(",") if k) or kinds
     if a.kinds[0] != "honest" or not set(a.kinds) <= set(kinds):
