@@ -46,6 +46,10 @@ name = "core_memory_challenger"
 path = "../../verity/core/devices/memory_challenger/lean"
 
 [[require]]
+name = "core_firewall"
+path = "../../verity/core/service/firewall"
+
+[[require]]
 name = "network_check"
 path = "../../verity/core/protocols/network/lean"
 

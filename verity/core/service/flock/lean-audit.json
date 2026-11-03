@@ -91,7 +91,8 @@
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
-  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock"
+  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {

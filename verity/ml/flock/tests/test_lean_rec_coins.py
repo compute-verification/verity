@@ -59,6 +59,13 @@ CIRCUIT_SHA512 = ("27aded67e57a39ba5ccc3dbfff854d0de705cd2fd858261e281749a0fe580
                   "b5e13cdb010ccd")
 #: the recorded outer session's refusal as `verity/flock-circuit`, after setup
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
+
+
+def _complete(port: str) -> str:
+    """`Registered.checkComplete`'s refusal of a reads file that names no port `port` of the statement, at setup before any
+    V* check."""
+    return (f"setup: registered reads (complete): the statement's port {port} is no port of the verifier's registered reads, "
+            "which name every port the statement's outputs read: its rows would be committed afresh, stated by the public file")
 #: a staging's key (`once`): the inner session and V*'s fold, points and salts it reads, and the import closure of this
 #: module, which holds the code each staging runs
 _KEY = functools.partial(keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json",
@@ -229,21 +236,15 @@ def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape
     assert str(v["rec_part"]) == _own(forged, shape)[1], v
 
 
-def test_the_recorded_level_is_the_level_restaged(restaged):
-    """Staging is a function of the inner session, V*'s fold and points and the running sums' salts, but for the salts
-    of the prover's own `row` and `aux` rows, which it draws afresh (`rec_outer.stage`): restaged from the fixture, level
-    3's registration is the recorded one byte for byte, and so is its public file's header but for those two ports'
-    bindings and roots."""
-    assert (SET / "L3" / "registered.json").read_bytes() == (restaged / "registered.json").read_bytes()
-
-    def header(d: Path) -> dict:
-        h = json.loads((d / "pub.bin").read_bytes().split(b"\n", 1)[0])
-        for k in ("bindings", "roots"):
-            for port in ("row", "aux"):
-                del h["frame_v3"][k][port]
-        return h
-
-    assert header(SET / "L3") == header(restaged)
+def test_the_recorded_level_is_refused_for_its_unregistered_rows(forged, shape, tmp_path, restaged):
+    """The recorded level was staged before a level registered its opened rows: its reads file names no `row`, so it is
+    refused at setup by `Registered.checkComplete`, before any V* check. Restaged from the fixture, the level registers
+    every port (`rec_outer.stage`, `inner_registered`) and its public file differs (the prover's own `row` and `aux` rows'
+    salts are drawn afresh), and it passes setup (`test_the_honest_level_passes_setup_at_the_honest_inner_session`)."""
+    assert (SET / "L3" / "pub.bin").read_bytes() != (restaged / "pub.bin").read_bytes()
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    assert v["why"] == _complete("row"), v["why"]
 
 
 def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path, restaged):
@@ -537,19 +538,17 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
 
 
 def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape, undrawn, tmp_path):
-    """`RecCoins.checkCap`'s reads: RecCap with `top` committed afresh (gone from its reads file and `pub.bin`'s registered
-    rows) is refused, since its rows would then be the prover's alone; with its zero outputs `out` gone, likewise.
-    `Flock.Test.RecCap` guards the rest of `checkCap`'s refusals (a top at another value, size or reads)."""
+    """RecCap with `top` committed afresh (gone from its reads file and `pub.bin`'s registered rows) is refused, since its
+    rows would then be the prover's alone; with its zero outputs `out` gone, likewise. `Registered.checkComplete` refuses
+    both at setup, before `RecCoins.checkCap`'s own reads check; `Flock.Test.RecCap` guards `checkCap`'s refusals (a missing
+    top or out, a top at another value, size or reads)."""
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps(S.shared_rows([], (), [cap])))
     why = {}
     for port in ("top", "out"):
         d = _unregistered(cap, tmp_path / f"no-{port}", port)
         why[port] = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", session=undrawn, rows=rows)["why"]
-    assert why["top"] == (f"setup: rec-coins: {CAP}: the verifier's registered reads hold no port top: the cap's rows would be "
-                          "the prover's"), why["top"]
-    assert why["out"] == (f"setup: rec-coins: {CAP}: the verifier's registered reads hold no port out: its rec-cap-zero would be "
-                          "the prover's"), why["out"]
+    assert why == {port: _complete(port) for port in ("top", "out")}, why
 
 
 #: `Test/RecCoins.lean`'s root of R's opening part's one zero row at program "p" (`RecCoins.checkOpening`'s `checkZero`)
@@ -647,7 +646,8 @@ def _part(ex, d: Path, shape: Path, undrawn: Path, shared: Path | None = None) -
 def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn, rows, tmp_path):
     """`OwnNamesRows` and `PartPortsOne`'s check (`RecVStar.checkRows`): the honest part that reads `acc0` passes setup at the
     verifier's shared rows (`--rec-rows`, the honest algebra's) and is refused without them. The honest part with `acc0`
-    committed afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing row port.
+    committed afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing port, at setup
+    (`Registered.checkComplete`, before `checkRows`).
 
     Each verify sets the part's statement up over its whole population before any V* check (about 9 minutes at one core and
     4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the next test's beside
@@ -660,8 +660,7 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
     assert honest.result()["why"] == S2_R7, honest.result()["why"]
     assert bare.result()["why"] == (f"setup: {unit}: one of V*'s parts; pass the verifier's record of V*'s shared rows "
                                     "(--rec-rows F), which each of its row ports must be"), bare.result()["why"]
-    assert re.fullmatch(rf"setup: {re.escape(unit)}: its row port acc0 is not a port of the registered reads \(\[.*\]\)",
-                        fresh.result()["why"]), fresh.result()["why"]
+    assert fresh.result()["why"] == _complete("acc0"), fresh.result()["why"]
 
 
 def test_a_part_staged_under_another_salt_is_refused_at_the_verifiers_shared_rows(salted, algebra, shape, undrawn, rows,
