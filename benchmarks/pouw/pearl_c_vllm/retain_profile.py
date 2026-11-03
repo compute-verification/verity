@@ -12,7 +12,8 @@ kernel's dirty-page limits.
 ``serve`` runs `served_passes.main` with ``serve SERVE_ARGS`` and timers around the retention path's parts (`PARTS`, each
 wrapped where its module holds it, skipped where it is absent): per pass, each part's calls, host seconds and bytes, the y
 trees' seconds on the GPU (CUDA events around `served_y.y_tree`, read at the run's end), the writer threads' seconds, and
-/proc/meminfo's Dirty and Writeback at each pass end.  It writes the parts by pass, with served.json's ``step_s`` beside
+/proc/meminfo's Dirty and Writeback at each pass end, with the ending thread's and the process's CPU seconds and the wall
+clock there (``main_cpu_s``, ``process_cpu_s``, ``wall_s``: a step's main-thread CPU against its wall time).  It writes the parts by pass, with served.json's ``step_s`` beside
 them, to ``--profile``.  ``--seed S`` draws the epoch's coins and the hm96 salt key from ``random.Random(S)`` (two serves of
 one load then retain the same bytes, so two trees' retention paths compare file by file); ``--wait-ends`` completes each
 step's retained pass in its step (`PassEnds.retain_behind` off).
@@ -175,7 +176,8 @@ class _Profile:
             finally:
                 self.add(at, name, time.perf_counter() - t, _nbytes(name, a))
                 if name == "end":
-                    self.mem[at] = _meminfo()
+                    self.mem[at] = {**_meminfo(), "main_cpu_s": time.thread_time(), "process_cpu_s": time.process_time(),
+                                    "wall_s": time.perf_counter()}
                     self.ends += 1
         return timed
 
