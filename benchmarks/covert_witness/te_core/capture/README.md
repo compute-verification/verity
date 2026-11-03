@@ -63,8 +63,12 @@ summed as its kernel sums it. `"capture"` names the version of these rows (`prod
 `te_core.formalism.products_of_trace` reads them. `"elementwise_products"` lists the matrix products the step writes
 with elementwise ops, which no row is: a multiplication of two θ′-dependent values that broadcasts both (an outer
 product, or `(x.unsqueeze(-1) * W).sum(-2)` for `x @ W`), and gathered rows multiplied by such a value and summed by
-index (gather, mul and `index_add`). The formalism leaves the fresh-products term unmeasured where the list has any,
-and on a trace captured before the list (`formalism.ELEMENTWISE_FROM`).
+index (gather, mul and `index_add`). A value's entries are its sources' (`products._sources`: a GEMM's output, a graph
+source and a lookup of a module tensor's rows by the step's data are their own), so a broadcast is found whatever map,
+scaling, copy in place or multiplication by a value outside the update it passes through, and an embedding's rows are
+no broadcast; two broadcasts along the same dims (a token's code over lanes times its scale) are elementwise
+(`products._flats`), and dims the capture can't tell never exempt one. The formalism leaves the fresh-products term
+unmeasured where the list has any, and on a trace captured before this check (`formalism.ELEMENTWISE_FROM`).
 
 A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
 stand-in's. The recording lists each such read-back by its source line and steps, in `formalism["data_dependent"]` (a
