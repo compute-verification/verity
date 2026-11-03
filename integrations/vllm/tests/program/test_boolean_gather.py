@@ -2,8 +2,10 @@
 `GatherF32x{V}_v1` and `Embedding_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are
 pinned by gate count and program digest, and cut under `Q_word_v1{X=16,W=32}` into one unit of 16 output bits per gather, with
 no gate two gathers compute. `GatherF32x{V}_v2` is one Definition, the word family's Boolean version made on demand and
-`boolean_fp8_moe`'s expert gather alike. The gathers over more than 1024 words are trees of Calls whose chunk Definition takes
-seconds to compile, so their tests are slow; the quick ones cover the multiplexer tree traced whole."""
+`boolean_fp8_moe`'s expert gather alike. `GatherF32Chunked_v1{V, W}` is `GatherF32x{V}_v1` at every token, V-chunk
+boundaries and the wrap past i32's extremes included, and `W_MAX` is where `circuit.compose`'s block of 2^27 bits ends. The
+gathers over more than 1024 words are trees of Calls whose chunk Definition takes seconds to compile, so their tests are
+slow; the quick ones cover the multiplexer tree traced whole."""
 from __future__ import annotations
 
 import json
@@ -11,6 +13,8 @@ import json
 import numpy as np
 import pytest
 
+from verity_flock import class_statement as CS
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
@@ -28,6 +32,8 @@ from verity.ml.definitions import word as W
 SERVED_VOCAB = 49152
 #: the training step's vocabulary, over which it gathers an f32 word (`GatherF32x50304_v1`)
 TRAINING_VOCAB = 50304
+#: Llama 3's vocabulary, three V-chunks of at most `BGA.W_MAX` words
+LLAMA_VOCAB = 128256
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -42,9 +48,23 @@ PINS = {
     "GatherF32x128u10_v1": (4160, 8224, 27, "b68e161389f1e1a9badaaf275fc86ceb3d9655d2e26240fbfcf07799792c85c5af8e37078faf796f579e5066c70409012659239d414aff4bf5e6b82bd20c1a4b"),
     "GatherF32x50u22_v1": (2176, 3744, 171, "5f4eac65d7ed4d1b6c9a45187657be4ee9d0eeaab5d3d15767ba1b861e8d1f80d6c575761f5f91178a4aacce2a8f0b9c8390dbba6060858e654b975ddc6d9ccd"),
     "GatherF32x1024u10_v1": (32736, 65472, 0, "ef4a2799247f2f245f1e83882e6f0dd57504ebb379dfb4faea4e340b5adbe2a5c520f83f4f609c07f8b2772567e46bbc56c56d0a761c776fa3a4263b7383dd4c"),
+    "GatherF32Chunked_v1{V=100,W=40}": (6266, 9558, 924, "fd02229c025eadd82d5cfa555e61dbb79a56de29bfb527d744b9d1dfa981df4a90c8e89e502ad0f2e81f55fdbd5018776efe0a9bbe15a054c6fa4a78a4e807fc"),
+    "GatherChunkSplit_v1{V=100,W=40}": (122, 246, 87, "24de67c2e1cf234209d9886d75446e82e86cc5434573f59ad43b497d5178bdba107ed51f0a6fa8fb1a0c9c893e3c78697ccfc791735fbb33fdadb2ee57fa1243"),
+    "GatherChunkSplit_v1{V=50304,W=47163}": (50, 76, 22, "9f6088905b7cbceb2460dc9423af266cfb67ff3f74aacaa109cae6435b4d047a7785ef21ae7ec9aa530e468f79edb7bb00f86d30d141f3ee4ee0fe97ee3766e5"),
+    "GatherChunkSplit_v1{V=128256,W=47163}": (92, 179, 56, "5a6ee8aa63701c633e3bc0ebd4a186de4678994bde26fcad6ce85f49ef347e86edfd98cf110b246b83a39545b5c921b46911b676696ad1fa5333caeb3a974047"),
+    "GatherF32x576u10_v1": (18496, 36896, 27, "41263c18f52bbbc0dc0c90ad8903f8180d543236eedb0714253ddf7b98cb75872b6261b6fce67116f9fbc386a226d22c33ecd6268fea148de8f250593d8be224"),
+    "GatherF32x25u22_v1": (1408, 2176, 180, "8058a76e03075fcfff33325f2b5d2869c9eeab3114dff9ba1a15077cba71cc0b0963677b1269053eb5a3b0585b8751fb318032c37e5430198dbfd00c6254ff7b"),
+    "GatherF32x768u10_v1": (24576, 49120, 9, "96be69465c6be5897f8834275589041120e5748474f9ffe5c4ea131f356c5f75349b046ac8a402b6e4d81ba6a0ec3c89adf6df05dfcb9404ea1393eea7aaac4f"),
+    "GatherF32x42u22_v1": (1920, 3232, 171, "31b0ed477c18305eb76a24e7ca54a5a841d33519e20dfbced8cf0ea2b6db9134406feaff2f036564f20624f8fbf71a1ddf4956251d85db01fa048ba9575df5b6"),
+    "GatherF32x2u1_v1": (32, 64, 0, "875776f990dfcfd035b7889a640f66605a0f3aebbe1c6c8844e1b1c8406b7f72db2d2e3f584760d6b4cafe97a97d0fc3f8ef39797c013ffe36b5a941bb3e0b55"),
+    "GatherF32x3u2_v1": (96, 160, 9, "4613eb0c51155dfc4ac4d00c24fec03fe7ab7a0d42a53cd33e03957aaa78e20b9c22dca4b09ae15db7cef5803710acfece5a410279e08b4cb8bdbb96f08d22e1"),
 }
 QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16),
-         bind(BGA.gather_f32(64)), bind(BGA.gather_index(128, 10, "F32")), bind(BGA.gather_index(50, 22, "F32"))]
+         bind(BGA.gather_f32(64)), bind(BGA.gather_index(128, 10, "F32")), bind(BGA.gather_index(50, 22, "F32")),
+         bind(BGA.GatherF32Chunked, V=100, W=40), bind(BGA.GatherChunkSplit, V=100, W=40),
+         bind(BGA.GatherChunkSplit, V=TRAINING_VOCAB, W=BGA.W_MAX), bind(BGA.GatherChunkSplit, V=LLAMA_VOCAB, W=BGA.W_MAX),
+         bind(BGA.gather_index(576, 10, "F32")), bind(BGA.gather_index(25, 22, "F32")), bind(BGA.gather_index(768, 10, "F32")),
+         bind(BGA.gather_index(42, 22, "F32")), bind(BGA.gather_index(2, 1, "F32")), bind(BGA.gather_index(3, 2, "F32"))]
 TREES = [bind(BGA.gather_index(1024, 10)), bind(BGA.gather_bf16(1100)), bind(BGA.Embedding, V=1100, H=2),
          bind(BGA.gather_index(1024, 10, "F32"))]
 
@@ -149,6 +169,118 @@ def test_the_training_vocabulary_f32_gather_is_pinned() -> None:
 @pytest.mark.slow
 def test_the_training_vocabulary_f32_gather_agrees_with_gather_f32x50304_v1() -> None:
     _agree_f32(TRAINING_VOCAB, 7, 24)
+
+
+def test_the_v_chunks_are_the_fewest_of_at_most_w_words_as_even_as_whole_words_allow() -> None:
+    assert BGA.chunk_widths(TRAINING_VOCAB, BGA.W_MAX) == [25152] * 2
+    assert BGA.chunk_widths(LLAMA_VOCAB, BGA.W_MAX) == [42752] * 3
+    assert BGA.chunk_widths(BGA.W_MAX, BGA.W_MAX) == [BGA.W_MAX] and BGA.chunk_widths(BGA.W_MAX + 1, BGA.W_MAX) == [23582] * 2
+    assert BGA.chunk_widths(100, 40) == [34, 33, 33] and BGA.chunk_widths(5, 2) == [2, 2, 1]
+    for V, w in ((0, 4), (4, 0), ((1 << 31) + 1, BGA.W_MAX)):
+        with pytest.raises(ValueError, match="V-chunks of at most"):
+            BGA.chunk_widths(V, w)
+    with pytest.raises(ValueError, match="nothing to split"):
+        bind(BGA.GatherChunkSplit, V=64, W=64).signature()
+
+
+def _starts(V: int, w: int) -> list[int]:
+    widths = BGA.chunk_widths(V, w)
+    return [sum(widths[:j]) for j in range(len(widths) + 1)]
+
+
+def _chunk_edges(V: int, w: int) -> list[int]:
+    """Each V-chunk's first and last word and their neighbours, the column's ends, i32's extremes, and the negative tokens that
+    wrap to the largest i32s once the last V-chunk's start is subtracted."""
+    s = _starts(V, w)
+    return ([x + d for x in s for d in (-1, 0, 1)] + [V - 1, -1, -V, (1 << 31) - 1, -(1 << 31), -(1 << 31) + 1, (1 << 31) - V]
+            + [-(1 << 31) + s[-2] + d for d in (-1, 0)])
+
+
+def _u32(tokens) -> np.ndarray:
+    return np.array([t % (1 << 32) for t in tokens], np.uint32)
+
+
+@pytest.mark.parametrize(("V", "w"), [(1, 1), (5, 2), (7, 3), (9, 4), (64, 64), (65, 64), (100, 25), (100, 40)])
+def test_the_chunked_gather_is_the_whole_gather_at_every_token(V: int, w: int) -> None:
+    """Every token in [-3, V + 3] and every edge (`_chunk_edges`), against `GatherF32x{V}_v1` and `GatherF32x{V}_v2`: one V-chunk
+    (V <= w), uneven widths, a V-chunk of one word, and three V-chunks under a two-bit select."""
+    f = bind(BGA.GatherF32Chunked, V=V, W=w)
+    assert word_of(f) is RP.gather_f32(V) and BL.is_boolean(f)
+    first = f"GatherChunkSplit_v1{{V={V},W={w}}}" if len(BGA.chunk_widths(V, w)) > 1 else f"GatherF32x{V}_v2"
+    assert f.body.nodes[0].fn.id == first
+    tok = _u32(list(range(-3, V + 4)) + _chunk_edges(V, w))
+    col = np.random.default_rng(V * w).integers(0, 1 << 32, (len(tok), V), dtype=np.uint64)
+    _agree(f, tok, col)
+    got = BS.evaluate_words(f, tok, col).reshape(-1)
+    assert np.array_equal(got, BS.evaluate_words(bind(BGA.gather_f32(V)), tok, col).reshape(-1))
+    off = tok >= V
+    assert off.any() and (got[off] == BGA.F32_FILL).all()
+
+
+@pytest.mark.slow
+def test_the_chunked_gather_over_trees_of_calls_agrees_with_gather_f32_v1() -> None:
+    """V-chunks of 1667 and 1666 words, each a tree of Calls with a partial last chunk: the tree's edges and the V-chunks'."""
+    rng = np.random.default_rng(5000)
+    tok = np.concatenate([_tokens(5000, rng, 200), _u32(_chunk_edges(5000, 2100))])
+    _agree(bind(BGA.GatherF32Chunked, V=5000, W=2100), tok, rng.integers(0, 1 << 32, (len(tok), 5000), dtype=np.uint64))
+
+
+#: V -> the chunked gather's body (its nodes' ids and gates), a V-chunk's body, and the chunked gather's ANDs
+CHUNKED = {
+    TRAINING_VOCAB: ([("GatherChunkSplit_v1{V=50304,W=47163}", 148), ("GatherF32x25152_v2", 4832350), ("GatherF32x2u1_v1", 96)],
+                     [("GatherF32x1024u10_v1", 2356992), ("GatherF32x576u10_v1", 55419), ("GatherF32x25u22_v1", 3764)], 1611218),
+    LLAMA_VOCAB: ([("GatherChunkSplit_v1{V=128256,W=47163}", 327), ("GatherF32x42752_v2", 12316668), ("GatherF32x3u2_v1", 265)],
+                  [("GatherF32x1024u10_v1", 4026528), ("GatherF32x768u10_v1", 73705), ("GatherF32x42u22_v1", 5323)], 4106204),
+}
+
+
+@pytest.mark.parametrize("V", sorted(CHUNKED))
+def test_the_vocabularies_chunked_gathers_are_pinned(V: int) -> None:
+    """The training vocabulary in two V-chunks of 25,152 words and Llama 3's in three of 42,752, each a batch of one gather
+    behind a split of 50 and 92 ANDs, then a two- and a three-way select."""
+    nodes, chunk, _ = CHUNKED[V]
+    g = bind(BGA.GatherF32Chunked, V=V, W=BGA.W_MAX)
+    assert BL.is_boolean(g) and word_of(g) is RP.gather_f32(V)
+    assert [(n.fn.id, n.gates) for n in g.body.nodes] == nodes
+    assert [(n.fn.id, n.gates) for n in g.body.nodes[1].fn.body.nodes] == chunk
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("V", sorted(CHUNKED))
+def test_the_vocabularies_chunked_gathers_agree_with_gather_f32_v1(V: int) -> None:
+    """At every V-chunk edge (`_chunk_edges`), past the column and at random tokens in it."""
+    g = bind(BGA.GatherF32Chunked, V=V, W=BGA.W_MAX)
+    assert BS.compile(g).counts["and"] == CHUNKED[V][2]
+    rng = np.random.default_rng(V)
+    tok = np.concatenate([_u32(_chunk_edges(V, BGA.W_MAX) + [V, V + 1, 1 << 31, (1 << 32) - 1]), rng.integers(0, V, 16).astype(np.uint32)])
+    _agree(g, tok, rng.integers(0, 1 << 32, (len(tok), V), dtype=np.uint64))
+
+
+def _block(d) -> dict:
+    """``d`` as one C-Flock block, as `benchmarks/unit_block` composes it (each parameter one ``hm96-sha512/row/v2`` bit row and
+    its return one more): its META."""
+    return CS.UnitStager(d, f"unit-block/{d.name}", [(p, V2, t.leaves, [p]) for p, t in d.signature()[0]], [(V2, (0,))]).meta
+
+
+@pytest.mark.slow
+def test_w_max_is_the_most_words_whose_gather_and_its_rows_openings_fit_one_block() -> None:
+    """`GatherF32x{W_MAX}_v2` composes into exactly 2^27 bits, its unit in a 2^22 slot and the column row's 1,473 compressions
+    in 491 sha512x3 slots, and one more word needs a 492nd slot and a block of 2^28, which `compose` refuses. Only `compose`
+    itself shows that edge (two builds, about a minute each): the module doc's arithmetic is its layout's."""
+    m = _block(bind(BGA.gather_f32(BGA.W_MAX)))
+    assert (m["k_log"], m["unit_log"], m["per_vu"]["sha512x3"]) == (27, 22, 491)
+    assert max((r["pos0"] + r["count"]) << r["slot_log"] for r in m["ranges"]) == 1 << 27
+    with pytest.raises(ValueError, match=r"a block of 2\^28 bits"):
+        _block(bind(BGA.gather_f32(BGA.W_MAX + 1)))
+
+
+@pytest.mark.slow
+def test_the_split_and_the_select_are_no_block_alone() -> None:
+    """Their rows are a few bytes each, under one SHA-512 block, so `compose` refuses either as a statement of its own (about
+    10 s, its SHA-512 slot circuits)."""
+    for d in (bind(BGA.GatherChunkSplit, V=LLAMA_VOCAB, W=BGA.W_MAX), bind(BGA.gather_index(3, 2, "F32"))):
+        with pytest.raises(ValueError, match="no row has a compression before its last block"):
+            _block(d)
 
 
 def test_the_served_gather_is_pinned_and_agrees_with_gather_bf16x49152_v1() -> None:
