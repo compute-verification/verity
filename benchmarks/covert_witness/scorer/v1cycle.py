@@ -362,7 +362,9 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         workers, gb = trace_resources(len(runs))
         r = subprocess.run(["research", "run", "--on", TRACE_NODE, *(["--pool", TRACE_POOL, "--as", TRACE_LANE] if TRACE_POOL else []),
                             "--project", "verity", "--source", str(HERE.parents[2]),
-                            "--cwd", "source", "--send", str(pack), "--cpus", str(workers), "--mem-gb", str(gb),
+                            "--cwd", "source", "--send", str(pack),
+                            # on a named machine the pool slot's cores are the run's, and --cpus is the queue's
+                            *(["--cpus", str(workers)] if TRACE_NODE == "auto" else []), "--mem-gb", str(gb),
                             "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL, "--",
                             "bash", "benchmarks/covert_witness/scorer/job40.sh"],
                            capture_output=True, text=True, check=False, env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
