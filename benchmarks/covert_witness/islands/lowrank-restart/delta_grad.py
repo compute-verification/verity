@@ -795,7 +795,7 @@ def main() -> int:
         steps.append({"op": "extra", "flops": extra, "what": "message codes, tree sums, optimizer and store"})
         losses.append(total)
         if (step + 1) % 50 == 0:
-            row = {"step": step + 1, "loss": round(float(total), 4), "s": round(time.perf_counter() - t0, 1)}
+            row = {"step": step + 1, "loss": float(total), "s": round(time.perf_counter() - t0, 1)}
             log.append(row)
             print(json.dumps(row), flush=True)
         b = bucket(step + 1)
