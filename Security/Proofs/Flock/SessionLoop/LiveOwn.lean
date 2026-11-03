@@ -2,6 +2,8 @@ import Proofs.Flock.Claims.ZK.OwnHistAny
 import Proofs.Flock.SessionLoop.LiveSchedOwn
 import Proofs.Flock.SessionLoop.LiveInnerOwn
 import Proofs.Flock.SessionLoop.FinishIsLoop
+import Proofs.Flock.SessionLoop.VsOfTakes
+import Proofs.Flock.SessionLoop.SwCausalExe
 
 /-!
 # `LiveRoundEq` for any worker, at its own histories
@@ -17,11 +19,13 @@ only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
 * **`LeanRelease.liveRoundEqOwn_withInner`**: at that release with the inner proof's rounds the loop's finish's
   (`withInner` at `Loop.finOf`), at `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's
   inputs, `LiveRoundEqOwn` holds at every worker taking some admissible `vs`'s values at its own histories
-  (`Loop.TakesValsOwn`), `vs` being admissible when it is causal (`SwCausal`), its round-1c values fix its `final_c`
-  (`Loop.FinalCFixed`), its level-0 words are the firewall's (`Loop.L0Fixed`) and its rows hold (`Loop.RowsOK`). It
-  takes neither `Loop.TakesFinalC` nor `Loop.TakesTau`. A
-  worker taking no admissible `vs`'s values is outside it. `liveRoundEqOwn_honestVals`: its premises on the worker and
-  the values hold at the honest worker `Loop.valsWk honestVals`.
+  (`Loop.TakesValsOwn`), `vs` being admissible when it is causal on the coins `Loop.SwOk` admits (`SwCausalOn`), its
+  round-1c values fix its `final_c` (`Loop.FinalCFixed`), its level-0 words are the firewall's (`Loop.L0Fixed`) and its
+  rows hold (`Loop.RowsOK`). It takes neither `Loop.TakesFinalC` nor `Loop.TakesTau`. A worker taking no admissible
+  `vs`'s values is outside it. `liveRoundEqOwn_honestVals`: its premises on the worker and the values hold at the
+  honest worker `Loop.valsWk honestVals`.
+* **`LeanRelease.liveRoundEqOwn_vsOf`**: they hold at `Loop.vsOf bx` and the worker `Loop.phased bx post`, for every
+  algebraic-phase worker `bx` and every `post`, wherever `bx`'s served values' rows hold (`Loop.vsServed`).
 
 `Loop.finishIs` takes `LiveRoundEqOwn`: the `Finish` reads each frame round on the history it ends, a prefix of the own
 history `FinishIs` is asked on, which is own (`ZkServer.OwnHist.take`, `msg_of_liveRoundEq`).
@@ -57,7 +61,8 @@ theorem liveRoundEqOwn_ofLoopLink (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
 proof's rounds the loop's finish's (`withInner` at `Loop.finOf`, at `L₁`'s frame draws), on the loop's own tables
 (`Loop.realOf`) and inputs (`Loop.Src`), at a statement in the masked scope with a witness that the loop serves,
 `LiveRoundEqOwn` holds at every worker taking some admissible `vs`'s values at its own histories (`Loop.TakesValsOwn`):
-one that is causal (`SwCausal`), whose `final_c` its round-1c values fix (`Loop.FinalCFixed`), whose level-0 words are
+one causal on the coins `Loop.SwOk` admits (`SwCausalOn`), whose `final_c` its round-1c values fix
+(`Loop.FinalCFixed`), whose level-0 words are
 the firewall's (`Loop.L0Fixed`) and whose rows hold (`Loop.RowsOK`). `liveRoundEqOwn_ofLoopLink` at
 `liveSchedOwn_ofLoopLink` and `liveInnerOwn_withInner`. -/
 theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flock.Wit Loop.Tp)
@@ -67,8 +72,8 @@ theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flo
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
-    (hcaus : Loop.finS.SwCausal vs) (hC : Loop.FinalCFixed vs x w) (hL0 : Loop.L0Fixed vs x w)
-    (hrows : Loop.RowsOK vs x w)
+    (hcaus : Loop.finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) (hC : Loop.FinalCFixed vs x w)
+    (hL0 : Loop.L0Fixed vs x w) (hrows : Loop.RowsOK vs x w)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
     (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)
       wk x w) :
@@ -76,12 +81,11 @@ theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flo
       CoinOpen.shaH wk x w :=
   liveRoundEqOwn_ofLoopLink vs _ src real wk x w
     (liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hL0 hV)
-    (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc
-      (Loop.swCausalOn_swOk Masked.dataE vs hcaus) wk hV hC hL0 hrows)
+    (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc hcaus wk hV hC hL0 hrows)
 
 /-- **At the honest worker and values**: `liveRoundEqOwn_withInner` at `Loop.valsWk honestVals`, whose premises on the
-worker and the values hold there (`Loop.takesValsOwn_honestVals`, `RefSession.swCausal_vals`,
-`Loop.finalCFixed_honestVals`, `Loop.l0Fixed_honestVals`, `Loop.rowsOK_honestVals`). -/
+worker and the values hold there (`Loop.takesValsOwn_honestVals`, `RefSession.swCausal_vals` through
+`Loop.swCausalOn_swOk`, `Loop.finalCFixed_honestVals`, `Loop.l0Fixed_honestVals`, `Loop.rowsOK_honestVals`). -/
 theorem liveRoundEqOwn_honestVals (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -93,9 +97,33 @@ theorem liveRoundEqOwn_honestVals (L₁ : LeanRelease Flock.Wit Loop.Tp)
       (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) CoinOpen.shaH
       (Loop.valsWk Loop.finS.honestVals
         (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)) x w :=
-  liveRoundEqOwn_withInner _ L₁ src real hreal x w hTab hTape hR hSv hsc hSrc (RefSession.swCausal_vals _ hcz)
-    (Loop.finalCFixed_honestVals x w) (Loop.l0Fixed_honestVals x w (Masked.live_of hsc hR) hR)
-    (Loop.rowsOK_honestVals hR) _ (Loop.takesValsOwn_honestVals _ src real x w)
+  liveRoundEqOwn_withInner _ L₁ src real hreal x w hTab hTape hR hSv hsc hSrc
+    (Loop.swCausalOn_swOk Masked.dataE _ (RefSession.swCausal_vals _ hcz)) (Loop.finalCFixed_honestVals x w)
+    (Loop.l0Fixed_honestVals x w (Masked.live_of hsc hR) hR) (Loop.rowsOK_honestVals hR) _
+    (Loop.takesValsOwn_honestVals _ src real x w)
+
+/-- **At every algebraic-phase worker, through `vsOf`**: `liveRoundEqOwn_withInner` at `Loop.vsOf bx` and the worker
+`Loop.phased bx post`, which runs `bx`'s algebraic phase and then `post`, at a witness where `bx`'s served values'
+rows hold (`Loop.RowsOK (Loop.vsServed bx)`). `vsOf bx` is causal on the coins `Loop.SwOk` admits
+(`Loop.swCausal_oneTape_vsOf`), fixes its `final_c` (`Loop.finalCFixed_vsOf`) and its level-0 words
+(`Loop.l0Fixed_vsOf`), its rows hold (`Loop.rowsOK_vsOf`), and the worker takes its values (`Loop.takesVals_vsOf`). -/
+theorem liveRoundEqOwn_vsOf (L₁ : LeanRelease Flock.Wit Loop.Tp)
+    (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
+    (x : Msg) (w : Flock.Wit) (hTab : Loop.finS.Tables) (hTape : Loop.finS.TapeOK)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
+    (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
+    (bx : Loop.AlgWorker (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real))
+    (hRo : Loop.RowsOK (Loop.vsServed _ bx) x w)
+    (post : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker) :
+    LiveRoundEqOwn Loop.finS (Loop.vsOf _ bx)
+      (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) CoinOpen.shaH
+      (Loop.phased _ bx post) x w :=
+  liveRoundEqOwn_withInner (Loop.vsOf _ bx) L₁ src real hreal x w hTab hTape hR hSv hsc hSrc
+    (Loop.swCausal_oneTape_vsOf L₁ src real _ hreal bx) (Loop.finalCFixed_vsOf _ bx x w)
+    (Loop.l0Fixed_vsOf _ src real bx x w (Masked.live_of hsc hR) hR) (Loop.rowsOK_vsOf _ bx hR) _
+    (Loop.takesValsOwn_of_takesVals (Loop.takesVals_vsOf L₁ src real _ hreal x w hSv bx hRo post))
 
 end LeanRelease
 
