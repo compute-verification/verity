@@ -5,8 +5,7 @@ every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it d
 that leaves the Lean one at the auditor's sample (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
 the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, and every coin after a refusal
 refused. The loop starts the reps' frames on a port of its
-own and drives each itself, every coin a frame takes the loop's own opening, and a coin a frame refuses (a zerocheck outer
-coin `1`) stops the session at that round. `flock-circuit`'s firewalled sessions through it
+own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled sessions through it
 are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 

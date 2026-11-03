@@ -27,8 +27,10 @@ the prover's bytes:
   prover put after its round is dropped): the algebraic phase's scheduled round, the opening's (the loop's own
   `Drive.openStep`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's, the
   frame's own on the rounds the loop's finish computed and handed the loop's frames before the prover relays them
-  (`Frame.innerSched`, `Frames.Sessions.innerRound`). Its coins, once opened, are the frame's (`Frames.feedOf`,
-  `Frames.coins`), and the prover receives them only once the frame took them.
+  (`Frame.innerSched`, `Frames.Sessions.innerRound`). At an inner round the finish has not computed, the frame takes no
+  device round: whatever the prover relays fails, the frame's own round stands in, and the rep stops
+  (`Frames.roundStep`). Its coins, once opened, are the frame's (`Frames.feedOf`, `Frames.coins`), and the prover
+  receives them only once the frame took them.
 * Each table's level 0 is the loop's: on its frames port the loop draws a table's mask-slot words, level-0 hiding and
   salts from the operating system for the packed witness the prover hands it, writes the words into the witness's mask
   slot, and commits level 0 on them (`level0`, `Level0.draw`), for the live session and table the request names (by the
@@ -72,6 +74,7 @@ import Flock.Firewall.Level0
 import Flock.Firewall.Finish
 import Std.Async.TCP
 import Std.Async.DNS
+import Flock.JsonParse
 
 namespace Flock.Firewall.Session
 
@@ -394,7 +397,7 @@ def notAccepted (why : String) : ByteArray :=
 /-- Whether `r` is a `Resp::Verdict` that accepts (`"accepted": true`). -/
 def accepts (r : ByteArray) : Bool :=
   match byte? r 0, getBytes r 1 with
-  | some 4, some (v, _) => match (String.fromUTF8? v).map Json.parse with
+  | some 4, some (v, _) => match (String.fromUTF8? v).map JsonParse.parse with
     | some (.ok j) => j.getObjValD "accepted" == Json.bool true
     | _ => false
   | _, _ => false
