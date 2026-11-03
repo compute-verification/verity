@@ -38,7 +38,6 @@ namespace LeanRelease
 open FlockSoundness.Refine (Frame encs)
 
 open Loop Ranked in
-set_option maxHeartbeats 4000000 in
 /-- **Level 0's rounds past the binding, where no refusal shows**: at rep stream `2j + r`'s level-0 round
 `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`) and no refusal
 shows by the round, the release of the worker's round is the switched session's message without its leading domain
@@ -261,7 +260,6 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
       rw [if_neg (by omega)]
       exact lt_of_lt_of_le he (by decide))
 
-set_option maxHeartbeats 1000000 in
 /-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
 `k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the release of the
 worker's round is the switched session's message without its leading domain frame. The round is past the rep's PCS

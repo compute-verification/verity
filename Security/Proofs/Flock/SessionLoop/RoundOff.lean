@@ -351,7 +351,7 @@ set_option maxHeartbeats 2000000 in
 (`Masked.repBase`), the frame starts the rep fresh (`freshOf_ok`, `step_prior_fresh`) and checks the worker's round
 against the loop's own, the binding behind the stream's domain frame (`Sched.rounds_two`, `head_encs`), so the worker's
 round is that round and the release is the binding with the configuration's pads root and `r_skip`'s squeeze
-(`roundFree_zcHead_out`), at the cap of the loop's table there. -/
+(`roundFree_zcHead_out`), at the cap of the loop's table there. The round frees no word. -/
 theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -367,6 +367,11 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
           (_root_.Flock.Firewall.Finish.flat tr.cm0.cap)
           ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).root) ++ (Frame.sq 2 6).enc) ∧
       (ofLoop Masked.dataE L₁ real).rep x (ops.length + 1) = 2 * j.val + r.val ∧
+      (∀ {m₁ : Masker} {out₁ : ByteArray} {s₁ : Masker} {fr₁ : Array ℕ},
+        (ofLoop Masked.dataE L₁ real).answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m₁ →
+        roundFree ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m₁ with stopped := false }
+          ⟨v.toArray⟩ ((ofLoop Masked.dataE L₁ real).coins x (ops.length + 1)) = .ok (out₁, s₁, fr₁) →
+        fr₁ = #[]) ∧
       ∃ lay mask, _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask) := by
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
@@ -507,10 +512,15 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hvb := passes_eq hro (check_none_passes hck)
   have hrel := release_of_roundFree (ofLoop Masked.dataE L₁ real) x (ν, t) ((m₀, ρ₀) :: ops) false v hA hcoins
     (out := o) (s' := tq) (fr := #[]) (by rw [hvb]; exact hro)
-  refine ⟨tr, hir, hre', ?_, ?_, lay, mask, by rw [hjh] at hds; exact hds⟩
+  refine ⟨tr, hir, hre', ?_, ?_, ?_, lay, mask, by rw [hjh] at hds; exact hds⟩
   · rw [hrel, ho, hdgE]
   · show repOf x (ops.length + 1) = _
     rw [show ops.length + 1 = q + 2 by omega, repOf_add_two hsx, hloc]
+  · intro m₁ out₁ s₁ fr₁ hA₁ hf
+    obtain rfl : m = m₁ := Except.ok.inj (hA.symm.trans hA₁)
+    have hc6 : (ofLoop Masked.dataE L₁ real).coins x (ops.length + 1) = 6 := hcoins
+    rw [hc6, hvb] at hf
+    exact (Prod.mk.inj (Prod.mk.inj (Except.ok.inj (hf.symm.trans hro))).2).2
 
 open Loop in
 set_option maxHeartbeats 2000000 in
@@ -543,7 +553,7 @@ theorem release_sched_zcBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
   have hjh : (2 * j.val + r.val) / 2 = j.val := by omega
   have hrh : (2 * j.val + r.val) % 2 = r.val := by omega
   have hm25 : 25 ≤ (Masked.stAt x j).m := (htabs j.val hj).1
-  obtain ⟨tr, hir, hre, hrel, hrep, lay, mask, hds⟩ :=
+  obtain ⟨tr, hir, hre, hrel, hrep, -, lay, mask, hds⟩ :=
     zcBind_frame (withFiles (withLink L₀ src) src) real wk hx hSv ν t κ m₀ ρ₀ ops
       (by rw [hreal]; exact Loop.realTabs_of src x w (ν, t) hsx) hlt hl hv j r hn
   have hrel' : (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
