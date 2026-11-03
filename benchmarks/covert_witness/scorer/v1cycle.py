@@ -67,6 +67,9 @@ RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-delta-t-40-516a")
 #: coded width from 4.2's traces, coordinator 07:48Z); a VERSION outside TE40_WT's group is a new capture, whose cache
 #: traces every run again (`next_capture`)
 CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"))
+#: the capture from which every later VERSION captures alike, and which traces the pilot's runs too, after v3's: the
+#: toolsmith's 08:14Z line (te_core 4.4: the capture is final for tonight, retrace every run once)
+CAPTURE_FINAL = "4.4"
 #: where node traces run: `auto` spreads shards of TRACE_SHARD runs over the CPU pool (coordinator 07:48Z)
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "auto")
 TRACE_SHARD = 6
@@ -161,7 +164,9 @@ def capture_version(te: Path) -> str:
 
 
 def same_capture(a: str, b: str) -> bool:
-    return a == b or any({a, b} <= set(g) for g in CAPTURES)
+    def final(v):
+        return tuple(map(int, v.split("."))) >= tuple(map(int, CAPTURE_FINAL.split(".")))
+    return a == b or any({a, b} <= set(g) for g in CAPTURES) or (final(a) and final(b))
 
 
 def next_capture(newest: str) -> Path | None:
@@ -208,9 +213,9 @@ def replaces(new: Path) -> bool:
 
 def to_trace(te: Path, busy: set[str]) -> list[str]:
     """The runs in scope with no trace in `te`'s cache and no node run tracing them, v3's first, then the pilot's
-    when TE_TRACE_PILOT is set."""
+    under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set."""
     v3, done = v3_scope(), trace40.done(trace40.cache(te)) | busy
-    pilot = os.environ.get("TE_TRACE_PILOT") == "1"
+    pilot = os.environ.get("TE_TRACE_PILOT") == "1" or same_capture(capture_version(te), CAPTURE_FINAL)
     runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)]
     return sorted(runs, key=lambda r: r not in v3)
 
@@ -503,6 +508,7 @@ def main() -> int:
     for r in scored:
         by_start.setdefault(r["start"], set()).add(r["run_id"])
     meta = {"stamp": stamp, "te_core": commit, "te_core_version": te_version(commit), "te_core_chosen": chosen,
+            "capture": trace_version,
             "integrator_te_core": newest, "pins": PINS,
             "quantities": ("rescore_v1's analysis" if final else
                            f"measured on each record's traced step (te_core {trace_version}'s capture, t literal; "
@@ -687,13 +693,13 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
     refused = tr["ledger"].get("refused_runs") or []
     nx = meta.get("next_capture")
     nx_refused = len(nx.get("launch_refused") or []) if nx else 0
-    nx_said = (f" (te_core {nx['te_core']} refuses every row traced before 4.2's capture ({nx['commit'][:11]}), which "
-               f"is tracing v3's runs over the CPU pool: {nx['covered']} of the {nx['of']} done so far, "
+    nx_said = (f" (te_core {nx['te_core']} prices a row from its own capture ({nx['commit'][:11]}), which is tracing "
+               f"every run over the CPU pool, v3's first: {nx['covered']} of v3's {nx['of']} done so far, "
                f"{nx['traced']} traced"
                + (f", {nx_refused} of {len(nx.get('launch') or [])} shard launches refused, packed again at the next "
                   "refresh" if nx_refused else "") + "; "
-               f"this refresh scores on te_core {meta['te_core_version']} until they trace as many runs, and as many of "
-               "v3's)" if nx else "")
+               f"this refresh scores on te_core {meta['te_core_version']} over {meta.get('capture', '?')}'s capture "
+               "until it traces as many runs, and as many of v3's)" if nx else "")
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
     v3_said = ", ".join(f"{s} {x['records']} ({x['checkpoints']} checkpoints)" for s, x in meta["v3"].items()
