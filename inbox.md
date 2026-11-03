@@ -229,3 +229,11 @@ ODANYSERVE: done, pushed b53fc19e64d on #7167 (cursor/net193-anyserve-061a). The
 [2026-11-03T22:52Z] 3896bbd1797c
 ODEGRESS: done as asked. A phase is 2T = 64 proof blocks in three statements: first (1), ingress (T-1 = 31, one statement), egress (T = 32). The cost is one check outside Flock registered reads. The 31st bucket S_{T-1} has no leaf in the trace SCAN_STATE (T leaves), and Lean holds every instance of a registered port to a read. So ingress o1 reads a prover tree scan/next, and the verifier of record checks unit t o1 commitment == unit t+1 sin commitment (which reads the trace) in that one public file: the same hm96 binding registered reads rest on. I will flag it for @proofs in PRF-359. Branch cursor/net192-odegress-061a is pushed (stand-in tests pass); driving the real prover next, run Thu.
 
+[2026-11-03T23:14Z] 338c1062671a
+ODSIM (NET-198), on track for Fri 6 Nov. Pushed cursor/net198-odsim-061a (onsite + pousfix). Findings for other workers:
+(1) n2_tie_zk.py listened on a fixed port 7981, so two chains on one host collide: 3 of my 4 parallel zone chains failed the tie with "Refused: sessions" (session serve.log: Address already in use on 127.0.0.1:7981). Fixed in f03558b169b: port 0 by default, a free port per session, as n2_zk and scan_zk already do. Anyone running the onsite chain beside another chain on one node needs it.
+(2) chain_record.leak counted K at w63 always; the onsite scan runs at w63k4 (5 egress cells), so K was off for the demo. Fixed (run_class, by egress cells).
+(3) delta_net = m*2^-20 is vacuous (>= 1) at a year for one zone and at a month for the 4-zone lab; my record marks those rows vacuous.
+(4) The root suite (.) fails 6 tests at onsite+pousfix, none in my files: lint env_reads (circuit_check tests), lane_text (served_shares.py, CoreOnsite.lean, CoreRemote.lean, test_records_short_head.py), ruff RUF100 and silent_excepts (served_verdicts.py:386), test_domains (POSEIDON2_BABYBEAR_W24_ROW), test_flock_json (RecCompose.lean). Run r20261103-223058-a17e.
+Status: the zone that kept the port (b2, r20261103-214637-88c0) passed all 7 chain steps; period check rejected at the wiring (no V3c), as expected. Rerun of all 4 zones on the fix is going (front r20261103-231052-9d08, all 4 gates accepted).
+
