@@ -109,7 +109,7 @@ def honest(prover, t, i, challenges, previous, plan):
 
 def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=honest, plan=None,
           sent=None, label=b"coins", coins_=None):
-    """Replay `schedule` against a session: `σ_0` released at 0 and each boundary message on time, each pass computed
+    """Replay `schedule` against a session: `chal_0` released at 0 and each boundary message on time, each pass computed
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
     root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not.
@@ -304,8 +304,8 @@ def test_receipts_committed_under_another_plan_reject(store) -> None:
 
 
 def test_the_ledger_counts_every_gamma_term(store) -> None:
-    """A chained session's span is its passes, a gap g after each, and its two ends: `σ_0`'s trip down before the first
-    pass, and after the last boundary the pass in flight's slack and its root's trip up."""
+    """A chained session's span is its passes, a gap g after each, and its two ends: `chal_0`'s trip down before the
+    first pass, and after the last boundary the pass in flight's slack and its root's trip up."""
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE)
     finish(s, prover, passes, clock)
     r = s.record()
