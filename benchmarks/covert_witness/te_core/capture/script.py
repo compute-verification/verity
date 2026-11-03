@@ -42,8 +42,9 @@ reached by read-backs from two or more earlier steps is listed too (`formalism["
 keeps such state as a device tensor (a 0-dim fp32 tensor updated in place), which the graph carries as one value. An op
 whose output size is set by values (``nonzero``, ``unique``, ``masked_select``, ``x[mask]``) is taken at its largest. The run is
 recorded again with ctx halved (prepare.EVAL_CTX and every window), for its token axes, or, when that changes its steps (a
-plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). `record(...)` returns step A's
-`StepGraph`; the CLI writes its structure (te_core.flops's record form) and its forward's GEMM MACs beside the record's
+plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). The measured step's quantities
+keep its matrix products as te_core.io_bound reads them (`formalism["products"]`, te_core.capture.products' rows).
+`record(...)` returns step A's `StepGraph`; the CLI writes its structure (te_core.flops's record form) and its forward's GEMM MACs beside the record's
 forward MACs (its backward's differ by the recompute the GPU's fused attention runs and the math backend doesn't).
 """
 from __future__ import annotations
@@ -71,6 +72,7 @@ from torch.overrides import TorchFunctionMode
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils.weak import WeakTensorKeyDictionary
 
+from te_core.capture import products
 from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
 from te_core.flops import TOKEN_INDEX
@@ -818,10 +820,12 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
         return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
 
     def flagged(g: StepGraph) -> StepGraph:
+        rows = products.rows(g) if g.formalism is not None else None
         if g.circuit is not None:
             g.circuit.read_backs = {k: list(v) for k, v in listed.items()}
+            g.circuit.products = rows
         if g.formalism is not None:
-            g.formalism = g.formalism | listed
+            g.formalism = g.formalism | listed | {"products": rows}
         return g
 
     base = trace(1)

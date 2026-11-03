@@ -6,10 +6,11 @@ runs. null is unmeasured (a term, the max, or ρ where no kind is measured); JSO
 writes `rho_vectors.json` beside this file (prints it without --write); te_core's tests check the file is what this
 module makes. Each case is a step of wildcard's program traced on the tiny start (`CASES`, the circuits under
 te_core/capture/tests/fixtures), measured by te_core.capture.circuit.measure as one part, with Δ and d stated per case,
-and its ops the same trace's (te_core.tiles.of_graph, the `.ops.json` beside the circuit). Each vector is a case at a
-cell (c, k) of `CELLS`: each kind's term and the inputs it reads, the max over the kinds and the kind it binds on, the
-sensitivities, Fit, ρ_fit, ρ and the label. A case's `measured` is te_core.formalism.from_json's form, reading A's
-`entries` and `ops` in it.
+and its ops and product rows the same trace's (te_core.tiles.of_graph, the `.ops.json` beside the circuit;
+te_core.capture.products at the console's k, the `.products.json`). Each vector is a case at a cell (c, k) of `CELLS`:
+each kind's term and the inputs it reads, the max over the kinds and the kind it binds on, the sensitivities, Fit,
+ρ_fit, ρ and the label. A case's `measured` is te_core.formalism.from_json's form, reading A's `entries`, `ops` and
+`products` in it.
 
 `sessions` holds the console's c, te_core.policy's `session` at every size it states a shape for (`SHAPES`) and each
 session of `SESSIONS`: its inputs (parameters, input and output tokens, the shape) and its outputs (the tokens that run
@@ -85,8 +86,8 @@ def sessions() -> dict:
 
 
 def case_measured(case: dict) -> formalism.Measured:
-    """A case's quantities: its traced step's (`measure`) as one part, Δ and d as the case states, and the step's ops
-    (the `.ops.json` beside its circuit)."""
+    """A case's quantities: its traced step's (`measure`) as one part, Δ and d as the case states, the step's ops (the
+    `.ops.json` beside its circuit) and its product rows (the `.products.json`, te_core.capture.products')."""
     circuit = FIXTURES / case["circuit"]
     f = measure(StepCircuit.load(circuit))
     part = {"gates": f["gates"], "tokens": f["tokens"], "token_gates": f["sigma"] * f["gates"],
@@ -94,9 +95,11 @@ def case_measured(case: dict) -> formalism.Measured:
             "partial_bits": f["partial_cut_bits"], "grad_bits": f["grad_cut_bits"]}
     delta = case["delta_bits"] if case["delta_bits"] is not None else float(f["update_cut_bits"])
     ops = json.loads(circuit.with_suffix(".ops.json").read_text())
+    rows = json.loads(circuit.with_suffix(".products.json").read_text())
     block = formalism.of_trace(f) | {"parts": [part], "delta_bits": delta, "decoder_gates": case["decoder_gates"],
-                                     "ops": ops}
-    block["labels"] |= {"delta_bits": case["delta"], "decoder_gates": case["decoder"], "ops": OPS}
+                                     "ops": ops, "products": formalism.products_of_trace(rows)}
+    block["labels"] |= {"delta_bits": case["delta"], "decoder_gates": case["decoder"], "ops": OPS,
+                        "products": formalism.TRACED_PRODUCTS}
     return formalism.complete(block, {"output": {"e_bytes": delta / 8}}, TINY)
 
 
