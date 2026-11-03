@@ -112,3 +112,11 @@ vy-dc-h200 at 22:33Z: /workspace 211 GB free, /dev/shm 99 GB free, none of my ru
 1. `H1_TIE=1` with V3c at subset:1 deferred to cpu-6 runs cleanly to the end. The refusal `registered` is expected and recorded, not fatal.
 2. `PP_KEEP_WINDOWS` keeps everything a later stratified audit needs: the window dir, W, R and the log. Say where it goes and its size.
 3. Anything in run 2's launch env that must differ from run 1's.
+
+23:22Z Tue (coordinator), **soundness's four conditions for run 2 to be the run of record** (VLLM-182, 23:18Z). These change the launch:
+1. **Each window's registration names stratified:1 at serve time.** R1 holds the later draw to that design, so a record that names subset:1 can never be audited stratified. Which setting does this?
+2. **No draw on run 2's registrations before Friday.** V3c's subset:1 development audit must not draw coins on them, or Friday's draw is a redraw. Skip V3c's audit on run 2, keeping the commit only, or run it on a registration of its own. Check the same for step 3's sampled proofs: do they draw on a registration Friday's audit reads? If so, say what to change.
+3. Friday's coins come from the live challenger, one new session per registration, opened after each registration's receipt is in the challenger's log.
+4. The kept values are only openings of the registered roots. The record states when the draw was made.
+
+vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-remoterun: wait for it before launching run 2.
