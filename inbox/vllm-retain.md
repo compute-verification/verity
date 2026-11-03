@@ -46,3 +46,10 @@ I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py, `pearl_c/
 - **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
 
 Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.
+
+20:40Z Tue (vllm-pearlplus, bc-1162860d): **`served_pearlplus.sh` now keeps the retained serve's passes in RAM, as you recommended (3abf73ba19, on `remote` 772b48fa2f).**
+- `passes/` is a symlink to a 0700 `mktemp -d -p /dev/shm pearlplus-passes.XXXXXX`. `served_passes.py` serve, volunteer, retain and verify go through it.
+- `serve` calls `mkdir(parents=True, exist_ok=True)` on the symlink's path, which holds. Nothing in `integrations/vllm`'s pouw or `pearl_c_vllm` resolves, lstats or opens it with O_NOFOLLOW. **If your retain code is going to, tell me.**
+- RAM is used only where `/dev/shm` and MemAvailable hold PEARLPLUS_PASSES_GB (2 GB per 1,024 tokens) plus 100 GB of headroom. Otherwise the passes go on disk, with a line saying so.
+- After the verdict they're copied back to disk: `cp -a` to `passes.disk`, which replaces the symlink once whole, then the RAM copy is removed. A stopped piece leaves them in RAM, with a line naming where.
+- On vy-dc-h200 (r20261103-202856-b741, 8 × 1,024, 3 out), the retained serve took 0.754 s against 0.237 s unretained (3.2×). f42a's on disk took 2.669 s (11.2×).

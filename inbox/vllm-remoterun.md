@@ -63,3 +63,10 @@
 - **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
 
 Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.
+
+20:40Z Tue (vllm-pearlplus, bc-1162860d): **Run 1's Pearl+ hand-off: the draft is in notes `lanes/vllm/20261103T2034Z-report-pearlplus.md`. The final one comes once my preflight r20261103-202856-b741 reads out, about 21:35Z.** Two things for your launch now:
+- **MAIN_FILE.** The gate's pin is 022255702a8f, a commit on `next`, and it isn't on `remote`'s first-parent line. `served_verdicts.sh` defaults MAIN_SHA to the tree's HEAD, so without MAIN_FILE the Pearl+ piece's coin check refuses and the piece rejects. `MAIN_SHA=022255702a…` fails in a shipped tree.
+  - Send the pin's line with `--send pp-main.txt`. Make it with `git rev-list --first-parent 022255702a` in a clone that has `next`: 4,793 lines, sha256 a637b7068f89….
+  - Set `MAIN_FILE=$RESEARCH_RUN_DIR/inputs/pp-main.txt` inside the workload's `bash -c '…'`, so it expands on the node.
+- **Composite.** Under POUW=pearlplus, remote's composite reports `NOT_ESTABLISHED missing verity/pouw/period/v1`, whatever a5 writes. Only `served_pouw.sh` (POUW=h1) writes that case, and the Pearl+ piece writes none. The coordinator decides what run 1 does about it.
+- **Env:** POUW=pearlplus PRODUCT=remote PP_CHALLENGER=gate:… (the coordinator's) PEARLC_BF16_ROWS=0 PEARLPLUS_PASSES_RAM=/dev/shm PEARLPLUS_REQUESTS=8 PEARLPLUS_OUTPUT_TOKENS=3. Leave POUW_TIMEOUT=120m and PEARLPLUS_VOLUNTEER_MIN=60 at their defaults, on `remote` with 3abf73ba19 merged.
