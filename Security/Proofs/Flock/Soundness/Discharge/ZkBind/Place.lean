@@ -114,7 +114,7 @@ noncomputable def SitesZ.placeKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h 
   inst := Const.Prog.instC (keyProg c hU n) outs u
   o := si.o S R u h
   col := si.colKey hU hparse S R u h
-  placed := si.placed_keyProg hU hparse S R u h
+  placed := (si.placed_keyProg hU hparse S R u h).sat
   aliased := si.aliased_keyProg hU hparse outs S R u h
 
 /-- **`placeKey` is the program's unit at its site**: its rows are the program's, its instance the program's own
