@@ -192,15 +192,14 @@ theorem sum_sigma_wholeOut [Fintype κ] [DecidableEq κ] (s : Finset ι) (f : κ
 omit [Fintype ι] [DecidableEq ι] in
 /-- A post-fixed point is nonnegative. -/
 theorem nonneg_of_postFixed [Fintype κ] {k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ} (hcs : ∀ j, 0 ≤ cs j)
-    (hμ : ∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j) (j : κ) : 0 ≤ μ j :=
+    (hμ : sys.PostFixed k b cs A μ) (j : κ) : 0 ≤ μ j :=
   (mul_nonneg (div_nonneg (mul_nonneg (hcs j) (Nat.cast_nonneg k)) (by positivity)) (sq_nonneg _)).trans (hμ j)
 
 /-- **The class bound below depth `t`**: in an inference block, each class `i`'s products less deep than `t` have the
 whole chains of at most `μ_i k / b` output entries. -/
 theorem classBound_lt [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ}
     (hS : ∀ p, (sys.prod p).Algorithm) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
-    (hM : sys.Matched A) (hb : 0 < b) (hK : ∀ j, 0 < sys.K j) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j)
-    (hμ : ∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j)
+    (hM : sys.Matched A) (hb : 0 < b) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j) (hμ : sys.PostFixed k b cs A μ)
     {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) (t : ℕ) (i : κ) :
     ((∑ q ∈ (univ.filter fun q => sys.depth q < t).filter (fun q => sys.cls q = i),
       ((sys.prod q).wholeOut I).card : ℕ) : ℝ) ≤ μ i * k / b := by
@@ -259,9 +258,9 @@ theorem classBound_lt [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → �
       rw [Nat.cast_mul, Nat.cast_pow] at h1
       exact h1.trans (hsh I hI i F hFi)
     have hKpos : (0 : ℝ) < (sys.K i : ℝ) ^ 2 := by
-      have := hK i
+      have := sys.K_pos i
       positivity
-    have hK0 : (sys.K i : ℝ) ≠ 0 := by exact_mod_cast (hK i).ne'
+    have hK0 : (sys.K i : ℝ) ≠ 0 := by exact_mod_cast (sys.K_pos i).ne'
     refine le_of_mul_le_mul_left ?_ hKpos
     calc (sys.K i : ℝ) ^ 2 * ((∑ p ∈ F, ((sys.prod p).wholeOut I).card : ℕ) : ℝ)
         ≤ cs i * ((sys.hadValues F I).card : ℝ) ^ 2 := hsum
@@ -278,8 +277,8 @@ end System
 namespace SecurityProofs
 
 theorem ClassBound : Guarantees.ClassBound := by
-  intro d ι κ _ _ _ _ sys c k b cs A μ I j hS hV hsh hW hM hb hK hcs hA hμ hI
-  have h := sys.classBound_lt hS hV hsh hW hM hb hK hcs hA hμ hI (univ.sup sys.depth + 1) j
+  intro d ι κ _ _ _ _ sys c k b cs A μ I j hS hV hsh hW hM hb hcs hA hμ hI
+  have h := sys.classBound_lt hS hV hsh hW hM hb hcs hA hμ hI (univ.sup sys.depth + 1) j
   rwa [filter_true_of_mem fun q _ => Nat.lt_succ_of_le (le_sup (f := sys.depth) (mem_univ q))] at h
 
 end SecurityProofs
@@ -292,8 +291,7 @@ variable {ι κ : Type} [Fintype ι] [DecidableEq ι] (sys : System d ι κ)
 `b |π₁₂ T| + b |π₂₃ T| ≤ |U ∩ cones| + e k`, `e` the class's whole-making factor. -/
 theorem ops_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ}
     (hS : ∀ p, (sys.prod p).Algorithm) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
-    (hM : sys.Matched A) (hb : 0 < b) (hK : ∀ j, 0 < sys.K j) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j)
-    (hμ : ∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j)
+    (hM : sys.Matched A) (hb : 0 < b) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j) (hμ : sys.PostFixed k b cs A μ)
     {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) (q : ι) :
     (b : ℝ) * (((sys.prod q).whole I).image fun x => (x.1, x.2.1)).card +
         (b : ℝ) * (((sys.prod q).whole I).image fun x => (x.2.1, x.2.2)).card ≤
@@ -320,7 +318,7 @@ theorem ops_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A 
       (k : ℝ) / b * wholeFactor A μ (sys.cls q) := by
     rw [sys.sum_sigma_wholeOut _ (fun i => A i (sys.cls q)) I, wholeFactor, mul_sum]
     refine sum_le_sum fun i _ => ?_
-    have hc := SecurityProofs.ClassBound d ι κ sys c k b cs A μ I i hS hV hsh hW hM hb hK hcs hA hμ hI
+    have hc := SecurityProofs.ClassBound d ι κ sys c k b cs A μ I i hS hV hsh hW hM hb hcs hA hμ hI
     calc A i (sys.cls q) * _ ≤ A i (sys.cls q) * (μ i * k / b) := mul_le_mul_of_nonneg_left hc (hA _ _)
       _ = (k : ℝ) / b * (A i (sys.cls q) * μ i) := by ring
   rw [← card_filter_add_card_filter_not (s := (sys.prod q).hadCones I)
@@ -342,7 +340,7 @@ end System
 namespace SecurityProofs
 
 theorem WholeCap : Guarantees.WholeCap := by
-  intro d ι κ _ _ _ _ sys c k b bC cs A μ q m P hS hV hsh hW hM hR hP hb hC hK hcs hA hμ
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ q m P hS hV hsh hW hM hR hP hb hC hcs hA hμ
   obtain ⟨start, hcard, hread⟩ := hR
   have hCpos : (0 : ℝ) < bC := by exact_mod_cast hC
   have hbpos : (0 : ℝ) < b := by exact_mod_cast hb
@@ -355,7 +353,7 @@ theorem WholeCap : Guarantees.WholeCap := by
     (k := (k : ℝ) * (1 + wholeFactor A μ (sys.cls q))) (bA := b) (bB := b) (bC := bC)
     (O := ((sys.ni q * sys.nj q : ℕ) : ℝ)) (mul_nonneg (Nat.cast_nonneg _) (by linarith)) hbpos hbpos hCpos
     (fun _ => Nat.cast_nonneg _) (fun _ => div_nonneg (Nat.cast_nonneg _) hCpos.le)
-    (fun u => sys.ops_le hS hV hsh hW hM hb hK hcs hA hμ (inferenceBlock_gates hP u) q)
+    (fun u => sys.ops_le hS hV hsh hW hM hb hcs hA hμ (inferenceBlock_gates hP u) q)
     (fun u => by
       have h := (sys.prod q).card_add_card_le (hS q) (inferenceBlock_gates hP u)
       have h' : ((d.unregistered (P.gates u) ∩ (sys.prod q).cones).card : ℝ) +
@@ -383,9 +381,9 @@ theorem WholeCap : Guarantees.WholeCap := by
   linarith
 
 theorem WholeBound : Guarantees.WholeBound := by
-  intro d ι κ _ _ _ _ sys c k b bC cs A μ G hS hV hsh hW hM hR hb hC hK hcs hA hμ m P hP
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ G hS hV hsh hW hM hR hb hC hcs hA hμ m P hP
   refine Finset.sup_le fun q hq => ?_
-  have hcap := WholeCap d ι κ sys c k b bC cs A μ q m P hS hV hsh hW hM (hR q hq) hP hb hC hK hcs hA hμ
+  have hcap := WholeCap d ι κ sys c k b bC cs A μ q m P hS hV hsh hW hM (hR q hq) hP hb hC hcs hA hμ
   have he : 0 ≤ wholeFactor A μ (sys.cls q) :=
     sum_nonneg fun i _ => mul_nonneg (hA _ _) (sys.nonneg_of_postFixed hcs hμ i)
   have hk' : 0 ≤ (k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) := mul_nonneg (Nat.cast_nonneg _) (by linarith)

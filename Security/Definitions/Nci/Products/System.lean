@@ -31,9 +31,9 @@ Four premises, facts of the given circuit, named as io_bound's are:
   elementwise steps matching operand entries one to one (fan-out at most fan-in).
 
 The theorems (`Nci.Products.Guarantees.ClassBound`, `WholeCap`, `WholeBound`) read the system at a **post-fixed point**
-`μ ≥ 0`, `r_j (1 + Σ_i A_ij μ_i)² ≤ μ_j` for every class with `r_j = c_j k / (K_j² b)`, of which io_bound's
-`whole_chain_of` computes the least, and a product's **whole-making factor** `e = Σ_i A_ij μ_i` at its class `j`
-(`wholeFactor`).
+(`System.PostFixed`), `r_j (1 + Σ_i A_ij μ_i)² ≤ μ_j` for every class with `r_j = c_j k / (K_j² b)`, of which
+io_bound's `whole_chain_of` computes the least, and a product's **whole-making factor** `e = Σ_i A_ij μ_i` at its class
+`j` (`wholeFactor`).
 `wholeBound` is the products kind's bound on `ρ` that the cap with operands made whole gives: `chainBlocks N
 (α' + k) (β' √O) · c / |C|`, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and `β' = (k'/2) / b` at `k' = k (1 + e)`.
 -/
@@ -71,11 +71,17 @@ def values : Finset (Finset (Fin d.D.N)) :=
 
 end Standard
 
+/-- **The whole-making factor** of class `j` at fan-outs `A` and a post-fixed point `μ`: `Σ_i A_ij μ_i`, the values a
+block makes whole for one of class `j`'s products, in units of `k / b`. -/
+def wholeFactor {κ : Type} [Fintype κ] (A : κ → κ → ℝ) (μ : κ → ℝ) (j : κ) : ℝ := ∑ i, A i j * μ i
+
 /-- **A whole-making system** in `d`: products `p : ι`, each `C_p = A_p · B_p` by the standard algorithm with chains of
 its class's length `K (cls p)`, at nesting depth `depth p`, and the output entries `src v` each value `v` is made from. -/
 structure System (d : Declaration) (ι κ : Type) where
   /-- Each class's chain length. -/
   K : κ → ℕ
+  /-- Each chain has a MAC. -/
+  K_pos : ∀ j, 0 < K j
   /-- Each product's class. -/
   cls : ι → κ
   /-- Its output's rows. -/
@@ -126,11 +132,12 @@ def Matched [DecidableEq κ] (A : κ → κ → ℝ) : Prop :=
   (∀ p, ∀ v ∈ (sys.prod p).values, ∀ x ∈ sys.src v, sys.depth x.1 < sys.depth p) ∧
     ∀ x j, (((sys.classValues j).filter fun v => x ∈ sys.src v).card : ℝ) ≤ A (sys.cls x.1) j
 
-end System
+/-- **A post-fixed point** at `(k, b)`, P-share's `c_j` and P-match's `A_ij`, a condition on numbers: `μ` with
+`r_j (1 + Σ_i A_ij μ_i)² ≤ μ_j` for every class `j`, `r_j = c_j k / (K_j² b)`. -/
+def PostFixed [Fintype κ] (k b : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ) (μ : κ → ℝ) : Prop :=
+  ∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j
 
-/-- **The whole-making factor** of class `j` at fan-outs `A` and a post-fixed point `μ`: `Σ_i A_ij μ_i`, the values a
-block makes whole for one of class `j`'s products, in units of `k / b`. -/
-def wholeFactor {κ : Type} [Fintype κ] (A : κ → κ → ℝ) (μ : κ → ℝ) (j : κ) : ℝ := ∑ i, A i j * μ i
+end System
 
 /-- **The products kind's bound with operands made whole**: `chainBlocks N (α' + k) (β' √O) · c / |C|` for a product of
 `N` MACs and `O` output entries, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and `β' = (k'/2) / √(b b)` at the bits

@@ -30,8 +30,8 @@ inference block reads beyond `θ`, `b` an operand's width, `μ` a post-fixed poi
 The premises are named as io_bound's: Values; P-share (`System.Shared`); P-width extended (`System.WidthExtended`),
 which takes the place of widths as passed's operand side (`Standard.Passed`, P-width) for the system's products;
 P-match (`System.Matched`); and the partial sums received at their width (`Standard.Received`, P-width's read side with
-P-chain). None reads P-cell (`Standard.Unsplit`) or the chains' order (`Standard.Chained`). The post-fixed point is a
-condition on numbers the theorems take, not a fact of the circuit.
+P-chain). None reads P-cell (`Standard.Unsplit`) or the chains' order (`Standard.Chained`). The post-fixed point
+(`System.PostFixed`) is a condition on numbers the theorems take, not a fact of the circuit.
 
 Each has an honest and a nontrivial lemma (`Definitions.Nci.Guarantees.Products.WholeWitnesses`).
 -/
@@ -49,8 +49,7 @@ def ClassBound : Prop :=
   ∀ (d : Declaration) (ι κ : Type) [Fintype ι] [DecidableEq ι] [Fintype κ] [DecidableEq κ] (sys : System d ι κ)
     (c k b : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ) (μ : κ → ℝ) (I : Finset (Fin d.D.N)) (j : κ),
     (∀ p, (sys.prod p).Algorithm) → sys.Values → sys.Shared c k cs → sys.WidthExtended c k b → sys.Matched A →
-    0 < b → (∀ j, 0 < sys.K j) → (∀ j, 0 ≤ cs j) → (∀ i j, 0 ≤ A i j) →
-    (∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j) → InferenceBlock d c k I →
+    0 < b → (∀ j, 0 ≤ cs j) → (∀ i j, 0 ≤ A i j) → sys.PostFixed k b cs A μ → InferenceBlock d c k I →
     ((∑ p ∈ univ.filter (fun p => sys.cls p = j), ((sys.prod p).wholeOut I).card : ℕ) : ℝ) ≤ μ j * k / b
 
 /-- **The cap with operands made whole**: a product `q` of a whole-making system, with the class bound's premises and
@@ -61,8 +60,8 @@ def WholeCap : Prop :=
   ∀ (d : Declaration) (ι κ : Type) [Fintype ι] [DecidableEq ι] [Fintype κ] [DecidableEq κ] (sys : System d ι κ)
     (c k b bC : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ) (μ : κ → ℝ) (q : ι) (m : ℕ) (P : Partition d.D m),
     (∀ p, (sys.prod p).Algorithm) → sys.Values → sys.Shared c k cs → sys.WidthExtended c k b → sys.Matched A →
-    (sys.prod q).Received c k bC → P.IsCK d c k → 0 < b → 0 < bC → (∀ j, 0 < sys.K j) → (∀ j, 0 ≤ cs j) →
-    (∀ i j, 0 ≤ A i j) → (∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j) →
+    (sys.prod q).Received c k bC → P.IsCK d c k → 0 < b → 0 < bC → (∀ j, 0 ≤ cs j) → (∀ i j, 0 ≤ A i j) →
+    sys.PostFixed k b cs A μ →
     ((sys.ni q * sys.K (sys.cls q) * sys.nj q : ℕ) : ℝ) ≤
       m * ((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3 * √((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3) /
           √((b : ℝ) * b * bC) + k) +
@@ -75,8 +74,8 @@ def WholeBound : Prop :=
   ∀ (d : Declaration) (ι κ : Type) [Fintype ι] [DecidableEq ι] [Fintype κ] [DecidableEq κ] (sys : System d ι κ)
     (c k b bC : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ) (μ : κ → ℝ) (G : Finset ι),
     (∀ p, (sys.prod p).Algorithm) → sys.Values → sys.Shared c k cs → sys.WidthExtended c k b → sys.Matched A →
-    (∀ q ∈ G, (sys.prod q).Received c k bC) → 0 < b → 0 < bC → (∀ j, 0 < sys.K j) → (∀ j, 0 ≤ cs j) →
-    (∀ i j, 0 ≤ A i j) → (∀ j, cs j * k / ((sys.K j : ℝ) ^ 2 * b) * (1 + wholeFactor A μ j) ^ 2 ≤ μ j) →
+    (∀ q ∈ G, (sys.prod q).Received c k bC) → 0 < b → 0 < bC → (∀ j, 0 ≤ cs j) → (∀ i j, 0 ≤ A i j) →
+    sys.PostFixed k b cs A μ →
     PartitionBound d c k (G.sup fun q => wholeBound d (sys.ni q * sys.K (sys.cls q) * sys.nj q)
       (sys.ni q * sys.nj q) c k b bC (wholeFactor A μ (sys.cls q)))
 
