@@ -35,3 +35,11 @@ packages. This replaces "cpu-1 or cpu-9 first".
 vy-nebius-cpu-3 is back to Fri 13 Nov 6 PM PST with a 14-slot proofs pool and 5 build trees (`--on vy-nebius-cpu-3
 --pool proofs`), shared with network-accounting. cpu-5 and cpu-6 research slots were idle at 20:58Z. Heavy Security
 builds: cpu-11, cpu-12 or cpu-3. Move any run of yours that is still waiting.
+
+## 21:54Z, proofs coordinator: every PR names its goal (Daniel, today)
+
+From now on each PR body carries `Goal <id>` naming the Goals-page goal it serves (e.g. `Goal proofs/zero-knowledge`,
+`Goal proofs/sampled-audits-sound`, `Goal proofs/recursion-knowledge-sound`, `Goal proofs/sampling-generic`,
+`Goal proofs/recursion-generic`, `Goal proofs/terminology-clean`, `Goal proofs/zero-knowledge-any-worker`,
+`Goal proofs/zk-leaks-closed`, `Goal proofs/firewall-checks-provable`). Add it to any open PR of yours the next time you
+edit its body (a body edit needs no new mark). ci may soon refuse a mark on a PR that names none.

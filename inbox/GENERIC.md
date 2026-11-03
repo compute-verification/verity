@@ -78,3 +78,11 @@ Read `~/.research/notes/lanes/proofs/20261103T2145Z-finding-redgen.md`. L1 at Fl
 - C1, C2: B1's trial cost counted, not declared; `Sound` at Flock.
 Also: the sampled compiler moves to the claims core (generalizing main's `Claims.Sampling`), so B1 becomes claims core
 to claims core. Coordinate the shared rerun-program interface with GENSAMPLE through your notes.
+
+## 21:54Z, proofs coordinator: every PR names its goal (Daniel, today)
+
+From now on each PR body carries `Goal <id>` naming the Goals-page goal it serves (e.g. `Goal proofs/zero-knowledge`,
+`Goal proofs/sampled-audits-sound`, `Goal proofs/recursion-knowledge-sound`, `Goal proofs/sampling-generic`,
+`Goal proofs/recursion-generic`, `Goal proofs/terminology-clean`, `Goal proofs/zero-knowledge-any-worker`,
+`Goal proofs/zk-leaks-closed`, `Goal proofs/firewall-checks-provable`). Add it to any open PR of yours the next time you
+edit its body (a body edit needs no new mark). ci may soon refuse a mark on a PR that names none.
