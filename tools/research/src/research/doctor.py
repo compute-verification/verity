@@ -57,12 +57,12 @@ from .store import remote as store_remote
 SCHEMA = "research/doctor/v1"
 ROLES = ("lane", "coordinator", "infra")
 #: The Cursor secrets each role needs, by name; a tuple is alternatives, any one of which will do, and a role needs the names of
-#: the roles before it too. GitHub and Slack need none: they go through Verity's brokers with the agent's Cursor identity
-#: (.git/verity-auth, `research msg`). HF_TOKEN is optional (the Hub repos we fetch are public); Notion is an MCP server's.
+#: the roles before it too. GitHub, the notes and Slack need none: they go through Verity's brokers with the agent's Cursor
+#: identity (.git/verity-auth, `notes_sync.notes_token`, `research msg`). HF_TOKEN is optional (the Hub repos we fetch are
+#: public); Notion is an MCP server's.
 SECRETS: dict[str, tuple[str | tuple[str, ...], ...]] = {
     "lane": ("R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",      # the store's remote (store/remote.py)
-             "RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64",                                       # pods, and ssh to every machine (pods/runpod.py)
-             "RESEARCH_NOTES_TOKEN"),                                                      # notes pushes (notes_sync.py)
+             "RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64"),                                      # pods, and ssh to every machine (pods/runpod.py)
     "coordinator": (),
     "infra": ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", ("NEBIUS_SA_PRIVATE_KEY_B64", "NEBIUS_SA_PRIVATE_KEY")),   # pods/nebius/common.sh
 }
@@ -225,15 +225,19 @@ def check_notes_push() -> Check:
     root = registry.notes_root()
     if _git_root(root) != root.resolve():
         return Check("notes-push", FINDING, f"{root} is not a git clone: notes written here reach nobody",
-                     "with RESEARCH_NOTES_TOKEN set, any `research notes` command clones it (kb/cloud-lane-setup.md, section 1)")
+                     "any `research notes` command clones it, with the GitHub broker's notes token on a Cursor agent "
+                     "(kb/cloud-lane-setup.md, section 1)")
     if not _has_origin(root):
         return Check("notes-push", FINDING, f"the notes clone {root} has no origin: notes committed here reach nobody (a checkout "
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
     opts, where = notes_sync.remote_target(root)
-    fix = (f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): a new one goes in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
-           else f"set {notes_sync.TOKEN_ENV} (a Cursor secret): without it git pushes as the VM's GitHub App, which the notes repo "
-                "refuses (kb/cloud-lane-setup.md, section 1)")
+    fix = ("the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access"
+           if os.environ.get(notes_sync.SOURCE_ENV) == "broker"
+           else f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): unset it to use the GitHub broker's token, or put a new "
+                f"one in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
+           else "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
+                f"{notes_sync.TOKEN_ENV}")
     return push_probe("notes-push", root, opts, where, fix)
 
 
