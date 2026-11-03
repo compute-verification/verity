@@ -143,8 +143,9 @@ data with neither a start that has a scored checkpoint nor a ladder point has no
 from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one on fewer than five from scratch
 (`FIT_TARGET`) is provisional: its status and note say so, the note with its points' residuals and the ladder's runs
 off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
-11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
-g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
+11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
+L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
+(H the least |C| of any checkpoint from the start
 on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
 the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
 cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
