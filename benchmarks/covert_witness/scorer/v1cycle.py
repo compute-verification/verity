@@ -426,8 +426,8 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     used = re.search(r"(\d+) ladder points(?: \((art:\w+)\))?", json.loads(fit.read_text()).get("source") or ""
                      ) if fit.exists() else None
     res["ladder_used"] = {"points": int(used[1]), "art": used[2]} if used else None
-    c = subprocess.run([sys.executable, "-c", "import json; from te_core import algorithm_policy as a; "
-                        "print(json.dumps(list(a.CONSOLE)))"], cwd=RESCORE_WT / "benchmarks" / "covert_witness",
+    console = "import json; from te_core import algorithm_policy as a; print(json.dumps(list(a.CONSOLE)))"
+    c = subprocess.run([sys.executable, "-c", console], cwd=RESCORE_WT / "benchmarks" / "covert_witness",
                        capture_output=True, text=True, check=False)
     res["console"] = json.loads(c.stdout) if not c.returncode else None
     return res
