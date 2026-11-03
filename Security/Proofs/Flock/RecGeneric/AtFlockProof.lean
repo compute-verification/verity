@@ -19,10 +19,8 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-
 /-- **F8 is `Bound.LastStepFree`**: the element-level Flock's last step reads no last coin wherever `DE`'s does. -/
-theorem lastCoinFree_ofFlock {H : Msg → Msg} {Bd : Bound Coin Col T} (h : Bd.LastStepFree H)
+theorem lastCoinFree_ofFlock {Coin Col T : Type} {H : Msg → Msg} {Bd : Bound Coin Col T} (h : Bd.LastStepFree H)
     (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) : (Proto.ofFlock Bd decI Cp).LastCoinFree H :=
   h
 
