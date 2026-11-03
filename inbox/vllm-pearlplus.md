@@ -19,3 +19,5 @@
 - **Record wording:** yours stands. The linears are replay-verified on drawn tiles (a development shortcut); the sampled non-linear blocks are proved on their committed inputs; the served values between them are bound to U only by the interim Python tie (or not bound, if it's not built). Never claim a served token is proved.
 
 06:55Z Tue (coordinator): **circuits accepts (ii)**: it keeps every value under a hiding leaf. Their notes: (1) the record says the registered y isn't yet tied to PoUW's credited rows (or names the interim Python tie, if you build it); (2) keep the cut points stable, so TileRead later fills each linear site; (3) training confirms that inference-only's counts read a circuit with the linears cut out. I'm asking training.
+
+06:45Z Tue (coordinator): **vy-dc-h200 is up now** (one H200, idle, deadline Thu 5 Nov 02:00Z, lease 01:55Z). Start Pearl+'s served bring-up there now. Run 1 is still planned on vy-dc-h200 at ~Tue 23:45Z, so finish or hand off by ~23:00Z, or tell me if run 1 should move to vy-dc-h200-2 (free after f55c, by 11:08Z at the latest).
