@@ -42,7 +42,8 @@ REPO = Path(os.environ.get("TE_REPO", "/workspace"))
 PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
                                     "36aac280a62be7a04cbf510b50636b5ad875ba54").split(",")
 CW = "benchmarks/covert_witness"
-TRACE_TIMEOUT = 3000
+#: a run whose dominant update structure starts late replays every step before it (a 4-arm shallow run: 3,493 steps)
+TRACE_TIMEOUT = 5400
 #: the formalism's fields in bits of the update or the gradient, which seed-subspace's d scales
 D_SCALED = ("u1_bits", "update_cut_bits", "grad_cut_bits", "state_bits", "delta_grad_bits")
 #: plan keys the trace's printed plan and the run's notes both carry but don't compare (plans.py's SKIP)
@@ -103,13 +104,13 @@ def archive(rev: str, dest: Path, sub: str = "", strip: int = 0, exclude: str = 
     subprocess.run(cmd, input=a, check=True)
 
 
-def pack(out: Path, te: Path, everything: bool, only: set[str] | None = None) -> list[dict]:
+def pack(out: Path, te: Path, everything: bool, only: set[str] | None = None, skip: set[str] = frozenset()) -> list[dict]:
     """PACK.tar for the runs in `scope` with no trace in this te_core's cache (`only`: those runs or islands): runs.json,
     each run's run.json (gzip) and meta.json, the measurement trees (covert_witness without te_core), the island trees,
     te_core and the starts."""
     c = cache(te)
     have = set() if everything else done(c)
-    runs = [r for r in scope() if r["run_id"] not in have and (not only or r["run_id"] in only or r["island"] in only)]
+    runs = [r for r in scope() if r["run_id"] not in have | skip and (not only or r["run_id"] in only or r["island"] in only)]
     if not runs:
         return []
     d = Path(tempfile.mkdtemp(prefix="trace40-pack-"))
@@ -454,6 +455,7 @@ def main() -> int:
     p.add_argument("--te", type=Path, default=TE40_WT)
     p.add_argument("--all", action="store_true", help="every run in scope, traced or not")
     p.add_argument("--only", default="", help="comma-separated run ids or islands")
+    p.add_argument("--skip", default="", help="comma-separated run ids (another node run has them)")
     n = sub.add_parser("node")
     n.add_argument("--pack", type=Path, required=True)
     n.add_argument("--out", type=Path, required=True)
@@ -466,7 +468,7 @@ def main() -> int:
     led.add_argument("--te", type=Path, default=TE40_WT)
     a = ap.parse_args()
     if a.cmd == "pack":
-        runs = pack(a.out, a.te, a.all, {x for x in a.only.split(",") if x} or None)
+        runs = pack(a.out, a.te, a.all, {x for x in a.only.split(",") if x} or None, {x for x in a.skip.split(",") if x})
         print(json.dumps({"runs": len(runs), "pack": str(a.out) if runs else None,
                           "bytes": a.out.stat().st_size if runs else 0}))
     elif a.cmd == "node":
