@@ -398,6 +398,8 @@ def test_a_model_format_keeps_thetas_vocabulary_context_and_tying_and_only_its_a
     ("adapter", ("adapter_norm", "adapter_down.weight", "adapter_up.weight"), "adapter_up.weight", "adapter_down.weight", 7),
 ])
 def test_an_extended_model_at_its_initialisation_computes_thetas_function_exactly(key, tensors, zero, live, stage):
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
     small = lf(2)
     big = {**small, key: 4}
     # at fp32: the CPU's bf16 products aren't bitwise reproducible from one call to the next, θ's own model included
@@ -410,22 +412,22 @@ def test_an_extended_model_at_its_initialisation_computes_thetas_function_exactl
     assert all(not init[f"blocks.{j}.{zero}"].any() and init[f"blocks.{j}.{live}"].any() for j in range(2))
     out = prepare.decode(th, prepare.encode_model(big, init), device="cpu")
     idx = torch.randint(0, 32000, (2, 16), generator=torch.Generator().manual_seed(3))
-    with torch.device("cpu"):
-        start, extended = prepare.Net(small).load(th), prepare.Net(big).load(out)
-    assert torch.equal(start.logits(idx), extended.logits(idx))
     rec = prepare.model_record({"config": small, "tokenizer": prepare.data_v3.TOKENIZER}, big, out)
     at = {n["param"]: n for n in prepare.positions(rec)}
     assert at[f"blocks.1.{live}"]["stage"] == stage and at[f"blocks.1.{live}"]["flops"] == 2 * 4 * 32
     from te_core.flops import forward_macs_per_token
-    with torch.device("cpu"):
+    # CPU's flash attention kernel isn't run-to-run deterministic, and forward_macs_per_token doesn't count its
+    # aten._scaled_dot_product_flash_attention_for_cpu, so every forward here runs on the MATH kernel
+    with sdpa_kernel(SDPBackend.MATH), torch.device("cpu"):
+        start, extended = prepare.Net(small).load(th), prepare.Net(big).load(out)
+        assert torch.equal(start.logits(idx), extended.logits(idx))
         extra = forward_macs_per_token(prepare.Net(big), 16, 32000, "cpu") - forward_macs_per_token(prepare.Net(small), 16, 32000, "cpu")
-    # the 4 prefix keys' scores and values, or the adapter's down and up, at d = 32 in both blocks
-    assert extra >= 2 * 2 * 4 * 32
-    # training the zero tensor moves the function, so the extension is live
-    out[f"blocks.0.{zero}"] = torch.full_like(out[f"blocks.0.{zero}"], 0.5)
-    with torch.device("cpu"):
+        # the 4 prefix keys' scores and values, or the adapter's down and up, at d = 32 in both blocks
+        assert extra >= 2 * 2 * 4 * 32
+        # training the zero tensor moves the function, so the extension is live
+        out[f"blocks.0.{zero}"] = torch.full_like(out[f"blocks.0.{zero}"], 0.5)
         moved = prepare.Net(big).load(out)
-    assert not torch.equal(start.logits(idx), moved.logits(idx))
+        assert not torch.equal(start.logits(idx), moved.logits(idx))
 
 
 def test_a_bias_extension_at_zero_biases_reproduces_thetas_function_exactly(monkeypatch):
