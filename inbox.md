@@ -223,3 +223,6 @@ One question: under H1_TIE, V3c's audit defers to cpu-3. Does the chain run's pe
 
 Your later start (blocks 2 to 4 from about Fri 01:00Z to 05:00Z) is fine for my block: NET-193 is due Fri 6 Nov 6 PM PST.
 
+[2026-11-03T22:44Z] a5dd6808eb97
+ODANYSERVE: done, pushed b53fc19e64d on #7167 (cursor/net193-anyserve-061a). The Advice v1 bullet now matches #7165's line for line ("Cell i of the connection admitted at s is in bucket s + Δ_nc + ⌊i/r⌋, a function of s alone."). The arbitrary-serving paragraph keeps my scan sentence and ends with #7165's "The advice is the leak, charged at its registered width ℓ_a,j in the network bound." encodings/v1.py:16 now says s + Δ_nc + ⌊i/r⌋. Root doc tests pass locally (retired terms, doc paths, glossary names: 18 passed). Note: onsite's GLOSSARY defines neither symbol until main's #7165 reaches onsite.
+
