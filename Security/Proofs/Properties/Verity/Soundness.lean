@@ -379,14 +379,17 @@ theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw
 end Idle
 
 /-- **`SoundnessOf`'s honest lemma**: its hypotheses hold at the idle deployment's compiled composites, every
-subprotocol meeting its target at onsite and at remote. -/
+subprotocol meeting its target at onsite, at remote and at remote with the network certifier. -/
 theorem soundness_at_of_targets_honest :
     Idle.unbounded.Target .onsite .sampled ∧ Idle.unbounded.Target .onsite .pouw ∧
       Idle.unbounded.Target .onsite .inferenceOnly ∧ Idle.unbounded.Target .onsite .pous ∧
       Idle.unbounded.Target .onsite .poub ∧ Idle.unbounded.Target .onsite .network ∧
       Idle.unbounded.Target .onsite .wipe ∧ Idle.unbounded.Target .remote .sampled ∧
-      Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly :=
+      Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly ∧
+      Idle.unbounded.Target .remoteNetwork .sampled ∧ Idle.unbounded.Target .remoteNetwork .pouw ∧
+      Idle.unbounded.Target .remoteNetwork .inferenceOnly ∧ Idle.unbounded.Target .remoteNetwork .network :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
+    Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
