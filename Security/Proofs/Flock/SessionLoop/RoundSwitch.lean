@@ -1,5 +1,6 @@
 import Proofs.Flock.SessionLoop.SchedAt
 import Proofs.Flock.SessionLoop.SchedUnrefused
+import Proofs.Flock.SessionLoop.RoundSwitchCut
 import Proofs.Flock.SessionLoop.RoundSwitchSv
 import Proofs.Flock.SessionLoop.RoundSwitchRel
 
@@ -89,7 +90,7 @@ theorem release_sched_switch (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
   obtain ⟨extras, hext⟩ := Masked.extra_ok hx hsx (Loop.finS.pad (K := refK x) cs) hj
   obtain ⟨hsz, hsv⟩ := Loop.switch_sv vs hR hx hsx
     (show Loop.Level0Src src x w ∧ Loop.RepSrc L₀ src x w from hS).1 ν t ops hpos hlt.le hcs j r
-    (by rw [hreal] at hre; exact hre) hst hpts (by omega) hN hext
+    (by rw [hreal] at hre; exact hre) hst hpts (k := k) (by omega) hN hext
   rw [hsz] at hkN
   rw [Loop.swMsgAt_switch vs w hx hsx ν t cs (by rw [← hcs, List.length_map]; exact hlt) j r
       (by rw [← hcs, List.length_map]; exact hn) (by rw [← hn]; exact hN) hext hkN,
