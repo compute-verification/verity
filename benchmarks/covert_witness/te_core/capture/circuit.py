@@ -33,10 +33,15 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - t (`tail_share`): the share of that work in ops that read no update value at all, wherever they sit (attention's
   products, dW, elementwise products of activations); `frozen_tail_share`: only the contiguous ones between the
   forward's last update read and the backward's first (frozen layers above the highest update).
-- Δ_grad = `grad_cut_bits` + `state_bits`: the narrowest cut, at the accumulator's width (32 bits an element at least),
-  between the step's token side and where its weight-shaped token-dependent values (gradients, the update) meet a
-  carried value or reach step R + 1, plus the carried values the step's token ops don't read (optimizer moments, error
-  feedback).
+- Δ_grad = `grad_cut_bits` + `state_bits`: the narrowest cut between the step's token side and where its weight-shaped
+  token-dependent values (gradients, the update) meet a carried value or reach step R + 1, plus the carried values the
+  step's token ops don't read (optimizer moments, error feedback). The cut prices each value at the width the circuit
+  passes it, its dtype's (a torch.bool plane 1 bit an entry, int8 and uint8 8, f16 16, a packed word its packing), so
+  a message coded inside the step is measured at its coded width. Its encode, decode and sum are traced ops, counted in
+  |C| by the rule every op is (te_core.gates): their products at the elementwise price, an integer one at bf16's for
+  want of a Definition, and their comparisons, casts, shifts, masks and sums at nothing. The values a reduction over
+  the step's tokens makes (a dW product, a loss) are priced at the accumulator's width, 32 bits an element at least,
+  since a block holding part of the tokens passes the accumulator's partial.
 - `update_cut_bits`: the narrowest cut between the carried values and every update value any token op of the step
   reads: the trace's own encoding of θ' (compare 8 |E|).
 - `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
@@ -387,9 +392,10 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
             stack.extend(p for p in preds[v] if p in U)
     state = sum(int(c.bits[v]) for v in carried if v not in weightlike)
     G = ~tok & tokdep & dep
-    gcap = {v: int(c.bits[v]) // max(int(c.width[v]), 1) * max(ACCUMULATOR_BITS, int(c.width[v]))
-            for v in np.nonzero(G)[0].tolist()}
-    g_entries = {v for v in gcap if any(tokdep[p] and not G[p] for p in preds[v])}
+    g_vals = np.nonzero(G)[0].tolist()
+    g_entries = {v for v in g_vals if any(tokdep[p] and not G[p] for p in preds[v])}
+    gcap = {v: int(c.bits[v]) // max(int(c.width[v]), 1) * max(ACCUMULATOR_BITS, int(c.width[v])) if v in g_entries
+            else int(c.bits[v]) for v in g_vals}
     g_sinks = {v for v in gcap if c.read_next[v]}
     for v in np.nonzero(reads_upd)[0].tolist():
         g_sinks.update(p for p in preds[v] if p in gcap)
