@@ -23,6 +23,19 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
     (uniform codes at the absmax, 0: in full), xz'd;
 
   quantized factors and magnitudes train through their rounding (straight-through, the rounding refreshed once a step);
+- VeRA (`--vera R`, Kopiczko et al. 2024): frozen random A (R x d_in, one per d_in) and B (d_out x R, one per d_out),
+  shared by every target of that width and coded once at `--bits` (default 2) into the Lloyd–Max codebook times an f16
+  RMS scale a row; each target trains only d (R, init `--vera-d0`) and b (d_out, init 0), adding b ⊙ B(d ⊙ A x). E is
+  CWQUAN1 lora entries whose codes are the shared ones and whose row scales carry d and b (f16-rounded straight-through),
+  so the repeated codes cost xz almost nothing;
+- coded gradient messages (`--msg vote|q1|q2|q4|q8`, the coordinator's 04:41Z ruling): a step's batch is cut into token
+  blocks of `--leaf` sequences (1: 1,024 tokens, under s = c/w for any of these runs), and each block's partial gradient
+  of the factors (or of VeRA's d and b), taken in the one batched backward by tensor hooks, is its message: `vote` its
+  sign (a zero drawn ±1), qN stochastically rounded onto 2^(N-1) - 1 levels a side times a bf16 absmax scale per 128
+  entries. A message passes at its width in the trace (bools, or N-bit levels packed into uint8s, and bf16 scales). The
+  messages are summed up a binary tree whose every sum is recoded, so every message an inner node sends is as wide as a
+  leaf's, and the optimizer reads the root's. `delta_grad.grad_bits` is that width (1 bit an entry for `vote`, N +
+  16/128 for qN), and `notes.messages` says how it was cut;
 - initialization: `--init` gauss (A ~ N(0, 1/d_in), B = 0), orth (A orthonormal rows), grad (A the top-r right singular
   vectors of the targets' full gradient over `--init-batches` batches, B = 0; the pass and the weight gradients are logged);
 - optimizer: AdamW with `--b-lr-mult` (LoRA+), `--opt riemann` (each factor's gradient preconditioned by the other's Gram,
@@ -157,12 +170,77 @@ def quant_pair(A: torch.Tensor, B: torch.Tensor, bits_a: int, bits_b: int):
     return qa, qb, G, va * (G / c)[:, None], vb * c[None, :]
 
 
+MSG_GROUP = 128
+
+
+MSG_CODES = ("vote", "q1", "q2", "q4", "q8")
+
+
+class Message:
+    """A token block's message code (`--msg`): `vote`, the sign (a zero drawn ±1 at random, a majority vote's tie), or
+    qN, stochastic rounding of each group of entries onto the uniform grid (c - L)/L, c in 0..2L, L = 2^(N-1) - 1 (±1 at
+    one bit) times the group's absmax rounded up to a bf16 (a block's gradients sit below f16's normal range): unbiased,
+    E[code(x)] = x. A group is gcd(the block's entries, MSG_GROUP) entries of one block's message. What a block passes
+    (`encode`) is at its width in the trace: bools at one bit, else the levels c packed 8 // N to a uint8, and the bf16
+    scales. Tensor ops only; x is blocks x shape."""
+
+    def __init__(self, kind: str, gen: torch.Generator):
+        self.kind, self.gen = kind, gen
+        self.bits = 1 if kind == "vote" else int(kind[1:])
+        self.levels = 1 if self.bits == 1 else 2 ** (self.bits - 1) - 1
+
+    def width(self, entries: int) -> int:
+        """The bits of one block's message of `entries` entries: codes and bf16 scales."""
+        return entries if self.kind == "vote" else entries * self.bits + 16 * entries // math.gcd(entries, MSG_GROUP)
+
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
+        if self.kind == "vote":
+            coin = torch.rand(x.shape, generator=self.gen, device=x.device) < 0.5
+            return torch.where(x == 0, coin, x > 0), None
+        flat = x.reshape(x.shape[0], -1, math.gcd(x[0].numel(), MSG_GROUP))
+        s = (flat.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).bfloat16()
+        sf = s.float()
+        v = (flat / torch.where(sf > 0, sf, torch.ones_like(sf))).clamp(-1, 1)
+        u = torch.rand(v.shape, generator=self.gen, device=v.device)
+        if self.bits == 1:
+            return u < (v + 1) / 2, s
+        L = self.levels
+        lo = (v * L).floor().clamp(-L, L - 1)
+        c = (lo + L).long() + (u < v * L - lo).long()
+        per = 8 // self.bits
+        shifts = torch.arange(per, device=x.device) * self.bits
+        return (c.reshape(x.shape[0], -1, per) << shifts).sum(-1).to(torch.uint8), s
+
+    def decode(self, codes: torch.Tensor, s: torch.Tensor | None, shape: torch.Size) -> torch.Tensor:
+        if self.bits == 1:
+            q = codes.float() * 2 - 1
+        else:
+            shifts = torch.arange(8 // self.bits, device=codes.device) * self.bits
+            q = (((codes.long()[..., None] >> shifts) & (2 ** self.bits - 1)).float() - self.levels) / self.levels
+        return q.reshape(shape) if s is None else (q.reshape(s.shape[0], s.shape[1], -1) * s.float()).reshape(shape)
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.decode(*self.encode(x), x.shape)
+
+
+def reduce_tree(leaves: torch.Tensor, code: Message) -> torch.Tensor:
+    """The root's message of a binary tree over the token blocks' partial gradients `leaves` (blocks x shape): each block
+    sends code(its gradient), each inner node code(its two children's sum), an odd node passing up as it is."""
+    m = code(leaves)
+    while m.shape[0] > 1:
+        odd = m[-1:] if m.shape[0] % 2 else m[:0]
+        m = torch.cat([code(m[0:m.shape[0] - len(odd):2] + m[1:m.shape[0] - len(odd):2]), odd])
+    return m[0]
+
+
 class LowRank:
     """One target's factors (fp32 latents A, B), its scale and precision, the straight-through offsets to the values E
-    stores (`refresh`), and with DoRA the magnitudes (init: W's row norms)."""
+    stores (`refresh`), and with DoRA the magnitudes (init: W's row norms). With `leaf` (sequences a token block), the
+    forward hook also takes each block's partial gradient of A and B from its output's gradient (`gA`, `gB`)."""
 
-    def __init__(self, w: torch.nn.Parameter, a0: torch.Tensor, s: float, bits: tuple[int, int], fmt: str, dora: bool):
-        self.w, self.s, self.bits, self.fmt = w, s, bits, fmt
+    def __init__(self, w: torch.nn.Parameter, a0: torch.Tensor, s: float, bits: tuple[int, int], fmt: str, dora: bool,
+                 leaf: int = 0):
+        self.w, self.s, self.bits, self.fmt, self.leaf = w, s, bits, fmt, leaf
         self.A = torch.nn.Parameter(a0.float().clone())
         self.B = torch.nn.Parameter(torch.zeros(w.shape[0], a0.shape[0], device=a0.device))
         quantized = fmt != "lora"
@@ -171,6 +249,23 @@ class LowRank:
         self.wn2 = w.detach().float().pow(2).sum(1) if dora else None
         self.m = torch.nn.Parameter(self.wn2.sqrt().clone()) if dora else None
         self.dm = torch.zeros_like(self.m) if dora else None
+        self.gA, self.gB = [], []
+
+    def trained(self) -> list[torch.nn.Parameter]:
+        return [self.A, self.B]
+
+    def leaf_grads(self, x: torch.Tensor, h: torch.Tensor, fb: torch.Tensor, g: torch.Tensor) -> None:
+        """Each block's gradient of B and A from g, the gradient of z = B(A x) (s already in it)."""
+        n = x.shape[0] // self.leaf
+        gs, hs, xs = (t.float().reshape(n, -1, t.shape[-1]) for t in (g, h, x))
+        self.gB.append(torch.einsum("ntd,ntr->ndr", gs, hs))
+        self.gA.append(torch.einsum("ntr,ntd->nrd", gs @ fb.float(), xs))
+
+    def reduce(self, code: Message) -> None:
+        """The tree's root over this step's block gradients, as A's and B's gradient (autograd's sums discarded)."""
+        self.A.grad = reduce_tree(torch.cat(self.gA), code)
+        self.B.grad = reduce_tree(torch.cat(self.gB), code)
+        self.gA, self.gB = [], []
 
     def latents(self) -> int:
         """The fp32 values the update rule reads and writes beside what E stores: the factors (bf16 or coded in E) and
@@ -192,7 +287,12 @@ class LowRank:
     def hook(self, mod, inp, out):
         fa = self.A if self.dA is None else self.A + self.dA
         fb = self.B if self.dB is None else self.B + self.dB
-        y = out + self.s * F.linear(F.linear(inp[0], fa), fb)
+        x = inp[0]
+        h = F.linear(x, fa)
+        z = F.linear(h, fb)
+        if self.leaf and z.requires_grad:
+            z.register_hook(functools.partial(self.leaf_grads, x.detach(), h.detach(), fb.detach()))
+        y = out + self.s * z
         if self.m is None:
             return y
         # each output row of W + sBA rescaled to its magnitude, the row norms and the rescale in fp32
@@ -202,6 +302,75 @@ class LowRank:
             sq = ((fb32 @ (fa32 @ fa32.t())) * fb32).sum(1)
             n = (self.wn2 + 2 * self.s * cross + self.s ** 2 * sq).clamp_min(1e-12).sqrt()
             return (y.float() * ((self.m + self.dm) / n)).to(y.dtype)
+
+
+class VeRA:
+    """One target's VeRA vectors (fp32 latents d, b) over the shared frozen codes `qa` (R x d_in) and `qb` (d_out x R),
+    each a row-grouped QArray whose values are `va`, `vb`: the output gains b ⊙ vb (d ⊙ (va x)). E's row scales are
+    f16(d ⊙ qa.scales) and f16(b ⊙ qb.scales), so `refresh` keeps the f16 rounding's offsets (straight-through)."""
+
+    def __init__(self, qa: prepare.QArray, va: torch.Tensor, qb: prepare.QArray, vb: torch.Tensor, d0: float,
+                 leaf: int = 0):
+        self.qa, self.qb, self.va, self.vb, self.leaf = qa, qb, va, vb, leaf
+        self.sa, self.sb = qa.scales.float().to(va.device), qb.scales.float().to(vb.device)
+        self.d = torch.nn.Parameter(torch.full((va.shape[0],), float(d0), device=va.device))
+        self.b = torch.nn.Parameter(torch.zeros(vb.shape[0], device=vb.device))
+        self.dd, self.db = torch.zeros_like(self.d), torch.zeros_like(self.b)
+        self.gd, self.gb = [], []
+
+    def trained(self) -> list[torch.nn.Parameter]:
+        return [self.d, self.b]
+
+    def latents(self) -> int:
+        return self.d.numel() + self.b.numel()
+
+    def row_scales(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return (self.d.detach() * self.sa).half(), (self.b.detach() * self.sb).half()
+
+    @torch.no_grad()
+    def refresh(self, mag_dtype: torch.dtype) -> None:
+        ha, hb = self.row_scales()
+        self.dd.copy_(torch.where(self.sa > 0, ha.float() / self.sa, 0.0) - self.d)
+        self.db.copy_(torch.where(self.sb > 0, hb.float() / self.sb, 0.0) - self.b)
+
+    def leaf_grads(self, u: torch.Tensor, z: torch.Tensor, bv: torch.Tensor, g: torch.Tensor) -> None:
+        n = u.shape[0] // self.leaf
+        gs, us, zs = (t.float().reshape(n, -1, t.shape[-1]) for t in (g, u, z))
+        self.gb.append((gs * zs).sum(1))
+        self.gd.append(((gs * bv) @ self.vb * us).sum(1))
+
+    def reduce(self, code: Message) -> None:
+        self.d.grad = reduce_tree(torch.cat(self.gd), code)
+        self.b.grad = reduce_tree(torch.cat(self.gb), code)
+        self.gd, self.gb = [], []
+
+    def hook(self, mod, inp, out):
+        dv, bv = self.d + self.dd, self.b + self.db
+        u = F.linear(inp[0], self.va)
+        z = F.linear(u * dv, self.vb)
+        y = z * bv
+        if self.leaf and y.requires_grad:
+            y.register_hook(functools.partial(self.leaf_grads, u.detach(), z.detach(), bv.detach()))
+        return out + y.to(out.dtype)
+
+    def entry(self) -> dict:
+        ha, hb = self.row_scales()
+        return {"kind": "lora", "a": self.qa._replace(scales=ha.cpu()), "b": self.qb._replace(scales=hb.cpu()),
+                "scale": 1.0}
+
+
+def vera_bases(theta, targets: list[str], rank: int, bits: int, seed: int) -> dict[str, tuple]:
+    """The shared frozen VeRA codes: A ~ N(0, 1/d_in) (rank x d_in) per input width, B ~ N(0, 1/rank) (d_out x rank) per
+    output width, drawn on the CPU from `seed` in increasing width, each coded by row (`qcodes`). Target -> (QArray A,
+    A's values, QArray B, B's values) on the device."""
+    gen = torch.Generator().manual_seed(seed)
+    d_ins = sorted({theta[n].shape[1] for n in targets})
+    d_outs = sorted({theta[n].shape[0] for n in targets})
+    A = {d: torch.randn(rank, d, generator=gen) / math.sqrt(d) for d in d_ins}
+    B = {d: torch.randn(d, rank, generator=gen) / math.sqrt(rank) for d in d_outs}
+    qa = {d: qcodes(A[d].to(prepare.DEVICE), bits, d) for d in d_ins}
+    qb = {d: qcodes(B[d].to(prepare.DEVICE), bits, rank) for d in d_outs}
+    return {n: (*qa[theta[n].shape[1]], *qb[theta[n].shape[0]]) for n in targets}
 
 
 def bits_of(targets: list[str], a) -> dict[str, tuple[int, int]]:
@@ -288,13 +457,15 @@ def ranks_for(theta, targets: list[str], rank: int, rank_map: dict[str, int]) ->
     return {n: r for n, r in out.items() if r > 0}
 
 
-def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int) -> dict:
-    """Δ_grad: each trained value's fp32 gradient and its optimizer's fp32 state (AdamW's m and v, Muon's one buffer),
-    plus the `latent` fp32 masters the update rule reads and writes beside what E stores."""
+def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int, msg: Message | None = None) -> dict:
+    """Δ_grad: each trained value's gradient as a token block passes it (fp32, or `msg`'s coded width) and its
+    optimizer's fp32 state (AdamW's m and v, Muon's one buffer), plus the `latent` fp32 masters the update rule reads
+    and writes beside what E stores."""
     na, nm = sum(p.numel() for p in adam), sum(p.numel() for p in muon)
     n = na + nm
-    bits = 32 * n + 64 * na + 32 * nm + 32 * latent
-    return {"trainable": n, "grad_bits": 32 * n, "adam_bits": 64 * na, "muon_bits": 32 * nm, "latent_bits": 32 * latent,
+    grad = sum(msg.width(p.numel()) for p in adam + muon) if msg else 32 * n
+    bits = grad + 64 * na + 32 * nm + 32 * latent
+    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * na, "muon_bits": 32 * nm, "latent_bits": 32 * latent,
             "bits": bits, "bytes": bits // 8}
 
 
@@ -428,6 +599,11 @@ def main() -> int:
                     help="quant: the gains as deltas at this many bits (0: in full)")
     ap.add_argument("--dora", action="store_true", help="DoRA magnitudes (lora2, --dtype f16)")
     ap.add_argument("--mag-lr", type=float, default=3e-4)
+    ap.add_argument("--vera", type=int, default=0, help="VeRA's shared rank R (0: LoRA's own factors)")
+    ap.add_argument("--vera-d0", type=float, default=0.1)
+    ap.add_argument("--msg", default="fp32", choices=("fp32", *MSG_CODES),
+                    help="each token block's gradient message (fp32: autograd's sum over the batch)")
+    ap.add_argument("--leaf", type=int, default=1, help="--msg: sequences of 1,024 tokens a token block")
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
@@ -450,6 +626,15 @@ def main() -> int:
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     a = ap.parse_args()
     a.format = a.format or ("lora" if not a.bits else "lora2" if a.bits in prepare.LORA2_BITS else "quant")
+    if a.vera:
+        a.bits, a.format = a.bits or 2, "quant"
+        if a.dora or a.alloc != "uniform" or a.init != "gauss" or a.opt != "adamw" or a.rank or a.rank_map:
+            raise SystemExit(f"{KLASS}: --vera trains d and b by AdamW over its shared codes: no --dora, --alloc, "
+                             "--init, --opt, --rank or --rank-map")
+    coded = a.msg != "fp32"
+    if coded and (a.norms != "none" or a.dora or a.leaf < 1 or a.micro % a.leaf or a.batch % a.micro):
+        raise SystemExit(f"{KLASS}: --msg {a.msg} codes the factors' block gradients: --norms none, no --dora, and "
+                         "--leaf divides --micro, which divides --batch")
     if a.dora and (a.format != "lora2" or a.dtype != "f16"):
         raise SystemExit(f"{KLASS}: --dora needs --format lora2 (CWLORA2 holds the magnitudes) and --dtype f16")
     if a.opt == "muon" and a.wd:
@@ -474,12 +659,18 @@ def main() -> int:
     # every exact |E| comes before the first compute: an E encoded after it is a checkpoint
     size_of = lambda ranks: e_bytes(theta, {n: (r, *bits[n]) for n, r in ranks.items()}, norms, a)
     rank = a.rank
-    if not rank and targets:
-        hi = max(min(theta[n].shape) for n in targets)
-        rank = max(1, fit_prefix(lambda r: size_of(ranks_for(theta, targets, r, rank_map)), hi, target_bytes))
-    ranks = ranks_for(theta, targets, rank, rank_map)
-    size = size_of(ranks)
-    model = size_model(theta, targets, bits, norms, a, ranks) if a.alloc == "grad" else None
+    if a.vera:
+        if any(a.vera > min(theta[n].shape) for n in targets):
+            raise SystemExit(f"{KLASS}: --vera {a.vera} exceeds a target's short side")
+        # E's size is only known once xz has seen the shared codes repeat
+        rank, ranks, size, model = a.vera, {n: a.vera for n in targets}, None, None
+    else:
+        if not rank and targets:
+            hi = max(min(theta[n].shape) for n in targets)
+            rank = max(1, fit_prefix(lambda r: size_of(ranks_for(theta, targets, r, rank_map)), hi, target_bytes))
+        ranks = ranks_for(theta, targets, rank, rank_map)
+        size = size_of(ranks)
+        model = size_model(theta, targets, bits, norms, a, ranks) if a.alloc == "grad" else None
     probe = grad_probe(net, params, targets, data, a, steps, tokens) if a.init == "grad" or a.alloc == "grad" else {}
     if a.alloc == "grad":
         # rank units in decreasing σ² per byte; σ falls with the unit's index, so each target's units come in order
@@ -495,16 +686,22 @@ def main() -> int:
 
         ranks = ranks_at(fit_prefix(lambda p: model(ranks_at(p)), len(order), target_bytes))
         rank, size = 0, model(ranks)
-    if size > want:
+    if size is not None and size > want:
         raise SystemExit(f"{KLASS}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms "
                          f"is {size} bytes, over {want}")
     for n in norms:
         params[n].data = params[n].data.float()
         params[n].requires_grad_(True)
     g = torch.Generator(device=prepare.DEVICE).manual_seed(a.seed)
+    leaf = a.leaf if coded else 0
+    bases = vera_bases(theta, targets, a.vera, a.bits, a.seed) if a.vera else {}
     ads = {}
     for n, r in ranks.items():
         w = params[n]
+        if a.vera:
+            ads[n] = VeRA(*bases[n], a.vera_d0, leaf)
+            net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(ads[n].hook)
+            continue
         if a.init == "grad":
             a0 = probe[n][1][:r].contiguous()
         elif a.init == "orth":
@@ -513,24 +710,37 @@ def main() -> int:
         else:
             a0 = torch.randn(r, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1])
         s = math.sqrt(w.shape[1] / r) if a.scale == "rs" else 1.0
-        ads[n] = LowRank(w, a0, s, bits[n], a.format, a.dora)
+        ads[n] = LowRank(w, a0, s, bits[n], a.format, a.dora, leaf)
         net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(ads[n].hook)
-    del probe
+    del probe, bases
     mag_dtype = prepare.DTYPES[a.dtype]
     for ad in ads.values():
         ad.refresh(mag_dtype)
-    fwd = torch.compile(net)
-    factors = [{"params": [ad.A for ad in ads.values()], "lr": a.lr, "weight_decay": a.wd},
-               {"params": [ad.B for ad in ads.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd}]
-    rest = [{"params": [ad.m for ad in ads.values() if ad.m is not None], "lr": a.mag_lr, "weight_decay": 0.0},
+    # the block messages' tensor hooks run eager
+    fwd = net if coded else torch.compile(net)
+    msg = Message(a.msg, torch.Generator(device=prepare.DEVICE).manual_seed(a.seed + 1)) if coded else None
+    if msg and msg.bits > 1 and any(p.numel() % (8 // msg.bits) for ad in ads.values() for p in ad.trained()):
+        raise SystemExit(f"{KLASS}: --msg {a.msg} packs {8 // msg.bits} levels a byte, so every trained tensor's "
+                         "entries must be a multiple of that")
+    factors = [{"params": [ad.trained()[0] for ad in ads.values()], "lr": a.lr, "weight_decay": a.wd},
+               {"params": [ad.trained()[1] for ad in ads.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd}]
+    mags = [ad.m for ad in ads.values() if getattr(ad, "m", None) is not None]
+    rest = [{"params": mags, "lr": a.mag_lr, "weight_decay": 0.0},
             {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}]
     muon = [grp for grp in factors if grp["params"]] if a.opt == "muon" else []
     adam = [grp for grp in (rest if a.opt == "muon" else factors + rest) if grp["params"]]
     opts = ([Muon(muon, lr=a.lr)] if muon else []) + (
         [torch.optim.AdamW(adam, betas=(0.9, a.beta2), fused=prepare.DEVICE.startswith("cuda"))] if adam else [])
     extra = sum(ns_flops(tuple(p.shape)) for grp in muon for p in grp["params"])
+    msg_extra = 0
+    if coded:
+        # the block gradients' einsums (2 FLOPs a MAC) and ~20 elementwise FLOPs an entry per coding and sum
+        macs = sum(r * (2 * theta[n].shape[0] + theta[n].shape[1]) if not a.vera else theta[n].shape[0] * (r + 1) + r
+                   for n, r in ranks.items())
+        entries = sum(p.numel() for ad in ads.values() for p in ad.trained())
+        msg_extra = 2 * tokens * macs + 20 * entries * (2 * (a.batch // a.leaf) - 1)
     trainable = {"full": norms, "adapters": ranks}
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
+    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra + msg_extra
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
     n_steps = int((a.budget_fraction * prepare.budget(a.start)["train_flops"] - spent) // per_step)
     # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
@@ -538,11 +748,18 @@ def main() -> int:
     hooks.plan(n_steps)
     trained = [p for grp in muon + adam for p in grp["params"]]
     dgrad = delta_grad([p for grp in adam for p in grp["params"]], [p for grp in muon for p in grp["params"]],
-                       sum(ad.latents() for ad in ads.values()) + sum(params[n].numel() for n in norms))
-    print(json.dumps({"island": KLASS, "format": a.format, "opt": a.opt, "steps": n_steps, "rank": rank,
+                       sum(ad.latents() for ad in ads.values()) + sum(params[n].numel() for n in norms),
+                       msg)
+    messages = {"code": a.msg, "leaf_sequences": a.leaf, "leaf_tokens": a.leaf * prepare.EVAL_CTX,
+                "blocks_per_step": a.batch // a.leaf, "max_group": MSG_GROUP,
+                "entry_bits": dgrad["grad_bits"] / max(dgrad["trainable"], 1),
+                "tree": "binary over the blocks, every sum recoded at the leaves' width, an odd node passing up; "
+                        "the optimizer reads the root's"} if coded else None
+    print(json.dumps({"island": KLASS, "method": "vera" if a.vera else "dora" if a.dora else "lora", "format": a.format,
+                      "opt": a.opt, "msg": a.msg, "steps": n_steps, "rank": rank,
                       "ranks": sorted(set(ranks.values())), "rank_sum": sum(ranks.values()), "targets": len(ranks),
                       "norms": len(norms), "E_bytes": size, "delta_grad": dgrad, "flops_per_step": per_step,
-                      "extra_per_step": extra, "init_flops": spent, "windows": len(data.order)}), flush=True)
+                      "extra_per_step": extra + msg_extra, "init_flops": spent, "windows": len(data.order)}), flush=True)
     t0 = time.perf_counter()
     groups = [grp for opt in opts for grp in opt.param_groups]
     lrs = [grp["lr"] for grp in groups]
@@ -561,6 +778,10 @@ def main() -> int:
             loss.backward()
             total += float(loss.detach())
         steps.append({"op": "train", "tokens": tokens})
+        if coded:
+            for ad in ads.values():
+                ad.reduce(msg)
+            steps.append({"op": "extra", "flops": msg_extra, "what": "block messages: block gradients, codes, tree sums"})
         torch.nn.utils.clip_grad_norm_(trained, 1.0)
         if a.opt == "riemann":
             steps.append({"op": "extra", "flops": riemann_precondition(ads, a.riemann_delta)})
@@ -580,9 +801,11 @@ def main() -> int:
     blob = encode(ads, params, norms, theta, a)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=list(ranks) + norms,
-                   notes={"method": "lora", "direction": "lowrank", "format": a.format, "rank": rank, "ranks": ranks,
+                   notes={"method": "vera" if a.vera else "dora" if a.dora else "lora", "direction": "lowrank",
+                          "format": a.format, "rank": rank, "ranks": ranks,
                           "bits": {n: list(bits[n]) for n in ranks}, "args": vars(a), "steps": n_steps,
-                          "final_train_ema": ema, "E_bytes": len(blob), "delta_grad": dgrad}, snapshots=snaps)
+                          "final_train_ema": ema, "E_bytes": len(blob), "delta_grad": dgrad, "messages": messages},
+                   snapshots=snaps)
     return 0
 
 
@@ -595,6 +818,9 @@ def encode(ads: dict, params: dict, norms: list[str], theta: dict, a) -> bytes:
     if a.format == "quant":
         entries = {}
         for n, ad in ads.items():
+            if isinstance(ad, VeRA):
+                entries[n] = ad.entry()
+                continue
             qa, qb, G, _, _ = quant_pair(ad.A, ad.B, *ad.bits)
             entries[n] = {"kind": "lora", "a": qa, "b": qb, "scale": ad.s * G}
         for n in norms:
