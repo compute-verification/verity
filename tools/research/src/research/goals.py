@@ -34,7 +34,7 @@ from .slack import RouteError, SlackError, _Identity, http_json, route_error
 GOALS = "https://website-docs-sage.vercel.app/api/goals"   # the route, and its OIDC token's audience
 PACIFIC = ZoneInfo("America/Los_Angeles")
 STATUSES = ("on-track", "off-track", "done")
-STORED_ONLY = ("updatedAt", "updatedBy", "wasDue")
+STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet")
 
 
 class Route:
