@@ -572,6 +572,7 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                 f"{REFERENCE}: " + "; ".join(parts) + f". {fb}; nothing else PUT. art: {arts}.")
     tr = meta["trace"]
     tracing = sum(tr["tracing"].values())
+    refused = tr["ledger"].get("refused_runs") or []
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
     v3_said = ", ".join(f"{s} {x['records']} ({x['checkpoints']} checkpoints)" for s, x in meta["v3"].items()
@@ -589,6 +590,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
             + (f" ({tr['packed']} runs' trace refused on {TRACE_NODE}, packed again at the next refresh)"
                if "launch_refused" in tr else "")
             + (f", {tr['untraced_runs']} runs whose trace failed (trace40-traced.json)" if tr["untraced_runs"] else "")
+            + (f"; {len(refused)} runs refused, not scored, their trace showing an affected share of 0 or u(1) = 0 "
+               f"beside a nonzero E (04:40Z): {', '.join(refused)}" if refused else "")
             + "; H and W* over every checkpoint, so S >= 1; ρ c/(c − d) where Fit holds for the training, else "
             "Slowdown's bound, a target, whose A1 charges no read of earlier tokens' keys and values "
             f"(loose-end-attention)) at −1% and {REFERENCE}: " + "; ".join(parts)

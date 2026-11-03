@@ -13,7 +13,9 @@ forward reads an applied update (of the first three), its circuit measured (`te_
 sampled head's rows taken at the counter's width and seed-subspace's d at the run's, then `te_core.ledger.ingest` with
 that structure on every updated step structure. `ledger` links the scorer's ledger ($TE_LEDGER) and replaces each
 traced run's submissions with the node's under their ids, so routes keep their names; a run with no trace keeps its
-row, which 4.0's rescore leaves out as not_measured. The cache is per te_core tree, so a new te_core traces again.
+row, which 4.0's rescore leaves out as not_measured. A run whose trace shows an affected share of 0 or u(1) = 0 beside
+a nonzero E is refused, not scored (coordinator 04:40Z): its rows are marked invalid. The cache is per te_core tree, so
+a new te_core traces again.
 """
 from __future__ import annotations
 
@@ -52,6 +54,9 @@ D_SCALED = ("u1_bits", "update_cut_bits", "grad_cut_bits", "state_bits", "delta_
 #: plan keys the trace's printed plan and the run's notes both carry but don't compare (plans.py's SKIP)
 SKIP = {"args", "steps", "data", "arms", "seconds", "s", "loss", "step", "first_order", "train_steps", "data_steps",
         "flops_per_step", "probe_flops", "time", "wall", "lowest_trained", "spent"}
+#: the `invalid` reason `ledger` gives a refused run's records (`refused`), which te_core.frontier leaves out
+REFUSED = ("capture: affected share 0 or u(1) = 0 beside a nonzero update, refused, not scored (coordinator 04:40Z: "
+           "the trace missed the update's path into the forward)")
 
 
 def git(*args: str, cwd: Path = REPO) -> str:
@@ -449,10 +454,24 @@ def take(run: str, te: Path) -> dict:
     return new
 
 
+def refused(c: Path) -> set[str]:
+    """Traced runs whose step shows an affected share of 0 or u(1) = 0 while the run's E is nonzero."""
+    traced = json.loads((c / "traced.json").read_text()) if (c / "traced.json").exists() else {}
+    e = {}
+    for line in (STATE / "index.jsonl").open():
+        x = json.loads(line)
+        if x.get("source") == "launch.py" and x.get("run"):
+            e[x["run"]] = x.get("E_bytes") or 0
+    return {k for k, v in traced.items() if not v.get("error") and e.get(k, 0) > 0
+            and 0 in ((v.get("formalism") or {}).get("affected_share"), (v.get("formalism") or {}).get("u1_bits"))}
+
+
 def ledger(out: Path, te: Path) -> dict:
     """The scorer's ledger with each traced run's submissions replaced by the node's (under the ledger's id, agent and
-    write time), every other file linked; written to `out` whole, then swapped in."""
+    write time), a refused run's (`refused`) marked invalid with REFUSED, every other file linked; written to `out`
+    whole, then swapped in."""
     c = cache(te)
+    bad = refused(c)
     traced = collections.defaultdict(list)
     for p in sorted((c / "records").glob("*.jsonl.gz")) if (c / "records").exists() else []:
         with gzip.open(p, "rt") as f:
@@ -474,6 +493,9 @@ def ledger(out: Path, te: Path) -> dict:
         if key in traced:
             old = json.loads(p.read_text())
             new = traced[key][0] | {k: old[k] for k in ("id", "agent", "written_at", "written_ts")}
+            if key[0] in bad:
+                new["invalid"] = [*(new.get("invalid") or []), REFUSED]
+                n["refused"] += 1
             dst.write_text(json.dumps(new, sort_keys=True) + "\n")
             used.add(key)
             n["replaced"] += 1
@@ -481,6 +503,7 @@ def ledger(out: Path, te: Path) -> dict:
             os.link(p, dst)
             n["linked" if p.suffix == ".json" else "other"] += 1
     n["traced rows with no ledger row"] = len(set(traced) - used)
+    n["refused_runs"] = sorted(bad)
     old = out.with_name(out.name + ".old")
     shutil.rmtree(old, ignore_errors=True)
     if out.exists():
