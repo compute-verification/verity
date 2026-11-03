@@ -11,19 +11,20 @@ last conjunct the bound's negation.
 
 The counting lemma, Slowdown and Security are at `Chain`, at `(c, k) = (1, 1)`: a token of three gates in a chain, of
 which only the first is computed from the token's inputs. Each premise holds at `blocks`, four blocks of one gate,
-priced at `1`. A1 holds at `Chain.witnesses`, the token's three gates as one witness block, which reads one update bit
-and no state: every block that works on the token reads one bit. The token kind's work is `X = {3, 4}`, the
-token's gates no block computing it from its inputs holds, with the cap `1`, Slowdown's other kind is the new weight,
-gate `1`, with the cap `1`, and the partition-level kind is all of `C`, whose bound `1` every partition into blocks of
-one gate meets with its `|C| = 4` blocks, so the bound is `max(1/2, 1/4, 1) = 1`.
+priced at `1`. A1 holds at `Chain.witnesses`, the token's three gates as one witness block, which reads one shared bit,
+the new weight, and none of the token's state: every block that works on the token reads one bit. The token kind's
+work is `X = {3, 4}`, the token's gates no block computing it from its inputs holds, with the cap `1`, Slowdown's other
+kind is the new weight, gate `1`, with the cap `1`, and the partition-level kind is all of `C`, whose bound `1` every
+partition into blocks of one gate meets with its `|C| = 4` blocks, so the bound is `max(1/2, 1/4, 1) = 1`.
 
 * The counting lemma drops the partition into inference blocks: at the kind `{3, 4}` with the cap `1` and the
   partition-level bound `1`, its bound `1` is above `whole`'s price `1/4`, and `whole`'s one block of four gates is no
   inference block at `c = 1`.
 * Slowdown and Security drop A1 (`CutCost`): at `Chain.skipping`, the witness block of gates `2` and `4`, which reads
-  one update bit and one bit of state, A1 prices every block that works on the token at two bits, which the block of
-  gate `3` does not read. A1's budget then admits no block that holds a gate of `X`, the cap `0` bounds the token work
-  within it, and the bound is `⊤`, above `blocks`' price `1` and, for Security, above `N n c = 4`.
+  one shared bit, the new weight, and one bit of the token's state, gate `3`, A1 prices every block that works on the
+  token at two bits, which the block of gate `3` does not read. A1's budget then admits no block that holds a gate of
+  `X`, the cap `0` bounds the token work within it, and the bound is `⊤`, above `blocks`' price `1` and, for Security,
+  above `N n c = 4`.
 * Fit's bounds are at `Honest`: its two blocks fit at `k = 2`, and at `k = 1` they don't and no partition into inference
   blocks exists, since gate `3` reads two values, so `ρ = ⊤`, above `c / (c - d) = 1`.
 

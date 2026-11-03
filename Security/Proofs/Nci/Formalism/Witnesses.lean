@@ -10,10 +10,16 @@ The proofs of `Security/Definitions/Nci/Guarantees/Formalism/Witnesses.lean`, at
 `Security/Definitions/Nci/Formalism/Instances.lean`. Their gates, reads and token blocks are small finite sets, which
 `decide` computes. At `Chain`, the inference blocks at `(c, k) = (1, 1)` are the empty block and the blocks of one gate
 (`ib_cases`), so A1 is five counts and every block holds at most one gate (`entryWork_le`). Each family of witness
-blocks has one, so A1's values are its reads (`stateAt_singleton`, `updateAt_singleton`), and `u_I` is its one update
-bit for a block that works on the token (`blockUpdate_eq`). At `skipping`, A1's budget admits no block that works on
-the token, so none it admits holds a gate of `{3, 4}`. Each bound is compared with its price in `ℝ`. The `example`s at
-the end apply each guarantee to its lemmas, so the lemmas are the premises as the guarantee states them.
+blocks has one, so A1's values are its reads (`stateAt_of_eq`, `readsAt_of_eq`), and `u_I` is the new weight, one
+shared bit, for a block that works on the token (`blockShared_eq`). At `skipping`, A1's budget admits no block that
+works on the token, so none it admits holds a gate of `{3, 4}`. Each bound is compared with its price in `ℝ`. The
+`example`s after the instances' lemmas apply each guarantee to its lemmas, so the lemmas are the premises as the
+guarantee states them.
+
+`Pair` is A1 at a block of two tokens: tokens `1` and `2` each read token `0`'s value, and token `2` reads token `1`'s
+too. A1 holds at every inference block at `(c, k) = (2, 2)` (`Pair.cutCost`), and the block of both tokens, which
+reads two bits, the new weight and token `0`'s value, is charged two (`Pair.charge`): it pays once for token `0`'s
+value, which both tokens read, and nothing for token `1`'s, which it computes.
 -/
 
 namespace Nci.Formalism
@@ -38,12 +44,12 @@ theorem natCast_div_natCast {a b : ℕ} (hb : b ≠ 0) :
     (a : ℝ≥0∞) / (b : ℝ≥0∞) = (((a : ℝ≥0) / (b : ℝ≥0) : ℝ≥0) : ℝ≥0∞) := by
   rw [← coe_div_coe (by exact_mod_cast hb), ENNReal.coe_natCast, ENNReal.coe_natCast]
 
-/-- `W_T(x, ν) ≤ n` when every inference block whose work on `T` begins at `x` with at most `ν` update bits holds at
+/-- `W_T(x, ν) ≤ n` when every inference block whose work on `T` begins at `x` with at most `ν` shared bits holds at
 most `n` gates of `X` in `T`. -/
 theorem entryWork_le_of {d : Declaration} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {X : Finset (Fin d.D.N)} {T : L} {x : E}
     {ν n : ℕ}
-    (h : ∀ I, InferenceBlock d c k I → e I T = x → A.blockUpdate e 𝒲 I ≤ ν → (I ∩ A.tokens.holds T ∩ X).card ≤ n) :
+    (h : ∀ I, InferenceBlock d c k I → e I T = x → A.blockShared e 𝒲 I ≤ ν → (I ∩ A.tokens.holds T ∩ X).card ≤ n) :
     A.entryWork c k e 𝒲 X T x ν ≤ n := by
   classical
   unfold Annotation.entryWork
@@ -63,17 +69,37 @@ theorem enters_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : 
     {W' | A.Enters e {W} T x W'} = {W} :=
   Set.ext fun _ => ⟨fun h => Finset.mem_singleton.1 h.1, fun h => (Set.mem_singleton_iff.1 h) ▸ hW⟩
 
-/-- At a family of one witness `W` entering `T` at `x`, `a_T(x)` is the state bits `W` reads. -/
-theorem stateAt_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
-    {e : Finset (Fin d.D.N) → L → E} {W : Finset (Fin d.D.N)} {T : L} {x : E} (hW : A.Enters e {W} T x W) :
-    A.stateAt e {W} T x = A.stateReads W := by
-  rw [Annotation.stateAt, enters_singleton A hW, Set.image_singleton, csInf_singleton]
+/-- When `W` is the one witness block entering `T` at `x`, `a_T(x)` is the state bits of `T` it reads. -/
+theorem stateAt_of_eq {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {W : Finset (Fin d.D.N)} {T : L} {x : E}
+    (h : {W' | A.Enters e 𝒲 T x W'} = {W}) : A.stateAt e 𝒲 T x = A.stateReads W T := by
+  rw [Annotation.stateAt, h, Set.image_singleton, csInf_singleton]
 
-/-- At a family of one witness `W` entering `T` at `x`, `u_T(x)` is the update bits `W` reads. -/
-theorem updateAt_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
-    {e : Finset (Fin d.D.N) → L → E} {W : Finset (Fin d.D.N)} {T : L} {x : E} (hW : A.Enters e {W} T x W) :
-    A.updateAt e {W} T x = A.updateReads W := by
-  rw [Annotation.updateAt, enters_singleton A hW, Set.image_singleton, csInf_singleton]
+/-- When `W` is the one witness block entering `T` at `x`, `R_T(x)` is what it reads beyond `θ`. -/
+theorem readsAt_of_eq {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {W : Finset (Fin d.D.N)} {T : L} {x : E}
+    (h : {W' | A.Enters e 𝒲 T x W'} = {W}) : A.readsAt e 𝒲 T x = d.unregistered W := by
+  have hW : A.Enters e 𝒲 T x W := (Set.ext_iff.1 h W).2 (Set.mem_singleton W)
+  ext g
+  simp only [Annotation.readsAt, mem_filter, mem_univ, true_and]
+  refine ⟨fun hg => hg.2 W hW, fun hg => ⟨⟨W, hW⟩, fun W' hW' => ?_⟩⟩
+  obtain rfl : W' = W := Set.mem_singleton_iff.1 ((Set.ext_iff.1 h W').1 hW')
+  exact hg
+
+/-- When no witness block enters `T` at `x`, `a_T(x)` is `0`. -/
+theorem stateAt_of_empty {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {T : L} {x : E}
+    (h : {W' | A.Enters e 𝒲 T x W'} = ∅) : A.stateAt e 𝒲 T x = 0 := by
+  rw [Annotation.stateAt, h, Set.image_empty, Nat.sInf_empty]
+
+/-- When no witness block enters `T` at `x`, `R_T(x)` is empty. -/
+theorem readsAt_of_empty {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {T : L} {x : E}
+    (h : {W' | A.Enters e 𝒲 T x W'} = ∅) : A.readsAt e 𝒲 T x = ∅ := by
+  refine Finset.eq_empty_of_forall_notMem fun g hg => ?_
+  simp only [Annotation.readsAt, mem_filter, mem_univ, true_and] at hg
+  obtain ⟨⟨W, hW⟩, -⟩ := hg
+  exact Set.eq_empty_iff_forall_notMem.1 h W hW
 
 namespace SecurityProofs
 
@@ -112,44 +138,48 @@ theorem enters_skipping (T : Fin 1) (x : Unit) : A.Enters entry skipping T x {2,
   exact ⟨mem_singleton_self _, by unfold GateSet; decide, by decide, fun T' h => absurd (Subsingleton.elim T' 0) h,
     rfl⟩
 
-/-- The token's three gates read the new weight alone: no state, one update bit. -/
+/-- The token's three gates read the new weight alone: none of the token's state, one shared bit. -/
 theorem stateAt_witnesses (T : Fin 1) (x : Unit) : A.stateAt entry witnesses T x = 0 := by
-  rw [stateAt_singleton A (enters_witnesses T x)]
+  rw [stateAt_of_eq A (enters_singleton A (enters_witnesses T x))]
+  obtain rfl : T = 0 := Subsingleton.elim T 0
   decide
 
-theorem updateAt_witnesses (T : Fin 1) (x : Unit) : A.updateAt entry witnesses T x = 1 := by
-  rw [updateAt_singleton A (enters_witnesses T x)]
+theorem readsAt_witnesses (T : Fin 1) (x : Unit) : A.readsAt entry witnesses T x = {1} := by
+  rw [readsAt_of_eq A (enters_singleton A (enters_witnesses T x))]
   decide
 
-/-- Gates `2` and `4` read the new weight and gate `3`'s value: one bit of state, one update bit. -/
+/-- Gates `2` and `4` read the new weight and gate `3`'s value: one bit of the token's state, and one shared bit. -/
 theorem stateAt_skipping (T : Fin 1) (x : Unit) : A.stateAt entry skipping T x = 1 := by
-  rw [stateAt_singleton A (enters_skipping T x)]
+  rw [stateAt_of_eq A (enters_singleton A (enters_skipping T x))]
+  obtain rfl : T = 0 := Subsingleton.elim T 0
   decide
 
-theorem updateAt_skipping (T : Fin 1) (x : Unit) : A.updateAt entry skipping T x = 1 := by
-  rw [updateAt_singleton A (enters_skipping T x)]
+theorem readsAt_skipping (T : Fin 1) (x : Unit) : A.readsAt entry skipping T x = {1, 3} := by
+  rw [readsAt_of_eq A (enters_singleton A (enters_skipping T x))]
   decide
 
-/-- At a family whose witnesses read one update bit, `u_I` is `1` for a block that works on the token and `0` for one
-that doesn't. -/
-theorem blockUpdate_eq {𝒲 : Finset (Finset (Fin d.D.N))} (hu : ∀ T x, A.updateAt entry 𝒲 T x = 1)
-    (I : Finset (Fin d.D.N)) : A.blockUpdate entry 𝒲 I = (A.worksOn I).sup fun _ => 1 := by
-  simp only [Annotation.blockUpdate, hu]
+/-- At a family whose witness blocks all read `R`, `u_I` is what `R` holds beyond the token's state and `I`'s gates for
+a block that works on the token, and `0` for one that doesn't. -/
+theorem blockShared_eq {𝒲 : Finset (Finset (Fin d.D.N))} {R : Finset (Fin d.D.N)}
+    (hR : ∀ T x, A.readsAt entry 𝒲 T x = R) (I : Finset (Fin d.D.N)) :
+    A.blockShared entry 𝒲 I =
+      ((((A.worksOn I).biUnion fun _ => R) \ I) \ (A.worksOn I).biUnion fun T => R ∩ A.tokens.holds T).card := by
+  simp only [Annotation.blockShared, hR]
 
-/-- **A1 holds** at `witnesses`: it prices every block that works on the token at the witness's one update bit, and
-each reads one bit. -/
+/-- **A1 holds** at `witnesses`: it prices every block that works on the token at the witness's one shared bit, the new
+weight, and each reads one bit. -/
 theorem cutCost : CutCost A 1 1 entry witnesses := by
   intro I hI
-  rw [blockUpdate_eq updateAt_witnesses]
+  rw [blockShared_eq readsAt_witnesses]
   simp only [stateAt_witnesses, sum_const_zero, add_zero]
   rcases ib_cases hI with rfl | rfl | rfl | rfl | rfl <;> decide
 
-/-- **A1 fails at `skipping`**: it prices the block of gate `3` at two bits, an update bit and a bit of state, and that
-block reads one. -/
+/-- **A1 fails at `skipping`**: it prices the block of gate `3` at two bits, a shared bit and a bit of the token's
+state, and that block reads one. -/
 theorem not_cutCost_skipping : ¬ CutCost A 1 1 entry skipping := by
   intro h
   have h3 := h {3} ib_three
-  rw [blockUpdate_eq updateAt_skipping] at h3
+  rw [blockShared_eq readsAt_skipping] at h3
   simp only [stateAt_skipping] at h3
   exact absurd h3 (by decide)
 
@@ -162,7 +192,7 @@ theorem tokenCapAt_one : A.TokenCapAt 1 1 entry witnesses {3, 4} 1 := by
         rw [Fin.sum_univ_one]
         exact_mod_cast entryWork_le A entry witnesses {3, 4} 0 (f 0) ν
 
-/-- At `skipping`, A1's budget admits no block that works on the token, whose update bit and the token's one bit of
+/-- At `skipping`, A1's budget admits no block that works on the token, whose shared bit and the token's one bit of
 state are two, so no block it admits holds a gate of `{3, 4}`. -/
 theorem tokenCapAt_zero : A.TokenCapAt 1 1 entry skipping {3, 4} 0 := by
   refine ⟨by decide, fun S f ν hbud => le_of_eq (sum_eq_zero fun T hT => ?_)⟩
@@ -173,7 +203,7 @@ theorem tokenCapAt_zero : A.TokenCapAt 1 1 entry skipping {3, 4} 0 := by
   subst hν
   suffices h : A.entryWork 1 1 entry skipping {3, 4} T (f T) 0 = 0 by rw [h, Nat.cast_zero]
   refine Nat.eq_zero_of_le_zero (entryWork_le_of A fun I hIB _ hu => ?_)
-  rw [blockUpdate_eq updateAt_skipping] at hu
+  rw [blockShared_eq readsAt_skipping] at hu
   obtain rfl : T = 0 := Subsingleton.elim T 0
   rcases ib_cases hIB with rfl | rfl | rfl | rfl | rfl
   · decide
@@ -381,6 +411,108 @@ example : slowdown Honest.d 1 2 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : 
 example (h3 : TrainingFits 1 1 1 1 1 1) : False := by
   obtain ⟨h1, h2, -, hlt⟩ := FitTraining_nontrivial
   exact hlt (FitTraining Honest.d 2 Honest.P 1 1 0 1 1 1 1 1 h1 h2 h3)
+
+namespace Pair
+
+/-- Gate 0 is the weight `θ`, an input; gate 1 computes `θ'`, a copy of it; gate 2, token `0`, copies the new weight;
+gate 3, token `1`, reads the new weight and token `0`'s value; and gate 4, token `2`, reads tokens `0` and `1`'s
+values. -/
+abbrev C : Circuit where
+  N := 5
+  w _ := 1
+  isInput := ![true, false, false, false, false]
+  reads := ![∅, {0}, {1}, {1, 2}, {2, 3}]
+  reads_lt := by decide
+  input_reads := by decide
+  op g v := if g = 1 then v 0 else if g = 2 then v 1 else if g = 3 then v 1 &&& v 2 else if g = 4 then v 2 &&& v 3
+    else 0
+  op_congr g v v' hv := by
+    fin_cases g
+    · rfl
+    · simpa using hv 0 (by decide)
+    · simpa using hv 1 (by decide)
+    · simp [hv 1 (by decide), hv 2 (by decide)]
+    · simp [hv 2 (by decide), hv 3 (by decide)]
+  outputs := {4}
+
+/-- Gate 0 is registered. -/
+abbrev d : Declaration := ⟨C, {0}, by decide⟩
+
+/-- The new weight is gate 1, and tokens `0`, `1` and `2` hold gates 2, 3 and 4. -/
+abbrev A : Annotation d (Fin 3) := ⟨{1}, ⟨![{2}, {3}, {4}]⟩⟩
+
+/-- Where a block's work on a token begins: one entry for every block. -/
+abbrev entry (_ : Finset (Fin d.D.N)) (_ : Fin 3) : Unit := ()
+
+/-- The witness blocks: tokens `1` and `2`'s gates, each a block of its own. -/
+abbrev witnesses : Finset (Finset (Fin d.D.N)) := {{3}, {4}}
+
+theorem valid : A.Valid :=
+  ⟨by decide, by decide, fun T T' h => by fin_cases T <;> fin_cases T' <;> first | exact absurd rfl h | decide⟩
+
+/-- No witness block enters token `0`. -/
+theorem enters_zero (x : Unit) : {W | A.Enters entry witnesses 0 x W} = ∅ := by
+  refine Set.eq_empty_of_forall_notMem fun W hW => ?_
+  obtain ⟨hW, -, hne, -, -⟩ := hW
+  rcases mem_insert.1 hW with rfl | hW
+  · exact absurd hne (by decide)
+  · rw [mem_singleton.1 hW] at hne
+    exact absurd hne (by decide)
+
+theorem enters_one (x : Unit) : {W | A.Enters entry witnesses 1 x W} = {{3}} := by
+  ext W
+  simp only [Set.mem_ofPred_eq, Set.mem_singleton_iff]
+  constructor
+  · rintro ⟨hW, -, hne, -, -⟩
+    rcases mem_insert.1 hW with rfl | hW
+    · rfl
+    · rw [mem_singleton.1 hW] at hne
+      exact absurd hne (by decide)
+  · rintro rfl
+    exact ⟨by decide, by unfold GateSet; decide, by decide, by decide, Subsingleton.elim _ _⟩
+
+theorem enters_two (x : Unit) : {W | A.Enters entry witnesses 2 x W} = {{4}} := by
+  ext W
+  simp only [Set.mem_ofPred_eq, Set.mem_singleton_iff]
+  constructor
+  · rintro ⟨hW, -, hne, -, -⟩
+    rcases mem_insert.1 hW with rfl | hW
+    · exact absurd hne (by decide)
+    · exact mem_singleton.1 hW
+  · rintro rfl
+    exact ⟨by decide, by unfold GateSet; decide, by decide, by decide, Subsingleton.elim _ _⟩
+
+/-- Neither witness block reads its token's state. -/
+theorem stateAt_eq (T : Fin 3) (x : Unit) : A.stateAt entry witnesses T x = 0 := by
+  fin_cases T
+  · exact stateAt_of_empty A (enters_zero x)
+  · exact (stateAt_of_eq A (enters_one x)).trans (by decide)
+  · exact (stateAt_of_eq A (enters_two x)).trans (by decide)
+
+/-- Token `1`'s witness block reads the new weight and token `0`'s value, and token `2`'s reads tokens `0` and `1`'s
+values. -/
+theorem readsAt_eq (T : Fin 3) (x : Unit) : A.readsAt entry witnesses T x = ![∅, {1, 2}, {2, 3}] T := by
+  fin_cases T
+  · exact readsAt_of_empty A (enters_zero x)
+  · exact (readsAt_of_eq A (enters_one x)).trans (by decide)
+  · exact (readsAt_of_eq A (enters_two x)).trans (by decide)
+
+/-- **A1 holds** at every inference block at `(c, k) = (2, 2)`. -/
+theorem cutCost : CutCost A 2 2 entry witnesses := by
+  intro I hI
+  simp only [Annotation.blockShared, readsAt_eq, stateAt_eq, sum_const_zero, add_zero]
+  revert I
+  decide
+
+/-- **A1 charges the block of both tokens what it reads**: two bits, the new weight and token `0`'s value, which both
+tokens read and it pays for once; token `1`'s value, which token `2` reads, it computes and doesn't pay for. -/
+theorem charge : InferenceBlock d 2 2 {3, 4} ∧
+    A.blockShared entry witnesses {3, 4} + ∑ T ∈ A.worksOn {3, 4}, A.stateAt entry witnesses T (entry {3, 4} T) = 2 ∧
+    (d.unregistered {3, 4}).card = 2 := by
+  simp only [Annotation.blockShared, readsAt_eq, stateAt_eq, sum_const_zero, add_zero]
+  decide
+
+end Pair
 
 end SecurityProofs
 

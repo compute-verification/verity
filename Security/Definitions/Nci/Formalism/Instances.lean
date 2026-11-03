@@ -18,10 +18,10 @@ one registered input, the weight `θ`.
   and gates 3 and 4's each read the token's gate before. `whole` is one block of all four gates, which is no partition
   into inference blocks at `c = 1` and prices them at `1 / 4`. A1's values here are set by witness blocks entering the
   token at `entry`, one entry for every block: `witnesses`, the token's three gates as one block, which reads the new
-  weight alone, one update bit and no state; and `skipping`, gates 2 and 4, which read the new weight and gate 3's
-  value, one update bit and one bit of state, more than gate 3's block reads. The lemmas of the counting lemma,
-  Slowdown and Security are stated here, Security's with a run on the all-zero inputs that is the only one of the
-  methods considered.
+  weight alone, one shared bit and none of the token's state; and `skipping`, gates 2 and 4, which read the new weight
+  and gate 3's value, one shared bit and one bit of the token's state, more than gate 3's block reads. The lemmas of
+  the counting lemma, Slowdown and Security are stated here, Security's with a run on the all-zero inputs that is the
+  only one of the methods considered.
 
 `silent` is the decoder that outputs nothing, so every total update is `⊤`, within `D = ⊤` bits.
 -/
