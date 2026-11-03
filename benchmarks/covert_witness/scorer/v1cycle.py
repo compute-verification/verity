@@ -593,8 +593,14 @@ def frame(p: dict) -> list[dict]:
 
 
 def put_data(tree: Path, kind: str, meta: dict) -> str:
-    r = subprocess.run(["research", "data", "put", "--kind", kind, "--tree", str(tree), "--preserve", "--json",
-                        "--meta", json.dumps(meta)], capture_output=True, text=True, check=False)
+    # the store's local index is SQLite, which another writer on this VM holds for a while ("database is locked",
+    # the 17:00Z refresh's publish); the same tree puts to the same id, so a retry is safe
+    for wait in (0, 15, 60, 180):
+        time.sleep(wait)
+        r = subprocess.run(["research", "data", "put", "--kind", kind, "--tree", str(tree), "--preserve", "--json",
+                            "--meta", json.dumps(meta)], capture_output=True, text=True, check=False)
+        if not r.returncode or "database is locked" not in r.stderr:
+            break
     if r.returncode:
         raise RuntimeError(f"data put {tree}: {r.stderr[-400:]}")
     return json.loads(r.stdout)["id"]
