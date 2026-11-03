@@ -12,15 +12,18 @@ holds this direction's board lines. Launch from a committed tree:
 
 Each part of a run must fit a block of k bits (te_core.formalism `at`):
 
-- Δ = 8|E|: the header (~130-160 B) plus one 16-bit coefficient a step (`--coeff bf16`), so `--max-bits` caps the
-  steps. MeZO's step reads two forwards a token, so its s = c/w is ~2,048 tokens and sτ ~31 kbit at 32k vocab: Δ ≤ ~34
-  kbit at the console default (k = 65,536), against ~45 kbit for a backward step's s.
+- Δ = 8|E|: the header (~90-160 B) plus one 16-bit coefficient a step (`--coeff bf16`), so `--max-bits` caps the
+  steps. Δ + sτ ≤ k: at te_core 4.6's console c a block holds 2,294 training tokens, which leaves Δ ≤ 28.8 kbit for a
+  backward step (k = 65,536).
 - Δ_t, what a step hands the next: MeZO updates S's fp32 masters in place, so 32|S|, unless `--rebuild` carries only
   the bf16 coefficients (16 bits an entry) and rebuilds S from them each step. `--first-order K` carries its K fp32
   coefficients (32K).
 - Δ_grad: a step's two batch halves' L₊ − L₋ sums (128 bits) and the lr rule's three fp32 EMAs. te_core.capture
   measures 512 bits on a traced step (the EMAs and the warm's lr as carried state); with `--subspace K` it adds the K
-  coefficients (16 bits each) as carried state.
+  coefficients (16 bits each) as carried state. `--first-order K` passes the batch gradient projected onto its K
+  directions at Z's bf16 (16K; te_core 4.9's trace measures 16K + 96 at K = 16), or over S when K ≥ |S| (32|S|), so
+  Fit's update block, 32K + 16K ≤ k, caps K at about 1,360. A block-local step (`--batch 2`) doesn't raise that: a
+  block running the whole step reads Δ_t and its two sequences' tokens (about 30.8 kbit), so K ≤ about 1,090.
 - d: the decoder replays every entry over S, T·|S| fp32 FMAs at F32Fma_v4's 12,637 gates; `notes.decoder` gives d at
   each checkpoint, and te_core prices it against its own c, which nothing here sets: rho_default's E0 reference (4,096
   forward tokens of the start; on s-t20 d < c needs T·|S| < 2.0e10) and the console's session c (`te_core.policy`,

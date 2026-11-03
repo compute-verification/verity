@@ -196,9 +196,10 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
       state); each E is the update projected onto the K directions by the least-norm solve, exact up to the rounding.
     - K < |S|: SGD on the K coefficients themselves (random-subspace training). A step draws its batch, rebuilds θ_S from
       the fp32 coefficients alone, projects the batch gradient onto the directions (Z g) and adds lr times that to the
-      coefficients, so the cut from the step's tokens to its carried state is K wide (Δ_grad = 32K) and the update the
-      next step reads is the coefficients (Δ_t = 32K). Z is kept on the device at bf16 (K·|S|·2 bytes, at most
-      `--max-z-gb`); E is the coefficients, decoded at fp32.
+      coefficients, so the cut from the step's tokens to its carried state is K bf16 values (Δ_grad = 16K, Z g at Z's
+      width) and the update the next step reads is the coefficients (Δ_t = 32K). Z is kept on the device at bf16
+      (K·|S|·2 bytes, at most `--max-z-gb`); E is the coefficients, decoded at fp32. Fit's update block
+      (Δ_t + Δ_grad ≤ k) then caps K at about k/48.
 
     The lr is `--lr`, or `--lr-auto F`: F / λ, λ the top eigenvalue of the Hessian over what SGD moves (S, or the
     coefficients), by `--power-iters` steps of power iteration from the first batch's gradient on central-difference
@@ -280,7 +281,7 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
         return (v.to(Z.dtype) @ Z).float() if proj else v
 
     def drop(h: torch.Tensor) -> torch.Tensor:
-        return (Z @ h.to(Z.dtype)).float() if proj else h
+        return (h.to(Z.dtype) @ Z.T).float() if proj else h  # mm, not mv: te_core 4.9's io_bound can't price a bf16 mv
 
     t0 = time.perf_counter()
     grad_on(data.next(a.batch), a.precision == "bf16")
@@ -356,17 +357,18 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
     torch.backends.cuda.matmul.allow_tf32 = tf32
     macs = K * d
     width = K if proj else d
-    what = ("the batch gradient projected onto the K directions (Z g, the step's cut from its tokens to the carried "
-            "coefficients); the fp32 coefficients are Delta_t, and each step rebuilds S from them" if proj else
-            "the batch gradient over S at fp32 (plain SGD, no state); S's fp32 masters are Delta_t, the form the "
+    grad_bits = 16 * K if proj else 32 * d
+    what = ("the batch gradient projected onto the K directions at bf16 (Z g, Z bf16: the step's cut from its tokens to "
+            "the carried coefficients); the fp32 coefficients are Delta_t, and each step rebuilds S from them" if proj
+            else "the batch gradient over S at fp32 (plain SGD, no state); S's fp32 masters are Delta_t, the form the "
             "update rule reads and writes")
     notes = {"method": "seedlog-sgd-subspace" if proj else "seedlog-sgd", "args": vars(a), "steps": n_done, "K": K,
              "names": names, "d": d, "lambda_power": [float(x) for x in lams], "lr": float(lr0), "eps": eps,
              "l0_cal": float(l0), "l_end_cal": float(l_end), "projection_rel_error": err,
              "mechanism": {"label": a.label, "description": a.description},
              "delta_bits": 8 * len(blob), "delta_t_bits": 32 * width,
-             "delta_grad": {"trainable": d, "grad_bits": 32 * width, "adam_bits": 0, "muon_bits": 0,
-                            "latent_bits": 32 * width, "bits": 32 * width, "bytes": 4 * width, "what": what},
+             "delta_grad": {"trainable": d, "grad_bits": grad_bits, "adam_bits": 0, "muon_bits": 0,
+                            "latent_bits": grad_bits, "bits": grad_bits, "bytes": grad_bits // 8, "what": what},
              "decoder": {"macs": macs, "gates": macs * F32_FMA_GATES,
                          "rule": "prepare.rebuild_macs (K x |S| fp32 FMAs) at F32Fma_v4's gates"},
              "checkpoints": cps}
