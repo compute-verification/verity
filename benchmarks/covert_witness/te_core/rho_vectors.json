@@ -1,5 +1,5 @@
 {
- "about": "The one bound's test vectors (te_core.formalism's `bound`, and `at` with a reading), which the console's rho.ts runs:",
+ "about": "The one bound's test vectors (te_core.formalism's `bound`, and `at` with a reading), which the console's rho.ts runs.\nJSON has no infinity: null is \u221e (a term no block bounds, or \u03c1 there).",
  "cases": {
   "adapter": {
    "circuit": "wildcard_adapter.npz",

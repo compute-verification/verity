@@ -1,4 +1,5 @@
-"""The one bound's test vectors (te_core.formalism's `bound`, and `at` with a reading), which the console's rho.ts runs:
+"""The one bound's test vectors (te_core.formalism's `bound`, and `at` with a reading), which the console's rho.ts runs.
+JSON has no infinity: null is ∞ (a term no block bounds, or ρ there).
 
     python -m te_core.rho_vectors [--write]
 
@@ -7,7 +8,7 @@ module makes. Each case is a step of wildcard's program traced on the tiny start
 te_core/capture/tests/fixtures), measured by te_core.capture.circuit.measure as one part, with Δ and d stated per case.
 Each vector is a case at a cell (c, k) of `CELLS` under reading A or B: each kind's term and the inputs it reads, the
 max over every kind and its kind, Fit, ρ_fit, ρ and the label. A case's `measured` is te_core.formalism.from_json's
-form, reading A's `entries` in it. JSON has no infinity: null is ∞ (a term no block bounds, or ρ there).
+form, reading A's `entries` in it.
 """
 from __future__ import annotations
 
