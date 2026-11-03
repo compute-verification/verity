@@ -349,18 +349,18 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
 def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str = "te_core.frontier_fit"
            ) -> tuple[list[dict], list[tuple], str]:
     """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json)
-    and the panels' source for a loaded ledger `d` (te_core.rescore's `load`)."""
+    and the source of `command`'s panels for a loaded ledger `d` (te_core.rescore's `load`): its pins at 12
+    characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`."""
     runs = panels.pretraining(a.pretraining or panels.fetch(panels.PRETRAINING))
     extra = [p for path in [*a.ladder_points, *([a.ladder_fit] if a.ladder_fit else [])] for p in ladder_points(path)]
     built = not a.ladder_points and LADDER
     if built:
         extra += [(x, y, r | {"manifest": LADDER}) for x, y, r in ladder_points(panels.fetch(LADDER) / LADDER_FILE)]
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
-    source = a.source or (f"python -m {command} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
-                          f"{len(scored)} valid checkpoints, quantities {d['quantities']}; "
-                          f"{len(d.get('refused', {}))} refused (te_core.formalism.refusal); "
-                          f"{len(extra)} ladder points" + (f", {LADDER} from its manifest" if built else "") + ")")
-    return runs, extra, source
+    tail = (f"{len(scored)} valid checkpoints, quantities {d['quantities']}; {len(d.get('refused', {}))} refused; "
+            f"{len(extra)} ladder points" + (f" ({LADDER[:16]})" if built else "") + ")")
+    forms = [f"python -m {command} (te_core {VERSION}; pin {' + '.join(c[:n] for c in pin)}; {tail}" for n in (12, 7)]
+    return runs, extra, a.source or next((s for s in forms if len(s) <= console.SOURCE_MAX), forms[-1])
 
 
 def scored_rows(a) -> tuple[dict, list[dict]]:
