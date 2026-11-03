@@ -10,6 +10,10 @@ public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Claims.Sampling.Select.Misses
 public import Proofs.Accounting.Served
 public import Proofs.Pouw.Period.Accept
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
