@@ -3075,6 +3075,19 @@ def test_a_records_run_vouches_for_exactly_the_packages_it_passed(world, capsys)
         assert any(f"records gate: {pkg}: records run {rid} of {h[:12]} passed it" in line for line in world.logs)
 
 
+def test_a_records_run_built_outside_the_checkout_names_the_report_by_the_package_s_directory(world, capsys):
+    """lean/check.py tags a package's report by its directory's name alone when the build is outside the checkout, as a records
+    run's is (`audit-Proofs`, not `audit-pkg_Proofs`): that report vouches for the package too."""
+    world.with_store_remote()
+    h = world.change({LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")})
+    rid = _published(world, h, files={"lean-audit/audit.json": _audit(),
+                                      "lean-audit/audit-Proofs/report.json": json.dumps(
+                                          {"package": "/w/lean-records/build-0/pkg/Proofs", "failures": []})})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 0, capsys.readouterr().err
+    assert any(f"records gate: pkg/Proofs: records run {rid} of {h[:12]} passed it" in line for line in world.logs)
+
+
 def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys):
     """A records run of `Security` audits `Security/Proofs` too (its `proved_in`), with that package's verdict in
     `audit-pkg_Proofs/report.json` (lean/check.py tags it by its path, not `audit-Proofs`): a head changing both locks is
@@ -3222,7 +3235,8 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
     assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
     for n, files in ((6, {"lib/tests/t.py": "x = 2\n"}), (7, {"lib/README.md": "lib, said again\n", "lib/READMEs.txt": "x\n"}),
-                     (8, {"pkg/test/x.txt": "y\n", "pkg/NOTES.md": "notes\n"})):        # tests and docs: no records run reads them
+                     (8, {"pkg/test/x.txt": "y\n", "pkg/NOTES.md": "notes\n"}),
+                     (11, {"tools/verity/lean/README.md": "the checker's outline\n"})):  # tests and docs: no records run reads them
         assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 0
         assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
