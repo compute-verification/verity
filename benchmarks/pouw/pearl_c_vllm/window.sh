@@ -88,7 +88,7 @@ touch "$OUT/.started"
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
 grep -Eq "$GPU_NAME" "$OUT/identity.csv" && grep -q ", $GPU_CC," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"
 
-mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-$OUT/inputs/${K//_/-}-ship.tar}" -C "$OUT/ship"
+mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-${RESEARCH_RUN_DIR:-$OUT}/inputs/${K//_/-}-ship.tar}" -C "$OUT/ship"
 SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) || fail SHIP "MANIFEST.sha256 does not hold"
 cmp -s "$SHIP/run.py" "$KERNEL/run.py" || fail SHIP "the ship's run.py is not the run tree's"
