@@ -55,7 +55,7 @@ Two kinds of committed run:
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
-        [--workers N] [--hf-config F] [--target F] [--cap-bits L]
+        [--workers N] [--window-registration W --h1-key FILE] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -122,7 +122,10 @@ Two kinds of committed run:
   certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
   run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
   ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
-  ``window-circuit`` record is the circuit it holds it to.
+  ``window-circuit`` record is the circuit it holds it to. With ``--window-registration W`` (H1's registration of
+  the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds H1's steps, the
+  class's outputs), and the window's registration ``--out``/registration.json is chained right after W and registers
+  them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -1436,6 +1439,29 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
     return out
 
 
+def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
+    """With ``--window-registration``: H1's registration W of the window, its window Program's meta (the serve dir's
+    ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
+    without. ValueError where there's no ``--h1-key``, W is under another Program, or H1's rounds aren't the class's
+    outputs, a table a round the circuit reads."""
+    if not a.window_registration:
+        return None
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import commit as CT
+    if not a.h1_key:
+        raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
+    w = json.loads(Path(a.window_registration).read_text())
+    meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META).read_text())
+    if not isinstance(w, dict) or w.get("program") != meta.get("program_digest"):
+        raise ValueError(f"{a.window_registration} is no registration under the serve's H1 window Program "
+                         f"{str(meta.get('program_digest'))[:16]}…")
+    if int(meta["steps"]) != cls.outputs:
+        raise ValueError(f"H1's windows are {meta['steps']} rounds, and the class's {cls.outputs} outputs are the rounds whose "
+                         "tables the circuit reads")
+    return w, meta, WC.Tables(*CT.shape(meta["layout"], int(meta["steps"])))
+
+
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
@@ -1447,10 +1473,11 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
     one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
-    ``max_tokens`` give (`window_rows.standin_state`). Refused for a registration of another model. -> the window's run
-    root, its circuit record's SHA-512, its population and members, the scan state's kind (``scanned`` or ``stand-in``),
-    the registered weights whose root the window's is (``held``) and those it isn't, whose reads are free (``free``), and
-    the seconds each part took."""
+    ``max_tokens`` give (`window_rows.standin_state`). Refused for a registration of another model. With
+    ``--window-registration`` (`h1_tie`), the circuit reads H1's tables and the registration reuses W's (``tie``: the
+    digest of W it is chained after, and the tables). -> the window's run root, its circuit record's SHA-512, its
+    population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered weights whose root the
+    window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1477,10 +1504,12 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
+    tie = h1_tie(a, cls)
+    tables = None if tie is None else tie[2]
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
-        WC.takes(compiled, cls)
-        low = WC.lower(registered, cls)
+        WC.takes(compiled, cls, tables=tables)
+        low = WC.lower(registered, cls, tables=tables)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lap("lower")
@@ -1529,6 +1558,12 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
     filled = WRS.Rows(low, slots, values)
+    previous = None
+    if tie is not None:
+        from verity_vllm.protocols.pouw.h1 import commit as CT
+        h1w, meta, _tables = tie
+        values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
+        previous = R.digest(h1w)
     lap("rows")
     win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
@@ -1538,13 +1573,14 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
-    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
+    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
+            "tie": None if previous is None else {"previous": previous, "tables": len(low.circuit.registered.values)},
             "seconds": seconds}
 
 
@@ -1717,6 +1753,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
+    p.add_argument("--window-registration", help="H1's registration W of the window (`pouw_h1_commit.registration`): the "
+                   "circuit reads H1's tables where the model makes them (`window_class.Tables`, from the serve dir's "
+                   "h1/window-program.meta.json), and the window's registration registers them as W's tables, chained right "
+                   "after W (`pouw_h1_commit.reuse`)")
+    p.add_argument("--h1-key", help="with --window-registration: H1's prover key file (its prover dir's key), whose salts "
+                   "W's tables take")
     for name in ("window-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
