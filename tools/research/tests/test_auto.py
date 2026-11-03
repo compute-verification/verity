@@ -1,4 +1,4 @@
-"""`research run --on auto`'s placement (research.auto): a CPU node's pool first, node 2's share only for a job no pool fits. 19 Oct:
+"""`research run --on auto`'s placement (research.auto): a free CPU pool slot first, then node 2's share if it starts the job now. 19 Oct:
 two runs held all 48 of the share's cores for hours while 56 waited, a 4-CPU suite 36th in line, and cpu-1's cores sat idle."""
 from __future__ import annotations
 
@@ -53,10 +53,20 @@ def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
     full = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=3)                      # (3 + 1) / 4 = 1
     assert auto.choose({N2: share(waiters=56), CPU1: full}, 4, 16)[0] == (CPU1, "research")
-    assert auto.choose({N2: share(free=8), CPU1: full}, 4, 16)[0] == (CPU1, "research"), "node 2 free still waits in a pool"
+    assert auto.choose({N2: share(free=8, waiters=1), CPU1: full}, 4, 16)[0] == (CPU1, "research"), "node 2 has a line too"
     busier = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=7)                    # (7 + 1) / 4 = 2
     target, why = auto.choose({N2: share(), CPU1: busier, CPU5: full}, 4, 16)
     assert target == (CPU5, "research") and why.endswith(f"the shortest line per run that fits is {CPU5}'s research pool")
+
+
+def test_with_every_pool_full_node_2_takes_a_job_it_can_start_now():
+    """INF-438, 3 Nov 03:49Z: --on auto queued top's suites behind cpu-6's 8 held slots and 9 waiters (first slot ~05:30Z) while
+    node 2's 48 CPUs sat free with no one waiting."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    target, why = auto.choose({N2: share(free=48), CPU1: full, CPU5: full}, 4, 16)
+    assert target is None and why.endswith(f"no pool slot is free, and it starts on {N2} now")
+    assert auto.choose({N2: share(free=2), CPU1: full}, 4, 16)[0] == (CPU1, "research"), "too few free CPUs there: the pool's line"
+    assert auto.choose({N2: share(free=48), CPU1: pool(slot("r0"))}, 4, 16)[0] == (CPU1, "research"), "a free pool slot still wins"
 
 
 def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
