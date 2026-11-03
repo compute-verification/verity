@@ -46,7 +46,7 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 
 def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop", "budget-1", "budget-2"}
     return v["cases"]
 
 
@@ -148,13 +148,14 @@ def _honest(rounds: int, budget: int, n: int, rng: random.Random | None) -> tupl
 
 @pytest.mark.parametrize("rounds", range(1, S.ROUNDS + 1))
 def test_an_honest_stream_is_never_refused_an_open(lean, rounds):
-    """Completeness of the budget's open rule: an honest stream at each `rounds` R (1 to `ROUNDS`) and budget b (from
-    `BUDGET_MIN`), under the challenger's stream's rules, is refused nothing by the Lean and Python ZK servers alike, which
-    give the same results and record at every op. The challenger holds at most min(R, b − failures) registrations open,
-    each unended recursive session covers one of them, and a session is released whole before its rounds' outcomes close
-    them; so at an open its stream has fewer than min(R, b) unended. Without `rng` each session covers one round and is
-    opened as soon as it can be, so min(R, b) recursive sessions are unended at once: the most, which the rule allows."""
-    for budget in (FW.BUDGET_MIN, FW.BUDGET_MIN + 1):
+    """Completeness of the budget's open rule: an honest stream at each `rounds` R (1 to `ROUNDS`) and budget b (1 to 4,
+    from `BUDGET_MIN`), under the challenger's stream's rules, is refused nothing by the Lean and Python ZK servers
+    alike, which give the same results and record at every op. The challenger holds at most min(R, b − failures)
+    registrations open, each unended recursive session covers one of them, and a session is released whole before its
+    rounds' outcomes close them; so at an open its stream has fewer than min(R, b) unended. Without `rng` each session
+    covers one round and is opened as soon as it can be, so min(R, b) recursive sessions are unended at once: the most,
+    which the rule allows."""
+    for budget in range(FW.BUDGET_MIN, 5):
         most = 0
         for rng in (None, *(random.Random(seed) for seed in range(3))):
             ops, results, m = _honest(rounds, budget, 3 * rounds + 2, rng)
