@@ -270,6 +270,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -3097,6 +3098,17 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
     return found or {f"exit {r.returncode}": f"pytest exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}"}
 
 
+def one_line_at_a_time(log: Callable[[str], None]) -> Callable[[str], None]:
+    """``log`` under a lock, for lines logged from several threads at once (a sync's preflights, `PREFLIGHT_PARALLEL`, beside
+    its walk): `print` writes a line and its newline apart, so two unlocked could splice."""
+    lock = threading.Lock()
+
+    def said(line: str) -> None:
+        with lock:
+            log(line)
+    return said
+
+
 @contextlib.contextmanager
 def worktrees_locked(repo: Path):
     """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
@@ -5280,6 +5292,7 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             q._drive_only("main", "once", a.dry_run)          # its landings push `main`, its syncs `next`
         if a.command in ("sync", "drive"):
+            q.log = one_line_at_a_time(q.log)
             q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
                                     root=a.preflight_root).onto
         if a.command == "sync":
