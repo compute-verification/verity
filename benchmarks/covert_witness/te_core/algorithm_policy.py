@@ -40,8 +40,9 @@ fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. 
 leaves it unmeasured, never 1; coordinator 09:46Z and 12:20Z), `reading` (A where formalism.READING_A and the row's token kind
 is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
-sensitivities it leaves out, with a measured fresh-products term's premises beside it (`PREMISED`), or `void`
-where that term is a void's 0 (`VOIDED`).
+sensitivities it leaves out, with a measured fresh-products term's premises beside it (`PREMISED`) and, where
+that term is its best subset's, the products it dropped (`fresh_subset`, te_core 4.10), or `void` where that term is
+a void's 0 (`VOIDED`).
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial or void one
@@ -265,8 +266,9 @@ def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
 def kinds(one: dict, void: bool = False) -> str:
     """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
     `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; `partial` and `why` where
-    `published` sets them; `void`, the kind whose term is a void's 0 (`VOID`), where `void`; and `rests_on`, what
-    each `PREMISED` kind's term rests on where it is measured and not void."""
+    `published` sets them; `void`, the kind whose term is a void's 0 (`VOID`), where `void`; `rests_on`, what
+    each `PREMISED` kind's term rests on where it is measured and not void; and `fresh_subset`, the products the
+    fresh-products term's best subset dropped, where it dropped any."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
 
@@ -276,7 +278,8 @@ def kinds(one: dict, void: bool = False) -> str:
     marks = ((',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
                                                                   if one.get("why") else "")
              + (f',"void":{json.dumps(VOIDED)}' if void else "")
-             + (f',"rests_on":{json.dumps(rests)}' if rests else ""))
+             + (f',"rests_on":{json.dumps(rests)}' if rests else "")
+             + (f',"fresh_subset":{part(one["fresh_subset"])}' if one.get("fresh_subset") else ""))
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}{marks}}}'
 
 
