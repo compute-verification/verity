@@ -15,7 +15,8 @@ measured by te_core.formalism.measure, and priced as te_core.algorithm_policy pr
 ("inf" where infinite); `binding_kind` is what ρ rests on at the default (algorithm_policy's `binding`), and
 `rho_terms` every kind's term at both points (algorithm_policy's `rho_terms`), those outside `IN_RHO` sensitivities,
 never the bound. `rho_inputs` holds `KEYS` (C_gates and algorithm_policy's `DIAL`, to 6 significant digits), from
-which algorithm_policy.page_rho gives ρ at any (c, k); `build` refuses a row whose rho_inputs miss ρ at either point.
+which algorithm_policy.page_rho gives ρ at any (c, k); `build` refuses a row whose rho_inputs miss ρ at either point
+or whose token dials miss its measured tokens (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
 assumed.
@@ -239,6 +240,18 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None) -> dic
     return out | (override or {})
 
 
+def token_dials(dials: dict, tokens: float) -> list[str]:
+    """Where `dials`' token counts (`tokens`, and `tokens_per_param` over `student_params` or `n_params`) miss the run's
+    measured `tokens` (formalism.Measured's: each step's count scaled by its traced structure's consumed tokens over its
+    count, so a step of micro-batches counts them all) by more than 1%: te_core leaves a step before the run's first
+    update at the counter's count, which counts one micro-batch of a step's."""
+    want = {"tokens": tokens}
+    if "tokens_per_param" in dials:
+        want["tokens_per_param"] = tokens / dials.get("student_params", dials.get("n_params"))
+    return [f"its dial {k} is {dials[k]:g}, te_core measured {algorithm_policy.num(v)}: the dial is the run's"
+            for k, v in want.items() if k in dials and not math.isclose(dials[k], v, rel_tol=1e-2)]
+
+
 def points(w_fwd: float) -> dict[str, tuple[float, float]]:
     """The two dial points (c, k): the dial's default for a start whose forward is `w_fwd` gates a token, and the
     console's (algorithm_policy's `default` and `CONSOLE`)."""
@@ -290,6 +303,8 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
     rows, details = [], []
     for r in spec["rows"]:
         m, shape, read = measured(r, tr.get(r["run"], {}))
+        if bad := token_dials(r["dials"], m.tokens):
+            raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {'; '.join(bad)}")
         w_fwd = policy.w_fwd(shape)
         pts = points(w_fwd)
         at = {name: formalism.at(m, c, k, reading, kinds) for name, (c, k) in pts.items()}
