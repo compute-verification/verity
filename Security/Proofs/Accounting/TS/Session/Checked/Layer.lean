@@ -6,7 +6,7 @@ import Proofs.Accounting.TS.Session.Assumptions
 The proof layer a checked record (`Accounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
 round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome `out x w i`:
 
-* `accepted`: flock-verify `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof service's rule
+* `accepted`: flock-verify `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof system's rule
   (`Accounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
 * `opened`: the registered rows, the committed trees' own: at each unit `u` and each wire of `u` at a registered read
   of `rdU u` (the unit's `zy` and A rows, its registered B, and its `ok` row), the bit of the registrant's opening

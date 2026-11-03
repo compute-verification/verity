@@ -9,6 +9,8 @@
     circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
+    circuit-check --all --catalog-units --cache DIR --binding NAME  only catalog binding NAME's targets, from the records
+    circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
@@ -22,7 +24,8 @@ unpinned or untyped lowering, and a Definition over the partition's budget are w
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
 under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
 (whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and ``--combine``
-exits 2 when it refuses the shards it was given (`shard.read`).
+exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
+bindings' records give no task list or the catalog has no binding of that name.
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -649,9 +652,23 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
             z.close()
 
 
+#: how ``--binding`` refuses a name no catalog binding has (`verity graph`'s circuit-binding runner tells it by this)
+NO_BINDING = "the catalog has no binding of that name"
+
+
+def _binding_of(plan: UN.Plan, kind: str, label: str) -> set[str]:
+    """The catalog bindings (`shard.binding`) that ``--binding`` checks a target of the list under: a Definition's, the one whose
+    record `units.derive` took it from (the binding whose roots reach it first, which makes it where it misses, `_made`); a
+    template's, the one that binds it."""
+    if kind == "definition":
+        return {SH.binding(plan.derived.via[label].units)}
+    return {SH.binding((u,)) for u in TG.BINDINGS.get(label, ())}
+
+
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
-        fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None) -> dict:
+        fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None,
+        binding: str | None = None) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own (a `CONSTRUCTED` family's members in batches, `_batched`), up to ``jobs`` at once (`parallel`): forked
     from a process that holds the task list, each check with its own memo, so a target's check never reuses what another's
@@ -700,6 +717,12 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     the whole catalog, as the ids come from it (`targets.select`), but describes only shard K's targets before its checks,
     and its task-list entry is the shard's, under a key that names it.
 
+    With ``binding`` (a catalog binding's name, `shard.binding`) only that binding's targets (`_binding_of`) are looked up and
+    checked, from the bindings' records (``units``; a binding whose record misses is built apart, as ``--all`` builds it):
+    `units.Stale` when they give no task list, where ``--all`` would build the whole catalog here, or the catalog has no
+    binding of that name (`NO_BINDING`), which would check nothing.  The report is of those targets alone, unjoined, as a
+    shard's, and so is the task-list entry, under a key that names the binding.
+
     The report's ``prologue_s`` is the seconds from the run's start until it hands the task list to `_checked_all`: the list,
     from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself."""
     started = time.time()
@@ -712,14 +735,15 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         TG.load_registries()
         listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
                          "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "pinned": sorted(TG.pinned()),
-                         **({"shard": list(shard)} if shard is not None else {})})
+                         **({"shard": list(shard)} if shard is not None else {}),
+                         **({"binding": binding} if binding is not None else {})})
         if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
             ids = [tuple(t) for t in hit[0]["targets"]]
             idx = list(range(len(ids))) if shard is None else SH.mine(ids, shard)
             got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
             if all(g is not None and not _errored(g[0]) for g in got):
                 records = [{**g[0], "cache": {"hit": g[1]}} for g in got]
-                rep = CK.report(records, opts) if shard is None else SH.unjoined(records, opts)
+                rep = CK.report(records, opts) if shard is None and binding is None else SH.unjoined(records, opts)
                 rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 if shard is not None:
@@ -739,23 +763,33 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 if log:
                     log(f"circuit-check: {len(SC.HANDED)} Definitions' owners as a full build has them, from a process that "
                         f"imported every module the bindings' builds did ({time.time() - t0:.1f}s)")
+                if binding is not None:
+                    keep = lambda kind, label, plan=plan: binding in _binding_of(plan, kind, label)  # noqa: E731
             planned = _planned(plan, opts, cache, forked=apart is not None, keep=keep) if plan is not None else None
         except UN.Stale as e:
             why = str(e)
             plan, planned = None, None
             TG.BINDINGS.clear()
             SC.HANDED.clear()
+    if binding is not None and plan is not None and binding not in {SH.binding(e.units) for e in plan.entries}:
+        raise UN.Stale(f"--binding {binding}: {NO_BINDING} (`--bindings` names them)")
     if planned is not None:
         tasks, keys, hits = planned
         if plan.listed is None:
             listed = None                                 # its reads are every binding's: a full build stores it
+    elif binding is not None:
+        raise UN.Stale(f"--binding {binding}: the bindings' records give no task list "
+                       f"({why or 'no record of this checker counts, and none was built'})")
     else:
         tasks, keys, hits = _tasks(specs, opts, everything, as_call), None, None
-    if keys is not None:
-        # before the zygotes fork: its digest parses every module a target's check can read, and theirs reuse that
-        _store_listed(cache, listed, tasks, keys, plan)
     ids = [(t[0], t[1]) for t in tasks]
     only = None if shard is None else SH.mine(ids, shard)
+    if binding is not None:
+        only = [i for i, (kind, label) in enumerate(ids) if keep(kind, label)]
+    if keys is not None:
+        # before the zygotes fork: its digest parses every module a target's check can read, and theirs reuse that
+        _store_listed(cache, listed, *((tasks, keys) if binding is None else
+                                       ([tasks[i] for i in only], [keys[i] for i in only])), plan)
     zygote = None
     if isolated and fork:
         _TASKS[:] = tasks
@@ -812,6 +846,22 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None)
         return {**out, "stored": 0, "why": f"the tracer could not see what it did ({'; '.join(why[:3])})"}
     stored = UN.store(cache, REPO, plan.entries, only_rebuilt=True)
     return {**out, "stored": stored, "bytes": UN.held(cache, plan.entries)}
+
+
+def bindings(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None) -> dict:
+    """``--bindings``: every catalog binding by name (`shard.binding`), each with the targets of the list ``--binding`` checks
+    under it (`_binding_of`), from the bindings' records in ``cache`` (each one that misses built in a process of its own, as
+    ``--records-only`` builds it), and no target checked; beside them what the suite requires of the catalog
+    (test_circuit_check.py): every root made (``root_errors``) and every registered Definition family checked (``unchecked``:
+    the families no target of the list is of).  `units.Stale` when a record disagrees with what was built."""
+    plan = UN.plan(cache, REPO, log, (max(1, jobs), budget_gb(mem_gb), heavy()))
+    d = plan.derived
+    out: dict[str, list[list[str]]] = {SH.binding(e.units): [] for e in plan.entries}
+    for kind, label in [*(("definition", fid) for fid in d.ids), *(("template", t[0]) for t in TG.templates())]:
+        for name in sorted(_binding_of(plan, kind, label)):
+            out.setdefault(name, []).append([kind, label])
+    return {"bindings": dict(sorted(out.items())), "root_errors": [list(x) for x in TG.ROOT_ERRORS],
+            "unchecked": sorted(set(TG.REGISTERED) - {d.nodes[fid]["f"] for fid in d.ids})}
 
 
 def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
@@ -1227,6 +1277,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="key and check only the targets whose id hashes to shard K of N (circuit_check.shard), no other, and write "
                          "their records and a manifest to --shard-dir; exit 1 on their own new failures")
     ap.add_argument("--shard-dir", type=Path, metavar="DIR", help="with --shard: where its records and manifest go")
+    ap.add_argument("--binding", metavar="NAME",
+                    help="with --all --catalog-units --cache DIR: key and check only the targets of the catalog binding NAME "
+                         "(`shard.binding`, such as verity.ml.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots): the list's "
+                         "Definitions its roots reach first and the templates it binds, from the bindings' records; exit 1 on "
+                         "their own new failures, 2 when the records give no task list")
+    ap.add_argument("--bindings", action="store_true",
+                    help="with --all --cache DIR: every catalog binding's name with the targets --binding checks under it, "
+                         "from the bindings' records, and no target checked (`bindings`)")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
                          "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")
@@ -1245,8 +1303,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="check batch invariance of every template the request-major compiler emits for the frozen v0 registration "
                          "instead of running the property checks (cli.batch): each verdict held to the declared one")
     a = ap.parse_args(argv)
-    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine, a.records_only))) > 1:
-        ap.error("--structural, --ambient, --batch, --combine and --records-only are five modes: give one")
+    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine, a.records_only, a.bindings))) > 1:
+        ap.error("--structural, --ambient, --batch, --combine, --records-only and --bindings are six modes: give one")
     if a.structural:
         return _structural_main(a, ap)
     if a.ambient:
@@ -1258,6 +1316,14 @@ def main(argv: list[str] | None = None) -> int:
     if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
         ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
+    if a.bindings and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir
+                       or a.binding):
+        ap.error("--bindings names every catalog binding's targets from the records in --cache DIR and checks none: give --all "
+                 "and --cache, and no target, --no-cache, --update-pins, --shard, --shard-dir or --binding")
+    if a.binding is not None and (a.targets or not a.all or not a.catalog_units or a.cache is None or a.no_cache
+                                  or a.update_pins or a.shard or a.records_only):
+        ap.error("--binding checks one catalog binding's targets from the bindings' records: give --all, --catalog-units and "
+                 "--cache DIR, and no target, --no-cache, --update-pins, --shard or --records-only")
     if not a.targets and not a.all:
         ap.error("give a target or --all")
     shard = None
@@ -1288,18 +1354,29 @@ def main(argv: list[str] | None = None) -> int:
     jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     if a.records_only:
         return _records_main(a, cache, jobs)
+    if a.bindings:
+        return _bindings_main(a, cache, jobs)
     opts = _options(a)
     t0 = time.time()
-    rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
-              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
-              mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
-              units=a.catalog_units, shard=shard)
+    try:
+        rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
+                  log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
+                  mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
+                  units=a.catalog_units, shard=shard, binding=a.binding)
+    except UN.Stale as e:
+        if a.binding is None:
+            raise
+        print(f"circuit-check: refused: {e}", file=sys.stderr)
+        return 2
     wall = time.time() - t0
     if not a.quiet:
         print(time_summary(rep, wall, jobs))
     _cache_lines(rep)
     if a.update_pins:
         update_pins(rep)
+    if a.binding is not None:
+        return verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
+                       what=f"binding {a.binding}: {len(rep['targets'])} target(s)")
     if shard is None:
         return verdict(rep, everything=a.all, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings)
     SH.write(a.shard_dir, rep, wall_s=round(wall, 1), prologue_s=rep.get("prologue_s"), jobs=jobs)
@@ -1307,6 +1384,20 @@ def main(argv: list[str] | None = None) -> int:
     print(f"circuit-check: shard {m['shard']}/{m['shards']}'s records and manifest are in {a.shard_dir}")
     return verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
                    what=f"shard {m['shard']}/{m['shards']}: {len(rep['targets'])} of the list's {m['list']['targets']} target(s)")
+
+
+def _bindings_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
+    """``--bindings`` (`bindings`): exit 2 when a record disagrees with what was built, else 0."""
+    try:
+        rep = bindings(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb)
+    except UN.Stale as e:
+        print(f"circuit-check --bindings: refused: {e}", file=sys.stderr)
+        return 2
+    if a.out:
+        a.out.write_text(json.dumps(rep, indent=1) + "\n")
+    print(f"circuit-check --bindings: {len(rep['bindings'])} catalog bindings, {sum(map(len, rep['bindings'].values()))} "
+          f"target(s), {len(rep['root_errors'])} root(s) not made, {len(rep['unchecked'])} registered family(ies) unchecked")
+    return 0
 
 
 def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:

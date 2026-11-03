@@ -41,11 +41,13 @@ resources = { cores = 1, mem_gb = 8, disk_gb = 2 }
 timeout_s = 1800
 
 [family.circuit-binding]
+# one task per circuit-check catalog binding, each from the records one circuit-catalog task builds, and one coverage task;
+# a task's cores and mem_gb are its circuit-check's --jobs and --mem-gb
 files = ["**/*.circuit-check.py", "**/*.circuit-check.json", "tools/verity/circuit_check/**"]
 kinds = ["circuit-binding", "circuit-coverage", "circuit-catalog"]
 env = "py"
-about = "circuit-check {name}"
-resources = { cores = 1, mem_gb = 8, disk_gb = 2 }
+about = "circuit-check --binding {binding}"
+resources = { cores = 4, mem_gb = 32, disk_gb = 2 }
 timeout_s = 3600
 
 [family.build]
