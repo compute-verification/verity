@@ -26,6 +26,8 @@ formula of its own, te_core.formalism is the one:
   (forward gates over the start's forward gates per token), its token blocks' gates (forward and backward, so
   σ = their share of |C|), their affected gates, and Δ_grad (the run's optimizer state at its widths);
 - τ (one token id), a (d_model x 16), Δ = 8 |E|, and u(1) = Δ;
+- Δ_t, the update application's weights (the coordinator's 00:47Z ruling): a straight-through run's fp32 latents, 32
+  bits a value as its record counts them, else Δ;
 - u and u_in, A1's and A1''s profiles: evenly spread where the run has no frozen tail; with one (its share t above the
   run's highest update, the tied head included), u is 0 up to t and u_in jumps to the full update at once.
 
@@ -59,6 +61,8 @@ LABELS = {
     "tau_bits": f"stub: one token id per token block, ceil(log2 V) bits ({SOURCE})",
     "a_bits": f"upper bound (witness): d_model x 16, one token's bf16 residual stream ({SOURCE})",
     "delta_bits": "upper bound (witness): 8 |E|, the submitted update code",
+    "delta_t_bits": f"{SOURCE}: a straight-through run's fp32 latents, 32 bits a value as its record counts them; "
+                    "every other run's is Delta",
     "u1_bits": f"upper bound (witness): u(1) = Delta, every token's path reads the whole update ({SOURCE})",
     "decoder_gates": "stub: the decoder's gates d unmeasured, taken as 0 (rho 1 where Fit holds)",
 }
@@ -83,8 +87,9 @@ def block(c: dict, r: dict, tau: float) -> dict:
     t = t if 0 < t < 1 else 0.0
     return {"parts": [{"gates": c["gates"], "tokens": c["tokens"], "token_gates": c["token_gates"],
                        "affected_gates": c["affected_gates"], "steps": 1, "delta_grad_bits": r["delta_grad"]}],
-            "tau_bits": tau, "a_bits": r["a"], "delta_bits": c["delta"], "u1_bits": c["delta"], "u": c["u"],
-            "u_in": c["u_in"], "tail_share": t, "decoder_gates": None, "labels": LABELS | (TAIL if t else EVEN)}
+            "tau_bits": tau, "a_bits": r["a"], "delta_bits": c["delta"], "delta_t_bits": r.get("delta_t"),
+            "u1_bits": c["delta"], "u": c["u"], "u_in": c["u_in"], "tail_share": t, "decoder_gates": None,
+            "labels": LABELS | (TAIL if t else EVEN)}
 
 
 def analysed(path: Path, scorer: Path, ledger: Path, cache: Path) -> dict[tuple, tuple[dict, str | None]]:
