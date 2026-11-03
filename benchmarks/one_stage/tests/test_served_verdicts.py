@@ -736,6 +736,69 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
 
 
+def _pearlplus_run(accepted: tuple[bool, ...] = (True, True, True, True)) -> tuple[dict, dict]:
+    """Pearl+'s served run, `served_passes.py`'s two documents: a warm-up pass, then three timed passes, one each
+    verdict of ``accepted``."""
+    served = {"arm": "pouw:pearl-c-h100-v1-h3", "spec": "s.toml", "run": "r", "served_tokens": 32, "generate_s": 2.0,
+              "prompt_tokens": 1024, "output_tokens": 1, "ok": True, "over_caps": [],
+              "passes": [{"pass": i, "timed": i > 0, "units": 64, "macs": 1000 * i} for i in range(4)]}
+    verified = {"ok": all(accepted), "verified": 4, "accepted": sum(accepted),
+                "verdicts": [{"pass": i, "accepted": ok, "credited_macs": 900 * i, "credit": "7/2",
+                              "line": f"{'ACCEPT' if ok else 'REJECT'} pass {i}"} for i, ok in enumerate(accepted)]}
+    return served, verified
+
+
+def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys):
+    """``pearlplus``: Pearl+'s own served run, every pass accepted by the replay, is accepted with its shares (the timed
+    passes' MACs at θ over the timed call's wall), and its row in the record stays missing with its own reason, its
+    passes not the window sampled proofs audited, so the record composes pending; the pieces' line says it's a
+    development run's."""
+    served, verified = _pearlplus_run()
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified)
+    assert (doc["verdict"], doc["reasons"], doc["credited"], doc["why"]) == ("accept", [], False, S.PEARLPLUS_WHY)
+    assert (doc["scheme"], doc["passes"], doc["verified"], doc["accepted"]) == ("pearl-c-h100-v1-h3", 4, 4, 4)
+    tensor = doc["shares"]["readings"]["tensor"]
+    rho = 4096 * 132 * 1830e6
+    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 5400} and doc["shares"]["credit_w1"] == "21/2"
+    assert (tensor["declared_linears"], tensor["credited"]) == (6000 / rho / 2.0, 5400 / rho / 2.0)
+    row = S.piece_row("work", tmp_path / "pieces")
+    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.PEARLPLUS_WHY, "accept")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
+    assert line["composed"] == "pending" and line["development"] == {"PoUW": "accept"}
+    assert line["missing"]["PoUW"] == S.PEARLPLUS_WHY and BR.check(rec) == {}
+    assert rec["composed"]["onsite"]["reason"].startswith(f"sampled proofs: accept; PoUW: {S.PEARLPLUS_WHY}; ")
+    got = S.pieces(tmp_path, 1, tmp_path / "again", env={"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""})
+    assert "POUW (development run, credits nothing) " in capsys.readouterr().out
+    assert (got["pouw"]["verdict"], got["pouw"]["accepted"], got["pouw"]["credited"]) == ("accept", 4, False)
+    assert got["pouw"]["shares_at_tensor_clock"]["declared_linears"] == tensor["declared_linears"]
+
+
+@pytest.mark.parametrize("served, verified, reason", [
+    (True, (True, False, True, True), "the replay accepted 3 of 4 passes: REJECT pass 1"),
+    (True, None, "no replay: served_passes.py verify wrote no document"),
+    (None, None, "no served run: served_passes.py serve wrote no document"),
+])
+def test_a_pearlplus_piece_rejects_a_pass_the_replay_rejects_and_a_run_that_wrote_nothing(tmp_path, served, verified,
+                                                                                          reason):
+    s, v = _pearlplus_run(verified or (True,) * 4)
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", s if served else None, v if verified else None)
+    assert (doc["verdict"], doc["reasons"][0], doc["shares"]) == ("reject", reason, None)
+    row = S.piece_row("work", tmp_path / "pieces")
+    assert (row["verdict"], row["reason"]) == ("reject", "; ".join(doc["reasons"]))
+
+
+def test_the_pearlplus_command_writes_a_reject_where_a_step_wrote_no_document(tmp_path, capsys):
+    """`served_pearlplus.sh` names both documents whether or not its steps wrote them: a serve that wrote neither gets a
+    piece that rejects, naming both, and its POUW-DEV line."""
+    out = tmp_path / "pieces" / "pouw"
+    assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json")]) == 0
+    doc = json.loads((out / S.DEVELOPMENT).read_text())
+    assert (doc["verdict"], doc["reasons"]) == ("reject", ["no served run: served_passes.py serve wrote no document",
+                                                           "no replay: served_passes.py verify wrote no document"])
+    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
+    assert (line["verdict"], line["credited"], line["passes"]) == ("reject", False, None)
+
+
 def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
     """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
     piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""

@@ -22,6 +22,12 @@ the Lean's ``Credit.PeriodCredit``, or that credit itself): its credited served 
 its windows, times the floor ``--floor`` (`FLOOR`), at θ, over the same wall. A rejected answer accounts 0, and so does a
 run with no ``--credit``. The credited share (the floor at 1) is reported beside it. Neither is part of the declared
 share, and the two are never added.
+
+Pearl+'s served run (`pearlplus_shares`, from `served_passes.py`'s serve and verify documents, the POUW=pearlplus piece's)
+has no step trace: its wall is its timed ``generate`` call's, its declared work that call's passes' linear MACs alone (no
+attention or LM head), and its credited work the credited cells' MACs of those passes the reference replay accepted, both at
+θ (the H200's dense FP8 rate is its int8 rate). The work law's credit (`clear_work.work`, W1 units: one a chain MAC, plus
+the peel's and A's forming) at θ is beside them, and no floor is applied: Pearl+'s is compute-accounting's to set.
 """
 from __future__ import annotations
 
@@ -123,6 +129,24 @@ def shares(serve_dir: Path, credit: dict[str, Any] | None = None, floor: Fractio
                        "accounted": float(floor * work) / rho / wall}
     return {"schema": SCHEMA, "dir": str(serve_dir), "model": model, "wall_s": wall, "macs": total, "loads": loads,
             "credit": {"verdict": verdict, "work": work, "floor": str(floor)}, "readings": readings}
+
+
+def pearlplus_shares(served: dict[str, Any], verified: dict[str, Any]) -> dict[str, Any]:
+    """Pearl+'s served run's shares at each reading of the clock (module docstring): ``served`` is `served_passes.py
+    serve`'s document, ``verified`` its ``verify``'s."""
+    wall = served["generate_s"]
+    if not (isinstance(wall, (int, float)) and wall > 0):
+        raise ValueError(f"the served run's timed call has no wall: {wall!r}")
+    timed = {p["pass"] for p in served["passes"] if p.get("timed")}
+    accepted = [v for v in verified.get("verdicts") or () if v["pass"] in timed and v["accepted"]]
+    declared = sum(p["macs"] or 0 for p in served["passes"] if p["pass"] in timed)
+    credited = sum(v["credited_macs"] for v in accepted)
+    credit = sum((Fraction(v["credit"]) for v in accepted), Fraction(0))
+    return {"schema": SCHEMA, "wall_s": wall, "passes": len(timed), "accepted": len(accepted),
+            "macs": {"declared_linears": declared, "credited": credited}, "credit_w1": str(credit),
+            "readings": {r: {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "declared_linears": declared / rho / wall,
+                             "credited": credited / rho / wall, "credit_w1": float(credit) / rho / wall}
+                         for r, rho in RHO.items()}}
 
 
 def main(argv: list[str] | None = None) -> int:
