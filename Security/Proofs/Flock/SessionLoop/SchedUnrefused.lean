@@ -1,15 +1,14 @@
-import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.PcsRank
 
 /-!
 # No refusal shows at a rep's scheduled rounds
 
 The session sends `[]` at a round by which the coins show a refusal (`Masked.encStop`, `Masked.Refused`).
 `LeanRelease.unrefused_prefix` rules one out up to the rep's rank check; past it, the rep's own rank check and its level
-0's pair `ρ₀, ρ₁` count too, which the frame decides from the coins at the opening's label (`Masker.label`) and at
-`ρ₁`'s coins (`Masker.answer`), before the rep's `β` round:
+0's pair `ρ₀, ρ₁` count too, which the frame decides from the coins at the opening's label (`Masker.label`, the rank
+check `LeanRelease.rank_unrefused_sched` reads, in `PcsRank`) and at `ρ₁`'s coins (`Masker.answer`), before the rep's
+`β` round:
 
-* **`LeanRelease.rank_unrefused_sched`**: on a live history past rep `2j + r`'s rank check, the rep's rank check holds
-  at the opened coins.
 * **`LeanRelease.rho_unrefused_sched`**: on a live history past rep `2j + r`'s `ρ₁` round, its pair coins are
   independent.
 * **`LeanRelease.unrefused_of_rank`**: on a live history whose next round is one of rep `q`'s up to its `β` round, no
@@ -30,27 +29,6 @@ open _root_.Flock (V)
 namespace LeanRelease
 
 open Loop
-
-/-- **The frame refuses a rank-deficient rep at its opening's label**: on a live history of at most `refK x` openings
-whose last coins the frame takes, past table `j`'s rep `r`'s rank check (`Masked.rankSlot`), the rep's rank check holds
-at the opened coins. The round at the rank check is the opening's first, whose label runs the frame's rank check on the
-coins the stream answered (`Masker.label`); the frame took that round's coins, at its own replay of the rep's scheduled
-rounds. -/
-theorem rank_unrefused_sched (T : ZKMal.CoinLayer.TableData)
-    (L₀ : LeanRelease Flock.Wit
-      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
-    (real : Msg → Flock.Wit →
-      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
-    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
-    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
-    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hN : Masked.rankSlot x j r < ops.length) :
-    ¬ Masked.RankBad (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
-      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r := by
-  sorry
 
 /-- **The frame refuses dependent `ρ₀, ρ₁` at `ρ₁`'s coins**: on a live history of at most `refK x` openings whose last
 coins the frame takes, past table `j`'s rep `r`'s `ρ₁` round (`Masked.rhoSlot` `+ 1`), the rep's pair coins at the
