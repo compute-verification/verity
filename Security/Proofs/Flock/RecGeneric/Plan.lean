@@ -10,7 +10,8 @@ compiler's proof can rebuild at the composite without knowing the inner protocol
 through whether it accepts and its coins, forks runs at rounds, and searches the calls of the runs it names for a
 collision is such a finder: it is a plan (`Plan`) over runs named by how they were drawn (`RunExp`), and it runs in any
 model of runs (`RunModel`). Its model at the inner protocol's own runs (`runModel`) is where the inner protocol's KS is
-stated; its model at the composite's draws (`Claims.RecGeneric.drawModel`) is where the recursion's bound reads it.
+stated; its models at the composite's draws (`Claims.RecGeneric.Comp.innerModel`, `Comp.verModel`) are where the
+recursion's bound reads it.
 
 `ReadsLe F d`: in every model and for every predicate `bad` of units, a run of `F`'s plan asks about a unit where `bad`
 holds and the unit accepts with probability at most `d · Pr[bad]`. It is a property of the plan alone, Wald's bound for

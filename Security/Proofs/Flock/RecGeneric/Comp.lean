@@ -22,8 +22,9 @@ inner view read off `E_O`'s witnesses (`Comp.dec`) as the run of `Open(Π, S)` o
 knowledge error is the inner protocol's, `N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the
 composite's draws (`Comp.innerModel`, `Comp.verModel`).
 
-`Comp.Contract` is what the compiled verifier must give, each a code fact proved per compiler (and, for `forks` and
-`accepts`, per circuit V* proves, at every statement some run accepts).
+`Comp.Contract H K IV x` is what the compiled verifier must give at the statement `x`, each a code fact proved per
+compiler (and, for `forks` and `accepts`, per circuit V* proves, where some run accepts `x`); `Comp.OuterKSAt` is
+`E_O`'s knowledge soundness at `x`. The composite's bound at `x` reads both at `x` alone.
 
 Statements only: definitions, no proofs.
 -/
@@ -118,12 +119,13 @@ def drawCost (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : 
 
 /-- **The composite's draws, as the inner terms' finders read them**: a unit is a draw; a fork at the inner round `j`
 keeps the compiled coins before `min j k_Π`; a draw is accepted where the inner view `E_O`'s witnesses give accepts; its
-coins are the compiled verifier's, whose first `k_Π` are the inner session's; its evaluations are `drawCalls`. -/
+coins are the inner session's, the compiled verifier's first `k_Π`, as the inner run shows them (`default` past them);
+its evaluations are `drawCalls`. -/
 def innerModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) :
     RunModel Coin Ω (K.V.k x) (K.EO.C x) where
   cut j := min j (IV.k (K.xI x))
   acc ω u := (K.dec IV H x u.1 (K.wits H P x ω u)).out = .acc
-  coins u := coinSeq u.1
+  coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
   log := K.drawCalls H P x
   cost := K.drawCost H P x
 
@@ -133,28 +135,27 @@ def verModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} 
     RunModel Coin Ω (K.V.k x) (K.EO.C x) where
   cut j := min j (IV.k (K.xI x))
   acc ω u := (K.wits H P x ω u).isSome = true
-  coins u := coinSeq u.1
+  coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
   log ω u := K.drawCalls H P x ω u ++ K.ownAt H P x ω u
   cost := K.drawCost H P x
 
-/-! ## The compiler's contract -/
+/-! ## The compiler's contract, at a statement -/
 
-/-- `E_O` gives witnesses only on accepted runs (it replays the judged run first). -/
-def Replays (H : Msg → Msg) (K : Comp Coin) : Prop :=
-  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
+/-- `E_O` gives witnesses at `x` only on accepted runs (it replays the judged run first). -/
+def Replays (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     (K.EO.eval H P x ω r c).1 = some w → (run H P K.V x ω r).out = .acc
 
-/-- Every accepted run is of a statement that parses into the relation's form. -/
-def Refuses (H : Msg → Msg) (K : Comp Coin) : Prop :=
-  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin),
-    (run H P K.V x ω r).out = .acc → K.parses x
+/-- An accepted run of `x` shows that `x` parses into the relation's form. -/
+def Refuses (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin), (run H P K.V x ω r).out = .acc → K.parses x
 
-/-- The inner rounds are among the compiled verifier's, its first. -/
-def InnerRounds (K : Comp Coin) (IV : Verifier Coin) : Prop := ∀ x, IV.k (K.xI x) ≤ K.V.k x
+/-- The inner rounds at `x` are among the compiled verifier's, its first. -/
+def InnerRounds (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop := IV.k (K.xI x) ≤ K.V.k x
 
-/-- On an accepted run the inner protocol takes a round and the compiled verifier at least three more. -/
-def RoundsMargin (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) : Prop :=
-  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin), (run H P K.V x ω r).out = .acc →
+/-- On an accepted run of `x` the inner protocol takes a round and the compiled verifier at least three more. -/
+def RoundsMargin (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin), (run H P K.V x ω r).out = .acc →
     0 < IV.k (K.xI x) ∧ IV.k (K.xI x) + 3 ≤ K.V.k x
 
 /-- **`E_O`'s witnesses on an accepted run**: `E_O` gives `w` at `(r, c)` and the run at `r` accepts. -/
@@ -162,28 +163,38 @@ def Gives (H : Msg → Msg) (K : Comp Coin) {Ω : Type} (P : Prover Ω) (x : Msg
     (c : K.EO.C x) (w : K.WO) : Prop :=
   (run H P K.V x ω r).out = .acc ∧ (K.EO.eval H P x ω r c).1 = some w
 
-/-- Every evaluation `calls` holds at given witnesses is a true one. -/
-def CallsTrue (H : Msg → Msg) (K : Comp Coin) : Prop :=
-  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
+/-- Every evaluation `calls` holds at given witnesses at `x` is a true one. -/
+def CallsTrue (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     K.Gives H P x ω r c w → ∀ e ∈ K.calls H x r w, H e.1 = e.2
 
-/-- **The inner verifier's calls are searched**: at given witnesses, the inner view's run's calls are among `calls` and
-the compiled verifier's own, or two of those collide. -/
-def CallsLogColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) : Prop :=
-  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
+/-- **The inner verifier's calls are searched**: at given witnesses at `x`, the inner view's run's calls are among
+`calls` and the compiled verifier's own, or two of those collide. -/
+def CallsLogColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     K.Gives H P x ω r c w →
       (∀ e ∈ (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog,
         e ∈ K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) ∨
       ∃ u v, findColl (K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) = some (u, v) ∧ Collision H u v
 
-/-- **The commitments bind across forks** (from the server's `Binds` and V\*'s reading of the run's commit strings):
-at `x`, two accepted draws forked inside the inner rounds whose witnesses give inner views that differ at the fork's
-round show a collision among the two draws' evaluations. -/
-def ForksBind (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop :=
+/-- The inner verifier's calls in the inner view's run at a draw's witnesses. -/
+def innerLog (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin) (w : K.WO) :
+    List (Msg × Msg) :=
+  (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog
+
+/-- **The commitments bind across forks** (from the server's `Binds` and V\*'s reading of the run's commit strings),
+modulo what the inner extractor reads at the last inner round: at `x`, two accepted draws forked at an inner round `j`
+whose witnesses give inner views that differ at `j` show a collision among the two draws' evaluations, where `j` is
+before the last inner round, or the two views differ in what the inner extractor reads of them (`rd`) or in the set
+of the inner verifier's calls. Two last messages read alike (as the deployed reader reads a trailing space) are one
+view to `E*`, so they need no collision. -/
+def ForksBind {β : Type} (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (rd : Seen → β) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (j : ℕ) (ω : Ω) (r r' : Fin (K.V.k x) → Coin) (c c' : K.EO.C x) (w w' : K.WO),
     j < IV.k (K.xI x) → K.Gives H P x ω r c w → K.Gives H P x ω (fork j r r') c' w' →
     ((K.view IV H x r w).msgs.map Prod.fst).getD j [] ≠
       ((K.view IV H x (fork j r r') w').msgs.map Prod.fst).getD j [] →
+    (j + 1 < IV.k (K.xI x) ∨ rd (K.view IV H x r w) ≠ rd (K.view IV H x (fork j r r') w') ∨
+      (K.innerLog IV H x r w).toFinset ≠ (K.innerLog IV H x (fork j r r') w').toFinset) →
     ∃ u v, findColl (K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs ++
       (K.calls H x (fork j r r') w' ++ K.own H x (run H P K.V x ω (fork j r r')).msgs)) = some (u, v) ∧
       Collision H u v
@@ -196,17 +207,26 @@ def InnerAcceptsColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x :
     (K.view IV H x r w).out = .acc ∨
       ∃ u v, findColl (K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) = some (u, v) ∧ Collision H u v
 
-/-- **The compiler's contract** at the inner verifier `IV`: the code facts about the compiled verifier and `E_O`, and
-V\*'s two at every statement some run accepts. -/
-structure Contract (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) : Prop where
-  replays : K.Replays H
-  refuses : K.Refuses H
-  rounds : K.InnerRounds IV
-  margin : K.RoundsMargin H IV
-  callsTrue : K.CallsTrue H
-  callsLog : K.CallsLogColl H IV
-  forks : ∀ x, AccAt H K.V x → K.ForksBind H IV x
-  accepts : ∀ x, AccAt H K.V x → K.InnerAcceptsColl H IV x
+/-- **The compiler's contract** at the inner verifier `IV`, what the inner extractor reads of a view (`rd`) and the
+statement `x`: the code facts about the compiled verifier and `E_O` there, and V\*'s two where some run accepts `x`.
+The composite's bound at `x` reads it at `x` alone, so a compiler whose V\* is shown at some statements' forms gets the
+bound at those statements. -/
+structure Contract {β : Type} (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (rd : Seen → β) (x : Msg) :
+    Prop where
+  replays : K.Replays H x
+  refuses : K.Refuses H x
+  rounds : K.InnerRounds IV x
+  margin : K.RoundsMargin H IV x
+  callsTrue : K.CallsTrue H x
+  callsLog : K.CallsLogColl H IV x
+  forks : AccAt H K.V x → K.ForksBind H IV rd x
+  accepts : AccAt H K.V x → K.InnerAcceptsColl H IV x
+
+/-- **`E_O` is knowledge sound at `x`** (`Claims.KS` at one statement): every prover's
+`Pr[run = acc ∧ ¬R_O(x, E_O(x))] ≤ κ_O(x) + √(γ_O(x)·Pr[B])`. -/
+def OuterKSAt (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+    PrBad H K.V K.RO K.EO x P ≤ K.κO x + Real.sqrt (K.γO x * PrB H K.V P x)
 
 end Comp
 

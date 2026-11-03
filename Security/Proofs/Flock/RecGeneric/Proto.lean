@@ -63,6 +63,14 @@ def Proto.KSAbortLin (H : Msg → Msg) (I : Proto Coin W) : Prop :=
       I.κ x + ∑ i, (I.terms i).w x *
         (((I.terms i).F (m i)).PrAt H (runModel H I.V P x keep) x + (I.terms i).tail x (m i))
 
+/-- **The inner verifier's last step reads no last coin**: at its last round, two coin lists that agree before the last
+coin give one decision with the same calls. The composite's inner prover sends the plurality of the draws' last
+messages, decided at its own run's last coin, so the recursion reads this with `Comp.ForksBind` at the last round. It
+holds at a public-coin verifier whose decision reads only the coins that answered earlier messages. -/
+def Proto.LastCoinFree (H : Msg → Msg) (I : Proto Coin W) : Prop :=
+  ∀ (x : Msg) (as : List Msg) (cs cs' : List Coin), as.length = I.V.k x → cs.length = as.length →
+    cs'.length = as.length → cs.dropLast = cs'.dropLast → (I.V.next x as cs).eval H = (I.V.next x as cs').eval H
+
 /-- **The inner protocol over a server's commitments**: its verifier is `Open(V, S)` (`Server.IVStar` at its answers),
 and its extractor reads each view opened (`Server.openView`); its relation, scope, waits, accepted reruns per wait,
 truncation, assembly, check and errors are its own. -/
