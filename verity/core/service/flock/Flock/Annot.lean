@@ -46,7 +46,7 @@ node or several) and `fuel`.
 
 `Meaning` is the public predicate's parameters: `tiling` (`partition`: every computed gate in exactly one set and no
 input gate in any; `cover`: every computed gate in at least one), `max_gates` (each label holds at most that many gates)
-and `max_count` (at most that many labels). The verdict is `{accept, count}`, with the first failing rule's `code` when
+and `max_count` (at most that many labels). The result is `{accept, count}`, with the first failing rule's `code` when
 refused: `input-held`, `gate-in-no-set` or `overlap` (the tiling, body by body in node order, members in order, depth
 first), then `too-many`, then `too-large`. A partition is tested on the unlabelled family's sets, which is stronger than
 the labelled annotation's: a gate in two sets of one label is refused. `max_gates` under an affine `label` is refused as
@@ -895,14 +895,14 @@ def Meaning.ofJson (j : Json) : V Meaning := do
     | .ok x => refuse "term" s!"a tiling is \"partition\" or \"cover\", not {x.compress}"
   return { tiling, maxGates := ← optNat j "max_gates", maxCount := ← optNat j "max_count" }
 
-/-- The verdict: accepted, or the first failing rule's code; the annotation's label count either way. -/
-structure Verdict where
+/-- The check's result: accepted, or the first failing rule's code; the annotation's label count either way. -/
+structure CheckResult where
   accept : Bool
   code : String := ""
   count : Nat
   deriving BEq, Inhabited
 
-def Verdict.toJson (v : Verdict) : Json :=
+def CheckResult.toJson (v : CheckResult) : Json :=
   Json.mkObj ([("accept", Json.bool v.accept), ("count", Lean.toJson v.count)] ++
     (if v.accept then [] else [("code", Json.str v.code)]))
 
@@ -1098,7 +1098,7 @@ def tableLabels (P : Prog) (D : Desc) (F : Family) (name : String) : V (Array (O
 
 /-- `Annot.check`: meaning `Φ` decided on the description of annotation `D` of program `P`, at the size of the
 description. -/
-def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
+def check (Φ : Meaning) (P : Prog) (D : Desc) : V CheckResult := do
   let F ← eval P D
   let top := F.plans[F.top]!
   let (count, sizes) ← match F.map with
@@ -1118,7 +1118,7 @@ def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
             | .descend s | .grid _ s => total e.members * sums[s]!
             | _ => Entry.allGates P body e)
       pure (n, some (w.foldl max 0))
-  let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
+  let refused := fun (code : String) => (pure { accept := false, code, count } : V CheckResult)
   if let some t := Φ.tiling then
     match (tiles P F (gateKinds P) (planHolds P F) (t == .partition) Steps.FUEL P.root #[F.top]).run' {} with
     | .error e => throw e
