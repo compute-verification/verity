@@ -10,8 +10,8 @@ Three layers, each a statement over the one below:
 
 * **L1, the composition** (`GenericRecursiveKS`): any inner protocol `Π` (`Proto`) over any server's commitments
   (`Server`), at any compiled verifier with any outer extraction (`Comp`), at each statement where the outer extraction
-  is knowledge sound (`Comp.OuterKSAt`) and the compiler meets its contract (`Comp.Contract`). The composite extractor is `Π`'s `E^rep`, each rerun served by `E_O` (`Comp.E`); its error is
-  `Comp.err`: `κ_Π + N_I·κ_O`, `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's draws, a
+  is knowledge sound (`Comp.OuterKSAt`) and the compiler meets its contract (`Comp.Contract`). The composite
+  extractor is `Π`'s `E^rep`, each rerun served by `E_O` (`Comp.E`); its error is `Comp.err`: `κ_Π + N_I·κ_O`, `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's draws, a
   rejecting judged draw (`B_I`, `forkPlan`) and the deviation finder (`linkPlan`) at weight
   `β = (N_I + Σ_i w_i·d_i)·k_Π`.
 * **L2, the compiler** (`GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)` for any outer argument `A` (`Arg`) and
