@@ -32,7 +32,7 @@ at most `tableError(fast100 m, shape)`:
   `Arith.Correct` from `execArith_correct`, so they have no named assumption.
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (`value_batch_le`, `Audit/README.md`).
-- **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Definitions/Flock/LigeritoPad.lean`). M1
+- **With masking's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Definitions/Flock/LigeritoPad.lean`). Masking
   (`verity/ml/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
@@ -42,7 +42,7 @@ at most `tableError(fast100 m, shape)`:
     at most **2^-205 per table** (`table_sound_pad_m1`).
   - **The committed values** are the witness lanes' messages `a − c₀·pad` of lane families within the padded radius
     (`CommittedPad`).
-  - **The model is M1 in the clear.** The verifier computes the restarted claim `s + Σ_i ρ_i·e_i` itself. M1 masks the
+  - **The model is Flock ZK in the clear.** The verifier computes the restarted claim `s + Σ_i ρ_i·e_i` itself. Flock ZK masks the
     lane rounds and `e`, and its inner proof enforces the restart. That is the inner proof's soundness, a separate
     statement.
   - **New in the proof:**
@@ -171,7 +171,7 @@ link term per audit.
 | The list size: at most `L₀` codewords near the committed table (ArkLib's Johnson bound) | 1a | `closeMsgs_card_le` (`ListSize.lean`) | proved |
 | Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
-| M1's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
+| Masking's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
 | The padded bound at Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
@@ -410,7 +410,7 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 - **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
   prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
   `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).
-- M2's coin openings bind under SHA-512 collision resistance (T6, `coin_opening_binding_keyed`), and T7's numeric step
+- The coin tree's openings bind under SHA-512 collision resistance (T6, `coin_opening_binding_keyed`), and T7's numeric step
   (`gk_ratio_le_third`).
 - **Theorem GK**, the Goldreich–Kahan simulator (`ZK/GK/`): `gk` makes a dummy run, estimates the completion rate from
   fresh dummy runs, and rewinds at most `4t/p̃` times with fresh dummy openings, under a cap `M`. `Model.gk_simulate`: for a
@@ -449,7 +449,7 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 - **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
   (DESIGN.md §11.2).
 
-**Expected assumptions** (to be confirmed against M1's spec):
+**Expected assumptions** (to be confirmed against Flock ZK's spec):
 
 - **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. When proving, the
   leaf salts are the operating system's bytes, 192 a leaf (`getrandom`), which A3 makes
@@ -465,7 +465,7 @@ tables' public statements alone, and runs in expected polynomial time. The simul
   AHIV22 Lemma 4.15 condition). **Proved** (`ZK/Masking.lean`), with the standard axioms only:
   - `padded_openings_uniform`: at distinct points where the padding's factor doesn't vanish, every vector of opened
     values is reached by the same number of paddings, whatever the message is;
-  - `level0_openings_uniform`: the same at M1's level 0, whose padding `(X_L + κ)·μ` combines the first `t_pad`
+  - `level0_openings_uniform`: the same at masking's level 0, whose padding `(X_L + κ)·μ` combines the first `t_pad`
     novel-basis polynomials;
   - `card_translate_fiber`: any value masked by the image of uniform randomness under a surjective additive map is
     uniform. The pads, the mask slot, the extra-lane pairs and the paddings are all instances.

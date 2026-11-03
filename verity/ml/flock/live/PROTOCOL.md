@@ -1,4 +1,4 @@
-# verity/flock-circuit: the masked protocol (M1) and its coin commitment (M2)
+# verity/flock-circuit: Flock ZK, its masking and its coin tree
 
 What `flock-circuit --zk` sends, where every mask comes from, and what the verifier checks. This is the layout the Lean
 reference prover must reproduce byte for byte (soundness DESIGN.md §6: a deterministic function of statement, witness,
@@ -6,9 +6,9 @@ prover seed and verifier coins), and the statement its zero-knowledge theorem is
 
 Code:
 - `src/zk_veil.rs`: masking, replay, constraints, the inner proof, the simulator's pieces.
-- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`; M2's
+- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`; the coin tree's
   `VStar`, `gk_simulate`, `rewind`, `zkrewind`.
-- `src/coin_tree.rs` (M2): the verifier's coin commitment and the prover's check of every opening.
+- `src/coin_tree.rs` (the coin tree): the verifier's coin commitment and the prover's check of every opening.
 - `../flock-zk-b684b12.patch`: Ligerito level 0's hiding in upstream Flock (`pcs::ligerito::zk`, `commit::commit_zk`, the F256
   split prover and verifier), and the CPU prover's 64-bit nonzero offsets (`lincheck::CscCircuit`, `r1cs::flatten_csr`), so
   one matrix may hold more than 2^32 nonzeros. The GPU prover's are 32-bit: `--gpu` refuses a circuit past them
@@ -17,7 +17,7 @@ Code:
 **Claim.** Every message a session sends is masked, committed or public, and the audit (`zkaudit`) attributes every
 byte. The target notion is VEIL's special honest-verifier zero knowledge for the whole session (both repetitions),
 meaning one simulator for every fixed coin sequence (DESIGN.md §11), statistical in the common-reference-string model
-under the assumptions of §7. Malicious-verifier zero knowledge is M2's, from its coin commitment and single rewind (§9).
+under the assumptions of §7. Malicious-verifier zero knowledge is the coin tree's, from its coin commitment and single rewind (§9).
 The prover refuses the degenerate coins (`β = 0`, a mask slot of deficient rank, dependent `ρ`, a zerocheck outer coin
 `r_j = 1`) as they open, before it sends anything that depends on them. Each rep has its own pair of level 0's extra
 lanes (§7). The proof class stays `NON_ZK_PROOF` until the Lean proof covers it.
@@ -30,13 +30,13 @@ value upstream's prover computed, `h` a pad, and `v' = v + h`. `m` is the dense 
 
 ## 1. Order of one repetition
 
-Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. Items marked M1 are new; the rest is
+Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. Items marked ZK are Flock ZK's; the rest is
 M0 and upstream Flock.
 
 ~~~text
 bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
 zerocheck           label flock-zerocheck-v0
-  M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
+  ZK                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
                     slice round1_ab' (64) · slice round1_c' (64) · squeeze z
                     per j < m-6: scalar G_j(1)' · scalar G_j(∞)' · squeeze ρ_j
@@ -48,20 +48,20 @@ opening             label flock-pcs-open-batch-v0                         (the a
                     per claim: label flock-ring-switch-v0 · slice s_hat_v (128) · squeeze r'' (7)
                     squeeze γ (claims)
 Ligerito level 0    label flock-ligerito-basis-f256-split-v0 · scalar target · bytes cap
-  M1                label verity-flock-zk-l0-open-v0                      (level 0's masking begins)
+  ZK                label verity-flock-zk-l0-open-v0                      (level 0's masking begins)
                     per OOD sample: squeeze z (log_n) · scalar y' · bytes nonce · squeeze β
                     msg_0' (u_0 slice 2, u_2 slice 2)
                     per j < initial_k: squeeze r_j (F256) · msg_{j+1}' for j+1 < initial_k
-  M1                slice e_0' (2) · slice e_1' (2) (rep r's pair) · squeeze ρ_0, ρ_1 (F256)
-  M1                label verity-flock-zk-l0-close-v0                     (level 0's masking ends)
-  M1                slice T' (2) · slice ybar (2 t_pad)
+  ZK                slice e_0' (2) · slice e_1' (2) (rep r's pair) · squeeze ρ_0, ρ_1 (F256)
+  ZK                label verity-flock-zk-l0-close-v0                     (level 0's masking ends)
+  ZK                slice T' (2) · slice ybar (2 t_pad)
                     code-switch message · cap_1 · ... levels 1+, unchanged ...
-M1 inner proof      label verity-flock-zk-inner-v0 · scalar final_c' · squeeze ε · slice [ρ, σ] · squeeze γ (10)
-  M2                bytes τ's commitment (64) · squeeze β · slice Y (s+192) · squeeze queries (168)
+ZK inner proof      label verity-flock-zk-inner-v0 · scalar final_c' · squeeze ε · slice [ρ, σ] · squeeze γ (10)
+  ZK                bytes τ's commitment (64) · squeeze β · slice Y (s+192) · squeeze queries (168)
 proof bytes         bincode (Commitment, R1csProofLigerito with the masked fields, InnerProof)
 ~~~
 
-Upstream never absorbs `final_c'`; M1 absorbs it first in the inner proof (§5). The claim order in the opening is ab, then
+Upstream never absorbs `final_c'`; Flock ZK absorbs it first in the inner proof (§5). The claim order in the opening is ab, then
 c, then the region claims (region-major, then the two link points).
 
 ## 2. The pads
@@ -172,14 +172,14 @@ It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from
    failing row. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
 2. `γ` (10) ← V. Both sides form `(c, t)`. P checks `⟨c, h⟩ = t` on its pads and stops otherwise, before it sends anything
    more. P computes `τ = ⟨c, mu⟩` and sends its commitment
-   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, M2).
+   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, §9).
 3. `β` ← V. P refuses `β = 0`. P sends `Y = (h + β mu ‖ pad_h + β pad_mu)`.
 4. 168 query words ← V, reduced to `j = lo mod N`. P opens `(C_h[j], C_mu[j])` with salts and paths. The proof carries
    `τ` and its salt.
 5. V checks that `τ` opens its commitment, `⟨c, Y[..s]⟩ = t + β τ`, `C(Y)_j = C_h[j] + β C_mu[j]` at every query, and each
    path to the pads root.
 
-`τ` in the clear before `β` (M1's first version) would let a verifier test `⟨c, Y⟩ = t + βτ` as soon as `Y` arrives,
+`τ` in the clear before `β` (masking's first version) would let a verifier test `⟨c, Y⟩ = t + βτ` as soon as `Y` arrives,
 before the last coin; §9's extraction run needs every message before the last coin masked, committed or public.
 
 **The prover checks before it speaks** (step 2, `zk_veil::SelfCheck`). On a failing constraint, `⟨c, Y[..s]⟩ + t + βτ`
@@ -322,15 +322,15 @@ is the minimum.
   - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under `hash-derived-key`.
     The distance is then about `N·2^-192`, with `N` every leaf ever committed under the key (an `m = 25` session commits
     about 2^14.4), so a lifetime of `2^64` leaves stays within `2^-128`.
-- **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
+- **So masking is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
   with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
   No random oracle is involved.
 - **No premise on a stream generator.** Every pad, mask, padding coefficient and extra lane (`ProverRng`) and every leaf
   salt (`LeafSalts`) is the OS's own bytes, so the claim is statistical with the OS
   generator's output as the uniform prover randomness it assumes, and nothing rests on ChaCha20 as a PRG. (A test
   harness's injected seed expands all of them with ChaCha20, so its proofs repeat; a proving build has no injected seed.)
-- **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
-  verifier's coin commitment (§9), not M1's hiding.
+- **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and the coin tree's binding of the
+  verifier's coin commitment (§9), not masking's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
   `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), mask-slot weights of rank `< 128·(claim points)` (§6), and a
   zerocheck outer coin `r_j = 1` (the replay's round `j` divides by zero there, and the honest pads miss the inner proof's
@@ -389,7 +389,7 @@ the statistics' relation classes.
 The prover's own replay takes its lincheck's folded `comb` as an argument (`LincheckProof::comb_partial`, never
 serialized), never from a proof.
 
-## 9. M2: the verifier's coin commitment and the single-rewind simulator
+## 9. The coin tree: the verifier's coin commitment and the single-rewind simulator
 
 The design for malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md
 §2 and §6, DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round
@@ -418,7 +418,7 @@ degenerate coins as they open (the Claim above).
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
-  assumption M2's zero knowledge adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` under the session's nonce
+  assumption the coin tree's zero knowledge adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` under the session's nonce
   (`cr/sha-512`), so a collision in V*'s auxiliary input, made before `ν` existed, opens nothing. It holds whatever
   salts V* chooses (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers
   the commitment must be collapse-binding (ASSUMPTIONS.md §6).
@@ -575,7 +575,7 @@ item leaves:
 - in the opening, the loop's own opening round, the ZK server's computation (an honest device's round);
 - at `Commit`, the recheck's root;
 - for the returned proof, the ZK server's own (the passed values and the Lean finish's opening, as on any rep), and the inner
-  proof speaks on schedule without its self-check (§5), as M1's simulator's does.
+  proof speaks on schedule without its self-check (§5), as masking's simulator's does.
 
 A device that sends more rounds than the statement has gets coins back and nothing leaves; one that returns early has the
 rest of the schedule released by the ZK server itself. A failed rep's rounds from its failure on reach the loop as no

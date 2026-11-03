@@ -123,7 +123,7 @@ Workers would prove the inner statement natively with ZK off and the outer proof
 (compiled Lean, CPU) would sample the masks and salts, check the outer relations and release; the auditor runs the Lean
 verifier. That split doesn't exist. The ZK point measures today's stand-in,
 labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same sampled sessions with
-`flock-circuit prove --zk --gpu` (M1's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
+`flock-circuit prove --zk --gpu` (Flock ZK's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
 checks on its host threads and the Lean (`verity/core/service/flock/Flock/Firewall`, the `flock-firewall` processes the
 prover starts on the same node: the session loop, the frames and the finish, which commits level 0 and computes the
 opening and the proof file), and `zk-point` writes the result: the prover process's CPU seconds per session, the
