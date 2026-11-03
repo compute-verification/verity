@@ -68,6 +68,10 @@ namespace Standard
 
 variable {ni nl nj : ℕ} (S : Standard d ni nl nj)
 
+/-- The products whose MAC lies in `I`, a block's `T`. -/
+def whole (I : Finset (Fin d.D.N)) : Finset (Fin ni × Fin nl × Fin nj) :=
+  univ.filter fun p => S.mac p.1 p.2.1 p.2.2 ⊆ I
+
 theorem mac_subset_macs (i : Fin ni) (l : Fin nl) (j : Fin nj) : S.mac i l j ⊆ S.macs := fun _ hg =>
   mem_biUnion.2 ⟨(i, l, j), mem_univ _, hg⟩
 
@@ -270,7 +274,7 @@ theorem card_le_whole_add (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) :
     _ ≤ _ := add_le_add le_rfl (sum_le_sum fun u _ => S.sum_card_mac_le hS _)
 
 /-- With every MAC in one block, `N ≤ Σ_u |T_u|`. -/
-theorem card_le_whole {m : ℕ} (P : Partition d.D m) (h : ∀ i l j, ∃ u, S.mac i l j ⊆ P.gates u) :
+theorem card_le_whole {m : ℕ} (P : Partition d.D m) (h : S.Unsplit P) :
     ni * nl * nj ≤ ∑ u, (S.whole (P.gates u)).card := by
   rw [S.sum_card_whole P]
   calc ni * nl * nj = ∑ _p : Fin ni × Fin nl × Fin nj, 1 := by

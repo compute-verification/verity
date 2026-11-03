@@ -41,12 +41,11 @@ def Cap : Prop :=
     S.Algorithm → S.Passed c k bA bB bC → P.IsCK d c k → 0 < bA → 0 < bB → 0 < bC → 0 < μ →
     ((ni * nl * nj : ℕ) : ℝ) ≤ m * capAt k bA bB bC μ + μ * S.outBits
 
-/-- **The cap at word level**: when every MAC lies in one block,
+/-- **The cap at word level**: when every MAC lies in one block (`Standard.Unsplit`),
 `ni nl nj ≤ m k √k / (4 √(b_A b_B b_C)) + μ* Σ_ij |out_ij|`, `μ* = √k / (4 √(b_A b_B b_C))`. -/
 def WordCap : Prop :=
   ∀ (d : Declaration) (ni nl nj : ℕ) (S : Standard d ni nl nj) (c k bA bB bC m : ℕ) (P : Partition d.D m),
-    S.Algorithm → S.Passed c k bA bB bC → P.IsCK d c k → (∀ i l j, ∃ u, S.mac i l j ⊆ P.gates u) → 0 < k →
-    0 < bA → 0 < bB → 0 < bC →
+    S.Algorithm → S.Passed c k bA bB bC → P.IsCK d c k → S.Unsplit P → 0 < k → 0 < bA → 0 < bB → 0 < bC →
     ((ni * nl * nj : ℕ) : ℝ) ≤ m * ((k : ℝ) * √(k : ℝ) / (4 * √((bA : ℝ) * bB * bC))) +
       √(k : ℝ) / (4 * √((bA : ℝ) * bB * bC)) * S.outBits
 

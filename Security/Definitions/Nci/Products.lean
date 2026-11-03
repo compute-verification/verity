@@ -32,16 +32,16 @@ Two premises, facts of the given circuit:
   operand some inference block gets for fewer reads of its cone than its width: one in `θ`, which costs nothing to read,
   or one computed from registered values.
 
-`whole I` is the set of products whose MAC lies in `I`, `outBits` the bits of `C`'s final values `Σ_ij |out_ij|`, and
-`handed C G I` the gates of `G` in `I` that a gate of `G` outside `I` reads. `capAt k b_A b_B b_C μ` is the cap a block
-at the weight `μ > 0`, `max (k² / (16 μ b_A b_B b_C)) ((μ + 1) k)` products, and `bound` the products kind's bound on
-`ρ`, `((ni nl nj - μ Σ_ij |out_ij|) / |C|) / (capAt / c)`.
+`outBits` is the bits of `C`'s final values `Σ_ij |out_ij|`, `handed C G I` the gates of `G` in `I` that a gate of `G`
+outside `I` reads, and `Unsplit P` the word level, a partition `P` that splits no MAC. `capAt k b_A b_B b_C μ` is the
+cap a block at the weight `μ > 0`, `max (k² / (16 μ b_A b_B b_C)) ((μ + 1) k)` products, and `bound` the products kind's
+bound on `ρ`, `((ni nl nj - μ Σ_ij |out_ij|) / |C|) / (capAt / c)`.
 -/
 
 namespace Nci.Products
 
 open Finset
-open Verity (Circuit Declaration)
+open Verity (Circuit Declaration Partition)
 open Nci.Formalism
 open scoped ENNReal
 
@@ -79,12 +79,11 @@ def macs : Finset (Fin d.D.N) := univ.biUnion fun p : Fin ni × Fin nl × Fin nj
 def cones : Finset (Fin d.D.N) :=
   (univ.biUnion fun p : Fin ni × Fin nl => S.coneA p.1 p.2) ∪ univ.biUnion fun p : Fin nl × Fin nj => S.coneB p.1 p.2
 
-/-- The products whose MAC lies in `I`. -/
-def whole (I : Finset (Fin d.D.N)) : Finset (Fin ni × Fin nl × Fin nj) :=
-  univ.filter fun p => S.mac p.1 p.2.1 p.2.2 ⊆ I
-
 /-- The bits of `C`'s final values, `Σ_ij |out_ij|`. -/
 def outBits : ℕ := ∑ p : Fin ni × Fin nj, (S.out p.1 p.2).card
+
+/-- **The word level**: the partition `P` splits no MAC, each lying in one of its blocks. -/
+def Unsplit {m : ℕ} (P : Partition d.D m) : Prop := ∀ i l j, ∃ u, S.mac i l j ⊆ P.gates u
 
 /-- **The standard algorithm**, a fact of the given circuit: the MACs are nonempty, pairwise disjoint and connected sets
 of computed gates; each reads every bit of both its operands; the cones are pairwise disjoint and disjoint from the

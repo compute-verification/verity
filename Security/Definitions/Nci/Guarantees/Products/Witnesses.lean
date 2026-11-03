@@ -45,15 +45,15 @@ def Cap_nontrivial : Prop :=
 /-- **The word-level cap's premises hold** at `Single` with its operands fresh, at `(c, k) = (1, 2)` and one-bit
 widths, its one MAC in `P`'s one block. -/
 def WordCap_honest : Prop :=
-  freshProduct.Algorithm ∧ freshProduct.Passed 1 2 1 1 1 ∧ P.IsCK fresh 1 2 ∧
-    (∀ i l j, ∃ u, freshProduct.mac i l j ⊆ P.gates u) ∧ (0 : ℕ) < 2 ∧ (0 : ℕ) < 1
+  freshProduct.Algorithm ∧ freshProduct.Passed 1 2 1 1 1 ∧ P.IsCK fresh 1 2 ∧ freshProduct.Unsplit P ∧ (0 : ℕ) < 2 ∧
+    (0 : ℕ) < 1
 
 /-- **The word-level cap is false without widths as passed**: at `Single` with its operands registered, at
 `(c, k) = (1, 1)` and the rest as in `WordCap_honest`, the block reads none of either cone beyond `θ`, and the bound
 `1 ≤ 1/4 + 1/4` fails. -/
 def WordCap_nontrivial : Prop :=
   registeredProduct.Algorithm ∧ ¬ registeredProduct.Passed 1 1 1 1 1 ∧ P.IsCK registered 1 1 ∧
-    (∀ i l j, ∃ u, registeredProduct.mac i l j ⊆ P.gates u) ∧ (0 : ℕ) < 1 ∧
+    registeredProduct.Unsplit P ∧ (0 : ℕ) < 1 ∧
     ¬ ((1 * 1 * 1 : ℕ) : ℝ) ≤ (1 : ℕ) * ((1 : ℕ) * √((1 : ℕ) : ℝ) / (4 * √(((1 : ℕ) : ℝ) * (1 : ℕ) * (1 : ℕ)))) +
       √((1 : ℕ) : ℝ) / (4 * √(((1 : ℕ) : ℝ) * (1 : ℕ) * (1 : ℕ))) * registeredProduct.outBits
 

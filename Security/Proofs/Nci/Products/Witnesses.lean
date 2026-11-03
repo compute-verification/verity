@@ -75,8 +75,8 @@ theorem isCK_registered (k : ℕ) : P.IsCK registered 1 k :=
 
 theorem gates_zero : P.gates 0 = {2} := by decide
 
-theorem whole (θ : Finset (Fin C.N)) (hθ : ∀ g ∈ θ, C.isInput g = true) :
-    ∀ i l j, ∃ u, (product θ hθ).mac i l j ⊆ P.gates u := fun _ _ _ => ⟨0, by rw [gates_zero]⟩
+theorem unsplit (θ : Finset (Fin C.N)) (hθ : ∀ g ∈ θ, C.isInput g = true) : (product θ hθ).Unsplit P :=
+  fun _ _ _ => ⟨0, by rw [gates_zero]⟩
 
 theorem outBits_eq : registeredProduct.outBits = 1 := by decide
 
@@ -117,11 +117,11 @@ theorem Cap_nontrivial : Guarantees.Cap_nontrivial :=
     Single.not_cap⟩
 
 theorem WordCap_honest : Guarantees.WordCap_honest :=
-  ⟨Single.algorithm_fresh, Single.passed_fresh, Single.isCK_fresh, Single.whole _ _, by norm_num, Nat.one_pos⟩
+  ⟨Single.algorithm_fresh, Single.passed_fresh, Single.isCK_fresh, Single.unsplit _ _, by norm_num, Nat.one_pos⟩
 
 theorem WordCap_nontrivial : Guarantees.WordCap_nontrivial :=
-  ⟨Single.algorithm_registered, Single.not_passed_registered 1, Single.isCK_registered 1, Single.whole _ _, Nat.one_pos,
-    Single.not_wordCap⟩
+  ⟨Single.algorithm_registered, Single.not_passed_registered 1, Single.isCK_registered 1, Single.unsplit _ _,
+    Nat.one_pos, Single.not_wordCap⟩
 
 theorem Bound_honest : Guarantees.Bound_honest :=
   ⟨Single.algorithm_fresh, Single.passed_fresh, Single.isCK_fresh, Nat.one_pos, by norm_num⟩
