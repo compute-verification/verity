@@ -44,3 +44,5 @@
 4. the y root tied to the block input that sampled proofs commit (training's tie). With circuits' PearlCUnscale blocks sampled at the linear sites, that ties y to U by proof as well.
 
 08:45Z Tue (coordinator): **`remote` is now 08d5d36ee0**, with compute-accounting's Pearl+ verdict covering y. served_y commits each call's real rows of y on retained passes; verify_run checks them against unscale(U) on drawn tiles, then runs served_passes and served_shares at Pearl+'s credit. Merge `remote` into your branch.
+
+09:45Z Tue (coordinator): **`remote` is now 6f86e8412c**, with training's #7083 merged: the inference-only verdict step, ibcounts' block-counts, and tiee2e's run-2 tree (the H1 tie A-E and the ok-salt fix). Merge `remote` into your branch. **For the 4 PM run (training):** set IO_CLASS, REPO, REV and LEASE_MIN as served, and have `lake` on the served node. The verdict runs in served_verdicts.sh step 5, beside sampled proofs. Rehearsal 2 accepts retroactively.
