@@ -70,15 +70,16 @@ A spec-level reference for network accounting's timing channel:
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
-- the egress tie through the proof system (`scan_service`): `EgressTie`, a link-window's step-indexed scan as one
-  registration of the proof service with every bucket proved, its 2T proof blocks in three statements (``first``,
-  bucket 0's `IngressScanFirst`; ``ingress``, the T − 1 `IngressScanBucket` units batched; ``egress``, the T
-  `EgressBucket` units), every port a registered read of the network certifier's rows, the committed trace's
-  `SCAN_STATE` and slot entries, or the prover's ``scan/view`` and ``scan/next``; decided by the verifier of record
-  (`EgressTie.verify`: C-Flock's Lean verifier on its own registered reads, and the ingress statement's commitment
-  chain, `chained`), and `EgressTie.tie`, which builds `EgressTieVerdict` from the stream's outcomes of record alone.
-  `Scans`, the tie and its stream, is the verifier's own source that `network_verdict(egress=…)` reads.
-  `benchmarks/network_traces/scan_tie.py` proves a link-window through it on C-Flock's prover;
+- the egress tie through the proof system (`scan_service`): `EgressTie`, an execution phase's step-indexed scan as one
+  registration of the proof system with every bucket proved, its 2T proof blocks in four statements (``first``,
+  bucket 0's `IngressScanFirst`; ``ingress``, buckets 1 … T − 2's `IngressScanBucket` blocks batched; ``last``,
+  bucket T − 1's, whose S_{T−1} no state leaf holds; ``egress``, the T `EgressBucket` blocks batched), every port a
+  registered read of the network certifier's rows, the committed trace's `SCAN_STATE` and slot entries, or the
+  prover's ``scan/view`` and ``scan/last``, so each S_t is the state leaf one block writes and the next reads; decided
+  by its verifier (`EgressTie.verify`: C-Flock's Lean verifier on its own registered reads), and `EgressTie.tie`, which
+  builds `EgressTieVerdict` from the stream's outcomes alone. `Scans`, the tie and its stream, is the verifier's own
+  source that `network_verdict(egress=…)` reads. `benchmarks/network_traces/scan_tie.py` proves an execution phase
+  through it on C-Flock's prover;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -328,8 +329,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 Every protocol is to be zero-knowledge. N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
 the declared sync), beside the proved timing bound (provisional); on a network certifier link the egress tie
-(`scan_service`) holds the egress rows to the committed trace, and the network verdict of record counts only the
-windows it tied. N3, the content check, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
+(`scan_service`) holds the egress rows to the committed trace, and the network verdict counts only the execution
+phases it tied. N3, the content check, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean

@@ -82,7 +82,7 @@ It runs on every execution phase, as a structural check must. In a proof it is a
 bits with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
 N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
-retired, superseded by the egress tie: the step-indexed scan (`ingress_scan`, `egress`) as a Spec of the proof service
+retired, superseded by the egress tie: the step-indexed scan (`ingress_scan`, `egress`) as a Spec of the proof system
 (`scan_service`), every bucket proved, which the network verdict of a network certifier link reads.
 
 **The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof

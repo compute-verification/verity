@@ -2,8 +2,8 @@
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
 egress view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state
 and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Their Spec is
-the egress tie's (`scan_service.EgressTie`): its ``first`` statement is bucket 0's proof block and its ``ingress``
-statement the T − 1 others' of a link-window.
+the egress tie's (`scan_service.EgressTie`): of an execution phase, its ``first`` statement is bucket 0's proof block,
+its ``ingress`` statement buckets 1 … T − 2's and its ``last`` statement bucket T − 1's.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
