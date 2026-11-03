@@ -1,5 +1,5 @@
 {
- "roots": ["Definitions", "Models"],
+ "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions": {
   "Accounting.Additive": {
@@ -3224,7 +3224,7 @@
   "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "trees": {
-  "definitions": ["Definitions", "Models"],
+  "definitions": ["Definitions"],
   "properties": ["Properties"],
   "proofs": ["Proofs", "Proofs.Properties"],
   "except": {

@@ -6,9 +6,9 @@ protocol, a bound on the probability that the verifier accepts while a claim abo
 
 ## Three trees
 
-- `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
-  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its named assumptions (`Assumptions`) and its
-  guarantee statements (`Guarantees`), each a `def G : Prop`.
+- `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
+  (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its named assumptions
+  (`Assumptions`) and its guarantee statements (`Guarantees`), each a `def G : Prop`.
 - `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
   runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each

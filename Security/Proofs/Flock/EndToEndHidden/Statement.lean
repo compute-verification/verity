@@ -13,7 +13,7 @@ flat circuit file, `D = Desc.single c`, stated over the circuit `c` that `HmOut.
 `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` and the two `Flat` corollaries.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Models.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndHidden` does.
 -/
 

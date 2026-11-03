@@ -1,5 +1,5 @@
 # The security analysis's proofs (untrusted): every proof of a guarantee `security` states, C-Flock's level3 and
-# soundness among them. Its modules sit beside the trusted text's (`srcDir = ".."`) under a root of their own, `Proofs`.
+# soundness among them. Its modules sit beside the spec's (`srcDir = ".."`) under a root of their own, `Proofs`.
 name = "security_proofs"
 srcDir = ".."
 defaultTargets = ["Proofs"]

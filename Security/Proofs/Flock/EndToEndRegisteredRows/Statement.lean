@@ -18,7 +18,7 @@ the link from `ProofLayer`'s opening to the extracted plurality `XplurZC`, and a
 `OwnReadsHJ` here is over all of a session's registered reads, not per unit.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegisteredRows` does.
 -/
 
