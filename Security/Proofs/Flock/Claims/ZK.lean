@@ -544,8 +544,8 @@ import Proofs.Flock.Claims.ZK.RepRet
   proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
 * `OwnHistAny`: the deferred server's own histories (`ZkServer.OwnHist`, closed under prefixes: `OwnHist.take`; each
   the own history on its answers: `OwnHist.eq_ownOf`), their messages at the Lean frame's live and stand-in rounds
-  (`LeanRelease.ownHist_msg_live`, `ownHist_msg_fill`), and `LeanRelease.LiveRoundEqOwn`, `LiveRoundEq` at the own
-  histories only, which the any-worker live equations are proved at.
+  (`LeanRelease.ownHist_msg_live`, `ownHist_msg_fill`): what the proofs of `LeanRelease.LiveRoundEqOwn` (`Refine`,
+  `LiveRoundEq` at the own histories only) share.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
   requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
