@@ -49,7 +49,7 @@ leaves it missing; no verdict is made for a piece that didn't run. A development
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
-``--product`` (default ``PRODUCT``, else onsite) is the product the run composes (`block_record.PRODUCTS`): onsite's
+``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
 every subprotocol, remote's sampled proofs and PoUW alone. A piece the product drops isn't run, whatever its command,
 and prints a ``DROPPED`` line naming it.
 
@@ -99,7 +99,7 @@ an answer that names no server isn't carried. An accepted answer whose outputs a
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
 ``accept`` only when every subprotocol accepted here.
-Those are the subprotocols of ``--product`` (default ``PRODUCT``, else onsite; `block_record.PRODUCTS`): each one the
+Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
 product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
 verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
 The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
@@ -1046,13 +1046,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
-        q.add_argument("--product", default=os.environ.get("PRODUCT") or "onsite")
+        q.add_argument("--product", default="onsite")
     a = ap.parse_args(argv)
     if a.cmd in ("pieces", "record"):
         from verity_e2e_demo import block_record as BR
 
         if a.product not in BR.PRODUCTS:
-            ap.error(f"--product (PRODUCT) {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
+            ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
