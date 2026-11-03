@@ -29,7 +29,7 @@ credit's (`commit_of`) and one-stage's, and R1-R7 (`registration.check` with the
 W's) accept it. With the flipped row they accept W' and an R' written by hand after it: the records can't see a row, and
 only the reader's proof refuses it.
 
-**Lean** (opt-in as the records, and a Lean toolchain): `served_cases.py --serve-dir` on a serve dir under H1's tie (V3c's
+**Lean** (opt-in as the records, on a machine with Lean's toolchain): `served_cases.py --serve-dir` on a serve dir under H1's tie (V3c's
 audit's v1 case of R, H1's log of W then R, and PoUW's period case of one window naming R) writes the three cases, and
 `sampled-proofs-one-stage check` (whose log record reader takes W and whose R1-R7 accept R) and `inference-only check`
 accept theirs, each naming R's digest, and the period's window names R (`served_cases.period_case`, the record tie remote
@@ -47,14 +47,13 @@ import hashlib
 import importlib.util
 import io
 import json
-import os
-import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import settings
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
@@ -98,10 +97,8 @@ LAW = D.parse_law("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped row: round 1's o-projection's (call 1 of the round) first slot
 FLIP = ("row-table/1/k2048", M * 1)
-REMOTETIE = "VERITY_PROVE_PATH_REMOTETIE"
-RECORDS = pytest.mark.skipif(not os.environ.get(REMOTETIE), reason=f"{REMOTETIE}=1 records, commits and writes the toy's "
-                             "11,252 proof blocks, a few minutes")
-LEAN = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+RECORDS = pytest.mark.skipif(not settings.REMOTETIE, reason="VERITY_PROVE_PATH_REMOTETIE=1 records, commits and writes the "
+                             "toy's 11,252 proof blocks and builds the Lean verifiers that check them, a few minutes")
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
 
@@ -462,7 +459,6 @@ def _remote(lean, out: Path, period: Path) -> tuple[int, dict]:
 
 @pytest.mark.slow
 @RECORDS
-@LEAN
 def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(toy, written, lean, tmp_path):
     """`served_cases` writes the three cases from the serve dir. One-stage's Lean accepts R on the log [W] (its log record
     reader takes W, and its R1-R7 accept R chained right after W with each table an output value of W's), and the
@@ -485,7 +481,6 @@ def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(t
 
 @pytest.mark.slow
 @RECORDS
-@LEAN
 def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, tmp_path):
     """A period whose window names H1's W as its Commit record is refused by `served_cases` (remote's record tie) before any
     composite. Handed to remote anyway, beside the policy's and one-stage's cases on R, it rejects with the period's own
@@ -502,7 +497,6 @@ def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, t
 
 @pytest.mark.slow
 @RECORDS
-@LEAN
 def test_one_stage_s_lean_accepts_a_flipped_w_s_record_only_on_its_own_log(toy, written, lean, tmp_path):
     """The R' written by hand after W' (the flipped row's) is accepted by one-stage's Lean on the log [W'], as R1-R7 accept
     it: no record holds a row. On the log [W] its registration is refused."""
