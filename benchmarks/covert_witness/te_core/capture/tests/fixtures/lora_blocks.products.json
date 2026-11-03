@@ -1,5 +1,5 @@
 {
- "capture": "4.12",
+ "capture": "4.12.1",
  "gates": 40746494648599.0,
  "k": 65536.0,
  "order": "unknown",
@@ -22,6 +22,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    true,
+    false
+   ],
    "k_whole": null,
    "macs": 8388608,
    "op": "mm",
@@ -61,6 +65,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    true,
+    false
+   ],
    "k_whole": null,
    "macs": 524288,
    "op": "mm",
@@ -105,6 +113,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    true,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -149,6 +161,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 134217728,
    "op": "bmm",
@@ -198,6 +214,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    true
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -243,6 +263,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 8388608,
    "op": "mm",
@@ -287,6 +311,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 524288,
    "op": "mm",
@@ -331,6 +359,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -379,6 +411,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -427,6 +463,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 524288,
    "op": "mm",
@@ -471,6 +511,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -519,6 +563,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -567,6 +615,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 1572864,
    "op": "mm",
@@ -611,6 +663,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -659,6 +715,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 8388608,
    "op": "mm",
@@ -707,6 +767,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 134217728,
    "op": "bmm",
@@ -760,6 +824,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -805,6 +873,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 8388608,
    "op": "mm",
@@ -849,6 +921,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 524288,
    "op": "mm",
@@ -893,6 +969,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -941,6 +1021,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -989,6 +1073,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 524288,
    "op": "mm",
@@ -1033,6 +1121,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -1081,6 +1173,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -1129,6 +1225,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 1572864,
    "op": "mm",
@@ -1173,6 +1273,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -1221,6 +1325,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 6593445888,
    "op": "mm",
@@ -1269,6 +1377,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 6593445888,
    "op": "mm",
@@ -1321,6 +1433,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -1369,6 +1485,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 524288,
    "op": "mm",
@@ -1421,6 +1541,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -1465,6 +1589,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -1513,6 +1641,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -1565,6 +1697,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -1613,6 +1749,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 1572864,
    "op": "mm",
@@ -1665,6 +1805,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -1709,6 +1853,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -1757,6 +1905,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -1809,6 +1961,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -1857,6 +2013,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -1901,6 +2061,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -1949,6 +2113,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 8388608,
    "op": "mm",
@@ -2001,6 +2169,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -2050,6 +2222,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 134217728,
    "op": "bmm",
@@ -2103,6 +2279,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -2156,6 +2336,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -2205,6 +2389,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -2249,6 +2437,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 524288,
    "op": "mm",
@@ -2301,6 +2493,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -2345,6 +2541,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -2389,6 +2589,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 8388608,
    "op": "mm",
@@ -2441,6 +2645,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -2489,6 +2697,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 524288,
    "op": "mm",
@@ -2541,6 +2753,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -2585,6 +2801,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -2633,6 +2853,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -2685,6 +2909,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 1572864,
    "op": "mm",
@@ -2733,6 +2961,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 1572864,
    "op": "mm",
@@ -2785,6 +3017,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -2829,6 +3065,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 524288,
    "op": "mm",
@@ -2877,6 +3117,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -2929,6 +3173,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -2977,6 +3225,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -3025,6 +3277,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 8388608,
    "op": "mm",
@@ -3077,6 +3333,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -3126,6 +3386,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    true
+   ],
    "k_whole": null,
    "macs": 134217728,
    "op": "bmm",
@@ -3175,6 +3439,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -3224,6 +3492,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 32.0,
    "macs": 134217728,
    "op": "bmm",
@@ -3273,6 +3545,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    true
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -3317,6 +3593,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 524288,
    "op": "mm",
@@ -3361,6 +3641,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    true
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -3405,6 +3689,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 524288,
    "op": "mm",
@@ -3449,6 +3737,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 1024.0,
    "macs": 8388608,
    "op": "mm",
