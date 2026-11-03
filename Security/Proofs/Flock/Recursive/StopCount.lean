@@ -33,6 +33,8 @@ line that is not `Event.line` of the event it parses to).
   (`cutP`, at how many of its messages are kept), and the view the run released, each statement's part cut at what
   reached the auditor of it. `recReleased … = recCut … (recStop …) …` is `RecStopsOfRun`'s first conjunct read at the
   view.
+* `recStopAt`, `sent_cutAt_at`, `recReleased_eq_at`: the stop read at a fixed number of statements `n`, so that it ranges
+  over one `RecStops` at every run, as `prCoin_cut_le` counts it, and the view cut at it where `s` has `n` statements.
 -/
 
 namespace Flock.StopCount
@@ -231,5 +233,31 @@ theorem recReleased_eq (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ 
   funext fun p => by
     unfold recReleased recCut
     rw [(h M steps s).1 p]
+
+/-- **The stop at `n` statements**: `recStop` read at a fixed `n`, so that its type is one at every run (a stop that
+`StopLeak`'s `prCoin_cut_le` counts ranges over one `RecStops`): where `s` has `n` statements, `recStop`; else none. -/
+def recStopAt (n : ℕ) (M : String → ℕ → ℕ) (σ : St) (s : String) : Flock.SecurityProofs.RecStops (fun p : Fin n => M s p) :=
+  if h : nOf σ s = n then h ▸ recStop M σ s else none
+
+/-- Where `s` has `n` statements, what reached the auditor of each is `cutAt`'s at `recStopAt n`. -/
+theorem sent_cutAt_at (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ → ℕ) (steps : List Step) (s : String)
+    {n : ℕ} (hn : nOf (run M steps) s = n) (p : ℕ) :
+    (run M steps).sent s p = cutAt (fun p : Fin n => M s p) (recStopAt n M (run M steps) s) p := by
+  subst hn
+  unfold recStopAt
+  split
+  · exact (h M steps s).1 p
+  · rename_i hne
+    exact absurd rfl hne
+
+/-- **The released view is the whole view cut at `recStopAt n`**, where `s` has `n` statements: the form
+`prCoin_cut_le` reads, its stop in `RecStops (fun p : Fin n => M s p)` at every run. -/
+theorem recReleased_eq_at (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ → ℕ) (steps : List Step) (s : String)
+    {n : ℕ} (hn : nOf (run M steps) s = n) {V : Fin n → Type} (cutP : (p : Fin n) → ℕ → V p → V p)
+    (v : (p : Fin n) → V p) :
+    (fun p => cutP p ((run M steps).sent s p) (v p)) = recCut (fun p => M s p) cutP (recStopAt n M (run M steps) s) v :=
+  funext fun p => by
+    unfold recCut
+    rw [sent_cutAt_at h M steps s hn p]
 
 end Flock.StopCount
