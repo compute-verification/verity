@@ -341,7 +341,7 @@ theorem fast100_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : 
     | none => rfl
     | some _ => simp [hs] at h2
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
-  obtain ⟨A, K, n, hA, -, -⟩ := OpenLower.statements_dense hvs hsp
+  obtain ⟨A, K, L, n, hA, -, -, -⟩ := OpenLower.statements_dense hvs hsp
   rw [hh] at hA
   obtain ⟨sch, sp, ps, hsch, -, -, -⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hfs : fast100 r.shape.m = some sch := FlockVBridge.Family.sched_fast100 hsch
