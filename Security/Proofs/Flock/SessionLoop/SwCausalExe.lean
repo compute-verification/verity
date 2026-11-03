@@ -741,11 +741,6 @@ theorem ofCircuit_m (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).m = st.m := 
 theorem ofCircuit_kLog (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).kLog = st.c.kLog := rfl
 theorem ofCircuit_fold (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).fold.kLog = st.c.kLog := rfl
 
-/-- A bound on a pad's position or its place in the absorbed order, at the pads layout's positions (`pl_*`). -/
-local macro "place_tac" : tactic =>
-  `(tactic| ((try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp, pl_lgOod,
-    pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega))
-
 /-! A pad's place in the absorbed order (`place_hi`'s) is below the values of the PIOP round that frees it: round 2
 for round 1's pads, residual round `a` for its pair, `final_a`/`final_b`'s round, lincheck round `a`, `z_partial`'s. -/
 
@@ -923,42 +918,50 @@ theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     fun k hk hn => ?_, fun hn => ?_, fun i hi hn t ht => ?_, fun hn a ha t ht => ?_, fun hn => ?_, fun hn => ?_,
     fun hn => ?_, fun hn => ?_, fun _ => ?_⟩
   · obtain ⟨h1, h2⟩ := hA.ab hn i hi
-    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (place_r1 (by place_tac))
-        fun k hk => hcc k (by omega)),
-      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (place_r1 (by place_tac))
-        fun k hk => hcc k (by omega))⟩
+    refine ⟨hM ?_ h1 (freeWord_at L₀ src real hSv hP bx 2 ?_ (place_r1 ?_) fun k hk => hcc k ?_),
+      hM ?_ h2 (freeWord_at L₀ src real hSv hP bx 2 ?_ (place_r1 ?_) fun k hk => hcc k ?_)⟩
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
   · obtain ⟨h1, h2⟩ := hA.ml i hi hn
     rw [em] at hi
-    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac)
-        (place_ml hi (by place_tac)) fun k hk => hcc k (by omega)),
-      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac)
-        (place_ml hi (by place_tac)) fun k hk => hcc k (by omega))⟩
+    refine ⟨hM ?_ h1 (freeWord_at L₀ src real hSv hP bx (3 + i) ?_ (place_ml hi ?_) fun k hk => hcc k ?_),
+      hM ?_ h2 (freeWord_at L₀ src real hSv hP bx (3 + i) ?_ (place_ml hi ?_) fun k hk => hcc k ?_)⟩
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
   · obtain ⟨h1, h2, -⟩ := hA.f hn
     rw [em] at hn
-    refine ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) (by place_tac)
-        (place_f (by place_tac)) fun k hk => hcc k (by omega)),
-      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) (by place_tac)
-        (place_f (by place_tac)) fun k hk => hcc k (by omega)), ?_⟩
-    exact swMasked_fc_congr _ bx hSv hRo wt ω p _ _ j r (zcE_z_congr j r hcc (by omega))
-      (fun k hk => (hA.ab (by omega) k hk).2)
-      fun k hk => freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (place_r1 (by place_tac))
-        fun k hk => hcc k (by omega)
+    refine ⟨hM ?_ h1 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) ?_ (place_f ?_) fun k hk => hcc k ?_),
+      hM ?_ h2 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) ?_ (place_f ?_) fun k hk => hcc k ?_),
+      swMasked_fc_congr _ bx hSv hRo wt ω p _ _ j r (zcE_z_congr j r hcc ?_) (fun k hk => (hA.ab ?_ k hk).2)
+        fun k hk => freeWord_at L₀ src real hSv hP bx 2 ?_ (place_r1 ?_) fun k hk => hcc k ?_⟩
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
   · obtain ⟨h1, h2⟩ := hA.lc i hi hn
     rw [em] at hn
     rw [ef] at hi
-    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
-        (place_lc hi (by place_tac)) fun k hk => hcc k (by omega)),
-      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
-        (place_lc hi (by place_tac)) fun k hk => hcc k (by omega))⟩
+    refine ⟨hM ?_ h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) ?_ (place_lc hi ?_)
+        fun k hk => hcc k ?_),
+      hM ?_ h2 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) ?_ (place_lc hi ?_)
+        fun k hk => hcc k ?_)⟩
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
   · have h1 := hA.zp hn i hi
     rw [em, ef] at hn
-    exact hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) +
-      ((stAt x j).c.kLog - 6)) (by place_tac) (place_zp (by place_tac)) fun k hk => hcc k (by omega))
+    refine hM ?_ h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6)) ?_
+      (place_zp ?_) fun k hk => hcc k ?_)
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
   · rw [bsv c, bsv c']
     exact hA.sv k hk hn
-  · exact hM (by place_tac) (hA.ood hn) (hL (by place_tac))
-  · exact hM (by place_tac) (hA.msg i hi hn t ht) (hL (by place_tac))
-  · exact hM (by place_tac) (hA.E hn a ha t ht) (hL (by place_tac))
+  · refine hM ?_ (hA.ood hn) (hL ?_)
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
+  · refine hM ?_ (hA.msg i hi hn t ht) (hL ?_)
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
+  · refine hM ?_ (hA.E hn a ha t ht) (hL ?_)
+    all_goals (try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp,
+      pl_lgOod, pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega
   · obtain ⟨h1, h2, h3⟩ := hA.y1 hn
     obtain ⟨b1, b2, b3⟩ := brs c
     obtain ⟨b1', b2', b3'⟩ := brs c'
