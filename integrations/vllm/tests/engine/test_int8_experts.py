@@ -166,6 +166,32 @@ def test_zy_rows_hand_the_records_to_observe():
             assert z is None
 
 
+def test_gemm_serves_in_place_of_scaled_mm():
+    """With ``gemm`` set, a call's rows are ``row_quant``'s and its y is ``gemm``'s, handed to ``observe`` and served; a
+    zero-row call reaches ``observe`` and never ``gemm``. A ``gemm`` that serves the plain product leaves the layer's
+    output bit for bit the plain arm's."""
+    _, (w13, s13, w2, s2) = _layer(11)
+    rng = np.random.default_rng(12)
+    x = _bf16(rng.standard_normal((6, H), dtype=np.float32))
+    tw, ids = _routing(rng, 6, 2, idle=(3,))
+    plain = X.forward(X.sites("moe", w13, s13, w2, s2), x, tw, ids)
+    sites = X.sites("moe", w13, s13, w2, s2)
+    seen = []
+
+    def gemm(layer, xq, s_a):
+        seen.append((layer, xq, s_a))
+        return E.dequantize(E.int_mm(xq, layer.weight), s_a, layer.weight_scale)
+    for s in sites:
+        s.quant_method.gemm = gemm
+    tap = _Tap(sites)
+    assert torch.equal(_words_t(X.forward(sites, x, tw, ids)), _words_t(plain))
+    live = [c for c in tap.calls if len(c[2])]
+    assert len(seen) == len(live) <= 2 * (EXPERTS - 1) and len(tap.calls) == 2 * EXPERTS
+    for (layer, xq, s_a), (e, proj, _tokens, oxq, os_a, y, z) in zip(seen, live):
+        assert layer is sites[2 * e + (proj == X.DOWN)] and xq is oxq and s_a is os_a and z is None
+        assert torch.equal(_words_t(y), _words_t(E.dequantize(E.int_mm(xq, layer.weight), s_a, layer.weight_scale)))
+
+
 def test_an_unrouted_slot_goes_to_no_expert():
     """vLLM's id -1 (its profile run routes every slot so): the slot adds nothing, the token's other slots are as routed, and
     a token with every slot unrouted is zero."""

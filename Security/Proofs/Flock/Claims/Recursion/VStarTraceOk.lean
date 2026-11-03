@@ -21,8 +21,8 @@ circuit has three nets:
   `g · upv` slots, `nextPow2` row slots per VU, the unit `Net.ofRows`'s with 16-bit leaf ports, the `sha512x3` and
   `hm96` nets the verifier's), `ProvedScope.scopeOk` (one input group, `unitLog ≤ 32`, unsegmented `16 · words`-bit
   rows), V\*'s parse check (`checkParsed`: one unit per VU, no leaf cuts) and the setup's `kLog ≤ 27`;
-* `refs` from the stager's builders (`partIn_refs`): each of a level's, algebra part's or cap's ports has one ref per
-  opening, rep or top node.
+* `refs` from the stager's builders (`partIn_refs`): each of a level's, algebra part's, cap's or the link table's ports
+  has one ref per opening, rep, top node or table row.
 
 Two facts the checks don't give, the hypotheses here:
 
@@ -177,6 +177,14 @@ theorem capIn_refs {src : Src} {level N : ℕ} {pin : PartIn} (h : capIn src lev
       rcases hx with rfl | rfl <;> simp [ownRows, hN, Flock.RecCoins.zeroRows]
     · cases h
 
+open _root_.VStar.In in
+/-- **The link table's port inputs**: one ref per table row in every port. -/
+theorem linkIn_refs {src : Src} {prog : String} {UB PB N : ℕ} :
+    0 < (linkIn src prog UB PB N).size ∧ ∀ x ∈ (linkIn src prog UB PB N).toList, x.2.refs.size = N := by
+  refine ⟨by simp [linkIn], fun x hx => ?_⟩
+  simp only [linkIn, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [ownRows]
+
 /-- **The stager's port inputs have one ref per instance in each port** (`TraceOk.refs`). -/
 theorem partIn_refs {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar.Stmt}
     {pin : _root_.VStar.In.PartIn} (h : _root_.VStar.In.partIn src prog st = .ok pin) :
@@ -187,6 +195,9 @@ theorem partIn_refs {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VSt
     · exact ⟨_, levelIn_refs h⟩
     · exact ⟨_, algebraIn_refs h⟩
     · exact ⟨_, capIn_refs h⟩
+    · simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      exact ⟨_, linkIn_refs⟩
     · cases h
   obtain ⟨N, hpos, hN⟩ := key
   have hc : _root_.VStar.Trace.count pin = N := by
