@@ -1,4 +1,4 @@
-"""`one_stage.slots` on small circuit files: Δ's source keys, the sources an instance owns, and the layout's positions.
+"""`one_stage.slots` on a small circuit file: Δ's source keys, the sources a unit owns, and the layout's positions.
 `verity/core/service/sampled_proofs/tests/test_difftest.py` holds it to `Slots.layout` on a deployed statement."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def _row(a: list[int], b: list[int]) -> str:
     return " ".join(map(str, [len(a), *a, len(b), *b]))
 
 
-def _files(d: Path, indices: list[int], name: str = "") -> tuple[Path, Path]:
+def _circuit(d: Path) -> Path:
     """A unit of two input words, two copies: leaf ports `x0` (column 0) and `x1` (column 1), and port `y` (column 128) past
     the leaf group, which copy 0's leaf cut fills from message word 1 and copy 1's wire from the stage. Its computed rows
     read columns 0, 1 and 128. Copy 0's `x1` is the zero; both copies' `x0` is word 0's low bit; copy 1's `x1` and copy 0's
@@ -26,15 +26,14 @@ def _files(d: Path, indices: list[int], name: str = "") -> tuple[Path, Path]:
     stage = ["flock-ir-unit/v2 stage 3 2 1 0 1 1 1 1 1 1 1 1", _row([0], [0]), _row([0], [0]), _row([2], [2])]
     meta = {"units_per_vu": 2, "ports": [["x", 2, 1]], "leaves_in": [[0, -1], [0, 1]], "leaf_cuts": [["unit", 0, 2, 1]],
             "wires": [["unit", 1, 2, "stage", 0, 0]]}
-    circuit, public = d / f"circuit{name}.txt", d / f"pub{name}.bin"
+    circuit = d / "circuit.txt"
     circuit.write_text("\n".join(["flock-circuit/v1 t", f"META {json.dumps(meta)}", f"CIRCUIT unit {len(unit)}", *unit,
                                   f"CIRCUIT stage {len(stage)}", *stage]) + "\n")
-    public.write_bytes(json.dumps({"instances": len(indices), "units": {"indices": indices}}).encode() + b"\nrest")
-    return circuit, public
+    return circuit
 
 
-def test_an_instance_owns_the_first_input_of_each_key_a_row_reads(tmp_path):
-    meta, nets = SL.read_circuit(_files(tmp_path, [0])[0])
+def test_a_unit_owns_the_first_input_of_each_key_a_row_reads(tmp_path):
+    meta, nets = SL.read_circuit(_circuit(tmp_path))
     keys = SL.src_keys(meta, nets)
     assert len(keys) == 2 * 256
     assert keys[0] == keys[256] == ("msg", 0, 0, 0)
@@ -42,23 +41,21 @@ def test_an_instance_owns_the_first_input_of_each_key_a_row_reads(tmp_path):
     assert keys[257] == keys[128] == ("msg", 0, 2, 0)
     assert keys[384] == ("wire", "stage", 0, 128)
     assert keys[2] == ("pad", 0, 2)
-    f = SL.file_units(*_files(tmp_path, [4, 5, 6]))
-    assert f == SL.FileUnits((4, 5, 6), 512, 2 * (259 - 256 + 1), (0, 128, 384))
-    assert (f.inputs, f.size) == (2 + 3 * 512, 2 + 3 * 512 + 3 * 3 * 8)
-    assert f.block(1) == [(f.inputs + 24, f.inputs + 48), (514, 515), (642, 643), (898, 899)]
+    f = SL.file_units(_circuit(tmp_path), 3)
+    assert f == SL.FileUnits(3, 512, 2 * (259 - 256 + 1), (0, 128, 384))
+    assert (f.in_gates, f.size) == (2 + 3 * 512, 2 + 3 * 512 + 3 * 3 * 8)
+    assert f.block(1) == [(f.in_gates + 24, f.in_gates + 48), (514, 515), (642, 643), (898, 899)]
 
 
-def test_the_layout_lays_the_files_end_to_end_in_the_order_of_their_first_unit(tmp_path):
-    lo, hi = _files(tmp_path, [0, 1], "lo"), _files(tmp_path, [2], "hi")
-    (pop,) = SL.layout([hi, lo])
-    f = SL.file_units(*lo)
-    assert [[b["unit"] for b in s] for s in pop] == [[0, 1], [2]]
-    assert pop[1][0]["pus"][0] == [f.size + 2 + 512 + 0, f.size + 2 + 512 + 24]
+def test_the_layout_is_the_summary_unit_by_unit_in_the_strata():
+    f = SL.FileUnits(3, 2, 1, (1,))
+    (pop,) = SL.layout(f, SL.strata_sizes([("a", [(0, 2)]), ("b", [(2, 3)])]))
+    assert pop == [[{"pus": [[8, 11], [3, 4]], "unit": 0}, {"pus": [[11, 14], [5, 6]], "unit": 1}],
+                   [{"pus": [[14, 17], [7, 8]], "unit": 2}]]
     assert SL.checked([pop], [2, 0]) == [[0, 0], [2, 0]]
 
 
-def test_a_public_file_that_does_not_name_its_instances_units_is_refused(tmp_path):
-    circuit, public = _files(tmp_path, [0, 1])
-    public.write_bytes(json.dumps({"instances": 3, "units": {"indices": [0, 1]}}).encode() + b"\n")
-    with pytest.raises(ValueError, match="names 2 units for its 3 instances"):
-        SL.file_units(circuit, public)
+def test_strata_that_are_not_the_units_in_order_are_refused():
+    for strata in ([("a", [(0, 1), (2, 3)]), ("b", [(1, 2)])], [("a", [(1, 2)])]):
+        with pytest.raises(ValueError, match="not the units 0, 1"):
+            SL.strata_sizes(strata)

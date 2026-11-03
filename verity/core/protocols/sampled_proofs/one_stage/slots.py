@@ -1,14 +1,13 @@
-"""The claims' slots over circuit files: `SampledProofs.Slots.layout` and `SampledProofs.FileUnits`, which the difftest
+"""The claims' slots over a circuit file: `SampledProofs.Slots.layout` and `SampledProofs.FileUnits`, which the difftest
 holds this to (`slots`).
 
-A circuit file's units in the claims' program (`Flock.Bridge.progOf` of `Placed.keyProg`): gate 0 the constant, gate 1 the
-zero, then `B = upv · W` sources per instance (`W` the unit's input columns), instance `i`'s source `b` gate
-`2 + i·B + b`, one position each; then each instance's `rows = upv · (constPos − W + 1)` computed rows, three positions
-each. Instance `i`'s proof block is its computed rows' positions, then each source it owns: the first stacked input with
-the key (`src_key`, Δ's source of a unit input) of an input column some computed row reads, the zero's excepted.
+A circuit file's key program at `n` units (`Flock.Bridge.progOf` of `Placed.keyProg`): gate 0 the constant, gate 1 the
+zero, then `B = upv · W` sources a unit (`W` the unit's input columns), unit `u`'s source `b` gate `2 + u·B + b`, one
+position each; then each unit's `m = upv · (constPos − W + 1)` computed rows, three positions each. Unit `u`'s proof
+block is its computed rows' positions, then each source it owns: the first stacked input with the key (`src_key`, Δ's
+source of a unit input) of an input column some computed row reads, the zero's excepted.
 
-The layout is one class, a stratum per circuit file in the order of its first unit, each instance a proof block labelled
-with its unit (the public file's `units.indices`), the files' positions laid end to end."""
+The layout is one class, the population, in the registration's strata (`strata_sizes`), slot `u` unit `u`."""
 from __future__ import annotations
 
 import json
@@ -150,39 +149,29 @@ def src_keys(meta: dict, nets: dict[str, Net]) -> list[tuple]:
 
 @dataclass(frozen=True)
 class FileUnits:
-    """`SampledProofs.FileUnits`: the unit each instance is, the sources per instance, the computed rows per instance and
-    the sources an instance owns, ascending."""
+    """`SampledProofs.FileUnits` (`FilePart`'s fields): the units, each unit's sources and computed rows, and the sources
+    a unit owns, ascending."""
 
-    units: tuple[int, ...]
-    srcs: int
-    rows: int
-    owned: tuple[int, ...]
+    n: int
+    B: int
+    m: int
+    srcs: tuple[int, ...]
 
     @property
-    def inputs(self) -> int:
-        return 2 + len(self.units) * self.srcs
+    def in_gates(self) -> int:
+        return 2 + self.n * self.B
 
     @property
     def size(self) -> int:
-        return self.inputs + 3 * len(self.units) * self.rows
+        return self.in_gates + 3 * self.n * self.m
 
-    def block(self, i: int) -> list[tuple[int, int]]:
-        own = [(self.inputs + 3 * i * self.rows, self.inputs + 3 * (i + 1) * self.rows)] if self.rows else []
-        return own + [(2 + i * self.srcs + b, 2 + i * self.srcs + b + 1) for b in self.owned]
-
-
-def public_units(public: Path) -> list[int]:
-    """The unit each of a public file's instances is (its header's `units.indices`)."""
-    with open(public, "rb") as f:
-        header = json.loads(f.readline())
-    units = header["units"]["indices"]
-    if len(units) != header["instances"]:
-        raise ValueError(f"the public file names {len(units)} units for its {header['instances']} instances")
-    return units
+    def block(self, u: int) -> list[tuple[int, int]]:
+        own = [(self.in_gates + 3 * self.m * u, self.in_gates + 3 * self.m * (u + 1))] if self.m else []
+        return own + [(2 + u * self.B + b, 2 + u * self.B + b + 1) for b in self.srcs]
 
 
-def file_units(circuit: Path, public: Path) -> FileUnits:
-    """`FileUnits.ofFile`: a circuit file's units, with its public file's."""
+def file_units(circuit: Path, n: int) -> FileUnits:
+    """`FileUnits.ofCircuit`: a circuit file's key program at `n` units."""
     meta, nets = read_circuit(circuit)
     unit, upv = nets["unit"], meta["units_per_vu"]
     n_in = min(unit.in_words * WORD, unit.const_pos)
@@ -192,22 +181,30 @@ def file_units(circuit: Path, public: Path) -> FileUnits:
         first.setdefault(k, i)
     read = {c for a, b in unit.rows[n_in:unit.const_pos] for c in (*a, *b) if c < n_in}
     owned = {first[keys[k * n_in + x]] for k in range(upv) for x in read if keys[k * n_in + x] != ("zero",)}
-    return FileUnits(tuple(public_units(public)), upv * n_in, upv * (unit.const_pos - n_in + 1), tuple(sorted(owned)))
+    return FileUnits(n, upv * n_in, upv * (unit.const_pos - n_in + 1), tuple(sorted(owned)))
 
 
-def layout(files: Sequence[tuple[Path, Path]]) -> list[list[list[dict[str, Any]]]]:
-    """`Slots.layout`'s JSON: one class, a stratum per `(circuit, public)` file in the order of its first unit, each
-    instance's proof block `{"unit", "pus"}` at its file's offset."""
-    fs = []
-    for circuit, public in files:
-        f = file_units(Path(circuit), Path(public))
-        if not f.units:
-            raise ValueError("a circuit file's public file names no unit")
-        fs.append(f)
+def strata_sizes(strata: Iterable[tuple[str, Sequence[tuple[int, int]]]]) -> list[int]:
+    """`Slots.strataSizes`: the sizes of the strata (`partition.strata`), each range starting where the last ended."""
+    at, ns = 0, []
+    for _template, ranges in strata:
+        lo = at
+        for a, b in ranges:
+            if a != at or b < a:
+                raise ValueError("the strata, read stratum by stratum, are not the units 0, 1, … in order")
+            at = b
+        ns.append(at - lo)
+    return ns
+
+
+def layout(f: FileUnits, ns: Sequence[int]) -> list[list[list[dict[str, Any]]]]:
+    """`Slots.layout`'s JSON: one class, the strata consecutive runs of slots of sizes `ns`, slot `u` unit `u`'s proof
+    block `{"unit", "pus"}`."""
+    blocks = [{"pus": [list(iv) for iv in f.block(u)], "unit": u} for u in range(f.n)]
     pop, at = [], 0
-    for f in sorted(fs, key=lambda f: f.units[0]):
-        pop.append([{"pus": [[at + lo, at + hi] for lo, hi in f.block(i)], "unit": u} for i, u in enumerate(f.units)])
-        at += f.size
+    for k in ns:
+        pop.append(blocks[at:at + k])
+        at += k
     return [pop]
 
 

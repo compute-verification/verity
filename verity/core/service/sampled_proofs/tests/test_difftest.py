@@ -8,8 +8,8 @@ The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
-`slots` piece that sample in the claims' slots over circuit files (`one_stage.slots`), on a deployed statement's files
-(`SLOTS_FIXTURE`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
+`slots` piece that sample in the claims' slots over a circuit file (`one_stage.slots`), on a deployed statement's file
+and registration (`SLOTS_FIXTURE`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition` and `select` pieces also run on random partitions: mixed population
@@ -891,18 +891,19 @@ def select(j):
 
 
 def slots(j):
-    """`Slots.select`: the claims' partition over the circuit files the input names (`files`, `[circuit, public]` paths;
-    `one_stage.slots.layout`), and the checked proof blocks of the select piece's sample on its program and query,
-    `(slot, 0)` of each unit it proves (`draw.proved`), in slot order (`one_stage.slots.checked`)."""
-    files = j.get("files") if isinstance(j, dict) else None
-    if not (isinstance(files, list) and all(isinstance(f, list) and len(f) == 2 and all(isinstance(p, str) for p in f)
-                                            for f in files)):
-        raise D.Reject("files is not a list of [circuit, public] paths")
+    """`Slots.select`: the claims' partition of the circuit file the input names (`circuit`, a path) in the strata of the
+    select piece's program under its query (`one_stage.slots.strata_sizes` of `partition.strata`; `layout` of
+    `file_units` at their sum), and the checked proof blocks of that piece's sample, `(slot, 0)` of each unit it proves
+    (`draw.proved`: its units and a work draw's closure), in slot order (`one_stage.slots.checked`)."""
+    if not (isinstance(j, dict) and isinstance(j.get("circuit"), str)):
+        raise D.Reject("circuit is not a path")
+    out = select({k: v for k, v in j.items() if k != "circuit"})
+    program = PROGRAMS[PO.program_sha512(j["program"])]
     try:
-        classes = SL.layout([(Path(c), Path(p)) for c, p in files])
-    except (OSError, ValueError, KeyError) as e:
+        ns = SL.strata_sizes(P.strata(program, j["query"]))
+        classes = SL.layout(SL.file_units(Path(j["circuit"]), sum(ns)), ns)
+    except (OSError, ValueError, KeyError, IndexError) as e:
         raise D.Reject(str(e)) from None
-    out = select({k: v for k, v in j.items() if k != "files"})
     return {"checked": SL.checked(classes, DR.proved(out["draw"])), "classes": classes}
 
 
@@ -2350,7 +2351,7 @@ def changed_selections(draw, most: int = 2) -> dict:
 
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
-#: run on the fixture's files only (`test_the_slots_are_the_file_layout`), not drawn
+#: run on the fixture's circuit file only (`test_the_slots_are_the_file_layout`), not drawn
 SLOTS = D.Port(PIECES, "slots", slots, st.nothing(), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -3104,8 +3105,8 @@ def test_the_call_queries_refuse_the_widths_one_stage_does_not_apply(pieces):
             select(copy.deepcopy(refused))
 
 
-#: a deployed statement's files (`test_proofs.py`'s fixture): RoPE d64's circuit file of 32 instances, each a stack of 32
-#: copies of its unit, and its public file, instance `i` unit `i`
+#: a deployed statement's files (`test_proofs.py`'s fixture): RoPE d64's circuit file of 32 units, each a stack of 32
+#: copies of its template instance, and its registration's program and query, the template's 32 instances
 SLOTS_FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 
@@ -3121,69 +3122,59 @@ def stage(tmp_path_factory) -> Path:
         pytest.skip(f"the evidence store is not reachable: {e}")
 
 
-def _shifted(public: Path, by: int, to: Path) -> Path:
-    """`public` with its instances the units `by, by + 1, …` (its header's `units`, as `HmRow.unitsEntry` writes it)."""
-    head, rest = public.read_bytes().split(b"\n", 1)
-    h = json.loads(head)
-    u = h["units"]
-    u["indices"] = [by + i for i in u["indices"]]
-    g = u["vus_per_block"]
-    u["blocks"] = [u["indices"][i:i + g] for i in range(0, len(u["indices"]), g)]
-    to.write_bytes(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n" + rest)
-    return to
+@pytest.fixture(scope="module")
+def registration(stage) -> tuple[dict, dict]:
+    """The fixture's registration: its program's descriptor, put among `PROGRAMS`, and its query."""
+    import verity.ml.definitions.registry.boolean_rope  # noqa: F401  (registers the RoPE primitives the program names)
+    from verity.ml.circuits.defs import REGISTRY
+
+    desc = json.loads((stage / "program.json").read_bytes())
+    PROGRAMS[PO.program_sha512(desc)] = codec.decode_program(desc, REGISTRY)
+    return desc, json.loads((stage / "partition.json").read_bytes())["query"]
 
 
 @pytest.mark.slow
-def test_the_slots_are_the_file_layout(pieces, stage, tmp_path):
-    """On two copies of the fixture's statement, its own public file (units 0 to 31) and one of units 32 to 63, named in
-    that order reversed, Lean's slots are the Python's whole: one class, the files' strata in the order of their first
-    unit, each instance's proof block its `3 · rows` computed positions (`rows = upv · (constPos − W + 1)`) after the input
-    gates, then the 2048 sources of its 64 read input columns per copy, the second file's positions after the first's;
-    every proof block's positions are disjoint; and the checked proof blocks are the sampled units' slots. The draw is on
-    a 64-unit population program of this file: the files are the statement's, which the slots read whatever the program.
+def test_the_slots_are_the_file_layout(pieces, stage, registration):
+    """The honest registration: on the fixture's circuit file and its own program and query (one stratum, the template's
+    32 instances), Lean's slots are the Python's whole: one class, one stratum, slot `u` unit `u`, its proof block its
+    `3m` computed positions after the input gates (`m = upv · (constPos − W + 1)`), then the 2048 sources of its 64 read
+    input columns per copy; every proof block's positions are disjoint and inside the program; and the checked proof
+    blocks are the sampled units' slots.
 
-    It parses the 56 MB circuit file twice, in Lean and in Python: the one test of `FileUnits.ofFile` on a deployed
+    It parses the 56 MB circuit file twice, in Lean and in Python: the one test of `FileUnits.ofCircuit` on a deployed
     circuit, whose `srcKey` keys message leaves through `leaves_in`."""
-    circuit, public = stage / "circuit.txt", stage / "pub-32.bin"
-    hi = _shifted(public, 32, tmp_path / "pub-hi.bin")
-    case = {"closure": None, "files": [[str(circuit), str(hi)], [str(circuit), str(public)]],
-            "program": _template_population(PAIR, 64), "query": _json(P.template_instance_query(PAIR.id)),
+    desc, query = registration
+    circuit = stage / "circuit.txt"
+    case = {"circuit": str(circuit), "closure": None, "program": desc, "query": query,
             "rule": {"law": "subset:8", "rule": "law"}, "source": hashlib.shake_256(b"file slots").hexdigest(400),
             "work_table": None}
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
     (pop,) = out["classes"]
-    assert [[b["unit"] for b in s] for s in pop] == [list(range(32)), list(range(32, 64))]
-    f = SL.file_units(circuit, public)
-    assert (f.srcs, len(f.owned)) == (32 * 128, 2048)
-    for k, s in enumerate(pop):
-        for i, b in enumerate(s):
-            (lo, hi_), *owned = b["pus"]
-            assert (lo, hi_) == (k * f.size + f.inputs + 3 * i * f.rows, k * f.size + f.inputs + 3 * (i + 1) * f.rows)
-            assert [g for g, _ in owned] == [k * f.size + 2 + i * f.srcs + x for x in f.owned]
-    gates = [g for s in pop for b in s for lo, hi_ in b["pus"] for g in (lo, hi_ - 1)]
+    assert [[b["unit"] for b in s] for s in pop] == [list(range(32))]
+    f = SL.file_units(circuit, 32)
+    assert (f.B, len(f.srcs)) == (32 * 128, 2048)
+    for u, b in enumerate(pop[0]):
+        (lo, hi), *owned = b["pus"]
+        assert (lo, hi) == (f.in_gates + 3 * f.m * u, f.in_gates + 3 * f.m * (u + 1))
+        assert [g for g, _ in owned] == [2 + u * f.B + x for x in f.srcs]
     spans = sorted(iv for s in pop for b in s for iv in b["pus"])
-    assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:])) and max(gates) < 2 * f.size
+    assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:])) and spans[-1][1] <= f.size
     assert out["checked"] == [[u, 0] for u in sorted(select(case)["draw"]["units"])]
 
 
 @pytest.mark.slow
-def test_files_that_do_not_name_their_units_are_refused(pieces, stage, tmp_path):
-    """Lean refuses as the Python does a file it can't read, a `files` that isn't `[circuit, public]` pairs, and a public
-    file whose `units.indices` names 31 units for its 32 instances."""
-    circuit, public = stage / "circuit.txt", stage / "pub-32.bin"
-    head, rest = public.read_bytes().split(b"\n", 1)
-    h = json.loads(head)
-    h["units"]["indices"] = h["units"]["indices"][:31]
-    short = tmp_path / "pub-short.bin"
-    short.write_bytes(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n" + rest)
-    case = {"closure": None, "program": _template_population(PAIR, 32), "query": _json(P.template_instance_query(PAIR.id)),
-            "rule": {"law": "subset:8", "rule": "law"}, "source": hashlib.shake_256(b"file slots").hexdigest(400),
-            "work_table": None}
-    for files in ([[str(circuit), str(tmp_path / "none.bin")]], [[str(circuit)]], str(circuit),
-                  [[str(circuit), str(short)]]):
-        refused = {**case, "files": files}
-        assert D.replay(SLOTS, refused, pieces)[0] == "reject", files
+def test_a_circuit_file_that_does_not_parse_is_refused(pieces, stage, registration, tmp_path):
+    """Lean refuses as the Python does a circuit file it can't read, one that isn't a circuit file, and a `circuit` that
+    isn't a path."""
+    desc, query = registration
+    junk = tmp_path / "junk.txt"
+    junk.write_text("flock-circuit/v1 t\nnot a META line\n")
+    case = {"closure": None, "program": desc, "query": query, "rule": {"law": "subset:8", "rule": "law"},
+            "source": hashlib.shake_256(b"file slots").hexdigest(400), "work_table": None}
+    for circuit in (str(tmp_path / "none.txt"), str(junk), [str(stage / "circuit.txt")], None):
+        refused = {**case, "circuit": circuit}
+        assert D.replay(SLOTS, refused, pieces)[0] == "reject", circuit
         with pytest.raises(D.Reject):
             slots(copy.deepcopy(refused))
 

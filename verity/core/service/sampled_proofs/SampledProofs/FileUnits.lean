@@ -1,30 +1,28 @@
 /-
-A circuit file's units in the claims' program (`Flock.Bridge.progOf` of `Placed.keyProg`): what `Slots.layout` expands
-into proof blocks. It stands in for `FilePart.ofFile` until that lands, and reads what `keyProg` reads:
+A circuit file's units in the claims' program (`Flock.Bridge.progOf` of `Placed.keyProg`), summarized once: what
+`Slots.layout` expands into proof blocks. It stands in for `FilePart.ofCircuit`, whose summary it is field for field
+(`n`, `B`, `m`, `srcs`), until that lands; it reads what `keyProg` reads:
 
-* **Inputs.** Gate 0 is the constant, gate 1 the zero, then `B = upv · W` sources per instance (`W` the unit's input
-  columns, `min (inWords · WORD) constPos`): instance `i`'s source `b` is gate `2 + i·B + b`. An input gate lowers to one
-  position, so gate `g` is position `g`.
-* **Rows.** Instance `i`'s computed gates follow every input gate, `rows = upv · (constPos − W + 1)` of them (the stack of
-  `upv` copies, each with its constant row: `Rows.stack`), each a row, lowered to three positions: positions
-  `[inputs + 3·i·rows, inputs + 3·(i+1)·rows)`.
+* **Inputs.** Gate 0 is the constant, gate 1 the zero, then `B = upv · W` sources a unit (`W` the unit's input columns,
+  `min (inWords · WORD) constPos`): unit `u`'s source `b` is gate `2 + u·B + b`. An input gate lowers to one position, so
+  gate `g` is position `g`.
+* **Rows.** Unit `u`'s computed gates follow every input gate, `m = upv · (constPos − W + 1)` of them (the stack of `upv`
+  copies, each with its constant row: `Rows.stack`), each a row, lowered to three positions: positions
+  `[inGates + 3·m·u, inGates + 3·m·(u+1))`.
 * **Owned sources.** Copy `k`'s input column `x` reads the source of its key (`srcKey`, which mirrors
-  `Aliased.srcKey`): the first stacked input with that key (`keyIdx`), or the zero where Δ copies the zero. Only
-  instance `i` reads its sources, so it owns the ones a computed row reads (`RecResiduals.readIns`): `owned`, the same for
-  every instance. The constant and the zero are constants, owned by none; a source no row reads is in no proof block.
-
-Instance `i` is the population's unit `units[i]` (the public file's `units.indices`).
+  `Aliased.srcKey`): the first stacked input with that key (`keyIdx`), or the zero where Δ copies the zero. Only unit
+  `u` reads its sources, so it owns the ones a computed row reads (`RecResiduals.readIns`): `srcs`, the same for every
+  unit. The constant and the zero are constants, owned by none; a source no row reads is in no proof block.
 -/
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Flock.KnownRead
 import Flock.ProvedScope
 import Flock.RecResiduals
-import Flock.Registered
 
 namespace SampledProofs
 
-open Flock (V Circuit Public WORD)
+open Flock (Circuit WORD)
 
 namespace FileUnits
 
@@ -76,47 +74,46 @@ def srcKey (c : Circuit) (st : Array Nat) (mask : Array Bool) (pc : Array (Nat �
 
 end FileUnits
 
-/-- A circuit file's units in the claims' program: the population unit each instance is, the sources per instance
-`srcs`, the computed rows per instance `rows`, and the sources an instance owns, ascending. -/
+/-- A circuit file's key program at `n` units: each unit's `B` sources and `m` computed rows, and the sources a unit
+owns, ascending (`FilePart`'s fields). -/
 structure FileUnits where
-  units : Array Nat
-  srcs : Nat
-  rows : Nat
-  owned : Array Nat
+  n : Nat
+  B : Nat
+  m : Nat
+  srcs : Array Nat
   deriving BEq, Inhabited, Repr
 
 namespace FileUnits
 
-/-- The input gates: the constant, the zero, and every instance's sources. -/
-def inputs (f : FileUnits) : Nat := 2 + f.units.size * f.srcs
+/-- The input gates: the constant, the zero, and `B` sources a unit. -/
+def inGates (f : FileUnits) : Nat := 2 + f.n * f.B
 
-/-- The lowered program's positions: the input gates, then three per computed gate. -/
-def size (f : FileUnits) : Nat := f.inputs + 3 * f.units.size * f.rows
+/-- The lowered program's positions: the input gates, then three per computed row. -/
+def size (f : FileUnits) : Nat := f.inGates + 3 * f.n * f.m
 
-/-- **Instance `i`'s proof block**, its positions as intervals `[lo, hi)`: its computed gates, then each source it owns. -/
-def block (f : FileUnits) (i : Nat) : Array (Nat × Nat) :=
-  (if f.rows = 0 then #[] else #[(f.inputs + 3 * i * f.rows, f.inputs + 3 * (i + 1) * f.rows)]) ++
-    f.owned.map fun b => (2 + i * f.srcs + b, 2 + i * f.srcs + b + 1)
+/-- **Unit `u`'s proof block**, its positions as intervals `[lo, hi)`: its rows' lowered gates, then each source it
+owns. -/
+def block (f : FileUnits) (u : Nat) : Array (Nat × Nat) :=
+  (if f.m = 0 then #[] else #[(f.inGates + 3 * f.m * u, f.inGates + 3 * f.m * (u + 1))]) ++
+    f.srcs.map fun b => (2 + u * f.B + b, 2 + u * f.B + b + 1)
 
-/-- **A circuit file's units** (`circuit`, its public file `pub`): as the module's header reads them. -/
-def ofFile (c : Circuit) (pub : Public) : V FileUnits := do
-  let units ← Flock.Registered.unitIndices pub
-  if units.size != pub.n then throw s!"the public file names {units.size} units for its {pub.n} instances"
+/-- **The circuit `c`'s key program at `n` units**, summarized as the module's header reads it. -/
+def ofCircuit (c : Circuit) (n : Nat) : FileUnits :=
   let g := c.unit
   let W := g.inWords * WORD
   let nIn := min W g.constPos
-  let srcs := c.upv * nIn
+  let B := c.upv * nIn
   let st := Flock.KnownRead.starts c
   let mask := Flock.ProvedScope.portMask g.inGroups W
   let pc := Flock.portCols g.inGroups
-  let keys := (Array.range srcs).map (srcKey c st mask pc W)
+  let keys := (Array.range B).map (srcKey c st mask pc W)
   let first : Std.HashMap Src Nat := keys.zipIdx.foldl (fun m (k, i) => if m.contains k then m else m.insert k i) {}
   let rd := Flock.RecResiduals.readIns g
-  let owned := (List.range c.upv).foldl (fun s k => (List.range nIn).foldl (fun s x =>
-      match rd.getD x false, keys[k * nIn + x]? with
+  let owned := (List.range B).foldl (fun s x =>
+      match rd.getD (x % nIn) false, keys[x]? with
       | true, some key => if key == .zero then s else s.insert (first.getD key 0)
-      | _, _ => s) s) ({} : Std.HashSet Nat)
-  return { units, srcs, rows := c.upv * (g.constPos - nIn + 1), owned := owned.toArray.qsort (· < ·) }
+      | _, _ => s) ({} : Std.HashSet Nat)
+  { n, B, m := c.upv * (g.constPos - nIn + 1), srcs := owned.toArray.qsort (· < ·) }
 
 /-! Two copies of a unit of one input word whose leaf port `x` is message word 0's low bit and padding past it, whose
 computed rows read column 0 and the constant: copy 1's column 0 is the same message bit as copy 0's, so both read source
@@ -136,15 +133,9 @@ private def testCircuit : Circuit :=
     outPorts := #[], g := 1, kLog := 0, upv := 2, unitNet := 0, leavesIn := #[#[0], #[0]], leavesOut := #[],
     key := .empty, dummyDigests := #[], dummyOutputs := #[], leafScheme := "", perVu := #[2], wires := #[] }
 
-private def testPublic : Public :=
-  { header := Lean.Json.mkObj [("units", Lean.Json.mkObj [("indices", Lean.toJson #[4, 5, 6])])], n := 3,
-    digests := #[], outputs := #[], sha := .empty }
-
-#guard (ofFile testCircuit testPublic).toOption ==
-  some { units := #[4, 5, 6], srcs := 2 * WORD, rows := 2 * 3, owned := #[0] }
-#guard ((ofFile testCircuit testPublic).toOption.map fun f => (f.inputs, f.size, f.block 1)) ==
-  some (2 + 3 * 256, 2 + 3 * 256 + 3 * 3 * 6, #[(2 + 3 * 256 + 18, 2 + 3 * 256 + 36), (2 + 256, 2 + 256 + 1)])
-#guard (ofFile testCircuit { testPublic with n := 2 }).toOption.isNone
+#guard ofCircuit testCircuit 3 == { n := 3, B := 2 * WORD, m := 2 * 3, srcs := #[0] }
+#guard (let f := ofCircuit testCircuit 3; (f.inGates, f.size, f.block 1)) ==
+  (2 + 3 * 256, 2 + 3 * 256 + 3 * 3 * 6, #[(2 + 3 * 256 + 18, 2 + 3 * 256 + 36), (2 + 256, 2 + 256 + 1)])
 
 end FileUnits
 

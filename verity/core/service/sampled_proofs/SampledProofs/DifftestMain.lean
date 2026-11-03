@@ -3,12 +3,12 @@ import SampledProofs.Pieces
 import SampledProofs.OneStageZk
 
 /-!
-# `sampled-proofs-difftest`: the pieces, and the `slots` piece over circuit files
+# `sampled-proofs-difftest`: the pieces, and the `slots` piece over a circuit file
 
 `Pieces.table` behind `Difftest.respond`'s line protocol, and one more request, `slots`, whose input names its circuit
-files by path (`files`, `[circuit, public]` pairs; `tables`, lookup tables' files, each the `Flock.MUFU_TABLES` table of
-its SHA-512): this process reads and parses them as the one-stage verifier does (`Slots.parseFiles` under
-`OneStageZk.STATEMENT`) and answers `Pieces.slotsWith` on them, a file it can't read or parse a reject.
+file by path (`circuit`; `tables`, lookup tables' files, each the `Flock.MUFU_TABLES` table of its SHA-512): this
+process reads and parses it as the one-stage verifier does (`Slots.parseCircuit` under `OneStageZk.STATEMENT`) and
+answers `Pieces.slotsWith` on it, a file it can't read or parse a reject.
 -/
 
 namespace SampledProofs.DifftestMain
@@ -20,40 +20,36 @@ def readAll (paths : Array String) : IO (Except String (Array ByteArray)) := do
   try return .ok (← paths.mapM fun p => IO.FS.readBinFile p)
   catch e => return .error s!"slots: {e}"
 
-/-- The circuit files a `slots` input names, read and parsed, or why they can't be. -/
-def filesOf (input : Json) : IO (Flock.V (Array (Flock.Circuit × Flock.Public))) := do
-  let paths : Except String (Array (String × String) × Array String) := do
-    let .arr fs := (input.getObjVal? "files").toOption.getD .null | throw "slots: files is not a list"
-    let pairs ← fs.mapM fun f => match f with
-      | .arr #[.str c, .str p] => pure (c, p)
-      | _ => throw "slots: a file is not [circuit, public]"
+/-- The circuit file a `slots` input names, read and parsed, or why it can't be. -/
+def circuitOf (input : Json) : IO (Flock.V Flock.Circuit) := do
+  let paths : Except String (String × Array String) := do
+    let .str c := (input.getObjVal? "circuit").toOption.getD .null | throw "slots: circuit is not a path"
     let tables ← match input.getObjVal? "tables" with
       | .error _ => pure #[]
       | .ok (.arr ts) => ts.mapM fun t => match t with
         | .str s => pure s
         | _ => throw "slots: a table is not a path"
       | .ok _ => throw "slots: tables is not a list"
-    return (pairs, tables)
+    return (c, tables)
   match paths with
   | .error e => return .error e
-  | .ok (pairs, tps) =>
-    match ← readAll (pairs.flatMap fun (c, p) => #[c, p]), ← readAll tps with
+  | .ok (c, tps) =>
+    match ← readAll #[c], ← readAll tps with
     | .error e, _ => return .error e
     | _, .error e => return .error e
     | .ok bs, .ok ts =>
       let tables := Flock.MUFU_TABLES.filterMap fun t =>
         (ts.find? fun b => Flock.hexOf (Flock.Sha512.hash b) == t.sha512).map fun b => (t.name, b)
-      return Slots.parseFiles OneStageZk.STATEMENT
-        ((Array.range pairs.size).map fun i => (bs[2 * i]!, bs[2 * i + 1]!)) tables
+      return Slots.parseCircuit OneStageZk.STATEMENT bs[0]! tables
 
-/-- The response line to one request line: `slots` on the files it names, or a piece of `Pieces.table`. -/
+/-- The response line to one request line: `slots` on the circuit file it names, or a piece of `Pieces.table`. -/
 def respond (request : String) : IO String := do
   match Json.parse request with
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
     | .ok "slots", .ok input =>
-      let files ← filesOf input
-      return Difftest.respond (Difftest.table [("slots", fun j => Pieces.slotsWith j files)]) request
+      let c ← circuitOf input
+      return Difftest.respond (Difftest.table [("slots", fun j => Pieces.slotsWith j c)]) request
     | _, _ => return Difftest.respond (Difftest.table Pieces.table) request
   | .error _ => return Difftest.respond (Difftest.table Pieces.table) request
 
