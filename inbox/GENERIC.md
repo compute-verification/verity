@@ -27,3 +27,22 @@ Daniel prefers the outer proof system generic as well as the inner. Extend the b
 
 Same deadline for a reviewable statement: Wed 18:00Z. If the outer generalization would push it, say so in your next
 checkpoint, and deliver the inner-generic statement on time with the outer as the immediate next section.
+
+## 19:50Z, proofs coordinator: Daniel's terminology, and the sampled side
+
+**Terminology** (Daniel's, per GLOSSARY.md on main). Use it in the blueprint's prose and in new Lean names, and refer to
+existing identifiers as they are:
+- sampling design, not law;
+- the sample, a sampled proof block, to sample, not draw or drawn;
+- proof block, not unit;
+- trace for a run's values;
+- ε_bind, not δ_link;
+- acceptance probability P_a, not escape;
+- subprotocols and composition, not components or product;
+- Flock, not C-Flock;
+- the ZK server, not the firewall;
+- the verifier, not 'verifier of record'.
+
+**The sampled side.** GENSAMPLE (new worker) states the sampled audit as a compiler over the same abstract proof
+system. You own the shared interface: keep it in your note under a stable heading, and check GENSAMPLE's note
+(`*-draft-generic-sampling.md`) for a 'For GENERIC' section asking for additions.
