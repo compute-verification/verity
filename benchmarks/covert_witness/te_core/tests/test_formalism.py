@@ -642,6 +642,50 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert "fresh operands" in F.RESTS_ON["fresh_products"] and "P-chain" in F.RESTS_ON["fresh_products"]
 
 
+def test_published_reading_a_where_fit_holds_is_fits_c_over_c_minus_d():
+    c, k = 1e13, 1e6
+    one = F.published(measured(u1=1e5, dgrad=1e5, decoder=1e12), c, k, "A")
+    assert (one["rho"], one["binding_kind"], one["partial"], one["why"]) == (
+        pytest.approx(c / (c - 1e12)), "fit", False, None)
+    assert one["rests_on"] == F.RESTS_ON_CELL["fit"]
+
+
+def test_published_reading_a_above_1_is_the_measured_max_partial_where_a_kind_is_unmeasured():
+    """The token kind binds at 800 with fresh products unmeasured (an op log, no product rows): partial, only a lower
+    bound. With the chain's products every kind is measured and fresh products bind: not partial."""
+    c = 1e11
+    one = F.published(one_segment(), c, 1000, "A")
+    assert one["rho"] == pytest.approx(c * 0.5 / 6.25e7) and one["binding_kind"] == "token"
+    assert one["partial"] and one["why"] is None and one["terms"]["fresh_products"] is None
+    assert one["rests_on"] == F.RESTS_ON_CELL["token"]
+    chain = replace(one_segment(), products={"k": policy.CONSOLE[1], "order": "chain", "products": [SQUARE]})
+    full = F.published(chain, 1e10, policy.CONSOLE[1], "A")
+    assert full["binding_kind"] == "fresh_products" and full["rho"] == full["terms"]["fresh_products"] > 1
+    assert not full["partial"] and full["rests_on"] == F.RESTS_ON_CELL["fresh_products"]
+
+
+def test_published_reading_a_at_most_1_with_a_kind_unmeasured_is_null_never_1():
+    """The token kind's term is 0.5 and fresh products are unmeasured: ρ is null, never the floor's 1 (coordinator
+    12:20Z), with `why` naming the unmeasured kind; with no kind measured, null too."""
+    one = F.published(one_segment(), 1e11, 3600, "A")
+    assert (one["rho"], one["binding_kind"], one["rests_on"], one["partial"]) == (None, "unmeasured", "unmeasured", False)
+    assert one["terms"]["token"] == pytest.approx(0.5) and one["terms"]["fresh_products"] is None
+    assert one["why"] == "the measured kinds give at most 1; fresh products unmeasured"
+    none = F.published(replace(one_segment(), ops=None), 1e11, 3600, "A")
+    assert (none["rho"], none["binding_kind"], none["why"]) == (None, "unmeasured", "no kind is measured")
+
+
+def test_published_reading_a_with_every_kind_measured_and_none_above_1_is_1_binding_none():
+    """Every kind measured (the chain's products, an op log and entries), each at most 1 at c = 1e8: ρ is 1, binding
+    none, resting on no kind exceeding 1; the floor sets it, not the token term."""
+    k = policy.CONSOLE[1]
+    chain = replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE]})
+    one = F.published(chain, 1e8, k, "A")
+    assert all(t is not None and t <= 1 for t in one["terms"].values())
+    assert (one["rho"], one["binding_kind"], one["partial"], one["why"]) == (1.0, "none", False, None)
+    assert one["rests_on"] == F.RESTS_ON_CELL["none"] == "no kind exceeds 1"
+
+
 def test_products_of_takes_io_bounds_fresh_rows_from_captured_steps():
     """`products_of` is io_bound.rows_of's fresh rows of each captured step at k, their MACs and output entries times
     the segment's steps: a low-rank chain through trained weights, whose a and b products and, at rank 64, last's are

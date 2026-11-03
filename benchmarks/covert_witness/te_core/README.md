@@ -11,7 +11,8 @@ which every record carries. Findings, negative results and tool announcements go
 
 te_core scores by the training formalism v2. |C|, c, w and d are Boolean gates (`gates`: each counted op at its
 circuit Definition's price, a bf16 GEMM MAC being `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 = 1,480.1), every
-other quantity bits.
+other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x its AND count (3.0x for a bf16 GEMM,
+`gates.UNIT`, which the training panels' titles state).
 
 - **θ (registered weights)**: a start's weights, registered once at the start of the monitoring period, so every value
   computed during the run is new.
@@ -153,22 +154,26 @@ data with neither a start that has a scored checkpoint nor a ladder point has no
 from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one on fewer than five from scratch
 (`FIT_TARGET`) is provisional: its status and note say so, the note with its points' residuals and the ladder's runs
 off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
-11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
-g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
-the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
-cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
-`build` refuses a row whose cells miss `formalism.at` at a dial cell. Beside them, `formalism.published` at the
-console's default policy: `rho_console` (the one bound's ρ under reading A where the row's trace has entries and an op
-log: Fit's c/(c − d) where it holds, else the measured max where it exceeds 1, partial where a kind is unmeasured,
-else null where a kind is unmeasured, else 1, binding none; else reading B's, a target), its `reading`, the `te_core`
-that priced it, `binding_kind`, `rests_on` and `kinds`
-(the terms its max takes and the sensitivities it leaves out). Its coverage (gain
-target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
+11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
+L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
+(H the least |C| of any checkpoint from the start
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
+`formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
+and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
+console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
+ᾱ/α_max among them, u_in exact at the dial's k and the console's); `build` refuses a row whose cells miss
+`formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
+where the row's trace has entries and an op log: Fit's c/(c − d) where it holds, else the measured max where it
+exceeds 1, partial where a kind is unmeasured, else null where a kind is unmeasured, else 1, binding none; else
+reading B's, a target), the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds` (the terms its max takes
+and the sensitivities it leaves out). Its coverage
+(gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
+default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
-and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
-this build fills less of, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
-empties a populated panel. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
+build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
+empties a populated panel; a build with every served run replaces an older te_core's rows, however its coverage
+moves. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
 `page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
@@ -270,7 +275,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key; the console's policy (`CONSOLE`), one full session of the 45M reference in gates (`session_gates`, `session`: the matrices, the LM head and attention's score and value products over the session's context, at the shape `SHAPES` states for each size), which every producer reads |
 | `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`, `ORDER`) and from a trace's product rows (`products_of_trace`, `product_kind`, `PRODUCTS_FROM`, `TRACED_PRODUCTS`, `STAND_IN`), its figure with or without P-cell (`P_CELL`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
-| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
+| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, a 120-character title, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
 | `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
