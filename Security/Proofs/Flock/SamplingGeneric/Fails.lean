@@ -121,6 +121,10 @@ def SessionKS (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
 
 /-! ## The numbers -/
 
+section Numbers
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
 theorem k_pos (L : Compiled Coin A) (x : Msg) : 0 < L.k x := by
   unfold Compiled.k; positivity
 
@@ -147,8 +151,11 @@ theorem rpow_k_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 
   unfold Compiled.k
   exact card_rpow_le_slack hN hm
 
+end Numbers
+
 /-! ## The failure event's probability -/
 
+omit [Inhabited Coin] in
 /-- **One outer run's inner wait**: at first-stage coins `r` where the sample misses every proof block of `B` (each
 below `n_PU`) with probability at most `esc`, and the sampled block any selection picks is not found with probability at
 most `κr`, the inner wait (times its acceptance) comes up short or keeps only runs at which no block of `B` is good with
@@ -178,7 +185,8 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
       obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1
         ((List.find?_isSome (p := fun u : Fin (L.nPU x) => decide (u.val ∈ l ∧ u.val ∈ B))).2
           ⟨⟨v, hB v hvB⟩, List.mem_finRange _, decide_eq_true ⟨hvl, hvB⟩⟩)
-      exact ⟨u, hu, of_decide_eq_true (List.find?_some hu)⟩
+      have hpu := List.find?_some hu
+      exact ⟨u, hu, of_decide_eq_true hpu⟩
     have hmiss := (Pr_fst (β := L.BlockEC x) (fun d : Fin (L.V.k x) → Coin =>
       ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B)).trans_le hesc
     refine Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
@@ -205,6 +213,7 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκr0)))
 
 set_option synthInstance.maxSize 1024 in
+omit [Inhabited Coin] in
 /-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the draw law holds and the sampled proof
 block any selection picks at first-stage coins `r` is not found with probability at most `κr(r)`, the outer wait (times
 its acceptance) comes up short or, for some refused `B`, keeps only runs bad for `B`, with probability at most
