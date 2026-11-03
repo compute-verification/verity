@@ -10,11 +10,11 @@ deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) 
 witness):
 - the warden's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
-  its `max_tokens`; and its release, the bucket s of its connection's last ingress cell (`Request.end`), from which the
+  its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the warden's fixed schedule sets (egress cell i in bucket s + Δ_nc + ⌊i/r⌋).
-The reference order is the warden's release order, the requests by (s, ordinal) (`release_order`).
+  which the warden's fixed schedule sets (egress cell i in bucket s + Δ_nc + ⌊i/r⌋, s its connection's admission).
+The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
 comes after the release and overtakes it under load (the trace corpus behind the warden: 2,970 inversions of 499,500
