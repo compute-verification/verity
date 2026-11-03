@@ -158,7 +158,9 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert code == 0 and (got["out"] / f"{AP.NAME}.png").stat().st_size > 10_000
     p, f = got["panel"], fitted(got["fit"])
     assert (p["id"], p["kind"], p["columns"]) == (AP.PANEL, "table", AP.COLUMNS) and p["source"] and p["updated_at"]
-    assert {r[AP.COLUMNS.index("te_core_version")] for r in p["rows"]} == {AP.VERSION}
+    cell = {c: [r[AP.COLUMNS.index(c)] for r in p["rows"]] for c in ("reading", "te_core", "rho_console")}
+    assert set(cell["reading"]) == {AP.READING} and set(cell["te_core"]) == {AP.VERSION} and p["rows"]
+    assert all(v == "inf" or v >= 1 for v in cell["rho_console"])
     ds, rows = plots.frame(p), ledger_rows()
     assert {d["data"] for d in ds} == {"v2.3-pilot"} and {d["gain_target"] for d in ds} == set(AP.GAINS)
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):
@@ -188,7 +190,8 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert s1[("mezo@2", 1.1)][0] == s1[("lora@2", 2)][0] == s1[("ref@3", 11)][0] == "no"
     assert s1[("ref@3", 11)][1] is None and s1[("mezo@2", 2)][1] == pytest.approx(1.2 / 1.5)
     q = got["console"]
-    assert q["rows"] == [AP.rounded(r) for r in p["rows"]] and not console.refused(q)
+    assert q["columns"] == AP.CONSOLE_COLUMNS and {"reading", "te_core", "rho_console", "rho_default"} <= set(q["columns"])
+    assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
 
@@ -340,16 +343,17 @@ def test_kept_is_the_coverage_rows_and_each_groups_p_rho_front_and_best_failed_a
 def test_the_cut_is_the_table_when_it_fits_else_the_first_tier_that_does(monkeypatch):
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
     art = "art:" + "a" * 64
-    assert AP.cut(p, art)["rows"] == [AP.rounded(r) for r in p["rows"]] and AP.cut(p, art)["note"] == AP.note(art)
+    assert AP.cut(p, art)["rows"] == AP.console_rows(p["rows"]) and AP.cut(p, art)["note"] == AP.note(art)
     cov = {c["row"] for c in AP.coverage(p) if c["row"] is not None}
-    size = {t: len(console.body(AP.checked(p | {"rows": [AP.rounded(r) for r in AP.kept(p["rows"], t, cov)],
-                                                "note": AP.note(art, t)}))) for t in AP.TIERS}
+    size = {t: len(console.body(AP.checked(p | {"columns": AP.CONSOLE_COLUMNS, "note": AP.note(art, t),
+                                                "rows": AP.console_rows(AP.kept(p["rows"], t, cov))}))) for t in AP.TIERS}
     assert len(console.body(AP.cut(p, art))) > size["family"] > size["start"] > size["coverage"]
     for t in AP.TIERS:
         monkeypatch.setattr(console, "BODY_MAX", size[t])
         q = AP.cut(p, art)
         assert q["note"] == AP.note(art, t) and len(q["note"]) <= console.NOTE_MAX and not console.refused(q)
-        assert {p["rows"][i][AP.COLUMNS.index("record")] for i in cov} <= {r[AP.COLUMNS.index("record")] for r in q["rows"]}
+        assert {p["rows"][i][AP.COLUMNS.index("record")] for i in cov} <= {r[AP.CONSOLE_COLUMNS.index("record")]
+                                                                          for r in q["rows"]}
     monkeypatch.setattr(console, "BODY_MAX", size["coverage"] - 1)
     with pytest.raises(ValueError, match="the coverage's rows alone"):
         AP.cut(p, art)

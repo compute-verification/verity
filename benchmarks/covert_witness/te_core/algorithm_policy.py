@@ -24,14 +24,16 @@ to recompute ρ at any (c, k) in te_core.panels' candidate layout, the route tak
 a JSON object of `panels.PACKED`, beside `delta_bits`, `w_fwd_gates`, `u_points` and `u_in_points` (`SPLIT`), u_in
 through its points at the dial's k (`panels.through`), where x0 is exact; `page_rho` is the dial's formula on them.
 `build` refuses a row whose rounded columns don't give formalism.at's ρ and basis at every cell of te_core.panels'
-dial (`panels.mismatches`). `estimated` names the inputs that are stubs, bounds, assumptions or estimates, and
-`te_core_version` the te_core VERSION that priced the row's ρ.
+dial (`panels.mismatches`). `estimated` names the inputs that are stubs, bounds, assumptions or estimates. The
+dashboard's cells: `reading`, the reading of A1 the ρ is priced under (`READING`), `te_core` the te_core VERSION that
+priced it, and `rho_console` its ρ at the console's default policy (`CONSOLE`), "inf" where infinite.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
 The console's copy (`cut`) is the whole table when it fits the panels route (te_core.console), else the coverage's
 rows and, at the first tier of `TIERS` that fits, per data, start and target (and family, at the first tier) the
-reached rows on the lower-left (p, rho_default) front and the failed attempt with the greatest gain. DIR gets the
+reached rows on the lower-left (p, rho_default) front and the failed attempt with the greatest gain, without the
+columns of `CONSOLE_DROP`, which the route's 24 columns leave no room for. DIR gets the
 uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.md`, `refused.json`, each valid
 checkpoint te_core.formalism refuses with its reason, which no row holds, and te_core.frontier_fit's
 `frontier-fit.json` and `frontier-points.json`), both panels' console copies in `console/` and `algorithm-policy.png`
@@ -71,7 +73,16 @@ INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "
 SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
-           "estimated", "rho_inputs", *SPLIT, "te_core_version"]
+           "estimated", "rho_inputs", *SPLIT, "reading", "te_core", "rho_console"]
+#: the console's default policy, at which `rho_console` is ρ (null in no row: "inf" where infinite): the 45M reference
+#: with 4,096 input and 1,024 output tokens, c = 5,120 × 2 × 45e6 × 740 gates and k = 65,536 bits
+CONSOLE = (5_120 * 2 * 45e6 * 740, 65_536)
+#: the reading of A1 the rows' ρ is priced under: B until te_core prices reading A
+READING = "B"
+#: the columns the console's copy leaves out to fit the route's `console.COLUMNS_MAX` (the stored tables keep them):
+#: H is C/p, and what ρ rests on is the same on every row of a te_core version
+CONSOLE_DROP = ("H_gates", "estimated")
+CONSOLE_COLUMNS = [c for c in COLUMNS if c not in CONSOLE_DROP]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the console copy's compute and ρ inputs, so its dial reproduces ρ and its gains and p
 #: recompute, and of its other numbers
@@ -209,7 +220,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
             return False, math.inf if x[ix["p"]] is None else x[ix["p"]], x[ix["C_gates"]]
         return True, -x[ix["gain"]], x[ix["C_gates"]]
 
-    rows, wrong = [], []
+    rows, wrong, consoles = [], [], {}
     for st in info["starts"]:
         f = info["fits"].get(st.data)
         if f is None:
@@ -233,8 +244,11 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None,
                        None if math.isinf(v["rho"]) else v["rho"], "fit" if v["fit"] else "target", plots.method(r),
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data, estimated(r["measured"])]
-                cols = panels.rho_columns(r["measured"], st.w) | {"delta_bits": r["measured"].delta_bits,
-                                                                  "w_fwd_gates": st.w, "te_core_version": VERSION}
+                if r["id"] not in consoles:
+                    consoles[r["id"]] = formalism.at(r["measured"], *CONSOLE)["rho"]
+                cols = panels.rho_columns(r["measured"], st.w) | {
+                    "delta_bits": r["measured"].delta_bits, "w_fwd_gates": st.w, "reading": READING, "te_core": VERSION,
+                    "rho_console": "inf" if math.isinf(consoles[r["id"]]) else consoles[r["id"]]}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
                 wrong += panels.mismatches(d | {"run": d["record"]}, dials[r["id"]], st.w)
@@ -388,15 +402,22 @@ def checked(q: dict) -> dict:
     return q
 
 
+def console_rows(rows: list[list]) -> list[list]:
+    """`rows` rounded, on `CONSOLE_COLUMNS`."""
+    on = [COLUMNS.index(c) for c in CONSOLE_COLUMNS]
+    return [[x[i] for i in on] for x in map(rounded, rows)]
+
+
 def cut(p: dict, art: str | None = None) -> dict:
     """The console's copy: every row rounded when it fits the panels route, else the rows `kept` keeps at the first of
-    `TIERS` that fits, the note naming the tier and the stored tables' art id."""
-    q = checked(p | {"rows": [rounded(r) for r in p["rows"]], "note": note(art)})
+    `TIERS` that fits, on `CONSOLE_COLUMNS`, the note naming the tier and the stored tables' art id."""
+    q = checked(p | {"columns": CONSOLE_COLUMNS, "rows": console_rows(p["rows"]), "note": note(art)})
     if len(console.body(q)) <= console.BODY_MAX:
         return q
     cov = {c["row"] for c in coverage(p) if c["row"] is not None}
     for tier in TIERS:
-        q = checked(p | {"rows": [rounded(r) for r in kept(p["rows"], tier, cov)], "note": note(art, tier)})
+        q = checked(p | {"columns": CONSOLE_COLUMNS, "rows": console_rows(kept(p["rows"], tier, cov)),
+                         "note": note(art, tier)})
         if len(console.body(q)) <= console.BODY_MAX:
             return q
     raise ValueError(f"{PANEL}: the coverage's rows alone are {len(console.body(q))} bytes, over {console.BODY_MAX}")
