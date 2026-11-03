@@ -452,8 +452,8 @@ theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readi
     (h : ∀ (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
       ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
           V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤
-        FlockSoundness.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) (K.live A θ F c σ).game
-            (K.project A θ F c σ) +
+        FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own o)
+            (K.live A θ F c σ).game (K.project A θ F c σ) +
           (A.hidingTerm + ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
             ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))) :
     CouplingTarget V k K A θ F := fun c σ =>
