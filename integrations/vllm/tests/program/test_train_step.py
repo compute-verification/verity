@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
+from torch.utils._python_dispatch import TorchDispatchMode
 
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step
 from verity.ml.circuits.boundary import gate_width
@@ -44,12 +45,25 @@ def _bits(x: torch.Tensor) -> list[int]:
     return [int(v) & ((1 << (8 * x.element_size())) - 1) for v in x.tolist()]
 
 
+class _IeeeSqrt(TorchDispatchMode):
+    """torch with IEEE f32 `sqrt` (and `pow` 0.5, which torch computes with it), as the rules state it: torch CPU's is MKL's, which
+    on AMD EPYC Genoa (the CPU nodes) is one ulp off on 11 of `POS`'s 64 words, and IEEE's on an Intel Xeon."""
+
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        x = args[0] if args else None
+        if isinstance(x, torch.Tensor) and x.dtype == torch.float32 and (
+                func is aten.sqrt.default or (func is aten.pow.Tensor_Scalar and args[1] == 0.5)):
+            return torch.from_numpy(np.asarray(np.sqrt(x.detach().numpy())))
+        return func(*args, **(kwargs or {}))
+
+
 def _run(f, *xs) -> tuple[torch.Tensor, torch.Tensor]:
-    """(the Program's outputs, torch's), each as one flat f32 tensor."""
+    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor."""
     prog = _program(f, *xs)
     tab = materialize(prog, [_bits(x) for x in xs])
     got = np.array([tab[g] for g in prog.circuit.root_outputs()], dtype=np.uint32).view(np.float32)
-    want = torch.cat([t.detach().reshape(-1).float() for t in f(*xs)])
+    with _IeeeSqrt():
+        want = torch.cat([t.detach().reshape(-1).float() for t in f(*xs)])
     return torch.from_numpy(got.copy()), want
 
 
@@ -165,7 +179,8 @@ def test_functional_adamw_is_torch_adamw() -> None:
 
 
 def test_adamw_update_program_bit_exact() -> None:
-    """The derived optimizer update (decoupled decay, lerp, addcmul, sqrt, division, addcdiv) is torch's, word for word."""
+    """The derived optimizer update (decoupled decay, lerp, addcmul, sqrt, division, addcdiv) is torch's (with IEEE sqrt), word for
+    word."""
     f = AdamW(**ADAMW)
     p, grad, m, v = _adamw_inputs(1)
     s = [torch.tensor(x, dtype=torch.float32) for x in f.scalars(1).values()]

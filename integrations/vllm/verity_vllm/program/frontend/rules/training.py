@@ -4,7 +4,7 @@ them. The default rules are unchanged; a node either kind of rule lowers is lowe
 and the training rules placed first claim only what the defaults lower per row or cannot represent at a step's sizes.
 
 Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for it
-(true division, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
+(true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
 `fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels
 sum in blocks). A training op with no Definition to lower it to is refused with the Definition it needs (`_log_softmax`: a
 correctly-rounded f32 log, `F32LogRn`).
@@ -293,7 +293,8 @@ class Binary(_TrainRule):
 class Unary(_TrainRule):
     """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 value, as torch's CPU kernels compute
     them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2 reciprocals,
-    1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not)."""
+    1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is IEEE's
+    (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, one ulp off it on some CPUs (AMD EPYC Genoa)."""
     info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32", "the operand is an f32 value",
                  "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)", "one batch per step over the elements")
 
