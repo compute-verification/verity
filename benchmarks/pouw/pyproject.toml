@@ -40,8 +40,7 @@ verity-exact-kit = { workspace = true }
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
-# before and after vllm's layout move. Pearl-C's bench arm reserves its live salt session through the pipeline's
-# challenger gate (commit_coins.py).
+# before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
