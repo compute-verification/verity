@@ -22,7 +22,10 @@ below its fit's E has no rows, and a data with no fit none.
 Each row's ρ is te_core.formalism's `published` at its checkpoint at the console's default policy (`CONSOLE`,
 te_core.policy's: one full session of the 45M reference, attention included), the one default of every ρ column
 (coordinator 08:09Z and 10:23Z: rows are reported at that c only); `rho_served` is the same at the registered serving
-block (te_core.panels' `SERVED`), the figure beside every headline. `rho_default` is it as a number: under reading B
+block (te_core.panels' `SERVED`), the figure beside every headline, where it is a whole number (measured, finite and
+not partial), else null, never inf (coordinator 15:29Z), the kinds cell's `served` saying why (`served_rho`), such
+as a fresh-products term measured at the console's default and not there, its products classified at the default's
+k alone. `rho_default` is the default's ρ as a number: under reading B
 c/(c − d) where Fit holds for the training (basis `fit`), else Slowdown's token form (`target`), null where infinite;
 under reading A, Fit's, else the measured terms' max over the kinds valid on their own where it exceeds 1 (basis its
 binding kind, or `partial` where a valid kind is unmeasured, so ρ is only a lower bound), else null with basis
@@ -42,7 +45,7 @@ is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's t
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
 sensitivities it leaves out, with a measured fresh-products term's premises beside it (`PREMISED`) and, where
 that term is its best subset's, the products it dropped (`fresh_subset`, te_core 4.10), or `void` where that term is
-a void's 0 (`VOIDED`).
+a void's 0 (`VOIDED`), and `served`, rho_served's binding kind and what it rests on, or why it is null.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial or void one
@@ -58,14 +61,17 @@ uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.m
 checkpoint te_core.formalism refuses with its reason, which no row holds, and te_core.frontier_fit's
 `frontier-fit.json` and `frontier-points.json`), both panels' console copies in `console/` and `algorithm-policy.png`
 (p against ρ at the console's default on the headline data, v3 once it has rows, else the pilot: a panel per gain
-target, with iso-S diagonals). `--publish` GETs what the route serves (`console.served`; no PUT when that fails), puts
-`tables/` in the evidence store, whose art id the cut's note names, and PUTs `training/frontier-fit`, then the cut. A
+target, with iso-S diagonals, the covert methods read against the reference runs, `REFERENCE`'s, which the figure
+and the coverage label `REFERENCE_RUN`). `--publish` GETs what the route serves (`console.served`; no PUT when that
+fails), puts `tables/` in the evidence store, whose art id the cut's note names, and PUTs `training/frontier-fit`,
+then the cut. A
 version switch never empties a populated panel: on each data whose served rows are at a newer te_core, or at an older
 one with a run there that this build has no row for, its traces not covering it yet (`kept_data`), both panels keep
 the served rows (`guarded`), which the note and the board line name. A build with every served run's rows replaces
 an older te_core's even where its coverage fills fewer cells, as reading A's partial rows and the gain C(L1)/C(L0)
 do (coordinator 11:16Z and 11:51Z). The coverage's table and board line give the reached cells' ρ at the
-registered serving block beside the console's default (`served_text`).
+registered serving block beside the console's default (`served_text`), and count the rows whose rho_served is null by
+why (`served_nulls`).
 """
 from __future__ import annotations
 
@@ -85,7 +91,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from . import VERSION, console, formalism, frontier_fit, panels, plots, policy, rescore
+from . import VERSION, console, formalism, frontier, frontier_fit, panels, plots, policy, rescore
 from .gates import UNIT
 
 NAME = "algorithm-policy"
@@ -156,11 +162,46 @@ LOWER = {PARTIAL: 6, VOID: "x"}
 #: binding or not: the fresh-products term rests on premises on the reference circuit, P-width and P-chain
 #: (coordinator 12:09Z), which `rests_on` names only where it binds
 PREMISED = ("fresh_products",)
+#: the reference directions (te_core.frontier's): a run of one is honest training, which the figure and the coverage
+#: label "reference run" so the covert methods read against it (coordinator 15:29Z)
+REFERENCE = frontier.REF_DIRECTIONS
+REFERENCE_RUN = "reference run"
 
 
 def finite(rho: float | None) -> float | None:
     """A published ρ as a number column: null where infinite or unmeasured."""
     return None if rho is None or math.isinf(rho) else rho
+
+
+def served_rho(m: formalism.Measured, default: dict) -> tuple[float | None, dict]:
+    """rho_served and the kinds cell's `served`: te_core.formalism's `published` at the registered serving block
+    (te_core.panels' `SERVED`) where it is a whole number (measured, finite and not partial), labelled with its binding
+    kind and what it rests on; else null, never inf (coordinator 15:29Z), with why: published's reason where
+    unmeasured, the lower bound where partial, or that it is infinite, and under reading A te_core.formalism's reason
+    (`bound`'s) for each kind the console's default (`default`, `published` there) measures and the serving block
+    doesn't, such as a fresh-products term whose products were classified at the default's k alone."""
+    one = formalism.published(m, *panels.SERVED)
+    rho = one["rho"]
+    if rho is not None and math.isfinite(rho) and not one.get("partial"):
+        return rho, {"binding_kind": one["binding_kind"], "rests_on": one["rests_on"]}
+    why = (f"unmeasured: {one.get('why') or one['binding_kind']}" if rho is None else
+           f"infinite ({one['binding_kind']})" if math.isinf(rho) else
+           f"partial: at least {num(rho, DIGITS)} ({one['binding_kind']}), a kind unmeasured")
+    b = formalism.bound(m, *panels.SERVED) if one["reading"] == "A" else None
+    lost = {kind: b["unmeasured"].get(kind, "unmeasured") for kind in b["kinds"]
+            if b["terms"][kind] is None and default["terms"].get(kind) is not None} if b else {}
+    return None, {"why": why} | ({"unmeasured": lost} if lost else {})
+
+
+def reference(d: dict) -> bool:
+    """Whether a row's run is of a reference direction (`REFERENCE`, its method key's)."""
+    return (d.get("method_key") or "").split("/")[0] in REFERENCE
+
+
+def group(d: dict) -> str:
+    """A row's colour in the figure: `REFERENCE_RUN` for a reference direction's, else its family, else its method's
+    direction (v3's records name no family)."""
+    return REFERENCE_RUN if reference(d) else d.get("family") or (d.get("method_key") or "?").split("/")[0]
 
 
 def num(v: float, digits: int = INPUT_DIGITS) -> str:
@@ -263,12 +304,13 @@ def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
             f"\"u_in_points\":{json.dumps(cols['u_in_points'])}}}")
 
 
-def kinds(one: dict, void: bool = False) -> str:
+def kinds(one: dict, void: bool = False, at_served: dict | None = None) -> str:
     """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
     `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; `partial` and `why` where
     `published` sets them; `void`, the kind whose term is a void's 0 (`VOID`), where `void`; `rests_on`, what
-    each `PREMISED` kind's term rests on where it is measured and not void; and `fresh_subset`, the products the
-    fresh-products term's best subset dropped, where it dropped any."""
+    each `PREMISED` kind's term rests on where it is measured and not void; `fresh_subset`, the products the
+    fresh-products term's best subset dropped, where it dropped any; and `served`, what rho_served rests on or why it
+    is null (`served_rho`'s), where given."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
 
@@ -279,7 +321,8 @@ def kinds(one: dict, void: bool = False) -> str:
                                                                   if one.get("why") else "")
              + (f',"void":{json.dumps(VOIDED)}' if void else "")
              + (f',"rests_on":{json.dumps(rests)}' if rests else "")
-             + (f',"fresh_subset":{part(one["fresh_subset"])}' if one.get("fresh_subset") else ""))
+             + (f',"fresh_subset":{part(one["fresh_subset"])}' if one.get("fresh_subset") else "")
+             + (f',"served":{json.dumps(at_served)}' if at_served else ""))
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}{marks}}}'
 
 
@@ -326,9 +369,9 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                 m = r["measured"]
                 if r["id"] not in dials:
                     dials[r["id"]] = panels.dial(m, st.w) | {(CONSOLE[0] / st.w, CONSOLE[1]): formalism.at(m, *CONSOLE)}
-                    rhos[r["id"]] = formalism.published(m), formalism.published(m, *panels.SERVED)
-                    void[r["id"]] = voided(m, rhos[r["id"]][0])
-                one, served = rhos[r["id"]]
+                    one = formalism.published(m)
+                    rhos[r["id"]], void[r["id"]] = (one, served_rho(m, one)), voided(m, one)
+                one, (rho_served, at_served) = rhos[r["id"]]
                 gain, est = frontier_fit.gain_from(f, st.l0, r["val_bpb"]), estimated(m)
                 basis = (UNMEASURED if one["rho"] is None else STUB if any(t.endswith(f":{STUB}") for t in est.split())
                          else VOID if void[r["id"]] else PARTIAL if one.get("partial") else one["binding_kind"])
@@ -340,8 +383,8 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                 cols = {"rho_inputs": rho_inputs(m, st.w), "reading": one["reading"], "te_core": VERSION,
                         "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
                         "binding_kind": one["binding_kind"], "rests_on": one["rests_on"],
-                        "kinds": kinds(one, void[r["id"]]),
-                        "rho_served": finite(served["rho"])}
+                        "kinds": kinds(one, void[r["id"]], at_served),
+                        "rho_served": rho_served}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
                 wrong += panels.mismatches(d | {"run": d["record"]}, dials[r["id"]], st.w)
@@ -426,39 +469,86 @@ def coverage(p: dict) -> list[dict]:
 
 
 def rho_text(rho: float | None) -> str:
+    """A coverage cell's rho_default as text: a cell's null one is infinite (`decade`)."""
     return "inf" if rho is None else f"{rho:.3g}"
 
 
 def cell_text(c: dict, short: bool = False) -> str:
     """A coverage cell as text: `EMPTY`, "yes p ..." or "no gain ...", with its ρ at the console's default and at the
-    registered serving block and its run unless `short`."""
+    registered serving block (null where `served_rho` leaves it null, never inf) and its run, a reference run's
+    labelled, unless `short`."""
     if c["state"] == "empty":
         return EMPTY
     head = (f"yes p {c['p']:.3g}" if c["state"] == "reached" else
             f"no gain {c['gain']:.3g}" + ("" if c["p"] is None else f", p >= {c['p']:.3g}"))
-    return head if short else (f"{head}, rho {rho_text(c['rho_default'])}, served {rho_text(c.get('rho_served'))} "
-                               f"({c['start']}, {c['method_key']}, {c['record']})")
+    there = "null" if c.get("rho_served") is None else f"{c['rho_served']:.3g}"
+    return head if short else (f"{head}, rho {rho_text(c['rho_default'])}, served {there} ({c['start']}, "
+                               f"{c['method_key']}{f', {REFERENCE_RUN}' if reference(c) else ''}, {c['record']})")
 
 
 def served_text(cov: list[dict]) -> str:
     """The reached cells' ρ per data at the console's default and at the registered serving block (te_core.panels'
-    `SERVED`), the figure beside every headline (coordinator 08:09Z), "" without a reached cell."""
-    def span(xs: list) -> str:
+    `SERVED`), the figure beside every headline (coordinator 08:09Z), "" without a reached cell; at the serving block
+    a null ρ is null (`served_rho`), never inf."""
+    def span(xs: list, null: str) -> str:
         fin = [x for x in xs if x is not None]
-        return (frontier_fit.span(min(fin), max(fin)) if fin else "none finite") + (", and inf" if None in xs else "")
+        n = len(xs) - len(fin)
+        if not fin:
+            return "none finite" if null == "inf" else f"null on all {n}"
+        return frontier_fit.span(min(fin), max(fin)) + (f", and {null}" if n and null == "inf" else
+                                                        f", null on {n}" if n else "")
 
-    parts = [f"{data} {span([c['rho_default'] for c in yes])} at the console's default, "
-             f"{span([c.get('rho_served') for c in yes])} at the registered serving block"
+    parts = [f"{data} {span([c['rho_default'] for c in yes], 'inf')} at the console's default, "
+             f"{span([c.get('rho_served') for c in yes], 'null')} at the registered serving block"
              for data in panels.DATA if (yes := [c for c in cov if c["data"] == data and c["state"] == "reached"])]
     return (f"Reached cells' rho: {'; '.join(parts)} (c {panels.SERVED[0]:.3g} gates, k {panels.SERVED[1]:,} bits)."
             if parts else "")
 
 
+def served_of(d: dict) -> dict:
+    """A row's kinds cell's `served`: what rho_served rests on, or why it is null (`served_rho`)."""
+    return json.loads(d.get("kinds") or "{}").get("served") or {}
+
+
+def served_nulls(p: dict) -> dict[str, int]:
+    """How many of a panel's rows have rho_served null (`rows`), and by why (their kinds cell's `served`): each kind the
+    console's default measures and the serving block doesn't (`lost:` and the kind), else `unmeasured` there as at
+    the default, `partial` or `infinite`, and `unsaid` for a row with no `served` (one `guarded` kept as served from a
+    build before it)."""
+    out: dict[str, int] = {}
+    for d in plots.frame(p):
+        if d.get("rho_served") is not None:
+            continue
+        s = served_of(d)
+        why = [f"lost:{k}" for k in s.get("unmeasured", {})] or [(s.get("why") or "unsaid").split(":")[0].split(" ")[0]]
+        for key in ["rows", *why]:
+            out[key] = out.get(key, 0) + 1
+    return out
+
+
+def served_line(nulls: dict[str, int], short: bool = False) -> str:
+    """`served_nulls`' counts as a sentence ("" with none), shorter for a board line where `short`."""
+    if not nulls.get("rows"):
+        return ""
+    lost = [f"{n} with {k.split(':', 1)[1].replace('_', ' ')} measured at the console's default and not there"
+            for k, n in nulls.items() if k.startswith("lost:")]
+    rest = [f"{nulls[k]} {words}" for k, words in (("unmeasured", "unmeasured there as at the console's default"),
+                                                    ("partial", "partial there (rho a lower bound)"),
+                                                    ("infinite", "infinite there"),
+                                                    ("unsaid", "kept as served from an earlier build, no reason"))
+            if nulls.get(k)]
+    return (f"rho_served is null on {nulls['rows']} {'row' if nulls['rows'] == 1 else 'rows'}, never inf: "
+            + ", ".join(lost + rest)
+            + ("." if short else " (each row's kinds cell, served, gives te_core.formalism's reason)."))
+
+
 def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None,
-                unmeasured: int = 0, stubs: int = 0, partial: int = 0, void: int = 0) -> str:
+                unmeasured: int = 0, stubs: int = 0, partial: int = 0, void: int = 0,
+                served: dict[str, int] | None = None) -> str:
     """The coverage table in Markdown, a row per gain target and data, a column per decade of ρ, and how many valid
     checkpoints te_core.formalism refused (`refused`, row id -> reason) and rows have no measured ρ (`unmeasured`),
-    rest on a stub (`stubs`), are partial (`partial`) or read a void term (`void`), which no cell can hold."""
+    rest on a stub (`stubs`), are partial (`partial`) or read a void term (`void`), which no cell can hold, and have
+    rho_served null, by why (`served`, `served_nulls`')."""
     lines = [f"# training/algorithm-policy coverage, {stamp}", "",
              "Per gain target, data and decade of rho_default: the reached row with the least p, else the failed "
              f"attempt with the greatest gain (p a lower bound), else **{EMPTY}**.", "",
@@ -472,8 +562,7 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
     n = sum(c["state"] == "empty" for c in cov)
     lines += ["", f"{n} of {len(cov)} cells {EMPTY}; {sum(c['state'] == 'failed' for c in cov)} hold only failed "
                   "attempts."]
-    if served := served_text(cov):
-        lines.append(served)
+    lines += [x for x in (served_text(cov), served_line(served or {})) if x]
     if refused:
         lines.append(f"{len(refused)} valid checkpoints are refused by te_core.formalism, never scored, so in no cell "
                      f"({frontier_fit.refusals(refused)}; refused.json has each one's reason).")
@@ -493,7 +582,8 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
 
 
 def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused: dict[str, str] | None = None,
-               unmeasured: int = 0, stubs: int = 0, partial: int = 0, void: int = 0) -> str:
+               unmeasured: int = 0, stubs: int = 0, partial: int = 0, void: int = 0,
+               served: dict[str, int] | None = None) -> str:
     """The coverage as one board line's text, after its time and tag."""
     parts = []
     for g in GAINS:
@@ -507,7 +597,7 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused
     return (f"coverage at {stamp} ({art or 'unpublished'}), gain target x data x decade of rho_default (1, 10, 100, "
             f"1e3, 1e4, 1e5+): the least-p reached row, else the failed attempt with the greatest gain, else {EMPTY}. "
             + "; ".join(parts) + f". {n} of {len(cov)} cells {EMPTY}."
-            + (f" {served}" if (served := served_text(cov)) else "")
+            + "".join(f" {x}" for x in (served_text(cov), served_line(served or {}, short=True)) if x)
             + (f" {len(refused)} valid checkpoints refused by te_core.formalism, never scored "
                f"({frontier_fit.refusals(refused)})." if refused else "")
             + (f" {stubs} {'row rests' if stubs == 1 else 'rows rest'} on a stub, in no decade." if stubs else "")
@@ -652,14 +742,20 @@ def store(path: Path, meta: dict) -> str:
 
 
 def figure(p: dict, out: Path) -> Path:
-    """p against ρ at the console's default on the headline data, log-log, one panel per gain target: a colour per family,
-    a marker per start, filled where reached and open at a failed attempt's lower bound on p, a caret up from a partial
-    row's (`PARTIAL`, ρ a lower bound, never the least S) and a cross on a void row's (`VOID`, the same), the
-    coverage's decades of ρ dotted and the iso-S diagonals S = p ρ at `LEVELS`."""
+    """p against ρ at the console's default on the headline data, log-log, one panel per gain target: a colour per
+    family or method direction (`group`), the reference runs' black, each panel's least-p reached one labelled
+    `REFERENCE_RUN` so the covert methods read against it (coordinator 15:29Z), a marker per start, filled where
+    reached and open at a failed attempt's lower bound on p, a caret up from a partial row's (`PARTIAL`, ρ a lower
+    bound, never the least S) and a cross on a void row's (`VOID`, the same), the coverage's decades of ρ dotted and
+    the iso-S diagonals S = p ρ at `LEVELS`."""
     data = headline(p)
     every = [d for d in plots.frame(p) if d["data"] == data]
     rows = [d for d in every if d["p"] is not None and d["rho_default"] is not None and d["basis_default"] != STUB]
-    families = sorted({d["family"] or "?" for d in rows})
+    groups = sorted({group(d) for d in rows} - {REFERENCE_RUN})
+
+    def colour(d: dict) -> str:
+        return "k" if reference(d) else f"C{groups.index(group(d)) % 10}"
+
     starts = list(dict.fromkeys(d["start"] for d in rows))
     xlo = 10 ** math.floor(math.log10(min([d["p"] for d in rows] + [0.8])))
     xhi = 10 ** math.ceil(math.log10(1.5 * max([d["p"] for d in rows] + [5.0])))
@@ -675,15 +771,18 @@ def figure(p: dict, out: Path) -> Path:
         for lo in DECADES[1:]:
             ax.axhline(lo, color="0.6", lw=0.6, ls=":", zorder=0)
         for d in mine:
-            yes = d["reached"] == "yes"
-            colour = f"C{families.index(d['family'] or '?') % 10}"
+            yes, c = d["reached"] == "yes", colour(d)
             ax.plot(d["p"], d["rho_default"], MARKERS[starts.index(d["start"]) % len(MARKERS)], ms=4.5, alpha=0.75,
-                    color=colour, mfc=colour if yes else "none", mec="k" if yes and d["basis_default"] == "fit" else
-                    colour, mew=0.7)
+                    color=c, mfc=c if yes else "none", mec="k" if yes and d["basis_default"] == "fit" else c, mew=0.7)
             if d["basis_default"] in LOWER:
-                ax.plot(d["p"], d["rho_default"], marker=LOWER[d["basis_default"]], ms=9, color=colour, mew=1.0)
+                ax.plot(d["p"], d["rho_default"], marker=LOWER[d["basis_default"]], ms=9, color=c, mew=1.0)
         reached = [d for d in mine if d["reached"] == "yes"]
         whole = [d for d in reached if d["basis_default"] not in LOWER]
+        if refs := [d for d in whole if reference(d)]:
+            ref = min(refs, key=lambda d: (d["p"], d["rho_default"]))
+            ax.annotate(f"{REFERENCE_RUN} ({ref['method_key']}):\np {ref['p']:.3g}, rho {ref['rho_default']:.3g}",
+                        (ref["p"], ref["rho_default"]), xytext=(10, -16), textcoords="offset points", fontsize=6.5,
+                        arrowprops={"arrowstyle": "-", "lw": 0.5})
         at = [d for d in every if d["gain_target"] == g]
         unplotted = len(at) - len(mine)
         if reached:
@@ -691,7 +790,8 @@ def figure(p: dict, out: Path) -> Path:
             if whole:
                 best = min(whole, key=lambda d: d["p"] * d["rho_default"])
                 ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
-                least = f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})"
+                least = (f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']}"
+                         f"{f', {REFERENCE_RUN}' if reference(best) else ''})")
             ax.set_title(f"gain {g:g}: {len(reached)} reached"
                          + (f" ({len(reached) - len(whole)} partial or void)" if len(whole) < len(reached) else "")
                          + f", {len(mine) - len(reached)} not"
@@ -711,7 +811,10 @@ def figure(p: dict, out: Path) -> Path:
         ax.grid(alpha=0.15, which="major")
         ax.set_xlabel("p = C/H (open: not reached, p a lower bound)")
     axes[0].set_ylabel(f"rho at the console's default (c = {CONSOLE[0]:.3g} gates, k = {CONSOLE[1]:,.0f} bits)")
-    keys = [Line2D([], [], marker="o", ls="none", color=f"C{i % 10}", label=f) for i, f in enumerate(families)]
+    refs = sorted({d["method_key"].split("/")[0] for d in rows if reference(d)})
+    keys = ([Line2D([], [], marker="o", ls="none", color="k", label=f"{REFERENCE_RUN} ({', '.join(refs)})")]
+            if refs else [])
+    keys += [Line2D([], [], marker="o", ls="none", color=f"C{i % 10}", label=f) for i, f in enumerate(groups)]
     keys += [Line2D([], [], marker=MARKERS[i % len(MARKERS)], ls="none", color="0.3", label=s)
              for i, s in enumerate(starts)]
     keys.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="red", ms=9, label="least S reached"))
@@ -720,8 +823,8 @@ def figure(p: dict, out: Path) -> Path:
         if any(d["basis_default"] == basis for d in rows):
             keys.append(Line2D([], [], marker=LOWER[basis], ls="none", color="0.3", ms=8, label=label_))
     fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 7), fontsize=7, bbox_to_anchor=(0.5, 0.04))
-    fig.suptitle(f"{p['title']}, {data} data\n(grey: iso-S, S = p rho; dotted: the coverage's decades of rho)",
-                 fontsize=10)
+    fig.suptitle(f"{p['title']}, {data} data\n(grey: iso-S, S = p rho; dotted: the coverage's decades of rho; black: "
+                 "the reference runs, honest training, which the covert methods read against)", fontsize=10)
     fig.text(0.01, 0.005, p["note"], fontsize=5.5, wrap=True, va="bottom")
     fig.tight_layout(rect=(0, 0.12, 1, 0.93))
     path = out / f"{NAME}.png"
@@ -749,7 +852,9 @@ def summary(p: dict, info: dict) -> str:
             ls = min(fin, key=lambda d: d["p"] * d["rho_default"]) if fin else None
             bn = max(no, key=lambda d: d["gain"]) if no else None
             lines.append(f"| {st.data} | {st.label} | {g:g} | {frontier_fit.gain(f, st.l0, st.c0):.3f} | {len(mine)} | "
-                         f"{len(yes)} | " + (f"{lp['p']:.3g} ({lp['method_key']} {lp['record']})" if lp else "-")
+                         f"{len(yes)} | " + (f"{lp['p']:.3g} ({lp['method_key']}"
+                                             f"{f', {REFERENCE_RUN},' if reference(lp) else ''} {lp['record']})"
+                                             if lp else "-")
                          + " | " + (f"{ls['p'] * ls['rho_default']:.3g} ({ls['p']:.3g}, {ls['rho_default']:.3g})"
                                     if ls else "-")
                          + " | " + (f"gain {bn['gain']:.3g} ({bn['method_key']} {bn['record']})" if bn else "-")
@@ -777,7 +882,8 @@ def main(argv=None) -> int:
     (tables / "refused.json").write_text(json.dumps(d["refused"], indent=1, sort_keys=True) + "\n")
     (tables / "coverage.md").write_text(coverage_md(own, info["fits"], p["updated_at"], d["refused"],
                                                     unmeasured_rows(p), unmeasured_rows(p, STUB),
-                                                    unmeasured_rows(p, PARTIAL), unmeasured_rows(p, VOID)))
+                                                    unmeasured_rows(p, PARTIAL), unmeasured_rows(p, VOID),
+                                                    served_nulls(p)))
     served = {}
     if a.publish:
         try:
@@ -788,8 +894,9 @@ def main(argv=None) -> int:
             return 1
     pub, fpub, held = guarded(p, fp, served)
     cov = own if pub is p else coverage(pub)
+    nulls = served_nulls(pub)
     md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], unmeasured_rows(pub), unmeasured_rows(pub, STUB),
-                     unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID))
+                     unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID), nulls)
     art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
                          "rows": len(p["rows"]), "source": source}) if a.publish else None
     q = cut(pub, art, held)
@@ -811,7 +918,8 @@ def main(argv=None) -> int:
           f"{len(q['note'])} characters" + (f", served rows kept on {held}" if held else "")
           + f" -> {a.out}: tables/, console/{NAME}.json, console/{frontier_fit.NAME}.json, {png.name}")
     print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"], unmeasured_rows(pub),
-                                 unmeasured_rows(pub, STUB), unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID))
+                                 unmeasured_rows(pub, STUB), unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID),
+                                 nulls)
           + (f" Kept as served: {held}." if held else ""))
     if a.publish:
         status = []

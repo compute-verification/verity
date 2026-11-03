@@ -168,7 +168,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert all(v == "inf" or v >= 1 for v in cell["rho_console"])
     assert set(cell["binding_kind"]) <= {"fit", "target"}
     assert all(formalism.RESTS_ON_CELL[b] == r for b, r in zip(cell["binding_kind"], cell["rests_on"]))
-    assert all(set(json.loads(x)) == {"bound", "sensitivity"} for x in cell["kinds"])
+    assert all(set(json.loads(x)) == {"bound", "sensitivity", "served"} for x in cell["kinds"])
     ds, rows = plots.frame(p), ledger_rows()
     assert {d["data"] for d in ds} == {"v2.3-pilot"} and {d["gain_target"] for d in ds} == set(AP.GAINS)
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):
@@ -309,10 +309,11 @@ def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_
     assert AP.build(info(None), "test")["rows"] == []
 
 
-def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0, basis=None, served=None) -> list:
+def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0, basis=None, served=None,
+        method=None) -> list:
     d = dict.fromkeys(AP.COLUMNS) | {"start": start, "gain_target": g, "family": family, "reached": reached, "p": p,
                                     "rho_default": rho, "gain": gain, "record": rec, "data": data, "C_gates": gates,
-                                    "basis_default": basis, "rho_served": served}
+                                    "basis_default": basis, "rho_served": served, "method_key": method}
     return [d[c] for c in AP.COLUMNS]
 
 
@@ -441,6 +442,158 @@ def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_
     cov, lora = AP.coverage(p), sum(d["record"].startswith("lora@") for d in ds)
     assert lora == len(AP.GAINS) == AP.unmeasured_rows(p) and sum(c["rows"] for c in cov) == len(ds) - lora
     assert not any((c.get("record") or "").startswith("lora@") for c in cov)
+
+
+def test_rho_served_is_a_whole_number_labelled_else_null_with_why_never_inf(monkeypatch):
+    """rho_served is te_core.formalism's `published` at the registered serving block where that is a whole number
+    (measured, finite and not partial), labelled with its binding kind and what it rests on; else null, never inf
+    (coordinator 15:29Z), the kinds cell's `served` saying why. Products classified at the console's k alone leave the
+    fresh-products term unmeasured at the serving block's, so a ρ that term binds at the console's default is only a
+    lower bound there, null, with formalism's reason for the term; products classified at the serving block's k price
+    it there; an unmeasured or infinite ρ is null."""
+    from test_formalism import SQUARE, one_segment
+
+    def classified(k: float) -> formalism.Measured:
+        return dataclasses.replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE]})
+
+    m = classified(AP.CONSOLE[1])
+    one, there = formalism.published(m), formalism.published(m, *panels.SERVED)
+    assert (one["reading"], one["binding_kind"], there["partial"]) == ("A", "fresh_products", True)
+    reason = formalism.bound(m, *panels.SERVED)["unmeasured"]["fresh_products"]
+    assert "classified at k = 65536" in reason and there["terms"]["fresh_products"] is None
+    rho, why = AP.served_rho(m, one)
+    assert (rho, why) == (None, {"why": f"partial: at least {AP.num(there['rho'], AP.DIGITS)} ({there['binding_kind']}"
+                                        "), a kind unmeasured", "unmeasured": {"fresh_products": reason}})
+    assert json.loads(AP.kinds(one, at_served=why))["served"] == why
+    at = classified(float(panels.SERVED[1]))
+    there = formalism.published(at, *panels.SERVED)
+    assert there["binding_kind"] == "fresh_products" and math.isfinite(there["rho"]) and not there["partial"]
+    assert AP.served_rho(at, formalism.published(at)) == (there["rho"], {"binding_kind": "fresh_products",
+                                                                         "rests_on": there["rests_on"]})
+    for stand_in, want in (({"reading": "A", "rho": None, "binding_kind": "unmeasured", "why": "no kind is measured"},
+                            {"why": "unmeasured: no kind is measured", "unmeasured": {"fresh_products": reason}}),
+                           ({"reading": "B", "rho": math.inf, "binding_kind": "target", "why": None},
+                            {"why": "infinite (target)"})):
+        monkeypatch.setattr(formalism, "published", lambda m, c=None, k=None, reading=None, s=stand_in: s)
+        assert AP.served_rho(m, one) == (None, want)
+
+
+def test_a_row_priced_at_the_consoles_k_alone_has_rho_served_null_and_the_coverage_counts_it(tmp_path, monkeypatch,
+                                                                                            capsys):
+    """Where the console's default measures a kind the serving block doesn't, as a fresh-products term whose products
+    were classified at the default's k alone, the row's rho_served is null, never inf, its kinds cell's `served` gives
+    formalism's reason, and the coverage table and the board line count those rows by why. Stand-ins put the
+    reference runs' checkpoints (ref's and ref2's) under reading A, the term binding at the console's default and the
+    token kind alone measured at the serving block, at 1.7."""
+    real, real_bound = formalism.published, formalism.bound
+    reason = "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k"
+    terms = {"fresh_products": None, "token": 1.7, "decoding": 1.7}
+
+    def published(m, c=None, k=None, reading=None):
+        one = real(m, c, k, reading)
+        if m.delta_bits != 9e8:
+            return one
+        if k is None:
+            return one | {"reading": "A", "rho": 2.5e5, "binding_kind": "fresh_products",
+                          "rests_on": formalism.RESTS_ON_CELL["fresh_products"],
+                          "terms": terms | {"fresh_products": 2.5e5, "token": 1.5, "decoding": 1.5}}
+        return one | {"reading": "A", "rho": 1.7, "binding_kind": "token", "rests_on": formalism.RESTS_ON_CELL["token"],
+                      "partial": True, "terms": terms}
+
+    def bound(m, c, k, kinds=formalism.KINDS):
+        b = real_bound(m, c, k, kinds)
+        return b if m.delta_bits != 9e8 else b | {"terms": b["terms"] | terms, "unmeasured": {"fresh_products": reason}}
+
+    monkeypatch.setattr(formalism, "published", published)
+    monkeypatch.setattr(formalism, "bound", bound)
+    code, got = run(tmp_path, monkeypatch)
+    ds = plots.frame(got["panel"])
+    refs = [d for d in ds if d["record"].split("@")[0] in ("ref", "ref2")]
+    assert code == 0 and len(refs) == 2 * len(AP.GAINS) and all(d["rho_default"] == 2.5e5 for d in refs)
+    assert all(d["rho_served"] is None and AP.served_of(d) == {
+        "why": "partial: at least 1.7 (token), a kind unmeasured", "unmeasured": {"fresh_products": reason}}
+        for d in refs)
+    assert all(d["rho_served"] is None or math.isfinite(d["rho_served"]) for d in ds)
+    nulls = AP.served_nulls(got["panel"])
+    assert nulls["lost:fresh_products"] == len(refs) and nulls["rows"] == sum(d["rho_served"] is None for d in ds)
+    line = AP.served_line(nulls)
+    assert line.startswith(f"rho_served is null on {nulls['rows']} rows, never inf: {len(refs)} with fresh products "
+                           "measured at the console's default and not there")
+    assert line in (got["out"] / "tables" / "coverage.md").read_text()
+    board = next(x for x in capsys.readouterr().out.splitlines() if x.startswith("board: "))
+    assert AP.served_line(nulls, short=True) in board
+
+
+def test_the_coverage_labels_a_reference_run_and_says_null_where_rho_served_is():
+    """A coverage cell names a reference run's row (te_core.frontier's `REF_DIRECTIONS`), honest training, so the
+    covert methods read against it (coordinator 15:29Z), and gives its rho_served as null where it is, never inf;
+    the served span is over the finite ones and counts the null; `served_nulls` counts the null rows by why."""
+    rows = [row("s", 1.1, None, "yes", 1.0, 2e5, 1.2, "r@1", method="ref-optim/adamw"),
+            row("s", 1.1, None, "yes", 4.3, 5e4, 1.3, "w@2", served=3.5, method="wildcard/topcode")]
+    cov = AP.coverage({"columns": AP.COLUMNS, "rows": rows})
+    md = AP.coverage_md(cov, {"v3": None, "v2.3-pilot": LAW}, "T")
+    assert "yes p 1, rho 2e+05, served null (s, ref-optim/adamw, reference run, r@1)" in md
+    assert "yes p 4.3, rho 5e+04, served 3.5 (s, wildcard/topcode, w@2)" in md
+    assert ("v2.3-pilot 5e+04 to 2e+05 at the console's default, 3.5, null on 1 at the registered serving block"
+            in md)
+    assert AP.served_text([c for c in cov if c.get("record") != "w@2"]).startswith(
+        "Reached cells' rho: v2.3-pilot 2e+05 at the console's default, null on all 1 at the registered serving block")
+    assert [AP.group(d) for d in ({"method_key": "ref-data/hold", "family": "full"},
+                                  {"method_key": "wildcard/topcode", "family": None},
+                                  {"method_key": "lowrank/lora", "family": "adapter"})] == [AP.REFERENCE_RUN,
+                                                                                            "wildcard", "adapter"]
+
+    def served(r: list, why: dict | None) -> list:
+        return [json.dumps({"served": why}) if c == "kinds" and why else v for c, v in zip(AP.COLUMNS, r)]
+
+    p = {"columns": AP.COLUMNS, "rows": [
+        served(rows[0], {"why": "partial: at least 1.7 (token), a kind unmeasured", "unmeasured": {"fresh_products": "x"}}),
+        served(rows[0], {"why": "infinite (target)"}), served(rows[0], {"why": "unmeasured: no kind is measured"}),
+        rows[0], served(rows[1], {"binding_kind": "token", "rests_on": "y"})]}
+    assert AP.served_nulls(p) == {"rows": 4, "lost:fresh_products": 1, "infinite": 1, "unmeasured": 1, "unsaid": 1}
+    assert AP.served_line(AP.served_nulls(p), short=True) == (
+        "rho_served is null on 4 rows, never inf: 1 with fresh products measured at the console's default and not "
+        "there, 1 unmeasured there as at the console's default, 1 infinite there, 1 kept as served from an earlier "
+        "build, no reason.")
+    assert AP.served_line({}) == "" and "rho_served" not in AP.coverage_md(cov, {"v3": None, "v2.3-pilot": LAW}, "T")
+
+
+def test_the_figure_draws_the_reference_runs_black_and_labels_each_panels_least_p_one(tmp_path, monkeypatch):
+    """The figure reads the covert methods against the reference runs (coordinator 15:29Z): their rows black, a legend
+    entry naming their directions, and on each gain target's panel the least-p reached one labelled "reference run";
+    every other row takes its family's colour, else its method direction's."""
+    p = AP.build(info(), "test")
+    ds = [d for d in plots.frame(p) if d["p"] is not None and d["rho_default"] is not None]
+    calls, notes, legends = [], [], []
+    real_plot, real_note, real_legend = AP.plt.Axes.plot, AP.plt.Axes.annotate, AP.plt.Figure.legend
+
+    def plot(ax, *a, **k):
+        calls.append((a[:2], k))
+        return real_plot(ax, *a, **k)
+
+    def annotate(ax, text, xy, *a, **k):
+        notes.append((text, tuple(xy)))
+        return real_note(ax, text, xy, *a, **k)
+
+    def legend(fig, *a, **k):
+        legends.append([h.get_label() for h in k["handles"]])
+        return real_legend(fig, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    monkeypatch.setattr(AP.plt.Axes, "annotate", annotate)
+    monkeypatch.setattr(AP.plt.Figure, "legend", legend)
+    AP.figure(p, tmp_path)
+    want = []
+    for g in AP.GAINS:
+        if refs := [d for d in ds if d["gain_target"] == g and d["reached"] == "yes" and AP.reference(d)]:
+            best = min(refs, key=lambda d: (d["p"], d["rho_default"]))
+            want.append((f"reference run ({best['method_key']}):\np {best['p']:.3g}, rho {best['rho_default']:.3g}",
+                         (best["p"], best["rho_default"])))
+    assert want and [x for x in notes if x[0].startswith(AP.REFERENCE_RUN)] == want
+    black = {xy for xy, k in calls if k.get("color") == "k"}
+    assert {(d["p"], d["rho_default"]) for d in ds if AP.reference(d)} <= black
+    assert legends[0][0] == f"{AP.REFERENCE_RUN} (ref-optim)" and "?" not in legends[0]
+    assert {"adapter", "seed", "update-code", "partial"} <= set(legends[0])
 
 
 def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):

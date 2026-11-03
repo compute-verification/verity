@@ -164,7 +164,8 @@ L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with
 (H the least |C| of any checkpoint from the start
 on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
 `formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
-and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
+and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`, a whole number or null, never inf,
+the kinds cell's `served` saying why), so S = pρ, and the inputs the
 console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
 ᾱ/α_max among them, u_in exact at the dial's k and the console's); `build` refuses a row whose cells miss
 `formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
@@ -174,7 +175,8 @@ reading B's, a target), the `te_core` that priced it, `binding_kind`, `rests_on`
 and the sensitivities it leaves out, a measured fresh-products term with its premises, P-width and P-chain, beside
 it). Its coverage
 (gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
-default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
+default, and the reference runs, honest training, labelled in it and in the figure so the covert methods read against
+them) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). A row `published` marks partial (a valid
 kind unmeasured, so ρ is only a lower bound) has basis `partial`: the figure draws it with a caret up and the cut
 picks the partial rows among themselves, but none is in a cell, on the others' front or the least S. A row whose ρ
