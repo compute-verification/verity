@@ -4,7 +4,7 @@ import Proofs.Flock.Recursive.StopCountStream
 # A stream's sessions left unreleased, at most its failure budget
 
 `StopCountStream` counts a stream's joint stops where at most `B` of its sessions are left with a statement not
-released. Here `B` is the stream's failure budget `b`, at every order of the record's ops (`Op`), and so at every run
+released. Here `B` is the stream's failure budget `b`, at every order of the record's ops (`RecOp`), and so at every run
 (`StopCount.run`): `openSession` refuses an open while the stream's failures and its unended recursive sessions reach
 `b`, a session left with a statement not released is unended or stopped, a stop is recorded only of an opened session
 (`stop`, and `slot`'s for the slot's orphan), so each stop of one of the stream's sessions is one of its failures (rule
@@ -499,7 +499,7 @@ theorem RecOk.afterOpen {evs : Events} (h : RecOk evs) (stream : String) (parts 
 
 /-- One of the record's ops, as the firewall's server calls them: `openSession`, `finish`, `stop`, `release`, `slot`,
 `admit`, and the Loop's `wait`. -/
-inductive Op where
+inductive RecOp where
   | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.Firewall.Schedule)
   | finish (s : String)
   | stop (s part why : String)
@@ -509,7 +509,7 @@ inductive Op where
   | wait (s part : String)
 
 /-- The record after `op`. -/
-def Op.apply (evs : Events) : Op → Events
+def RecOp.apply (evs : Events) : RecOp → Events
   | .openRec stream parts budget sched => (openSession evs stream parts budget sched).2
   | .finish s => Core.Firewall.finish evs s
   | .stop s part why => (Core.Firewall.stop evs s part why).2
@@ -519,9 +519,9 @@ def Op.apply (evs : Events) : Op → Events
   | .wait s part => evs.push (.wait s part)
 
 /-- The record after the ops `ops`, in order, from the empty record. -/
-def opsRun (ops : List Op) : Events := ops.foldl Op.apply #[]
+def opsRun (ops : List RecOp) : Events := ops.foldl RecOp.apply #[]
 
-theorem RecOk.apply {evs : Events} (h : RecOk evs) : ∀ op, RecOk (Op.apply evs op)
+theorem RecOk.apply {evs : Events} (h : RecOk evs) : ∀ op, RecOk (RecOp.apply evs op)
   | .openRec stream parts budget sched => h.afterOpen stream parts budget sched
   | .finish _ => h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
   | .stop s part why => h.afterStop s part why
@@ -531,8 +531,8 @@ theorem RecOk.apply {evs : Events} (h : RecOk evs) : ∀ op, RecOk (Op.apply evs
   | .wait _ _ => h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
 
 /-- **Every order of the record's ops keeps its invariant.** -/
-theorem RecOk.ofOps (ops : List Op) : RecOk (opsRun ops) := by
-  have : ∀ (l : List Op) evs, RecOk evs → RecOk (l.foldl Op.apply evs) := by
+theorem RecOk.ofOps (ops : List RecOp) : RecOk (opsRun ops) := by
+  have : ∀ (l : List RecOp) evs, RecOk evs → RecOk (l.foldl RecOp.apply evs) := by
     intro l
     induction l with
     | nil => intro evs h; exact h
@@ -541,7 +541,7 @@ theorem RecOk.ofOps (ops : List Op) : RecOk (opsRun ops) := by
 
 /-- **At most `b` of a stream's sessions are left with a statement not released**, at every order of the record's ops,
 `b` the stream's failure budget. -/
-theorem card_unrel_le_budget (ops : List Op) {t : String} {b : ℕ} (hb : budgetOf (opsRun ops) t = some b) :
+theorem card_unrel_le_budget (ops : List RecOp) {t : String} {b : ℕ} (hb : budgetOf (opsRun ops) t = some b) :
     (unrel (opsRun ops) t).card ≤ b :=
   (RecOk.ofOps ops).within t b hb
 
