@@ -383,9 +383,9 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
         return {"flags": flags, "error": f"nci-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
     try:
         out = json.loads(p.stdout)
+        if not isinstance(out, dict):
+            raise ValueError("not an object")
     except ValueError:
-        out = None
-    if not isinstance(out, dict):
         return {"flags": flags, "error": f"nci-check {' '.join(flags)} printed no JSON object",
                 "said": p.stdout.strip()[-300:]}
     return {"flags": flags, "out": out}
