@@ -95,8 +95,9 @@ def warden(tmp_path_factory):
         fetches[name] = d / f"{name}.tar.gz"
         with tarfile.open(fetches[name], "w:gz") as tar:
             tar.add(run, arcname=RUN)
+    dep = WC.deployment(run)[0]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
-            "windows": WC.deployment(run)[0]["windows"]}
+            "windows": dep["windows"], "all": io["records"], "run_id": dep["run_id"]}
 
 
 def _write(path: Path, rows: list[dict]) -> None:
@@ -106,12 +107,16 @@ def _write(path: Path, rows: list[dict]) -> None:
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
     """A serve dir whose window K served ``records`` (the network certifier's, by default those of its execution phase)
-    and whose gate fetch (``warden[fetch]``) the front kept."""
+    and window K + 1 the network certifier's other certified requests, each released in its run, and whose gate fetch
+    (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
+    rest = [r for r in warden["all"] if r["user"] not in {x["user"] for x in records}]
     reqs = [{"engine_id": f"e{i}", "user": r["user"], "prompt_ids": r["prompt"], "streamed_ids": r["output"],
-             "windows": [K], "check": {"passed": True}} for i, r in enumerate(records)]
+             "windows": [K if i < len(records) else K + 1], "release": [warden["run_id"], r.get("stream", i)],
+             "check": {"passed": True}} for i, r in enumerate([*records, *rest])]
     _write(d / "requests.jsonl", reqs)
+    reqs = reqs[:len(records)]
     _write(d / "seals.jsonl", [{"window": K, "requests": [r["engine_id"] for r in reqs]}])
     _write(d / "windows.jsonl", [{"window": K, "passed": True, "commit": {"steps": 9}}])
     _write(d / "advice_trace.jsonl", [{"step": 0}])

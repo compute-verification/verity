@@ -111,10 +111,13 @@ admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` 
 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint
 records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows form of
 the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
-of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
+of the audited window is a certified one inside that link-window and carries the network certifier's run in its release,
+every certified request is exactly one served request, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
+late, say, a connection the network certifier failed closed) or a step that can't run, the piece refuses
+(`refused.txt`), naming the network certifier's own check's problems, which leaves the certifier missing; a rehearsal
+whose certified egress holds bytes that are no output's is a reject. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
 on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so

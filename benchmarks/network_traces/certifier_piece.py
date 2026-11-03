@@ -44,9 +44,15 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
      late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
-     reject (`rehearsed`).
-  2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
-     requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
+     reject, and the refusal names the network certifier's own check's problems (`rehearsed`). One whose certified
+     egress holds a cell that is neither an id-form cell nor a `FAIL`, bytes the server sent that are no output's, is a
+     reject.
+  2. The window's requests are certified ones (`bind`): each window request's user names one of the network certifier's
+     certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with the same
+     prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one certified
+     request and every certified request is one; else reject. These read the endpoint's records, the prover's, in the
+     clear: they refuse what a relay between the network certifier and an honest endpoint does, and the chain's tie is
+     what binds the committed values to the certified cells.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
@@ -97,6 +103,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import secrets
 import select
 import shutil
@@ -110,6 +117,7 @@ import threading
 import time
 import traceback
 import urllib.request
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
@@ -145,6 +153,11 @@ REFUSED = "refused.txt"
 CASE = "case.json"
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
+#: what `bind`'s rejects say: a served request the network certifier didn't carry, a certified one the endpoint didn't
+#: serve, and one certified request served twice
+NOT_SEEN = "the window served traffic the warden didn't see"
+UNSERVED = "the warden carried traffic the endpoint didn't serve"
+SHARED = "one certified request served twice"
 #: the split piece's chain step's accept, which its period step reads
 CHAINED = "chain.json"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
@@ -342,34 +355,79 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
     return d, run
 
 
+def device_problems(run: Path) -> list[str]:
+    """The network certifier's own check of the kept run (`warden_serve.check` on its witness), each problem once with
+    its numbers (connections, cells, windows) as N: what refused the rehearsal, none of its counts."""
+    import warden_chain as WC
+    try:
+        got = WC.WS.check(WC.witness(run))
+    except (OSError, ValueError, KeyError, SystemExit) as e:
+        return [f"the check didn't run: {type(e).__name__}"]
+    return list(dict.fromkeys(re.sub(r"\d+", "N", p) for p in got["problems"]))
+
+
 def rehearsed(run: Path) -> None:
     """`NotRun` unless the gate's check passed the kept rehearsal (its ``end.json``): a failed one, late or otherwise,
-    is an infrastructure failure, like a busy gate."""
+    is an infrastructure failure, like a busy gate, and names the network certifier's own check's problems
+    (`device_problems`): a connection the network certifier failed closed (late, past the egress cells, upstream) is
+    inside k_fail and certifies no served answer. But one whose certified egress holds a cell that is neither an
+    id-form cell nor a `FAIL`, bytes the server sent that are no output's, is Rejected."""
+    import warden_chain as WC
     try:
         end = json.loads((run / "end.json").read_text())
     except (OSError, ValueError) as e:
         raise NotRun(f"the kept run's end.json: {type(e).__name__}: {e}") from None
     v = end.get("verdict") or {}
     if end.get("rc") != 0 or v.get("accepted") is not True:
+        problems = device_problems(run)
+        try:
+            violations = WC.io(run)["violations"]
+        except (OSError, ValueError, KeyError, SystemExit):
+            violations = []
+        if any(why == WC.NOT_ID_CELL for _, why in violations):
+            raise Rejected(f"the warden's certified egress holds {WC.NOT_ID_CELL.removeprefix('an ')}: bytes the server "
+                           f"sent that are no output's; the warden's own check: {problems[:4]}")
         raise NotRun(f"the gate's rehearsal didn't pass, so it certified no served answer: exit {end.get('rc')}, "
                      f"{end.get('ended')}; its check accepted {v.get('accepted')} with {v.get('problems')} problems, "
-                     f"failed {v.get('failed')}")
+                     f"failed {v.get('failed')}; the warden's own check: {problems[:4]}")
 
 
-def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
-    """Each window request's certified record by its user; Rejected when one isn't the network certifier's."""
+def release_run(r: dict) -> str | None:
+    """The network certifier's run a served request's release names (requests.jsonl's ``release``, [run, N] under
+    ``--admit release-order``), None without one."""
+    rel = r.get("release")
+    return rel[0] if isinstance(rel, list) and len(rel) == 2 else None
+
+
+def bind(reqs: list[dict], io: dict, run_id: str | None = None, served: list[dict] | None = None) -> dict[str, dict]:
+    """Each window request's certified record by its user; Rejected when one isn't the network certifier's: its user
+    names no certified request, it carries no release of the network certifier's run ``run_id`` (when given), or its
+    prompt or streamed ids aren't the certified ones. Of ``served`` (when given: every request the endpoint recorded,
+    of which those carrying the run's release and ``reqs`` are read), Rejected when two name one certified request or
+    a certified request is none of them."""
     if not io["accepted"]:
         raise Rejected(f"the warden's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}
     for r in reqs:
-        c = by.get(r.get("user"))
+        eid, user = r.get("engine_id"), r.get("user")
+        c = by.get(user)
         if c is None:
-            raise Rejected(f"window request {r.get('engine_id')}'s user {r.get('user')!r} is no certified request: "
-                           "the window served traffic the warden didn't see")
+            raise Rejected(f"window request {eid}'s user {user!r} is no certified request: {NOT_SEEN}")
+        if run_id is not None and release_run(r) != run_id:
+            raise Rejected(f"window request {eid} (user {user!r}) carries no release of the warden's run "
+                           f"({r.get('release')!r}): {NOT_SEEN}")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
-                raise Rejected(f"window request {r.get('engine_id')}'s {key} aren't the certified {theirs}")
-        got[r["user"]] = c
+                raise Rejected(f"window request {eid}'s {key} aren't the certified {theirs}")
+        got[user] = c
+    if served is not None:
+        mine = {json.dumps(r, sort_keys=True): r
+                for r in [*reqs, *(r for r in served if run_id is not None and release_run(r) == run_id)]}
+        named = Counter(r.get("user") for r in mine.values() if r.get("user") in by)
+        if twice := sorted(u for u, n in named.items() if n > 1):
+            raise Rejected(f"certified request {twice[0]!r} is {named[twice[0]]} served requests: {SHARED}")
+        if unserved := sorted(set(by) - set(named)):
+            raise Rejected(f"certified request {unserved[0]!r} is no served request: {UNSERVED}")
     return got
 
 
@@ -564,7 +622,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         except SystemExit as e:
             raise Rejected(f"the kept warden run: {e}") from None
         T = params.window
-        certified = bind(reqs, io)
+        certified = bind(reqs, io, dep["run_id"], _lines(serve_dir / "requests.jsonl"))
         out = keep / run / "chain" / "out"
         report = out / "report" / "report.json"
         if chain is None:
