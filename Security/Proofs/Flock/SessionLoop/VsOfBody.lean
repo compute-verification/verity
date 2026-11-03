@@ -1,5 +1,6 @@
 import Proofs.Flock.SessionLoop.VsOfTakes
-import Proofs.Flock.SessionLoop.SchedAt
+import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.PiopState
 
 /-!
 # A pad is freed no later than the PIOP round that absorbs it
