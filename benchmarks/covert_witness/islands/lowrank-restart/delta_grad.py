@@ -750,9 +750,6 @@ def main() -> int:
             acct = accounting(a, trained, acct["n_norm_entries"], opt, tau_bits)
             extra = extra_of(trained)
             grown.append({"step": step, "ranks": dict(grow_at[step]), **acct})
-            if a.compile:
-                torch._dynamo.reset()
-                fwd = torch.compile(net)
         rows = data.next(a.batch)
         load_weights()
         tree, total = Tree(msg, a.tree, leaves), torch.zeros((), device=DEV)
