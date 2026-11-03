@@ -24033,7 +24033,7 @@
    ]
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "6f688a7d17ec128001a2bff2fd63b935d85a15142afb154ff296ff4092d0f021",
+   "digest": "ab393fb6311312de39067d5f6c4599cf9350b4b8576936f8d7789ba146af2219",
    "definitions": {
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
     "SampledProofs.Challenger.LoggedTree.key": "e940f525be182c1d1571a352e1cd449dd4a86123311c0c57cbc48538b843ae17",
@@ -24057,13 +24057,13 @@
     "SampledProofs.Challenger.TreeOpening.round": "b2c2210773668b2c3362b225648daeec22f3c27d556b731a2d2e76203bacd05c",
     "SampledProofs.Challenger.TreeOpening.stream": "0f3022aa9c1dc98c799c52ea8719005f23b6dfce83ba8804030d46b3c52769bf",
     "SampledProofs.Challenger.UNUSED_TREE": "4e32086f72701ca1a4dba3a02400a2a00a4685b53511d71187dacb954b469993",
-    "SampledProofs.Challenger.coinTreesOf": "53a8952203390f77e57a0a8d0f7bad57dc46ce6215cfaad97d79448b08ffbfd8",
+    "SampledProofs.Challenger.coinTreesOf": "8229bd50591d157737921f4a631c42c282417adca7d0ac16d53744ebc4bd3006",
     "SampledProofs.Challenger.coinTreesOf._sparseCasesOn_1": "e7a52db7911b92370948c2ec8a212a5494245aaacd8a5f3e505270cdfa9103fa",
-    "SampledProofs.Challenger.isTreeSpec": "5bbb98cd952d1a78bf0da2880458954c4e6c049e6983bc3bdc4bd7975dad75c4",
+    "SampledProofs.Challenger.isTreeSpec": "913f1974d9072b24ba05380e4e2b2f0bac0493546f003315daef36deb6536623",
     "SampledProofs.Challenger.isTreeSpec._sparseCasesOn_3": "7d0325932917a222b8be7ad4567c468f277ae569c585c2d8951014a95253d226",
     "SampledProofs.Challenger.linkAfter": "9134ba7b2df795021b258df443b0136b91f379a4a42d4abdc290347744a91e68",
     "SampledProofs.Challenger.recordCoins?": "ad53d7ff5d64c593532deb0dcc78c37ea5b0caf48161325381f19a55b9443b84",
-    "SampledProofs.Challenger.sessionTreeReason": "6943a0564486d83884d8fa709ecf51a98bae978d19d3761f122f37a315482804",
+    "SampledProofs.Challenger.sessionTreeReason": "3c59a521247986da314e6f8667dbe9a4c8cbcd2c88a3ff6a6714381658208ea9",
     "SampledProofs.Challenger.sessionTreeReason._sparseCasesOn_9": "1b56b3602811edd94be432523815f320a65d4ac7971bf21cd6ef958a2015f89c",
     "SampledProofs.Challenger.sessionsTreeReason": "d2871461274c408e1676fd0697eccb2f8671f3d132cc29d5a5471de98a54f421",
     "SampledProofs.Challenger.trustedTreesOf": "e507e753c0512ac0044ede65c1eba48434605e6d8b997f2150cf24720f09aa8b",
