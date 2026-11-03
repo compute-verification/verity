@@ -123,6 +123,35 @@ def test_each_cases_op_log_holds_its_circuits_gates():
         assert all(o["products"] for o in ops if o["op"] != "rest") and tiles.unplaced(ops) < 0.01
 
 
+def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a_target(built):
+    """The coordinator's 08:26Z ruling: the published ρ's max takes only the kinds valid on their own, each binding
+    kind with what it rests on, and since 4.5's packer (`READING_A`; the coordinator's 09:02Z: reading B until then) a
+    row whose token kind is measured publishes reading A, `at`'s ρ, with the bound's terms and its reduction and update
+    sensitivities (the console's cell has room for no more). At the
+    dial's default the dense, LoRA and grown-adapter steps bind on the token kind; the adapter with its live code
+    publishes 1, no kind above 1, its reduction sensitivity above 9 beside it. A row without entries or an op log
+    publishes reading B, Slowdown's token form, a target."""
+    default = rho_vectors.CELLS[0]
+    for case in rho_vectors.CASES:
+        v = by(built, case, *default)
+        m = formalism.from_json(built["measured"][case])
+        one = formalism.published(m, v["c"], v["k"])
+        assert one == formalism.published(m, v["c"], v["k"], "A") and one["reading"] == "A" and not v["fit"]
+        assert not differences(rho_vectors.finite([one["rho"], one["terms"], one["sensitivities"]]),
+                               [v["rho"], v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
+        assert one["binding_kind"] == (v["binding"] if num(v["max"]) > 1 else "none")
+        assert one["rests_on"] == formalism.RESTS_ON_CELL[one["binding_kind"]]
+        assert one["binding_kind"] == ("none" if case == "adapter-live" else "token")
+    live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"])
+    assert live["rho"] == 1.0 and live["sensitivities"]["reduction"] > 9
+    for gone in ("entries", "ops"):
+        m = formalism.from_json(built["measured"]["dense"] | {gone: None})
+        b, at = formalism.published(m, v["c"], v["k"]), formalism.at(m, v["c"], v["k"])
+        assert (b["reading"], b["binding_kind"], b["rho"]) == ("B", "target", at["rho"])
+        assert b["terms"] == {"token_form": at["slowdown"]} and list(b["sensitivities"]) == ["reduction", "update"]
+        assert b["rests_on"] == formalism.RESTS_ON_CELL["target"]
+
+
 def test_the_tiny_starts_forward_is_the_counters():
     import model
 

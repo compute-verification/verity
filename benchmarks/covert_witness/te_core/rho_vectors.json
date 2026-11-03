@@ -8222,6 +8222,7 @@
  "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
  "schema": "te-core/rho-vectors/v2",
  "sensitivities": {
+  "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
   "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
   "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
@@ -8251,6 +8252,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 1188322487411.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 2471.6805093657736,
+     "share": 0.6520858971202714,
+     "x0": 8.333582376964214e-05
     },
     "fresh_products": {},
     "per_gate": {
@@ -8309,6 +8319,7 @@
    "rho": 11.065531262155444,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 501.0542637591155,
     "reduction": 9.776271345877682,
     "token_form": 0.5483513212839408,
@@ -8339,6 +8350,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 8472607790387.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 24716.805093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -8397,6 +8417,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
     "token_form": 0.0,
@@ -8427,6 +8448,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -8485,6 +8515,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
     "token_form": 0.0,
@@ -8515,6 +8546,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -8573,6 +8613,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
     "token_form": 0.0,
@@ -8603,6 +8644,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 30480169048499.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 2481504.0,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -8661,6 +8711,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
     "token_form": 0.0,
@@ -8691,6 +8742,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 1188322487411.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 2471.6805093657736,
+     "share": 0.6520858971202714,
+     "x0": 8.333582376964214e-05
     },
     "fresh_products": {},
     "per_gate": {
@@ -8749,6 +8809,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 9.776271345877682,
     "token_form": 0.0,
@@ -8779,6 +8840,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 8472607790387.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 24716.805093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -8837,6 +8907,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
     "token_form": 0.0,
@@ -8867,6 +8938,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -8925,6 +9005,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
     "token_form": 0.0,
@@ -8955,6 +9036,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9013,6 +9103,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
     "token_form": 0.0,
@@ -9043,6 +9134,15 @@
      "share": 0.6520858971202714,
      "tiles_gates": 30480169048499.0,
      "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 2481504.0,
+     "share": 0.6520858971202714,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9101,6 +9201,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
     "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
     "token_form": 0.0,
@@ -9131,6 +9232,15 @@
      "share": 0.9996631800490919,
      "tiles_gates": 1681060789271.0,
      "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 76.8711329152391,
+     "share": 0.9996631800490919,
+     "x0": 0.00034364702383247125
     },
     "fresh_products": {},
     "per_gate": {
@@ -9189,6 +9299,7 @@
    "rho": 8.35335685982954,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
     "per_gate": 146.76517300380573,
     "reduction": 42.05663060357565,
     "token_form": 13.115530738562539,
@@ -9219,6 +9330,15 @@
      "share": 0.9996631800490919,
      "tiles_gates": 12531690772247.0,
      "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 768.711329152391,
+     "share": 0.9996631800490919,
+     "x0": 0.08627081452593345
     },
     "fresh_products": {},
     "per_gate": {
@@ -9277,6 +9397,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
     "per_gate": 14.306487096221096,
     "reduction": 4.2056630603575655,
     "token_form": 1.1988162915313898,
@@ -9307,6 +9428,15 @@
      "share": 0.9996631800490919,
      "tiles_gates": 32720902510871.0,
      "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 7687.11329152391,
+     "share": 0.9996631800490919,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9365,6 +9495,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
     "per_gate": 0.999663180049092,
     "reduction": 0.4205663060357565,
     "token_form": 0.0,
@@ -9395,6 +9526,15 @@
      "share": 0.9996631800490919,
      "tiles_gates": 32720902510871.0,
      "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 7687.11329152391,
+     "share": 0.9996631800490919,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9453,6 +9593,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490919,
     "per_gate": 0.9996631800490918,
     "reduction": 0.42611088135947006,
     "token_form": 0.0,
@@ -9483,6 +9624,15 @@
      "share": 0.9996631800490919,
      "tiles_gates": 40964378605847.0,
      "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 76871.13291523911,
+     "share": 0.9996631800490919,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9541,6 +9691,7 @@
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
     "per_gate": 0.999663180049092,
     "reduction": 0.042688096126554144,
     "token_form": 0.0,
@@ -9571,6 +9722,15 @@
      "share": 0.9999300519868621,
      "tiles_gates": 1761588219799.0,
      "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 20167818969088.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 77.98372904034717,
+     "share": 0.9999300519868621,
+     "x0": 0.08805491470908546
     },
     "fresh_products": {},
     "per_gate": {
@@ -9629,6 +9789,7 @@
    "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
+    "decoding_form": 1.000196951609222,
     "per_gate": 134.7778543633552,
     "reduction": 4.15717585271444,
     "token_form": 11.857120347569653,
@@ -9659,6 +9820,15 @@
      "share": 0.9999300519868621,
      "tiles_gates": 12513481313815.0,
      "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 779.8372904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9717,6 +9887,7 @@
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
+    "decoding_form": 0.9999300519868622,
     "per_gate": 0.9999300519868621,
     "reduction": 0.41571758527144403,
     "token_form": 0.0,
@@ -9747,6 +9918,15 @@
      "share": 0.9999300519868621,
      "tiles_gates": 32503018553623.0,
      "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 7798.372904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9805,6 +9985,7 @@
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
+    "decoding_form": 0.9999300519868622,
     "per_gate": 0.9999300519868621,
     "reduction": 0.041571758527144405,
     "token_form": 0.0,
@@ -9835,6 +10016,15 @@
      "share": 0.9999300519868621,
      "tiles_gates": 32503018553623.0,
      "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 7798.372904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9893,6 +10083,7 @@
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
    "sensitivities": {
+    "decoding_form": 0.9999300519868621,
     "per_gate": 0.9999300519868621,
     "reduction": 0.041612355947581066,
     "token_form": 0.0,
@@ -9923,6 +10114,15 @@
      "share": 0.9999300519868621,
      "tiles_gates": 40746494648599.0,
      "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": null,
+     "s_star": 77983.72904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
     },
     "fresh_products": {},
     "per_gate": {
@@ -9981,6 +10181,7 @@
    "rho": 1.0,
    "rho_fit": "inf",
    "sensitivities": {
+    "decoding_form": 0.9999300519868622,
     "per_gate": 0.9999300519868621,
     "reduction": 0.004197773273151105,
     "token_form": 0.0,

@@ -91,11 +91,15 @@ ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never i
 - update: there, the blocks applying the update read the gradient's cut (`Part.grad_bits`), the weights read once and θ
   free, c·Σ steps·γ/(k|C|) (assumption (U));
 - token_form: Slowdown's token form, A1 under reading B;
+- decoding_form: (D) under reading B, a block reading the update code holding at most max(c − d, min(c, α_max(x0·s +
+  s*))) affected gates;
 - per_gate: the token kind with each gate at the best witness that holds it, not closed under unions (below).
 (R) and (U) hold only for partitions split by tokens, not by layers or tensors (a block holding only frozen layers'
-work passes no partial), and per_gate only for blocks that are no union of witnesses, so they aren't lower bounds on
-their own; `kinds` refuses them. Each result is labelled
-"te_core VERSION, reading A".
+work passes no partial), reading B isn't A1's approved reading, and per_gate holds only for blocks that are no union of
+witnesses, so they aren't lower bounds on their own; `kinds` refuses them. Each result is labelled
+"te_core VERSION, reading A". `published` is the console's ρ (coordinator 08:26Z): `at`'s under reading A where a
+row's token kind is measured (its trace's entries and an op log), else reading B's token form, a target, each with the
+kind it binds on and what that rests on, short (`RESTS_ON_CELL`), and the reduction and update sensitivities.
 
 **Reading A** (A1's approved reading): every block I reads |in(I) \\ θ| ≥ u_I + Σ_T a_T(e_T(I)), u_I the
 update bits I's work reads, counted once, and a_T(e) the bits of token T's computed state where I's work on T begins,
@@ -130,6 +134,8 @@ under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of 
 carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
 "u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "ops", "labels"}, which `of_record`
 passes through field by field. Reading A's tiles read the block's `ops`, else the row's `macs_log` (te_core.tiles).
+The trace's Δ_grad leaves θ' out of its carried state (a latent the step quantizes is θ' as the step reads it), so
+Δ_t + Δ_grad counts the latents once.
 
 **The decoder** (`decoder`; seed-mezo's 04:15Z finding): d is the block's `decoder_gates` where it gives one,
 else the gates the record's program reports for the checkpoint's E (`output.decoder_gates`, ingest's from the
@@ -576,6 +582,9 @@ SENSITIVITIES = {
     "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 "
                   "from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved "
                   "reading",
+    "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole "
+                     "decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* "
+                     "from the uncapped profiles; reading B isn't A1's approved reading",
     "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate "
                 "at the best witness that holds it (per_gate); a block holding one gate of a product beside another "
                 "product's tile or the best run holds more, for a few bits of that gate's own operands",
@@ -588,7 +597,9 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     """The counting lemma over the kinds of block work that are lower bounds on their own (module docstring) at (c, k):
     each kind's term (None: unmeasured, its reason in `unmeasured`), ρ ≥ their max over `kinds`, the kind that max
     binds on (`binding`; None where no kind is measured) and what each kind rests on (`rests_on`); and beside them the
-    sensitivities (`SENSITIVITIES`), never in the max. `inputs` holds what each term reads beyond `m`'s fields."""
+    sensitivities (`SENSITIVITIES`), never in the max, reduction and update each the sum over the parts that measure
+    it (None where none does; `unmeasured` names it where a part doesn't). `inputs` holds what each term reads beyond
+    `m`'s fields."""
     off = [kind for kind in kinds if kind in SENSITIVITIES]
     if off:
         raise ValueError(f"kinds {off!r}: sensitivities, never in the bound's max (they hold only for partitions split "
@@ -620,25 +631,26 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
     if m.context is not None:
         s_star = context_s_star(m.context, u, k, m.a_bits, x0, s_star)
-    sens = {"token_form": _token_form(m.sigma, x0, c / m.w, s_star, m.alpha_ratio), "per_gate": per_gate(m, c, k)}
-    red = upd = 0.0
+    x0r, sr = bottom_share(m.u_in, k), room(m.u, k) / m.a_bits
+    if m.context is not None:
+        sr = context_s_star(m.context, m.u, k, m.a_bits, x0r, sr)
+    cap = max(c - d if code else 0.0, min(c, m.alpha_max * (x0r * c / m.w + sr)))
+    sens = {"token_form": _token_form(m.sigma, x0, c / m.w, s_star, m.alpha_ratio),
+            "decoding_form": share * c / cap if cap > 0 else (math.inf if share else 0.0), "per_gate": per_gate(m, c, k)}
     blocks = [_blocks(p, c) for p in m.parts]
-    for p, b in zip(m.parts, blocks):
-        if b >= 2 and p.partial_bits is None:
-            red = None
-        elif b >= 2 and red is not None:
-            red += p.steps * (b - 1) * p.partial_bits
-        if b >= 2 and p.grad_bits is None:
-            upd = None
-        elif b >= 2 and upd is not None:
-            upd += p.steps * p.grad_bits
-    for name, x, cut in (("reduction", red, "partial_cut_bits"), ("update", upd, "grad_cut_bits")):
-        sens[name] = None if x is None else c * x / (k * total) if total else 0.0
-        if x is None:
-            unmeasured[name] = f"unmeasured: a part traced before te_core 4.4 has no {cut}"
+    split = [(p, b) for p, b in zip(m.parts, blocks) if b >= 2]
+    red = [p.steps * (b - 1) * p.partial_bits for p, b in split if p.partial_bits is not None]
+    upd = [p.steps * p.grad_bits for p, b in split if p.grad_bits is not None]
+    for name, got, cut in (("reduction", red, "partial_cut_bits"), ("update", upd, "grad_cut_bits")):
+        sens[name] = (c * sum(got) / (k * total) if total else 0.0) if got or not split else None
+        if len(got) < len(split):
+            unmeasured[name] = (f"unmeasured: a part its token work splits has no {cut} (traced before te_core 4.4, or "
+                                f"untraced)" + ("; the term sums the parts that have it" if got else ""))
     steps = [p.steps for p in m.parts]
     inputs = {"fresh_products": {}, "token": tok, "decoding": tok, "per_gate": tok,
               "token_form": {"sigma": m.sigma, "x0": x0, "s": c / m.w, "s_star": s_star, "alpha_ratio": m.alpha_ratio},
+              "decoding_form": {"share": share, "delta_bits": tok["delta_bits"], "decoder_gates": m.decoder_gates,
+                                "x0": x0r, "s_star": sr, "alpha_max": m.alpha_max, "cap": cap},
               "reduction": {"blocks": blocks, "steps": steps, "partial_bits": [p.partial_bits for p in m.parts]},
               "update": {"blocks": blocks, "steps": steps, "grad_bits": [p.grad_bits for p in m.parts]}}
     on = [kind for kind in KINDS if kind in kinds and terms[kind] is not None]
@@ -694,6 +706,53 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
     return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
             "slowdown": slow, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
             "rho": rho, "x0_known": x0_known, "s_star_known": s_star_known} | charged | one
+
+
+#: what a published ρ rests on, by its binding kind, short (a console cell on every row; `RESTS_ON` has each kind's in
+#: full): Fit's c/(c − d), a kind of the one bound, reading B's token form (a target, not a bound), or `none` where Fit
+#: fails and no measured kind exceeds 1
+RESTS_ON_CELL = {
+    "fit": "Fit's construction",
+    "fresh_products": "theorem for this circuit (Loomis-Whitney)",
+    "token": "A1 (reading A), its family: runs and tiles",
+    "decoding": "assumption (D), with A1 (reading A)",
+    "target": "target: A1 at reading B, not a bound",
+    "none": "no measured kind > 1",
+}
+#: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update), on every console
+#: row, so the others (`SENSITIVITIES`) stay in `bound`
+CELL_SENSITIVITIES = ("reduction", "update")
+#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: since te_core
+#: 4.5's packer, whose witness family has matrix-product and weight-gradient tiles (coordinator 09:02Z: every row
+#: reading B's, a target, until then)
+READING_A = True
+
+
+def published(m: Measured, c: float, k: float, reading: str | None = None) -> dict:
+    """The published ρ at (c, k) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
+    the row's token kind is measured), Fit's c/(c − d) where it holds, else max(1, the one bound's max over `KINDS`; 1
+    where none is measured); under reading B Slowdown's token form, a target. Beside it the binding kind (fit, a kind,
+    target, or none), what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: unmeasured; under reading B
+    the token form) and the bound's `CELL_SENSITIVITIES`."""
+    if reading is None:
+        reading = "A" if READING_A and m.entries is not None and m.ops is not None else "B"
+    if reading not in ("A", "B"):
+        raise ValueError(f"reading {reading!r}: A (the one bound) or B (Slowdown's token form, a target)")
+    from . import VERSION
+
+    v = at(m, c, k, "A") if reading == "A" else at(m, c, k)
+    b = v["bound"] if reading == "A" else bound(m, c, k)
+    if v["fit"]:
+        binding = "fit"
+    elif reading == "B":
+        binding = "target"
+    else:
+        binding = b["binding"] if b["max"] is not None and b["max"] > 1 else "none"
+    terms = dict(b["terms"]) if reading == "A" else {"token_form": v["slowdown"]}
+    return {"reading": reading, "label": f"te_core {VERSION}, reading {reading}",
+            "rho": 1.0 if v["rho"] is None else v["rho"], "binding_kind": binding,
+            "rests_on": RESTS_ON_CELL[binding], "terms": terms,
+            "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES}}
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
