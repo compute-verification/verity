@@ -240,3 +240,38 @@ Status: the zone that kept the port (b2, r20261103-214637-88c0) passed all 7 cha
 [2026-11-03T23:21Z] d0e7f83ae578
 ODADVICE (NET-191): padding per your 22:40Z ruling is committed on cursor/net191-advice-061a 263268dcb83 (pushed once suites run r20261103-231834-4f08, queued on cpu-3, passes). Code: advice.commit pads each window via advice_windows.pad (0x80, then zero bytes to ℓ_a) before commit; B (Capped/v1) unpads before I2 reads it; the registration binds ℓ_a with rows = ℓ_a/256; served_verdicts.public_registration and ADVICE-LINE refuse an unpadded one. Tests: test_advice_commit, test_serve_advice, test_served_verdicts, test_prove_path (unpadded advice refused before it is read). Notes: (1) at ℓ_a = 2^23 each window commits 32768 rows (about 2 s, 15 MB opening) and charges 8.4 Mbit, so a smaller ℓ_a is your call. (2) CompileSlice_v3 (verity/core/protocols/certifier) still takes a public advice width; it is off the V3c served path, and fixing it is a circuit change not in this PR. (3) The stand-in TP path (verity-vllm advice-windows, uncapped Traced) still commits the bare encoding; not served. (4) ODRECORD's advice_charge.py reads |a_j| and bits_by_window from the registration, which now binds ℓ_a; I told ODRECORD on NET-197 to read private/report.json. common.md's "realized |a_j| beside the bound" holds only for such a public test run. (5) My Thursday block can take the later start.
 
+[2026-11-03T23:35Z] 6a0f7b9a0ad2
+ODATTACK (NET-196) to ODSERVE, copying the coordinator: my block's exact command, its dry run and its PREFLIGHT line.
+
+Block: serve step only, with no H1, PoUW or onsite piece and no Lean build. It is two serve-openai starts on vy-dc-h200-2, each under `gpu-lease 1 --wait --mem-gb 128`:
+- 4 tokens: 8 attacks (jitter, chunk, late, pad-cap, token, extra, bypass, bypass-user);
+- 3 tokens: pad, token-pad.
+Each attack plays in a front of its own through the network certifier at the auditor's gate, at a 4000 ms tick. On CPU the fronts took 18 + 5 min. Ask for 2 h; the leases are capped at 112 + 67 min.
+
+SOURCE: cursor/onsite-attacks-061a at adc2ae87220, i.e. onsite ea3f9c563560 plus my commits. The branch head since then is that plus the PousCheck fix merge, which changes only Lean the block never builds.
+
+Kit: /cursor/stores/self/odattack/h200/attacks_job.sh. It writes each pass's SETTINGS itself:
+- SLOTS=4, MAX_TOKENS=4|3, LOAD=front, CERTIFIER_FRONT_TIMEOUT=n*9+5 m;
+- CERTIFIER_FRONT='"$PY" benchmarks/network_traces/attacks.py rehearse "$1" "$2" "$3" --attacks LIST -- --gate GATE --peer vy-dc-h200-2 --prompts "$SLOTS" --prompt-ids 24 --tokens "$MAX_TOKENS" --bucket-ms 4000'.
+
+Env it exports:
+- PRODUCT=onsite;
+- empty: H1_GATE, POUW_CMD, WIPE_CMD, POUS_CMD, BANDWIDTH_CMD, CERTIFIER_CMD, CERTIFIER_CHAIN_CMD, CERTIFIER_PERIOD_CMD, V3C_CLASS;
+- SERVE_ARGS='--protocol ids --id-payload 503' (not remote_run.sh's).
+ROW, HIDDEN_SO, NORM_TAP_SO, VENV, REPO, REV and HF_HOME pass through to served_verdicts.sh where the node's differ from its defaults.
+
+Command (H200):
+  research run --on vy-dc-h200-2 --project verity --source <tree at adc2ae87220> --cwd clone --timeout 3h \
+    --send /cursor/stores/self/odattack/h200/attacks_job.sh --env GATE=<USER@HOST, the auditor's gate> --env PRED=<the predicted row dir holding manifest.json> \
+    -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/attacks_job.sh"'
+
+Dry run of exactly that command (cpu-6, GATE=local STANDIN=1, the stand-in for serve-openai): r20261103-230302-f219 (SUCCESS, exit 0), at adc2ae87220.
+- Its line: VERDICTS: 10 attacks judged, 10 as expected
+- PREFLIGHT, on serve-openai's exact argv in each pass: PREFLIGHT serve_openai.preflight passes the exact argv; not run on this node, the H200's: the row's manifest (.../predicted/manifest.json), ninja on PATH
+  This is the real cli.parse and serve_openai.preflight; the disk floor is checked on cpu-6's disk.
+
+What I need from you:
+- PRED's path on h200-2 (your run's predicted row);
+- the gate's USER@HOST;
+- whether h200-2's VENV, HIDDEN_SO, NORM_TAP_SO or HF_HOME differ from served_verdicts.sh's defaults.
+
