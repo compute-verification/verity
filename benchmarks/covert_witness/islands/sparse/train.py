@@ -29,7 +29,9 @@ decoder can carry) or with a list index, and single entries with an entropy-code
 
 The gains (`--norms`) can ride along with every mechanism: in bf16 with the CWLORA1 ones, as `--norm-bits` deltas with
 the CWQUAN1 ones (θ is fp32, so a gain carried in full would cost 4 bytes). `--layers top:N` keeps every touched tensor
-in the top N blocks (the final norm included), so the backward stops there and a step costs less. `--embed-rank R` gives
+in the top N blocks (the final norm included), so the backward stops there and a step costs less; `--targets mlp
+--layers top:1 --norms mlp_norm,norm` is the last sublayer, everything after the last attention, so no token's update
+reaches another token's keys or values. `--embed-rank R` gives
 the tied embedding a rank-R LoRA (E carries it as one factor pair on `embed`; training applies it in factored form to
 both the lookup and the head), its (vocab + d) · R entries taken before the block matrices' allocation. `--cap` sets a
 byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy); the reference class has no
@@ -108,6 +110,8 @@ def norm_names(theta: dict, spec: str, layers: str, n_layer: int) -> list[str]:
         return [n for n in names if n == "norm"]
     if spec.startswith("top:"):
         return [n for n in names if in_layers(n, spec, n_layer)]
+    if spec != "all":
+        return [n for n in names if leaf(n) in set(spec.split(","))]
     return names
 
 
@@ -635,7 +639,8 @@ def main() -> int:
     ap.add_argument("--norm-group", type=int, default=64, help="qlora, signrows: gain entries per f16 scale")
     ap.add_argument("--targets", default="all", help="`all`, `out`, `mlp`, `attn` or leaf names: the candidate matrices")
     ap.add_argument("--layers", default="all", help="`all` or `top:N`: touch only the top N blocks (and the final norm)")
-    ap.add_argument("--norms", default="all", help="`all`, `none`, `final` or `top:N`: the gains trained in full")
+    ap.add_argument("--norms", default="all",
+                    help="`all`, `none`, `final`, `top:N` or leaf names (`mlp_norm,norm`): the gains trained in full")
     ap.add_argument("--orient", default="both", choices=("rows", "cols", "both"))
     ap.add_argument("--select", default="grad", choices=("grad", "fisher", "adam", "magnitude", "random"),
                     help="the lines' selection energy: G², the mean squared batch gradient, G²/√(that) (an Adam step's "
