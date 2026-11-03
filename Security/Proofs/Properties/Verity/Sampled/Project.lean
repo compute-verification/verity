@@ -23,6 +23,13 @@ decoded from the play's output on the tape.
   that misses nowhere has an outcome flock-verify `--zk` accepts (`Decodes`, the decoders'). Off them the logged
   coupling holds at the projection (`loggedCoupling_withProject`), so `CouplingTarget` holds at the constructions with
   the projection and the messages' finders wherever the binding's bound does (`couplingTarget_withProject`).
+* **The coin map's premise, off local ones** (`couples_of_preserves`, `couplingTarget_withProject_of_preserves`):
+  `Couples` holds wherever the coin map writes each round's coins and the link points in as the tape's own
+  (`CoinMap.RoundPreserves`, `CoinMap.LinkPreserves`), its start leaves the tape from the first stop fresh given the
+  draw (`FirstStopFresh`), and its start is within the hiding term of the uniform tape (`StartClose`). Over a uniform
+  tape from any position, the rounds' and the session's joint laws give an event of the tape its share of the tapes
+  through the position (`avg_roundsW_tape`, `avg_linkW_tape`), from `Verity.Game.Pos.avg_toStop` and the tape law's
+  indifference to everything but the stops (`prob_roundsW_tape`).
 * **What the joint law's support holds** (`jointG_reaches`, `RoundsReach`): each outcome it reaches is a trace of the
   projection's stops, the submissions decoded there and their coins, ending on the outcome's tape with the proof files
   decoded from its play. That tape is one through every stop (`RoundsReach.through`), and each stop's decoded modes
@@ -138,6 +145,21 @@ attribute [instance] CoinMap.fT CoinMap.nT
 def CoinMap.widening {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (M : CoinMap g σ Ω R mPts) :
     Widening :=
   ⟨M.T⟩
+
+/-- **The coin map writes a round's live coins in as the tape's own**: at every stop, table count and submission, a
+uniform tape from the stop with a uniform round's coins written in is a uniform tape from there. -/
+def CoinMap.RoundPreserves {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (M : CoinMap g σ Ω R mPts) :
+    Prop :=
+  ∀ (q : Pos g σ Claims.Msg (Fin R)) (J : ℕ) (s : SubmitJ J) (G : CoinTape q.g' q.s' → ℝ≥0∞),
+    avg (fun c : Fin s.n → 𝔽 => avg fun z : CoinTape q.g' q.s' => G (M.round (q.withTape z) J s c z)) = avg G
+
+/-- **The coin map writes the live link points in as the tape's own**: at every stop, a uniform tape from the stop
+with uniform link points written in is a uniform tape from there. -/
+def CoinMap.LinkPreserves {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (M : CoinMap g σ Ω R mPts) :
+    Prop :=
+  ∀ (q : Pos g σ Claims.Msg (Fin R)) (G : CoinTape q.g' q.s' → ℝ≥0∞),
+    avg (fun pts : Fin 2 → Fin mPts → 𝔽 => avg fun z : CoinTape q.g' q.s' => G (M.link (q.withTape z) pts z)) =
+      avg G
 
 /-! ## The projection on the live session -/
 
@@ -337,6 +359,130 @@ theorem RoundsReach.toStop_modes {β : Type} {fin : LiveOutJ J mPts → β} {roo
     rw [hoq]
     exact Pos.modes_eq hi (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq) _
 
+/-! ### The joint law's tape -/
+
+open Classical in
+/-- **An event of the period's tape, at a position**: its indicator on the whole tape there. -/
+noncomputable def tapeInd (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fin R)) : ℝ≥0∞ :=
+  if Q q.tape then 1 else 0
+
+theorem tapeInd_le_one (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fin R)) : tapeInd Q q ≤ 1 := by
+  unfold tapeInd
+  split_ifs <;> simp
+
+theorem resample_tapeInd_le_one (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fin R)) :
+    Pos.resample (tapeInd Q) q ≤ 1 :=
+  (avg_mono fun _ => tapeInd_le_one Q _).trans_eq (avg_const 1)
+
+theorem tapeInd_toStop (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fin R)) :
+    tapeInd Q q.toStop = tapeInd Q q := by
+  unfold tapeInd
+  rw [Pos.toStop_tape]
+
+/-- **One round's joint law's tape reads neither the outcome's relabelling nor the session's values**: an event of the
+tape has the same probability at any two of them, wherever the next rounds' tapes do. -/
+theorem prob_stepW_tape {β β' : Type} (fin : LiveOutJ J mPts → β) (fin' : LiveOutJ J mPts → β')
+    (rootB rootB' : Array ByteArray) (pts pts' : Fin 2 → Fin mPts → 𝔽) (rs rs' : Fin J → Fin 2 → List Flock.Round)
+    (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fin R))
+    (next : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (β × CoinTape g σ)) (w : ∀ s c, Strategy (next s c))
+    (next' : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (β' × CoinTape g σ)) (w' : ∀ s c, Strategy (next' s c))
+    (h : ∀ s c, prob (fun o => Q o.2) (next s c) (w s c) = prob (fun o => Q o.2) (next' s c) (w' s c)) :
+    ∀ o : Option (SubmitJ J),
+      prob (fun o => Q o.2) (stepW D J fin rootB pts rs q next o) (stepWS D J fin rootB pts rs q next w o) =
+        prob (fun o => Q o.2) (stepW D J fin' rootB' pts' rs' q next' o) (stepWS D J fin' rootB' pts' rs' q next' w' o)
+  | none => rfl
+  | some s => Finset.sum_congr rfl fun c _ => congrArg (HMul.hMul _) (h s c)
+
+/-- **The rounds' joint law's tape reads neither the outcome's relabelling nor the session's values.** -/
+theorem prob_roundsW_tape {β β' : Type} (fin : LiveOutJ J mPts → β) (fin' : LiveOutJ J mPts → β')
+    (Q : CoinTape g σ → Prop) :
+    ∀ (N : ℕ) (rootB rootB' : Array ByteArray) (pts pts' : Fin 2 → Fin mPts → 𝔽)
+      (rs rs' : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R)),
+      prob (fun o => Q o.2) (roundsW D M dg J fin rootB pts N rs p) (roundsWS D M dg J fin rootB pts N rs p) =
+        prob (fun o => Q o.2) (roundsW D M dg J fin' rootB' pts' N rs' p) (roundsWS D M dg J fin' rootB' pts' N rs' p)
+  | 0, _, _, _, _, _, _, _ => rfl
+  | N + 1, rootB, rootB', pts, pts', rs, rs', p =>
+    prob_stepW_tape D J fin fin' rootB rootB' pts pts' rs rs' Q p.toStop _ _ _ _
+      (fun _ _ => prob_roundsW_tape fin fin' Q N _ _ _ _ _ _ _) (D.sub J p.toStop.modes)
+
+/-- **The rounds' joint law's tape is uniform from where it starts**: wherever the coin map writes each round's coins
+in as the tape's own, an event of the tape has, over a uniform tape from the position `p`, its probability under the
+rounds' joint law as its share of the tapes through `p`. -/
+theorem avg_roundsW_tape (hR : M.RoundPreserves) {β : Type} (fin : LiveOutJ J mPts → β) (Q : CoinTape g σ → Prop) :
+    ∀ (N : ℕ) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (rs : Fin J → Fin 2 → List Flock.Round)
+      (p : Pos g σ Claims.Msg (Fin R)),
+      avg (fun z : CoinTape p.g' p.s' => prob (fun o => Q o.2) (roundsW D M dg J fin rootB pts N rs (p.withTape z))
+          (roundsWS D M dg J fin rootB pts N rs (p.withTape z))) =
+        avg fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)
+  | 0, _, _, _, _ => rfl
+  | N + 1, rootB, pts, rs, p => by
+    let nxt : (q : Pos g σ Claims.Msg (Fin R)) → (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (β × CoinTape g σ) :=
+      fun q s c => roundsW D M dg J fin rootB pts N (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c))
+        (q.rewrite (M.round q J s c)).consume
+    let Ψ : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q => prob (fun o => Q o.2)
+      (stepW D J fin rootB pts rs q (nxt q) (D.sub J q.modes))
+      (stepWS D J fin rootB pts rs q (nxt q) (fun _ _ => roundsWS D M dg J fin rootB pts N _ _) (D.sub J q.modes))
+    have hstop : ∀ (q : Pos g σ Claims.Msg (Fin R)) (o : Option (SubmitJ J)),
+        avg (fun z : CoinTape q.g' q.s' => prob (fun o => Q o.2) (stepW D J fin rootB pts rs (q.withTape z)
+          (nxt (q.withTape z)) o) (stepWS D J fin rootB pts rs (q.withTape z) (nxt (q.withTape z))
+            (fun _ _ => roundsWS D M dg J fin rootB pts N _ _) o)) =
+          avg fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z) := fun q o => by
+      cases o with
+      | none => rfl
+      | some s =>
+        let G : CoinTape q.g' q.s' → ℝ≥0∞ := fun z => prob (fun o => Q o.2)
+          (roundsW D M dg J fin rootB pts N rs (q.consume.withTape z))
+          (roundsWS D M dg J fin rootB pts N rs (q.consume.withTape z))
+        calc _ = avg (fun z : CoinTape q.g' q.s' => avg fun c : Fin s.n → 𝔽 =>
+              G (M.round (q.withTape z) J s c z)) :=
+              congrArg avg (funext fun z => Finset.sum_congr rfl fun c _ => congrArg (HMul.hMul _)
+                (prob_roundsW_tape D M dg J fin fin Q N rootB rootB pts pts _ rs _))
+          _ = avg fun c : Fin s.n → 𝔽 => avg fun z : CoinTape q.g' q.s' => G (M.round (q.withTape z) J s c z) :=
+              avg_comm _
+          _ = avg G := hR q J s G
+          _ = avg fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z) :=
+              avg_roundsW_tape hR fin Q N rootB pts rs q.consume
+    calc _ = avg (fun z : CoinTape p.g' p.s' => Ψ (p.withTape z).toStop) := rfl
+      _ = avg fun z : CoinTape p.g' p.s' => Pos.resample Ψ (p.withTape z).toStop := Pos.avg_toStop Ψ p
+      _ = avg fun z : CoinTape p.g' p.s' => Pos.resample (tapeInd Q) (p.withTape z).toStop :=
+          congrArg avg (funext fun z => hstop _ (D.sub J (p.withTape z).toStop.modes))
+      _ = avg fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z).toStop := (Pos.avg_toStop (tapeInd Q) p).symm
+      _ = avg fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z) :=
+          congrArg avg (funext fun z => tapeInd_toStop Q _)
+
+/-- **The session's joint law's tape is uniform from its first stop**: wherever the coin map writes the link points and
+each round's coins in as the tape's own, an event of the tape has, over a uniform tape from the stop `q`, its
+probability under the session's joint law from there as its share of the tapes through `q`. -/
+theorem avg_linkW_tape (hL : M.LinkPreserves) (hR : M.RoundPreserves) {β : Type} (fin : LiveOutJ J mPts → β)
+    (Q : CoinTape g σ → Prop) (N : ℕ) (q : Pos g σ Claims.Msg (Fin R)) :
+    Pos.resample (fun q' => avg fun pts : Fin 2 → Fin mPts → 𝔽 => prob (fun o => Q o.2)
+        (roundsW D M dg J fin (D.root q'.modes) pts N (fun _ _ => []) (q'.rewrite (M.link q' pts)).consume)
+        (roundsWS D M dg J fin (D.root q'.modes) pts N (fun _ _ => []) (q'.rewrite (M.link q' pts)).consume)) q =
+      Pos.resample (tapeInd Q) q := by
+  let G : CoinTape q.g' q.s' → ℝ≥0∞ := fun z => prob (fun o => Q o.2)
+    (roundsW D M dg J fin (D.root q.modes) 0 N (fun _ _ => []) (q.consume.withTape z))
+    (roundsWS D M dg J fin (D.root q.modes) 0 N (fun _ _ => []) (q.consume.withTape z))
+  calc _ = avg (fun z : CoinTape q.g' q.s' => avg fun pts : Fin 2 → Fin mPts → 𝔽 =>
+        G (M.link (q.withTape z) pts z)) :=
+        congrArg avg (funext fun z => congrArg avg (funext fun pts =>
+          prob_roundsW_tape D M dg J fin fin Q N _ _ pts 0 _ _ _))
+    _ = avg fun pts : Fin 2 → Fin mPts → 𝔽 => avg fun z : CoinTape q.g' q.s' => G (M.link (q.withTape z) pts z) :=
+        avg_comm _
+    _ = avg G := hL q G
+    _ = Pos.resample (tapeInd Q) q := avg_roundsW_tape D M dg J hR fin Q N _ 0 _ q.consume
+
+/-- **An event of the tape under the session's joint law** from `p` is its mean over the link points at the first
+stop. -/
+theorem prob_sessionW_tape {β : Type} (fin : LiveOutJ J mPts → β) (Q : CoinTape g σ → Prop) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) :
+    prob (fun o => Q o.2) (sessionW D M dg J fin N p) (sessionWS D M dg J fin N p) =
+      avg fun pts : Fin 2 → Fin mPts → 𝔽 => prob (fun o => Q o.2)
+        (roundsW D M dg J fin (D.root p.toStop.modes) pts N (fun _ _ => [])
+          (p.toStop.rewrite (M.link p.toStop pts)).consume)
+        (roundsWS D M dg J fin (D.root p.toStop.modes) pts N (fun _ _ => [])
+          (p.toStop.rewrite (M.link p.toStop pts)).consume) :=
+  rfl
+
 end Session
 
 /-! ## The projection on the live audit -/
@@ -445,6 +591,67 @@ def Couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (
   ∀ Q : CoinTape (V.game θ F c) σ → Prop, ENNReal.ofReal (Claims.Pr Q) ≤
     prob (fun o => Q o.2) (jointG V θ F c A rd σ D M) (jointS V θ F c A rd σ D M) + A.hidingTerm
 
+/-- **The coin map's start leaves the tape from the first stop fresh**: over the widened sample, any reading of the
+draw and the projection's first stop has the mean of its average over the tapes from the stop. -/
+def FirstStopFresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
+  ∀ G : Finset (Fin A.n) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞,
+    avg (fun ω : (A.extend M.widening).L.Ω => G ((A.extend M.widening).L.draw ω) (firstStop V θ F c A rd σ M ω)) =
+      avg fun ω : (A.extend M.widening).L.Ω =>
+        Pos.resample (G ((A.extend M.widening).L.draw ω)) (firstStop V θ F c A rd σ M ω)
+
+/-- **The coin map's start is within the hiding term of the uniform tape**: over the widened sample, the period's tape
+the start gives is, at every reading of it bounded by 1, within the hiding term of the uniform tape. -/
+def StartClose (A : Live) (σ : Strategy (V.game θ F c)) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
+  ∀ H : CoinTape (V.game θ F c) σ → ℝ≥0∞, (∀ x, H x ≤ 1) →
+    avg H ≤ avg (fun ω : (A.extend M.widening).L.Ω => H (M.start ω)) + A.hidingTerm
+
+theorem ofReal_pr_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (Q : C → Prop) :
+    ENNReal.ofReal (Claims.Pr Q) = prCoin Q := by
+  classical
+  rw [prCoin_eq_card, Claims.Pr, ENNReal.ofReal_div_of_pos (Nat.cast_pos.2 Fintype.card_pos), ENNReal.ofReal_natCast,
+    ENNReal.ofReal_natCast]
+
+/-- **The coin map's premise, off its local ones**: the joint law's tape is within the hiding term of the uniform tape
+at every event wherever the coin map writes the link points and each round's coins in as the tape's own, its start
+leaves the tape from the first stop fresh, and its start is within the hiding term of the uniform tape. -/
+theorem couples_of_preserves (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (hR : M.RoundPreserves)
+    (hL : M.LinkPreserves) (hF : FirstStopFresh V θ F c A rd σ M) (hS : StartClose V θ F c A σ M) :
+    Couples V θ F c A rd σ D M := fun Q => by
+  let R₀ := regOf V θ F c A rd σ D
+  let G : Finset (Fin A.n) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞ := fun dr q =>
+    avg fun pts : Fin 2 → Fin A.mP → 𝔽 => prob (fun o => Q o.2)
+      (roundsW D M A.dg (A.J dr R₀) (fun t => (R₀, dr, A.wr dr R₀ t)) (D.root q.modes) pts A.N
+        (fun _ _ => []) (q.rewrite (M.link q pts)).consume)
+      (roundsWS D M A.dg (A.J dr R₀) (fun t => (R₀, dr, A.wr dr R₀ t)) (D.root q.modes) pts A.N
+        (fun _ _ => []) (q.rewrite (M.link q pts)).consume)
+  have hG : prob (fun o => Q o.2) (jointG V θ F c A rd σ D M) (jointS V θ F c A rd σ D M) =
+      avg fun ω : (A.extend M.widening).L.Ω => Pos.resample (tapeInd Q) (firstStop V θ F c A rd σ M ω) := by
+    calc prob (fun o => Q o.2) (jointG V θ F c A rd σ D M) (jointS V θ F c A rd σ D M)
+        = avg fun ω : (A.extend M.widening).L.Ω => prob (fun o => Q o.2)
+            (sessionW D M A.dg (A.J ((A.extend M.widening).L.draw ω) R₀)
+              (fun t => (R₀, (A.extend M.widening).L.draw ω, A.wr ((A.extend M.widening).L.draw ω) R₀ t)) A.N
+              (Pos.root (roundCuts V θ F c rd) (M.start ω)))
+            (sessionWS D M A.dg (A.J ((A.extend M.widening).L.draw ω) R₀)
+              (fun t => (R₀, (A.extend M.widening).L.draw ω, A.wr ((A.extend M.widening).L.draw ω) R₀ t)) A.N
+              (Pos.root (roundCuts V θ F c rd) (M.start ω))) := rfl
+      _ = avg fun ω : (A.extend M.widening).L.Ω =>
+            G ((A.extend M.widening).L.draw ω) (firstStop V θ F c A rd σ M ω) :=
+          congrArg avg (funext fun ω => prob_sessionW_tape D M A.dg _ _ Q A.N _)
+      _ = avg fun ω : (A.extend M.widening).L.Ω =>
+            Pos.resample (G ((A.extend M.widening).L.draw ω)) (firstStop V θ F c A rd σ M ω) := hF G
+      _ = _ := congrArg avg (funext fun ω => avg_linkW_tape D M A.dg _ hL hR _ Q A.N _)
+  have hU : prCoin Q = avg fun x : CoinTape (V.game θ F c) σ =>
+      Pos.resample (tapeInd Q) (Pos.root (roundCuts V θ F c rd) x).toStop := by
+    refine Eq.trans ?_ (Pos.avg_walk (tapeInd Q) (V.game θ F c) σ (roundCuts V θ F c rd) id)
+    refine congrArg avg (funext fun x => ?_)
+    show _ = tapeInd Q (Pos.root (roundCuts V θ F c rd) x).toStop
+    rw [tapeInd, Pos.toStop_tape]
+    rfl
+  rw [ofReal_pr_eq_prCoin, hU, hG]
+  exact hS _ fun x => resample_tapeInd_le_one Q _
+
 /-- **The decoders' premise**, at the composite `k` and the property `P` of the play: on the joint law's support, a
 tape whose play's sampled verdict accepts, that misses at no round and not at the record, and whose play `P` holds of,
 is beside an outcome flock-verify `--zk` accepts at `own`. -/
@@ -506,5 +713,23 @@ theorem couplingTarget_withProject (rd : Readings) (K : Constructions V)
     (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ)) :
     CouplingTarget V k ((K.withProject V rd D M).withMessages rd) A θ F :=
   couplingTarget_of_logged V k rd _ A P θ F ha (loggedCoupling_withProject V k rd K D M A P θ F hC hD)
+
+omit θ F c in
+/-- **The coupling at the projection, off the coin map's local premises**: `couplingTarget_withProject` with the coin
+map's premise discharged by `couples_of_preserves` at each commitment and strategy. -/
+theorem couplingTarget_withProject_of_preserves (rd : Readings) (K : Constructions V)
+    (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
+      Decoders A.rounds A.Reg)
+    (M : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
+    (A : Live) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (ha : LoggedBound V k (K.withProject V rd D M) P θ F)
+    (hR : ∀ c σ, (M A θ F c σ).RoundPreserves) (hL : ∀ c σ, (M A θ F c σ).LinkPreserves)
+    (hF : ∀ c σ, FirstStopFresh V θ F c A (rd A θ F c) σ (M A θ F c σ))
+    (hS : ∀ c σ, StartClose V θ F c A σ (M A θ F c σ))
+    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ)) :
+    CouplingTarget V k ((K.withProject V rd D M).withMessages rd) A θ F :=
+  couplingTarget_withProject V k rd K D M A P θ F ha
+    (fun c σ => couples_of_preserves V θ F c A _ σ _ _ (hR c σ) (hL c σ) (hF c σ) (hS c σ)) hD
 
 end Verity.Sampled
