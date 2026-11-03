@@ -41,13 +41,15 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 - optimizer: AdamW with `--b-lr-mult` (LoRA+), `--opt riemann` (each factor's gradient preconditioned by the other's Gram,
   Zhang and Pilanci 2024), `--opt muon` (A and B by Muon at `--lr`: Nesterov momentum, one fp32 buffer per value,
   orthogonalized by 5 Newton–Schulz steps, its matmuls counted as extra FLOPs; gains and magnitudes stay on AdamW),
-  `--beta2`, `--wd`;
+  `--opt sign` (signSGD, Bernstein et al. 2018: each factor value, or VeRA's d and b, moves by `--lr` against its
+  gradient's sign, no optimizer state; with `--msg vote` it is signSGD with majority vote), `--beta2`, `--wd`;
 - schedule: `--schedule` linear (warmup, linear decay to 0), wsd (`--cooldown` fraction), cosine; `--batch`;
 - data: `--fresh` skips the windows the start trained on (its seed-0 order's prefix).
 
 The run plans its steps for the harness (`hooks.plan`) and encodes E in the middle of each of `--snaps` + 1 shares of them
 (the default 19: each 5%), so each of the harness's 5% checkpoints scores one. The record's notes carry `delta_grad`: the
-trainable values and the bits of their gradient, of the optimizer's state (AdamW's m and v, or Muon's buffer, fp32) and of
+trainable values and the bits of their gradient, of the optimizer's state (AdamW's m and v, or Muon's buffer, fp32; none
+for signSGD) and of
 the fp32 masters the update rule reads and writes beside what E stores (the factors, any magnitudes and the norm gains:
 `latent_bits`, Δ_t).
 
@@ -229,8 +231,10 @@ def reduce_tree(leaves: torch.Tensor, code: Message) -> torch.Tensor:
     sends code(its gradient), each inner node code(its two children's sum), an odd node passing up as it is."""
     m = code(leaves)
     while m.shape[0] > 1:
-        odd = m[-1:] if m.shape[0] % 2 else m[:0]
-        m = torch.cat([code(m[0:m.shape[0] - len(odd):2] + m[1:m.shape[0] - len(odd):2]), odd])
+        n = m.shape[0] - m.shape[0] % 2
+        s = code(m[0:n:2] + m[1:n:2])
+        # no empty slice of the level below: the trace would read it as a path around this level's codes
+        m = torch.cat([s, m[n:]]) if n < m.shape[0] else s
     return m[0]
 
 
@@ -458,13 +462,14 @@ def ranks_for(theta, targets: list[str], rank: int, rank_map: dict[str, int]) ->
     return {n: r for n, r in out.items() if r > 0}
 
 
-def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int, msg: Message | None = None) -> dict:
+def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int, msg: Message | None = None,
+               sign: list[torch.Tensor] = ()) -> dict:
     """Δ_grad: each trained value's gradient as a token block passes it (fp32, or `msg`'s coded width) and its
-    optimizer's fp32 state (AdamW's m and v, Muon's one buffer), plus the `latent` fp32 masters the update rule reads
-    and writes beside what E stores."""
+    optimizer's fp32 state (AdamW's m and v, Muon's one buffer, none for signSGD), plus the `latent` fp32 masters the
+    update rule reads and writes beside what E stores."""
     na, nm = sum(p.numel() for p in adam), sum(p.numel() for p in muon)
-    n = na + nm
-    grad = sum(msg.width(p.numel()) for p in adam + muon) if msg else 32 * n
+    n = na + nm + sum(p.numel() for p in sign)
+    grad = sum(msg.width(p.numel()) for p in [*adam, *muon, *sign]) if msg else 32 * n
     bits = grad + 64 * na + 32 * nm + 32 * latent
     return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * na, "muon_bits": 32 * nm, "latent_bits": 32 * latent,
             "bits": bits, "bytes": bits // 8}
@@ -578,6 +583,23 @@ class Muon(torch.optim.Optimizer):
                 p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
 
 
+class Sign(torch.optim.Optimizer):
+    """signSGD: p ← p (1 − lr·wd) − lr·sign(∇p), no state."""
+
+    def __init__(self, params, lr: float, weight_decay: float = 0.0):
+        super().__init__(params, {"lr": lr, "weight_decay": weight_decay})
+
+    @torch.no_grad()
+    def step(self):
+        for g in self.param_groups:
+            for p in g["params"]:
+                if p.grad is None:
+                    continue
+                if g["weight_decay"]:
+                    p.mul_(1 - g["lr"] * g["weight_decay"])
+                p.add_(torch.sign(p.grad), alpha=-g["lr"])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
@@ -608,7 +630,7 @@ def main() -> int:
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
-    ap.add_argument("--opt", default="adamw", choices=("adamw", "riemann", "muon"))
+    ap.add_argument("--opt", default="adamw", choices=("adamw", "riemann", "muon", "sign"))
     ap.add_argument("--riemann-delta", type=float, default=1e-2)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--b-lr-mult", type=float, default=1.0)
@@ -629,9 +651,9 @@ def main() -> int:
     a.format = a.format or ("lora" if not a.bits else "lora2" if a.bits in prepare.LORA2_BITS else "quant")
     if a.vera:
         a.bits, a.format = a.bits or 2, "quant"
-        if a.dora or a.alloc != "uniform" or a.init != "gauss" or a.opt != "adamw" or a.rank or a.rank_map:
-            raise SystemExit(f"{KLASS}: --vera trains d and b by AdamW over its shared codes: no --dora, --alloc, "
-                             "--init, --opt, --rank or --rank-map")
+        if a.dora or a.alloc != "uniform" or a.init != "gauss" or a.opt not in ("adamw", "sign") or a.rank or a.rank_map:
+            raise SystemExit(f"{KLASS}: --vera trains d and b by AdamW or signSGD over its shared codes: no --dora, "
+                             "--alloc, --init, --opt riemann or muon, --rank or --rank-map")
     coded = a.msg != "fp32"
     if coded and (a.norms != "none" or a.dora or a.leaf < 1 or a.micro % a.leaf or a.batch % a.micro):
         raise SystemExit(f"{KLASS}: --msg {a.msg} codes the factors' block gradients: --norms none, no --dora, and "
@@ -729,8 +751,9 @@ def main() -> int:
     rest = [{"params": mags, "lr": a.mag_lr, "weight_decay": 0.0},
             {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}]
     muon = [grp for grp in factors if grp["params"]] if a.opt == "muon" else []
-    adam = [grp for grp in (rest if a.opt == "muon" else factors + rest) if grp["params"]]
-    opts = ([Muon(muon, lr=a.lr)] if muon else []) + (
+    sign = [grp for grp in factors if grp["params"]] if a.opt == "sign" else []
+    adam = [grp for grp in (rest if a.opt in ("muon", "sign") else factors + rest) if grp["params"]]
+    opts = ([Muon(muon, lr=a.lr)] if muon else []) + ([Sign(sign, lr=a.lr)] if sign else []) + (
         [torch.optim.AdamW(adam, betas=(0.9, a.beta2), fused=prepare.DEVICE.startswith("cuda"))] if adam else [])
     extra = sum(ns_flops(tuple(p.shape)) for grp in muon for p in grp["params"])
     msg_extra = 0
@@ -747,10 +770,10 @@ def main() -> int:
     # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
     marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
-    trained = [p for grp in muon + adam for p in grp["params"]]
+    trained = [p for grp in muon + sign + adam for p in grp["params"]]
     dgrad = delta_grad([p for grp in adam for p in grp["params"]], [p for grp in muon for p in grp["params"]],
                        sum(ad.latents() for ad in ads.values()) + sum(params[n].numel() for n in norms),
-                       msg)
+                       msg, [p for grp in sign for p in grp["params"]])
     messages = {"code": a.msg, "leaf_sequences": a.leaf, "leaf_tokens": a.leaf * prepare.EVAL_CTX,
                 "blocks_per_step": a.batch // a.leaf, "max_group": MSG_GROUP,
                 "entry_bits": dgrad["grad_bits"] / max(dgrad["trainable"], 1),
