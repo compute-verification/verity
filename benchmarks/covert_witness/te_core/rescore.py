@@ -12,12 +12,13 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
 19:50Z rule). It writes into DIR:
 
 - `frontier.md` and `frontier.json`: Fit, Slowdown's ρ and Security's S = W*/H per start, target and policy cell, with
-  W*'s route and its x0 and s* bounds and best-known values (te_core.frontier's `formalism_report`);
+  W*'s route and its x0 and s* bounds and best-known values (te_core.frontier's `formalism_report`), and each row whose
+  quantities te_core.formalism refuses, with the reason (`refused`; never scored);
 - the five panels, each `<name>.json` (a panels-route body) and `<name>.png` drawn from it (te_core.plots), and
   `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT
   (its training panels, te_core.panels' and te_core.algorithm_policy's, read the ledger and the quantities through
   `arguments` and `load`);
-- `formalism.jsonl`: each scored row's block and its source;
+- `formalism.jsonl`: each kept row's block, its source and its refusal (None: scored);
 - with the measured quantities and the analysis in the checkout, `compare.json` and `compare.md`: each scored row's
   quantities beside the analysis's for the same checkpoint (their ratios), the policy's S and route per start and
   target under each, and each route row's Slowdown bound measured over analysis as the ratios of its factors
@@ -79,7 +80,6 @@ LABELS = {
     "delta_t_bits": f"{SOURCE}: a straight-through run's fp32 latents, 32 bits a value as its record counts them; "
                     "every other run's is Delta",
     "u1_bits": f"upper bound (witness): u(1) = Delta, every token's path reads the whole update ({SOURCE})",
-    "decoder_gates": "stub: the decoder's gates d unmeasured, taken as 0 (rho 1 where Fit holds)",
 }
 EVEN = {"u": f"assumption (A1): evenly spread, u(x) = x * u(1) ({SOURCE})",
         "u_in": f"assumption (A1'): evenly spread, u_in = u ({SOURCE})"}
@@ -115,7 +115,7 @@ def block(c: dict, r: dict, tau: float) -> dict:
     return {"parts": [{"gates": c["gates"], "tokens": c["tokens"], "token_gates": c["token_gates"],
                        "affected_gates": c["affected_gates"], "steps": 1, "delta_grad_bits": r["delta_grad"]}],
             "tau_bits": tau, "a_bits": r["a"], "delta_bits": c["delta"], "delta_t_bits": r.get("delta_t"),
-            "u1_bits": c["delta"], "u": c["u"], "u_in": c["u_in"], "tail_share": t, "decoder_gates": None,
+            "u1_bits": c["delta"], "u": c["u"], "u_in": c["u_in"], "tail_share": t,
             "labels": LABELS | (TAIL if t else EVEN)}
 
 
@@ -215,7 +215,10 @@ def compare(scored: list[dict], analysed_rows: list[dict], shapes: dict, rep: di
         if shape is None or a is None:
             continue
         c, k = policy.cells(shape)[name]
-        m, ma = formalism.measure(r, shape), formalism.measure(a, shape)
+        try:
+            m, ma = formalism.measure(r, shape), formalism.measure(a, shape)
+        except formalism.Refused:
+            continue
         q, qa = quantities(m), quantities(ma)
         v, va = formalism.at(m, c, k), formalism.at(ma, c, k)
         tr = r["formalism"]["trace"]
@@ -360,16 +363,18 @@ def main(argv=None) -> int:
     valid = [r for r in rows if r["id"] not in left_out]
     kept = [r for r in valid if keep is None or keep(r)]
     missing = sorted(r["id"] for r in valid if keep is not None and not keep(r))
+    refused = {i: v[len(frontier.REFUSED):] for i, v in rep["skipped"].items() if v.startswith(frontier.REFUSED)}
     (a.out / "frontier.json").write_text(json.dumps(
         {"pin": list(pin), "left_out": left_out, "quantities": how,
-         "not_analysed": missing if mode == ANALYSED else [], "not_measured": missing if mode == MEASURED else []}
-        | rep, indent=1, default=str) + "\n")
+         "not_analysed": missing if mode == ANALYSED else [], "not_measured": missing if mode == MEASURED else [],
+         "refused": refused} | rep, indent=1, default=str) + "\n")
     (a.out / "frontier.md").write_text(frontier.formalism_markdown(rep) + "\n")
     with (a.out / "formalism.jsonl").open("w") as f:
         for r in kept:
             f.write(json.dumps({"id": r["id"], "run_id": r.get("run_id"), "start": r["start"],
                                 "checkpoint_step": r.get("checkpoint_step"), "source": source[r["id"]],
-                                "family": r.get("family"), "formalism": r.get("formalism")}, default=str) + "\n")
+                                "family": r.get("family"), "refused": refused.get(r["id"]),
+                                "formalism": r.get("formalism")}, default=str) + "\n")
     if mode == MEASURED and blocks:
         arows, asource = attach(rows, blocks)
         arows = with_context(arows, shapes) if a.charge_context else arows
@@ -384,8 +389,9 @@ def main(argv=None) -> int:
     written = plots.write(scored, shapes, stubs, pin, a.out, a.policy, fs, a.g, a.drop, what)
     console.write(a.out, a.out / "console")
     print(frontier.formalism_markdown(rep))
-    print(f"pin {' + '.join(c[:12] for c in pin)}: {len(valid)} valid rows, {len(kept)} scored with {how}"
+    print(f"pin {' + '.join(c[:12] for c in pin)}: {len(valid)} valid rows, {len(kept) - len(refused)} scored with {how}"
           + (f", {len(missing)} left out (frontier.json's {left})" if left else "")
+          + (f", {len(refused)} refused (frontier.json's refused, with the reasons)" if refused else "")
           + f" -> {a.out}: frontier.md, frontier.json, formalism.jsonl, "
           + ("compare.md, compare.json, " if mode == MEASURED and blocks else "")
           + ", ".join(f"{p.stem}.json/.png" for p in written) + ", console/")

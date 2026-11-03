@@ -11,7 +11,10 @@ an E is the one its compute is counted for), and one a later ingest of its run s
 ingested before 3.13 carries no read-outs; `--facts` gives them by run id (`with_facts`). Under 4.0 an update of the
 tied embedding alone is deep (its lookup's rows are update-dependent and reach every later layer), so the scorer's
 tied-lookup rule (coordinator 13:32Z) is retired. `measured(r)` says whether a row's quantities were measured on its
-record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled.
+record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled. A row whose
+quantities te_core.formalism refuses (a trace before 4.2's read-back lists, a data-dependent capture, a Python number
+folded over steps, a nonempty E with no update in its trace or prefix: `formalism.refusal`) is never scored: it is
+skipped with its reason (`refused: ...`).
 
 Each valid submission is scored by the formalism (`formalism_rows`): |C| in Boolean gates, ρ at every (c, k) of its
 start's policy grid and at its reference shapes (te_core.policy's `cells`; c/(c − d) where Fit holds for the training,
@@ -49,6 +52,8 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
 
 #: the first te_core whose ingest measures the formalism's quantities from the traced step circuit (a row's `te_core`)
 MEASURED_FROM = (4, 0)
+#: a skipped row's reason when te_core.formalism refuses its quantities
+REFUSED = "refused: "
 
 
 def _run_key(r: dict):
@@ -56,9 +61,16 @@ def _run_key(r: dict):
 
 
 def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
-    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args` and
-    `readout_leaks`, as `ledger.facts` gives them), for rows ingested before te_core 3.13."""
-    return [r | facts.get(r.get("run_id"), {}) for r in rows]
+    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args`,
+    `readout_leaks` and `changed`, as `ledger.facts` gives them), for rows ingested before te_core 3.13; and with each
+    checkpoint's E facts the row's `output` lacks (`checkpoints`: step -> `rebuild_macs`, `decoder_gates`), for rows
+    ingested before 4.2."""
+    out = []
+    for r in rows:
+        f = dict(facts.get(r.get("run_id"), {}))
+        cp = f.pop("checkpoints", {}).get(str(r.get("checkpoint_step")))
+        out.append(r | f | ({"output": cp | (r.get("output") or {})} if cp else {}))
+    return out
 
 
 def pinned(pilot: bool = False) -> tuple[str, ...]:
@@ -195,7 +207,8 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
     `cells`: the grid's and the reference shapes'), whether Fit holds there for the training (`fit`) and Slowdown's terms
     there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`; `pilot-start`, a record
     on data v3 from a start whose shape has another tokenizer, as the pilot's FineWeb-Edu starts do, since v3's branch
-    points are v3's starts; `over-cap` or `unmeasured`)."""
+    points are v3's starts; `over-cap`; `unmeasured`; or `refused: ` and te_core.formalism's reason,
+    `formalism.refusal`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
@@ -213,6 +226,9 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
             cells[r["start"]] = policy.cells(shape)
         try:
             m = formalism.measure(r, shape)
+        except formalism.Refused as e:
+            skipped[r["id"]] = f"{REFUSED}{e}"
+            continue
         except ValueError:
             skipped[r["id"]] = "unmeasured"
             continue
@@ -329,7 +345,7 @@ def main(argv=None) -> int:
     ap.add_argument("--pin", action="append", default=None,
                     help="a measurement commit, repeated for one version's (default covert_witness's pin.py)")
     ap.add_argument("--facts", type=Path, default=None,
-                    help="JSON, run id -> args, readout_leaks, for rows ingested before 3.13")
+                    help="JSON, run id -> args, readout_leaks, changed, checkpoints (ledger.facts)")
     ap.add_argument("--formalism", action="store_true",
                     help="accepted for te_core 3.14-3.18's command lines: the formalism is the only score")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
@@ -349,8 +365,9 @@ def main(argv=None) -> int:
         a.json.write_text(json.dumps({"pin": list(pin), "left_out": left_out} | rep, indent=1, default=str) + "\n")
     print(formalism_markdown(rep))
     reasons = sorted(set(left_out.values()))
+    refused = sum(v.startswith(REFUSED) for v in rep["skipped"].values())
     print(f"pin {' + '.join(c[:12] for c in pin)}: {rep['scored']} scored of {len(rows)} submissions, "
-          f"{len(rep['skipped'])} without a start shape or measurement; left out: "
+          f"{refused} refused, {len(rep['skipped']) - refused} without a start shape or measurement; left out: "
           + (", ".join(f"{sum(v == x for v in left_out.values())} {x}" for x in reasons) or "none"))
     return 0
 
