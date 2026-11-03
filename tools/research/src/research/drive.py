@@ -4317,24 +4317,28 @@ class Driver:
             self.tell(drive, keys.get(who, []), "; ".join(said), who)
 
     def _stacked(self, drive: dict, members: list[Member], tip: str) -> None:
-        """After a landing at ``tip``, tell the owner of each open PR whose head contains a landed member's head (a PR stacked
-        on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one marked ready at its head, which lands from
-        `next` as it is, and whose merge of `main` would need a new mark."""
+        """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
+        contains that member's head (a PR stacked on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one
+        marked ready at its head, which lands from `next` as it is, and whose merge of `main` would need a new mark.  A PR based
+        on another branch (a long-lived one, as the remote demo's) takes `main` through that branch, and isn't told."""
         from .stale import pull_refs
 
         q = self.q
         landed = {x.pr for x in members}
         try:
-            rest = {n: p for n, p in self._open().items() if n not in landed}
+            opened = self._open()
+            rest = {n: p for n, p in opened.items() if n not in landed}
             refs = pull_refs(q, rest.values())
         except QueueError as e:
             q.log(f"research queue drive: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
             return
         bases: dict[int, list[int]] = {}
         for x in members:
+            onto = {"main", *((opened[x.pr].branch,) if x.pr in opened and opened[x.pr].branch else ())}
             out = _git(self.repo, "for-each-ref", "--contains", x.head, "--format=%(refname:lstrip=3)", "refs/queue/pr/").stdout
             for n in (int(s) for s in out.split() if s.isdigit()):
-                if n in rest and refs.get(n) == rest[n].head and f"stacked:{n}<{x.pr}" not in drive["told"]:
+                if (n in rest and rest[n].base in onto and refs.get(n) == rest[n].head
+                        and f"stacked:{n}<{x.pr}" not in drive["told"]):
                     bases.setdefault(n, []).append(x.pr)
         for n, below in sorted(bases.items()):
             try:
