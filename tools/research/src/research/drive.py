@@ -2971,7 +2971,7 @@ class Driver:
         outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its reviewed ones
         above what a Lean check keeps to its bottom: `_lift`; held on its base
         while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
-        `lean_hold`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
+        `lean_hold`), judge again the Lean checks that ended while it ran (`_reread_lean`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
         stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
         bisection (`_bisect_step`); then ring what is past its bound (`_behind`, `_alarms`)."""
         q = self.q
@@ -3010,6 +3010,7 @@ class Driver:
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self.tell_out(drive, entries, state)
+            running = self._reread_lean(drive)
         landed, why, lane = None, self._unbaselined(drive), []
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
@@ -3028,6 +3029,20 @@ class Driver:
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
+
+    def _reread_lean(self, drive: dict) -> set[str]:
+        """After the sync, which takes most of a tick, judge again the Lean checks that ended while it ran (`_follow_lean`), so
+        the landing and the alarms read them as they are, not as they were at the tick's start (`next` was synced, held and
+        frozen on that view): the store's attempts are refreshed, and each run read this tick as still going is read again,
+        the after-landing run's too.  `_follow_lean` holds a second time in a tick: a check it judged keeps its verdict, a
+        machine's fault is run again once (``resend``), and a launch that registered no run is rung once and dropped.  The
+        commits a Lean check runs at now (`_running_lean`)."""
+        self._refresh_attempts()
+        live = {rid for rid, (st, *_) in self._seen.items() if st in ACTIVE}
+        self._seen = {rid: s for rid, s in self._seen.items() if rid not in live}
+        self._ev = {a: d for a, d in self._ev.items() if live.isdisjoint(a.split())}
+        self._follow_lean(drive)
+        return self._running_lean(drive)
 
     def _park(self, chain: list[Member]) -> list[int]:
         """The members the sync moves to the top of `next` (`queue.Queue.park`, which takes with each the PRs that contain it):
@@ -4133,11 +4148,7 @@ class Driver:
         if why := self._old_git():
             return why
         q.fetch()
-        if q.store is not None and q.store.remote is not None:
-            try:
-                q.store.refresh(attempts_only=True)
-            except Exception as e:  # noqa: BLE001  (the local catalog still answers)
-                q.log(f"research queue drive: refreshing attempts failed ({type(e).__name__}: {e}); using the local catalog")
+        self._refresh_attempts()
         state = q.load_state()
         drive = state.setdefault("drive", {})
         drive.setdefault("told", [])
@@ -4152,6 +4163,15 @@ class Driver:
         self.follow_postland(drive)
         self._follow_shadow(drive)
         return self._review(state, drive, dry_run)
+
+    def _refresh_attempts(self) -> None:
+        """Bring the store's catalog of attempts up to date from its remote, which the runs' states and records are read from."""
+        q = self.q
+        if q.store is not None and q.store.remote is not None:
+            try:
+                q.store.refresh(attempts_only=True)
+            except Exception as e:  # noqa: BLE001  (the local catalog still answers)
+                q.log(f"research queue drive: refreshing attempts failed ({type(e).__name__}: {e}); using the local catalog")
 
     def _old_git(self) -> str | None:
         """Why the tick is refused, before any sync or push, when drive's git is older than `GIT_MIN`: `Queue._merge` needs its
