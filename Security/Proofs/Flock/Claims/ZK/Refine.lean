@@ -351,6 +351,24 @@ theorem withStops_enc_cut (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) →
     show (if Rf x c₀ i = true then stop else _) = stop
     rw [hRf x c₀ c i h₀, hr, ite_eq_left rfl]
 
+/-- The reference prover's message after `n` coins, `n` before the last: round `n`'s encoding at them, padded. -/
+theorem msgAt_pre (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape)
+    (cs : List S.Coin) {n : ℕ} (hl : cs.length = n) (hn : n < refK x) :
+    S.msgAt x wt t cs = S.enc x (S.pad cs) n (S.cutOf x (S.pad cs) wt t) := by
+  subst hl
+  unfold msgAt
+  rw [ite_eq_left hn]
+
+/-- The switched prover's message after `n` coins, `n` before the last: round `n`'s encoding at them, padded. -/
+theorem swMsgAt_pre (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) {n : ℕ} (hl : cs.length = n) (hn : n < refK x) :
+    S.swMsgAt x wt v t cs = S.enc x (S.pad cs) n (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t) := by
+  subst hl
+  unfold swMsgAt
+  rw [ite_eq_left hn]
+
 open Classical in
 /-- **The reference prover's message after a prefix of a coin vector, before the last coin**: round `j`'s encoding at
 the prefix, padded. -/
@@ -384,7 +402,7 @@ theorem withStops_swMsgAt_pre (S : RefSession) (Rf : (x : Msg) → (Fin (refK x)
       if Rf x c j then stop else (S.withStops Rf stop).enc x c₁ j (S.swCutOf x c₁ (S.wt x w) (vs x w ν c₁) t) := by
   have hl : ((List.ofFn c).take j).length = j := by simp only [List.length_take, List.length_ofFn]; omega
   have h₀ : ∀ k : Fin (refK x), k.val < j → S.pad ((List.ofFn c).take j) k = c k := fun k hk => S.pad_take c j k hk
-  rw [(S.withStops Rf stop).swMsgAt_take_pre x (S.wt x w) (vs x w ν) t c j hj]
+  refine ((S.withStops Rf stop).swMsgAt_take_pre x (S.wt x w) (vs x w ν) t c j hj).trans ?_
   exact S.withStops_enc_swCut Rf stop vs Ok hRf hsc x w ν t c _ c₁ j h₀ fun hr =>
     ⟨(h₁ hr).1, S.stopsOk_pad Rf Ok hRf hOk _ (hl.trans_le hj.le) c (hl ▸ h₀) (hl ▸ hr), (h₁ hr).2⟩
 
@@ -396,7 +414,7 @@ theorem withStops_msgAt_pre (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) �
     (h₁ : Rf x c j = false → ∀ k : Fin (refK x), k.val < j → c₁ k = c k) :
     (S.withStops Rf stop).msgAt x wt t ((List.ofFn c).take j) =
       if Rf x c j then stop else (S.withStops Rf stop).enc x c₁ j (S.cutOf x c₁ wt t) := by
-  rw [(S.withStops Rf stop).msgAt_take_pre x wt t c j hj]
+  refine ((S.withStops Rf stop).msgAt_take_pre x wt t c j hj).trans ?_
   exact S.withStops_enc_cut Rf stop hRf hc x wt t c _ c₁ j (fun k hk => S.pad_take c j k hk) h₁
 
 /-- **The stopped round at the cut coins**: the stop where the rule stops `c` at round `i`, else the session with
@@ -431,11 +449,11 @@ theorem swPre_msg_stops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S
       S.pad ((ansHist a i).tail.map fun p => S.decOf p.2) k = S.coinsOf a k := fun k hk => S.pad_ansHist a i k hk
   show OC.ret ((S.withStops Rf stop).swMsgAt x (S.wt x w) (vs x w ν) t
     ((ansHist a i).tail.map fun p => S.decOf p.2)) = OC.ret _
-  unfold swMsgAt
-  rw [hl, ite_eq_left hlt]
-  exact congrArg OC.ret (S.withStops_enc_swCut Rf stop vs Ok hRf hsc x w ν t (S.coinsOf a) _ _ (i.val - 1) h₀
-    fun hr => ⟨fun k hk => S.cutCoins_agree Rf hlt.le hr k hk,
-      S.stopsOk_pad Rf Ok hRf hOk _ (hl.trans_le hlt.le) _ (hl ▸ h₀) (hl ▸ hr), S.cutCoins_ok Rf Ok hRf hOk hlt.le hr⟩)
+  exact congrArg OC.ret (((S.withStops Rf stop).swMsgAt_pre x (S.wt x w) (vs x w ν) t _ hl hlt).trans
+    (S.withStops_enc_swCut Rf stop vs Ok hRf hsc x w ν t (S.coinsOf a) _ _ (i.val - 1) h₀
+      fun hr => ⟨fun k hk => S.cutCoins_agree Rf hlt.le hr k hk,
+        S.stopsOk_pad Rf Ok hRf hOk _ (hl.trans_le hlt.le) _ (hl ▸ h₀) (hl ▸ hr),
+        S.cutCoins_ok Rf Ok hRf hOk hlt.le hr⟩))
 
 /-- **Before the last coin, the session with stops' prover sends the stopped round at the cut coins of what the answers
 open** (`Causal`). -/
@@ -457,10 +475,9 @@ theorem pre_msg_stops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.C
     simp only [List.length_map, List.length_tail, ansHist, List.length_ofFn]
   have hlt : i.val - 1 < refK x := by omega
   show OC.ret ((S.withStops Rf stop).msgAt x wt t ((ansHist a i).tail.map fun p => S.decOf p.2)) = OC.ret _
-  unfold msgAt
-  rw [hl, ite_eq_left hlt]
-  exact congrArg OC.ret (S.withStops_enc_cut Rf stop hRf hc x wt t (S.coinsOf a) _ _ (i.val - 1)
-    (fun k hk => S.pad_ansHist a i k hk) fun hr k hk => S.cutCoins_agree Rf hlt.le hr k hk)
+  exact congrArg OC.ret (((S.withStops Rf stop).msgAt_pre x wt t _ hl hlt).trans
+    (S.withStops_enc_cut Rf stop hRf hc x wt t (S.coinsOf a) _ _ (i.val - 1)
+      (fun k hk => S.pad_ansHist a i k hk) fun hr k hk => S.cutCoins_agree Rf hlt.le hr k hk))
 
 /-- **The switched model before the last coin, at the cut coins**: `swPreModel` of the session with stops, its tables
 and its stopped round at the cut coins of what the answers open (`encCut`). -/
@@ -563,7 +580,9 @@ theorem swOffCut_link (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.C
       exact S.withStops_swMsgAt_pre Rf stop vs Ok hRf hsc hOk x w ν t c _ j hlt fun hr =>
         ⟨fun k hk => S.cutCoins_agree Rf hlt.le hr k hk, S.cutCoins_ok Rf Ok hRf hOk hlt.le hr⟩
     · obtain rfl : j = refK x := by have := List.mem_range.1 hj; omega
-      rw [ite_eq_right hlt, (S.withStops Rf stop).swMsgAt_take_last x (S.wt x w) (vs x w ν) t c, ite_eq_right hA]
+      rw [ite_eq_right hlt]
+      refine ((S.withStops Rf stop).swMsgAt_take_last x (S.wt x w) (vs x w ν) t c).trans ?_
+      rw [ite_eq_right hA]
       show (if Rf x c (refK x) = true then stop else S.off x c (S.swCutOf x c (S.wt x w) (vs x w ν c) t)) =
         (if Rf x c (refK x) = true then stop else
           S.off x (S.cutCoins Rf x c) (S.swCutOf x (S.cutCoins Rf x c) (S.wt x w) (vs x w ν (S.cutCoins Rf x c)) t))
@@ -580,7 +599,9 @@ theorem swOffCut_link (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.C
       exact S.withStops_msgAt_pre Rf stop hRf hc x (S.wt₀ x) t c _ j hlt fun hr k hk =>
         S.cutCoins_agree Rf hlt.le hr k hk
     · obtain rfl : j = refK x := by have := List.mem_range.1 hj; omega
-      rw [ite_eq_right hlt, (S.withStops Rf stop).msgAt_take_last x (S.wt₀ x) t c, ite_eq_right hA]
+      rw [ite_eq_right hlt]
+      refine ((S.withStops Rf stop).msgAt_take_last x (S.wt₀ x) t c).trans ?_
+      rw [ite_eq_right hA]
       show (if Rf x c (refK x) = true then stop else S.off x c (S.cutOf x c (S.wt₀ x) t)) =
         (if Rf x c (refK x) = true then stop else S.off x (S.cutCoins Rf x c) (S.cutOf x (S.cutCoins Rf x c) (S.wt₀ x) t))
       cases hr : Rf x c (refK x)
@@ -609,11 +630,15 @@ theorem swCoinModel_link_stops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
         else (S.withStops Rf stop).fin x c ((S.withStops Rf stop).swViewsAt x c (S.wt x w) (vs x w ν c) t)
     refine List.map_congr_left fun j hj => ?_
     by_cases hlt : j < refK x
-    · rw [ite_eq_left hlt, (S.withStops Rf stop).cutV_swViewsAt,
-        S.withStops_swMsgAt_pre Rf stop vs Ok hRf hsc hOk x w ν t c c j hlt fun _ => ⟨fun _ _ => rfl, hOk.2 x c hA⟩]
-      exact S.withStops_enc_stop Rf stop x c j _
+    · rw [ite_eq_left hlt]
+      refine ((S.withStops_swMsgAt_pre Rf stop vs Ok hRf hsc hOk x w ν t c c j hlt fun _ =>
+        ⟨fun _ _ => rfl, hOk.2 x c hA⟩).trans (S.withStops_enc_stop Rf stop x c j _)).trans ?_
+      exact congrArg ((S.withStops Rf stop).enc x c j)
+        ((S.withStops Rf stop).cutV_swViewsAt x c (S.wt x w) (vs x w ν c) t).symm
     · obtain rfl : j = refK x := by have := List.mem_range.1 hj; omega
-      rw [ite_eq_right hlt, (S.withStops Rf stop).swMsgAt_take_last x (S.wt x w) (vs x w ν) t c, ite_eq_left hA]
+      rw [ite_eq_right hlt]
+      refine ((S.withStops Rf stop).swMsgAt_take_last x (S.wt x w) (vs x w ν) t c).trans ?_
+      rw [ite_eq_left hA]
   · exact ⟨S.swOffCut Rf stop vs x c, S.swOffCut_link Rf stop vs Ok H R hV hD hc hRf hsc hOk hT x w hR ν c hA, id,
       le_rfl⟩
 
