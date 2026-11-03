@@ -35,7 +35,8 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 The run plans its steps for the harness (`hooks.plan`) and encodes E in the middle of each of `--snaps` + 1 shares of them
 (the default 19: each 5%), so each of the harness's 5% checkpoints scores one. The record's notes carry `delta_grad`: the
 trainable values and the bits of their gradient, of the optimizer's state (AdamW's m and v, or Muon's buffer, fp32) and of
-the fp32 latent factors and magnitudes that a straight-through run keeps beside the stored codes.
+the fp32 masters the update rule reads and writes beside what E stores (the factors, any magnitudes and the norm gains:
+`latent_bits`, Δ_t).
 
     python launch.py START --island e1mb --node NODE --note TEXT -- [--targets all] [--rank 0] ...
 """
@@ -172,7 +173,9 @@ class LowRank:
         self.dm = torch.zeros_like(self.m) if dora else None
 
     def latents(self) -> int:
-        return (self.A.numel() + self.B.numel() if self.dA is not None else 0) + (self.m.numel() if self.m is not None else 0)
+        """The fp32 values the update rule reads and writes beside what E stores: the factors (bf16 or coded in E) and
+        any magnitudes."""
+        return self.A.numel() + self.B.numel() + (self.m.numel() if self.m is not None else 0)
 
     @torch.no_grad()
     def refresh(self, mag_dtype: torch.dtype) -> None:
@@ -287,7 +290,7 @@ def ranks_for(theta, targets: list[str], rank: int, rank_map: dict[str, int]) ->
 
 def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int) -> dict:
     """Δ_grad: each trained value's fp32 gradient and its optimizer's fp32 state (AdamW's m and v, Muon's one buffer),
-    plus the `latent` fp32 values a straight-through run keeps beside the codes E stores."""
+    plus the `latent` fp32 masters the update rule reads and writes beside what E stores."""
     na, nm = sum(p.numel() for p in adam), sum(p.numel() for p in muon)
     n = na + nm
     bits = 32 * n + 64 * na + 32 * nm + 32 * latent
@@ -535,7 +538,7 @@ def main() -> int:
     hooks.plan(n_steps)
     trained = [p for grp in muon + adam for p in grp["params"]]
     dgrad = delta_grad([p for grp in adam for p in grp["params"]], [p for grp in muon for p in grp["params"]],
-                       sum(ad.latents() for ad in ads.values()))
+                       sum(ad.latents() for ad in ads.values()) + sum(params[n].numel() for n in norms))
     print(json.dumps({"island": KLASS, "format": a.format, "opt": a.opt, "steps": n_steps, "rank": rank,
                       "ranks": sorted(set(ranks.values())), "rank_sum": sum(ranks.values()), "targets": len(ranks),
                       "norms": len(norms), "E_bytes": size, "delta_grad": dgrad, "flops_per_step": per_step,
