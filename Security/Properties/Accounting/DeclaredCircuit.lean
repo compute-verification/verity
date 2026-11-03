@@ -1,5 +1,5 @@
 import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Properties.RemoteAudit.Schedule
+import Properties.Accounting.Remote.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap

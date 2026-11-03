@@ -60,7 +60,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -89,7 +89,7 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
   before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
   `CoinsConfidential` and `OneClock`, no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
-- **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
+- **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.
 

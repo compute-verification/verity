@@ -2,7 +2,7 @@ import PousCheck.Run
 import Properties.Pous
 import Properties.Pous.TimedAudit
 import Properties.Pous.MemoryChallenger
-import Properties.Identity
+import Properties.Hash.Identity
 import Definitions.Pous.Assumptions.P2
 import Definitions.Pous.P2.Cost
 

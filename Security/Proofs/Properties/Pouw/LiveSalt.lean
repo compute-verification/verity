@@ -1,7 +1,7 @@
 import Properties.Pouw.LiveSalt
 import Proofs.Properties.Pouw.LiveSalt.Ledger
 import Proofs.Properties.Pouw.Commit
-import Proofs.Properties.NetworkRecords.Bytes
+import Proofs.Properties.NetworkCertifier.Records.Bytes
 
 /-!
 # Proofs of the Pearl-C live salt's properties (`Properties.Pouw.LiveSalt`)

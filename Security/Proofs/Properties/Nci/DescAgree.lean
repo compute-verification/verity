@@ -1,5 +1,5 @@
 import Proofs.Properties.Nci
-import Properties.NciDesc
+import Properties.Nci.Desc
 
 /-!
 # `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`

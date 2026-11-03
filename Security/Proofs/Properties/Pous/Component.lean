@@ -1,7 +1,7 @@
 import Properties.Pous.Component
 import Proofs.Properties.Pous.RunAt
 import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.CertifierDevice.Lms
+import Proofs.Properties.NetworkCertifier.Device.Lms
 import Mathlib.Tactic.SplitIfs
 import Batteries.Tactic.OpenPrivate
 

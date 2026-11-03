@@ -1,7 +1,7 @@
 import Properties.Attest
 import Proofs.Properties.Pous.MemoryChallenger.Tree
 import Proofs.Flock.Claims.Finder
-import Proofs.Properties.CertifierDevice.Lms
+import Proofs.Properties.NetworkCertifier.Device.Lms
 
 /-!
 # Proofs of a party's signed periods (`Properties.Attest`)
