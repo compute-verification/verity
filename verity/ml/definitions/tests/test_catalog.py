@@ -78,6 +78,7 @@ COUNT += 2  # io_shell's `SelectCollect_v1` and `SelectEntry_v1`, a line of its 
 COUNT += 2  # `int8_exact`'s Int8RowQuant_v3 and `boolean_int8`'s Int8RowQuant_v4, its σ, a line of its own
 
 COUNT += 4  # `int8_exact`'s Int8RowQuant_v5 and U8x4ToU32_v1, `boolean_int8`'s Int8RowQuant_v6 (σ of v5) and U8x4ToU32_v2
+COUNT += 1  # io_shell's `SelectCollect_v2`, a line of its own so it merges with any other change to the count
 
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
 
