@@ -10,6 +10,7 @@ public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
+import all Lean.Data.Json.Basic
 
 /-!
 # The verifier's parser reads back what the printers print
