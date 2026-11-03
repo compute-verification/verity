@@ -3,7 +3,9 @@ module
 public import Proofs.Flock.SampledGeneric.Defs
 
 /-!
-# The sampled audit as a compiler, generic in the proof system (stated)
+# The sampled audit as a compiler, generic in the proof system (stated in the game model)
+
+Proof material, listed in no lock: the statement is the claims core's (`Claims.SamplingGeneric`).
 
 Take any proof system for proof blocks (`ProofSystem`) with a knowledge extractor (`Extractor`, `Trials`), a binding
 commitment to the trace (`Binding`) and a sampling design (`Audit.Law`). The sampled audit (`Audit.audit`: the prover

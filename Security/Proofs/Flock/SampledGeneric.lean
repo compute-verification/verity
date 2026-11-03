@@ -10,7 +10,8 @@ public import Proofs.Flock.SampledGeneric.FlockHide
 public import Proofs.Flock.SampledGeneric.Flock
 public import Proofs.Flock.SampledGeneric.FlockZk
 
-/-! The sampled audit as a compiler, generic in the proof system: its objects, its statements, their proofs, and
-Flock as an instance. -/
+/-! The sampled audit as a compiler, generic in the proof system, in C-Flock's game model: its objects, its statements,
+their proofs, and Flock as an instance. Proof material, listed in no lock: the statement is the claims core's
+(`Claims.SamplingGeneric`). -/
 
 @[expose] public section
