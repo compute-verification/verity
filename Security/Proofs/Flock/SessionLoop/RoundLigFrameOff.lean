@@ -72,8 +72,10 @@ theorem label_close_out {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hl : s
       · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at h
         cases h
         exact ⟨rfl, rfl⟩
-      · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at h <;> cases h
-    · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos] at h <;> cases h
+      · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at h
+        cases h
+    · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos] at h
+      cases h
 
 /-- **A round outside every masked phase stays outside**: where the frame takes plain frames and the squeeze there,
 past the inner proof's label or not, it is still outside. -/
@@ -178,14 +180,14 @@ theorem check_pastAt {c : Cfg} {m s' : Masker} {C p : ℕ} {r : ByteArray × ℕ
   rw [Flags.eq_mk_encs hb] at h ⊢
   unfold FlockComplete.LigShape.preAt at h ⊢
   by_cases hpC : p = C
-  · rw [if_pos hpC, List.singleton_append] at h ⊢
+  · rw [ite_eq_left hpC, List.singleton_append] at h ⊢
     obtain ⟨hv, ho⟩ := check_closeAt hl hmf hpf hk (fun h' => hn0 h'.1) hn h
     refine ⟨hv, ?_⟩
     rw [ho, maskFrames_id 0 _ (fun f hf => by
       rcases List.mem_cons.1 hf with rfl | hf
       · trivial
       · exact hdf f hf)]
-  · rw [if_neg hpC, List.nil_append] at h ⊢
+  · rw [ite_eq_right hpC, List.nil_append] at h ⊢
     obtain ⟨hv, ho⟩ := check_offAt (hon (by omega)) hmf hpf hk (fun h' => hn0 h'.1) hn h
     refine ⟨hv, ?_⟩
     rw [ho, maskFrames_id 0 _ hdf]
@@ -226,10 +228,10 @@ theorem past_round {c : Cfg} {s : Masker} {C J : ℕ} {r : ByteArray × ℕ} {q 
   rw [Flags.eq_mk_encs hb] at h
   unfold FlockComplete.LigShape.preAt at h
   by_cases hJC : J + 1 = C
-  · rw [if_pos hJC, List.singleton_append] at h
+  · rw [ite_eq_left hJC, List.singleton_append] at h
     exact (roundFree_closeAt (hg.2 hd).1 (fun f hf => (hfs f hf).1) (fun f hf => (hfs f hf).2.1) hk
       (fun h' => hn0 h'.1) hn h).1
-  · rw [if_neg hJC, List.nil_append] at h
+  · rw [ite_eq_right hJC, List.nil_append] at h
     exact roundFree_offAt_on (hon (by omega)) (fun f hf => (hfs f hf).1) (fun f hf => (hfs f hf).2.1) hk
       (fun h' => hn0 h'.1) hn h
 
