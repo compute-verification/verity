@@ -2,21 +2,20 @@
 
 Sampled proofs spot-check a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then draws proof blocks
-from its own randomness, the developer proves the drawn proof blocks, and the verifier checks the proofs. It never runs any part
+on the auditor's challenger's coins, the developer proves the drawn proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.core.protocols.profile.IntegrityProfile`): except with
 probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW's period (`verity/pouw/period/v1`)
-and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols.
-In each, the composite's verifier runs `VStar.Recursive.Sampled`'s Lean check as a component, in the form its params
-name: the audit on the proofs (one-stage v2, `verity/sampled-proofs/one-stage/v2`) or the recursive audit
-(`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in the one-stage audit's live check on its
-verdict of record). One-stage v1 (`verity/sampled-proofs/one-stage/v1`), whose verdicts are the evidence's, is refused
-by name: a one-stage form whose params or evidence name no `proofs` is v1's (`VStar.Recursive.Sampled.V1_REFUSED`). The
-composite accepts only when every component accepts.
+Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
+`verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
+policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
+`VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
+the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in
+the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts are the evidence's, is refused
+by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The composite accepts only when
+every component accepts.
 
 ## Guarantee and assumptions
 
@@ -36,9 +35,9 @@ over the statement circuit. It rests on these named assumptions:
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
-In the one-stage form the verdicts are the component's own run of `flock-verify verify --zk`'s one-stage path on the
-sessions' files, which come in as blobs (under "Where things are"), so a composite accepts in that form only where that
-run accepts. No Lean statement yet carries a composite's acceptance to `SampledKSLiveV3`'s event.
+In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
+in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
+carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger, under three Lean premises,
@@ -77,8 +76,8 @@ without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, 
 than one, so every subcircuit is exercised in every audit. `work:K` keeps those strata and that sampler
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
-A work draw may add a closure, proof blocks proved with the drawn ones. Each verifier derives the strata from its own program and
-query, never from the prover.
+Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
+soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`) and a closure map (`closure`).
 
 **What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
@@ -107,7 +106,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the sampling designs (`Law`, `Stratified`,
   `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), the retired two stages
   (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
-  (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are
+  (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The challenger's coins are
   the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
@@ -148,7 +147,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
   `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s.
+  to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
@@ -214,8 +213,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
     `verifier.check_verdicts`).
-  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
-    sampling design's `closure=`), `session`, `deliver` and `outcome`, which
+  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (which refuses a
+    `closure=`), `session`, `deliver` and `outcome`, which
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
     is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
@@ -254,7 +253,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
   `params_of`, and `IDS`, the configuration's component names and their protocol ids.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
-- `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
+- `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
@@ -515,32 +514,32 @@ Each rule, its formats and its refusal codes are in `service`'s module docstring
 log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, the fleet's halt by
 `tests/test_service_fleet.py`, and the stream's and the fleet's rules by the difftest's `stream` and `fleet` pieces.
 
-### The verifier's randomness
+### The draw's coins
 
-The draw of record is `coins.OwnRandomness` on the Lean verifier's coins (`one_stage.verifier.coins`:
-`IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
-hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
-`Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except vLLM's legacy replay challenge
-until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
+The verifier draws no coins of its own: a draw's coins are the auditor's challenger's, read from its log. A stream whose
+selection reads coins takes only a `coins.ChallengerCoins` (else `service.NO_OWN_COINS`; `All`, or a `sampler`'s stream,
+reads none), and `Run.run` refuses a draw that read coins without the challenger's evidence or under another
+`coin_source`. `coins.OwnRandomness` reads those bytes, after the registration, with `Flock.Draw`'s samplers and no hash,
+derivation or beacon; `draw_first` reads them as `Flock.Draw.drawWith` does, and `coins`' docstring has the byte layout.
+Nothing derives a draw but vLLM's legacy replay challenge, until its re-baseline. Pinned by `tests/test_coins.py`.
+`one_stage.verifier.coins` (`IO.getRandomBytes`) is only `challenger.LiveChallenger`'s entropy; tests draw from
+`tests/fake_challenger.py`.
 
-A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
-`coins.ChallengerCoins` as the stream's `coins`. `commit(after)` takes the prover's commitment (the registration's
+A stream's `coins.ChallengerCoins` come from `remote.RemoteChallenger` (`challenger.LiveChallenger` in process).
+`commit(after)` takes the prover's commitment (the registration's
 digest after its receipt, or the run's root) and fixes the family and its next index. Each read then opens
 ceil(missing / 64) more of the family's coins after it in one round trip, checks each against the challenger's
 commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
 drawn once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
-are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` has `coin_source`
-`"challenger"` (its digest says so, and it takes no sampler); any other is `"verifier"`. Every outcome's run by the Lean
-verifier (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
-is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
+are exactly those released after the commitment, every one read; the stream's digest says `"coins": "challenger"`.
+`Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
 session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
 registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
 pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
 session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
 salt or path before it closed) and the bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
-window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
-failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
+window root are refused the same way, a reject failing `run`; a draw that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.
 
 ### Verification plans
