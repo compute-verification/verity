@@ -1,8 +1,8 @@
 """Direction `hybrid`, night 2: added capacity from θ toward the large gains (-2%, -5%) on fully trained starts, each
 arm priced by its compute.
 
-    python launch.py reference s100 --island hybrid --program grow.py --note "..." -- --klass reference \\
-        --budget-fraction 0.6 --arms "grow=none;grow=depth,depth=12;grow=moe,experts=8"
+    python launch.py s-t20 --island hybrid --program grow.py --note "grow ..." -- --grow depth --depth 8 \\
+        --budget-fraction 0.6
 
 `--grow` (an arm key, like every key in ARM_KEYS):
 
@@ -22,15 +22,19 @@ gains, the router and an unfrozen embedding by AdamW (betas 0.9, 0.95). The tied
 except in `scratch`. Linear warmup over `--warmup` steps, then linear decay to 0: each arm is a complete schedule from
 θ within its share of the budget.
 
-Only `none` is θ-shaped, so the evaluator scores only it (evaluate.check's `architecture`). Every arm is measured here:
-θ once, then each arm at `--evals` points of its schedule, by mean cross-entropy in nats per token over `--eval-windows`
-windows of the training stream that no start read and no step trains on (the last windows of the seed-0 order;
-training reads that order past the windows the start read). The bytes are the same for θ and the arm, so the paired
-drop in nats is the drop in bits per byte on those windows. `none` encodes its E at each point, a checkpoint the
-harness scores on the search pool, which calibrates the in-job measure. The submission is the last `none` arm's E,
-else θ unchanged. notes.arms holds each arm's points with their analytic FLOPs (the arm's own, its evaluations
-excluded), its sizes and its state: Δ ≤ 16 bits per trained weight (θ' in bf16), u(1) the trained weights a token reads,
-Δ_grad the f32 gradient plus optimizer state (Muon's momentum, AdamW's two moments) of the trained weights.
+Every arm is measured here: θ once, then each arm at `--evals` points of its schedule, by mean cross-entropy in nats per
+token over `--eval-windows` windows of the training stream that no start read and no step trains on (the last windows
+of the seed-0 order; training reads that order past the windows the start read). The bytes are the same for θ and the
+arm, so the paired drop in nats is the drop in bits per byte on those windows.
+
+The last arm is the submission (harness v3, no class). `none` encodes its changed tensors (`encode_full`) at each point,
+checkpoints the harness scores. `depth`, `mlp` and `scratch` submit their model at the end as a model of its own
+architecture (`encode_model`, CWMODL1: θ's family, vocabulary, context and tying; every tensor not θ's bit for bit is
+E's, in fp32), and that submission is their one checkpoint, since the pin's harness takes checkpoints only from the
+other encoders. lf has no experts, so a last `moe` arm submits θ unchanged and is measured here only. notes.arms holds
+each arm's points with their analytic FLOPs (the arm's own, its evaluations excluded), its sizes and its state: Δ ≤ 32
+bits per trained weight (E in fp32), u(1) the trained weights a token reads, Δ_grad the f32 gradient plus optimizer
+state (Muon's momentum, AdamW's two moments) of the trained weights.
 """
 from __future__ import annotations
 
@@ -45,7 +49,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import prepare
-from model import CTX, LM, Block, Size, rope
+from model import CTX, LM, VOCAB, Block, Size, rope
 
 ARM_KEYS = {"grow": ("none", "depth", "mlp", "moe", "scratch"), "depth": int, "mlp_mult": float, "experts": int,
             "topk": int, "aux": float, "router_init": float, "noise": float, "size": str, "kd": float, "kd_frac": float,
@@ -156,16 +160,17 @@ class MoEBlock(Block):
 def build(theta: dict[str, torch.Tensor], cfg: dict, aa: argparse.Namespace, dev: str) -> LM:
     """The arm's model at step 0 (`--grow`)."""
     d, L, H, ff = cfg["d_model"], cfg["n_layer"], cfg["n_head"], cfg["d_ff"]
+    V = cfg.get("vocab", VOCAB)
     torch.manual_seed(aa.seed)
     g = torch.Generator().manual_seed(aa.seed)
     if aa.grow == "scratch":
         dd, LL, HH, FF = (int(x) for x in aa.size.split("x"))
         with torch.device(dev):
-            return LM(Size("scratch", dd, LL, HH, FF))
+            return LM(Size("scratch", dd, LL, HH, FF), vocab=V)
     src = [j * L // aa.depth for j in range(aa.depth)] if aa.grow == "depth" else list(range(L))
     ff2 = round(ff * aa.mlp_mult) if aa.grow == "mlp" else ff
     with torch.device(dev):
-        lm = LM(Size("grown", d, len(src), H, ff2))
+        lm = LM(Size("grown", d, len(src), H, ff2), vocab=V)
         if aa.grow == "moe":
             lm.blocks = nn.ModuleList(MoEBlock(Size("grown", d, L, H, ff), aa.experts, aa.topk) for _ in range(L))
     lm.embed.copy_(theta["embed"])
@@ -225,7 +230,7 @@ def state(lm: LM, muon: list, adam: list, aa: argparse.Namespace) -> dict:
                   for blk in lm.blocks if isinstance(blk, MoEBlock))
     per_token = n_muon + n_adam - experts + (experts * aa.topk // aa.experts if experts else 0)
     return {"parameters": sum(p.numel() for p in lm.parameters()), "trained": n_muon + n_adam, "muon": n_muon,
-            "adamw": n_adam, "delta_bits_upper": 16 * (n_muon + n_adam), "u1_bits_upper": 16 * per_token,
+            "adamw": n_adam, "delta_bits_upper": 32 * (n_muon + n_adam), "u1_bits_upper": 32 * per_token,
             "delta_grad_bytes": 8 * n_muon + 12 * n_adam,
             "delta_grad_rule": "f32 gradient + Muon momentum (8 B a weight), f32 gradient + AdamW m, v (12 B)"}
 
@@ -242,7 +247,6 @@ def lr_frac(step: int, n: int, warmup: int) -> float:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--klass", required=True, choices=sorted(prepare.CLASSES))
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--grow", choices=ARM_KEYS["grow"], default="none")
@@ -347,7 +351,9 @@ def main() -> int:
         if n * aa.batch > len(train.order):
             fail(f"grow: arm {arm} reads {n * aa.batch} windows, {len(train.order)} are unread")
         train.at = 0
+        last = arm == len(arms) - 1
         marks = {round(n * j / aa.evals) for j in range(1, aa.evals + 1)}
+        enc_marks = {max(1, round(n * j / CHECKPOINTS)) for j in range(1, CHECKPOINTS + 1)}
         st = state(lm, muon, gains + ([lm.embed] if embed_lr else []), aa)
         overrides = {k: v for k, v in vars(aa).items() if k in ARM_KEYS and v != vars(a).get(k)}
         out = {"arm": arm, **overrides, "grow": aa.grow, "steps": n, "tokens": n * tokens, "flops_per_step": per_step,
@@ -388,11 +394,12 @@ def main() -> int:
             if (k + 1) % 100 == 0:
                 print(json.dumps({"arm": arm, "step": k + 1, "loss": round(total, 5), "lr_frac": round(frac, 4),
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            if last and aa.grow == "none" and k + 1 in enc_marks:
+                changed = [nm for nm, p in lm.named_parameters() if p.requires_grad]
+                blob = prepare.encode_full({nm: p.detach().to(theta[nm].dtype) for nm, p in lm.named_parameters()
+                                            if p.requires_grad})
+                snaps_at.append({"arm": arm, "step": k + 1, "e_bytes": len(blob)})
             if k + 1 in marks:
-                if aa.grow == "none":
-                    changed = [nm for nm, p in lm.named_parameters() if p.requires_grad]
-                    blob = prepare.encode_lora({}, "bf16", {nm: p for nm, p in lm.named_parameters() if p.requires_grad})
-                    snaps_at.append({"arm": arm, "step": k + 1, "e_bytes": len(blob)})
                 got = measure(lm, ft["forward"])
                 diff = base - got
                 pt = {"step": k + 1, "train_flops": (k + 1) * per_step, "nats": round(float(got.mean()), 6),
@@ -401,17 +408,29 @@ def main() -> int:
                       "s": round(time.perf_counter() - t0, 1)}
                 out["points"].append(pt)
                 print(json.dumps({"arm": arm, **pt}), flush=True)
+        if last and aa.grow in ("depth", "mlp", "scratch"):
+            s = lm.size
+            own = {**cfg, "d_model": s.d_model, "n_layer": s.n_layer, "n_head": s.n_head, "d_ff": s.d_ff}
+            new = {nm: p.detach().float().cpu() for nm, p in lm.named_parameters()}
+            new = {nm: v for nm, v in new.items() if nm not in theta or not prepare.same_bits(v, theta[nm])}
+            changed = sorted(new)
+            blob = prepare.encode_model(own, new)
+            out["config"] = own
+            snaps_at.append({"arm": arm, "step": n, "e_bytes": len(blob), "format": "CWMODL1"})
         arms_out.append(out)
         del lm, opts, muon, gains, moe
         if dev.startswith("cuda"):
             torch.cuda.empty_cache()
     if blob is None:
         blob = prepare.encode_full({})
-    prepare.submit(Path(a.out), a.start, a.klass, blob, prepare.decode(theta, blob),
+    kind = arms[-1].grow
+    prepare.submit(Path(a.out), a.start, blob, prepare.decode(theta, blob),
                    {"full": changed, "adapters": {}}, steps, changed=changed,
                    notes={"method": "grow", "args": vars(a), "theta_nats": base_mean, "data": data, "arms": arms_out,
                           "e_checkpoints": snaps_at,
-                          "submitted": "the last none arm's E" if changed else "θ unchanged: no arm is θ-shaped"})
+                          "submitted": {"none": "the last arm's changed tensors (encode_full)",
+                                        "moe": "θ unchanged: lf has no experts"}.get(
+                              kind, "the last arm's model of its own architecture (encode_model, CWMODL1)")})
     return 0
 
 
