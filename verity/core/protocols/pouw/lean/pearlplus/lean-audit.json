@@ -1,0 +1,14 @@
+{
+ "roots": ["PouwPearlPlus"],
+ "exempt": {},
+ "layers": {
+  "PouwPearlPlus": {
+   "imports": ["PouwPearlPlus", "PouwCommit", "Evaluate", "Randomness", "Identity", "Flock", "Lean"],
+   "except": [],
+   "why": "the verdict is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's randomness and tagged identity), and the evaluator's FP32, FP8 and tensor-core steps (`verity_evaluate`); no Mathlib and nothing of Security"
+  }
+ },
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}
