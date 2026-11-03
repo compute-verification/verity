@@ -21,8 +21,9 @@ The grid is every decade of c and of k from the least to the greatest of those s
 (`cells`). P1, P2 and P4 read the reference policy (`REFERENCE`); P3 marks all three.
 
 The scoring cap (`eligible`): a checkpoint is scored only when its own forward gates per token are at most the greater
-of its start's and the compute-optimal model's at the checkpoint's held-out loss under the ladder's fit (`ladder_fit`).
-Nothing caps what the harness evaluates; scoring reads the count the evaluation job records.
+of its start's and the compute-optimal model's at the checkpoint's held-out loss under the ladder's fit (`ladder_fit`),
+and at most twice its start's (`CAP_FALLBACK`) where the fit gives no value there. Nothing caps what the harness
+evaluates; scoring reads the count the evaluation job records.
 """
 from __future__ import annotations
 
@@ -43,6 +44,10 @@ REFERENCE_K_BITS = 8 * 10_000
 MARKS = ("inference", "reference", "server")
 REFERENCE = "reference"
 MANIFEST = Path(__file__).resolve().parents[1] / "starts_store.json"
+#: the scoring cap where the ladder's fit gives no value: this many times the start's forward gates per token
+CAP_FALLBACK = 2.0
+#: data v3's tokenizer (covert_witness's data_v3.TOKENIZER), which a start on v3's data has in its shape
+V3_TOKENIZER = "bpe32k"
 
 
 def id_bits(vocab: int) -> int:
@@ -67,10 +72,11 @@ def w_fwd(shape: dict) -> float:
 def eligible(w: float | None, start_w: float, loss: float | None, ladder=None) -> bool:
     """The scoring cap: whether a checkpoint whose model's forward is `w` gates per token is scored, `w` at most the
     greater of the start's `start_w` and the compute-optimal model's at its held-out `loss` under the ladder's fit
-    (`ladder(loss)`, `ladder_fit`'s; None where the fit has no point). A checkpoint whose forward isn't counted (`w`
+    (`ladder(loss)`, `ladder_fit`'s), and at most `CAP_FALLBACK` times the start's where there is no fit or it has no
+    point at that loss, so a grown model is scored until the fit exists. A checkpoint whose forward isn't counted (`w`
     None) has the start's."""
     at = ladder(loss) if ladder and loss is not None else None
-    return w is None or w <= max(start_w, at or 0.0)
+    return w is None or w <= (CAP_FALLBACK * start_w if at is None else max(start_w, at))
 
 
 def ladder_fit(path: Path):
