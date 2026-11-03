@@ -253,6 +253,10 @@ def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
         rec = launch[rid]
         start = starts[rec["start"]]
         trainable = ast.literal_eval(rec["trainable"]) if isinstance(rec["trainable"], str) else rec["trainable"]
+        # a run that trains a tensor its start doesn't have (a block it grew) isn't analysed: its checkpoints are
+        # left out as not_analysed
+        if any(n not in start["tensors"] for n in [*trainable.get("full", []), *trainable.get("adapters", {})]):
+            continue
         tok = rec.get("tokens") or {}
         forward_only = not tok.get("train") and bool(tok.get("forward"))
         pt = per_token(start, trainable, g, forward_only)
@@ -270,6 +274,8 @@ def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
                         "w_fwd": w_fwd, "a": cfg["d_model"] * ACT_BITS, **pt}
         records[rid]["family"] = family(records[rid])
     for x in subs:
+        if x["id"] not in records:
+            continue
         r = records[x["id"]]
         ops = counted.get((launch[x["id"]]["run"], x["macs"]))
         if ops is None:
