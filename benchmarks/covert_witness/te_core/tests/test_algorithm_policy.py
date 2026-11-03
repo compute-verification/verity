@@ -447,12 +447,12 @@ def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_nev
     bound; coordinator 12:20Z) has basis_default `partial`: no decade holds it, the cut picks the partial rows among
     themselves alone, so the others' picks are as if they weren't there, and the figure draws each with a caret but
     never rings one as the least S. A stand-in `published` makes the adapters' rows (lora's and the dominated ones')
-    partial at ρ 5."""
+    partial at ρ 1.01, which would put lora's at the least S at gain 1.1."""
     real = formalism.published
 
     def published(m, c=None, k=None, reading=None):
         one = real(m, c, k, reading)
-        return one if m.delta_bits != 8e6 else one | {"reading": "A", "rho": 5.0, "binding_kind": "token",
+        return one if m.delta_bits != 8e6 else one | {"reading": "A", "rho": 1.01, "binding_kind": "token",
                                                       "rests_on": formalism.RESTS_ON_CELL["token"], "partial": True}
 
     monkeypatch.setattr(formalism, "published", published)
@@ -460,7 +460,7 @@ def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_nev
     ds = plots.frame(p)
     part = [d["record"].startswith("lora") for d in ds]
     assert any(part) and all((d["basis_default"], d["rho_default"], d["rho_console"], d["binding_kind"])
-                             == (AP.PARTIAL, 5.0, 5.0, "token") and json.loads(d["kinds"])["partial"]
+                             == (AP.PARTIAL, 1.01, 1.01, "token") and json.loads(d["kinds"])["partial"]
                              for d, x in zip(ds, part) if x)
     assert all(d["basis_default"] != AP.PARTIAL for d, x in zip(ds, part) if not x)
     cov = AP.coverage(p)
@@ -477,7 +477,7 @@ def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_nev
     assert ("2 rows are partial (basis_default partial: a valid kind unmeasured, so rho is only a lower bound), in no "
             "decade.") in AP.coverage_md(cov, fits, "T", partial=2)
     assert AP.board_line(cov, fits, "T", None, partial=1).endswith(" 1 row partial (rho a lower bound), in no decade.")
-    assert "(1, 5)" not in AP.summary(p, info(runs=RUNS + DOMINATED))
+    assert "(1, 1.01)" not in AP.summary(p, info(runs=RUNS + DOMINATED))
     calls, real_plot = [], AP.plt.Axes.plot
 
     def plot(ax, *a, **k):
