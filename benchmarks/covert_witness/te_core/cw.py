@@ -63,7 +63,8 @@ from .flops import forward_macs_per_token, plain
 from .gates import per_mac
 from .run import theta_sha256
 
-ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant")
+ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant",
+            "encode_model")
 #: the standard library modules prepare's loader, decoder and scorer call into
 STDLIB = ("hashlib", "io", "json", "lzma", "math", "os", "struct", "zlib")
 PATH_EVENTS = {"open", "os.listdir", "os.scandir", "os.stat", "glob.glob", "os.chdir", "os.symlink", "os.link", "os.rename"}
