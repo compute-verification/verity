@@ -19,8 +19,8 @@ covered.
 * **L2, the compiler** (`GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)` for any outer argument `A`
   (`Claims.SamplingGeneric.Arg`, the sampled audit's proof system for proof blocks) and
   compiler, its outer extraction session by session (`Compiled.EO`) and knowledge sound by `A`'s (`OuterSessionsKS`).
-* **Zero knowledge** (`GenericRecursiveZK`, `Proofs.Flock.RecGeneric.ZK`): generic in the server's leaves and the outer
-  sessions' simulator.
+* **Zero knowledge** (`GenericRecursiveZK`, `Proofs.Flock.RecGeneric.ZK`): `Claims.ZKOut` of the ZK server's compiled
+  prover, generic in the server's leaves and the outer phase, from the outer phase's `ZKOut`.
 
 The Flock instance (`Proofs.Flock.RecGeneric.AtFlock`) is L1 at today's compiled record, its `E_O`, the hm96 server
 and the element-level Flock: it gives the deployed theorem's bound (`Claims.Recursion.KSLin2`) with the gated link's
