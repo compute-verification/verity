@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.Count
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -9,7 +10,8 @@ public import Proofs.Flock.SamplingGeneric.Split
 `Arg.ofFlock` is Flock's `E^rep` at a decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E`'s, `Flock.κ`'s and `Flock.γ`'s), and its
 rounds are its shape's (`arg_ofFlock_wf`). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
-it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`).
+it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`). `CompilerKSCount`
+follows from it (`SamplingGeneric/Count.lean`).
 -/
 
 @[expose] public section
