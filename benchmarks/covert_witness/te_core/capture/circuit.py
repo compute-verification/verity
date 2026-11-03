@@ -40,6 +40,9 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   feedback).
 - `update_cut_bits`: the narrowest cut between the carried values and every update value any token op of the step
   reads: the trace's own encoding of θ' (compare 8 |E|).
+- `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
+  (te_core.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
+  listed them for, which te_core.formalism refuses as unchecked.
 """
 from __future__ import annotations
 
@@ -84,14 +87,22 @@ class StepCircuit:
     token_key: np.ndarray
     region: int
     step_tokens: int
+    #: the recording's read-backs that decide what the graph can't carry (te_core.capture.script's `data_dependent` and
+    #: `carried_scalars`), which `measure` returns; None for a circuit no recording listed them for
+    read_backs: dict | None = None
 
     def save(self, path: Path) -> None:
-        np.savez_compressed(path, **{f.name: getattr(self, f.name) for f in fields(self)})
+        arrays = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "read_backs"}
+        if self.read_backs is not None:
+            arrays["read_backs"] = np.array(json.dumps(self.read_backs))
+        np.savez_compressed(path, **arrays)
 
     @classmethod
     def load(cls, path: Path) -> "StepCircuit":
         z = np.load(path, allow_pickle=False)
-        return cls(**{f.name: (int(z[f.name]) if f.name in ("region", "step_tokens") else z[f.name]) for f in fields(cls)})
+        out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens") else z[f.name])
+               for f in fields(cls) if f.name != "read_backs"}
+        return cls(**out, read_backs=json.loads(str(z["read_backs"])) if "read_backs" in z.files else None)
 
     def __len__(self) -> int:
         return len(self.phase)
@@ -393,7 +404,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
             "a_x": [a_x[0], a_x[-1]] if a_x else None,
             "u_in": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
             "group_gates": g_total, "update_cut_bits": update_cut, "grad_cut_bits": grad_cut, "state_bits": state,
-            "delta_grad_bits": None if grad_cut is None else grad_cut + state}
+            "delta_grad_bits": None if grad_cut is None else grad_cut + state} | (c.read_backs or {})
 
 
 def main(argv=None) -> int:
