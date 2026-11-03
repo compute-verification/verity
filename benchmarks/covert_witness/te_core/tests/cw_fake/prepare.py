@@ -124,12 +124,15 @@ class Scorer:
         self.base, self.net = Net(rec["config"]).load(theta), Net(rec["config"])
         self.start_bpb = evaluate_bpb(self.base, "search", "fake")["bpb"]
 
-    def search(self, state, weights_digest):
+    def model(self, state, config=None):
+        return self.net.load(state)
+
+    def search(self, state, weights_digest, config=None):
         self.net.load(state)
         return {"bpb": evaluate_bpb(self.net, "search", "fake")["bpb"], "start_bpb": self.start_bpb,
                 "slice": {"weights_digest": weights_digest}}
 
-    def seal(self, key, state, search):
+    def seal(self, key, state, search, config=None):
         SEALED.mkdir(parents=True, exist_ok=True)
         (SEALED / f"{key}.json").write_text(json.dumps({"search_bpb": search["bpb"]}))
         SEALED_KEYS.append(key)

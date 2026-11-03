@@ -130,7 +130,8 @@ covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `
 covert_witness's evaluation job (`cw.score_run`, run by its evaluate.py after the training job, outside that job's
 sandbox) decodes each E with `prepare.decode` and scores it with `prepare.Scorer`: the output's digest, then a fresh
 slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README; the final
-set only in its final mode). A batch from `TrainData.next` is token data through any op that reads it, not only an
+set only in its final mode). It records each scored model's forward MACs and gates per token, counted on that model's
+own forward (`cw.forward_cost`: what runs, so an MoE's active experts), and the start's; nothing caps them. A batch from `TrainData.next` is token data through any op that reads it, not only an
 embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
 harness's own work runs with its own instance of prepare.py, on plain copies of what the program handed it, and with the
 program's torch function modes (a default device among them), global module hooks and profilers off, its own
