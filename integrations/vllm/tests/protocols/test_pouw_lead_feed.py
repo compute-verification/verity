@@ -123,7 +123,9 @@ class Script:
 
 def test_g_is_sampled_by_rejection():
     sh = F.Shape(1, 1, 8)  # R 16, S 1, C 8, T 1
-    u32 = lambda *ws: np.array(ws, dtype="<u4").tobytes()  # noqa: E731
+    def u32(*ws: int) -> bytes:
+        return np.array(ws, dtype="<u4").tobytes()
+
     first = u32(F.G_KEEP, 2**32 - 1, 2400, 0, 1, 2, 3, 4)
     src = Script(bytes(16), bytes(64), first, u32(5, 6), bytes(3 * 8))
     coins = F.CallCoins.sample(sh, src)
