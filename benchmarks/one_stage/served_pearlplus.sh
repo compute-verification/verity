@@ -15,8 +15,10 @@
 #   3. with PEARLPLUS_VOLUNTEER=1, after the lease and before the verifier's coin, `served_passes.py volunteer` replays every
 #      tile of every retained pass on the CPU in PEARLPLUS_JOBS processes and gives up, in the passes' records, the rows
 #      over a debit cap (V-EX), which the serve's screen can't see. That replay is the whole run's, not a sample's, and at
-#      the default load it runs far past POUW_TIMEOUT, so by default it is not run and the verdict may draw such a tile;
-#   4. `served_passes.py verify` takes Pearl+'s verdict over every pass on the CPU in PEARLPLUS_JOBS processes (default
+#      the default load it runs far past POUW_TIMEOUT, so by default it is not run and the verdict may draw such a tile.
+#      It stops at PEARLPLUS_VOLUNTEER_MIN (default 60), and `served_passes.py retain` then drops, still before the coin,
+#      each pass it didn't finish or left over a cap: those credit nothing and stay in the declared share;
+#   4. `served_passes.py verify` takes Pearl+'s verdict over every retained pass on the CPU in PEARLPLUS_JOBS processes (default
 #      nproc): one draw of PEARLPLUS_DRAWS work-weighted tiles (default its own, 459) over all the passes, and each pass's
 #      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
@@ -81,10 +83,16 @@ fi
 
 if [ -s "$Q/served.json" ] && [ -n "${PEARLPLUS_VOLUNTEER:-}" ]; then
   t=$(date +%s)
-  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" --out "$Q/volunteer.json" \
+  timeout "${PEARLPLUS_VOLUNTEER_MIN:-60}m" \
+    "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" --out "$Q/volunteer.json" \
     --jobs "${PEARLPLUS_JOBS:-$(nproc)}" > "$Q/volunteer.log" 2>&1
   rc=$?
   say "volunteer: served_passes.py volunteer exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
+  if [ -s "$Q/volunteer.json" ]; then
+    "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py retain --passes "$Q/passes" \
+      --volunteer "$Q/volunteer.json" > "$Q/retain.log" 2>&1
+    say "retain: served_passes.py retain exit $?: $(tail -1 "$Q/retain.log" | cut -c1-400)"
+  fi
 elif [ -s "$Q/served.json" ]; then
   say "volunteer: not run (PEARLPLUS_VOLUNTEER unset): no row over a debit cap is given up before the verifier's coin"
 fi

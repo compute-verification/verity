@@ -517,16 +517,16 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
 def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     """A development piece's line (`pouw`'s document): its verdict, why it rejects, the window's session and how each
     check came out, core's credit refusal, and that it credits nothing. `pearlplus`'s: its verdict, why it rejects, its
-    passes, Pearl+'s verdict's credit (its credited and credited cells' MACs and ε), its shares at the tensor clock, the
-    unretained serve's wall and declared share there, and the prover's replay's seconds, cores and the cores it takes to keep
-    pace (each None without one, or why it has none)."""
+    passes and the rounds dropped before the coin, Pearl+'s verdict's credit (its credited and credited cells' MACs and
+    ε), its shares at the tensor clock, the unretained serve's wall and declared share there, and the prover's replay's
+    seconds, cores and the cores it takes to keep pace (each None without one, or why it has none)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
         at = (shares.get("readings") or {}).get("tensor") or {}
         un, rp = shares.get("unretained"), shares.get("replay")
         credit = doc.get("credit")
         return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
-                **{k: doc.get(k) for k in ("scheme", "passes", "served_tokens", "generate_s")},
+                **{k: doc.get(k) for k in ("scheme", "passes", "dropped", "served_tokens", "generate_s")},
                 "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
                 "unretained": None if un is None else un.get("error") or {
@@ -820,7 +820,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
     accept when the run served within its caps across at least two pass boundaries and Pearl+'s verdict accepts; it
-    carries that verdict's line and credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``), its shares
+    carries that verdict's line, credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``) and the rounds
+    the prover dropped from its retention before the coin (``dropped``, which credit nothing and stay declared), its shares
     are `served_shares.pearlplus_shares`'s, and it credits nothing (`PEARLPLUS_WHY`). ``unretained``, the same load served
     with no pass retained (``serve --no-retain``), adds the shares' ``unretained`` (`served_shares.pearlplus_unretained`),
     or why there are none; it is a measurement and never decides the verdict. ``volunteered``, the prover's replay of every
@@ -841,13 +842,14 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     elif answer.get("verdict") != "accept":
         reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": PEARLPLUS_WHY, "coins": PEARLPLUS_COINS,
-                           "scheme": None, "arm": None, "passes": None, "line": None, "credit": None, "shares": None}
+                           "scheme": None, "arm": None, "passes": None, "dropped": None, "line": None, "credit": None,
+                           "shares": None}
     if served is not None:
         doc.update(arm=served.get("arm"), scheme=(served.get("arm") or "").partition(":")[2] or None,
                    passes=sum(1 for p in served.get("passes") or () if p.get("units")),
                    **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
     if verified is not None:
-        doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"))
+        doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"), dropped=verified.get("dropped"))
     if served is not None and verified is not None and not reasons:
         try:
             doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified))
