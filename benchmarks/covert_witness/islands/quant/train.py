@@ -225,6 +225,15 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
     return sorted(n for n in params if any(re.search(p, n) for p in pats))
 
 
+def delta_grad(adam: int, muon: int, latent: int) -> dict:
+    """Δ_grad in islands/lowrank's keys: the fp32 gradient of each of the `adam` + `muon` trained values and its
+    optimizer's fp32 state (AdamW's m and v, Muon's one buffer); `bits`/`bytes` are their sum. `latent_bits`, beside it
+    and not in `bits`, are the fp32 latents a straight-through run reads and writes (the update application's Δ_t)."""
+    bits = 32 * (adam + muon) + 64 * adam + 32 * muon
+    return {"trainable": adam + muon, "grad_bits": 32 * (adam + muon), "adam_bits": 64 * adam, "muon_bits": 32 * muon,
+            "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8}
+
+
 QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)")
 #: a qat arm that trains the weights unquantized; its checkpoints encode `--variants` of them, as ptq's do
 QAT_FP = "fp"
@@ -445,6 +454,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                         "trainable": tr, "pieces": pieces(x, factors, norms),
                         "n_entries": sum(A.numel() + B.numel() for A, B, _ in factors.values())
                         + sum(params[n].numel() for n in norms)})
+        n_fac = sum(A.numel() + B.numel() for A, B, _ in factors.values())
+        results[-1]["delta_grad"] = delta_grad(results[-1]["n_entries"], 0, n_fac if x.qbits else 0)
         for h in handles:
             h.remove()
         del factors, opt
@@ -469,6 +480,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                                       steps=r["steps"], final_loss_ema=r["loss"], lora_bf16_bytes=lora_bytes(fac, full),
                                       where="submission" if r is best else "arm"))
     notes = {"direction": "quant", "mode": "qlora", "args": vars(a), "steps": sched.total, "arms": arm_notes,
+             "delta_grad": best["delta_grad"],
              "variants": [n for n in arm_notes if n["where"] == "submission"], "train_seconds": round(t_train, 1),
              "process_seconds": round(time.perf_counter() - t_start, 1),
              "E_format_note": "q_bytes is the arm's CWQUAN1 size (islands/quant/qformat.py; the bf16 lora size for qbits "
@@ -577,6 +589,7 @@ def main() -> int:
         # each step
         quantized = [n for n in names if params[n].ndim == 2] if a.mode == "qat" and x.qat != QAT_FP else []
         latent = {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
+        dgrad = delta_grad(*(sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized)))
         opt_of = {n: latent.get(n, params[n]) for n in names}
         muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr) if mats else None
         adam = torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
@@ -641,7 +654,7 @@ def main() -> int:
                     buckets.append(note | {"bucket": b, "step": g, "arm": k})
                     del model_v
             g += 1
-        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "qarrays": qarrays,
+        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "qarrays": qarrays, "delta_grad": dgrad,
                         "rest": {n: params[n].detach().cpu().clone() for n in names if n not in qarrays},
                         "latent": {n: v.cpu() for n, v in latent.items()} if x.qat == "sparse" else None})
         del latent, opt_of, muon, adam, opts
@@ -650,8 +663,10 @@ def main() -> int:
         blob, model, notes_v = finish_qat(a, results, theta, names, cycle, dev)
     else:
         blob, model, notes_v = finish_ptq(a, theta, params, names, cycle, dev)
+    sub = next((n.get("arm", 0) for n in notes_v if n["where"] == "submission"), 0)
     notes = {"direction": "quant", "mode": a.mode, "args": vars(a), "steps": sched.total,
-             "trained_parameters": sum(params[n].numel() for n in names), "variants": notes_v, "buckets": buckets,
+             "trained_parameters": sum(params[n].numel() for n in names), "delta_grad": results[sub]["delta_grad"],
+             "variants": notes_v, "buckets": buckets,
              "train_seconds": round(t_train, 1), "process_seconds": round(time.perf_counter() - t_start, 1),
              "E_format_note": "E is encode_full of the model, or with --emit quan the update's CWQUAN1 bytes "
                               "(prepare.encode_quant); q_bytes is the update's CWQUAN1 size (islands/quant/qformat.py), "
