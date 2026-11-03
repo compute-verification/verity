@@ -677,7 +677,8 @@ def TCoinModel.SwLink {W : Type} {G : Proto W} {x : Msg} :
   | .inr M => fun H ν c w => ∃ M' : G.TOffModel x, M'.SwLink H ν c w ∧ (M.OK → M'.OK) ∧ M'.size ≤ M.size
 
 theorem TCoinModel.swLink_inr {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) (H : Msg → Msg) (ν : G.Nonce)
-    (c : Fin (G.K x) → G.Coin) (w : W) (h : M.SwLink H ν c w) : (Sum.inr M : G.TCoinModel x).SwLink H ν c w :=
+    (c : Fin (G.K x) → G.Coin) (w : W) (h : M.SwLink H ν c w) :
+    TCoinModel.SwLink (G := G) (x := x) (.inr M) H ν c w :=
   ⟨M, h, id, le_rfl⟩
 
 /-- **`SHVZK` of the switched prover at a coin vector, from its model**, for any simulator that is `simAt` on a tape
