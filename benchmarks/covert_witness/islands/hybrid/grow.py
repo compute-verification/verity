@@ -8,7 +8,7 @@ arm priced by its compute.
 
 - `none`: θ's own model, the in-architecture control;
 - `depth`: `--depth N` blocks, block j a copy of θ's block ⌊jL/N⌋; a repeated copy has its output projections (wo,
-  w_down) zeroed, so the grown model computes θ's function at step 0;
+  w_down) zeroed, so the grown model computes θ's function at step 0 (`--zero 0` stacks the copies unchanged instead);
 - `mlp`: every MLP widened to `--mlp-mult` x d_ff, the new neurons copies of random old ones (their gate and up rows,
   plus `--noise` x each row's rms of Gaussian noise) with zeroed w_down columns, so θ's function again;
 - `moe`: every MLP upcycled into `--experts` copies of itself behind a router (Gaussian, `--router-init`/sqrt(d)); a
@@ -17,10 +17,11 @@ arm priced by its compute.
 - `scratch`: a fresh model of `--size DxLxHEADSxD_FF` from random initialization, distilled from θ: KL to θ's softmax
   at weight `--kd`, decaying linearly to 0 over `--kd-frac` of the steps (θ's forward is priced).
 
-Every block matrix is trained by Muon (Newton-Schulz, momentum 0.95, no decay; each expert's matrix on its own), the
-gains, the router and an unfrozen embedding by AdamW (betas 0.9, 0.95). The tied embedding is frozen (`--embed-lr 0`)
-except in `scratch`. Linear warmup over `--warmup` steps, then linear decay to 0: each arm is a complete schedule from
-θ within its share of the budget.
+Every block matrix is trained by Muon (Newton-Schulz, momentum 0.95, decoupled weight decay `--wd`; each expert's
+matrix on its own), the gains, the router and an unfrozen embedding by AdamW (betas 0.9, 0.95). The tied embedding is
+frozen (`--embed-lr 0`) except in `scratch`. Linear warmup over `--warmup` steps, then linear decay to 0: each arm is a
+complete schedule from θ within its share of the budget, `--budget-fraction` of the run's tier's (`prepare.budget`: the
+search tier's, or `launch.py --long`'s LONG_C0 x the start's C0).
 
 Every arm is measured here: θ once, then each arm at `--evals` points of its schedule, by mean cross-entropy in nats per
 token over `--eval-windows` windows of the training stream that no start read and no step trains on (the last windows
@@ -54,7 +55,7 @@ from model import CTX, LM, VOCAB, Block, Size, rope
 ARM_KEYS = {"grow": ("none", "depth", "mlp", "moe", "scratch"), "depth": int, "mlp_mult": float, "experts": int,
             "topk": int, "aux": float, "router_init": float, "noise": float, "size": str, "kd": float, "kd_frac": float,
             "lr": float, "adam_lr": float, "embed_lr": float, "warmup": int, "batch": int, "micro": int, "seed": int,
-            "share": float}
+            "share": float, "zero": int, "wd": float}
 #: te_core takes the first E encoded in each 5% of the run's MAC budget as a checkpoint
 CHECKPOINTS = 20
 
@@ -90,14 +91,31 @@ def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
     return (x.mT if tall else x).to(g.dtype)
 
 
+def gather_selects(n: int, bits: int = 32, chunk_bits: int = 10) -> int:
+    """The gather circuit's multiplexers per selected word over n words, as the harness prices a token lookup: a copy
+    of te_core/flops.py's, since a program may import only te_core's hooks and codecs."""
+    def tree(m: int, k: int) -> int:
+        out = 0
+        for _ in range(k):
+            m = (m + m % 2) // 2
+            out += m
+        return out
+
+    chunk = 1 << chunk_bits
+    if n <= chunk:
+        return tree(n, bits)
+    full, r = divmod(n, chunk)
+    return full * tree(chunk, chunk_bits) + (tree(r, chunk_bits) if r else 0) + tree(full + (r > 0), bits - chunk_bits)
+
+
 def ns_flops(shape: tuple[int, ...], steps: int = 5) -> int:
     m, n = min(shape[-2:]), max(shape[-2:])
     return math.prod(shape[:-2]) * steps * (4 * m * m * n + 2 * m ** 3)
 
 
 class Muon(torch.optim.Optimizer):
-    def __init__(self, params, lr: float, momentum: float = 0.95):
-        super().__init__(params, {"lr": lr, "momentum": momentum})
+    def __init__(self, params, lr: float, momentum: float = 0.95, wd: float = 0.0):
+        super().__init__(params, {"lr": lr, "momentum": momentum, "wd": wd})
 
     @torch.no_grad()
     def step(self):
@@ -108,6 +126,7 @@ class Muon(torch.optim.Optimizer):
                 st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
                 buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
                 u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
+                p.mul_(1 - g["lr"] * g["wd"])
                 p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[-2] / p.shape[-1]) ** 0.5)
 
 
@@ -199,7 +218,7 @@ def build(theta: dict[str, torch.Tensor], cfg: dict, aa: argparse.Namespace, dev
         blk.w_gate.weight.copy_(gate)
         blk.w_up.weight.copy_(up)
         blk.w_down.weight.copy_(down)
-        if j and src[j - 1] == i:
+        if j and src[j - 1] == i and aa.zero:
             blk.wo.weight.zero_()
             blk.w_down.weight.zero_()
     return lm
@@ -208,8 +227,11 @@ def build(theta: dict[str, torch.Tensor], cfg: dict, aa: argparse.Namespace, dev
 def flops_per_token(lm: LM, embed_trained: bool) -> dict:
     """Analytic FLOPs a token: the forward (every weight matmul a token reads, the router included, and the causal
     attention, prepare.attention_flops a layer), and a training pass as prepare.train_flops prices one with every block
-    trained (the forward, every matmul's input gradient, the trained matrices' weight gradients, twice the attention)."""
+    trained (the forward, every matmul's input gradient, the trained matrices' weight gradients, twice the attention).
+    A table other than θ's own (`embed_trained`) adds te_core's price of a token lookup, its gather circuit's
+    multiplexers, to each pass, which prepare.train_flops leaves out."""
     V, d = lm.embed.shape
+    lookup = 2 * gather_selects(V) * d if embed_trained else 0
     blocks = 0
     for blk in lm.blocks:
         if isinstance(blk, MoEBlock):
@@ -219,9 +241,9 @@ def flops_per_token(lm: LM, embed_trained: bool) -> dict:
             blocks += 4 * d * d + 3 * d * blk.w_gate.weight.shape[0]
     head = V * d
     attn = len(lm.blocks) * 2 * d * (CTX + 1)
-    fwd = 2 * (blocks + head) + attn
+    fwd = 2 * (blocks + head) + attn + lookup
     return {"forward": fwd, "train": fwd + 2 * (blocks + head) + 2 * blocks + (2 * head if embed_trained else 0) + 2 * attn,
-            "block_macs": blocks, "head_macs": head}
+            "block_macs": blocks, "head_macs": head, "lookup_flops": lookup}
 
 
 def state(lm: LM, muon: list, adam: list, aa: argparse.Namespace) -> dict:
@@ -257,6 +279,9 @@ def main() -> int:
     ap.add_argument("--aux", type=float, default=0.01)
     ap.add_argument("--router-init", type=float, default=1.0)
     ap.add_argument("--noise", type=float, default=0.01)
+    ap.add_argument("--zero", type=int, default=1, help="depth: 1 zeroes a repeated copy's wo and w_down (θ's function "
+                    "at step 0), 0 stacks the copies as they are")
+    ap.add_argument("--wd", type=float, default=0.0, help="Muon's decoupled weight decay (p *= 1 - lr x wd a step)")
     ap.add_argument("--size", default="", help="scratch: d_model x n_layer x n_head x d_ff, e.g. 768x8x12x2048")
     ap.add_argument("--kd", type=float, default=0.5)
     ap.add_argument("--kd-frac", type=float, default=0.5)
@@ -278,6 +303,7 @@ def main() -> int:
     dev = prepare.DEVICE
     net, rec, theta = prepare.load_start(a.start)
     cfg = rec["config"]
+    tier = prepare.budget(a.start)
     if cfg["family"] != "lf":
         raise SystemExit("grow: lf starts only")
     arms = parse_arms(a.arms, a)
@@ -332,10 +358,13 @@ def main() -> int:
         if aa.grow == "none":
             assert sorted(n for n, _ in lm.named_parameters()) == names
         embed_lr = aa.embed_lr if aa.grow != "scratch" else (aa.embed_lr or aa.adam_lr)
+        if not embed_lr:
+            # θ's own table, whose token lookup the harness doesn't price (a bitwise copy of it is another table)
+            lm.embed = net.inner.embed
         lm.embed.requires_grad_(embed_lr > 0)
         muon = [p for n, p in lm.named_parameters() if p.ndim >= 2 and n != "embed" and "router" not in n]
         gains = [p for n, p in lm.named_parameters() if p.ndim == 1 or "router" in n]
-        opts = [Muon(muon, lr=aa.lr)]
+        opts = [Muon(muon, lr=aa.lr, wd=aa.wd)]
         groups = [{"params": gains, "lr": aa.adam_lr}] + ([{"params": [lm.embed], "lr": embed_lr}] if embed_lr else [])
         opts.append(torch.optim.AdamW(groups, betas=(0.9, 0.95), weight_decay=0.0, fused=dev.startswith("cuda")))
         base_lrs = [[grp["lr"] for grp in o.param_groups] for o in opts]
@@ -344,7 +373,7 @@ def main() -> int:
         ns = sum(ns_flops(tuple(p.shape)) for p in muon)
         kd_tok = theta_fwd if aa.grow == "scratch" and aa.kd > 0 else 0
         per_step = ft["train"] * tokens + ns + kd_tok * tokens
-        share = aa.share * a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - aa.evals * ft["forward"] * a.eval_windows * CTX
+        share = aa.share * a.budget_fraction * tier["train_flops"] - aa.evals * ft["forward"] * a.eval_windows * CTX
         n = int(share // per_step)
         if n < aa.evals or n < 1:
             fail(f"grow: arm {arm}'s share buys {n} steps, fewer than its {aa.evals} measurements")
@@ -426,7 +455,8 @@ def main() -> int:
     kind = arms[-1].grow
     prepare.submit(Path(a.out), a.start, blob, prepare.decode(theta, blob),
                    {"full": changed, "adapters": {}}, steps, changed=changed,
-                   notes={"method": "grow", "args": vars(a), "theta_nats": base_mean, "data": data, "arms": arms_out,
+                   notes={"method": "grow", "args": vars(a), "tier": tier, "theta_nats": base_mean, "data": data,
+                          "arms": arms_out,
                           "e_checkpoints": snaps_at,
                           "submitted": {"none": "the last arm's changed tensors (encode_full)",
                                         "moe": "θ unchanged: lf has no experts"}.get(
