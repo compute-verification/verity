@@ -20,7 +20,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run.
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
-  row dir holds under the same digests, and its compile command runs with no vLLM importable."""
+  row dir holds under the same digests, and its compile command runs with no vLLM importable.
+* A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
+  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`)."""
 from __future__ import annotations
 
 import argparse
@@ -40,11 +42,11 @@ from typing import Any
 import pytest
 
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.ml.windows import rows as CS
+from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -154,9 +156,9 @@ def _bound(rec: dict) -> dict:
     return {k: rec["window"][k] for k in SRT.BINDING}
 
 
-def test_the_advice_must_be_in_the_registration_the_draw_followed():
+def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
     rec = _rec("11" * 64)
-    drawn = R.receipt(rec, A5.VERIFIER, received="0")
+    drawn = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
         "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
@@ -165,16 +167,6 @@ def test_the_advice_must_be_in_the_registration_the_draw_followed():
     assert PP.advice_before_draw(drawn, rec, _bound(late))["codes"] == ["advice"]
     other = _rec("11" * 64, compiler="ef" * 64)
     assert PP.advice_before_draw(drawn, rec, _bound(other))["codes"] == ["compiler"]
-
-
-def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
-    rec = _rec("11" * 64)
-    theirs, ours = R.receipt(rec, A5.CHALLENGER, received="0"), R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_draw(theirs, rec, _bound(rec), "challenger")["ok"]
-    assert PP.advice_before_draw(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
-    assert PP.advice_before_draw(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
-    late = _rec("22" * 64)
-    assert PP.advice_before_draw(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
 
 
 @dataclass(frozen=True)
@@ -250,7 +242,7 @@ def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch)
     run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
            "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", "o"]
     gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
-    for refused in (["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
+    for refused in ([], ["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
         with pytest.raises(SystemExit):
             PP.main(["audit", *run, *refused])
     got = []
@@ -380,7 +372,7 @@ def test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_ref
     committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
     compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
     rec = _registered(tp["honest"] / "rank0")
-    receipt = R.receipt(rec, A5.VERIFIER, received="0")
+    receipt = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(receipt, rec, bound)["ok"]
     got = PP.advice_after_draw(compiler, receipt, rec, opening, mine, held)
     assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
@@ -406,7 +398,7 @@ def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_
     unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
-    plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
+    plain, zk = (argparse.Namespace(plain=p, coins="challenger") for p in (True, False))
     stratified = replace(mine, law={"law": "stratified", "k": 8})
     assert A5.plain_refusal(plain, stratified, None) is None
     m = mine.members[0]
@@ -415,7 +407,7 @@ def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_
         return SimpleNamespace(members=members, law=stratified.law, population=sum(x.n for x in members), row_tables=())
 
     cases = [("a plain session's draw is stratified", plain, mine, None),
-             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None, verifier_coins=False), stratified, None),
+             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None), stratified, None),
              ("the window has 2 members", plain, window(m, replace(m, base=m.n)), None),
              ("registered reads, shared rows", plain, stratified, {m.key: {"ports": {}}}),
              ("registered reads, shared rows", plain, window(replace(m, tables=(("x", 1),))), None)]
@@ -833,7 +825,7 @@ def _circuit(compiler: Any, data: bytes, partition: Mapping[str, Any]) -> tuple[
 
     p = compiler.load(0, 1, PP.compile_advice(compiler, data))
     window, rows = SRW.population(p.progs, dict(partition), "", p.dirs, arrivals=p.arrivals, transfer_gates=compiler.transfer_gates)
-    return SRW.circuit_record(window), rows
+    return SRW.circuit_record(window, rows, p.arrivals), rows
 
 
 def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, monkeypatch):
@@ -1357,7 +1349,8 @@ def test_the_verifiers_i2_reads_only_builds_it_wrote_itself_and_the_provers_its_
     got = []
     monkeypatch.setattr(PP, "audit", lambda a: got.append(a) or 0)
     run = ["--serve-run", str(s.run), "--window", "0", "--row-dir", str(rows), "--windows", "w", "--partition", "p", "--template-sets",
-           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+           "--challenger", "local", "--main", "m.txt"]
     assert PP.main(["audit", *run]) == 0 and PP.main(["audit", *run, "--vllm-python", "pinned-python"]) == 0
     assert [a.builds for a in got] == [str(tmp_path / "out" / "builds")] * 2
     with pytest.raises(SystemExit):
@@ -1380,6 +1373,48 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
                     "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
     assert s.compiles == [True] and list(out.parent.iterdir()) == [out] and sys.modules["vllm"] is None
     assert json.loads(out.read_text())["templates"]
+
+
+def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
+                                                                                                      capsys):
+    """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
+    writes its record from the advice alone: each unit reads the gate and up projection's output, a row before the window, so
+    the record declares that port window ingress at its engine step (r0's four prompt tokens at step 0 and its decode at 1;
+    r1, arriving at 2, at 2, 3 and 4). Counted from its members alone (`records_audit.leak_count`) every input bit is other
+    and the bound vacuous, and the run figure (`declared_count`'s, only the run's ingress counted) is the same: the window
+    reads none of the run's ingress. The window figure beside it subtracts the window ingress, leaving the advice's bits,
+    the charge, only under its premise (`records_audit.WINDOW_PREMISE`), which the count names, and ``records_audit.py
+    count`` prints both figures so. The verifier's window from the record is the one the prover's Programs make
+    (`_circuit`), and the prover's record is the compiler's."""
+    import records_audit as RA
+
+    s = _tiny_served(tmp_path, monkeypatch)
+    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    out = tmp_path / "circuit.json"
+    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+    doc, bits = json.loads(out.read_text()), s.bound["advice"]["bits"]
+    assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
+        ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
+    assert "ingress" not in doc
+    mine = IF.window_of_record(doc, DR.parse_law(LAYER0["law"]), IF.resolve)
+    inputs = 11 * 16 * 2 * 128
+    assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
+    assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
+                                                     "other_inputs": inputs, "advice_bits": bits, "bound": "vacuous"}
+    window_figure = {"ingress": inputs, "free": 0, "other_inputs": bits, "bound": "within the charge",
+                     "premise": RA.WINDOW_PREMISE}
+    count = {"units": 11, "inputs": inputs, "wired": 0, "registered": 0, "ingress": 0, IF.WINDOW_INGRESS: inputs,
+             "free": inputs, "other_inputs": inputs + bits, "advice_bits": bits, "bound": "vacuous", "window": window_figure}
+    assert RA.declared_count(doc, bits) == count
+    capsys.readouterr()
+    assert RA.main(["count", "--circuit", str(out), "--bits", str(bits)]) == 0
+    assert json.loads(capsys.readouterr().out) == count
+    _row_dir(Path(s.a.row_dir), s)
+    prover = PP.compiler_of_args(argparse.Namespace(**vars(s.a), transfer_gate=[]))
+    record, _rows = _circuit(prover, s.data, LAYER0)
+    assert IF.circuit_of(record) == IF.circuit_of(doc)
 
 
 def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):

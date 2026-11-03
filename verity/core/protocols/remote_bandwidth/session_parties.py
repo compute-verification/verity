@@ -35,7 +35,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Int, Json, Message, Phase, Refused, Schema
 from verity.ml.commitments.identity import canonical_json_bytes
@@ -212,7 +212,7 @@ class Verifier:
         if self.s is None:
             return [Finish({"answer": None, "case": None}, refused or "closed", kind="private")]
         answer = P.answer(self.s)
-        out = [Record(answer, "output"), Finish({"answer": answer, "case": P.case_of(self.s, self.events)}, refused,
+        out = [LogEntry(answer, "output"), Finish({"answer": answer, "case": P.case_of(self.s, self.events)}, refused,
                                                 kind="private")]
         return out if refused is not None else [Send(PROVER, Message("End", body=self.disclosed())), *out]
 

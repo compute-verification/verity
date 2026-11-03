@@ -34,7 +34,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). New infra components go to
+  compute-verification/infra, and `INFRA_PATHS` (`tests/test_infra_paths.py`) lists what is still here and only shrinks.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -73,7 +74,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
   model's size is public.
-- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows) in frame-v3-sha512 trees, and signatures
+- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
+  leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺, not yet in a lock.

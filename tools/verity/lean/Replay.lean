@@ -25,6 +25,12 @@ finer than its modules, so a module of slow `decide` proofs is spread over the t
 tasks wait at once, each holding its environment. Unsafe and partial constants, which the kernel does not check, are in
 every one of those environments, as an import puts them, and the kernel refuses a checked declaration that mentions one.
 
+`lean` checks a module under the module system on its imports' public parts, where a theorem or a definition they don't
+expose is an axiom; with those bodies at hand the kernel can unfold its way into a computation it doesn't finish, and it
+stops on its recursion. Such a declaration is checked again as `lean` checked it: on its module's other constants and the
+constants its imports' public parts hold, each as this replay holds it (checked or imported), with the bodies those parts
+hide taken out. `OUT` names the declarations accepted that way (`on_public_imports`).
+
 A replayed module's verdict is cached under a key of its own `.olean` files and its imports', so it must depend on
 nothing else: each constant a checked declaration mentions must be declared by its module or by a module it imports,
 transitively, and a theorem two modules declare with one statement (an equation lemma each realized) is checked in both,
@@ -35,6 +41,30 @@ It then writes to `OUT` the axioms the package's own constants (the `Mᵢ` and `
 (the ones the kernel accepted, not the axiom sets each `.olean` recorded when it was built), so `check.py` can compare the
 two. Exit 0 when every constant is accepted, 1 when the kernel rejects one, after writing to `OUT` the modules of the
 rejected declarations.
+
+`Replay.lean OUT --records DIR M₁ … [--closure-reused E₁ …]` (the graph's lean-module runner) also writes the axioms of
+each own constant (`declarations`, those with any), and walks no `Eᵢ` that has a record: an `Eᵢ`'s constants take the sets
+its record `DIR/<its path>.json` holds (`{"module": E, "axioms": {name: [axiom, …]}}`, what this writes for `E`, a constant
+with none left out). An `Eᵢ` is read from the parts its files have, so under the module system its public part alone
+serves, where its theorems are axioms; one without a record is walked as those parts have it.
+
+`--env FILE` (before the modules) takes the sets of the imported modules' constants from FILE, the lean env's record
+(`verity_graph/runners/lean_env.py` writes it: a line `"sets":[…],` naming each set once, then after a line `"axioms":{`
+one line `"<module>":{"<constant>":<index into sets>,…}` per module, a constant with none left out), and walks no
+constant of a module it holds; `OUT` then also names every module imported (`env_modules`), so the runner can hold them
+to the record. `--env-out FILE` (the graph's lean-env runner) writes to FILE, a line each,
+`{"module":M,"axioms":{…},"unsafe":[…]}` for every module of the set, own and closure alike (`unsafe`: its unsafe
+constants with a set, which the kernel never checks and no checked declaration mentions), and last
+`{"deferred":[…],"joined":{M:{…}}}`; a theorem two of them declare takes the union of the copies' sets under each, and
+`joined` gives, for a module imported from an earlier replay, the sets of the theorems it declares that one of the set
+declares too, for its record to take. Module names are written unescaped, as their files' paths have them. It checks a
+set that can't all be imported together, as an env's modules can't (each executable's root module declares `main`): in an
+order with each module after those it imports, a module that declares a constant a module before it declares too (not one
+theorem with one statement), or that imports such a module, is deferred, left out of this replay and named in `deferred`
+for the next, which imports what it imports from this one.
+A module under the module system whose private part is missing is refused there, since its public part makes its
+theorems axioms. `--closure-of R₁ …` adds to `--closure` the `Rᵢ` and every module they import, transitively; an
+argument `@F` stands for F's lines.
 -/
 
 open Lean Elab Term
@@ -75,6 +105,182 @@ def axiomsIn (env : Kernel.Environment) (roots : Array Name) : Array Name := Id.
       | some (.recInfo v) => stack := stack ++ v.type.getUsedConstants
       | some (.quotInfo _) | none => pure ()
   return axs.toArray.qsort Name.lt
+
+/-- What `axiomsIn` walks through from `c`, and `c` itself when it is an axiom. -/
+def mentions (c : Name) : Option ConstantInfo → Array Name × Std.HashSet String
+  | some (.axiomInfo v) => (v.type.getUsedConstants, ({} : Std.HashSet String).insert (toString c))
+  | some (.defnInfo v) => (v.type.getUsedConstants ++ v.value.getUsedConstants, {})
+  | some (.thmInfo v) => (v.type.getUsedConstants ++ v.value.getUsedConstants, {})
+  | some (.opaqueInfo v) => (v.type.getUsedConstants ++ v.value.getUsedConstants, {})
+  | some (.inductInfo v) => (v.type.getUsedConstants ++ v.ctors.toArray, {})
+  | some (.ctorInfo v) => (v.type.getUsedConstants, {})
+  | some (.recInfo v) => (v.type.getUsedConstants, {})
+  | some (.quotInfo _) | none => (#[], {})
+
+/-- The axioms each constant reached from `roots` uses (`axiomsIn`'s walk, one set per constant), where `recorded` gives
+the set of a constant whose module recorded one, and the walk stops there. The constants of a strongly connected
+component (an inductive type and its constructors mention each other) share one set: Tarjan's algorithm, iterative, so a
+long chain of declarations takes no stack. -/
+def axiomSets (find? : Name → Option ConstantInfo) (recorded : Name → IO (Option (Std.HashSet String)))
+    (roots : Array Name) : IO (Std.HashMap Name (Std.HashSet String)) := do
+  let mut done : Std.HashMap Name (Std.HashSet String) := {}   -- each constant of a finished component, with its set
+  let mut index : Std.HashMap Name Nat := {}
+  let mut low : Std.HashMap Name Nat := {}
+  let mut reach : Std.HashMap Name (Std.HashSet String) := {}  -- what each open constant reaches so far
+  let mut opened : Array Name := #[]
+  let mut isOpen : Std.HashSet Name := {}
+  for root in roots do
+    if done.contains root || index.contains root then continue
+    let mut frames : Array (Name × Array Name × Nat) := #[]
+    let mut visit : Option Name := some root
+    repeat
+      if let some v := visit then
+        visit := none
+        let (ms, own) := mentions v (find? v)
+        low := low.insert v index.size
+        index := index.insert v index.size
+        reach := reach.insert v own
+        opened := opened.push v
+        isOpen := isOpen.insert v
+        frames := frames.push (v, ms, 0)
+      let some (v, ms, i) := frames.back? | break
+      if h : i < ms.size then
+        frames := frames.modify (frames.size - 1) fun (v, ms, i) => (v, ms, i + 1)
+        let w := ms[i]
+        if let some s := done[w]? then
+          reach := reach.modify v (·.insertMany s)
+        else match ← recorded w with
+          | some s =>
+            done := done.insert w s
+            reach := reach.modify v (·.insertMany s)
+          | none =>
+            match index[w]? with
+            | some iw => if isOpen.contains w then low := low.modify v (min · iw)
+            | none => visit := some w
+      else
+        frames := frames.pop
+        if low[v]! == index[v]! then
+          let mut members : Array Name := #[]
+          let mut s : Std.HashSet String := {}
+          repeat
+            let some m := opened.back? | break
+            opened := opened.pop
+            isOpen := isOpen.erase m
+            members := members.push m
+            s := s.insertMany (reach.getD m {})
+            if m == v then break
+          for m in members do
+            done := done.insert m s
+            reach := reach.erase m
+        if let some (u, _, _) := frames.back? then
+          match done[v]? with
+          | some s => reach := reach.modify u (·.insertMany s)
+          | none => low := low.modify u (min · low[v]!)
+  return done
+
+/-- The sets `DIR/<m's path>.json` records for `m`'s constants, or none when `DIR` holds no record of `m`. -/
+def readRecord (dir : System.FilePath) (m : Name) : IO (Option (Std.HashMap String (Std.HashSet String))) := do
+  let f := modToFilePath dir m "json"
+  unless ← f.pathExists do return none
+  let axs ← IO.ofExcept <| (Json.parse (← IO.FS.readFile f)).bind (·.getObjVal? "axioms") |>.bind Json.getObj?
+  let mut out : Std.HashMap String (Std.HashSet String) := {}
+  for (n, v) in axs do
+    let mut s : Std.HashSet String := {}
+    for a in ← IO.ofExcept v.getArr? do
+      s := s.insert (← IO.ofExcept a.getStr?)
+    out := out.insert n s
+  return some out
+
+/-- The lean env's record (`--env FILE`): the sets it names, and each module's line by the module's name, which
+`EnvRecord.module` parses once a constant of that module is looked up. -/
+structure EnvRecord where
+  sets : Array (Std.HashSet String)
+  lines : Std.HashMap String String
+
+def readEnvRecord (f : System.FilePath) : IO EnvRecord := do
+  let mut sets : Array (Std.HashSet String) := #[]
+  let mut lines : Std.HashMap String String := {}
+  let mut inAxioms := false
+  for line in ← IO.FS.lines f do
+    if inAxioms then
+      if line.startsWith "\"" then
+        lines := lines.insert ((line.drop 1).takeWhile (· != '"')).toString line
+    else if line.startsWith "\"axioms\":{" then
+      inAxioms := true
+    else if line.startsWith "\"sets\":" then
+      let obj := "{" ++ (if line.endsWith "," then (line.dropEnd 1).toString else line) ++ "}"
+      for s in ← IO.ofExcept ((Json.parse obj).bind (·.getObjVal? "sets") |>.bind Json.getArr?) do
+        let mut h : Std.HashSet String := {}
+        for a in ← IO.ofExcept s.getArr? do
+          h := h.insert (← IO.ofExcept a.getStr?)
+        sets := sets.push h
+  unless inAxioms do
+    throw <| IO.userError s!"{f} isn't a lean env record: no line `\"axioms\":\{`"
+  return { sets, lines }
+
+/-- The sets the record holds for module `m`'s constants, or none when it doesn't hold `m`. -/
+def EnvRecord.module (r : EnvRecord) (m : String) : IO (Option (Std.HashMap String (Std.HashSet String))) := do
+  let some line := r.lines[m]? | return none
+  let obj := "{" ++ (if line.endsWith "," then (line.dropEnd 1).toString else line) ++ "}"
+  let axs ← IO.ofExcept <| (Json.parse obj).bind (·.getObjVal? m) |>.bind Json.getObj?
+  let mut out : Std.HashMap String (Std.HashSet String) := {}
+  for (n, v) in axs do
+    let i ← IO.ofExcept v.getNat?
+    let some s := r.sets[i]? | throw <| IO.userError s!"the lean env record's {m} names set {i}, which it lacks"
+    out := out.insert n s
+  return some out
+
+/-- The modules of `loaded` in an order with each after the ones of `loaded` it imports, ties in `loaded`'s order. -/
+def importOrder (loaded : Array (Name × Array Import × ModuleData)) : Array Nat := Id.run do
+  let idx : Std.HashMap Name Nat := (List.range loaded.size).foldl (fun h i => h.insert loaded[i]!.1 i) {}
+  let mut order := #[]
+  let mut done : Std.HashSet Nat := {}
+  for root in [0:loaded.size] do
+    let mut stack : Array (Nat × Bool) := #[(root, false)]
+    repeat
+      let some (i, expanded) := stack.back? | break
+      stack := stack.pop
+      if done.contains i then continue
+      if expanded then
+        done := done.insert i
+        order := order.push i
+      else
+        stack := stack.push (i, true)
+        for m in loaded[i]!.2.1.reverse do
+          if let some j := idx[m.module]? then
+            unless done.contains j do stack := stack.push (j, false)
+  return order
+
+/-- The modules of `loaded` that can't be imported with the ones before them (`importOrder`): one that declares a
+constant a module kept before it declares too, but for a theorem both declare with one statement, and one that imports
+a module deferred. -/
+def deferredOf (loaded : Array (Name × Array Import × ModuleData)) : NameSet := Id.run do
+  let mut declared : Std.HashMap Name ConstantInfo := {}
+  let mut deferred : NameSet := {}
+  for i in importOrder loaded do
+    let (m, imports, data) := loaded[i]!
+    let clash := imports.any (deferred.contains ·.module) || data.constants.any fun c =>
+      match declared[c.name]?, c with
+      | none, _ => false
+      | some (.thmInfo a), .thmInfo b => !(a.type == b.type && a.levelParams == b.levelParams)
+      | some _, _ => true
+    if clash then
+      deferred := deferred.insert m
+    else
+      for c in data.constants do
+        unless declared.contains c.name do declared := declared.insert c.name c
+  return deferred
+
+/-- `args` with each `@F` replaced by the lines of F that aren't empty. -/
+def expandArgs (args : List String) : IO (List String) := do
+  let mut out : Array String := #[]
+  for a in args do
+    if a.startsWith "@" then
+      for l in ← IO.FS.lines (a.drop 1).toString do
+        unless l.isEmpty do out := out.push l
+    else
+      out := out.push a
+  return out.toList
 
 /-- The declaration `c` goes to the kernel in, named by its first constant: an inductive type's block, for the block's
 types, constructors and recursors (`Kernel.Environment.replay` checks them together), `Quot` for the quotient's
@@ -163,26 +369,41 @@ def sections (args : List String) : Std.HashMap String (Array Name) := Id.run do
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
   let t0 ← IO.monoMsNow
+  let args ← expandArgs args
   let some out := args.head? |
-    throw <| IO.userError "usage: Replay.lean OUT MODULE... [--reused MODULE...] [--closure MODULE...] [--closure-reused MODULE...]"
-  let parts := sections args.tail
+    throw <| IO.userError "usage: Replay.lean OUT [--records DIR] [--env FILE] [--env-out FILE] MODULE... \
+      [--reused MODULE...] [--closure MODULE...] [--closure-reused MODULE...] [--closure-of MODULE...]"
+  let mut opts : Std.HashMap String System.FilePath := {}
+  let mut rest := args.tail
+  repeat
+    match rest with
+    | k :: v :: r =>
+      unless ["--records", "--env", "--env-out"].contains k do break
+      opts := opts.insert k v
+      rest := r
+    | _ => break
+  let records := opts["--records"]?
+  let envIn := opts["--env"]?
+  let envOut := opts["--env-out"]?
+  let parts := sections rest
   for k in parts.keys do
-    unless ["", "--reused", "--closure", "--closure-reused"].contains k do
+    unless ["", "--reused", "--closure", "--closure-reused", "--closure-of"].contains k do
       throw <| IO.userError s!"Replay.lean: unknown flag {k}"
   let get k := parts.getD k #[]
   let own := get "" ++ get "--reused"
   let reusedSet := (get "--reused" ++ get "--closure-reused").foldl NameSet.insert {}
   let ownSet := own.foldl NameSet.insert {}
+  -- each module's imports and the data of its last part (its private one, where it has one), read once
+  let mut loaded : Array (Name × Array Import × ModuleData) := #[]
+  let mut seen : NameSet := {}
   -- the closure's modules first, so that a theorem a dependency and an own module both declare is the dependency's
-  let mods := get "--closure" ++ get "--closure-reused" ++ own
-  let modSet := mods.foldl NameSet.insert {}
-  let mut constants : Std.HashMap Name ConstantInfo := {}
-  let mut moduleOf : Std.HashMap Name Name := {}
-  let mut alsoIn : Std.HashMap Name (Array Name) := {}     -- the other modules that declare a duplicated theorem
-  let mut dups : Array (Name × ConstantInfo) := #[]      -- each second declaration of one, with its module
-  let mut importsOf : Std.HashMap Name (Array Name) := {}
-  let mut imports : Array Import := #[]
-  for m in mods do
+  let mut todo := (get "--closure" ++ get "--closure-of" ++ get "--closure-reused" ++ own).toList
+  let mut expand := (get "--closure-of").foldl NameSet.insert {}
+  while true do
+    let m :: next := todo | break
+    todo := next
+    if seen.contains m then continue
+    seen := seen.insert m
     let olean ← findOLean m
     let mut files := #[olean]
     for level in [OLeanLevel.server, OLeanLevel.private] do
@@ -190,7 +411,29 @@ unsafe def main (args : List String) : IO UInt32 := do
         files := files.push (level.adjustFileName olean)
     let parts ← readModuleDataParts files
     let (some (data, _), some (header, _)) := (parts.back?, parts[0]?) | throw <| IO.userError s!"no module data for {m}"
-    importsOf := importsOf.insert m (header.imports.map (·.module))
+    let priv := OLeanLevel.private.adjustFileName olean
+    if envOut.isSome && data.isModule && !(← priv.pathExists) then
+      throw <| IO.userError s!"{m} is under the module system and its private part ({priv}) is missing: its public \
+        part makes its theorems axioms"
+    loaded := loaded.push (m, header.imports, data)
+    if expand.contains m then
+      for i in header.imports do
+        unless seen.contains i.module do
+          expand := expand.insert i.module
+          todo := todo ++ [i.module]
+  let deferred := if envOut.isSome then deferredOf loaded else {}
+  loaded := loaded.filter fun (m, _, _) => !deferred.contains m
+  let mods := loaded.map (·.1)
+  let modSet := mods.foldl NameSet.insert {}
+  let mut constants : Std.HashMap Name ConstantInfo := {}
+  let mut moduleOf : Std.HashMap Name Name := {}
+  let mut alsoIn : Std.HashMap Name (Array Name) := {}     -- the other modules that declare a duplicated theorem
+  let mut dups : Array (Name × ConstantInfo) := #[]      -- each second declaration of one, with its module
+  let mut importsOf : Std.HashMap Name (Array Name) := {}
+  let mut imports : Array Import := #[]
+  let mut importSet : NameSet := {}
+  for (m, imported, data) in loaded do
+    importsOf := importsOf.insert m (imported.map (·.module))
     for c in data.constants do
       match constants[c.name]?, c with
       | none, _ => constants := constants.insert c.name c; moduleOf := moduleOf.insert c.name m
@@ -201,9 +444,10 @@ unsafe def main (args : List String) : IO UInt32 := do
         unless reusedSet.contains m do
           dups := dups.push (m, c)
       | some _, _ => throw <| IO.userError s!"{c.name} is declared by {moduleOf[c.name]!} and by {m}"
-    for i in header.imports do
-      if !modSet.contains i.module && !imports.any (·.module == i.module) then
+    for i in imported do
+      if !modSet.contains i.module && !importSet.contains i.module then
         imports := imports.push i
+        importSet := importSet.insert i.module
   let env ← if imports.isEmpty then mkEmptyEnvironment else importModules imports {}
   let tLoaded ← IO.monoMsNow
   for h : i in [0:env.header.moduleNames.size] do
@@ -316,6 +560,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"replay: {d} (in {moduleOfDecl d}) is on a cycle of declarations that mention each other"
       return 1
   let mut tasks : Array (Name × Task (Except IO.Error Nat)) := #[]
+  let mut settled : Array (Name × Except IO.Error Nat) := #[]
   let mut took : Array (Nat × Name) := #[]
   let mut rejected : NameSet := {}
   let mut waited := 0
@@ -351,25 +596,143 @@ unsafe def main (args : List String) : IO UInt32 := do
         kenv := addImported kenv c
     while tasks.size - waited > WINDOW do
       let (d', t) := tasks[waited]!
-      match ← IO.wait t with
-      | .ok ms => took := took.push (ms, d')
-      | .error e =>
-        IO.eprintln s!"replay: the kernel rejects {d'} (in {moduleOfDecl d'}):\n{e}"
-        rejected := rejected.insert (moduleOfDecl d')
+      settled := settled.push (d', ← IO.wait t)
       waited := waited + 1
   for (d, t) in tasks.extract waited tasks.size do
-    match ← IO.wait t with
+    settled := settled.push (d, ← IO.wait t)
+  let deepRecursion ← (Kernel.Exception.deepRecursion.toMessageData {}).toString
+  let underModuleSystem : NameSet := loaded.foldl (fun s (m, _, data) => if data.isModule then s.insert m else s) {}
+  let mut deep : Std.HashMap Name (Array Name) := {}
+  for (d, r) in settled do
+    match r with
     | .ok ms => took := took.push (ms, d)
     | .error e =>
-      IO.eprintln s!"replay: the kernel rejects {d} (in {moduleOfDecl d}):\n{e}"
-      rejected := rejected.insert (moduleOfDecl d)
+      if underModuleSystem.contains (moduleOfDecl d) && (toString e).endsWith s!"\n{deepRecursion}" then
+        deep := deep.alter (moduleOfDecl d) fun ds => some ((ds.getD #[]).push d)
+      else
+        IO.eprintln s!"replay: the kernel rejects {d} (in {moduleOfDecl d}):\n{e}"
+        rejected := rejected.insert (moduleOfDecl d)
+  -- each declaration the kernel stopped on, again on the constants `lean` checked it on (`Lean.Elab.processHeaderCore`
+  -- imports a module's imports at `.exported`)
+  let mut onPublic : Array Name := #[]
+  for (m, ds) in deep do
+    let some (_, mImports, data) := loaded.find? (·.1 == m) | unreachable!
+    let view ← importModules mImports {} (level := .exported)
+    let mut venv := (← mkEmptyEnvironment).toKernelEnv
+    let mut quot : Std.HashMap Name ConstantInfo := {}
+    let mut missing : Array String := #[]
+    -- nothing taken from `view` outlives its regions: each constant is this replay's, under its own name
+    for (n, c) in view.toKernelEnv.constants.map₁ do
+      let some f := kenv.find? n | missing := missing.push (toString n); continue
+      let f : ConstantInfo := match c, f with
+        | .axiomInfo _, .thmInfo v => .axiomInfo { toConstantVal := v.toConstantVal, isUnsafe := false }
+        | .axiomInfo _, .defnInfo v => .axiomInfo { toConstantVal := v.toConstantVal, isUnsafe := v.safety == .unsafe }
+        | .axiomInfo _, .opaqueInfo v => .axiomInfo { toConstantVal := v.toConstantVal, isUnsafe := v.isUnsafe }
+        | _, f => f
+      if f matches .quotInfo _ then quot := quot.insert f.name f else venv := addImported venv f
+    view.freeRegions
+    let failed : Std.HashMap Name ConstantInfo :=
+      ds.foldl (fun h d => (members.getD d #[]).foldl (fun h c => h.insert c.name c) h) {}
+    for c in data.constants do
+      unless failed.contains c.name do venv := addImported venv ((kenv.find? c.name).getD c)
+    let r : Except IO.Error Kernel.Environment ← if !missing.isEmpty then
+        pure (.error (IO.userError s!"its imports' public parts hold {missing.size} constants this replay lacks, \
+          {missing[0]!} among them"))
+      else IO.wait (← IO.asTask do (← venv.replay quot).replay failed)
+    match r with
+    | .ok _ => onPublic := onPublic ++ ds
+    | .error e =>
+      IO.eprintln s!"replay: the kernel stops on {", ".intercalate (ds.toList.map toString)} (in {m}), and rejects them \
+        on the parts of its imports `lean` checked them on:\n{e}"
+      rejected := rejected.insert m
   if !rejected.isEmpty then
     -- every other module's declarations passed with its imports present, which is what a module's cache entry says
     IO.FS.writeFile out <| (Json.mkObj [("rejected", toJson (rejected.toArray.qsort Name.lt |>.map toString))]).compress
     return 1
   let tChecked ← IO.monoMsNow
   let ownConstants := (constants.toArray.filter fun (n, _) => ownSet.contains moduleOf[n]!).map (·.1)
-  let names := axiomsIn kenv ownConstants |>.map toString
+  let mut names : Array String := #[]
+  let mut declarations : Array (String × Json) := #[]
+  let envRecord ← envIn.mapM readEnvRecord
+  let envRead ← IO.mkRef ({} : Std.HashMap String (Option (Std.HashMap String (Std.HashSet String))))
+  -- the set the env's record holds for constant `w` of module `m`, or none when it doesn't hold `m`
+  let fromEnv (m w : Name) : IO (Option (Std.HashSet String)) := do
+    let some r := envRecord | return none
+    let k := m.toString (escape := false)
+    let got ← match (← envRead.get)[k]? with
+      | some got => pure got
+      | none => do
+        let got ← r.module k
+        envRead.modify (·.insert k got)
+        pure got
+    return got.map (·.getD (toString w) {})
+  if records.isSome || envOut.isSome then
+    let recordedModules := (get "--closure-reused").foldl NameSet.insert {}
+    let read ← IO.mkRef ({} : Std.HashMap Name (Option (Std.HashMap String (Std.HashSet String))))
+    let recorded (w : Name) : IO (Option (Std.HashSet String)) := do
+      let some m := moduleOf[w]? | do
+        -- a constant of an imported module: the env's
+        let some i := env.getModuleIdxFor? w | return none
+        let some m := env.header.moduleNames[i.toNat]? | return none
+        fromEnv m w
+      unless recordedModules.contains m do
+        -- a module of the set is walked; another is the import a theorem the set declares too was moved to
+        if modSet.contains m then return none
+        return ← fromEnv m w
+      let some dir := records | return none
+      let r ← match (← read.get)[m]? with
+        | some r => pure r
+        | none => do
+          let r ← readRecord dir m
+          read.modify (·.insert m r)
+          pure r
+      return r.map (·.getD (toString w) {})
+    if let some f := envOut then
+      let sets ← axiomSets (fun n => renamed[n]? <|> kenv.find? n) recorded
+        (constants.toArray.map (·.1) ++ renamed.toArray.map (·.1))
+      -- the copies of a theorem two modules declare take their sets' union, so an importer finds it whichever module
+      -- its environment names for the theorem
+      let mut joined : Std.HashMap Name (Std.HashSet String) := {}
+      for (n, _) in constants do
+        joined := joined.insert n (sets.getD n {})
+      for (fresh, (n, _)) in renamedFrom do
+        joined := joined.alter n fun s => some ((s.getD {}).insertMany (sets.getD fresh {}))
+      let mut perModule : Std.HashMap Name (Array (String × Json)) := {}
+      let mut unsafeOf : Std.HashMap Name (Array String) := {}
+      for (n, m) in (constants.toArray.map fun (n, _) => (n, moduleOf[n]!)) ++ renamedFrom.toArray.map (·.2) do
+        let s := joined.getD n {}
+        unless s.isEmpty do
+          perModule := perModule.alter m fun ds => some ((ds.getD #[]).push (toString n, toJson (s.toArray.qsort (· < ·))))
+          if constants[n]?.any (·.isUnsafe) then
+            unsafeOf := unsafeOf.alter m fun ns => some ((ns.getD #[]).push (toString n))
+      -- a theorem a module imported from an earlier replay declares too: its copy's set joins that module's record
+      let mut earlier : Std.HashMap Name (Array (String × Json)) := {}
+      for (fresh, (n, _)) in renamedFrom do
+        if let some im := moduleOf[n]? then
+          let s := sets.getD fresh {}
+          unless modSet.contains im || s.isEmpty do
+            earlier := earlier.alter im fun ds => some ((ds.getD #[]).push (toString n, toJson (s.toArray.qsort (· < ·))))
+      let h ← IO.FS.Handle.mk f .write
+      for m in mods do
+        h.putStrLn (Json.mkObj [("module", m.toString (escape := false)),
+          ("axioms", Json.mkObj (perModule.getD m #[]).toList),
+          ("unsafe", toJson ((unsafeOf.getD m #[]).qsort (· < ·)))]).compress
+      h.putStrLn (Json.mkObj [("deferred", toJson (deferred.toArray.qsort Name.lt |>.map (·.toString (escape := false)))),
+        ("joined", Json.mkObj (earlier.toList.map fun (m, ds) => (m.toString (escape := false), Json.mkObj ds.toList)))]).compress
+    if records.isSome then
+      -- an own module's copy of a theorem a module before it declares too is recorded under the theorem's name
+      let copies := renamedFrom.toArray.filter fun (_, (_, m)) => ownSet.contains m
+      let sets ← axiomSets (fun n => renamed[n]? <|> kenv.find? n) recorded (ownConstants ++ copies.map (·.1))
+      let mut all : Std.HashSet String := {}
+      let named := ownConstants.map (fun n => (n, n)) ++ copies.map fun (fresh, (n, _)) => (fresh, n)
+      for (k, n) in named do
+        let s := sets.getD k {}
+        unless s.isEmpty do
+          all := all.insertMany s
+          declarations := declarations.push (toString n, toJson (s.toArray.qsort (· < ·)))
+      names := all.toArray.qsort (· < ·)
+  else
+    names := axiomsIn kenv ownConstants |>.map toString
   let sent := members.fold (fun a _ cs => a + cs.size) 0
   -- three passes, not `qsort`, which is quadratic on the many declarations that take 0 ms
   let top := (List.range 3).foldl (init := (#[] : Array (Nat × Name))) fun top _ =>
@@ -384,13 +747,20 @@ unsafe def main (args : List String) : IO UInt32 := do
     a theorem another module declares too, checked under a fresh name; {skipped} more are unsafe or partial: compiled code, \
     which the kernel does not check; {kept} more, of {reusedSet.size} modules that passed before, added unchecked; \
     {env.header.moduleNames.size} modules imported unchecked), as {tasks.size} declarations side by side \
-    (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}"
+    (slowest: {", ".intercalate slowest.toList}); {onPublic.size} of them, which the kernel stopped on, accepted on their \
+    imports' public parts (`lean`'s check){if onPublic.isEmpty then "" else s!": {", ".intercalate (onPublic.toList.map toString)}"}; \
+    axioms of the own modules' bodies: {", ".intercalate names.toList}"
   let tEnd ← IO.monoMsNow
   let seconds := [("load", tLoaded - t0), ("plan", tPlanned - tLoaded), ("check", tChecked - tPlanned),
     ("axioms", tEnd - tChecked)].map fun (k, ms) => (k, toJson (ms / 1000))
   IO.println s!"replay: seconds {Json.mkObj seconds |>.compress}"
-  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
+  IO.FS.writeFile out <| (Json.mkObj <| [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
     ("second_copies", toJson renamed.size), ("closure_checked", toJson (get "--closure").size),
     ("closure_reused", toJson (get "--closure-reused").size), ("imported", toJson env.header.moduleNames.size),
-    ("axioms", toJson names), ("seconds", Json.mkObj seconds)]).compress
+    ("axioms", toJson names), ("seconds", Json.mkObj seconds),
+    ("on_public_imports", toJson (onPublic.qsort Name.lt |>.map toString))] ++
+    (if records.isSome then [("declarations", Json.mkObj declarations.toList)] else []) ++
+    (if envIn.isSome then [("env_modules", toJson (env.header.moduleNames.map (·.toString (escape := false))))] else []) ++
+    (if envOut.isSome then [("modules", toJson mods.size),
+      ("deferred", toJson (deferred.toArray.qsort Name.lt |>.map (·.toString (escape := false))))] else [])).compress
   return 0
