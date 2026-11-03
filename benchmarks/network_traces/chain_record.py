@@ -685,9 +685,9 @@ SCOPES = ("link", "datacenter", "world")
 
 
 def run_class(params):
-    """The scan class of a warden run's schedule ``params``: the `scan_zk.SETUPS` class whose schedule has its egress
-    cells, which the gate's ``--scan-class`` sets (`auditor.SCAN_CLASSES`); `ingress_scan.Class.serves` checks the
-    rest."""
+    """The scan class of an active warden run's schedule ``params``: the `scan_zk.SETUPS` class whose schedule has its
+    egress cells, which the gate's ``--scan-class`` sets (`auditor.SCAN_CLASSES`); `ingress_scan.Class.serves` checks
+    the rest."""
     import scan_zk as SZ
     found = [s.cls for s in SZ.SETUPS.values() if s.params.egress_cells == params.egress_cells]
     if len(found) != 1:
