@@ -225,13 +225,16 @@ def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
 
 def kinds(one: dict) -> str:
     """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
-    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite."""
+    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; and `partial` and `why` where
+    `published` sets them."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
 
     def part(d: dict) -> str:
         return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
-    return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}}}'
+    marks = (',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
+                                                                 if one.get("why") else "")
+    return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}{marks}}}'
 
 
 def runs_of(st: frontier_fit.Start) -> dict[str, list[dict]]:
