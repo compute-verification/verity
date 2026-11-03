@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.6",
+ "te_core": "4.7",
  "reading": "B",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "policies": {
