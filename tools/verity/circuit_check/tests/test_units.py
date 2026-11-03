@@ -488,7 +488,8 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     _bindings(root, *BINDINGS)
     first = _records_only(root)
     assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5 and first["scratch_bytes"] > 0, first
-    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 5     # no target's entry, no task list
+    # the records and the catalog's roots record (`units.store_roots`): no target's entry, no task list
+    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 6
     assert first["bytes"] == sum(p.stat().st_size for p in _records(root))
     assert _records_only(root) == {"reused": 5, "rebuilt": [], "scratch_bytes": 0, "stored": 0, "bytes": first["bytes"]}
 
