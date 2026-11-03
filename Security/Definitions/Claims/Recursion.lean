@@ -1,4 +1,4 @@
-import Definitions.Claims.IndexedTapes
+import Definitions.Claims
 
 /-!
 # Claims: the ZK-recursion compiler (a draft, before it freezes)

@@ -1,7 +1,7 @@
 import Mathlib
 import Definitions.Core.Boolean
 import Definitions.Core.Interaction
-import Definitions.Claims.Hm96
+import Definitions.Core.Hm96
 import Definitions.Claims.Json
 
 /-!
@@ -63,7 +63,7 @@ Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
 The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's), hm96's hiding, `Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`, which the soundness proofs read), and the JSON library's specification, `JsonSpec`
+(`Definitions/Core/Hm96.lean`, which the soundness proofs read), and the JSON library's specification, `JsonSpec`
 (`Definitions/Claims/Json.lean`, which only completeness reads). What the claims rest on and no Lean statement can say
 is `trustedBase`.
 

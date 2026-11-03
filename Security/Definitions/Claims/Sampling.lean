@@ -1,4 +1,4 @@
-import Definitions.Claims.IndexedTapes
+import Definitions.Claims
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)

@@ -824,7 +824,6 @@
     {"file": "Security/Definitions/Accounting/TS/J10R.lean", "count": 1},
     {"file": "Security/Definitions/Accounting/Window.lean", "count": 1},
     {"file": "Security/Definitions/Claims.lean", "count": 12},
-    {"file": "Security/Definitions/Claims/IndexedTapes.lean", "count": 1},
     {"file": "Security/Definitions/Claims/Sampling.lean", "count": 1},
     {"file": "Security/Definitions/Core/Accel/Card.lean", "count": 2},
     {"file": "Security/Definitions/Core/Accel/Isa.lean", "count": 1},

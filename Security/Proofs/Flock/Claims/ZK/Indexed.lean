@@ -1,4 +1,4 @@
-import Definitions.Claims.IndexedTapes
+import Definitions.Claims
 
 /-!
 # `ZKmalRx` at one tape

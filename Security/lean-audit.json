@@ -2491,7 +2491,9 @@
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
    "Claims.Json.Ascii": "a helper the claims read: a text of ASCII without DEL, which `JsonSpec` reads",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
-   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim"
+   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
+   "Claims.ZKmalRLeak": "proved of every prover from `ZKmalRx` and `CutsOf` (`Claims.zkmalRLeak_of_cuts`), not of a deployment: a guarantee concludes it at a release's stop positions (`Verity.recZK_leak`, `Verity.zkStop_leak`), and no deployed record's claim reads it",
+   "Claims.CutsOf": "a premise of `ZKmalRLeak`'s derivation (`Claims.zkmalRLeak_of_cuts`) on the released prover: its run is the reference prover's cut at a public position, a condition on the prover like `decOK`, no claim"
   }
  },
  "witnesses": {
@@ -3165,9 +3167,15 @@
    "sealed": true
   },
   "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Core.Boolean", "Definitions.Core.Interaction", "Definitions.Claims"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Boolean",
+    "Definitions.Core.Interaction",
+    "Definitions.Core.Hm96",
+    "Definitions.Claims"
+   ],
    "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean); the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction)"
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean); the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction); hm96's hiding, which the claims and the composition of zero knowledge through a recursion state, is core's (Definitions.Core.Hm96)"
   },
   "Definitions.Hash": {
    "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Core.Hash", "Definitions.Hash"],
