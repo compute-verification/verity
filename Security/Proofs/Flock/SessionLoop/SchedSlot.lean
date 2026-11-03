@@ -99,7 +99,7 @@ theorem sched_slot_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx 
     have hA' : Sched.TabAlike tr tr := hA
     exact hA'.2.2.2.2.2
   obtain ⟨hm36, hk0, hn, hqb⟩ := Count.sched_facts hz
-  obtain ⟨⟨hmp, hmp0, hpc⟩, hdom, -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hs) hk
+  obtain ⟨⟨hmp, hmp0, hpc⟩, hdom, hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hs) hk
   have hdg : tr.st.digest.size < 2 ^ 64 := by
     rw [hts]
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
@@ -186,10 +186,15 @@ round of its own (`Loop.schedOf`) has the length of some rep `2j + r`'s round fr
 before its inner proof's (`repSlot … (innerOff 0)`). Live there, the frame's check passed the worker's round against
 the rep's schedule so far (`ofLoop_sched_live`), which holds the round (`Loop.schedOf_eq_none_iff`, `Loop.InnerAt`), so
 `Loop.sched_slot_at`. -/
-theorem sched_slot (L₁ : LeanRelease Flock.Wit Loop.Tp)
-    (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
+theorem sched_slot (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
-    (hSv : Loop.Serves x) (ρ : Loop.Tp) (κ : (ofLoop Masked.dataE L₁ real).toSrv.Chk) (m₀ ρ₀ : Msg)
+    (hSv : Loop.Serves x)
+    (ρ : (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand)
+    (κ : (ofLoop Masked.dataE L₁ real).toSrv.Chk) (m₀ ρ₀ : Msg)
     (ops : List (Msg × Msg))
     (hRT : ∀ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
