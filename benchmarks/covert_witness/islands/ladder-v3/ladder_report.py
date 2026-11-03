@@ -17,7 +17,8 @@ FIT.json is the fit's compute-optimal model at each loss, between the least and 
 one step's counted MACs a token, and w(N), the forward's MACs a token, power laws in N through the sizes' count.json. At
 fixed loss, N is compute-optimal where alpha A N^-alpha / gamma = beta B D^-beta (gamma = d ln c / d ln N), so the loss at
 which N is optimal is E + A N^-alpha (1 + alpha / (beta gamma)); a point's loss is that in bits per byte on the search pool
-and its forward gates per token are w(N) at the bf16 GEMM price (te_core.gates).
+and its forward gates per token are w(N) at the bf16 GEMM price (te_core.gates). It needs three sizes: with two, alpha is
+free, and the compute-optimal N with it.
 """
 from __future__ import annotations
 
@@ -147,9 +148,10 @@ def power_law(xs: list[float], ys: list[float]) -> tuple[float, float]:
 
 
 def compute_optimal(f: dict | None, runs: dict[str, dict], bpb_per_nat: float | None) -> dict | None:
-    """FIT.json (module docstring): None without a fit or with fewer than two sizes."""
+    """FIT.json (module docstring): None without a fit or with fewer than three sizes (two values of N fix E + A N^-alpha
+    at each but leave alpha free, and the compute-optimal N moves with it)."""
     sizes = sorted(runs.values(), key=lambda r: r["count"]["non_embedding_params"])
-    if f is None or len(sizes) < 2 or not bpb_per_nat or f["A"] == 0 or f["B"] == 0:
+    if f is None or f["sizes"] < 3 or len(sizes) < 3 or not bpb_per_nat or f["A"] == 0 or f["B"] == 0:
         return None
     ns = [r["count"]["non_embedding_params"] for r in sizes]
     c_k, gamma = power_law(ns, [r["count"]["macs_per_step"] / r["count"]["tokens_per_step"] for r in sizes])
