@@ -36,15 +36,19 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
 
 * **A causal game.** The prover sends the parameters `θ`, the committed files `F` (any number of blobs) and the
-  commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays `play (families θ) θ F c`, a
-  `Verity.Game` in which the prover drives the device (`releases`): the parameters fix only the coin commitment's
-  families, and the frames are the prover's, in any order and number. Each frame names what the device releases and
-  carries the bytes the release answers (a root, a transcript digest), and then the device draws and releases its coins:
-  a family's next coin (`Frame.fresh`), a coin tree sampled at its `Hello` with its root and key (`Frame.hello`), or an
-  opening of a tree the device holds open, its stream's next unopened round (`Frame.opening`), so no round is opened
-  twice. A frame the device refuses ends its releases, as the prover's close does. The evidence comes last, with its
-  own blobs (the record, its rep files, the proofs). A strategy (`Verity.Game.Strategy`) is a function of the coins
-  released so far and never of later ones. The composite reads the committed files and then the evidence's blobs
+  commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays
+  `play (families θ) (signer θ) θ F c`, a `Verity.Game` in which the prover drives the device. It sends its request
+  (`Exchange.request`), then its frames (`releases`): the parameters fix only the coin commitment's families and the
+  device's signer, and the frames are the prover's, in any order and number. Each frame names what the device releases
+  and carries the bytes the release answers (a root, a transcript digest), and then the device draws and releases its
+  coins: a family's next coin (`Frame.fresh`), a coin tree sampled at its `Hello` with its root and key
+  (`Frame.hello`), or an opening of a tree the device holds open, its stream's next unopened round (`Frame.opening`), so
+  no round is opened twice. A frame the device refuses ends its releases, as the prover's close does. At the close
+  (`finish`) the device draws each coin's salt and the coins it committed to and didn't release, and releases its
+  signatures on what the play fixed (`Signer`): its record, its close over its log and its ledger lines, as the
+  deployed device does once a withheld session's signed close is written. The evidence comes last, with its own blobs
+  (the record, its rep files, the proofs). A strategy (`Verity.Game.Strategy`) is a function of the coins released so
+  far and never of later ones. The composite reads the committed files and then the evidence's blobs
   (`Exchange.sent`), so every input whose blobs begin with the committed files is what some strategy sends
   (`Verity.sent_reachable`).
 * **The claims read the committed files the parameters name.** The circuit file and the public file are the committed
@@ -71,9 +75,11 @@ The statement's form is the causal game, the committed files, one fixed extracto
   `finderCROf`), the bound `ecr/sha-512` gives it. Two openings of one position
   and a second file with a registered digest (`fileFinder`, `publicFinder`) each enter that way. The named assumption
   `ecr/sha-512` is asked only of the finder. A forged device release enters the same way through a fixed forger
-  (`forger a`, a `Hash.Assumptions.LmsForger` applied to the strategy, its calls bounded as the finder's are and the
-  device's signatures it saw by the published `Q`): where it meets `Hash.Assumptions.LmsUnforgeable` at the compiled
-  LMS verifier (`lmsVerify`), the error adds the published `ε_forge(t, Q)` (`epsForge`).
+  (`forger a`, a `Hash.Assumptions.LmsForger` applied to the strategy, its calls bounded as the finder's are). It sees
+  the device's signatures a play releases, on each of its coins on at most the published `Q` messages, the most the
+  device signs in a play (`signs_le`, `forger_signed`), so it is a forger of the standard EUF-CMA game, its queries
+  chosen adaptively by the strategy's moves. Where it meets `Hash.Assumptions.LmsUnforgeable` at the compiled LMS
+  verifier (`lmsVerify`), the error adds the published `ε_forge(t, Q)` (`epsForge`).
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
   The inference-only policy's claim is `Nci.Complies` at the published `Γ` and `α` of the declaration over the committed
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
@@ -94,10 +100,11 @@ verdict at `k` accepts while its claim fails is at most its error there. `Verity
 (`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
-`programDigest`, `publicDigest` and `registered`, `families` and `coinsRead`, `extract`, the finders and the forgers,
-`computed`, `world` (the runs PoUS, PoUB-P2 and the network certifier realize), the declaration's registered inputs and
-the policy's budgets, the wipe at the period's boundary and the run read as its game, and `certOf`, `foreignBits`,
-`signatures`, `delta`, `epsForge` and `loss` (what the composite publishes, functions of the parameters alone).
+`programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
+forgers, `computed`, `world` (the runs PoUS, PoUB-P2 and the network certifier realize), the declaration's registered
+inputs and the policy's budgets, the wipe at the period's boundary and the run read as its game, and `certOf`,
+`foreignBits`, `signatures`, `delta`, `epsForge` and `loss` (what the composite publishes, functions of the parameters
+alone).
 -/
 
 namespace Verity
@@ -363,9 +370,9 @@ root or key sampled twice, a frame past its coin-tree lines), so each of its ses
 prover's close, is a play here with the same log, and the plays it refuses only add strategies. Each frame it serves
 releases one of the families' coins or writes one of its coin-tree lines, so it serves at most `frames fs`. A withheld
 session, the one a sampled-proofs window's draw reads, answers its hello with the families alone and each coin with its
-raw bytes, as the device here releases them, and its close with the commitment and every coin's salt and path, salts
-drawn apart from the coins after the last release; a nonce the prover leaves to the challenger is drawn apart from
-everything else. A prover that reads either is a mixture of strategies here.
+raw bytes, as the device here releases them, and its close with the commitment and every coin's salt and path, which
+the play draws after the last release (`finish`). A nonce the prover leaves to the challenger is drawn apart from
+everything else, so a prover that reads it is a mixture of strategies here.
 
 An opening draws its round anew among the draws with the leaf the `Hello` committed to. That gives the opened coins and
 salts, jointly with the key and every leaf, the law they have when the device keeps the draws it sampled at `Hello`, as
@@ -396,13 +403,39 @@ def releases : ℕ → List (String × ℕ) → List OpenTree → Game (List Rel
           .coin (TreeOpenable T.nonce T.spec T.sample s' r) fun d =>
             (releases k fs (ts.set i (T.bump s'))).map fun log => ⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log
 
-/-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
+/-- **The device's signer** in a play: the messages it signs under its LMS key, in the order it signs them, and its
+signature on each. Before any coin it signs what the prover's request fixes (`first`: the ledger's reserve and open,
+and the period's open). At the close it draws `draws` bits apart from every release, each coin's salt and the coins it
+committed to and didn't release, and signs what the request, its log, the bytes the close leaves to it and its draw fix
+(`last`: its record over its commitment to every coin and salt, its close over its log's line count and chain, the
+ledger's end and the period's close). `sign i m` is its signature on `m` as its `i`-th in the play. -/
+structure Signer where
+  first : ByteArray → List Hash.Msg
+  draws : ℕ
+  last : ByteArray → List Release → ByteArray → List Bool → List Hash.Msg
+  sign : ℕ → Hash.Msg → Hash.Msg
+
+/-- The messages the device signs in a play, in order: what the request fixes, then the rest. -/
+def Signer.signs (D : Signer) (a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : List Hash.Msg :=
+  D.first a ++ D.last a log b ρ
+
+/-- The device's signatures in a play: each message it signs, with its signature at its place among them. -/
+def Signer.signatures (D : Signer) (a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    List (Hash.Msg × Hash.Msg) :=
+  (D.signs a log b ρ).mapIdx fun i m => (m, D.sign i m)
+
+/-- How a play ends: the parameters, the committed files and the commitment sent first, the prover's request, the
+device's log, the bytes the prover's close leaves to the device, the device's draw after it and its signatures, and the
 evidence sent last with its blobs. -/
 structure Exchange where
   params : ByteArray
   files : Array ByteArray
   commitment : ByteArray
+  request : ByteArray
   log : List Release
+  close : ByteArray
+  drawn : List Bool
+  signed : List (Hash.Msg × Hash.Msg)
   evidence : ByteArray
   blobs : Array ByteArray
 
@@ -410,11 +443,28 @@ structure Exchange where
 files, then the evidence's blobs. -/
 def Exchange.sent (o : Exchange) : Sent := ⟨o.params, o.commitment, o.evidence, o.files ++ o.blobs⟩
 
-/-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device the prover
-drives under the coin commitment's families `fs`, from no coin tree open, each release after the bytes it answers, then
-the evidence with its blobs. -/
-def play (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange :=
-  (releases (frames fs) fs []).bind fun log => .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
+/-- **The play from the prover's close**, after its request `a` and the device's log `log`: the bytes `b` the close
+leaves to the device (how the session ended, the times its lines carry), the device's draw `ρ` and its signatures on
+what the play fixed (`Signer.signatures`), then the evidence with its blobs.
+
+A withheld session releases its commitment and every opened coin's salt and path only once its signed close is written,
+so drawing the salts and the unreleased coins at the close gives them, jointly with the released coins, the law the
+deployed device's draw before the session gives them. The prover here sees the whole draw, where the deployed one sees
+the salts and no unreleased coin, and chooses the bytes its close leaves to the device, where the deployed device's
+times and ending follow the prover's frames: a deployed prover is a mixture of strategies here. Each signature is the
+device's on its message at its place among the play's, so the signatures on what the request fixes are fixed before
+any coin, as the deployed ledger's reserve and open are. A forger built from a strategy has the device sign the play's
+messages on its coin (`Hash.Assumptions.LmsForger.signed`), each chosen by the strategy's moves before it: the
+adaptive queries of the EUF-CMA game. -/
+def finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) : Game Exchange :=
+  .send ByteArray fun b => .coin (Fin D.draws → Bool) fun ρ => .send (ByteArray × Array ByteArray) fun e =>
+    .ret ⟨θ, F, c, a, log, b, List.ofFn ρ, D.signatures a log b (List.ofFn ρ), e.1, e.2⟩
+
+/-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the prover's request
+`a`, then the device the prover drives under the coin commitment's families `fs`, from no coin tree open, each release
+after the bytes it answers, then the close under the device's signer `D` (`finish`). -/
+def play (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange :=
+  .send ByteArray fun a => (releases (frames fs) fs []).bind (finish D θ F c a)
 
 /-- **The prover that closes the device at once**, then plays `t` in what follows the device's empty log. -/
 def closeThen {β : Type} (f : List Release → Game β) (t : Game.Strategy (f [])) :
@@ -525,11 +575,12 @@ abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.
 
 /-- **The names the subprotocols define.** v2's reading of the committed files at the parameters; the positions from
 the files and the commitment, the circuit file's and the public file's digests in the parameters and the registered
-files; the coin commitment's families, the device's only part the parameters fix (its frames are the prover's:
-`Frame`), and the device's log as each component's check read it, decoded from the device's signed log in what the
-prover sent; the extractor applied to a strategy, and each subprotocol's collision finder and forger of the device's
-signature, with their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`) and the device's
-signatures the forger saw by the published `Q` (`forger_signed`), and the other finders each subprotocol's bound reads,
+files; the coin commitment's families and the device's signer, the device's only parts the parameters fix (its frames
+are the prover's: `Frame`), and the device's log as each component's check read it, decoded from the device's signed
+log in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder and forger of
+the device's signature, with their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`), and the
+device's messages in a play and the forger's on each of its coins bounded by the published `Q` (`signs_le`,
+`forger_signed`), and the other finders each subprotocol's bound reads,
 each with its budget in the strategy's calls (`finders`); the committed circuit's gates a play computed after
 their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
 budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
@@ -551,14 +602,17 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   registered : ByteArray → Array ByteArray
   /-- the coin commitment's families, each its label and its number of coins, fixed by the parameters before any coin -/
   families : ByteArray → List (String × ℕ)
+  /-- the device's signer, what it signs in a play and its signatures, fixed by the parameters before any coin -/
+  signer : ByteArray → Signer
   /-- the device's log as subprotocol `a`'s check read it, from the signed log in what the prover sent; `none` where its
   check reads none -/
   coinsRead : Subprotocol → Sent → Option (List Release)
-  extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (families θ) θ F c) →
-    (read θ F).circuit.Transcript
+  extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Transcript
   finder : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) θ F c) → Claims.Finder
-  cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (families θ) θ F c) → ℕ
+    Game.Strategy (play (families θ) (signer θ) θ F c) → Claims.Finder
+  cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c) → ℕ
   callsMul : ByteArray → Subprotocol → ℕ
   callsAdd : ByteArray → Subprotocol → ℕ
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
@@ -567,22 +621,25 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- **The other finders subprotocol `a`'s bound reads**, each built from the strategy, with its budget a function of
   the strategy's calls (`cost`) that bounds its calls (`FinderSpec`); none where the bound reads only `finder`. -/
   finders : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    List (FinderSpec (play (families θ) θ F c) (cost θ F c))
+    List (FinderSpec (play (families θ) (signer θ) θ F c) (cost θ F c))
   /-- each subprotocol's forger of the device's signature, applied to the strategy -/
   forger : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) θ F c) → Hash.Assumptions.LmsForger
+    Game.Strategy (play (families θ) (signer θ) θ F c) → Hash.Assumptions.LmsForger
   /-- **The forger's SHA-512 calls are at most `c · calls(τ) + d`**, the finder's budget, on every coin of the
   forger. -/
   forger_calls : ∀ a θ F c σ (x : (forger a θ F c σ).S),
     (forger a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
-  /-- the device's signatures in the period, `Q`, fixed by the parameters -/
+  /-- **`Q`**, fixed by the parameters: the most messages the device signs in a play, its records, closes and ledger
+  lines -/
   signatures : ByteArray → ℕ
-  /-- the forger saw at most `Q` of the device's signatures -/
-  forger_signed : ∀ a θ F c σ, (forger a θ F c σ).signed.length ≤ signatures θ
-  computed : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (families θ) θ F c) →
-    Exchange → Finset (Fin (read θ F).circuit.N)
-  world : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (families θ) θ F c) →
-    Exchange → World d α
+  /-- the device signs at most `Q` messages in every play -/
+  signs_le : ∀ θ a log b ρ, ((signer θ).signs a log b ρ).length ≤ signatures θ
+  /-- the forger has at most `Q` of the device's messages signed on each of its coins -/
+  forger_signed : ∀ a θ F c σ (x : (forger a θ F c σ).S), ((forger a θ F c σ).signed x).length ≤ signatures θ
+  computed : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c) → Exchange → Finset (Fin (read θ F).circuit.N)
+  world : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c) → Exchange → World d α
   /-- the window PoUS's and PoUB-P2's claims read, fixed by the parameters before any coin -/
   window : ByteArray → Accounting.Window
   /-- the account PoUS's claim charges device memory to, fixed by the parameters before any coin -/
@@ -611,16 +668,17 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- the wipe that opens the period, on the device -/
   wipe : (θ : ByteArray) → (F : Array ByteArray) → Verity.Wipe d (schedule θ F) (boundary θ F) Seed Spots
   /-- each play, read at the wipe's boundary as the wipe's game, with the strategy's moves there -/
-  wipeRun : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Game.Strategy (play (families θ) θ F c)) →
-    (wipe θ F).OfRun (play (families θ) θ F c)
+  wipeRun : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    (σ : Game.Strategy (play (families θ) (signer θ) θ F c)) → (wipe θ F).OfRun (play (families θ) (signer θ) θ F c)
   /-- the survivor threshold the wipe publishes with an accepted verdict -/
   foreignBits : ByteArray → ℕ
-  honest : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (families θ) θ F c)
+  honest : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c)
   certOf : ByteArray → Certificates
   crBound : ByteArray → Subprotocol → ℕ → ℝ
   delta : ByteArray → Subprotocol → ℕ → ℝ≥0∞
   /-- **The published `ε_forge(t, Q)`**: the bound `Hash.Assumptions.LmsUnforgeable` gives a forger of at most `t`
-  SHA-512 calls that saw at most `Q` of the device's signatures -/
+  SHA-512 calls that has at most `Q` of the device's messages signed on each of its coins -/
   epsForge : ByteArray → ℕ → ℕ → ℝ
   loss : Subprotocol → ByteArray → ℝ≥0∞ → ℝ≥0∞
 
@@ -629,7 +687,8 @@ namespace Vocab
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- The game after `θ`, `F` and `c`. -/
-def game (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange := play (V.families θ) θ F c
+def game (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange :=
+  play (V.families θ) (V.signer θ) θ F c
 
 /-- **The circuit file**: the committed file the parameters name by the circuit file's digest (`namedFile`). -/
 noncomputable def circuitFile (θ : ByteArray) (F : Array ByteArray) : ByteArray := namedFile (V.programDigest θ) F
@@ -708,9 +767,10 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
 (`coinsRead`; a check that reads none binds nothing). The device signs its log's line count and the lines' SHA-512 chain
 at its close (`close_session`), and v2 refuses a session whose signed close is missing or doesn't match its log
-(`SampledProofs.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, which
-`a`'s error bounds where its forger meets `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a
-SHA-512 collision of the chain, which its finder outputs. -/
+(`SampledProofs.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
+message the device didn't sign in the play (`Exchange.signed`), which `a`'s error bounds where its forger meets
+`Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a SHA-512 collision of the chain, which
+its finder outputs. -/
 def Logged (a : Subprotocol) (o : Exchange) : Prop := ∀ log ∈ V.coinsRead a o.sent, log = o.log
 
 /-- **The finder for a second circuit file with the registered digest** (`namedFinder`): it outputs the circuit file and
@@ -737,7 +797,8 @@ def FinderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteA
 
 /-- **`B^τ`'s forgery premise**: subprotocol `a`'s forger applied to the strategy meets
 `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier, at the finder's budget of SHA-512 calls
-(`callsMul θ a * cost θ F c σ + callsAdd θ a`, `forger_calls`) and the device's `Q` signatures (`forger_signed`). -/
+(`callsMul θ a * cost θ F c σ + callsAdd θ a`, `forger_calls`) and at most `Q` of the device's messages signed on each
+of its coins (`forger_signed`). -/
 def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   Hash.Assumptions.LmsUnforgeable lmsVerify (V.epsForge θ) (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a)
     (V.signatures θ) (V.forger a θ F c σ)
