@@ -44,7 +44,7 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
     "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by NciCheck.Count's "
                                                 "rule: its session Definition, gates by the gate table, fresh bits at the "
-                                                "verifier's pins, and a day's public counts (block-counts)",
+                                                "verifier's pins, and a day's public judgment against n, no count (block-counts)",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
@@ -53,8 +53,9 @@ PUBLIC = {
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
-    "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
-                                                "tie (Tables)",
+    "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
+                                                "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
+                                                "circuit cut at its linears (PearlTables)",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
@@ -67,6 +68,8 @@ PUBLIC = {
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s committed served y: each call's y rows, its domain and "
+                                                   "tree (y_domain, commit_y, retain_y), which verify_run opens and checks",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",

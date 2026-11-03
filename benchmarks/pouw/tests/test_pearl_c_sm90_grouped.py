@@ -383,11 +383,14 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
     assert len(g.calls) == len(g.sets) == (2 if split else 1)
 
 
-def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path):
+def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path, monkeypatch):
     """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
-    serial schedule: their manifests differ in the schedule they ran under alone, which it doesn't count, and a changed A
-    rows file it does."""
+    serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
+    count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
+    ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
     C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
+    empty = torch.empty
+    monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
     ws, counts, n, k = (1, 3), [3, 20], 128, 1024
     x = torch.randn(sum(counts), k).to(torch.bfloat16)
     run, weights = device_run(4, n, k, tmp_path / "grouped", "deferred-a")
@@ -398,7 +401,7 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     run.end_pass()
     alone.end_pass()
     a, b = (json.loads((tmp_path / d / "manifest.json").read_text()) for d in ("alone", "grouped"))
-    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"]
+    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
     assert C._same(tmp_path / "alone", tmp_path / "grouped") == []
     rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
     rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))
