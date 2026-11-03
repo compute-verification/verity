@@ -26,7 +26,7 @@ def block_gemm(K: int, N: int, G: int, scale: str, dot=None):
     return bind(BLOCK_GEMMS["DOT"][scale], K=int(K), N=int(N), G=int(G), DOT=dot)
 
 
-#: TA1 call name -> this port's call name (the capture mapping's child selectors are written against TA1's names)
+#: b1 call name -> this port's call name (the capture mapping's child selectors are written against b1's names)
 CALL_NAMES: dict[str, str] = {**H.CALL_NAMES, "LayerPre": "LayerPreFp8", "LayerPost": "LayerPostFp8", "Serve": "ServeFp8"}
 
 

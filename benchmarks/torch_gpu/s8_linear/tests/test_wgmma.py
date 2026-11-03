@@ -7,6 +7,7 @@ import sys
 import types
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
@@ -51,6 +52,7 @@ def test_params_is_the_kernels_layout():
     sa, m, ws, size = map(int, re.search(r"offsetof\(Params, sa\) == (\d+) && offsetof\(Params, M\) == (\d+) && "
                                          r"offsetof\(Params, ws\) == (\d+) && sizeof\(Params\) == (\d+)", src).groups())
     assert (W.Params.sa.offset, W.Params.M.offset, W.Params.ws.offset, W.C.sizeof(W.Params)) == (sa, m, ws, size)
+    assert W.Params.clk.offset == int(re.search(r"offsetof\(Params, clk\) == (\d+)", src).group(1))
     assert re.findall(r"^S8MM\((\d+), (\d+)\)", src, re.M) == [(str(tm), str(bn)) for tm, bn in W.TILES]
     assert int(re.search(r"constexpr int BK = (\d+)", src).group(1)) == W.BK
     assert int(re.search(r"SMEM_BUDGET = (\d+) \* 1024", src).group(1)) * 1024 == W.SMEM_BUDGET
@@ -121,3 +123,93 @@ def test_the_sass_gate_refuses(bad):
 def test_the_sass_gate_refuses_an_unsigned_or_other_shaped_atom():
     assert _gate(igmma="IGMMA.64x64x32.U8.S8 R24, gdesc[UR4], R24 ;")
     assert _gate(igmma="IGMMA.64x128x32.S8.S8 R24, gdesc[UR4], R24 ;")
+
+
+@pytest.mark.parametrize("report, why", [
+    (PTXAS.replace("Used 66 registers, ", ""), "no ptxas resource line"),
+    (PTXAS.replace("'sm_90a'", "'sm_100a'"), "compiled for sm_100a, want sm_90a"),
+    (PTXAS + "ptxas info    : (C7515) Potential Performance Loss: wgmma.mma_async instructions are serialized\n", "C7515"),
+])
+def test_the_sass_gate_refuses_the_report(report, why):
+    _, problems = SG.gate(report, LISTING.format(igmma="\n".join(["IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;"] * 4), extra=""))
+    assert any(why in p for p in problems), problems
+
+
+def test_the_kernel_order_is_a_permutation_within_each_32_bytes():
+    assert sorted(W.KERNEL_ORDER) == list(range(32))
+    assert W.KERNEL_ORDER[:8] == (0, 1, 2, 3, 8, 9, 10, 11) and W.KERNEL_ORDER[16:20] == (4, 5, 6, 7)
+
+
+def _fragments(o: np.ndarray) -> np.ndarray:
+    """A 64 x BN tile of s32 accumulators as the reduction's A [64, 4 BN] s8 in the kernel's order: thread (warp w, lane)
+    holds accumulator 4 j + i at row 16 w + lane / 4 + 8 (i / 2), column 8 j + 2 (lane % 4) + i % 2, and passes
+    (4 j, 4 j + 2, 4 j + 1, 4 j + 3) as the fragment's registers: rows g, g + 8, g, g + 8 at bytes 4 t, 4 t, 16 + 4 t, 16 + 4 t."""
+    bn = o.shape[1]
+    a = np.zeros((64, 4 * bn), np.int8)
+    for w in range(4):
+        for lane in range(32):
+            g, t = lane // 4, lane % 4
+            for j in range(bn // 8):
+                acc = [o[16 * w + g + 8 * (i // 2), 8 * j + 2 * t + i % 2] for i in range(4)]
+                for reg, row, k0 in zip((acc[0], acc[2], acc[1], acc[3]), (g, g + 8, g, g + 8), (4 * t, 4 * t, 16 + 4 * t, 16 + 4 * t)):
+                    a[16 * w + row, 32 * j + k0:32 * j + k0 + 4] = np.array([reg], "<i4").view(np.int8)
+    return a
+
+
+@pytest.mark.parametrize("bn,r", [(128, 8), (256, 16)])
+def test_the_registers_times_r_in_kernel_order_are_os_bytes_times_r(bn, r):
+    torch = pytest.importorskip("torch")
+    rng = np.random.default_rng(bn + r)
+    o = rng.integers(-2**31, 2**31, (64, bn), dtype=np.int64).astype(np.int32)
+    o[0], o[1, :8] = -2**31, 2**31 - 1
+    rmat = rng.integers(-128, 128, (r, 4 * bn), dtype=np.int64).astype(np.int8)
+    rk = W.kernel_order(torch.from_numpy(rmat)).numpy()
+    want = o.view(np.int8).astype(np.int64) @ rmat.astype(np.int64).T
+    assert (_fragments(o).astype(np.int64) @ rk.astype(np.int64).T == want).all()
+    assert not (o.view(np.int8).astype(np.int64) @ rk.astype(np.int64).T == want).all()
+
+
+def test_rparams_and_the_reduction_kernels_are_the_kernels():
+    src = (HERE / "s8_wgmma.cu").read_text()
+    r, z, size = map(int, re.search(r"offsetof\(RParams, r\) == (\d+) && offsetof\(RParams, z\) == (\d+) && "
+                                    r"sizeof\(RParams\) == (\d+)", src).groups())
+    assert (W.RParams.r.offset, W.RParams.z.offset, W.C.sizeof(W.RParams)) == (r, z, size)
+    built = {f"{prefix}_128x{bn}_r{rr}" for bn, rr in re.findall(r"^S8MR\((\d+), (\d+)\)", src, re.M) for prefix in W.FLUSHES.values()}
+    built |= {f"{name}_128x{bn}_r{rr}" for bn, rr, name in re.findall(r"^S8MR1\((\d+), (\d+), \d, (\w+)\)", src, re.M)}
+    cfg = {bn: W.Cfg.parse(f"128x{bn}") for _, bn in W.FUSED_TILES}
+    assert built == {f"{prefix}_128x{bn}_r{rr}" for _, bn in W.FUSED_TILES for rr in W.RS for flush, prefix in W.FLUSHES.items()
+                     if W.has_reduction(cfg[bn], rr, flush)}
+    assert SG.UNBUILT == {f"{W.FLUSHES[flush]}_{tm}x{bn}_r{rr}" for tm, bn, rr, flush in W.UNBUILT}
+    assert all(tm == 128 for tm, _ in W.FUSED_TILES)
+
+
+def test_a_tiles_reduction_fits_the_ring_beside_a_stage_of_the_next():
+    for tm, bn in W.FUSED_TILES:
+        for r in W.RS:
+            q, rst = W.red_geometry(tm, bn, r)
+            assert q * r * 128 <= (tm + bn) * W.BK and q * rst >= bn // 32 and rst < W.stages(tm, bn)
+            assert (1 if rst >= tm // 64 else tm // 64) * 64 * r * 4 <= (tm + bn) * W.BK
+    assert W.red_geometry(128, 256, 128) == (3, 3) and W.red_geometry(128, 256, 32) == (8, 1)
+    assert W.red_geometry(128, 128, 128) == (2, 2) and W.red_geometry(128, 128, 64) == (4, 1)
+
+
+def test_the_sm_clock_is_each_ctas_cycles_over_its_nanoseconds_and_skips_ctas_that_wrote_none():
+    import torch
+    clk = torch.zeros(4 * 4, dtype=torch.int64)
+    assert W.sm_mhz(clk) is None
+    clk.view(-1, 4)[0] = torch.tensor([10, 5_000, 10 + 1_830_000, 5_000 + 1_000_000])
+    clk.view(-1, 4)[1] = torch.tensor([7, 9_000, 7 + 1_755_000, 9_000 + 1_000_000])
+    clk.view(-1, 4)[2] = torch.tensor([7, 9_000, 7 + 1_800_000, 9_000 + 1_000_000])
+    assert W.sm_mhz(clk) == pytest.approx(1800.0)
+
+
+def test_the_sass_gate_passes_a_reduction_kernels_two_atoms_and_refuses_a_third():
+    name = "s8mr_128x256_r16"
+    main = "IGMMA.64x256x32.S8.S8 R24, gdesc[UR4], R24 ;"
+    red = "\n".join(["IGMMA.64x16x32.S8.S8 R200, R24, gdesc[UR8], R200 ;"] * 32)
+    assert _gate(igmma=main, extra=red, name=name) == []
+    assert _gate(igmma=main, extra=red.replace("64x16x32", "64x32x32"), name=name)
+    assert _gate(igmma=main, extra=red.replace("S8.S8 R200", "U8.S8 R200"), name=name)
+    listing = LISTING.format(igmma="\n".join([main] * 4), extra=red).replace("s8mm_64x64", name)
+    funcs, _ = SG.gate(PTXAS.replace("s8mm_64x64", name), listing)
+    assert funcs[name]["max_reg"] == 201 and funcs[name]["IGMMA"] == 36

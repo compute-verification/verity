@@ -10,7 +10,7 @@ class TypeReprError(ValueError):
 
 def parse_type_repr(s: str):
     """The `repr` of a `verity.ml.circuits.types.Type` back to a Type: `Value<32>`, `Array<31,Value<32>>`, `(A, B)`, `{name: A, other: B}`."""
-    from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
+    from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
     pos = 0
     n = len(s)
 
@@ -69,7 +69,7 @@ def parse_type_repr(s: str):
                     pos += 1
                     skip_ws()
             pos += 1
-            return Record(*pairs)
+            return RecordType(*pairs)
         raise TypeReprError(f"type repr: unexpected {s[pos:pos + 20]!r} at {pos}")
 
     t = parse()

@@ -291,7 +291,7 @@ def test_out_dot_on_bits_is_its_word_at_the_extremes():
 
 
 def test_each_word_primitive_is_its_definitions_word_view():
-    """A word primitive's operands are one word per leaf, which C-Flock's lowering hands its Boolean Definition's builder as
+    """A word primitive's operands are one word per leaf, which Flock's lowering hands its Boolean Definition's builder as
     that Definition's elements (`ir_lower._boolean_build`): so its ports are the word view of the Definition's
     (`boolean.word_type`), a dither row `Array<32, Value<1>>` being one `Value<32>`."""
     from verity.ml.circuits import boolean as BL

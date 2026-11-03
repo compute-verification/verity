@@ -58,7 +58,7 @@ CREDIT = {
     "eps": None,
     "blockers": [
         {"id": "h1zy-j10r-lanes", "what": "J10-R's lane Definitions in h1zy are pending: a drawn unit has no "
-                                          "registered lane statement for C-Flock to prove at the served K (16,384 and "
+                                          "registered lane statement for Flock to prove at the served K (16,384 and "
                                           "65,536)"},
         {"id": "CMP-127 TileDrawIsCoin", "what": "PouwCheck.Credit.window does not yet read the tile stratum of the single "
                                                  "stratified draw, so no unit here is credited"},

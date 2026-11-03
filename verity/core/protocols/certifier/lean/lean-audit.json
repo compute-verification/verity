@@ -38,32 +38,32 @@
   "NetworkCertifier.AdviceV1": {
    "imports": [],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "NetworkCertifier.Grid": {
    "imports": [],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "NetworkCertifier.Run": {
    "imports": ["NetworkCertifier.Grid"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "NetworkCertifier.Ingress": {
    "imports": ["NetworkCertifier.Run"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "NetworkCertifier.Schedule": {
    "imports": ["NetworkCertifier.Run"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "NetworkCertifier.WindowCharge": {
    "imports": ["NetworkCertifier.AdviceV1"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

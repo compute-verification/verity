@@ -242,6 +242,22 @@ def test_each_pinned_model_is_its_files_digest():
     assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 
+def test_llama32_1b_int8_and_its_k2048_role_pin_one_checkpoint():
+    """LLAMA32_1B_INT8 is vllm's int8 checkpoint of unsloth/Llama-3.2-1B (`verity-int8-channel127/v1`, snapshot 15b0976d):
+    the 6 files its `checkpoints-int8.json` entry lists by size and sha256, each by SHA-512, and its checkpoint_sha512
+    their canonical JSON's digest. LLAMA32_1B_INT8_K2048 is the same checkpoint under the role whose manifest entry
+    declares its K = 2048 linears (a J10-R period's at one K), so both pin one digest."""
+    doc = json.loads(Cr.MODELS.read_text())
+    e = doc["LLAMA32_1B_INT8"]
+    assert (e["repo"], e["revision"], e["recipe"]) == (
+        "verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800", "verity-int8-channel127/v1")
+    assert set(e["files"]) == {"config.json", "generation_config.json", "model.safetensors", "special_tokens_map.json",
+                               "tokenizer.json", "tokenizer_config.json"}
+    assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
+    assert doc["LLAMA32_1B_INT8_K2048"] == e
+    assert Cr.PINNED_MODELS["LLAMA32_1B_INT8_K2048"] == e["checkpoint_sha512"]
+
+
 def test_glm53_int8_pins_the_v3_checkpoint():
     """GLM53_INT8 is vllm's v3 int8 checkpoint of zai-org/GLM-5.3 (`verity-int8-channel127/v3`, snapshot 7065fe60): the
     146 files its `checkpoints-int8.json` entry lists by size and sha256 (141 shards, their index, the config, the
@@ -265,7 +281,7 @@ def test_honest_window_credits_its_bits(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_credit_bit_changed_after_draw_is_refused(seed):
-    """RT4-INT-32 (a): a verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits,
+    """A verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits,
     is not the root the challenger's log shows the draw followed."""
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
@@ -282,7 +298,7 @@ def test_credited_call_needs_a_bit_and_a_z_root(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_failed_or_missing_drawn_unit_refuses_the_window(seed):
-    """RT4-INT-32 (b): no partial credit."""
+    """No partial credit."""
     assert _outcome("honest", seed) is None
     missing, failed = _outcome("missing", seed), _outcome("failed", seed)
     assert missing[0] == "missing" and "Prove and verify every drawn unit" in missing[1]
@@ -292,7 +308,7 @@ def test_failed_or_missing_drawn_unit_refuses_the_window(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_tree_not_tied_to_the_round_roots_is_refused(seed):
-    """RT4-INT-34: an A tree registered over rows other than those each round's root committed before its coin."""
+    """An A tree registered over rows other than those each round's root committed before its coin."""
     assert Cr._a_link(**cases.a_link_instance(random.Random(f"honest/{seed}"))) is None
     for name in ("untied", "late-rows", "rewritten"):
         refused = Cr._a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
@@ -922,7 +938,7 @@ def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_counts_only_closed_and_complete(seed):
-    """RT4-INT-42: a closed, complete period earns each window's credit, in its close's order; with no close, a window
+    """A closed, complete period earns each window's credit, in its close's order; with no close, a window
     incomplete, missing or out of order, or one of no period among it, it earns nothing."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
@@ -965,7 +981,7 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_freshness_floor_counts_from_the_open_pin_not_mains_head(seed):
-    """CMP74-FOLLOW: a period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
+    """A period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
     (`credit.committed_floor`, first-parent commits, default 0 when the open records no floor). A window counts only when
     its pin is at most the floor behind the open pin on main's line, counted from that pin and never from main's head
     (`credit._pin_hygiene`): a window past the open pin plus the floor is refused, but a window within it stays credited

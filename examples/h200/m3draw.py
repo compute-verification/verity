@@ -1,6 +1,6 @@
-"""M3's live draw over the H200 block's step: commit a lockstep run's steps under salt keys only the prover
+"""M3's live sample over the H200 block's step: commit a lockstep run's steps under salt keys only the prover
 can rebuild, register their roots, and after the auditor's live coin re-run the same steps, hold every slot root and step root
-to the registered ones, and write the drawn units' values and openings.
+to the registered ones, and write the sampled proof blocks' values and openings.
 
     python examples/h200/m3draw.py commit --out OUT --secret FILE --new-secret [run flags]
     python examples/h200/m3draw.py open --out OUT --secret FILE --registered ROOTS.json --draw DRAW.json [run flags]
@@ -12,13 +12,13 @@ to the registered ones, and write the drawn units' values and openings.
   layout's digest and the step partition's size, and the requests' and outputs' digests. Nothing private.
 * **open** re-runs the same steps under the same salt keys and checks every slot root and step root against
   ``--registered`` (``root_check.json``); one that differs refuses the bundle (exit 5) before any unit is opened. Then each
-  drawn unit (``--draw``: ``{"step": S, "units": [i, ...]}``, i a global index of step S's partition, slot ``i // U`` and
+  sampled proof block (``--draw``: ``{"step": S, "units": [i, ...]}``, i a global index of step S's partition, slot ``i // U`` and
   commit unit ``i % U``, U the layout's units a slot) is replayed from its slot's request alone (`opening.replay_slot`), its
   slot's replayed roots compared with the committed ones, its inputs and outputs replayed against the Definitions
   (`units.Replayer`) and its one commit unit opened against the step's root (`opening.Openings`), and ``drawn.json`` with
   ``drawn.bin`` (mode 0600: the rows, salts and inputs) is written.
 
-Exit 0 when every root is the registered one and every drawn unit replays and opens; 3 when a unit doesn't; 5 when a root
+Exit 0 when every root is the registered one and every sampled proof block replays and opens; 3 when a unit doesn't; 5 when a root
 differs (the bundle is refused).
 """
 from __future__ import annotations

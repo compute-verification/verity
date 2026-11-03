@@ -10,7 +10,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "fold_min.py"
 
 
 def test_fold_min(tmp_path):
-    """FOLD-MIN's battery: the IMAD-pipe program for a keyed round's constant XOR, bit-exact against the reference
+    """The battery: the IMAD-pipe program for a keyed round's constant XOR, bit-exact against the reference
     keyed round at random and at li's keys, priced at every headline certificate, and the B200 sheet's cheater LP
     re-solved with it open. The claims are computed, so only running the script checks them; about 2 s."""
     verdict = tmp_path / "verdict.json"

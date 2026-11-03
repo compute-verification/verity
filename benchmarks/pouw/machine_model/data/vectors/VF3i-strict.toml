@@ -1,8 +1,7 @@
-# VF3i-strict: The strict VF3i on corrected LDSM/STSM rows (RS-W′ round 9).
+# VF3i-strict: The strict VF3i on corrected LDSM/STSM rows.
 name = "VF3i-strict"
 epoch = "VF3i-strict"
-summary = "The strict VF3i on corrected LDSM/STSM rows (RS-W′ round 9)."
-note = "note:20261016T1640Z-draft-rs-vf3j-strict-closure"
+summary = "The strict VF3i on corrected LDSM/STSM rows."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -34,9 +33,8 @@ credits = [
     ["STSM8T_X4", 4096], ["UTMA", 128], ["UTMA8", 256], ["UTMA512", 4096], ["G4_16", 512], ["G4_32", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0698
-tau_600w = 0.0546
 uf_low = 1.0938
 margin = 1.935
 

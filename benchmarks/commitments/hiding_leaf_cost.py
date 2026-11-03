@@ -11,7 +11,7 @@ Leaf rules, one row per leaf:
     vllm-v1/pos-leaf           today's serving leaf, SHA-256("verity/pos-leaf/v0" || u64be len || row); unsalted
     hm96/pos-leaf              hm96-sha256/v1 over the serving leaf (what the host committer's opt-in commits)
     hm96/sha256-row            hm96-sha256/v1 over sha256/row/v1 (a 64-byte public prefix block: the circuit-friendly inner digest)
-    vllm-v1-sha512/pos-leaf    the serving leaf through SHA-512 (vllm-v1-sha512); unsalted
+    vllm-v1-sha512/pos-leaf    the serving leaf through SHA-512; unsalted
     sha512/row/v1              the SHA-512 row digest (a 128-byte public prefix block); unsalted
     hm96-sha512/pos-leaf       hm96-sha512/v1 over the SHA-512 serving leaf
     hm96-sha512/sha512-row     hm96-sha512/v1 over sha512/row/v1
@@ -22,7 +22,7 @@ rounds of 7 additions, Ch and Maj, 48 schedule words of 3 additions and 8 feed-f
 80 rounds, 64 schedule words and 8 feed-forward additions (w = 64); a BLAKE3 compression is 7 rounds of 8 G of 6 additions.  A
 public prefix block is a constant midstate; every other compression is private.  hm96's XORs are those of ``b = x XOR M y`` for the
 pinned key; the hashes' own XORs are not counted.  Host times run the integration's paths on one core:
-``verity_vllm.commit.scheme.pos_leaf`` (``verity.ml.commitments.vllm_v1.pos_leaf`` for SHA-512), ``verity.ml.windows.hiding.HidingLeaves``
+``verity_vllm.commit.scheme.pos_leaf`` (under ``hashlib.sha512`` for SHA-512), ``verity.ml.windows.hiding.HidingLeaves``
 (salts from the OS generator included) and the ``blake3`` package; the median of ``--reps``.
 
 Writes ``hiding_leaf_cost.json`` and ``result.json`` (``research/result/v0.1``) to ``$RESEARCH_RUN_DIR`` or ``--out`` when either is
@@ -42,7 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.ml.commitments import hm96, vllm_v1
+from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
 from verity_vllm.commit import scheme
 from verity.ml.windows.hiding import HidingLeaves
@@ -139,7 +139,7 @@ def measure(r: int, n: int, reps: int) -> tuple[dict[str, float | None], bool]:
         return [scheme.pos_leaf(v) for v in rows]
 
     def pos512() -> list[bytes]:
-        return [vllm_v1.pos_leaf(v, "sha512") for v in rows]
+        return [scheme.pos_leaf(v, hashlib.sha512) for v in rows]
 
     def prefixed(prefix) -> list[bytes]:
         out = []

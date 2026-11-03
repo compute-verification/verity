@@ -1,9 +1,8 @@
-# DS-100 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
-# (`Accounting.TS.Sheet.machine`) reads on the B200, its value, the document that states it and its grade, and each
-# DS-100 class's tensor form or pipe. `machine-model sheet --device sm_100` derives every DS-100 line from it and checks
-# them against census/DS-100.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
-# Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
-# channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
+# DS-100 as a data sheet (G1): each constant the data-sheet machine (`Accounting.TS.Sheet.machine`) reads on the B200,
+# its value, the document that states it and its grade, and each DS-100 class's tensor form or pipe. `machine-model
+# sheet --device sm_100` derives every DS-100 line from it and checks them against census/DS-100.csv; `--lean` prints
+# the Lean module `lean` names, which the tests hold to it. Scope: one GPU's own SMs. A peer GPU's work over NVLink or
+# NVSwitch is outside the sheet, and Device.lean's side channels don't list it (RT-SCOPE-1).
 name = "B200"
 gpu = "HGX B200 (sm_100a, 180 GB, 1000 W)"
 vector = "DS-100"
@@ -12,7 +11,7 @@ lean = "Security/Definitions/Accounting/Sheets/B200.lean"
 [fmax]
 mhz = 1965
 grade = "measured only (the driver's maximum)"
-source = "no NVIDIA document read states a B200 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the driver's maximum at default clocks on vy-dc-b200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and clock probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz"
+source = "no NVIDIA document read states a B200 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the driver's maximum at default clocks on the deployed B200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and clock probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz"
 
 [sms]
 value = 148
@@ -171,21 +170,19 @@ grade = "measured only (no vendor document states the uniform datapath's rate)"
 source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest form alone (uz_128x) at 0.5009 uniform instructions a SMSP-cycle, at a 2% margin 1.9572915 SMSP-cycles each (five runs); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
 
 # Each DS-100 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: one thread issues a
-# tcgen05.mma, so its whole m·n·k is one warp instruction's, PTX ISA 9.4 §9.7.18.10, which the device-average counts
-# A3 reads spread over the SM's four SMSPs; Nsight Compute §2.3.6: 'one issuing thread can drive work across the four
-# warp schedulers'), a pipe, or neither (issue only: FFMA at 128 results a clock is the issue ceiling, tcgen05.ld
-# (LDTM) moves TMEM to registers on no row of the sheet). Every tensor type with a peak has an M128 N256 class
-# (RT-B200-EMP-2, note:20261019T0520Z-draft-rt-b200-emp; the census measures none of them): kind::f16 BF16, kind::tf32,
-# kind::f8f6f4 with E5M2, E2M3, E3M2 and E2M1 operands, kind::mxf8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 at twice
-# f8f6f4's K (PTX ISA 9.4 §9.7.18.10.10.1), and kind::i8 2:4 sparse (`sparse`: k its logical k, its dense MACs half
-# m · n · k). Each is at its dense i8 twin's 512: FP4 in kind::f8f6f4 at the kind's own peak (`fp4_f8f6f4`), not the
-# block-scaled kinds' FP4 figure, which would put it at 256. RT-ISA timed kind::mxf4, kind::mxf4nvf4 and kind::f8f6f4
-# E2M1 alone at those lines (r20261019-090041-1ef5). Each `mma.sync .f64` shape is a DMMA class at the f64 peak
-# (RT-ISA-1): DMMA.8x8x4 runs at it, and the m16n8 shapes are untimed.
-# The census's memory, atomic and control classes (ATOMS32, ATOME32, LDS128, STS32, STS128, STG32, STG128, REDUX,
-# REDG32, VIADD, NOROW and the catch-all UNLISTED) are issue only: no document gives them a line on a row of the
-# sheet, so A2 prices each at its issue slot alone, as the measured catch-all is (DC-CENSUS-1,
-# note:20261019T2245Z-draft-dc-census).
+# tcgen05.mma, so its whole m·n·k is one warp instruction's, PTX ISA 9.4 §9.7.18.10, which the device-average counts A3
+# reads spread over the SM's four SMSPs; Nsight Compute §2.3.6: 'one issuing thread can drive work across the four warp
+# schedulers'), a pipe, or neither (issue only: FFMA at 128 results a clock is the issue ceiling, tcgen05.ld (LDTM)
+# moves TMEM to registers on no row of the sheet). Every tensor type with a peak has an M128 N256 class (RT-B200-EMP-2;
+# the census measures none of them): kind::f16 BF16, kind::tf32, kind::f8f6f4 with E5M2, E2M3, E3M2 and E2M1 operands,
+# kind::mxf8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 at twice f8f6f4's K (PTX ISA 9.4 §9.7.18.10.10.1), and kind::i8 2:4
+# sparse (`sparse`: k its logical k, its dense MACs half m · n · k). Each is at its dense i8 twin's 512: FP4 in
+# kind::f8f6f4 at the kind's own peak (`fp4_f8f6f4`), not the block-scaled kinds' FP4 figure, which would put it at 256.
+# RT-ISA timed kind::mxf4, kind::mxf4nvf4 and kind::f8f6f4 E2M1 alone at those lines. Each `mma.sync .f64` shape is a
+# DMMA class at the f64 peak (RT-ISA-1): DMMA.8x8x4 runs at it, and the m16n8 shapes are untimed. The census's memory,
+# atomic and control classes (ATOMS32, ATOME32, LDS128, STS32, STS128, STG32, STG128, REDUX, REDG32, VIADD, NOROW and
+# the catch-all UNLISTED) are issue only: no document gives them a line on a row of the sheet, so A2 prices each at its
+# issue slot alone, as the measured catch-all is (DC-CENSUS-1).
 [kinds]
 ALU = { pipe = "alu" }
 ATOME32 = {}

@@ -1,7 +1,7 @@
-"""The remote bandwidth audit's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
+"""PoUB's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
 record: γ against both R, per window and over the session, and the memory line, a session total in three forms, each
-with its ε and δ.  They are computed here and nowhere else: the benchmark and every other consumer reads them from
-`declared`.
+with its ε and δ.  They are computed here, the memory line's charges and paced forms by `line`'s arithmetic in floats,
+and nowhere else: the benchmark and every other consumer reads them from `declared`.
 
 The memory line's forms are the conclusions of `Accounting.Guarantees.Remote.Held` (the snapshot), `HeldOverTime`
 (time-held) and `HeldOverTimeLinks` (link-charged), `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read at
@@ -12,19 +12,19 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
   squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
-  disk read (plus, link-charged, one link window B_l), `Node`'s bursts;
+  disk read (plus, link-charged, one link window B_l), `Node`'s bursts (X and B: `line.charges_of`);
 - snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
-- paced, with each window a group g ≤ C, its challenge at s_g, its n_g passes, e_g = max(its last root's arrival,
-  s_(g+1)) (the closing window C's: its last arrival), L = max_g (e_g − s_g), and the credited span Σ = [e_0, s_C):
-  time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
-  v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
+- paced, with each window a group g ≤ C and the credited span Σ = [e_0, s_C): time-held is
+  `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, the line's stretch held over time with the whole session
+  one stretch (`line.session_lost`: e_g, L and `fill` as `line` defines them).
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
-`timing.sketch_failure` over the session, and the draw's rejection (`rejection`): the statements' δc and δs, and
+`timing.sketch_failure` over the session, and the sample's rejection (`rejection`): the statements' δc and δs, and
 `LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
 windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond
-δ by name (`draw`), the advantages named with their claim and priced in neither."""
+δ by name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the
+advantages named with their claim and priced in neither."""
 from __future__ import annotations
 
 import math
@@ -34,13 +34,14 @@ from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
 
-from . import audit, coins, receipts, timing
+from . import audit, coins, line, receipts, timing
 
-SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
-FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
+SNAPSHOT = "snapshot"
+TIME_HELD, LINK_CHARGED = line.FORMS
+FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
-"""The draw's rejection a draw, in bits: a draw below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
+"""The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
 `Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
@@ -107,7 +108,7 @@ class Node:
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
+        a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
         second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
         links are charged."""
         measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
@@ -152,11 +153,11 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> float:
-    """The draw's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
-    requested, k_t the record's `samples` in every draw (the k at which `DrawsOfRecord` holds), one draw a window, or
-    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a draw
-    that opens all its receipts): the statement's error is a constant, and a draw's U_t is the prover's.  Refused for a
-    record that states no `samples`.  Exact: the draws are an integer."""
+    """The sample's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
+    requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
+    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
+    that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
+    record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
         raise ValueError("the record states no samples, the receipts every draw requested, at which the memory line's "
                          "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
@@ -164,10 +165,11 @@ def rejection(record: audit.Record) -> float:
 
 
 def hiding(record: audit.Record) -> float:
-    """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
-    `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
-    committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
-    `common-reference-string`, `hash-derived-key`)."""
+    """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
+    window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
+    pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
+    prover is sent the commitment only at the session's end (`coins.py`), so `PooledDraw` reads no hiding term and
+    `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
     return hiding_over(len(record.windows))
 
 
@@ -192,8 +194,8 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
 
 
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
-    """`binding` over a session of `draws` draws, at most `receipts` receipts a draw (`window_receipts` times the
-    windows a draw covers) and a draw cap of `samples`, its prover making at most `queries` SHA-512 compressions over
+    """`binding` over a session of `draws` draws, at most `receipts` receipts a sample (`window_receipts` times the
+    windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
     the span."""
     s = min(samples, receipts)
     return draws * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
@@ -207,15 +209,16 @@ def binding(record: audit.Record, node: Node) -> float:
     2·s_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s); under
     claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
     `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
-    L_t a set holding every receipt window t opens at every outcome, s_t the session's draw cap and split_t the chance
+    L_t a set holding every receipt window t opens at every outcome, s_t the session's sample cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
     prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the
-    term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
+    term's t is a sample, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
-    deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
-    yet: this charge takes it as 0, pending the change that sends the prover no commitment to a window's openings coin
-    before its roots (the gap `binding-split`, `PROTOCOL.md` §8)."""
+    prover is sent no coin commitment before the session's end (`coins.Released`, `audit.AuditRun.disclose`), so
+    nothing it holds before a window's openings coin is released depends on that coin; the statement that the play
+    then fixes each window's roots by its cut is not yet in Lean, and this charge takes split_t as 0 (the gap
+    `binding-split`, `PROTOCOL.md` §8)."""
     if record.samples is None or record.append_coins is None:
         raise ValueError("the binding term is charged at the session's bounds, its draw cap and its append coins, "
                          "which a record no session made doesn't state")
@@ -226,29 +229,28 @@ def binding(record: audit.Record, node: Node) -> float:
 
 
 @dataclass(frozen=True, slots=True)
-class Draw:
-    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`), the hiding terms (`hiding`) and
-    the receipts' binding term (`binding`), what reading the record's openings as the deployed draw over receipts its
-    roots hold costs.  `total` is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the fourth term, which
-    `PRF_CLAIM` prices with no numeric value: `to_json` names it, and `total` holds none of it."""
+class SamplingTerms:
+    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
+    (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
+    is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
+    numeric value: `to_json` names it, and `total` holds none of it."""
 
     rejection: float
-    hiding: float
     binding: float
 
     @property
     def total(self) -> float:
-        return self.rejection + self.hiding + self.binding
+        return self.rejection + self.binding
 
     def to_json(self) -> dict:
-        return {"binding": self.binding, "hiding": self.hiding, "rejection": self.rejection,
+        return {"binding": self.binding, "rejection": self.rejection,
                 "named": {"prf_advantage": {"claim": PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
                                             "in_total": False}}}
 
 
-def draw(record: audit.Record, node: Node) -> Draw:
+def draw(record: audit.Record, node: Node) -> SamplingTerms:
     """The record's draw terms on `node`."""
-    return Draw(rejection(record), hiding(record), binding(record, node))
+    return SamplingTerms(rejection(record), binding(record, node))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -263,17 +265,17 @@ def windows(record: audit.Record) -> list[tuple[int, int]]:
 
 @dataclass(frozen=True, slots=True)
 class Gamma:
-    """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
+    """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection, hiding and binding terms, the
-    PRF advantages named) added: both readings read the record's openings, each window's or pooled."""
+    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection and binding terms, the PRF
+    advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float
-    ledger: audit.Ledger
+    ledger: audit.GammaTerms
     windows: tuple[audit.WindowLedger, ...]
     sketch: float
-    draw: Draw
+    draw: SamplingTerms
 
     @property
     def gamma(self) -> float:
@@ -300,7 +302,8 @@ class Gamma:
                              "window": w.window} for w in self.windows]}
 
 
-def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
+def _fixed(record: audit.Record, lg: audit.GammaTerms, chip_bytes: int,
+           capacity: float) -> tuple[audit.WindowLedger, ...]:
     """The ledger's window terms over a paced record's fixed windows (`windows`).  A pass is in the fixed window that
     holds it whole, from its challenge's release to its root's arrival, and in none if it straddles a boundary; each
     term is its passes': their credited receipts, chip and counting, and of each window they are from, its wrong
@@ -413,48 +416,34 @@ def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
     (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
-    draw's rejection (`rejection`)."""
+    sample's rejection (`rejection`)."""
     return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
             "hiding": hiding(record), "binding": binding(record, node), "sketch": sketch(record, node),
             "rejection": rejection(record)}
 
 
 def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
-    """The memory line's three forms (`FORMS`)."""
+    """The memory line's three forms (`FORMS`): each form's charge `line.charges_of`'s and the paced forms
+    `line.session_lost`'s, in floats."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
     delta = (record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + binding(record, node)
              + sketch(record, node))
     S = -(-node.chip_bytes // b)
-    rebuild = node.rebuild(record.codec)
-    X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
-    X_link = X + node.link_bytes_per_s / b / 1e9
-    Br, Bd, Bl = node.rebuild_burst_bytes / b, node.disk_burst_bytes / b, node.link_burst_bytes / b
+    c = line.charges_of(node.rebuild(record.codec).squarings_per_s / record.codec.encode_squarings,
+                        node.disk_bytes_per_s, node.link_bytes_per_s, node.rebuild_burst_bytes, node.disk_burst_bytes,
+                        node.link_burst_bytes, b)
     planned = sum(sum(w.credited(False)) for w in record.windows)
     delta += rejection(record)
-    snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + (Br + Bd)) - P * S) / P)
+    X, B = c[TIME_HELD].rate, c[TIME_HELD].burst
+    snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + B) - P * S) / P)
     if (why := _paced(record)) is not None:
         return snapshot, Line(TIME_HELD, N, b, delta, refused=why), Line(LINK_CHARGED, N, b, delta, refused=why)
     ws = record.windows
-    C = len(ws) - 1
-    s = [w.released_ns for w in ws]
-    n = [w.passes for w in ws]
-    e = [max(w.arrived_ns[-1], s[g + 1]) if g < C else w.arrived_ns[-1] for g, w in enumerate(ws)]
-    L = max(eg - sg for eg, sg in zip(e, s))
-    span = s[C] - e[0]
-    v = [(s[g + 1] - s[g]) / n[g] if g < C else L / n[g] for g in range(C + 1)]
-    left, fill = W, 0.0
-    for g in sorted(range(C + 1), key=lambda g: v[g], reverse=True):
-        took = min(left, n[g] * N)
-        fill, left = fill + took * v[g], left - took
-        if left <= 0:
-            break
-
-    def lost(x: float, B: float) -> float:
-        return S + (2 * L * (x * (span + 2 * L) + B) + fill) / span
-
-    return (snapshot, Line(TIME_HELD, N, b, delta, lost(X, Br + Bd)),
-            Line(LINK_CHARGED, N, b, delta, lost(X_link, Br + Bd + Bl)))
+    times = [w.released_ns for w in ws], [w.arrived_ns[-1] for w in ws], [w.passes for w in ws]
+    return (snapshot, *(Line(f, N, b, delta, line.session_lost(*times, blocks=N, block_bytes=b,
+                                                               chip_bytes=node.chip_bytes, wrong=W, charge=c[f]))
+                        for f in line.FORMS))
 
 
 @dataclass(frozen=True, slots=True)

@@ -26,7 +26,7 @@ def test_the_defaults_give_the_statements_numbers():
     assert t["mu"] == pytest.approx(278, rel=0.01)
     assert t["nu"] == pytest.approx(1.04e-3, rel=0.01)
     assert t["chi"] == pytest.approx(1.73e-3, rel=0.01)
-    assert t["eta_T4"] == pytest.approx(0.454, rel=0.01)
+    assert t["eta_T4"] == pytest.approx(0.329, rel=0.01)
 
 
 @pytest.mark.parametrize("probe", HOLDS, ids=[f"{c[0]}-{c[2]}-{c[3]}" for c in HOLDS])

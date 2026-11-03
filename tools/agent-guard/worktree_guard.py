@@ -12,7 +12,7 @@ branch it had then is registered to it. The hook then refuses, from any other ag
     (the `research` CLI) follows the switch; checking out files (`git checkout -- PATH`, `git checkout REF -- PATH`) passes;
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
     worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
-For every agent, whatever it owns, it also refuses a push that would update `main` or `next` (only drive and the lander move
+For every agent, whatever it owns, it also refuses a push that would update `main`, `checked` or `next` (only drive and the lander move
 them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
@@ -140,7 +140,7 @@ def push_targets(directory: str, args: list[str]) -> list[str]:
 
 
 #: Branches only drive and the lander push, from their own processes rather than an agent's shell (INF-110)
-PROTECTED = {"main", "next"}
+PROTECTED = {"main", "checked", "next"}
 
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
 #: so even `--name-only` prints it (INF-105, INF-297)
@@ -162,7 +162,7 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
                     f.write(json.dumps({"agent": agent, "dir": d, "args": args, "reason": ok}) + "\n")
                 continue
             if opts & {"--all", "--mirror"} or targets:
-                return ("this push would update `main` or `next`, which only drive and the lander move (AGENTS.md). Push "
+                return ("this push would update `main`, `checked` or `next`, which only drive and the lander move (AGENTS.md). Push "
                         "your own branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
                         "`git switch -c <your-branch>` if this checkout is on main).")
         if sub == "config":

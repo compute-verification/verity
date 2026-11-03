@@ -5,11 +5,11 @@ predicates dropped. Fetch each run (`research fetch RUN --all --runs-dir DIR`) i
 holding a run's SASS beside it (`research data fetch ART --to DIR/ART`, the colon a hyphen), then
 `uv run benchmarks/pouw/tests/fixtures/census_cover_sass.py DIR`.
 
-- cpw_routes (`benchmarks/pouw/theory/cpw_routes.cu`, RT3-120): every mode's loop from `out/sass/counts.json`, kept
+- cpw_routes (`benchmarks/pouw/theory/cpw_routes.cu`): every mode's loop from `out/sass/counts.json`, kept
   when `out/device.txt` says `all_bitexact=1`.
-- rt3_dc's lane loops (`benchmarks/pouw/rt3_dc/cpatom.cuh`, RT3-DC): each `lr_*` and `lr8w_*` loop of the SASS gate's
+- rt3_dc's lane loops (`benchmarks/pouw/rt3_dc/cpatom.cuh`): each `lr_*` and `lr8w_*` loop of the SASS gate's
   verdicts (`out/gate-*.json`, the loop's `top`), kept when `out/exact.jsonl` records its form with 0 mismatches.
-- red_generic (`benchmarks/pouw/rt4_sheet/red_generic.cu`, RT4-SHEET-7): each `li_loop<CP, generic>` (the checkpoint's
+- red_generic (`benchmarks/pouw/rt4_sheet/red_generic.cu`): each `li_loop<CP, generic>` (the checkpoint's
   XOR into L2 through a generic address, ATOM.E) in the artifact's SASS for sm_90a and sm_100a, its longest backward
   branch, kept when the run's `out/device.txt` records that form with 0 mismatches (on the run's own device).
 """

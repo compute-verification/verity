@@ -247,13 +247,13 @@ def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
               q.rep q.level q.query + 1) = #[elemsOf bo.data.toList 2 0, elemsOf bo.data.toList 2 1]
 
 /-- **`StepsW` under a side condition `Φ`** on the joint acceptance: `StepsW` is `Φ := True` (`stepsW_of_G`), the
-22:25Z ruling's shape (`xs`, every part's acceptance there, no collision with its setups) is `Φ := XsW A`. -/
+shape with part statements (`xs`, every part's acceptance there, no collision with its setups) is `Φ := XsW A`. -/
 def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws → Φ x c ws →
@@ -271,7 +271,7 @@ def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → 
         ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
 
-/-- **The 22:25Z ruling's side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
+/-- **The part statements' side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
 accepted at its own (`xs.getD s []`), no collision among the layout's calls and the parts' setups, and `xs` staged at
 one prefix of messages (`XsStaged`). -/
 def XsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
@@ -372,7 +372,7 @@ and the next row has an owner (`NextHeldW`). -/
 
 /-- **The inner schedule is V\*'s**: at a dense statement with a level part, table 0's schedule at the inner statement
 is `fast100` at the read shape's `m` (`levelMatch`'s). -/
-theorem schAt_fast100 {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem schAt_fast100 {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -500,11 +500,11 @@ theorem accOutPort_recOpen {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} 
 /-- **Hypothesis: two slots of one row of the chain carry one commit string**, at a joint acceptance of a statement of
 the shape: where part `s`'s unit `u` holds `acc` at row `p`, its `nm` port (`acc`, or `acc_out` for the next row `p + 1`)
 and any holding `h'` of row `p + d` at part `s'` read one commit string at the parts' own witnesses. Owners: two level
-parts, `accCommit_eq` (hej-9976); a level part and an algebra part's `acc0`/`acc1`, `innerAccCommit_eq` (RECE). -/
+parts, `accCommit_eq`; a level part and an algebra part's `acc0`/`acc1`, `innerAccCommit_eq`. -/
 def AccCommitW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -522,7 +522,7 @@ def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws → Φ x c ws →
@@ -536,11 +536,11 @@ def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
 
 /-- **Hypothesis: the row after a level unit's has an owner**: at a statement of the shape, where a level part's unit
 holds `acc` at row `p`, some part holds row `p + 1` (the next unit's `acc`, or an algebra part's `acc1` at its rep's
-end). Owner: STEPSW. -/
+end). -/
 def NextHeldW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), _root_.Flock.RecVStar.statements r.shape = .ok ss →
     ∀ (s lv LANES HH n : ℕ), ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (u p : ℕ), ("acc", u) ∈ accHoldings r s p → (accCanon r (p + 1)).isSome

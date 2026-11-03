@@ -38,6 +38,7 @@ verity_vllm.program.predict.steps      # I2, the compiler: a library entry point
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
 verity_vllm.program.predict.window_rows      # a window's rows: a library entry point (`Rows`, `weight_values`), for benchmarks/prove_path's window-commit
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
+verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
 verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
 verity_vllm.properties.router_tap_exactness
@@ -59,6 +60,7 @@ verity_vllm.protocols.pouw.device
 verity_vllm.protocols.pouw.h1
 verity_vllm.protocols.pouw.h1.challenger
 verity_vllm.protocols.pouw.h1.commit
+verity_vllm.protocols.pouw.h1.drawn      # benchmarks/pouw/h1_prove/drawn.py runs it, outside this tree
 verity_vllm.protocols.pouw.h1.handoff
 verity_vllm.protocols.pouw.h1.hooks
 verity_vllm.protocols.pouw.h1.kept

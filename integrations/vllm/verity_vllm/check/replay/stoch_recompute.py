@@ -206,7 +206,7 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
     """The scheduler's EOS lag rows read from the RECORD's own attestation of `async_scheduling` (True -> 1,
     False -> 0): RunHeader.profile.engine_kwargs, RunHeader.engine_kwargs, capture/versions.json engine_kwargs -- the same locations GM-01
     reads (global_match.record_engine_facts); None when the record does not attest it (the lag slot is then unjudgeable, said so), with
-    an `unreadable: ` reason when versions.json is there but can't be read (the draw ledger's problem)."""
+    an `unreadable: ` reason when versions.json is there but can't be read (the sample ledger's problem)."""
     cands: list[tuple[str, object]] = []
     prof = getattr(header, "profile", None) if not isinstance(header, dict) else header.get("profile")
     prof = prof if isinstance(prof, dict) else {}
@@ -267,7 +267,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
 
 def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | None, build_dir: str | Path | None,
                     lag_attested: tuple[int | None, str] | None = None) -> dict:
-    """The DRAW LEDGER of the record, per request, measured --
+    """The sample LEDGER of the record, per request, measured --
     not stated: 'RNG advances iff r_t' read LITERALLY as an ordered-set comparison of the DRAWN positions against the positions the
     Program's rule says are executed:
 
@@ -277,8 +277,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         first EOS at slot t < C is followed by exactly min(A, C - t) lag slot(s) (A = the record's attested async_scheduling, 0/1) and
         nothing after; a request that runs to C has no lag slot (nothing is scheduled past the length bound);
       * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every drawn position not in the set is 'the RNG advanced without r_t'
-        (a draw past the cap without an EOS, a second draw after the lag slot, a draw for another row's counter), every expected position
-        not drawn is 'an executed slot did not draw' (a deleted step); one draw per engine step, in order;
+        (a sample past the cap without an EOS, a second draw after the lag slot, a sample for another row's counter), every expected position
+        not sampled is 'an executed slot did not sample' (a deleted step); one sample per engine step, in order;
       * an undeclared stop rule with an early stop, or an EOS before the cap with the profile unattested, leaves the request UNJUDGED --
         named, never a pass.
 
@@ -472,7 +472,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     s_disagree: list[str] = []
     chain_absent: list[str] = []      # engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
     engine_steps = len(per_step)
-    draws_seen: dict[str, list[dict]] = {}                 # every sampled row of every request, snapshot or not: the draw ledger
+    draws_seen: dict[str, list[dict]] = {}                 # every sampled row of every request, snapshot or not: the sample ledger
     for step, d in sorted(per_step.items()):
         g, se, ss = d["gumbel"], d["sample_end"], d["start"]
         _lrows = list(getattr(ss, "logits_rows", None) or ())
@@ -668,7 +668,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     s_ok = not s_disagree
     s_checked = sum(1 for r in rows if r.get("S_agree") is True)
     reasons.extend(chain_absent)
-    # the draw ledger: one draw per request per step at pos = prompt_len - 1 + k, draws == cap or
+    # the sample ledger: one sample per request per step at pos = prompt_len - 1 + k, draws == cap or
     # EOS + exactly eos_lag_rows lag draw(s) and none after; a ledger problem is a FAIL reason by name
     ledger = draw_accounting(draws_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
     reasons.extend(ledger["problems"])
