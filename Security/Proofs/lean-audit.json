@@ -70,6 +70,7 @@
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
+  "Proofs.Properties.Verity.Sampled.Messages",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledRead",
   "Proofs.Properties.Remote",
