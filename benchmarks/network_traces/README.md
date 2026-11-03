@@ -103,7 +103,9 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
+class (4 prompts of 24 ids, or `--prompt-ids LO:HI` each prompt's length drawn in LO … HI, at most 4 ids out,
+`--window-per-group`; `--stop-prompt` makes the last prompt a pattern the model's copying ends with its EOS id, so a
+request stops on the stop id) to serve-openai, all of it in execution phase 0, the
 network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its

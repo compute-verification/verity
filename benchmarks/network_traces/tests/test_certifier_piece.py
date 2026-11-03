@@ -694,6 +694,23 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
+def test_the_front_sends_a_span_of_prompt_lengths_with_a_stop_prompt_last(tmp_path, monkeypatch):
+    """``--prompt-ids 1:32 --stop-prompt``: the group's prompts are 1 to 32 ids below the vocabulary, and the last is 32
+    ids of the pattern whose copying next id is the EOS id (`served_session.prompts`); the gate's request is unchanged.
+    The seed is pinned."""
+    _stub_gate(tmp_path, monkeypatch)
+    monkeypatch.setattr(CP.secrets, "token_bytes", lambda n: b"s" * n)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--prompt-ids", "1:32",
+                    "--stop-prompt"]) == 0
+    *rest, last = json.loads((tmp_path / "prompts.json").read_text())
+    assert len(rest) == CP.PROMPTS - 1 and all(1 <= len(p) <= 32 and max(p) < 128000 for p in rest)
+    assert len(last) == 32 and last[1:] == (last[1:4] + [CP.SS.EOS]) * 7 + last[1:4]
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63k4 --window-per-group")
+    assert json.loads((out / "session.json").read_text())["prompts"] == {"count": CP.PROMPTS,
+                                                                         "ids": sum(map(len, rest)) + 32}
+
+
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted

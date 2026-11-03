@@ -2,8 +2,8 @@
 the active network certifier in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
-        [--minutes M] [--bucket-ms MS] [--warmup N]
+        [--prompts 4] [--prompt-ids 24 | --prompt-ids LO:HI] [--stop-prompt] [--tokens 4] [--vocab 128000]
+        [--scan-class w63k4] [--height 10] [--minutes M] [--bucket-ms MS] [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
@@ -13,8 +13,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
-  group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
-  with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into execution phase 0
+  group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab`` (``LO:HI``:
+  each prompt's length drawn in LO … HI), sampled from a fresh secret seed, each with ``--tokens`` its max_tokens, which
+  the model's EOS ends sooner; ``--stop-prompt`` makes the group's last prompt a pattern of three of its ids and the
+  EOS id, repeated, then the three, which the model's copying ends with its own EOS (`served_session.prompts`), so the
+  group holds a request that stops on the stop id. A group is sent half a bucket into execution phase 0
   and its cells are execution phase 0's alone (``--tokens`` at most 4 keeps the group in one execution phase), so the
   engine admits the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
@@ -201,7 +204,8 @@ def front(a: argparse.Namespace) -> int:
             raise SS.Refused(f"--tokens {a.tokens}: a group past one link-window, which the period's rows form refuses")
         if a.warmup < 0:
             raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
-        ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
+        ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32),
+                        stop=SS.EOS if getattr(a, "stop_prompt", False) else None)
         data = json.dumps(ps, separators=(",", ":")).encode()
         SS.check(a, data)
         if a.warmup:
@@ -788,7 +792,9 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--key", type=Path, default=SS.KEY)
     f.add_argument("--peer", default="vy-dc-h200")
     f.add_argument("--prompts", type=int, default=PROMPTS)
-    f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
+    f.add_argument("--prompt-ids", type=SS.span, default=PROMPT_IDS, help="N, or LO:HI each prompt's length drawn in")
+    f.add_argument("--stop-prompt", action="store_true",
+                   help=f"the group's last prompt a pattern the model's copying ends with its EOS id, {SS.EOS}")
     f.add_argument("--tokens", type=int, default=TOKENS)
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,

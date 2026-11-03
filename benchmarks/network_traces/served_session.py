@@ -30,8 +30,9 @@ w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bou
   400 requests at most.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
-  128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
-  which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
+  128,000 regular ids by default), ``--prompt-ids LO:HI`` drawing each prompt's length in LO … HI (`prompts`),
+  sampled from a fresh secret seed this process alone holds: they are the prover's, which the gate writes to its run's
+  ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
     prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
     until the run ends (``status.json``), then ``fetch``. The reply is the request's public fields and the run's
@@ -170,6 +171,8 @@ KEY = Path.home() / ".ssh" / SITE["gate_key"]
 KEEP = Path(SITE["keep"])
 #: Llama 3's regular token ids; 128,000 and up are its special tokens
 VOCAB = 128_000
+#: the base Llama-3.2-1B's one EOS id
+EOS = 128_001
 #: the minutes past `auditor.warden_minutes` a session asks for
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
@@ -216,11 +219,50 @@ class Late(Refused):
     code = 3
 
 
-def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
-    """`n` prompts of `ids` token ids below `vocab`: prompt j's id i is SHA-512(seed ‖ u32be j ‖ u32be i)'s first 8
-    bytes, mod `vocab`."""
-    return [[int.from_bytes(hashlib.sha512(seed + j.to_bytes(4, "big") + i.to_bytes(4, "big")).digest()[:8], "big")
-             % vocab for i in range(ids)] for j in range(n)]
+def span(text: str) -> int | tuple[int, int]:
+    """``--prompt-ids``: N, every prompt N ids, or LO:HI, each prompt's length drawn in LO … HI (`prompts`); N:N is
+    N."""
+    lo, colon, hi = text.partition(":")
+    try:
+        got = (int(lo), int(hi)) if colon else int(lo)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"N or LO:HI prompt ids, not {text!r}") from None
+    if colon and not 1 <= got[0] <= got[1]:
+        raise argparse.ArgumentTypeError(f"LO:HI with 1 <= LO <= HI, not {text!r}")
+    return got[0] if colon and got[0] == got[1] else got
+
+
+def bounds(ids: int | tuple[int, int]) -> tuple[int, int]:
+    """A prompt's least and most ids under ``--prompt-ids``."""
+    return ids if isinstance(ids, tuple) else (ids, ids)
+
+
+def label(ids: int | tuple[int, int]) -> str:
+    """``--prompt-ids``' words for `ids`."""
+    return f"{ids[0]}:{ids[1]}" if isinstance(ids, tuple) else str(ids)
+
+
+def _draw(seed: bytes, *at: int) -> int:
+    return int.from_bytes(hashlib.sha512(seed + b"".join(x.to_bytes(4, "big") for x in at)).digest()[:8], "big")
+
+
+def prompts(n: int, ids: int | tuple[int, int], vocab: int, seed: bytes, stop: int | None = None) -> list[list[int]]:
+    """`n` prompts of token ids below `vocab`, of `ids` ids or, for ``(LO, HI)``, prompt j's length LO +
+    (SHA-512(seed ‖ "len" ‖ u32be j)'s first 8 bytes mod HI − LO + 1): prompt j's id i is SHA-512(seed ‖ u32be j ‖
+    u32be i)'s first 8 bytes, mod `vocab`. With `stop`, the last prompt is instead HI ids: its first (HI − 3) mod 4
+    ids, then its next three and `stop`, (HI − 3) div 4 times, and the three again: a pattern whose next id, by the
+    model's copying, is the stop id, so the model's own EOS ends it."""
+    lo, hi = bounds(ids)
+    lens = [lo + _draw(seed + b"len", j) % (hi - lo + 1) if hi > lo else lo for j in range(n)]
+    out = [[_draw(seed, j, i) % vocab for i in range(lens[j])] for j in range(n)]
+    if stop is not None and n:
+        if hi < 7:
+            raise Refused(f"--stop-prompt: a pattern of three ids and the stop id, then the three, takes 7 ids, not "
+                          f"--prompt-ids {label(ids)}")
+        head = (hi - 3) % 4
+        last = [_draw(seed, n - 1, i) % vocab for i in range(head + 3)]
+        out[-1] = last[:head] + (last[head:] + [stop]) * ((hi - 3) // 4) + last[head:]
+    return out
 
 
 def words(a: argparse.Namespace) -> list[str]:
@@ -241,8 +283,9 @@ def scratch_host(d: Path, peer: str) -> A.Host:
 def check(a: argparse.Namespace, data: bytes) -> dict:
     """The request as this tree's gate records it, or Refused with the gate's reason or the scan class's."""
     (_, ki), (_, ko) = A.scan_bounds(getattr(a, "scan_class", None))
-    if not 1 <= a.prompt_ids <= ki:
-        raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {ki} prompt ids a request")
+    lo, hi = bounds(a.prompt_ids)
+    if not 1 <= lo <= hi <= ki:
+        raise Refused(f"--prompt-ids {label(a.prompt_ids)}: the scan's class takes 1 to KI = {ki} prompt ids a request")
     if not 1 <= a.tokens <= ko:
         raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {ko} ids a request")
     if not 2 <= a.vocab <= 1 << A.WARDEN_PROMPT_ID_BITS:
@@ -260,9 +303,9 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     req = check(a, data)
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
-               f"--minutes {a.minutes} --prompt-ids {a.prompt_ids} --tokens {a.tokens} --vocab {a.vocab}"
+               f"--minutes {a.minutes} --prompt-ids {label(a.prompt_ids)} --tokens {a.tokens} --vocab {a.vocab}"
                + (f" --at {a.at}" if a.at else "") + (f" --scan-class {a.scan_class}" if a.scan_class else ""))
-    ctx = a.prompt_ids + a.tokens
+    ctx = bounds(a.prompt_ids)[1] + a.tokens
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
             "least_minutes": A.warden_minutes(a.requests, a.height),
             "prompts": req["prompts"], "prompts_bytes": len(data),
@@ -394,7 +437,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     print(f"gate run {run} (local)", flush=True)
     endpoint = keep / run / "endpoint"
     endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
+    stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", label(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
     A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
@@ -726,7 +769,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=REQUESTS)
         q.add_argument("--height", type=int, default=12)
         q.add_argument("--minutes", type=int)
-        q.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
+        q.add_argument("--prompt-ids", type=span, default=PROMPT_IDS, help="N, or LO:HI each prompt's length drawn in")
         q.add_argument("--tokens", type=int, default=KO)
         q.add_argument("--vocab", type=int, default=VOCAB)
         q.add_argument("--scan-class", choices=sorted(A.SCAN_CLASSES),
@@ -778,6 +821,9 @@ def main(argv: list[str] | None = None) -> int:
             a.minutes = A.warden_minutes(a.requests, a.height) + MARGIN
         if a.cmd == "session" and a.gate == "local" and a.vocab > 256:
             raise Refused(f"--gate local: the stand-in serves byte ids, --vocab at most 256, not {a.vocab}")
+        if a.cmd == "session" and a.gate == "local" and isinstance(a.prompt_ids, tuple):
+            raise Refused(f"--gate local: the stand-in serves prompts of one length, not --prompt-ids "
+                          f"{label(a.prompt_ids)}")
         ps = prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         doc = plan(a, data)
