@@ -58,7 +58,8 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
-`PP_CHALLENGER` names it; otherwise the Lean verifier's own coins sample the proof blocks. The other three are not
+`PP_CHALLENGER` names it; otherwise a local development challenger session on the endpoint's node samples the proof
+blocks, which shows the path but is no auditor's coins. The verifier draws no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
 challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the prover
 doesn't control.
