@@ -26,7 +26,20 @@ step, cut as the harness cuts a standalone program's: at each `TrainData.next` o
 
 A Python number read from a tensor (`item`, `float`, `int`, `bool`, `tolist`, `numpy`) has no value: it is a fixed
 stand-in, and a float carries the nodes it was read from into the ops it reaches (``meta["te_scalar_deps"]``) through
-arithmetic, `math`'s functions and ``float(...)`` (whose calls in the program and prepare are rewritten to keep it). An op
+arithmetic, `math`'s functions and ``float(...)`` (whose calls in the program and prepare are rewritten to keep it).
+Anything else a stand-in decides is the stand-in's, not the run's, so the recording fails closed: each read-back whose
+value the graph can't carry is listed in the measured step's quantities (`formalism["data_dependent"]`, its kind, the
+program's line and the steps it ran in; te_core.formalism then refuses the record's measured quantities):
+
+- a comparison, truth test or integer conversion of a read-back float (``min``/``max``, ``if``, ``round``, ``int``),
+  and `math` or numpy reading one into anything but a float;
+- ``bool()``, ``int()`` or ``__index__`` of a tensor, an integer or boolean tensor read back (``item``, ``tolist``), any
+  ``numpy()`` of a tensor the program made, and a read-back inside an op (C++ code reading a value).
+
+A Python float folded over steps (an EMA of read-back estimates) carries every earlier step's read-back into the ops
+it reaches as values of their own, so its Δ_grad grows with the step though the program carries one number: an op
+reached by read-backs from two or more earlier steps is listed too (`formalism["carried_scalars"]`), and a program
+keeps such state as a device tensor (a 0-dim fp32 tensor updated in place), which the graph carries as one value. An op
 whose output size is set by values (``nonzero``, ``unique``, ``masked_select``, ``x[mask]``) is taken at its largest. The run is
 recorded again with ctx halved (prepare.EVAL_CTX and every window), for its token axes, or, when that changes its steps (a
 plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). `record(...)` returns step A's
@@ -61,6 +74,7 @@ from torch.utils.weak import WeakTensorKeyDictionary
 from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
 from te_core.flops import TOKEN_INDEX
+from te_core.formalism import READ_BACKS
 
 __all__ = ["Scalar", "record"]
 
@@ -76,14 +90,73 @@ class _Stop(BaseException):
     """The recorded steps are done."""
 
 
+#: the recording in progress (`_patched`), which a read-back's events go to
+_ACTIVE = None
+#: te_core's modules' directories, and the trees under which a frame is never the program's line (`_where`)
+_TE_CORE = (Path(__file__).resolve().parent, Path(__file__).resolve().parents[1])
+_LIBRARIES = tuple(str(Path(m.__file__).resolve().parent) for m in (torch, np, os))
+
+
+def _where() -> str | None:
+    """The program's innermost line on the stack: the first frame outside te_core's modules, torch, numpy and the
+    standard library."""
+    f = sys._getframe(1)
+    while f is not None:
+        name = f.f_code.co_filename
+        path = Path(name).resolve()
+        if not name.startswith("<") and path.parent not in _TE_CORE and not str(path).startswith(_LIBRARIES):
+            return f"{path.name}:{f.f_lineno}"
+        f = f.f_back
+    return None
+
+
+def _read_back(kind: str, *values) -> None:
+    """A value read back from a traced tensor decides something the graph can't carry (module docstring): listed on the
+    recording in progress when any of `values` carries graph nodes (none given: the read-back itself)."""
+    if _ACTIVE is not None and (not values or any(getattr(v, "deps", None) for v in values)):
+        _ACTIVE.data_dependent(kind)
+
+
 class Scalar(float):
     """A float read from a tensor: a stand-in value, carrying the graph nodes it was read from (`deps`)."""
     deps: frozenset = frozenset()
+    __hash__ = float.__hash__
 
     def __new__(cls, v: float, deps=()):
         o = super().__new__(cls, v)
         o.deps = frozenset(deps)
         return o
+
+    def __round__(self, ndigits=None):
+        if ndigits is None:
+            _read_back("round() of a read-back float", self)
+            return round(float(self))
+        return Scalar(round(float(self), ndigits), self.deps)
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return _numpy_on(getattr(ufunc, method), inputs, kwargs)
+
+    def __array_function__(self, func, types, args, kwargs):
+        return _numpy_on(func, args, kwargs)
+
+
+def _plain(x):
+    return float(x) if isinstance(x, Scalar) else x
+
+
+def _deps_of(tree) -> frozenset:
+    return frozenset().union(*(x.deps for x in pytree.tree_leaves(tree) if isinstance(x, Scalar)))
+
+
+def _numpy_on(f, args, kwargs):
+    """numpy reading read-back floats: a float result keeps their nodes, anything else is listed (module docstring)."""
+    d = _deps_of((args, kwargs))
+    r = f(*pytree.tree_map(_plain, args), **pytree.tree_map(_plain, kwargs))
+    if isinstance(r, (float, np.floating)) and not isinstance(r, bool):
+        return Scalar(float(r), d)
+    if d:
+        _read_back(f"numpy {getattr(f, '__name__', f)} of a read-back float")
+    return r
 
 
 def _lift(name: str):
@@ -100,19 +173,41 @@ def _lift(name: str):
     return op
 
 
+def _decides(name: str, what: str):
+    """A float method whose result the graph can't carry: listed when an operand is a read-back."""
+    f = getattr(float, name)
+
+    def op(self, *other):
+        r = f(self, *other)
+        if r is not NotImplemented:
+            _read_back(what, self, *other)
+        return r
+    return op
+
+
 for _n in ("__add__", "__radd__", "__sub__", "__rsub__", "__mul__", "__rmul__", "__truediv__", "__rtruediv__",
            "__pow__", "__rpow__", "__floordiv__", "__rfloordiv__", "__mod__", "__rmod__", "__neg__", "__pos__", "__abs__"):
     setattr(Scalar, _n, _lift(_n))
-
-_MATH = ("sqrt", "exp", "expm1", "log", "log1p", "log2", "log10", "pow", "fabs", "tanh", "sin", "cos", "atan2", "hypot",
-         "erf", "copysign")
+for _n in ("__lt__", "__le__", "__gt__", "__ge__", "__eq__", "__ne__"):
+    setattr(Scalar, _n, _decides(_n, "a comparison of a read-back float"))
+for _n, _what in (("__bool__", "a truth test of a read-back float"), ("__int__", "int() of a read-back float"),
+                  ("__trunc__", "an integer of a read-back float"), ("__floor__", "an integer of a read-back float"),
+                  ("__ceil__", "an integer of a read-back float"), ("__divmod__", "divmod() of a read-back float"),
+                  ("__rdivmod__", "divmod() of a read-back float"), ("is_integer", "is_integer() of a read-back float"),
+                  ("as_integer_ratio", "as_integer_ratio() of a read-back float")):
+    setattr(Scalar, _n, _decides(_n, _what))
 
 
 def _lift_math(f):
-    def op(*a):
-        r = f(*a)
-        d = frozenset().union(*(x.deps for x in a if isinstance(x, Scalar)))
-        return Scalar(r, d) if d and isinstance(r, float) else r
+    """A `math` function on read-back floats: a float result keeps their nodes, anything else is listed."""
+    def op(*a, **k):
+        r = f(*a, **k)
+        d = _deps_of((a, k))
+        if d and isinstance(r, float):
+            return Scalar(r, d)
+        if d:
+            _read_back(f"math.{f.__name__} of a read-back float")
+        return r
     return op
 
 
@@ -194,6 +289,25 @@ class _Recorder:
         self.now = 1.0e6
         self.inputs = 0
         self.ctx = 0
+        self.n_steps = 0
+        self.events: dict[tuple, dict] = {}
+
+    # -- read-backs the graph can't carry (module docstring)
+    def _event(self, family: str, kind: str, **extra) -> None:
+        if self.off:
+            return
+        where = _where()
+        e = self.events.setdefault((family, kind, where), {"kind": kind, "where": where, "steps": [self.step, self.step],
+                                                           "count": 0} | extra)
+        e["steps"][1], e["count"] = self.step, e["count"] + 1
+        for k, v in extra.items():
+            e[k] = max(e[k], v)
+
+    def data_dependent(self, kind: str) -> None:
+        self._event("data_dependent", kind)
+
+    def listed(self, family: str) -> list[dict]:
+        return [e for (f, _, _), e in self.events.items() if f == family]
 
     # -- steps and time
     def clock(self) -> float:
@@ -308,6 +422,10 @@ class _Recorder:
         deps = set().union(*self.scalars) if self.scalars else set()
         if deps:
             n.meta["te_scalar_deps"] = sorted(deps, key=lambda d: d.name)
+            earlier = {s for d in deps if 0 <= (s := int(d.meta.get("te_step", -1))) < self.step}
+            if len(earlier) >= 2:
+                self._event("carried_scalars", "a Python number read back in several earlier steps",
+                            earlier_steps=len(earlier))
         ins = [x for x in pytree.tree_leaves((a, k)) if isinstance(x, torch.fx.Node)]
         tok = any(x in self.tok for x in ins)
         if tok:
@@ -327,13 +445,13 @@ class _Recorder:
         elif isinstance(out, torch.Tensor):
             self._bind(out, n)
 
-    def stand_in(self, t: torch.Tensor):
-        """A Python number read from `t` (module docstring)."""
-        if t.dtype == torch.bool:
-            return True
+    def stand_in(self, t: torch.Tensor, how: str | None = None):
+        """A Python number read from `t` (module docstring); an integer or boolean one read by `how` is listed."""
         if t.dtype.is_floating_point or t.dtype.is_complex:
             return Scalar(self.dummy(), (self.node_of(t),) if not self.off else ())
-        return 1
+        if how:
+            self.data_dependent(f"{how} of a {str(t.dtype).removeprefix('torch.')} tensor")
+        return True if t.dtype == torch.bool else 1
 
 
 def _dynamic(func, args, kwargs):
@@ -378,6 +496,7 @@ class _Dispatch(TorchDispatchMode):
         kwargs = kwargs or {}
         rec = self.rec
         if func is aten._local_scalar_dense.default:
+            rec.data_dependent("a value read back inside an op")
             return rec.stand_in(args[0])
         if func.namespace == "prim" or rec.off:
             return func(*args, **kwargs)
@@ -446,25 +565,28 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
         setattr(obj, name, value)
 
     def _item(self):
-        return rec.stand_in(self)
+        return rec.stand_in(self, "item()")
 
     def _float(self):
-        v = rec.stand_in(self)
+        v = rec.stand_in(self, "float()")
         return v if isinstance(v, float) else float(v)
 
     def _int(self):
-        return int(rec.stand_in(self))
+        rec.data_dependent("int() of a tensor")
+        return int(float(rec.stand_in(self)))
 
     def _bool(self):
-        return bool(rec.stand_in(self))
+        rec.data_dependent("bool() of a tensor (a branch on its value)")
+        return True
 
     def _numpy(self):
         if self.dtype not in _NP:
             raise TypeError(f"Got unsupported ScalarType {self.dtype}")
+        rec.data_dependent("numpy() of a tensor")
         return np.zeros(tuple(self.shape), dtype=_NP[self.dtype])
 
     def _tolist(self):
-        flat = [rec.stand_in(self) for _ in range(max(self.numel(), 0))]
+        flat = [rec.stand_in(self, "tolist()" if i == 0 else None) for i in range(max(self.numel(), 0))]
         if self.dim() == 0:
             return flat[0]
         arr = np.empty(tuple(self.shape), dtype=object)
@@ -507,8 +629,9 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
     for name in ("time", "perf_counter", "monotonic"):
         put(time, name, rec.clock)
     put(time, "sleep", lambda s: None)
-    for name in _MATH:
+    for name in [n for n in dir(math) if not n.startswith("_") and callable(getattr(math, n))]:
         put(math, name, _lift_math(getattr(math, name)))
+    put(sys.modules[__name__], "_ACTIVE", rec)
 
     def from_stream(f):
         def make(data, *a, **k):
@@ -596,10 +719,22 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
 
     class _Session:
         def plan(self, n):
-            pass
+            rec.n_steps = int(n)
 
         def output(self, fn):
             pass
+
+        def current_step(self) -> int:
+            return rec.step
+
+        def progress_bucket(self) -> int:
+            """te_core.run's: which 5% of the planned steps the step in progress is in, else its index (a capture
+            counts no MACs, so a run planned by its MAC budget reads its index here)."""
+            from te_core.run import CHECKPOINTS
+
+            if rec.n_steps:
+                return math.ceil((rec.step + 1) * CHECKPOINTS / rec.n_steps)
+            return rec.step
 
         def explicit_step(self):
             return rec.explicit_step()
@@ -672,14 +807,25 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
     `step_tokens` (the record's count for that step)."""
     log = log if log is not None else open(os.devnull, "w")
     name = name or Path(script).parent.name
+    listed: dict[str, list[dict]] = {k: [] for k in READ_BACKS}
 
     def trace(scale, windows_only=False):
         rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
+        for k, have in listed.items():
+            seen = {(e["kind"], e["where"]) for e in have}
+            have += [e for e in rec.listed(k) if (e["kind"], e["where"]) not in seen]
         return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
+
+    def flagged(g: StepGraph) -> StepGraph:
+        if g.circuit is not None:
+            g.circuit.read_backs = {k: list(v) for k, v in listed.items()}
+        if g.formalism is not None:
+            g.formalism = g.formalism | listed
+        return g
 
     base = trace(1)
     try:
-        return StepGraph.build(base, [trace(2)], ("ctx",), updated=None, name=name)
+        return flagged(StepGraph.build(base, [trace(2)], ("ctx",), updated=None, name=name))
     except CaptureRefused as e:
         if e.reason != "batch_dependent":
             raise
@@ -698,7 +844,7 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
     if fixed:
         raise CaptureRefused("batch_dependent", None, f"{refused}; with only the stream's windows halved, its token "
                              f"inputs {fixed[:4]} keep their shape") from None
-    return g
+    return flagged(g)
 
 
 def gemm_macs(g: StepGraph) -> int:
@@ -741,7 +887,8 @@ def main(argv=None) -> int:
     f = g.formalism or {}
     print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_macs", "updated_macs", "cut_bits",
                                           "seconds")}
-                     | {k: f.get(k) for k in ("affected_share", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}))
+                     | {k: f.get(k) for k in ("affected_share", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}
+                     | {k: [f"{e['kind']} at {e['where']}" for e in f.get(k, [])][:8] for k in READ_BACKS}))
     return 0
 
 

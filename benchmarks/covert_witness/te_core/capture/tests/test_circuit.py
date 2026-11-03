@@ -5,12 +5,14 @@ state the forward doesn't read; frozen layers above the update are its tail; MeZ
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from te_core.capture import script
 from te_core.capture.circuit import StepCircuit, measure, vertex_cut
+from te_core.formalism import READ_BACKS
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
 V, H, B, CTX = 16, 8, 4, 8
@@ -94,10 +96,17 @@ def test_a_cache_rewritten_each_step(starts, source):
         assert f["affected_share"] >= plain["affected_share"] and f["a_bits"] == 2 * 32 * H
 
 
-def test_a_saved_circuit_measures_alike(starts, tmp_path):
-    g = recorded(starts, "adamw")
+@pytest.mark.parametrize("update", ["adamw", "mezo-clip"])
+def test_a_saved_circuit_measures_alike(starts, tmp_path, update):
+    """With the recording's read-back lists, which a saved circuit keeps (the scorer measures the saved one); one saved
+    without them measures without them, which te_core.formalism refuses as unchecked."""
+    g = recorded(starts, update)
     g.circuit.save(tmp_path / "c.npz")
     assert measure(StepCircuit.load(tmp_path / "c.npz")) == g.formalism
+    assert bool(g.formalism["data_dependent"]) is (update == "mezo-clip")
+    replace(g.circuit, read_backs=None).save(tmp_path / "old.npz")
+    old = measure(StepCircuit.load(tmp_path / "old.npz"))
+    assert "data_dependent" not in old and old == {k: v for k, v in g.formalism.items() if k not in READ_BACKS}
 
 
 def test_a_vertex_cut():

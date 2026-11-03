@@ -45,7 +45,9 @@ def build(subs, launch, starts, counted, g):
 
 
 TRACE = {"tau_ids": 1.125, "tau_other_bits": 0.0, "a_bits": 512 * 16.0, "u1_bits": 4e8, "tail_share": 0.3,
-         "u_in": [[0.0, 0.0], [0.0, 1e8], [0.5, 4e8], [1.0, 4e8]], "frozen_tail_share": 0.1, "update_cut_bits": 4e8}
+         "u_in": [[0.0, 0.0], [0.0, 1e8], [0.5, 4e8], [1.0, 4e8]], "frozen_tail_share": 0.1, "update_cut_bits": 4e8,
+         "affected_share": 0.85, "data_dependent": [], "carried_scalars": []}
+CLIP = {"kind": "a comparison of a read-back float", "where": "train.py:399", "steps": [0, 4], "count": 5}
 
 
 def ledger_rows():
@@ -61,12 +63,12 @@ def ledger_rows():
     return out
 
 
-def run(tmp_path, monkeypatch, *extra):
+def run(tmp_path, monkeypatch, *extra, index=ledger_rows):
     man = tmp_path / "starts_store.json"
     man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}}}))
     fake = tmp_path / "rescore_v1.py"
     fake.write_text(ANALYSIS)
-    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(ledger_rows),
+    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(index),
                                                                       "root": tmp_path})())
     out = tmp_path / "out"
     assert rescore.main(["--out", str(out), "--pin", "pin", "--manifest", str(man), "--analysis", str(fake),
@@ -173,7 +175,8 @@ def test_a_straight_through_runs_latents_are_its_delta_t(tmp_path, monkeypatch, 
     k0, k1 = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()][:2]
     assert k0["formalism"]["delta_t_bits"] == 3e9 and k0["formalism"]["labels"]["delta_t_bits"] == rescore.LATENTS
     assert k1["formalism"].get("delta_t_bits") is None
-    m0, m1 = formalism.measure(k0, SHAPE), formalism.measure(k1, SHAPE)
+    # formalism.jsonl's lines carry no output; d 0 (E stores θ') leaves Fit to the update application alone
+    m0, m1 = (formalism.measure(k | {"output": {"rebuild_macs": 0}}, SHAPE) for k in (k0, k1))
     assert m0.delta_t == 3e9 != m0.delta_bits and m1.delta_t == m1.delta_bits
     c, _ = policy.cells(SHAPE)["reference"]
     k = 3e9 + m0.delta_grad_bits
@@ -210,3 +213,22 @@ def test_measured_rows_are_scored_beside_the_analysis(tmp_path, monkeypatch, tai
     routed = [e["routes"]["measured"] for e in c["S"] if e["measured"]["id"]]
     assert routed and all(w["id"] in {"r0", "r1"} and w["factors"] for w in routed)
     assert "| s1 |" in (out / "compare.md").read_text()
+
+
+def test_a_refused_row_is_listed_with_its_reason_and_never_scored(tmp_path, monkeypatch):
+    """seed-mezo's 04:15Z LOOPHOLE: r1's capture lists a clip on a read-back loss, so its measured quantities are
+    refused: frontier.json lists it under `refused` with the reason, formalism.jsonl carries it, and no S, panel or
+    comparison reads it."""
+    def index():
+        out = ledger_rows()
+        out[1]["formalism"]["trace"] = out[1]["formalism"]["trace"] | {"data_dependent": [CLIP]}
+        return out
+
+    out, _ = run(tmp_path, monkeypatch, "--tail", "literal", index=index)
+    fr = json.loads((out / "frontier.json").read_text())
+    assert fr["refused"] == {"r1": formalism.refusal(index()[1])} and fr["refused"]["r1"].startswith("data-dependent")
+    assert fr["skipped"]["r1"].startswith("refused: data-dependent: not measured") and fr["scored"] == 1
+    kept = {k["id"]: k for k in map(json.loads, (out / "formalism.jsonl").read_text().splitlines())}
+    assert kept["r1"]["refused"] == fr["refused"]["r1"] and kept["r0"]["refused"] is None
+    routes = {e["of"]["id"] for s in fr["starts"].values() for t in s["targets"] for e in t["cells"].values() if e["of"]}
+    assert routes <= {"r0"} and [r["id"] for r in json.loads((out / "compare.json").read_text())["rows"]] == ["r0"]
