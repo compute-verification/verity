@@ -97,10 +97,11 @@ HARNESS_FLOP_SLACK = 1.1
 #: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
 GPU_SECONDS_CAP = 3000.0
 #: the run's tier (`budget`): search, or long (`launch.py --long`, only for a run the board assigns as long), whose budget
-#: is LONG_C0 times the start's own training compute and LONG_GPU_SECONDS of its steps
+#: is LONG_C0 times the start's own training compute and LONG_GPU_SECONDS of its steps, which with loading, evaluation and
+#: the pool wait fit launch.py's LONG_TIMEOUT under research's 24 h custody
 TIER = os.environ.get("CW_TIER", "search")
 LONG_C0 = 100
-LONG_GPU_SECONDS = 30 * 3600.0
+LONG_GPU_SECONDS = 16 * 3600.0
 MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWLORA2\n": "lora2", b"CWSEED1\n": "seedlog",
          b"CWSPAR1\n": "sparse", b"CWQUAN1\n": "quant", b"CWMODL1\n": "model"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
