@@ -130,8 +130,10 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     row whose token kind is measured publishes reading A, `at`'s ρ, with the bound's terms and its reduction and update
     sensitivities (the console's cell has room for no more). At the
     dial's default the dense, LoRA and grown-adapter steps bind on the token kind; the adapter with its live code
-    publishes 1, no kind above 1, its reduction sensitivity above 9 beside it. A row without entries or an op log
-    publishes reading B, Slowdown's token form, a target; under reading A it measures no kind, so it publishes None,
+    publishes 1, no kind above 1, labelled with the measured kind its max takes (coordinator 11:18Z), its reduction
+    sensitivity above 9 beside it. A row without entries or an op log
+    publishes reading B, Slowdown's token form, a target, and so does every row where `READING_A` is off (on since
+    the coordinator's 11:18Z ruling); read under A, such a row measures no kind, so it publishes None,
     binding none and resting on `unmeasured`, never 1 (coordinator 09:46Z)."""
     default = rho_vectors.CELLS[0]
     for case in rho_vectors.CASES:
@@ -142,11 +144,12 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         assert one["reading"] == "A" and not v["fit"]
         assert not differences(rho_vectors.finite([one["rho"], one["terms"], one["sensitivities"]]),
                                [v["rho"], v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
-        assert one["binding_kind"] == (v["binding"] if num(v["max"]) > 1 else "none")
+        assert one["binding_kind"] == v["binding"] and one["binding_kind"] in formalism.KINDS
         assert one["rests_on"] == formalism.RESTS_ON_CELL[one["binding_kind"]]
-        assert one["binding_kind"] == ("none" if case == "adapter-live" else "token")
+        assert case == "adapter-live" or one["binding_kind"] == "token"
     live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
-    assert live["rho"] == 1.0 and live["sensitivities"]["reduction"] > 9
+    assert live["rho"] == 1.0 and num(live["terms"][live["binding_kind"]]) <= 1
+    assert live["sensitivities"]["reduction"] > 9
     for gone in ("entries", "ops"):
         m = formalism.from_json(built["measured"]["dense"] | {gone: None})
         b, at = formalism.published(m, v["c"], v["k"]), formalism.at(m, v["c"], v["k"])
