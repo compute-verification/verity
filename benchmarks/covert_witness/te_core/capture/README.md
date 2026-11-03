@@ -60,7 +60,18 @@ kinds and chains move with k. A recorded
 program reads a weight through the version the previous step's update wrote, so these rates and chains are keyed by
 the capture's values, not by graph nodes as `io_bound`'s are. The summation order is `unknown`: a GEMM is one ATen op,
 summed as its kernel sums it. `"capture"` names the version of these rows (`products.CAPTURE`);
-`te_core.formalism.products_of_trace` reads them.
+`te_core.formalism.products_of_trace` reads them. `"elementwise_products"` lists the matrix products the step writes
+with elementwise ops, which no row is: a multiplication of two θ′-dependent values that broadcasts both (an outer
+product, or `(x.unsqueeze(-1) * W).sum(-2)` for `x @ W`), and gathered rows multiplied by such a value and summed by
+index (gather, mul and `index_add`). A value's entries are its sources' (`products._sources`: a GEMM's output, a graph
+source and a lookup of a module tensor's rows by the step's data are their own), so a broadcast is found whatever map,
+scaling, copy in place or multiplication by a value outside the update it passes through, and an embedding's rows are
+no broadcast; two broadcasts along the same dims (a token's code over lanes times its scale) are elementwise
+(`products._flats`), and dims the capture can't tell never exempt one. The dims are compared on the grid both operands'
+shapes share (`products._grid`), an operand that is a view regrouping its argument's dims read by its argument's, so a
+coded message's levels whose lanes a view merges into their group, times the group's scale, are elementwise, and two
+broadcasts each flattened by a view are still a product. The formalism leaves the fresh-products term
+unmeasured where the list has any, and on a trace captured before this check (`formalism.ELEMENTWISE_FROM`).
 
 A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
 stand-in's. The recording lists each such read-back by its source line and steps, in `formalism["data_dependent"]` (a

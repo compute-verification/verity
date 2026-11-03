@@ -8,7 +8,9 @@ rule), whether both operands are one array, its partial sums' width (`io_bound.A
 step's whole-making system (`io_bound.chain_classes`) reads of it: the classes whose outputs reach its operands (`fed`)
 and their paid factor (`P`, `_reach`), and whether each operand reads a gather's rows (an embedding's, the same for
 every token that shares an id) before any op makes them token-specific (`gathered`, `_gathered`), which the bound drops
-(te_core.formalism). The block's `p_match` lists the ops that break P-match. Identical rows of the step (a layer's GEMMs
+(te_core.formalism). The block's `p_match` lists the ops that break P-match, and its `elementwise_products` the
+matrix products written with elementwise ops (a broadcast multiplication and a sum, or a gather, a multiplication and
+a sum by index), which no row is and whose classes the whole-making system would miss. Identical rows of the step (a layer's GEMMs
 repeated over the layers) are one row with their count, so `gathered` puts layer 0's products of the embedding's rows in
 rows of their own. A trace keeps the rows at each k of the console's dial too (`rows_on_dial`, `DIAL_K`), since a
 row's rates, kind and feeds move with k.
@@ -27,12 +29,14 @@ from __future__ import annotations
 import math
 import operator
 
+import torch
+
 from te_core import io_bound
 from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
 #: distinguishable from one traced before them
-CAPTURE = "4.12.1"
+CAPTURE = "4.12.9"
 ORDER = "unknown"
 #: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block
 #: sizes, the reference's, the served demo's block and the console's default
@@ -329,6 +333,239 @@ def _gathered(vs: _Values, made: dict) -> set:
     return {v for v, s in state.items() if isinstance(s, tuple) and tok[v]}
 
 
+#: elementwise multiplications, by the positions of their two multiplicands
+_MULTIPLY = {"mul": (0, 1), "mul_": (0, 1), "div": (0, 1), "div_": (0, 1), "addcmul": (1, 2), "addcmul_": (1, 2),
+             "addcdiv": (1, 2), "addcdiv_": (1, 2)}
+
+def _sums_by_index(n) -> bool:
+    """Whether node `n` adds its source's entries into its output at indices (index_add, scatter_add, an accumulating
+    index_put, a summing or averaging scatter_reduce or index_reduce)."""
+    name = _pk(n.target)
+    if name in ("index_add", "index_add_", "scatter_add", "scatter_add_"):
+        return True
+    if name in ("index_put", "index_put_", "_unsafe_index_put", "_index_put_impl_"):
+        return bool(n.args[3] if len(n.args) > 3 else n.kwargs.get("accumulate", False))
+    if name in ("scatter_reduce", "scatter_reduce_", "index_reduce", "index_reduce_"):
+        return (n.args[4] if len(n.args) > 4 else n.kwargs.get("reduce")) in ("sum", "mean")
+    return False
+
+
+def _lookup(n) -> bool:
+    """Whether node `n` looks a module tensor's rows up by the step's data (an embedding by its token ids): a gather
+    of rows (embedding, table[ids], index_select along dim 0) whose table is a module tensor and whose index a graph
+    input, each through views and casts. Its rows repeat only where the data does, so its entries are its own; an
+    index a program computes, or a table it builds, is no lookup."""
+    name, a = _pk(n.target), n.args
+    if name == "embedding" and len(a) > 1:
+        index = a[1]
+    elif name in ("index", "_unsafe_index") and len(a) > 1 and isinstance(a[1], (list, tuple)) and a[1] and \
+            all(x is None for x in a[1][1:]):
+        index = a[1][0]
+    elif name == "index_select" and len(a) > 2 and a[1] == 0:
+        index = a[2]
+    else:
+        return False
+    if not (hasattr(a[0], "op") and hasattr(index, "op")):
+        return False
+    table, index = io_bound._root(a[0]), io_bound._root(index)
+    return getattr(table, "op", None) == "get_attr" and getattr(index, "op", None) == "placeholder"
+
+
+def _sources(vs: _Values) -> list:
+    """Each value's sources, the values that depend on θ′ whose entries it is computed from (None: it doesn't depend on
+    θ′). A graph source, a GEMM's output (a product the rows count) and a lookup's (`_lookup`) are their own sources, and
+    so is any value with at least as many entries as its sources have; any other value's are its affected
+    predecessors', storage-versioned (`_Flow`), so a view, a cast, a map, a multiplication by a value outside the
+    update or a copy in place keeps the entries of the value it broadcasts."""
+    flow, dep = vs.flow, vs.dep
+    own = {n for n in vs.nodes if n.op == "call_function" and (_gemms(n) or _lookup(n))}
+    size = _sizes(vs)
+    src: list = [None] * len(flow.preds)
+    for v, ps in enumerate(flow.preds):
+        if not dep[v]:
+            continue
+        aff = [p for p in ps if dep[p]]
+        s = frozenset((v,)) if not aff or flow.node[v] in own else frozenset().union(*(src[p] for p in aff))
+        src[v] = s if sum(size[x] for x in s) < size[v] else frozenset((v,))
+    return src
+
+
+def _sizes(vs: _Values) -> list[int]:
+    """Each value's entries (a Python scalar's 1)."""
+    return [max(b // max(w, 1), 1) for b, w in zip(vs.flow.bits, vs.flow.width)]
+
+
+#: ops whose output is their first argument's entries, its shape unchanged: casts and copies
+_SAME = {"_to_copy", "to", "clone", "contiguous", "detach", "alias", "lift_fresh_copy", "lift_fresh", "type_as"}
+#: views that only add or drop dims of size 1, or merge none
+_RESHAPE = {"unsqueeze", "squeeze", "view", "_unsafe_view", "reshape", "_reshape_alias", "view_as", "flatten",
+            "unflatten", "squeeze_copy", "unsqueeze_copy", "view_copy"}
+#: ops that broadcast their first argument to their output's shape
+_EXPAND = {"expand", "expand_as", "broadcast_to", "expand_copy"}
+
+
+def _shape_of(x) -> tuple | None:
+    v = x.meta.get("val") if hasattr(x, "meta") else None
+    return tuple(int(s) for s in v.shape) if hasattr(v, "shape") else None
+
+
+def _broadcast_dims(flat, shape: tuple, out: tuple) -> frozenset | None:
+    """The dims of `out` along which a value of `shape` that is flat along `flat` is, broadcast to it."""
+    if flat is None or shape is None or len(shape) > len(out):
+        return None
+    k = len(out) - len(shape)
+    return frozenset(i for i in range(len(out)) if out[i] > 1 and (i < k or shape[i - k] == 1 or i - k in flat))
+
+
+def _grid(*shapes: tuple) -> list[int] | None:
+    """The finest grid that arrays of `shapes`, each of the same entries laid out in order, share: the sizes of their
+    trailing blocks (each dim's entries times every later dim's), sorted, where each divides the next, so every dim of
+    each is a run of the grid's cells; None where they don't nest (a 2 x 3 and a 3 x 2 share none)."""
+    cuts = sorted({math.prod(s[i:]) for s in shapes for i in range(len(s) + 1)})
+    return cuts if all(b % a == 0 for a, b in zip(cuts, cuts[1:])) else None
+
+
+def _on_grid(grid: list[int], shape: tuple, flat: frozenset) -> frozenset:
+    """The cells of `grid` (its consecutive sizes) along which an array of `shape`, flat along `flat`, is."""
+    return frozenset(j for i in flat for j in range(len(grid) - 1)
+                     if math.prod(shape[i + 1:]) <= grid[j] and grid[j + 1] <= math.prod(shape[i:]))
+
+
+def _flats(vs: _Values, src: list) -> list:
+    """Each value's flat dims: those of size above 1 along which what it reads of θ′ doesn't vary, so it is a broadcast
+    along them (None: unknown, or it doesn't depend on θ′). A value that is its own source (`_sources`) has none; a
+    map, cast, copy or broadcast is flat where every affected argument is, broadcast to its shape, and a view that adds
+    or drops dims of size 1, or permutes them, keeps its argument's; every other op's are unknown."""
+    flow, dep = vs.flow, vs.dep
+    written = {v for _, v, _ in flow.writes}
+    flat: list = [None] * len(flow.preds)
+    for v, s in enumerate(src):
+        if s is not None and s == frozenset((v,)):
+            flat[v] = frozenset()
+    for n in vs.nodes:
+        v = flow.val.get(n)
+        if n.op != "call_function" or not isinstance(v, int) or not dep[v] or flat[v] is not None or v in written:
+            continue
+        out, name = _shape_of(n), _pk(n.target)
+        if out is None:
+            continue
+        first = n.args[0] if n.args and hasattr(n.args[0], "op") else None
+        own = flow.val.get(first) if first is not None else None
+        shape = _shape_of(first) if first is not None else None
+        f = flat[own] if isinstance(own, int) else None
+        if name in _EXPAND or name in _SAME or name in _MULTIPLY or torch.Tag.pointwise in getattr(n.target, "tags", ()):
+            got = [_broadcast_dims(flat[x] if isinstance(x := flow.val.get(a), int) else None, _shape_of(a), out)
+                   for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+            flat[v] = None if not got or None in got else frozenset.intersection(*got)
+        elif name in _RESHAPE and f is not None and shape is not None:
+            ins, outs = [i for i, x in enumerate(shape) if x > 1], [i for i, x in enumerate(out) if x > 1]
+            if [shape[i] for i in ins] == [out[i] for i in outs]:
+                flat[v] = frozenset(outs[j] for j, i in enumerate(ins) if i in f)
+        elif name in ("permute", "transpose", "t", "numpy_T", "mT") and f is not None and shape is not None:
+            order = list(range(len(shape)))
+            if name == "permute":
+                order = [int(d) % len(shape) for d in n.args[1]]
+            elif len(shape) >= 2:
+                d0, d1 = ((int(n.args[1]), int(n.args[2])) if name == "transpose" else (-2, -1))
+                d0, d1 = d0 % len(shape), d1 % len(shape)
+                order[d0], order[d1] = order[d1], order[d0]
+            flat[v] = frozenset(i for i, d in enumerate(order) if d in f and out[i] > 1)
+    return flat
+
+
+def _elementwise_products(vs: _Values) -> list[dict]:
+    """The measured step's matrix products written with elementwise ops, which no row is and whose outputs the
+    whole-making system would miss: a multiplication of two values that depend on θ′ whose result has more entries
+    than the sources (`_sources`) of either have, each broadcast or repeated along a dim the other isn't (`_flats`;
+    dims it can't tell never exempt): an outer product, a GEMM with K = 1, or a matrix product once summed, as
+    (x.unsqueeze(-1) * W).sum(-2) writes x @ W, whatever maps or copies the broadcast passes through first. Two
+    broadcasts along the same dims (a token's code over lanes times the token's scale) are elementwise. The dims are
+    compared on the grid the operands' shapes share (`_grid`), an operand that is a view regrouping its argument's
+    dims read by its argument's, so a code's levels whose lanes a view merges into their group, times the group's
+    scale, are elementwise, and two broadcasts each flattened by a view are still a product. And a sum by
+    index (`_sums_by_index`) of a multiplication of two such values one of which carries a gather's rows (a sparse
+    product: gather, mul and index_add), in the forward or the backward. A gather's rows and such a multiplication are
+    carried by every view, and by every other op with one affected argument and no fewer entries (a cast, a map, a
+    broadcast). A multiplication of two values of its own size (a norm's, a gate's) is elementwise, and so is one with
+    an operand that doesn't depend on θ′, whose product is θ's and never counted (P-match checks its broadcast).
+    [{"op", "count", "macs"}] by op, the multiplications' MACs."""
+    phases = _phases(vs.gm)
+    dep = vs.dep
+    made = _made(vs)
+    src, size = _sources(vs), _sizes(vs)
+    flat = _flats(vs, src)
+    gathered: set = set()
+    product: dict = {}
+    found: dict = {}
+
+    def ent(n, a) -> int:
+        s = frozenset().union(*(src[x] for x in _reads(vs, n, a) if dep[x]))
+        return min(io_bound._numel(a), sum(size[x] for x in s))
+
+    def dims(n, a) -> tuple[tuple, frozenset] | None:
+        """Operand `a` of `n` as (a shape of `n`'s entries, the dims of it along which `a` is flat): `n`'s own, or,
+        where `a` is a view that regroups its argument's dims (merging a flat dim with others, which its own dims
+        can't say) and `n` doesn't broadcast it, its argument's."""
+        own = vs.flow.val.get(a)
+        if not isinstance(own, int) or _reads(vs, n, a) - {own}:
+            return None
+        out = _shape_of(n)
+        got = _broadcast_dims(flat[own], _shape_of(a), out)
+        if got is not None:
+            return out, got
+        x = a.args[0] if _pk(a.target) in _RESHAPE and a.args and hasattr(a.args[0], "op") else None
+        arg = vs.flow.val.get(x) if x is not None else None
+        if not isinstance(arg, int) or flat[arg] is None or _shape_of(a) != out or _reads(vs, a, x) - {arg}:
+            return None
+        return _shape_of(x), flat[arg]
+
+    def mixes(n, a, b) -> bool:
+        """Whether each operand is a broadcast along a dim the other isn't (unknown: it may be), compared on the grid
+        both shapes share (`_grid`)."""
+        fa, fb = dims(n, a), dims(n, b)
+        grid = None if fa is None or fb is None else _grid(fa[0], fb[0])
+        if grid is None:
+            return True
+        ga, gb = _on_grid(grid, *fa), _on_grid(grid, *fb)
+        return not (ga <= gb or gb <= ga)
+
+    def add(name: str, macs: int) -> None:
+        c, m = found.get(name, (0, 0))
+        found[name] = (c + 1, m + macs)
+
+    for n in vs.nodes:
+        if n.op != "call_function":
+            continue
+        name = "getitem" if n.target is operator.getitem else _pk(n.target)
+        outs = made.get(n, [])
+        aff = [a for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+        a, b = (n.args[i] if len(n.args) > i else None for i in _MULTIPLY[name]) if name in _MULTIPLY else (None, None)
+        both = a in aff and b in aff
+        if name in _GATHERS and n.args and n.args[0] in aff:
+            gathered.update(outs)
+        elif len(aff) == 1 and not both and not _gemms(n) and (name in _WALK or
+                                                                io_bound._numel(n) >= io_bound._numel(aff[0])):
+            got = _reads(vs, n, aff[0])
+            if gathered & got:
+                gathered.update(outs)
+            if carried := [product[x] for x in got if x in product]:
+                product.update(dict.fromkeys(outs, max(carried)))
+        if not vs.measured(n) or phases.get(n, "forward") not in ("forward", "backward"):
+            continue
+        if both:
+            out = io_bound._numel(n)
+            if out > ent(n, a) and out > ent(n, b) and mixes(n, a, b):
+                add(name, out)
+            elif gathered & (_reads(vs, n, a) | _reads(vs, n, b)):
+                product.update(dict.fromkeys(outs, out))
+        elif _sums_by_index(n):
+            for x in io_bound._tensor_args(n)[1:]:
+                if carried := [product[v] for v in _reads(vs, n, x) if v in product]:
+                    add(name, max(carried))
+                    break
+    return [{"op": op, "count": c, "macs": m} for op, (c, m) in sorted(found.items())]
+
+
 def gathered_gemms(graph) -> set[tuple[str, str]]:
     """The (node, part) of each GEMM of the measured step with an operand that reads a gather's rows (`_gathered`)."""
     vs = _Values(graph)
@@ -372,11 +609,12 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
     `k_whole` None: no chain makes an operand entry whole by itself; `fed` the [K, A] pairs of the classes reaching its
     operands; `gathered` whether each operand reads a gather's rows before any op makes them token-specific), `gates`
     the step's |C| at io_bound's prices (`io_bound.step_gates`) for a step captured by capture_step or capture_fn, else
-    None (the circuit's count is the trace's), and `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
-    (`_reach`)."""
+    None (the circuit's count is the trace's), `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
+    (`_reach`), and `elementwise_products` the matrix products the step writes with elementwise ops
+    (`_elementwise_products`), which te_core.formalism refuses to price."""
     vs = _Values(graph)
     made = _made(vs)
-    return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made))
+    return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made)) | {"elementwise_products": _elementwise_products(vs)}
 
 
 def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
@@ -389,6 +627,7 @@ def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
     made = _made(vs)
     gathered = _gathered(vs, made)
     out = _rows(vs, graph, io_bound.CONSOLE[1], gemm_dtype, made, gathered)
+    out["elementwise_products"] = _elementwise_products(vs)
     out["at"] = {}
     for k in DIAL_K:
         if k != io_bound.CONSOLE[1]:

@@ -9,7 +9,9 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 import models
 from te_core.capture import capture_run, capture_step
-from te_core.flops import Counter
+from te_core.capture.script import recorded_forward_gemm_macs
+from te_core.flops import Counter, gather_macs
+from te_core.opnames import gemm_like
 
 N = 3
 
@@ -56,6 +58,35 @@ def lora_new():
     return m, {n for n, p in m.named_parameters() if p.requires_grad}
 
 
+def test_a_trace_is_of_its_runs_program_where_its_product_shapes_are_the_counters():
+    """te_core.formalism.other_program on the counter's op log as a ledger row keeps it (te_core.ledger's macs_log)
+    and the capture's product rows of the same program (coordinator 20:42Z): LoRA at rank 2, trained from scratch,
+    and the whole model trained run the same matrix-product shapes in both, so their terms are priced, while a capture
+    at rank 3 runs shapes the rank-2 run never ran (each adapter's factors and their gradients), so its term isn't."""
+    from te_core.capture.products import rows
+    from te_core.formalism import other_program
+    from te_core.ledger import _macs_log
+
+    def both(make, rank=None):
+        torch.manual_seed(0)
+        model, new = make()
+        opt = lambda: torch.optim.AdamW([p for p in model.parameters() if p.requires_grad])  # noqa: E731
+        g0 = capture_step(model, opt(), models.lm_loss, BATCH, updated=new)
+        return _macs_log(counted(model, opt(), new), None), rows(g0.with_updated(g0.trained | new))["rows"]
+
+    for make in (full, lora_new):
+        log, got = both(make)
+        assert got and other_program(got, log) is None, make
+    log = both(lora_new)[0]
+    torch.manual_seed(0)
+    model = models.lora(models.TinyLM(), 3)
+    new = {n for n, p in model.named_parameters() if p.requires_grad}
+    g0 = capture_step(model, torch.optim.AdamW([p for p in model.parameters() if p.requires_grad]), models.lm_loss,
+                      BATCH, updated=new)
+    o = other_program(rows(g0.with_updated(g0.trained | new))["rows"], log)
+    assert o is not None and o["unmatched"] > 0 and all(3 in s for s in o["largest"]), o
+
+
 @pytest.mark.parametrize("make", [full, top, lora_new])
 def test_the_capture_and_the_counter_agree_step_for_step(make):
     torch.manual_seed(0)
@@ -67,3 +98,26 @@ def test_the_capture_and_the_counter_agree_step_for_step(make):
     for i in range(N):
         assert [cnt["steps"][i][k] for k in keys] == [cap["steps"][i][k] for k in keys], i
     assert cnt["totals"]["macs"] == cap["totals"]["macs"]
+
+
+def test_the_counters_forward_is_the_traces_forward_gemms_and_a_trained_lookup_and_elementwise_work():
+    """Once the embedding trains, the counter's forward holds its lookup by token ids at the gather Definition's
+    multiplexers, which |C| counts and no product is, so a trace's forward GEMMs fall short of the counter's whole
+    forward by it and the forward's elementwise work; they are the counter's forward GEMMs exactly
+    (`recorded_forward_gemm_macs`). Before the first update the table is θ's and its lookup computes nothing."""
+    torch.manual_seed(0)
+    model, new = full()
+    adamw = lambda: torch.optim.AdamW([p for p in model.parameters() if p.requires_grad])  # noqa: E731
+    g0 = capture_step(model, adamw(), models.lm_loss, BATCH, updated=new)
+    g1 = g0.with_updated(g0.trained | new)
+    cnt = counted(model, adamw(), new)
+    lookup = gather_macs("embedding", tuple(model.emb.weight.shape), None, BATCH[0].numel() * model.emb.weight.shape[1])
+    for i, g in ((0, g0), (1, g1)):
+        step = cnt["steps"][i]
+        log = [r for r in cnt["structures"][step["struct"]]["log"] if r[0] == "fwd"]
+        forward = sum(v for k, v in step["by"].items() if k.startswith("fwd/"))
+        assert recorded_forward_gemm_macs(cnt, i) == g.phase_macs()["forward"] > 0, i
+        assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if i else []), i
+        assert forward == g.phase_macs()["forward"] + (lookup if i else 0) + sum(
+            r[5] for r in log if not gemm_like(r[2]) and r[2] != "embedding"), i
+    assert lookup > 0
