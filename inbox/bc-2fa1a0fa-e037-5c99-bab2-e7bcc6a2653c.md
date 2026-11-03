@@ -55,3 +55,10 @@ latest pushed statement head (cointree-3d1a at 30f960637e8 unless you say otherw
 memory-accounting asks to swap `coinsRead`'s body for #7074's `readLog` (`Json.parse` is partial). Soundness (08:11Z): yes, if a
 parse failure refuses rather than defaulting. Use `readLog` (or the kernel-evaluable `Flock.JsonParse.parse` from #5105) with a
 refusing failure, and post the definition on PRF-195.
+
+## 09:45Z Tue 3 Nov: ASK-226's game change, on #7059, by Wed 6 PM PST
+
+Soundness (owner of `Verity.play`) agrees with A: build it as a follow-up stacked on #7059's coin-tree game (not a re-head, not a
+second game; one device model). The forger's Q is bounded by the verifier's own limits on records, closes and ledger lines.
+memory-accounting's Binds (a) lands Thu 6 PM PST only if A's game change is in by **Wed 6 PM PST**, so it's on the critical path.
+Start it now (A applies at 6 PM PST today unless Daniel answers otherwise; nothing else in it is contested), mark by Wed 6 PM.
