@@ -452,7 +452,7 @@ def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs
   for s in e.sessions do
     let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
       | throw s!"session {s.name}'s record is not UTF-8"
-    named := named.push (s.name, (Flock.JsonParse.parse record).toOption.getD Json.null)
+    named := named.push (s.name, (Json.parse record).toOption.getD Json.null)
   if let some why := Challenger.sessionsTreeReason ts named then throw why
 
 /-- The evidence's one session (module docstring, **evidence**): evidence naming none or several refuses. -/
