@@ -1,5 +1,9 @@
-"""Island `hybrid`, cut.py: wildcard's train.py at b3dc667bb0, kept in step with it (only this line and the notes'
-direction differ), for hybrid's arms that train through a cut code. Wildcard's description follows.
+"""Island `hybrid`, cut.py: wildcard's train.py at b3dc667bb0, for hybrid's arms that train through a cut code. It differs
+in this line, the notes' direction and two things that let a traced step's narrowest cut (te_core 4.x's measured a) be
+the code: a forward code of at most 8 bits a coordinate passes through a uint8 tensor at its own width
+(`through_bytes`), and an `m` code's running mean moves toward the coded state's mean, not the uncoded one's (a
+statistic of the uncoded state that the step never reads back counts as something the loss reads, so the cut would
+have to hold the whole state). Wildcard's description follows.
 
 Updates whose structure the theorem prices at ρ = 1, trained as cheaply as possible.
 
@@ -233,10 +237,25 @@ def quantize(y: torch.Tensor, bits: int, group: int, stochastic: bool, gauss: bo
         step = y.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)
     step = step.to(torch.bfloat16).float().clamp_min(1e-30)
     half = 2 ** (bits - 1)
-    return ((torch.floor(y / step).clamp(-half, half - 1) + 0.5) * step).reshape(shape)
+    j = torch.floor(y / step).clamp(-half, half - 1)
+    if bits <= 8 and group % 8 == 0:
+        j = through_bytes((j + half).long(), bits).float() - half
+    return ((j + 0.5) * step).reshape(shape)
 
 
-#: Each `m` boundary's running mean of the residual (bf16 values in fp32), from the training batches coded before.
+def through_bytes(c: torch.Tensor, bits: int) -> torch.Tensor:
+    """Codes c in [0, 2^bits) (trailing axis a multiple of 8) through one uint8 tensor, eight codes to `bits` bytes, and
+    back unchanged: the code exists in the step at its own width, so a trace's narrowest cut (te_core 4.x's measured a)
+    can be the code, where a float of the same values would count 32 bits a coordinate."""
+    lanes = torch.arange(8, device=c.device, dtype=torch.int64)
+    octets = torch.arange(bits, device=c.device, dtype=torch.int64)
+    word = (c.reshape(*c.shape[:-1], -1, 8) << (bits * lanes)).sum(-1)
+    packed = ((word.unsqueeze(-1) >> (8 * octets)) & 255).to(torch.uint8)
+    word = (packed.long() << (8 * octets)).sum(-1)
+    return ((word.unsqueeze(-1) >> (bits * lanes)) & (2 ** bits - 1)).reshape(c.shape)
+
+
+#: Each `m` boundary's running mean of the coded residual (bf16 values in fp32), from the training batches coded before.
 CUT_MEAN: dict = {}
 MEAN_DECAY = 0.9
 
@@ -359,8 +378,8 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
     """Each boundary's code as a forward hook on the block below it (boundary B: block B - 1's output), active while
     CUT["on"]. A delta code's hook adds h_frozen back after coding h - h_frozen; h_frozen is carried up from block
     `low`'s input through frozen copies of blocks low.. (frozen_blocks). An `m` code's hook codes about CUT_MEAN, then
-    moves CUT_MEAN toward this batch's mean only in a training forward or with CUT["calibrate"] (never a probe's), so
-    a token's code reads no later token."""
+    moves CUT_MEAN toward this batch's coded mean only in a training forward or with CUT["calibrate"] (never a probe's),
+    so a token's code reads no later token, and the mean reads nothing the receiving side lacks."""
     CUT_MEAN.clear()
     by_block = {c["boundary"] - 1: c for c in cuts}
     top = max((c["boundary"] for c in cuts if c["delta"]), default=None)
@@ -393,7 +412,7 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                                 c["grad_gauss"])
             if c["mean"] and (torch.is_grad_enabled() or CUT.get("calibrate")):
                 with torch.no_grad():
-                    now = out.detach().float().mean(tuple(range(out.dim() - 1)))
+                    now = coded.detach().float().mean(tuple(range(coded.dim() - 1)))
                     old = CUT_MEAN.get(c["boundary"])
                     new = now if old is None else MEAN_DECAY * old + (1 - MEAN_DECAY) * now
                     CUT_MEAN[c["boundary"]] = new.to(torch.bfloat16).float()
