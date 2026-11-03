@@ -95,7 +95,7 @@ class Schedule:
 #: what an arm may set (`--arms`); the rest is the run's
 ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
             "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate",
-            "vote_margin", "vote_carry"}
+            "vote_margin", "vote_carry", "decay_frac"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -115,6 +115,12 @@ def parse_arms(a) -> list[argparse.Namespace]:
         x.arm = spec
         out.append(x)
     return out
+
+
+def rate_fraction(step: int, n: int, warmup: int, decay_frac: float) -> float:
+    """The schedule's fraction of the peak rate at `step` of `n`: linear warmup over `warmup` steps, then flat, then linear
+    to 0 over the last `decay_frac` of the steps (1.0, the default: decaying from the first step)."""
+    return min(1.0, (step + 1) / warmup) * min(1.0, (n - step) / (decay_frac * n))
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
@@ -751,7 +757,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                           "targets": len(targets), "norms": len(norms), "flops_per_step": per_step(x)}), flush=True)
         lrs = [grp["lr"] for grp in opt.param_groups]
         for step in range(n_k):
-            frac = min(1.0, (step + 1) / x.warmup) * (1 - step / n_k)
+            frac = rate_fraction(step, n_k, x.warmup, x.decay_frac)
             for grp, lr in zip(opt.param_groups, lrs):
                 grp["lr"] = lr * frac
             rows = data.next(a.batch)
@@ -884,6 +890,9 @@ def main() -> int:
                     help="--opt vote: keep a value's votes across steps until it moves (int16 state), so the margin "
                          "counts every partial since its last move")
     ap.add_argument("--warmup", type=int, default=50)
+    ap.add_argument("--decay-frac", type=float, default=1.0,
+                    help="the rate is flat after the warmup and decays linearly to 0 over this last share of an arm's "
+                         "steps (1.0: linear decay over the whole arm)")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
@@ -1028,7 +1037,7 @@ def main() -> int:
                     qarrays[n] = vote_code(voter.full_code(params[n]), vbits, x.vote_step)
 
         for step in range(n_arm):
-            frac = min(1.0, (step + 1) / x.warmup) * (1 - step / n_arm)
+            frac = rate_fraction(step, n_arm, x.warmup, x.decay_frac)
             for o, lr in opts:
                 for grp in o.param_groups:
                     grp["lr"] = lr * frac
