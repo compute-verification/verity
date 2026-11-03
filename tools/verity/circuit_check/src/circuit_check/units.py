@@ -14,7 +14,10 @@ and ran while they made its roots, the build of every Definition they reach, the
 closures, its units by digest and what the process read outside every recording; and the units of every binding that makes no
 root (one run for what it sets, as `syn.knob`'s), whose reads every record holds.  The registered primitives and static-free
 composites are `REGISTERED_RECORDS` more, ``<registered>:i``, each of a run of them in their order (`registered_entries`), so
-that their builds run apart from each other.
+that their builds run apart from each other.  A record holds nothing of how its build went: the CPU seconds of a binding
+built apart, which `cli._owners` weighs, are kept beside it (``<entry>.seconds``, `store`), so a record built again from an
+unchanged tree is the record it replaces, byte for byte, and so is a tarball of the records' entries (the circuit-catalog
+task's).
 
 A record counts only when its every read is unchanged where it was (never through a move) and the roots its binding made now
 are the ones it lists; else its binding is built as the catalog builds it and its record stored again.  The task list is then
@@ -106,7 +109,7 @@ class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted, with that record's
     reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and its
-    share of the task list's (``listed``), and the CPU seconds it took (``seconds``, which its record keeps).  ``words``: the
+    share of the task list's (``listed``), and the CPU seconds it took (``seconds``, kept beside its record).  ``words``: the
     Boolean Definitions its build registered (`_words`), where a process built it apart.  ``made`` None: its roots are the ids
     the catalog's roots record lists (``ids``, `plan`'s ``binding``), made by ``make`` when first read and held to those ids.
     ``effects``: what making its roots did beyond them (`_noting`), or doing that in their place (`_replay`)."""
@@ -396,10 +399,19 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
                 continue
             for fid in e.root_ids:
                 got["nodes"][fid]["k"]
-            return got, reads
+            return {**got, "seconds": _took(p)}, reads
         except (OSError, KeyError, TypeError, AttributeError, ValueError):
             continue
     return None
+
+
+def _took(record: Path) -> float | None:
+    """The CPU seconds of the build that last stored the record at ``record``, kept beside it (`store`); None when none was."""
+    try:
+        with CC.internal():
+            return float(record.with_suffix(".seconds").read_text())
+    except (OSError, ValueError):
+        return None
 
 
 @dataclass
@@ -705,17 +717,24 @@ def made_words(plan: Plan) -> int:
 
 def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> int:
     """Store each binding's record (each rebuilt one's, with ``only_rebuilt``), its reads digested now, each read once for all
-    of them (`cache.seen_all`); one built apart with the reads its process recorded; the count stored."""
+    of them (`cache.seen_all`); one built apart with the reads its process recorded, and the CPU seconds it took beside it
+    (``<entry>.seconds``: `_took`), out of the record's bytes; the count stored."""
     side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units]
     todo = [e for e in entries if not (only_rebuilt and e.reused)]
     reads = [e.reads if e.reads is not None else CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots)
              for e in todo]
     n = 0
     for e, got, now in zip(todo, reads, CC.seen_all(repo, reads)):
-        value = {"roots": e.root_ids, "nodes": e.nodes, **({"words": e.words} if e.words is not None else {}),
-                 **({"seconds": e.seconds} if e.seconds is not None else {})}
-        if CC.store(cache, e.key, repo, got, value, now) is not None:
-            n += 1
+        value = {"roots": e.root_ids, "nodes": e.nodes, **({"words": e.words} if e.words is not None else {})}
+        if (eid := CC.store(cache, e.key, repo, got, value, now)) is None:
+            continue
+        n += 1
+        if e.seconds is not None:
+            took = CC._dir(cache, e.key) / f"{eid}.seconds"
+            # a temporary name of this writer's own, as `cache.store` writes an entry
+            tmp = took.with_name(f".{took.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+            tmp.write_text(f"{e.seconds}\n")
+            os.replace(tmp, took)
     return n
 
 
