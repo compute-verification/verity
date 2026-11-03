@@ -552,6 +552,11 @@
   "Properties.Pouw.Commit.leafRefusals": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33",
   "Properties.Pouw.Commit.saltRefusals": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac",
   "Properties.Pouw.Commit.saltSize": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
+  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
@@ -632,12 +637,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -1737,14 +1737,13 @@
     "    (PouwWindow.roundsReason",
     "      { scheme := PouwWindow.LIVE_SCHEME, epoch := 0,",
     "        families :=",
-    "          List.cons { fst := PouwWindow.SALT, snd := 1 }",
-    "            (List.cons { fst := PouwWindow.DRAW, snd := 1 } (List.cons { fst := PouwWindow.ROUND, snd := 1 } List.nil)),",
+    "          List.cons { fst := PouwWindow.SALT, snd := 1 } (List.cons { fst := PouwWindow.ROUND, snd := 1 } List.nil),",
     "        root := { data := Array.replicate 64 0 } }",
     "      List.nil List.nil)",
     "    (Except.ok Option.none)"
    ],
    "assumptions": [],
-   "type_hash": "4ab978109e6645b2eae5288edd981449dd2f9e3dcc5efed3e11bdde48c893f94"
+   "type_hash": "f5b2b3ec3113624667eaeca599587f6051bc1169998eb30195bcb23d45eb91b4"
   },
   "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots_nontrivial": {
    "owner": "@compute-research",
@@ -4986,9 +4985,6 @@
     "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": {
-    "∀ (p : MemoryChallenger.WipeProtocol.Params) (c : MemoryChallenger.StreamedWipe.Commitment) (e : MemoryChallenger.WipeProtocol.Evidence), Exists fun out => Exists fun prof => Eq (check p c e) (Core.Outcome.accept out prof)": "PRF-301 debt (Tue 3 Nov): the acceptAll lemma's hypothesis as checked states it; #6241 unlists the lemma above this PR"
    }
   }
  },
@@ -13927,17 +13923,17 @@
    ]
   },
   "PouwWindow.Rounds": {
-   "digest": "70eac251e6e8c5c0bf124ee21f6a7eea36fc6e7703c66ed33b0ce382b2fabe56",
+   "digest": "f22e10f6181d514c4c3196c65d6bb740603326cce4915c652300e7b67376d9f4",
    "definitions": {
     "PouwWindow.DRAW": "2e0ee67ab6273e32ae26513667047a32e0ddc94b461e9dc7f428d1747fb6bcd6",
     "PouwWindow.LIVE_SCHEME": "84107e54316898815587ecf0d5a1961153eb4ce60a19c2420a35a9153663da76",
-    "PouwWindow.NOT_LIVE_EPOCH": "fb7222746434fac903953fe45bc2ce41fa407c67e939a3de053a236fe10627e1",
+    "PouwWindow.NOT_LIVE_EPOCH": "ecf1b3306b779fa84366fa3a3401efa887e84f49b8495cde977c6f5420aba97d",
     "PouwWindow.NOT_SALT_EPOCH": "3a3cb67a6a01a88f694dc5f6d38b1f877f0e47c3eee7b837d7329a641fe72131",
     "PouwWindow.ROUND": "6485d778e6694a4e742a99e85c443ad23a97415e59da3bffaabafd7cefe814cc",
     "PouwWindow.ROUND_NOISE_DOMAIN": "6f0941e3a2579698b8dfc714d9deaa233cb11bd66a7664fe165b2059b91a69d8",
     "PouwWindow.SALT": "8d7ca7bcd6b323f3b0e76244cae4488c01964b00dfef21053f02a7af7429e089",
     "PouwWindow.SALT_FAMILIES": "b0f18472dd980bab90eb2a2ec4763fd8bf0b838c85969822d565872c0a348f7e",
-    "PouwWindow.liveEpochReason": "9e88abc4f26014566502a7a089a3f923c2d95f24c04934f8128de34b00cf3969",
+    "PouwWindow.liveEpochReason": "b9229a2cbefa4ac76a924409a14db68f000b557093c62c9275276e751bc549f8",
     "PouwWindow.liveEpochReason._sparseCasesOn_1": "2bfe9f39fe21072b7c165da5e3716d47910c965f3cebb8b173ed46ef7c4e8cb4",
     "PouwWindow.liveEpochReason._sparseCasesOn_2": "ffe6c3c386248c2710432e152c8d92cc82694031aa63d7e8c8d7c06e90555e39",
     "PouwWindow.roundKey": "afcec283ce41afc5f40ee6c817e521a7e5738ebae78276a698e630ce48805d86",
@@ -13959,6 +13955,7 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
