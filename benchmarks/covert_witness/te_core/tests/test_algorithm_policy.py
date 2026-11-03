@@ -49,13 +49,15 @@ def law(c: float, f: dict = LAW) -> float:
 
 
 def block(gates, delta, dgrad, delta_t=None, tail=0.0, sigma=0.8) -> dict:
-    """One part whose token blocks are `W` gates each, labelled as te_core.rescore labels the analysis's blocks."""
+    """One part whose token blocks are `W` gates each, labelled as te_core.rescore labels the analysis's blocks but
+    with tau_bits as a trace measures it (the analysis's is a stub, which would mark every row `STUB`)."""
     u, u_in = formalism.tail(delta, tail)
     return {"parts": [{"gates": gates, "tokens": sigma * gates / W, "token_gates": sigma * gates,
                        "affected_gates": 0.5 * sigma * gates, "steps": 1, "delta_grad_bits": dgrad}],
             "tau_bits": 16, "a_bits": 8192, "delta_bits": delta, "delta_t_bits": delta_t, "u1_bits": delta,
             "u": [list(x) for x in u], "u_in": [list(x) for x in u_in], "tail_share": tail,
-            "labels": rescore.LABELS | (rescore.TAIL if tail else rescore.EVEN)}
+            "labels": rescore.LABELS | {"tau_bits": formalism.TRACED["tau_bits"]}
+            | (rescore.TAIL if tail else rescore.EVEN)}
 
 
 def ledger_rows(runs=RUNS) -> list[dict]:
@@ -265,7 +267,7 @@ def test_a_profile_capped_at_delta_loses_its_redundant_points_and_nothing_else()
 
 
 def test_estimated_names_the_inputs_that_arent_measured():
-    m = formalism.from_json(block(1e15, 1e6, 3e6, None, 0.3))
+    m = formalism.from_json(block(1e15, 1e6, 3e6, None, 0.3) | {"labels": rescore.LABELS | rescore.TAIL})
     text = AP.estimated(m)
     assert text == ("w_gates:est tau_bits:stub a_bits:bound u_points:A1 u_in_points:A1' delta_bits:bound "
                     "delta_t_bits:bound d_gates:est delta_grad_bits:est")
@@ -361,6 +363,45 @@ def test_an_unmeasured_rho_is_in_no_decade_and_an_infinite_one_in_the_last():
     assert "reading A" not in AP.coverage_md(cov, fits, "T") + AP.board_line(cov, fits, "T", None)
     assert AP.board_line(cov, fits, "T", None, unmeasured=2).endswith(" 2 rows unmeasured under reading A, in no "
                                                                      "decade.")
+
+
+def test_a_row_resting_on_a_stub_is_marked_and_kept_out_of_the_coverage_the_cuts_fronts_and_the_figure(tmp_path,
+                                                                                                    monkeypatch):
+    """A row whose ρ rests on a stub input (`estimated`'s stub tag; coordinator 08:09Z item 2) has basis_default
+    `stub`, whatever its ρ: no decade holds it, the cut's fronts leave it out at every tier and the figure doesn't plot
+    it, while the stored table keeps it and the table and board line count it."""
+    stub = {"tau_bits": "stub: no count of the update's token-side bits"}
+    rows = [r | {"formalism": r["formalism"] | {"labels": r["formalism"]["labels"] | stub}} if r["run_id"] == "lora"
+            else r for r in ledger_rows()]
+    shapes = {"s1": SHAPE, "s2": SHAPE2}
+    scored = plots.load(rows, ("pin",), shapes)[0]
+    p = AP.build({"starts": FF.starts(scored, shapes, RATE), "fits": {"v3": None, "v2.3-pilot": LAW}}, "test")
+    ds = plots.frame(p)
+    lora = [d for d in ds if d["record"].startswith("lora@")]
+    assert len(lora) == len(AP.GAINS) and all(d["rho_default"] is not None for d in lora)
+    assert all(d["basis_default"] == AP.STUB and "tau_bits:stub" in d["estimated"] for d in lora)
+    assert all(d["basis_default"] != AP.STUB for d in ds if d not in lora)
+    assert AP.decade(2.0, AP.STUB) is None and AP.unmeasured_rows(p, AP.STUB) == len(lora)
+    cov = AP.coverage(p)
+    assert sum(c["rows"] for c in cov) == len(ds) - len(lora)
+    assert not any((c.get("record") or "").startswith("lora@") for c in cov)
+    rec, held = AP.COLUMNS.index("record"), {c["row"] for c in cov if c["row"] is not None}
+    for tier in AP.TIERS:
+        assert not any(r[rec].startswith("lora@") for r in AP.kept(p["rows"], tier, held))
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert "3 rows rest on a stub input (basis_default stub), in no decade." in AP.coverage_md(cov, fits, "T", stubs=3)
+    assert AP.board_line(cov, fits, "T", None, stubs=3).endswith(" 3 rows rest on a stub, in no decade.")
+    plotted, real = set(), AP.plt.Axes.plot
+
+    def plot(ax, *a, **k):
+        if len(a) >= 2 and all(isinstance(x, float) for x in a[:2]):
+            plotted.add(a[:2])
+        return real(ax, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    AP.figure(p, tmp_path)
+    points = {(d["p"], d["rho_default"]) for d in ds if d["p"] is not None}
+    assert plotted and plotted <= points and not plotted & {(d["p"], d["rho_default"]) for d in lora}
 
 
 def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_and_follows_published_to_reading_a(
