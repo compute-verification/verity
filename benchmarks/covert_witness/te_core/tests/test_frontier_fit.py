@@ -2,8 +2,8 @@
 loss over its unconstrained frontier from the least start's C0 up, one point per 1/20 decade of C; a data with too few
 points, or too short a span, has no fit, and so has one with no scored start and no ladder point; effective compute
 inverts the fit, so a point on it has gain 1; the ladder's three files give v3's from-scratch points; each row carries
-its record's family whichever quantities score it; and the panel has a fit row per data, its points with their
-residuals and the starts with their own gains."""
+its record's family whichever quantities score it; a checkpoint is on its start's data whether or not its record says
+so; and the panel has a fit row per data, its points with their residuals and the starts with their own gains."""
 import json
 import math
 
@@ -14,7 +14,8 @@ pytest.importorskip("matplotlib")
 from te_core import console, frontier, plots, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
-from test_algorithm_policy import C0, LAW, SCRATCH, args, law, ledger_rows
+from test_algorithm_policy import C0, LAW, RATE, SCRATCH, SHAPE2, V3_SHAPE, args, law, ledger_rows
+from test_plots import SHAPE
 
 
 def on(f: dict, shares) -> list[tuple]:
@@ -90,6 +91,20 @@ def test_a_row_takes_its_records_family_from_the_analysis_whatever_the_quantitie
     assert d["refused"] == {"d-1": "data-dependent: not measured"}
     assert FF.refusals({"x": "data-dependent: a", "y": "read-backs unchecked: b", "z": "data-dependent: c"}) == \
         "2 data-dependent, 1 read-backs unchecked"
+
+
+def test_a_checkpoint_is_on_its_starts_data_whether_or_not_its_record_says_so():
+    """The scorer's measured copy of a traced record can lack the record's `data`: every checkpoint from t1, a start
+    with v3's tokenizer, is on v3 in t1's one start, and the pilot's starts' checkpoints are on the pilot."""
+    shapes = {"s1": SHAPE, "s2": SHAPE2, "t1": V3_SHAPE}
+    s1 = [r for r in ledger_rows() if r["start"] == "s1"]
+    v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "start": "t1", "start_bpb": 1.5}
+          | ({"data": "v3"} if i % 2 else {}) for i, r in enumerate(s1)]
+    scored = plots.load(ledger_rows() + v3, ("pin",), shapes)[0]
+    n = {s: sum(r["start"] == s for r in scored) for s in shapes}
+    assert n["t1"] == len(v3) and any("data" not in r for r in v3)
+    assert [(s.name, s.data, len(s.rows)) for s in FF.starts(scored, shapes, RATE)] == [
+        ("t1", "v3", n["t1"]), ("s1", "v2.3-pilot", n["s1"]), ("s2", "v2.3-pilot", n["s2"])]
 
 
 def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeypatch):
