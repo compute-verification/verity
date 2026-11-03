@@ -74,6 +74,7 @@ why), held (which slot, since when) or left (why), so `research status` shows a 
 from __future__ import annotations
 
 import fcntl
+import importlib.util
 import json
 import os
 import re
@@ -332,8 +333,15 @@ DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 def cache_disk() -> Path:
     """Where the check cache (`check.py`'s $CHECK_CACHE, default ~/.cache/verity-check) lives: its nearest existing directory.
     Its Lean build trees reach tens of GB, so its disk counts as DISK does; it is another disk (the 247 GB root) wherever
-    vm_setup.sh's link onto /workspace is missing."""
-    cache = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+    vm_setup.sh's link onto /workspace is missing. `common.cache_dir` names it, loaded by path since slot.py runs as a script;
+    shipped alone (check.py's and research.auto's slot reads send its source over ssh), it is the default path."""
+    try:
+        spec = importlib.util.spec_from_file_location("verity_check_common", Path(__file__).with_name("common.py"))
+        common = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(common)
+        cache = common.cache_dir()
+    except (NameError, OSError):
+        cache = Path.home() / ".cache" / "verity-check"
     return next((p for p in (cache, *cache.parents) if p.is_dir()), Path("/"))
 
 

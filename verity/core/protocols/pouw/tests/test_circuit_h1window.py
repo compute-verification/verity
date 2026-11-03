@@ -659,6 +659,20 @@ def test_the_real_tile_composes_at_mixed_k_and_at_the_served_32_by_32():
     assert [HW.unit_reads(served, tp, u) for u in range(2)] == _reads(want, (32, 32))
 
 
+@pytest.mark.slow
+def test_the_catalogs_window_over_the_real_tile_passes_the_port_rules():
+    """The window `h1window.circuit-check.py` registers unbuilt (`window`) is a Program's root under the port rules: each
+    tile's salt a coin and its position a position, the window's result one sink. The catalog makes its roots unbuilt, so
+    this is where its Program is checked. About 35 s, the real tile's seed and noise circuits."""
+    linears = (("q_proj", 64, 16), ("k_proj", 64, 8))
+    calls = tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj"))
+    prog = HW.program(linears, calls, 4, TILE)
+    assert prog.fn is HW.window(linears, calls, 4, TILE)
+    assert PT.check(prog.root) is not None
+    ret = PT.port_types(prog.fn).ret
+    assert [(lo, hi, o.sink) for lo, hi, o, _w in ret] == [(0, prog.fn.signature()[1].leaves, True)]
+
+
 @pytest.mark.parametrize("linears,calls,m,tile,why", [
     (LINEARS, CALLS, 6, TILE, "power of two"),
     (LINEARS, CALLS, 2, TILE, "power of two"),

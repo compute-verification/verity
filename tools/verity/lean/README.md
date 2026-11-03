@@ -5,7 +5,7 @@ changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
 records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
-`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
 path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
@@ -488,10 +488,10 @@ module docstring has the layout and the rules. In short:
 - A miss or a mismatch means building from source. So do a missing read credential (the `LEAN_CACHE_*` variables, else
   the same four lines in `~/.config/verity/lean-cache-read.env`, as the nodes' research user holds them), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
-  names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
-  writes and the sandboxed builds only read. A module is then built from source or restored from an earlier passing audit,
-  as a kept build's modules are: Lake's input hash decides which, in both.
+- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off` and `LAKE_ARTIFACT_CACHE=false`. Check's audit and
+  a records run name their node's own Lake cache instead (`--artifacts`, `lean_audit.LakeArtifacts`), which only a
+  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose key
+  (`module_keys.py`, the task graph's key of its compile) it indexes, and builds any other from source.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

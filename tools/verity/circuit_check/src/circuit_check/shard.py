@@ -1,5 +1,6 @@
 """``circuit-check --shard K/N`` and ``--combine DIR...``: one run's targets spread over N processes or nodes, and the shards'
-records joined into the report the unsharded run gives.
+records joined into the report the unsharded run gives.  ``--binding NAME`` checks the targets of one catalog binding
+(`binding`), unjoined as a shard's.
 
 Shards are numbered 1..N, as check.py's are (``check.py --shard K/N``).  A target is shard K's when the hash of its id, its
 kind and label, is K - 1 modulo N (`shard_of`): never its place in the list, so a new target moves no other.  Each shard builds the whole task list as the unsharded run does (the catalog, or the task list
@@ -54,6 +55,19 @@ def mine(ids: Iterable[tuple[str, str]], shard: tuple[int, int]) -> list[int]:
     """The places in ``ids`` (each target's kind and label) of shard ``(K, N)``'s targets, in order."""
     k, n = shard
     return [i for i, (kind, label) in enumerate(ids) if shard_of(kind, label, n) == k]
+
+
+def binding(units: Iterable[str]) -> str:
+    """The name ``--binding`` gives the catalog binding that a unit tuple (`targets.catalog_units`) belongs to: a root function's
+    first unit (``<module>.circuit-check#_X_roots``, `targets.py`'s own by name alone), every model of one `_model_roots` as
+    ``<module>.circuit-check#_model_roots``, every instance of one ``TEMPLATE_PARAMS`` entry as that entry, every template
+    `targets.py` checks at its example as ``TEMPLATE_PARAMS``, and the registered roots as ``<registered>``."""
+    head, sep, name = next(iter(units)).partition("#")
+    if not sep:
+        head, name = "", head
+    if name.startswith("_model_roots:") or (not sep and name.startswith("TEMPLATE_PARAMS:")):
+        name = name.partition(":")[0]
+    return head + sep + name
 
 
 def digest(ids: Iterable[tuple[str, str]]) -> str:

@@ -42,7 +42,8 @@ def Sized (x : Msg) : Prop :=
 theorem k_mem {x : Msg} (h : q.Sized x) :
     (1507 ≤ q.I.k (Claims.Recursion.xI q.D x) ∧ q.I.k (Claims.Recursion.xI q.D x) ≤ 12343986) ∧
       ∀ j : Fin (q.D.nS x), 1507 ≤ (q.D.nums x j).k ∧ (q.D.nums x j).k ≤ 12343986 := by
-  obtain ⟨⟨s, spec, sts, hin, h1⟩, hO, -, -⟩ := h
+  obtain ⟨s, spec, sts, hin, h1⟩ := h.1
+  have hO := h.2.1
   refine ⟨?_, fun j => ?_⟩
   · obtain ⟨hlo, hhi⟩ := FlockDeploy.N₀_le hin.setup hin.size_pos fun st hst =>
       have := hin.tab st hst
@@ -58,11 +59,17 @@ theorem k_mem {x : Msg} (h : q.Sized x) :
     have hk₁ := k_le_one hhi
     exact ⟨hk₀, hk₁⟩
 
+/-- **At most `16` parts at the deployment's sizes** (`RecDeploy.SizesAt.nS_le`, the verifier's cap). -/
+theorem nS_le_of_sized {x : Msg} (h : q.Sized x) : q.D.nS x ≤ 16 := by
+  first
+  | exact RecDeploy.SizesAt.nS_le h
+  | exact h.2.2.1
+
 /-- **The extractor's expected reruns at the deployment's sizes, from above**: `N_I = 1 + 210·k_I ≤ 2592237061` and
 `1 + Σ_s 210·k_s ≤ 41475792961` over at most `16` parts. -/
 theorem runs_le {x : Msg} (h : q.Sized x) : q.runs x ≤ 2592237061 * 41475792961 := by
   obtain ⟨⟨-, hI⟩, hP⟩ := q.k_mem h
-  obtain ⟨-, -, hn, -⟩ := h
+  have hn := q.nS_le_of_sized h
   have hNI : Claims.Recursion.NI q.D q.I x ≤ 2592237061 := by
     show 1 + 210 * q.I.k (Claims.Recursion.xI q.D x) ≤ 2592237061
     omega
@@ -84,17 +91,20 @@ theorem runs_ge {x : Msg} (h : q.Sized x) : 316471 ≤ q.runs x ∧ (0 < q.D.nS 
   have hNI : 316471 ≤ Claims.Recursion.NI q.D q.I x := by
     show 316471 ≤ 1 + 210 * q.I.k (Claims.Recursion.xI q.D x)
     omega
+  have hj : ∀ j : Fin (q.D.nS x),
+      210 * 1507 ≤ ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).k := fun j => by
+    have h0 : 210 * 1507 ≤ (q.D.nums x j).waits * (q.D.nums x j).k := by
+      show 210 * 1507 ≤ 210 * (q.D.nums x j).k
+      exact Nat.mul_le_mul_left 210 (hP j).1
+    exact h0.trans (Finset.single_le_sum (f := fun s : Fin (q.D.nS x) => (q.D.nums x s).waits * (q.D.nums x s).k)
+      (fun _ _ => Nat.zero_le _) (Finset.mem_univ j))
   unfold Dep.runs
-  refine ⟨(Nat.mul_one 316471).symm.le.trans (Nat.mul_le_mul hNI (Nat.le_add_right 1 _)), fun hn => ?_⟩
-  have h0 : 210 * 1507 ≤ (q.D.nums x 0).waits * (q.D.nums x 0).k := by
-    show 210 * 1507 ≤ 210 * (q.D.nums x 0).k
-    exact Nat.mul_le_mul_left 210 (hP ⟨0, hn⟩).1
-  have hs : (q.D.nums x 0).waits * (q.D.nums x 0).k ≤
-      ∑ j : Fin (q.D.nS x), (q.D.nums x j).waits * (q.D.nums x j).k :=
-    Finset.single_le_sum (f := fun j : Fin (q.D.nS x) => (q.D.nums x j).waits * (q.D.nums x j).k)
-      (fun _ _ => Nat.zero_le _) (Finset.mem_univ (⟨0, hn⟩ : Fin (q.D.nS x)))
-  rw [pow_two]
-  exact Nat.mul_le_mul hNI (by omega)
+  refine ⟨Nat.le_trans hNI (Nat.le_mul_of_pos_right _ (by omega)), fun hn => ?_⟩
+  have h1 : 316471 ≤ 1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).k := by
+    have := hj ⟨0, hn⟩
+    omega
+  calc 316471 ^ 2 = 316471 * 316471 := Nat.pow_two _
+    _ ≤ _ := Nat.mul_le_mul hNI h1
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {k : Verity.Registration.Composite}
   {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
