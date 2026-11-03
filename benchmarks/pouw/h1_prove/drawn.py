@@ -8,6 +8,7 @@ with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`), its Lean r
                           [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
     python drawn.py statements --work W --out FILE
     python drawn.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY [--jobs J]
+    python drawn.py fill SERVE_DIR WINDOW --circuits DIR --statements FILE --answers DIR [--lean FLOCK_VERIFY] [--jobs J]
 """
 from __future__ import annotations
 
@@ -62,7 +63,7 @@ def verified(statements: list | dict, files: dict, win: dict, units: list[int], 
     answers = A.Answers(by="the fill")
     runs, _refused = A.window_runs(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
                                    win["steps"], win["salt"], win["draw"])
-    A.fill(answers, runs, A.jobs(jobs))
+    A.fill(answers, runs, jobs)
     proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
                                win["steps"], answers, win["salt"], win["draw"])
     return proofs, why if why is not None else CR._proved(units, proofs)
@@ -94,8 +95,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--statements", required=True)
     c.add_argument("--lean", required=True)
     c.add_argument("--k", type=int)
-    c.add_argument("--jobs", type=int, help=f"Lean runs at once (default {A.JOBS_ENV}, else floor((memory - "
-                                            f"headroom) / {A.RUN_GB} GiB))")
+    f = sub.add_parser("fill")
+    f.add_argument("serve_dir")
+    f.add_argument("window", type=int)
+    f.add_argument("--circuits", required=True)
+    f.add_argument("--statements", required=True)
+    f.add_argument("--answers", required=True, help="the memo: a directory in the verifier's own scratch")
+    f.add_argument("--lean")
+    f.add_argument("--k", type=int)
+    for p in (c, f):
+        p.add_argument("--jobs", type=int, help=f"Lean runs at once (default {A.JOBS_ENV}, else floor((available memory "
+                                                f"- {A.HEADROOM_ENV} or {A.HEADROOM_GB:g} GiB) / {A.RUN_GB:g} GiB))")
     a = ap.parse_args(argv)
     a.checkpoint_weights = checkpoint_weights
     a.verified = lambda *x: verified(*x, jobs=getattr(a, "jobs", None))
