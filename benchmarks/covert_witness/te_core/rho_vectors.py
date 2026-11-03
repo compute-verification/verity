@@ -15,8 +15,9 @@ each kind's term and the inputs it reads, the max over the kinds and the kind it
 `fresh` holds the fresh-products term (te_core.formalism.fresh_products) on te_core.io_bound's hand-written product
 sets (`io_bound.vectors`) and the 45M start's dense step (`dense_45m.products.json`), each at its (c, k) and |C|: the
 term, io_bound's figure without P-cell (`formalism.P_CELL`), the whole-cell figure beside it (`fresh_cell`), the order
-its products are summed in (the reference circuit's chain, `formalism.ORDER`, where none is declared) and what the cell
-says it rests on; a circuit that declares a tree is unmeasured. `published` holds te_core.formalism.published under
+its products are summed in (the reference circuit's chain, `formalism.ORDER`, where none is declared), what the best
+subset dropped (`subset`; null where it dropped none) and what the cell says it rests on; a circuit that declares a
+tree is unmeasured, and so is a set no subset of which has a proved Λ (`formalism.FRESH_VOID`). `published` holds te_core.formalism.published under
 reading A at a cell for each case of its rule (`PUBLISHED`): Fit; the measured max above 1, partial where a kind is
 unmeasured; None where a kind is unmeasured and no measured term exceeds 1; 1, binding none.
 
@@ -137,7 +138,7 @@ def fresh(base: formalism.Measured) -> dict:
                     products=products)
         term, why, got = formalism.fresh_products(m, c, k)
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": products}, "term": term,
-                    "fresh_cell": got.get("fresh_cell"), "order": got["order"], "why": why,
+                    "fresh_cell": got.get("fresh_cell"), "order": got["order"], "why": why, "subset": got.get("subset"),
                     "share": got["io_bound"]["share"]})
     return {"p_cell": formalism.P_CELL, "order": formalism.ORDER,
             "rests_on": formalism.RESTS_ON_CELL["fresh_products"], "fresh_cell": formalism.SENSITIVITIES["fresh_cell"],

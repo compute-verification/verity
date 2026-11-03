@@ -26,7 +26,7 @@ from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _F
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
 #: distinguishable from one traced before them
-CAPTURE = "4.8"
+CAPTURE = "4.11"
 ORDER = "unknown"
 
 
@@ -164,9 +164,10 @@ def _gemm_rate(vs: _Values, n, g, R, k: float) -> float:
     token_a = "m" in td or "n" not in td
     param, r_tok, spread = (B, ra, d["n"]) if token_a else (A, rb, d["m"])
     tok = A if token_a else B
-    if vs.reads_affected(n, param) and (r_tok >= 0.999 * io_bound._width(tok)
+    b_tok, b_par = io_bound._passed_width(vs, n, tok), io_bound._passed_width(vs, n, param)
+    if vs.reads_affected(n, param) and (io_bound.is_paid(r_tok, b_tok)
                                         or d["k"] >= 3 ** 1.5 * math.sqrt(k / io_bound.ACC_BITS)):
-        return 4 * d["k"] ** 2 * io_bound._width(tok) * io_bound._width(param) / k
+        return 4 * d["k"] ** 2 * b_tok * b_par / k
     return r_tok * d["k"] / max(spread, 1)
 
 
@@ -191,14 +192,14 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
             return max((table.get(x, 0.0) for x in vs.flow.reads.get((n, a), ())), default=0.0)
 
         rates = (got(A, rate) if aff[0] else 0.0, got(B, rate) if aff[1] else 0.0)
-        paid = tuple(r >= 0.999 * io_bound._width(a) for r, a in zip(rates, (A, B)))
+        widths = (io_bound._passed_width(vs, n, A), io_bound._passed_width(vs, n, B))
         whole = min((v for v in (got(A, chain), got(B, chain)) if v > 0), default=math.inf)
         gpm, cell = io_bound._gemm_price(m.phase, _pk(n.target), _dtype_name(A), gemm_dtype)
         d = g.dims
         row = {"phase": m.phase, "op": _pk(n.target), "dims": {x: d[x] for x in ("batch", "m", "k", "n")},
                "token_dims": sorted(m.token_dims), "macs": _macs(d), "outputs": d["batch"] * d["m"] * d["n"],
-               "affected": list(aff), "widths": [io_bound._passed_width(vs, n, A), io_bound._passed_width(vs, n, B)],
-               "rates": [round(r, 6) for r in rates], "paid": list(paid),
+               "affected": list(aff), "widths": list(widths), "rates": [round(r, 6) for r in rates],
+               "paid": [io_bound.is_paid(r, w) for r, w in zip(rates, widths)],
                "self": io_bound._root(A, scale=True) is io_bound._root(B, scale=True), "b_c": io_bound.ACC_BITS,
                "k_whole": whole if math.isfinite(whole) else None, "gates_per_mac": gpm, "cell_gates": cell}
         key = repr(sorted(row.items()))
