@@ -85,7 +85,7 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
     guarantee, and the same credit period in the covered form (J10-R's per-call unit over PouwH1Tile_v5, at one K) is credited."""
     for seed in range(3):
         got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
-        assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
+        assert got["verdict"] == "reject" and got["reason"].startswith("form: execution phase "), (name, got["reason"])
         assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
         assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
 

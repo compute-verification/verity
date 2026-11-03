@@ -2174,7 +2174,7 @@ but records no floor), measured from that pin and never from main's head; `none`
 records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top.
 `unit` names what `i` counts (`DRAW_UNIT` for an execution phase's draw session). -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
-    (floor : Option Nat) (unit : String := "window") : Option (String × String) :=
+    (floor : Option Nat) (unit : String := "execution phase") : Option (String × String) :=
   match periodPin with
   | none => none
   | some pp =>
