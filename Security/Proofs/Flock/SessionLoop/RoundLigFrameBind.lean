@@ -51,6 +51,8 @@ def sizedSim : _root_.Flock.With.Sim OpenM OpenM where
   throw _ _ := trivial
   lift v _ := by cases v <;> exact trivial
 
+theorem sized_pure_bind {α β : Type} {a : α} {g : α → Step β} (h : Sized (g a)) : Sized (Step.bind (pure a) g) := h
+
 theorem sized_round (coins : Got) (live : Bool) (c : ByteArray) (got : Got) :
     Sized (((stepAsks coins live).round c).run got) := by
   rcases hn : coins[got.size]? with _ | cs
@@ -74,14 +76,10 @@ theorem sized_round (coins : Got) (live : Bool) (c : ByteArray) (got : Got) :
   · cases live
     all_goals
       simp only [stepAsks, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure, Step.bind,
-        hn, StateT.lift]
-      by_cases hz : cs.size = (_root_.Flock.u64OfLE c (c.size - 8)).toNat
-      · simp only [hz, bne_self_eq_false, Bool.false_eq_true, ite_false, set, StateT.set, MonadStateOf.set,
-          StateT.pure, StateT.bind, pure, bind, Step.bind]
-        exact trivial
-      · simp only [StateT.pure, hz, bne_iff_ne, ne_eq, not_false_eq_true, ite_true, throw, throwThe,
-          MonadExceptOf.throw, Function.comp_apply, StateT.lift, StateT.bind, bind, Step.bind]
-        exact trivial
+        hn]
+      first
+        | (refine sized_pure_bind ?_; dsimp only; split <;> exact trivial)
+        | (split <;> exact trivial)
 
 theorem asksRel_sized (coins : Got) (live : Bool) :
     AsksRel sizedSim (stepAsks coins live).toC (stepAsks coins live).toC :=
