@@ -10,13 +10,13 @@ import Proofs.Accounting.Compose.CircuitWork
   (`sum_redraw`); Markov at `ln(T_q/δ_g)/θ` and the union over the `T_q` queries give `δ_g`. Off it and off
   `SeedLuckAt`'s `Break`, at the query `sq a r` names, the round's gain is at most `roundPremium` (`gain_le_premium`;
   the round's weight `roundCone` where `θ_r = 0`), and summed over the rounds (every tile's round is one, under
-  `Declared.Wf`) the mode's `L − κ·U` is at most `premiumOf` (`gainSum_le`).
+  `RegisteredCircuit.Wf`) the mode's `L − κ·U` is at most `premiumOf` (`gainSum_le`).
 * **The live draw** (`live_le`): given the oracle's answers, a uniform `K_d`-subset misses the tiles whose checked values
   aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so a pass with `ρ·K_d·U ≥ ln(1/δ_s)` costs
   `δ_s`.
-* **The work**: off `DrawnRightOff`'s event on `Declared.atDraw`'s layer, `Of` gives the share game's pass; off the
+* **The work**: off `DrawnRightOff`'s event on `RegisteredCircuit.atDraw`'s layer, `Of` gives the share game's pass; off the
   rest, `S = (L − κ·U) + (1 + κ)·U` per mode (`share_split`) puts `a·S_F + b·S_0` below `rOfSeeded`'s first three terms,
-  and `UnitFixed` with `ServiceCovers` on `Declared.atIR`'s layer gives the words as in `CircuitWork`
+  and `UnitFixed` with `ServiceCovers` on `RegisteredCircuit.atIR`'s layer gives the words as in `CircuitWork`
   (`WorkProof.work_of_bounds`).
 -/
 
@@ -132,10 +132,10 @@ theorem bad_le [Fintype B] (r : Fin M) (g : Fin Tq → Paths (Fin Tq → B) M �
 
 section Gain
 
-variable {ι K A : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ}
+variable {ι K A : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ}
 
 theorem tileRound_lt (hw : Cd.Wf) (hr : 0 < Cd.rounds) (t : Fin Np) : tileRound Cd Np t < Cd.rounds := by
-  unfold tileRound Declared.roundOf
+  unfold tileRound RegisteredCircuit.roundOf
   rcases hl : unitGates Cd t.val with _ | ⟨i, l⟩
   · exact hr
   · have hi : i ∈ unitGates Cd t.val := by rw [hl]; exact List.mem_cons_self

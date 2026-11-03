@@ -43,7 +43,7 @@ theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
   exact Finset.filter_congr fun w _ => credited_iff σ k hk sT unitOf hKd ws opened rel right x w
 
 /-- **The run's credited live words are `Credit.window`'s accepted prefix's.** -/
-theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {nB mB n : ℕ} (σ : Fin nB → Fin mB)
+theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {nB mB n : ℕ} (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
@@ -59,7 +59,7 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
 /-- **Joint soundness at `Credit.window`'s run from the service's**: in each window, an accepted window with a drawn
 tile whose opening fails its relation is one `Credit.window` credits with that tile's window unit among the units its
 draw demanded (`TileDrawIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
-theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {nB mB n : ℕ}
+theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : RegisteredCircuit ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (unitOf : Fin nB → ℕ) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)

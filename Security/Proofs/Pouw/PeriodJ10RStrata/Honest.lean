@@ -229,7 +229,7 @@ end By
 
 open Classical in
 /-- **Stratum `s`'s live words at verdict `acc`**: `stratumLive` with `acc` for `Credit.window`'s verdict. -/
-noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
+noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
     (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (acc : Paths (StrataCoin C m σ) n → Fin n → Prop) (x : Paths (StrataCoin C m σ) n) : ℝ :=
@@ -240,7 +240,7 @@ noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared �
 period's fixed words, summed over `S`, are at least the sum over `S` of each stratum's credit of `acc`'s accepted
 prefix. -/
 def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
+    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → RegisteredCircuit ι) (hM : ∀ s, (Cd s).rounds = 1)
     (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U)
     (acc : Paths (StrataCoin C 1 σ) n → Fin n → Prop) (ρ δs : Fin mB → ℝ) (δ : ℝ) : Prop :=
@@ -252,7 +252,7 @@ def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB
 /-- **At `Credit.window`'s verdict it is the statement's conclusion**, so `strata_nontrivial`, `StrataBoundBy` at the
 verdict that credits every window, is the conclusion with that verdict in place of `Credit.window`'s. -/
 theorem strataBound_window {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
+    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → RegisteredCircuit ι) (hM : ∀ s, (Cd s).rounds = 1)
     (ws : CreditWindows (StrataCoin C 1 σ) n)
     (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U) (ρ δs : Fin mB → ℝ) (δ : ℝ) :

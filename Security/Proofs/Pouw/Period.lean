@@ -50,7 +50,7 @@ theorem prefixLen_eq {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (hKd : 0
   exact Finset.filter_congr fun w _ => credited_iff hK hKd p ws opened rel right x w
 
 /-- **The run's credited live words are the check's accepted prefix's.** -/
-theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {Kd Np n : ℕ} (hK : Kd ≤ Np)
+theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Kd Np n : ℕ} (hK : Kd ≤ Np)
     (hKd : 0 < Kd) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
@@ -64,7 +64,7 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
 /-- **Joint soundness at the check's run from the service's**: in each window, an accepted window with a drawn tile
 whose opening fails its relation is one the check accepts with a published unit (`DrawIsCoin`: the drawn tile's unit is
 among `Public.drawn`) whose opening fails its relation, which `ServiceSound` bounds at `δ_ks`. -/
-theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {Kd Np n : ℕ}
+theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : RegisteredCircuit ι) {Kd Np n : ℕ}
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)

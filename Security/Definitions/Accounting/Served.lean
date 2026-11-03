@@ -113,20 +113,20 @@ the fix of, and its round root covers the A and admit roots only. The admit word
 always-proved units are not in the per-call Program `Properties.Served.ServedUnits` names, so no gate of a served
 circuit is one. They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
 
-`Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
+`Tie` is what a declared circuit (`Accounting.Compose.RegisteredCircuit`) must be to be the served window's: its call sites and
 rounds the shape's, each value's commit coin `commitCoin` of its class (a receipt's any coin after its round's, by
 the draw), and the IR facts that put each class's value at the cut `commitCoin` names (a weight registered, an A row or
 a `y` row a run input read only by its own call, a record a run input read only by its own call and unit, a public
 input committed before every coin that reads it, a receipt reading its round's coin and read only by its own unit, a
 check word read only by its own unit).
 `TieCommits` states that the tie gives `Accounting.Compose.LayerCommitted`, and `TieLive` that it gives
-`Declared.Live` under any scheme: the two `Scope` conjuncts that are protocol structure. The units, the population and
+`RegisteredCircuit.Live` under any scheme: the two `Scope` conjuncts that are protocol structure. The units, the population and
 the draw, which read the verifier's partition of each call's Program, are `Properties.Served`'s. `EpochTie` ties an epoch's windows: each one's `Tie`, and each timed from the one salt's release,
 `Pouw.TimedRun.ts`, the start of the interval `Pouw.Guarantees.WorkBetweenSaltAndDeadline` counts work in. `CreditTie`
 is `Tie` with what useful-work credit needs of the circuit (`ValueChecked`): a necessary condition, which no credit
 statement reads yet.
 
-What the verifier must check at run time for each class, so that a `Declared` meeting `Tie` is the run's (the
+What the verifier must check at run time for each class, so that a `RegisteredCircuit` meeting `Tie` is the run's (the
 statement is over the declared circuit; these are the checks that make its `commitRound` the code's):
 * `registered`: the salt coin opened against the registration root, recorded before every round's coin; the weights'
   root equal to the served model's published one; each drawn unit's B rows opened under its linear's root(B), and
@@ -365,7 +365,7 @@ def commitCoin (F : Form) : Cls → ℕ → ℕ
 `outZ` or `outY` word of the unit (`z`, or the served `y`, computed or in `zTree` its record's); in `yOpen`, a gate of
 the unit that reads a word of the Commit's `y`. A read, not a dependence: what ties the word's value to the product is
 `ValueChecked`. -/
-def Form.Links {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Form → ℕ → Prop
+def Form.Links {ι : Type} (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) : Form → ℕ → Prop
   | .beside, _ => True
   | .zTree, i => ∃ j, j < Cd.dag.length ∧ (cls j = .outZ ∨ cls j = .outY) ∧ Cd.unit j = Cd.unit i
   | .yOpen, i => ∃ g j, g < Cd.dag.length ∧ Cd.unit g = Cd.unit i ∧ Cd.Reads g j ∧ cls j = .served
@@ -395,7 +395,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
 * `inRange`: every gate's call site is one of them;
 * `live`: every round's coin is live: the live challenger's, which runs off the prover's node, on the auditor's device
   (AGENTS.md, auditor-trusted devices; `trusted-host`). A challenger in the prover's process gives seeded coins,
-  however `coinMode` records them, so a `Declared` with `.live` rounds is the run's only under the module docstring's
+  however `coinMode` records them, so a `RegisteredCircuit` with `.live` rounds is the run's only under the module docstring's
   challenger check, which today's `serve.py` doesn't meet;
 * `coin`, `registered`, `act`, `pub`, `computed`, `outWords`: a gate is a coin input exactly when it is of class
   `coin`; a `registered` gate is a registered input; an `act` or `served` gate is a run input read only by gates of
@@ -409,7 +409,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   (`Gates.IntGate.commit`), so no opened value is declared inner and committed at its cut by fiat;
 * `noised`: a `receipt` gate, and in `perCall` an `outZ` or `outY` gate, reads its round's coin (`coinMark` past its
   round). This is reachability: the coin input is in the gate's cone, not that the gate's value depends on the coin. It
-  is what Compose's cut reads (`Declared.cutOf`), so it is what the commit order needs; that a receipt's value is the
+  is what Compose's cut reads (`RegisteredCircuit.cutOf`), so it is what the commit order needs; that a receipt's value is the
   noised product is its public Program's (`Properties.Served.ServedUnits`);
 * `forms`, `linked`: an `outZ` or `outY` gate is `zTree`'s or `perCall`'s and a `served` gate `yOpen`'s, and every
   receipt's unit has its form's link to the served output (`Form.Links`);
@@ -423,7 +423,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
 The `commit`, `receipt` and `inner` fields are how the declared circuit is built from the shape; the others are facts
 of each call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the
 commit coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
-structure Tie {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
+structure Tie {ι : Type} (L : Shape) (F : Form) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) : Prop where
   calls : Cd.calls = L.steps * L.calls
   rounds : Cd.rounds = F.rounds L
   round : ∀ c, c < Cd.calls → Cd.round c = F.roundOf L c
@@ -463,34 +463,34 @@ an A row's or a `y` row's, its round, its first reader's; a `zTree` `z` word's, 
 `perCall`'s `z` or `y` word's, the round after its own, which its coin read reaches; an inner value's, its cut. A
 receipt is a computed value only its own unit reads, committed by the draw (the second case). -/
 def TieCommits : Prop :=
-  ∀ (ι : Type) (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls), Tie L F Cd cls → LayerCommitted Cd
+  ∀ (ι : Type) (L : Shape) (F : Form) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls), Tie L F Cd cls → LayerCommitted Cd
 
 /-- **The tie's credited tiles are in live rounds**: under any scheme, every unit of a tied circuit with a credited word
 is in a round of the window (its first gate's call is a call of the shape), and every such round is live, so the tied
-circuit meets `Declared.Live`. -/
+circuit meets `RegisteredCircuit.Live`. -/
 def TieLive : Prop :=
-  ∀ (ι K : Type) (Sc : Scheme K) (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls),
+  ∀ (ι K : Type) (Sc : Scheme K) (L : Shape) (F : Form) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls),
     Tie L F Cd cls → Cd.Live Sc
 
 /-- **Gate `i` is in gate `j`'s cone** along reads: `j` is `i`, or reads a gate whose cone holds `i`. This is
 reachability, not dependence: `j`'s value may ignore `i`'s (`0·i`). -/
-def Feeds {ι : Type} (Cd : Declared ι) (i j : ℕ) : Prop := Relation.ReflTransGen (fun a b => Cd.Reads b a) i j
+def Feeds {ι : Type} (Cd : RegisteredCircuit ι) (i j : ℕ) : Prop := Relation.ReflTransGen (fun a b => Cd.Reads b a) i j
 
-/-- **Gate `i` is in gate `j`'s computed cone**: `j` is `i`, or `j` is a computed gate (no input: `Declared.binding` is
+/-- **Gate `i` is in gate `j`'s computed cone**: `j` is `i`, or `j` is a computed gate (no input: `RegisteredCircuit.binding` is
 `none`) that reads a computed gate of the circuit whose computed cone holds `i`. Inputs stop the walk: no input is in
 another gate's computed cone, and an input's is itself, whatever its operand list (an input's value is its slot's). -/
-def ComputedFeeds {ι : Type} (Cd : Declared ι) (i j : ℕ) : Prop :=
+def ComputedFeeds {ι : Type} (Cd : RegisteredCircuit ι) (i j : ℕ) : Prop :=
   Relation.ReflTransGen
     (fun a b => Cd.Reads b a ∧ a < Cd.dag.length ∧ Cd.binding a = none ∧ Cd.binding b = none) i j
 
 /-- Gate `i` is declared an s8 word, `[−128, 127]`: the type of an A row's and a B row's words. -/
-def S8 {ι : Type} (Cd : Declared ι) (i : ℕ) : Prop :=
+def S8 {ι : Type} (Cd : RegisteredCircuit ι) (i : ℕ) : Prop :=
   (Cd.dag[i]?).any (fun g => decide (g.lo = -128 ∧ g.hi = 127)) = true
 
 /-- **Unit `u`'s checks hold on input `x`**: every `check` word of the unit is `1`, as its proof holds it when the unit
 is drawn (an accepted proof of its Program, whose `ok` row the verifier reads at known content). With no check word in
 the unit it holds of every input. -/
-def Held {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) (u : ℕ) (x : ι → ℤ) : Prop :=
+def Held {ι : Type} (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) (u : ℕ) (x : ι → ℤ) : Prop :=
   ∀ k, k < Cd.dag.length → cls k = .check → Cd.unit k = u → Gates.val Cd.dag x k = 1
 
 /-- **Gate `z` is the product of its call's committed A row and a registered B column** (the value check): its
@@ -505,7 +505,7 @@ with an escape (`ok = (z = Σ) ∨ e`), holds on an input with any record, and f
 rows' words: an operand declared `[0, 0]` would leave only `a = 0` typed. `Nodup` keeps the `K`
 products distinct: an A word read `K` times would give `a·Σ_k b_k`, one product's work credited as `K`. Which row and
 column `as` and `bs` are is the call's Program's (`Properties.Served.ServedUnits`). -/
-def ProductOf {ι : Type} (L : Shape) (Cd : Declared ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
+def ProductOf {ι : Type} (L : Shape) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
   as.length = L.kOf (L.linearOf (Cd.call z)) ∧ bs.length = as.length ∧ as.Nodup ∧ bs.Nodup ∧
     (∀ a ∈ as, a < Cd.dag.length ∧ cls a = .act ∧ Cd.call a = Cd.call z ∧ S8 Cd a) ∧
     (∀ b ∈ bs, b < Cd.dag.length ∧ cls b = .registered ∧ S8 Cd b) ∧
@@ -524,7 +524,7 @@ unless that value is `dq` of `z`'s on every typed input. It is `dq` at every `ou
 with no case for zero: an empty slot's `s_a` is `+0` and its `y` is `dq(0, +0, s_w)`, which is `+0` only at a finite
 positive `s_w` (0x8000 at a negative one, 0x7FFF at an infinite or NaN one). That `dq` is the dequant
 the served code computes is the Definition's review. -/
-def DequantOf {ι : Type} (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) (y z sa sw : ℕ) : Prop :=
+def DequantOf {ι : Type} (dq : List ℤ → ℤ) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) (y z sa sw : ℕ) : Prop :=
   sa < Cd.dag.length ∧ cls sa = .act ∧ Cd.call sa = Cd.call z ∧ ¬ S8 Cd sa ∧
     sw < Cd.dag.length ∧ cls sw = .registered ∧ ¬ S8 Cd sw ∧
     ∀ x, Gates.Typed Cd.dag x → Held Cd cls (Cd.unit y) x →
@@ -549,7 +549,7 @@ needs of the circuit. With `ops z` the operands of `outZ` word `z` and `src y` t
 * every computed gate that a `check`, `outZ` or `outY` word reads, directly or through computed gates
   (`ComputedFeeds`), is of the word's unit. `Held`, `ProductOf` and `DequantOf` evaluate every gate
   honestly, but a unit's proof sees another unit's computed word as whatever that unit's prover committed, which
-  nothing checks when that unit isn't drawn, and which `Declared.Late` doesn't charge, being committed before the
+  nothing checks when that unit isn't drawn, and which `RegisteredCircuit.Late` doesn't charge, being committed before the
   reader's coin. A check `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′` over another unit's computed `z₁`, `Σ₁′` its own
   recomputation of it, never escapes under `Gates.val` and holds with any record at run time, and so does a computed
   `z₀ = Σ₀ + (z₁ − Σ₁′)` (`Properties.Served.witConeCheck_notValueChecked`, `witConeZ_notValueChecked`). Inputs stop
@@ -565,7 +565,7 @@ The credited work is the receipts' noised GEMM on the served operands, not neces
 the served bytes: a prover may serve from a plain GEMM beside the noised one, which no check can tell from a `z` peeled
 from the noised accumulators, and this asks neither. `dq` is the Program's public dequant,
 `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))` in today's code (`int8_ops.scaled_mm` at 14e4c23a). -/
-def ValueChecked {ι : Type} (L : Shape) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
+def ValueChecked {ι : Type} (L : Shape) (dq : List ℤ → ℤ) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) : Prop :=
   ∃ (ops : ℕ → List ℕ × List ℕ) (src : ℕ → ℕ × ℕ × ℕ),
     (∀ z, z < Cd.dag.length → cls z = .outZ → ProductOf L Cd cls z (ops z).1 (ops z).2) ∧
     (∀ z z', z < Cd.dag.length → z' < Cd.dag.length → cls z = .outZ → cls z' = .outZ →
@@ -587,7 +587,7 @@ def ValueChecked {ι : Type} (L : Shape) (dq : List ℤ → ℤ) (Cd : Declared 
 drawn unit's served product value-checked at the Program's public dequant `dq` (`ValueChecked`). It is necessary, not
 sufficient: no credit statement reads it yet, and it is of the declared circuit, not of the prover's kernel. No gate
 checks it yet (SERVE-GATE's has no such check). -/
-def CreditTie {ι : Type} (L : Shape) (F : Form) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
+def CreditTie {ι : Type} (L : Shape) (F : Form) (dq : List ℤ → ℤ) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) : Prop :=
   Tie L F Cd cls ∧ ValueChecked L dq Cd cls
 
 /-- **The served Llama-3.1-8B window's shape**: 128 linear calls a step, 86,016 units a step, 1,548,288 a window,
@@ -615,7 +615,7 @@ after the salt frame, and its A rows from them) is inside the interval. A window
 that spending outside its interval (`Properties.Served.spentIn_split`). For an actual circuit's run
 (`Accounting.Actual.timedRun`, whose `ts` is `CM_A`'s `tₛ`), `salted` says every window of the salt is costed in `CM_A`
 at the one `tₛ`. -/
-structure EpochTie {ι Q R S : Type} (L : Shape) (F : Form) (W : ℕ) (Cd : ℕ → Declared ι) (cls : ℕ → ℕ → Cls)
+structure EpochTie {ι Q R S : Type} (L : Shape) (F : Form) (W : ℕ) (Cd : ℕ → RegisteredCircuit ι) (cls : ℕ → ℕ → Cls)
     (release : ℝ) (run : ℕ → Pouw.TimedRun Q R S) : Prop where
   tie : ∀ w, w < W → Tie L F (Cd w) (cls w)
   salted : ∀ w, w < W → (run w).ts = release

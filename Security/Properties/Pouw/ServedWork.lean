@@ -82,7 +82,7 @@ salts `κ_deg`) and the play's fixed words the inventory's right words (`FixedAr
 def ServedWork : Prop :=
   ∀ {ι K T L U C Ξ V I W St : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty C] [Nonempty Ξ] [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-    (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι)
+    (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : RegisteredCircuit ι)
     {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1)
     (_hKd : 1 ≤ k sT) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)

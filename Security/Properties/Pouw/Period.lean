@@ -24,7 +24,7 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
   service's answer on the period's coins; it and every earlier window accepted; the number of such windows, the
   windows before the first refusal; their live tiles' words.
 * `checkedRun`, `checkedLayer`: the period's proofs with the check's verdict as every drawn proof's acceptance, each
-  drawn tile's opening the service's opening of that unit; `Declared.periodLayer` at that run.
+  drawn tile's opening the service's opening of that unit; `RegisteredCircuit.periodLayer` at that run.
 * `DrawIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as drawn (`Public.drawn`) are
   the model's draw at the window's draw coin (`drawOf`), of the population `N_p`, `K_d` of them; and the service's
   soundness against the check: a window is accepted with a published unit whose opening fails its relation with
@@ -45,7 +45,7 @@ tiles; the service proves the units the check publishes, so it follows from `Ser
 check doesn't discharge it:
 
 * `Scope Sc Cd δs` and the static numbers (`ρ`, `w_max`, the lucks `p, p0`, `SplitRate`), and `DeadConeDead`: facts of the
-  declared circuit and the scheme. They need a `Declared` built from the registered Program, which nothing builds yet
+  declared circuit and the scheme. They need a `RegisteredCircuit` built from the registered Program, which nothing builds yet
   (`Properties.Compose.UnitsOfLayout`, `Properties.Served.IsServed`, the extractor). `Scope`'s `LayerCommitted` also needs
   the live schedule, a coin a round after its root (`PouwCheck.roundsCheck`, `PouwCheck.saltCheck`), which
   `protocol.check` doesn't read: under PoUW's seeded salt-and-draw schedule it fails on every circuit an activation
@@ -103,7 +103,7 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
   its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
-  `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
+  `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `RegisteredCircuit.Live` and
   `LayerCommitted` fail of the circuit it runs). Its discharge path is ALLP-SALT; the per-epoch live
   salt is the fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1.
 * `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
@@ -159,7 +159,7 @@ end Executions
 open Classical in
 /-- **The accepted prefix's live words**: the words of each window's live tiles (`WindowPlay.liveAt`), over the windows
 before the check's first refusal. `creditedLive` with the check's prefix for the run's. -/
-noncomputable def checkedLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+noncomputable def checkedLive {ι K C B : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (p : Params)
     (ws : Executions (Paths C Cd.rounds × B) n) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo p x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
@@ -180,8 +180,8 @@ def checkedRun {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
   rel := rel
   right := right
 
-/-- **The period's proofs as the IR defines them, under the check**: `Declared.periodLayer` at `checkedRun`. -/
-def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params)
+/-- **The period's proofs as the IR defines them, under the check**: `RegisteredCircuit.periodLayer` at `checkedRun`. -/
+def checkedLayer {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params)
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop) :
@@ -238,7 +238,7 @@ the check's first refusal (`Executions.prefixLen`, `j` of them), all but `(d_F +
 (`LiveWorkAt` at `rOfPrefix`), except with probability `δ_s + n·(δ_bind + δ_ks)`. -/
 def CheckedWorkPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (_hKd : 0 < Kd) (prm : Params)
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -273,7 +273,7 @@ def CheckedWorkPeriod : Prop :=
 and `checkedLive`), `CircuitCreditPeriod`'s conclusion at the check's prefix. -/
 def CheckedCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (_hKd : 0 < Kd) (prm : Params)
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -346,7 +346,7 @@ its window's draw coin (`RegisteredBeforeDraw`). Then, except with probability
 windows before the check's first refusal, `ε(j) = (67/8)·ln(1/δ_s)·N_w/N_live` (`creditPrefix`). -/
 def H1CheckedCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
     (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params)
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ℕ → ℕ → V)

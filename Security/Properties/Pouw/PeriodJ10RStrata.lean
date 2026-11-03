@@ -129,7 +129,7 @@ def rightAt {C V : Type} {r m nB mB n : ℕ} (h : r = m) (hr : 0 < r) (σ : Fin 
 
 /-- **Stratum `s`'s proofs with `Credit.window`'s verdict**: `tileRun` at the stratum, on its view, with the period's
 `Credit.window` inputs and the service's openings. -/
-noncomputable def runAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ} (hM : Cd.rounds = m)
+noncomputable def runAt {ι C V : Type} (Cd : RegisteredCircuit ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (s : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
@@ -139,7 +139,7 @@ noncomputable def runAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) 
     (rightAt hM hr σ s enc place tile)
 
 /-- **Stratum `s`'s proofs as the IR defines them**: `tileLayer` at the stratum, on its view. -/
-noncomputable def layerAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ} (hM : Cd.rounds = m)
+noncomputable def layerAt {ι C V : Type} (Cd : RegisteredCircuit ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (s : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
@@ -169,7 +169,7 @@ def StrataDrawIsCoin {C : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : 
 open Classical in
 /-- **Stratum `s`'s live words over the accepted prefix**: the words of the stratum's live tiles (`WindowPlay.liveAt` of its
 period, on its view) in each window before the first window `Credit.window` refuses. -/
-noncomputable def stratumLive {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
+noncomputable def stratumLive {ι K C : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
     (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (ws : CreditWindows (StrataCoin C m σ) n) (x : Paths (StrataCoin C m σ) n) : ℝ :=
@@ -189,7 +189,7 @@ refusal, `ε_s` at the stratum's `N_s`, `Cd s`, `Λ_s` and `δ_s(s)`. -/
 def H1J10RCheckedCreditPeriodStrata : Prop :=
   ∀ {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Nonempty V]
     {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-    (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Fin mB → Declared ι) {n : ℕ} (_hn : 0 < n)
+    (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Fin mB → RegisteredCircuit ι) {n : ℕ} (_hn : 0 < n)
     (_hN : ∀ s ∈ S, (Cd s).units ≤ tileCount σ s) (hr : ∀ s, 0 < (Cd s).rounds) (hM : ∀ s, (Cd s).rounds = 1)
     (_hKd : ∀ s ∈ S, 1 ≤ k s)
     (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)

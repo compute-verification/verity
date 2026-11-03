@@ -44,7 +44,7 @@ def word : Accounting.Gates.IntGate Unit where
   commit := true
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
-def circuit : Declared Unit where
+def circuit : RegisteredCircuit Unit where
   dag := [word]
   calls := 1
   call := fun _ => 0
@@ -85,7 +85,7 @@ def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit wher
   rel := fun _ _ _ _ => True
   right := fun _ _ _ _ => True
 
-/-- The period's proofs, `Declared.periodLayer` at the honest run. -/
+/-- The period's proofs, `RegisteredCircuit.periodLayer` at the honest run. -/
 def layer (n : ℕ) : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) n 1 1 (Fin 1) ℕ (Fin n × ℕ) Unit :=
   circuit.periodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (run n)
 
@@ -327,7 +327,7 @@ def runR (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit whe
   rel := fun _ _ _ _ => True
   right := fun _ _ _ _ => True
 
-/-- Its proofs, `Declared.periodLayer` at `runR`. -/
+/-- Its proofs, `RegisteredCircuit.periodLayer` at `runR`. -/
 def layerR (n : ℕ) : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) (n + 1) 1 1 (Fin 1) ℕ (Fin (n + 1) × ℕ) Unit :=
   circuit.periodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (runR (n + 1))
 
