@@ -22,22 +22,30 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   Daniel's words: "Split the Verity and infra repos", "Security posture finalized". A tier-2 or tier-3 title says what
   will be true, in at most eight plain words: "A full check finishes within 45 minutes". "X measured" isn't a goal until
   it names what's delivered: "Second swarm's training results out". A title says what happens, not the mechanism's
-  name: "Each day's serving runs one program fixed in advance", not "One declared circuit per day".
-- **One owner** (`--owner`): the lead of the project it serves, who keeps it true and confirms it at least daily
-  (`research goals confirm ID`). Teams that do pieces of it are @handle in its plan; a check the remote demo runs is
-  the demo lead's goal even when proofs writes it in Lean.
+  name or which tool does it: "Each day's serving runs one program fixed in advance", not "One declared circuit per
+  day"; not "Landing converts Lean merges onto the module system", which names the tool and leaves unclear what
+  changes.
+- **One owner** (`--owner`): the lead of the component the goal mostly builds, who keeps it true and confirms it at
+  least daily (`research goals confirm ID`). Other components that do pieces of it are @handle in its plan; a check
+  the remote demo runs is the demo lead's goal even when proofs writes it in Lean.
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
-- **Tags** (`--tag`, repeated) come from one fixed list of projects, in Daniel's words: `remote-demo`, `onsite-demo`,
-  `proofs`, `lean`, `vllm`, `compute-accounting`, `network-accounting`, `memory-accounting`, `accounting` (only for
-  work across all three), `training`, `ci`, `infra`, `security`, `cleanup`. `proofs` is what the theorems say; `lean`
-  is Lean's code and build (the module system, the Lean check, toolchain bumps). The site refuses any other tag.
-  Nothing from your own bookkeeping goes in a tag. Tags name the projects a goal serves (follow it up to its tier-1
-  project), not the teams doing the work: the daily-program check under the remote demo is `remote-demo`, not `proofs`
-  and `training`.
+- **Tags** (`--tag`, repeated) are the development components responsible for the goal, from one fixed list in
+  Daniel's words: `remote-demo`, `onsite-demo`, `proofs`, `circuits`, `lean`, `vllm`, `compute-accounting`,
+  `network-accounting`, `memory-accounting`, `accounting` (work across all three), `training`, `ci`, `infra`,
+  `security`, `cleanup`. The site refuses any other tag.
+  - A component is a scope of responsibility in Verity's automated development, usually one lead's, often a part of
+    the architecture. The demos assemble the others; `ci`, `infra`, `security` and `cleanup` belong to the system that
+    develops Verity.
+  - Tag the components a goal builds or changes, never one it only uses. The trivial PoUW's Lean guarantee uses the
+    proof system, so it's `compute-accounting`, not `proofs`. The daily-program check builds part of the remote demo,
+    so it's `remote-demo`.
+  - One tag is work inside a component; several mark joint work that can't be done at their interfaces.
+  - `proofs` is the proof system; `lean` is Lean's code and build (the module system, the Lean check, toolchain bumps).
+  - Why a goal matters isn't a tag: it's the tier-1 project above it.
 - **Three tiers** (Daniel, 2 Nov):
   - Tier 1, a project: about a dozen across the plan, each one Daniel would name himself. Its description opens with
     the state that finishes it.
