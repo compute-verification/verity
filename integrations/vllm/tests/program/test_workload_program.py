@@ -8,7 +8,7 @@ from verity.ml.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_pr
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -159,10 +159,10 @@ def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_
 
 
 def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
-    """The real wrapper's `weights` is a mixed-width Record (bf16 tensors + an f32 rotary table), which lowers to one Input
+    """The real wrapper's `weights` is a mixed-width RecordType (bf16 tensors + an f32 rotary table), which lowers to one Input
     batch per field (a homogeneous record would be one batch): the group is shared as a whole either way."""
     def sig(S):
-        return ((("prompt", Array(S.LP, Value(16))), ("weights", Record(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", RecordType(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
                 Array(1, Value(16)))
 
     def body(B, S, prompt, weights):

@@ -18,7 +18,7 @@ from verity_flock import rec_live as RL
 import test_rec_live as T
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
+LEAN = HERE.parents[3] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 
 DRAW = {"law": "stratified", "population": 2, "k": 2, "strata": [{"template": "t", "units": [[0, 2]], "k": 2}],

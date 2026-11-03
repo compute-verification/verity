@@ -7,7 +7,7 @@
 # taken at (benchmarks/pouw/{edited_gemm,masked_gemm,floored_gemm,pearl_c}), sent as src-TAG.tar:
 #
 #   git archive -o src-91357d734.tar 91357d734 benchmarks/pouw/{edited_gemm,masked_gemm,floored_gemm,pearl_c}
-#   research run --on vy-dc-b200 --project verity --campaign eps1 --source <tree> --cwd source --mem-gb 16 \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --mem-gb 16 \
 #     --send src-91357d734.tar ... -- bash benchmarks/pouw/sass_census/eps_counts.sh
 #
 # Writes under $OUT/TAG/ARCH: build.log (ptxas -v), apv.gi.sass.gz (nvdisasm -c -gi), apv.sass.gz (cuobjdump -sass), and

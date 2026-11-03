@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.config import UsageError
 from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
 from verity_vllm.program.predict import aot as A
@@ -23,8 +23,8 @@ from tests.program.predict.test_predict import TINY, _phi
 AOT = {"comparison": "r20261018-001500-aaaa", "trace": "art:" + "5" * 64}
 
 
-def _weights(program) -> tuple[str, Record]:
-    return next((n, t) for n, t in program.fn.body.params if isinstance(t, Record))
+def _weights(program) -> tuple[str, RecordType]:
+    return next((n, t) for n, t in program.fn.body.params if isinstance(t, RecordType))
 
 
 def _trace(d: Path) -> Path:
@@ -60,7 +60,7 @@ def test_emit_writes_the_predicted_program_under_the_traces_annotations_and_name
     assert (doc["digest"], doc["correspondence_digest"]) == (res["program"]["digest"], res["program"]["correspondence_digest"])
     assert [r["name"] for r in doc["rows"]] == [f"m{k}/fx_{k}" for k in range(len(doc["rows"]))]
     name, rec = _weights(build_program(_phi(TINY), "step", M=1, pos0=8).program)
-    assert dict(doc["params"])[name] == str(Record(*((f"inner.{n}", t) for n, t in rec.fields)))
+    assert dict(doc["params"])[name] == str(RecordType(*((f"inner.{n}", t) for n, t in rec.fields)))
 
 
 def test_emit_refuses_weight_leaves_that_are_not_the_programs(tmp_path):
@@ -117,3 +117,25 @@ def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(
     assert got["errors"] == {} and set(got["secs"]) == {"step", "workload", *names}
     assert got["requests"] == {n: build_program(phi, "request", LP=lp, T=t).digest for n, (lp, t) in zip(names, phi.request_shapes())}
     assert got["workload"] == S.predict_workload(phi)["digest"]
+
+
+def test_a_predicted_rows_workload_is_one_gm01_verifies_by_its_descriptor(tmp_path):
+    """`write_workload` writes predict's workload Program as GP-01 writes its own: GM-01's `from_gprog` recomputes its digest from
+    the descriptor beside it and holds the `lag` block to the Program's `lag` static, and refuses either edited."""
+    from verity_vllm.check.match.declaration import from_gprog
+    from verity_vllm.pipeline.global_program import request_id_of
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
+                      for i, (lp, cap) in enumerate([(5, 3), (7, 2)])])
+    wl, p = A.write_workload(phi, {}, {}, str(tmp_path)), tmp_path / "workload_program.json"
+    g = from_gprog(str(p))
+    assert g["workload_digest"] == wl.digest == S.predict_workload(phi)["digest"]
+    dv = g["gprog_artifact"]["digest_verification"]
+    assert dv["verified"] is True and dv["lag_static"] == wl.lag == g["lag"]["value"], dv
+    assert [r["request_id"] for r in g["requests"]] == [request_id_of(0), request_id_of(1)]
+    art = json.loads(p.read_text())
+    p.write_text(json.dumps({**art, "lag": {**art["lag"], "value": 1 - wl.lag}}))
+    with pytest.raises(ValueError, match="lag declaration is not the Program's"):
+        from_gprog(str(p))
+    p.write_text(json.dumps({**art, "workload_digest": "0" * 128}))
+    with pytest.raises(ValueError, match="is not the Program it names"):
+        from_gprog(str(p))

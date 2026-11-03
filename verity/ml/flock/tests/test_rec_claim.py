@@ -1,4 +1,4 @@
-"""F4 candidate 3's registered opening (`note:proofs/20261010T1820Z-draft-c3-claim-layout`): RecSparse's two reps of one
+"""The opening-only candidate's registered opening: RecSparse's two reps of one
 session over a stacked table of 22 variables (`test_rec_sparse.session`, the honest prover) each output a ``claim``, rep r's row
 r of ``rec-claim``; an honest prover written here from the verifier's spec (§12, §13) opens the table at both reps'
 `rec_sparse.registered_claim` points by ring switching and Ligerito, and the opening-only algebra (`rec_algebra.Shape`'s
@@ -24,7 +24,7 @@ from verity_flock import rec_sparse as RS
 
 from test_rec_sparse import _template, session
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 #: a stacked table of 2^22 bits, fast100's smallest m: 2^6 entries, 16 planes (ELL = 7), 2^12 types; two slots
 SPARSE = RS.Shape(6, 7, 1, 12)
 OPEN = A.Shape(22, 6, 2, opening_only=True)
@@ -329,7 +329,7 @@ def test_the_opening_only_structure_is_the_full_ones_without_zerocheck_and_linch
     assert len(RR.parts(S)) == 1
 
 
-#: K2's price of the registered opening's algebra (`note:proofs/20261010T0250Z-draft-f4-bitsumcheck` §5.4) is
+#: K2's price of the registered opening's algebra is
 #: structure(Shape(m, 6, 2))'s products; the opening-only shape's, m = 22 .. 35
 K2 = [1070, 1104, 1170, 1136, 1170, 1236, 1282, 1292, 1302, 1268, 1302, 1368, 1334, 1368]
 OPENING = [715, 747, 811, 775, 807, 871, 915, 923, 931, 895, 927, 991, 955, 987]

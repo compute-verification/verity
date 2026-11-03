@@ -25,7 +25,7 @@ from typing import Any, Callable, Hashable, Iterable, Sequence
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.intervals import Intervals, full, isect, norm
 from verity.ml.circuits.liveness import Liveness
-from verity.ml.circuits.types import Record, Tuple, Type, field_starts, field_types
+from verity.ml.circuits.types import RecordType, Tuple, Type, field_starts, field_types
 
 
 class _Mark:
@@ -64,12 +64,12 @@ def _held(label: Any, t: Type, base: int = 0, out: dict | None = None) -> dict[A
     if label is SHARED or label is BATCH:
         out.setdefault(label, []).append((base, base + t.leaves))
     elif isinstance(label, Fields):
-        if not isinstance(t, (Tuple, Record)) or len(field_types(t)) != len(label.labels):
+        if not isinstance(t, (Tuple, RecordType)) or len(field_types(t)) != len(label.labels):
             raise ValueError(f"{len(label.labels)} field labels for {t!r}")
         for start, ft, lab in zip(field_starts(t), field_types(t), label.labels):
             _held(lab, ft, base + start, out)
     elif isinstance(label, Rows):
-        if isinstance(t, (Tuple, Record)):
+        if isinstance(t, (Tuple, RecordType)):
             for start, ft in zip(field_starts(t), field_types(t)):
                 _held(label, ft, base + start, out)
             return out

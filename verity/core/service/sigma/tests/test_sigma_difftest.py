@@ -33,7 +33,7 @@ from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.catalog import load as load_registry
 from verity.ml.definitions.replay import replayer
@@ -164,7 +164,7 @@ def reference(case: dict) -> dict:
 
 # ---- the corpus --------------------------------------------------------------------------------------------------------------
 
-PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
+PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
 FNS = {"add": W.F32AddFtz, "mul": W.F32MulFtz, "cast": MP.F2fpBf16, "max": W.F32Max, "guard": W.GuardNegInfZero}
 
 
@@ -324,7 +324,7 @@ _TYPES = st.recursive(
     st.integers(1, 40).map(Value),
     lambda t: st.one_of(st.tuples(st.integers(0, 3), t).map(lambda a: Array(*a)),
                         st.lists(t, max_size=3).map(lambda fs: TupleT(*fs)),
-                        st.lists(t, max_size=3).map(lambda fs: Record(*((f"f{i}", f) for i, f in enumerate(fs))))),
+                        st.lists(t, max_size=3).map(lambda fs: RecordType(*((f"f{i}", f) for i, f in enumerate(fs))))),
     max_leaves=8)
 
 

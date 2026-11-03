@@ -49,10 +49,11 @@ theorem setupHidden_tagsP (h : Stmt.setupHidden tags cf pf coins tables draw par
     st.tags = tags :=
   (setupHidden_specP h).choose_spec.tagsEq
 
-/-- `SpecP.parse`. -/
-theorem setupHidden_parseCP (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
+/-- `SpecP.parseF`, at a flat statement's tags. -/
+theorem setupHidden_parseCP (hi : tags.isTmpl = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     HmOut.parse tags cf tables = .ok st.c :=
-  (setupHidden_specP h).choose_spec.parse
+  (setupHidden_specP h).choose_spec.parseF hi
 
 /-- **The leaf scheme at `own`** (`setupHidden_hm96`). -/
 theorem setupHidden_hm96P (hl : tags.merkleLeaf = "hm96-sha512/v1")
@@ -60,7 +61,7 @@ theorem setupHidden_hm96P (hl : tags.merkleLeaf = "hm96-sha512/v1")
     st.merkle = MerkleScheme.hm96Sha512 := by
   have s := (setupHidden_specP h).choose_spec
   have hf := s.merkle
-  rw [parse_leafScheme s.parse, hl, Exec.find_hm96] at hf
+  rw [parseCommit_leafScheme s.parse, hl, Exec.find_hm96] at hf
   exact (Option.some.inj hf).symm
 
 /-- **The statement is well formed at `own`** (`setupHidden_wf`): its regions are `HmOut`'s and `HmIn`'s. -/
@@ -68,7 +69,7 @@ theorem setupHidden_wfP (h : Stmt.setupHidden tags cf pf coins tables draw parti
     StmtWF st ∧ RegionsWF st := by
   obtain ⟨pi, s⟩ := setupHidden_specP h
   obtain ⟨ro, ri, hro, hri, hr⟩ := s.regions
-  refine ⟨wf_of_facts (parse_slots s.parse) (hm_pin_ok s.pin) s.m, s.m, s.mPts, ?_⟩
+  refine ⟨wf_of_facts (parseCommit_slots s.parse) (hm_pin_ok s.pin) s.m, s.m, s.mPts, ?_⟩
   intro x hx
   rw [hr, Array.toList_append, List.mem_append] at hx
   rcases hx with hx | hx
@@ -166,7 +167,7 @@ theorem drawSetupHP_of_setupHiddenI {st : Flock.Stmt}
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
     ∃ x : DrawSetupHP I own mPts S d, x.st = st := by
-  have hcst : st.c = c := Except.ok.inj ((Hidden.setupHidden_parseCP h).symm.trans hc)
+  have hcst : st.c = c := Except.ok.inj ((Hidden.setupHidden_parseCP (HmOut.parse_isTmpl hc) h).symm.trans hc)
   have hg : 0 < st.c.g := by
     have P := parse_facts (parse_untyped ht hc).1
     obtain ⟨ls, hls⟩ := P.check

@@ -48,7 +48,7 @@ def caps_at(rev: str) -> types.ModuleType:
     """``CAPS`` as it is at ``rev``, as a module."""
     mod = types.ModuleType("markdown_caps_at_base")
     mod.__file__ = str(Path.cwd() / CAPS)
-    exec(compile(git("show", f"{rev}:{CAPS}"), f"{rev[:12]}:{CAPS}", "exec"), mod.__dict__)
+    exec(compile(git("show", f"{rev}:{CAPS}"), f"{rev[:12]}:{CAPS}", "exec"), mod.__dict__)  # noqa: S102  (the base's own copy, from git)
     return mod
 
 
