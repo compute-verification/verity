@@ -313,7 +313,7 @@ def test_a_candidate_from_parts_that_differ_gives_rho_at_every_cell():
     steps = tuple(p for i in range(200) for p in ((i / 200, 3e3 * i), (i / 200, 3e3 * (i + 1))))
     for dg in (None, 2e4):
         m = Measured((Part(4e15, 1e4, 3e15, 2e15, delta_grad_bits=1e4), Part(1e15, 1e4, 5e14, 1e14, delta_grad_bits=dg)),
-                     16.0, 12288.0, ((0.0, 0.0), (0.4, 0.0), (1.0, 6e5)), steps + ((1.0, 6e5),), 5e5)
+                     16.0, 12288.0, ((0.0, 0.0), (0.4, 0.0), (1.0, 6e5)), steps + ((1.0, 6e5),), 5e5, 0.0)
         assert m.w_fit == 5e10 and m.alpha_ratio == pytest.approx(0.525) and m.fit_delta_grad_bits == (dg and 2e4)
         d = {"run": "r", "delta_bits": m.delta_bits, "w_fwd_gates": W, **panels.rho_columns(m, W)}
         assert all(len(v) <= console.CELL_MAX for v in d.values() if isinstance(v, str))
