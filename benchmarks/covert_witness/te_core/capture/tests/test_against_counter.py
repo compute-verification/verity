@@ -1,6 +1,6 @@
-"""The capture's static record against te_core.flops.Counter's runtime record of the same steps, both read by
-te_core.annotate: they count from one op list (te_core.flops's *_NAMES) and must agree on every step's MACs and
-structure."""
+"""The capture's static record against te_core.flops.Counter's runtime record of the same steps: they count from one op
+list (te_core.flops's *_NAMES) and must agree on every step's MACs. The structure te_core 4.0 scores (updated MACs, depth,
+the cut) is the capture's alone: the Counter's rows are the weight-operand rule it had before."""
 from __future__ import annotations
 
 import pytest
@@ -8,7 +8,6 @@ import torch
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 import models
-from te_core.annotate import annotate
 from te_core.capture import capture_run, capture_step
 from te_core.flops import Counter
 
@@ -64,11 +63,7 @@ def test_the_capture_and_the_counter_agree_step_for_step(make):
     adamw = lambda: torch.optim.AdamW([p for p in model.parameters() if p.requires_grad])  # noqa: E731
     cap = captured(model, adamw(), new)
     cnt = counted(model, adamw(), new)
-    a, b = annotate(cnt), annotate(cap)
+    keys = ("tokens", "matmul_macs", "elementwise_macs", "macs")
     for i in range(N):
-        keys = ("tokens", "matmul_macs", "elementwise_macs", "macs")
         assert [cnt["steps"][i][k] for k in keys] == [cap["steps"][i][k] for k in keys], i
-        sa, sb = a.steps[i], b.steps[i]
-        assert (sa.updated_macs, sa.updated_per_token, sa.depth, sa.profile, sa.bits) == \
-               (sb.updated_macs, sb.updated_per_token, sb.depth, sb.profile, sb.bits), i
-    assert all(a.phi(d) == pytest.approx(b.phi(d), abs=1e-12) for d in (0, 1, 256, 1024))
+    assert cnt["totals"]["macs"] == cap["totals"]["macs"]
