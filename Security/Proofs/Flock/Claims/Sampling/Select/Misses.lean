@@ -23,7 +23,8 @@ def popUnits (S : Array (String × Array (ℕ × ℕ))) : List ℕ := S.toList.f
 theorem slotPartition_strata (f : FilePart.FilePart) (ns : Array ℕ) (hn : f.n = ns.toList.sum) :
     ∃ c, slotPartition (Slots.layout f ns) = ⟨[c]⟩ ∧ strataSizes c = ns.toList ∧ c.flatten.length = ns.toList.sum := by
   have hG : ((List.range f.n).map fun u => puGates (Slots.blockOf f u)).length = ns.toList.sum := by simp [hn]
-  exact ⟨_, slotPartition_layout f ns, List.map_splitLengths_length hG.ge, by rw [List.flatten_splitLengths hG.le, hG]⟩
+  exact ⟨_, slotPartition_layout f ns, List.map_splitLengths_length _ _ hG.ge,
+    by rw [List.flatten_splitLengths _ _ hG.le, hG]⟩
 
 /-- **The design's `P_a` on `Slots.layout`'s partition**: its one rule over the strata `ns`, on `B`'s slots among the
 `Σ ns` units. -/
