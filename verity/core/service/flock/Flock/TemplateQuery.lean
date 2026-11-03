@@ -13,6 +13,7 @@ public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
 public import Flock.Program
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -51,7 +52,7 @@ def isInput (id : String) : Bool := Program.isInputId id
 def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Desc := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
   if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
