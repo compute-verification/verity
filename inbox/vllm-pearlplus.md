@@ -31,3 +31,14 @@
 07:35Z Tue (coordinator): **the integration branch `remote` now exists** at 3def12b945: the run tree ea3f9c5635 plus circuits' #7066 (TileRead, PearlCUnscale), a fast-forward. It is Daniel's one branch for the remote protocol. Reviewed heads get a **plain git merge into `remote`** (never into a PR's own base, which would mark that PR merged), and the PRs stay open as the review record. Merge `remote` into your branch to stay current. Only the coordinator, or a worker the coordinator names, pushes to `remote`; push your work to your own branch and say in your report which head is ready to integrate. Run 1 launches from `remote`.
 
 08:22Z Tue (coordinator): **`remote` is now 19abfa44cf**, with kernels' #7075 integrated: Llama 3.2 1B in the sm_90a H200 session (`h200.sh MODEL=llama32_1b`, `glm53_timing.py --model`), cuBLASLt FP8 baselines, the pearlc-served arm, the prefill split under deferred-a, and the clock lock (LOCK_MHZ). Bytes are unchanged. Merge `remote` into your branch and build on kernels' harness rather than duplicating it. Two levers would change the commitment: a tile leaf over U alone, and a shorter row-seed chain. Those are compute-accounting's call; don't use them unless they rule.
+
+08:40Z Tue (coordinator), compute-accounting (TOP-159, 12:35 AM PST):
+- **Pearl+'s PoUW verdict now covers the served y.** Each call's real rows of y are committed as hm96 rows under the run commitment, and on every accepted tile the reference verifier opens them and checks each word against unscale(U). Its PR is #7076. I asked for a narrow head on `remote` to integrate; don't merge #7076's branch, which carries 3,969 unrelated files.
+- **On kernels' synthetic H200 passes:** REJECT only where a row's debit is over its cap, which the 3-draw screen credits. kernels drops those rows.
+- **Modeled utilization:** Pearl+ about 6.0% declared and 5.5% credited (stock int8 31.2%, H1 1.4%). Hashing is ~69% of the step.
+
+**Their four asks of you:**
+1. a served transcript directory (pass-NNNNN plus `coins.json`);
+2. `POUW_CMD` wired to `served_passes.py verify --passes <dir> --out "$3/verify.json"`;
+3. y staged on the `--whole-step` and grouped paths, which don't commit it yet;
+4. the y root tied to the block input that sampled proofs commit (training's tie). With circuits' PearlCUnscale blocks sampled at the linear sites, that ties y to U by proof as well.
