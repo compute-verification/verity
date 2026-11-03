@@ -22,14 +22,15 @@ beyond θ. Each term is a lower bound, so the max is one. Where Fit holds, its c
 (te_core.formalism), which `rho` reports with the menu beside it. The token, reduction, update and decoding kinds'
 terms are te_core.formalism.bound's (`TE_CORE`), each labelled by its `SENSITIVITIES` entry: te_core 4.5 publishes all
 four as sensitivities beside its one bound, never in its max (the coordinator's 08:26Z ruling), and this menu's max
-still takes them. The fresh products' are this module's until the io-bound module's replace them. The kinds (`KINDS`,
-each with what it rests on):
+still takes them. The fresh products' are this module's: a model's products have no traced summation order, so they
+take the tree constant, which te_core.io_bound (te_core.formalism's fresh-products kind on captured steps) doesn't
+have yet. The kinds (`KINDS`, each with what it rests on):
 
 - **fresh products** (`Fresh`): products whose two operands both depend on θ'. A product C = A·B by the standard
   algorithm is a triple, and the amortized Loomis-Whitney cap (the Lean lane's `sum_card_le_cap`, which charges only
   reads) bounds the blocks of a partition: Σ|T| ≤ B·cap + μ*·E, cap = k^1.5/(4·sqrt(b_A b_B b_C)), μ* = cap/k and E
   the b_C bits of each output entry, so B ≥ MACs/cap − b_C·entries/k (`fresh_blocks`, at the widths as passed,
-  `WIDTHS`; the io-bound module's term replaces it). The board's (k/3)^1.5 form charges a block for every entry it
+  `WIDTHS`; te_core.io_bound's once it has this constant). The board's (k/3)^1.5 form charges a block for every entry it
   touches, so its cap is 4/(3·sqrt 3) of this one and its term 1.30 times this one's. The entry term leaves no bound on
   products summing fewer than μ*·b_C terms an entry (22.6 at the console default's bf16): a LoRA's (x·A)·B, over its
   rank. A block's normalized reads are convex, so products of several widths share its k and their blocks add. A

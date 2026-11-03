@@ -68,7 +68,7 @@ import json
 import math
 import operator
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from .policy import CONSOLE, REFERENCE_K_BITS as PANEL_K, SESSION_TOKENS as PANEL_TOKENS
