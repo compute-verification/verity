@@ -417,9 +417,9 @@ theorem exists_tape (S : RefSession) (x : Msg)
     rw [← h (S.eP x t₀) p]
     exact Nat.card_pos
   obtain ⟨⟨t, ht⟩⟩ := (Nat.card_pos_iff.1 h0).1
-  refine ⟨t, congrArg Prod.fst ht, fun l0 => (congrFun (congrArg Prod.snd ht) _).trans ?_⟩
-  show Sum.elim y0 _ (leaves01 (fun j => (S.C x j).z) ((leaves01 (fun j => (S.C x j).z)).symm (.inl l0))) = y0 l0
-  simp only [Equiv.apply_symm_apply, Sum.elim_inl]
+  exact ⟨t, congrArg Prod.fst ht, fun l0 => (congrFun (congrArg Prod.snd ht) _).trans
+    (congrArg (Sum.elim y0 fun l1 => (S.eP x t₀).2 ((leaves01 (fun j => (S.C x j).z)).symm (.inr l1)))
+      ((leaves01 (fun j => (S.C x j).z)).apply_symm_apply (.inl l0)))⟩
 
 /-- `preModel` at `swP`. -/
 noncomputable def swPreModel (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (ν : S.Nonce) :
@@ -576,8 +576,9 @@ theorem swCoinModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R :
         else S.fin x c (S.swViewsAt x c (S.wt x w) (vs x w ν c) t)
     refine List.map_congr_left fun j hj => ?_
     rw [S.swMsgAt_take vs x w ν hsc t c j (List.mem_range.1 hj), S.cutV_swViewsAt, ite_eq_left hA]
-  · refine Proto.TCoinModel.swLink_inr _ H ν c w ⟨hV x w hR, fun j => hD x c j, fun p => (hT x hx).1 p _,
-      ⟨vs x w ν c, fun (t : S.Tape) => ?_⟩, fun (t : S.Tape) => ?_⟩
+  · refine Proto.TCoinModel.swLink_inr (G := S.swP vs) (x := x) _ H ν c w ?_
+    refine ⟨hV x w hR, fun j => hD x c j, fun p => (hT x hx).1 p _, ⟨vs x w ν c, fun (t : S.Tape) => ?_⟩,
+      fun (t : S.Tape) => ?_⟩
     · show (List.range (refK x + 1)).map (fun j => S.swMsgAt x (S.wt x w) (vs x w ν) t ((List.ofFn c).take j)) =
         (List.range (refK x + 1)).map fun j =>
           if j < refK x then S.enc x c j (S.swCutOf x c (S.wt x w) (vs x w ν c) t)
