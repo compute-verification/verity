@@ -135,14 +135,6 @@ theorem withStops_causal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → 
   rw [hRf x c c' i h]
   exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x wt ω p c c' i h)
 
-theorem withStops_swCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
-    (vs : S.SwVals) (hRf : S.StopsCausal Rf) (hc : S.SwCausal vs) : (S.withStops Rf stop).SwCausal vs := by
-  intro x w ν ω s p c c' i h
-  show (if Rf x c i = true then stop else if i = 0 then S.enc x c i _ else dropDom (S.enc x c i _)) =
-    (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
-  rw [hRf x c c' i h]
-  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω s p c c' i h)
-
 theorem withStops_swCausalOn (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (hRf : S.StopsCausal Rf)
     (hc : S.SwCausalOn Ok vs) : (S.withStops Rf stop).SwCausalOn Ok vs := by
@@ -623,6 +615,39 @@ theorem swCoinModel_link_stops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
       le_rfl⟩
 
 end Claims.ZKMal.RefSession
+
+namespace Claims.ZKMal
+
+open Claims
+open FlockSoundness.Discharge
+
+set_option synthInstance.maxSize 100000
+set_option synthInstance.maxHeartbeats 1000000
+
+/-- **Flock's zero knowledge at the session with stops, at values causal where it computes**: `Flock.zk_deployZk_sw` at
+`S.withStops Rf stop` with `refP`'s simulator there, its switched round encoding causal only on `Ok`
+(`RefSession.SwCausalOn`), which holds wherever the session with stops computes a round (`RefSession.StopsOk`). Before
+the last coin its prover is the cut model's (`RefSession.swPreCut_link`); at each coin vector, where its tables admit it,
+`swCoinModel`'s own, else the off-model at the cut coins (`RefSession.swCoinModel_link_stops`). -/
+theorem Flock.zk_deployZk_sw_stops (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
+    (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg) (vs : S.SwVals)
+    (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
+    (hRf : S.StopsCausal Rf) (hsc : S.SwCausalOn Ok vs) (hOk : S.StopsOk Rf Ok) (hT : S.TapeOK) :
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) ((S.withStops Rf stop).swP vs).prover
+      (((S.withStops Rf stop).refP.withSim fun x _ c => (S.withStops Rf stop).coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * (S.withStops Rf stop).nLeaves x * δ₁.toReal +
+        8 * t * (S.withStops Rf stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zkAt_sw_of_links H _ rfl (S.withStops Rf stop) vs
+    (fun x => (deployZk_proto_k rel ((S.withStops Rf stop).swPS vs) (fun _ => rfl) x).symm) t ht hT1 hδ₁
+    (S.withStops_tables Rf stop hS) (fun x ν => S.swPreCut Rf stop vs H x ν) (fun _ _ => le_rfl) (fun x _ => hS x)
+    (fun x w hR ν => S.swPreCut_link Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν)
+    fun x w hR ν c => S.swCoinModel_link_stops Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν c
+
+end Claims.ZKMal
 
 namespace Claims.ZKServer
 
@@ -1345,7 +1370,8 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (hRf : S.StopsCausal Rf) (vs : S.SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
-    (hsc : S.SwCausal vs) (hT : S.TapeOK) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (hsc : S.SwCausalOn Ok vs) (hOk : S.StopsOk Rf Ok)
+    (hT : S.TapeOK) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hlast : L.last x = refK x + 1) (hst : LeanRelease.StopsAt S Rf L H x)
     (hC : LeanRelease.CheckIs S L H x) (hH : LeanRelease.HelloEq S L x) (hLk : LeanRelease.LinkRoundEq S vs L x w)
@@ -1365,9 +1391,8 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
           (8 * (S.withStops Rf L.stop).nLeaves x * δ₁.toReal + 8 * t * (S.withStops Rf L.stop).nLeaves x * δ₁.toReal +
             2 * (1 / 3) ^ t) +
           4 * t * 3 ^ t * (Fork H (((S.withStops Rf L.stop).swP vs).prover w) Vs θ x).Pr H) :=
-  Flock.zk_server_lean H rel (S.withStops Rf L.stop) vs t ht hT1 hδ₁ (S.withStops_tables Rf L.stop hS)
-    (S.withStops_complete Rf L.stop hV) (S.withStops_dummyReg Rf L.stop hD) (S.withStops_causal Rf L.stop hRf hc)
-    (S.withStops_swCausal Rf L.stop vs hRf hsc) (S.withStops_tapeOK Rf L.stop hT) L wk x w hR
+  Flock.zk_server_lean_of H rel (S.withStops Rf L.stop) vs t δ₁
+    (Flock.zk_deployZk_sw_stops H rel S Rf L.stop vs Ok t ht hT1 hδ₁ hS hV hD hc hRf hsc hOk hT) L wk x w hR
     ⟨L.helloRefine_withStops S Rf vs H x w hH,
       L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq rel x)
         hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hLk hF,
@@ -1410,13 +1435,15 @@ theorem Flock.zk_server_lean_coinLayer
     (hS : (CoinLayer.session nr T).Tables)
     (hV : (CoinLayer.session nr T).Complete (Flock.R (FlockDeploy.deployZk rel).parse))
     (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
-    (hsc : (CoinLayer.session nr T).SwCausal vs) (hT : (CoinLayer.session nr T).TapeOK)
+    (Ok : (x : Msg) → (Fin (refK x) → (CoinLayer.session nr T).Coin) → Prop)
+    (hsc : (CoinLayer.session nr T).SwCausalOn Ok vs) (hT : (CoinLayer.session nr T).TapeOK)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hlast : L.last x = refK x + 1)
     (pc : Msg → List (CoinLayer.session nr T).Coin → Masker)
     (fc : Msg → List (CoinLayer.session nr T).Coin → Except String Masker)
     (cc : Msg → List (CoinLayer.session nr T).Coin → Array _root_.Flock.F128)
+    (hOk : (CoinLayer.session nr T).StopsOk (LeanRelease.rfOf (CoinLayer.session nr T) L pc fc cc) Ok)
     (hRd : LeanRelease.ReadsCoins (CoinLayer.session nr T) L pc fc cc x)
     (hH : LeanRelease.HelloIs nr T L x) (hP : LeanRelease.HelloParses nr T L x)
     (hFw : LeanRelease.ReqsFollow nr T L x)
@@ -1452,7 +1479,7 @@ theorem Flock.zk_server_lean_coinLayer
   have hC := LeanRelease.checkIs_coinLayer nr T L x hP hFw
   Flock.zk_server_lean_stops CoinOpen.shaH rel (CoinLayer.session nr T)
     (LeanRelease.rfOf (CoinLayer.session nr T) L pc fc cc) (LeanRelease.stopsCausal_rfOf _ L pc fc cc) vs t ht hT1 hδ₁ hS hV
-    hD hc hsc hT L wk x w hR hlast (LeanRelease.stopsAt_of_readsCoins _ L CoinOpen.shaH pc fc cc x hRd hC) hC hHe hLk hF
+    hD hc Ok hsc hOk hT L wk x w hR hlast (LeanRelease.stopsAt_of_readsCoins _ L CoinOpen.shaH pc fc cc x hRd hC) hC hHe hLk hF
     hE hEf Vs θ hk Ev
 
 end Claims.ZKServer

@@ -35,7 +35,7 @@ theorem finishIs (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) :
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
   finishIs_of_ret vs L₀ src wk x w hsc hR hServe hL0 hSrc hE hc
     (finRepTarget vs L₀ src (realOf src) wk x w hsc hR hServe hSrc.1)
