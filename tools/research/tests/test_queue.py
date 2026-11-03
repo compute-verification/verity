@@ -588,7 +588,8 @@ def _sync_preflight(refuse: dict[int, str]) -> tuple[Callable, list[tuple[int, s
 
 def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_above_it_merge(world):
     """Each merge a sync makes is preflighted onto the member below it, so a refusal leaves out that PR alone, told as a
-    conflict is (the state's `conflicts`, which drive posts to its owner)."""
+    conflict is (the state's `conflicts`, which drive posts to its owner).  #3's preflight ran beside #2's, onto #2's merge as
+    if #2 passed; #2's refusal took the sync back below #2, and #3 entered on its preflight onto #1's merge."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}))
@@ -597,7 +598,9 @@ def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_abo
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 3], world.logs
     one = members[0].commit
-    assert calls == [(1, _git(world.origin, "rev-parse", "main")), (2, one), (3, one)]
+    (two,) = {b for n, b in calls if n == 3} - {one}
+    assert sorted(calls) == sorted([(1, _git(world.origin, "rev-parse", "main")), (2, one), (3, two), (3, one)])
+    assert _git(q.workdir, "rev-parse", f"{two}^1", f"{two}^2").split() == [one, world.gh.prs[2].head]
     assert entries[2].state == "refused" and entries[2].why.endswith("a.py: SyntaxError")
     assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why and world.on_next(q) == [1, 3]
 
@@ -612,11 +615,11 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
     q = world.queue()
     q.preflight = refuse
     q.sync()
-    assert [n for n, _ in calls] == [1, 2]
+    assert sorted(n for n, _ in calls) == [1, 2]
     again = world.queue()                                                   # a later tick's queue reads the records back
     again.preflight = refuse
     members, entries = again.sync()
-    assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and [n for n, _ in calls] == [1, 2], world.logs
+    assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and sorted(n for n, _ in calls) == [1, 2], world.logs
     first = members[0].commit
     remade = subprocess.run(["git", "commit-tree", f"{first}^{{tree}}", "-p", f"{first}^1", "-p", f"{first}^2", "-m",
                              _git(world.origin, "log", "-1", "--format=%B", first)], cwd=world.origin, check=True, text=True,
@@ -628,17 +631,18 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
     rebuilt.preflight = refuse
     members, entries = rebuilt.sync()
     assert [m.commit for m in members] == [remade] and remade != first and entries[2].state == "refused"
-    assert [n for n, _ in calls] == [1, 2], world.logs
+    assert sorted(n for n, _ in calls) == [1, 2], world.logs
     _move_main(world, {"c.txt": "moved\n"})
     moved = world.queue()
     moved.preflight = refuse
     moved.sync()
-    assert [n for n, _ in calls] == [1, 2, 1, 2], world.logs
+    assert sorted(n for n, _ in calls) == [1, 1, 2, 2], world.logs
 
 
 def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):
     """A sync's preflights start only while they've taken under `PREFLIGHT_BUDGET_S` together: past it a PR waits off `next`,
-    with the PRs that contain it, told nothing, and a later sync preflights it within its budget."""
+    with the PRs that contain it, told nothing, and a later sync preflights it within its budget.  One at a time here
+    (`preflight_parallel`), so each starts once the one before it has ended."""
     now = [0.0]
     calls: list[int] = []
 
@@ -651,7 +655,7 @@ def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_pref
     world.gh.put(2, two := world.change({"b.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
     q = world.queue()
-    q.preflight, q.clock = slow, lambda: now[0]
+    q.preflight, q.clock, q.preflight_parallel = slow, lambda: now[0], 1
     members, entries = q.sync()
     assert [m.pr for m in members] == [1] and calls == [1], world.logs
     assert entries[2].state == entries[3].state == "waiting" and "hasn't run" in entries[2].why
@@ -666,7 +670,8 @@ def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_pref
 def test_a_pr_the_preflight_budget_skipped_is_preflighted_first_next_sync_within_the_budget_and_every_pr_is_reached(world):
     """New PRs that come before one the budget skipped, by number, would spend each sync's budget ahead of it.  Instead the PRs
     the last sync left waiting take the budget first: while one is still to come, the others wait too, recorded for the next
-    sync, and no sync's preflights start past the budget.  So each PR is reached in turn."""
+    sync, and no sync's preflights start past the budget.  So each PR is reached in turn.  One preflight at a time here, as
+    above."""
     now = [0.0]
     calls: list[int] = []
     spent: list[float] = []
@@ -685,7 +690,7 @@ def test_a_pr_the_preflight_budget_skipped_is_preflighted_first_next_sync_within
     for n in (3, 4, 5):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     q = world.queue()
-    q.preflight, q.clock = half, lambda: now[0]
+    q.preflight, q.clock, q.preflight_parallel = half, lambda: now[0], 1
     assert sync()[0] == [3, 4] and calls == [3, 4]
     assert q.load_state()["preflight_waited"] == [5]
     for n in (1, 2):
@@ -697,6 +702,129 @@ def test_a_pr_the_preflight_budget_skipped_is_preflighted_first_next_sync_within
     assert sync()[0] == [3, 4, 5, 1, 2] and calls == [3, 4, 5, 1, 2]
     assert q.load_state()["preflight_waited"] == []
     assert spent == [PREFLIGHT_BUDGET_S, PREFLIGHT_BUDGET_S / 2, PREFLIGHT_BUDGET_S], "no sync's preflights pass the budget"
+
+
+def test_a_sync_runs_four_preflights_at_once_in_its_order_each_onto_the_merge_below_its_place(world):
+    """A sync keeps `PREFLIGHT_PARALLEL` preflights running: above one still running it merges on as if that one passes.  The
+    stand-in gets past its barrier only once four are in it, so the first four PRs in the queue's order run together and the
+    next four as those end (fewer at once hangs here rather than passing).  Each ran onto the merge of the PR below it, and
+    each PR entered on its own."""
+    together, lock = threading.Barrier(Q.PREFLIGHT_PARALLEL), threading.Lock()
+    calls: list[tuple[int, str]] = []
+    running, peak = [0], [0]
+
+    def meet(pr, base, commit, members):
+        with lock:
+            calls.append((pr.number, base))
+            running[0] += 1
+            peak[0] = max(peak[0], running[0])
+        together.wait()
+        with lock:
+            running[0] -= 1
+        return None
+
+    for n in range(1, 9):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight = meet
+    members, _ = q.sync()
+    assert [m.pr for m in members] == list(range(1, 9)) == world.on_next(q), world.logs
+    assert peak[0] == Q.PREFLIGHT_PARALLEL == 4
+    assert sorted(n for n, _ in calls[:4]) == [1, 2, 3, 4] and sorted(n for n, _ in calls[4:]) == [5, 6, 7, 8]
+    below = [_git(world.origin, "rev-parse", "main")] + [m.commit for m in members[:-1]]
+    assert sorted(calls) == sorted(zip(range(1, 9), below))
+
+
+def test_four_preflights_at_once_spend_the_budget_as_wall_time_and_the_prs_left_waiting_go_first_next_sync(world):
+    """`PREFLIGHT_BUDGET_S` is wall time: four preflights that run together for half of it spend half of it, so eight start
+    and the ninth, which would start at the budget, waits off `next` untold.  The next sync runs it before the newer PRs that
+    come before it by number, which wait in their turn for the sync after."""
+    now = [0.0]
+    together = threading.Barrier(Q.PREFLIGHT_PARALLEL, action=lambda: now.__setitem__(0, now[0] + PREFLIGHT_BUDGET_S / 2))
+    lock, calls = threading.Lock(), []
+
+    def meet(pr, base, commit, members):
+        with lock:
+            calls.append(pr.number)
+            meets = len(calls) <= 2 * Q.PREFLIGHT_PARALLEL
+        if meets:
+            together.wait()
+        return None
+
+    for n in range(3, 12):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, q.clock = meet, lambda: now[0]
+    members, entries = q.sync()
+    assert [m.pr for m in members] == list(range(3, 11)) and sorted(calls) == list(range(3, 11)), world.logs
+    assert now[0] == PREFLIGHT_BUDGET_S
+    assert entries[11].state == "waiting" and entries[11].why == (
+        f"its preflight onto `next` hasn't run: this sync's preflights took their {PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+    state = q.load_state()
+    assert state["conflicts"] == {} and state["waiting"] == {} and state["preflight_waited"] == [11]
+    q.preflight, recorded = _sync_preflight({})
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == list(range(3, 12)) and [n for n, _ in recorded] == [11], world.logs
+    assert entries[1].state == entries[2].state == "waiting" and "the PRs the last sync left waiting" in entries[1].why
+    assert q.load_state()["preflight_waited"] == [1, 2]
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [*range(3, 12), 1, 2] and sorted(n for n, _ in recorded) == [1, 2, 11]
+    assert q.load_state()["preflight_waited"] == []
+
+
+def test_preflights_run_together_keep_each_prs_own_verdict_and_one_that_fails_to_run_admits_only_its_pr(world):
+    """Two refusals and a preflight that raises among six run four at once: each refused PR stays out with its own text,
+    recorded at its own base, the one that raised enters unpreflighted, logged once, with nothing recorded, and the others
+    enter on their own passing preflights onto the merge below their place."""
+    refusals = {2: "refused: two", 5: "refused: five"}
+    calls: list[tuple[int, str]] = []
+
+    def judge(pr, base, commit, members):
+        calls.append((pr.number, base))
+        if pr.number == 4:
+            raise RuntimeError("boom")
+        return refusals.get(pr.number)
+
+    for n in range(1, 7):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight = judge
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3, 4, 6] == world.on_next(q), world.logs
+    state = q.load_state()
+    for n, why in refusals.items():
+        assert entries[n].state == "refused" and entries[n].why == why == state["conflicts"][str(n)]["why"]
+    assert sorted(state["conflicts"]) == ["2", "5"] and state["waiting"] == {}
+    below = dict(zip([1, 3, 4, 6], [_git(world.origin, "rev-parse", "main")] + [m.commit for m in members[:-1]]))
+    below |= {2: below[3], 5: below[6]}
+    trees = dict(zip(below, _git(q.workdir, "rev-parse", *(f"{c}^{{tree}}" for c in below.values())).split()))
+    recorded = {n: state["preflights"].get(f"{world.gh.prs[n].head}:{trees[n]}", {"why": "unrecorded"})["why"]
+                for n in below}
+    assert recorded == {1: None, 2: "refused: two", 3: None, 4: "unrecorded", 5: "refused: five", 6: None}
+    assert set(below.items()) <= set(calls)
+    assert [line for line in world.logs if "failed to run" in line] == [
+        "research queue: #4's preflight onto `next` failed to run (RuntimeError: boom); it enters unpreflighted"]
+
+
+def test_what_a_sync_decided_above_a_preflight_that_then_refuses_is_taken_back(world):
+    """Above #2's running preflight the sync merged on as if #2 passed: #3, which edits #2's file, conflicted, and #4, which
+    contains #3, waited.  #2's refusal takes all of that back: #3 and #4 enter, nobody is told of a conflict or a wait, and
+    the log holds no line of the walk it dropped."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, three := world.change({"b.txt": "3\n"}))
+    world.gh.put(4, world.change({"c.txt": "4\n"}, base=three))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({2: "refused: two"})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3, 4] == world.on_next(q), world.logs
+    assert entries[3].why == entries[4].why == "" and entries[2].why == "refused: two"
+    state = q.load_state()
+    assert sorted(state["conflicts"]) == ["2"] and state["waiting"] == {} and state["preflight_waited"] == []
+    assert not [line for line in world.logs if "#3" in line or "#4" in line], world.logs
+    assert sorted(n for n, _ in calls) == [1, 2, 3, 4]
 
 
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
