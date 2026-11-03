@@ -1,7 +1,7 @@
 """The replay's state chain (`replay_chain`): the rows' layout and their refusals, sync and with async scheduling (AS)
 and the walk entries (EW), each shape's state and arrivals `ReplayStep_v1`'s fields and bits, `ReplayAdvance`,
 `ReplayLoad` and `ReplayClose` against `advance`, `load` and `close` on random and edge cases, the front's log shifter
-against slicing, the window's produced values opened at every unit's read, the carry and the empty start
+against slicing, the window's produced values opened at every proof block's read, the carry and the empty start
 (`check_chain`), a two-window session through all three parts, decisions a window leaves unread carried to the next and
 refused only at the session's end, and the cost `size` reports."""
 from __future__ import annotations

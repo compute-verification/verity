@@ -196,6 +196,7 @@ theorem ownWords_rows {s : VStar.Stmt} {u : VStar.UnitC} (hu : s.unit = .ok u)
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- **The holders of one round's row agree on its words**: wherever `readX` reads `x`, two rows the parts hold
 (`heldRows`) at one round of the rep streams sit at ports of one word count. The rows are under one `rec-c<k>`

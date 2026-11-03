@@ -347,14 +347,17 @@ def test_demo_bs_certificate_agrees(certify_server) -> None:
 
 def test_320_reads_certify_alike(certify_server) -> None:
     """At 320 challenges, at the registered point's `2^19` labels and at Demo B's, the Lean and the Python publish
-    `ObligationWide320`'s `⌊ρ·|C|⌋` at exactly `2^-20`, with no gap."""
-    for line, s_bits in ((_certify_line(P2.POINT[:2], 1 << 16, 8, 320, period.LIMIT_NS), 8_169_621_180),
-                         ({"point": DEMO_B["point"] | {"k": 320}}, 1_060_008_348_186)):
+    `⌊ρ·|C|⌋` at the 105-read certificates' `1% + 2^-128` (`P2SlackFamilyUncond`, `periodHeldAt`), with no gap:
+    `ObligationWide320`'s `2^-20` is no run's certificate."""
+    for line, s_bits, theorem in (
+            (_certify_line(P2.POINT[:2], 1 << 16, 8, 320, period.LIMIT_NS), 8_169_621_180,
+             "Pous.SecurityProofs.P2SlackFamilyUncond"),
+            ({"point": DEMO_B["point"] | {"k": 320}}, 1_060_008_348_186, "Pous.Period.SecurityProofs.periodHeldAt")):
         got = json.loads(D.replay(CERTIFY, line, certify_server)[1])
-        assert got["public"] == {"certified": True, "eps": f"1/{2 ** 20}", "s_bits": s_bits}
+        assert got["public"] == {"certified": True, "eps": f"{2 ** 126 + 25}/{25 * 2 ** 128}", "s_bits": s_bits}
         assert got["profile"]["gaps"] == []
-        assert got["profile"]["certificate"]["theorem"] == "Pous.SecurityProofs.ObligationWide320"
-        assert got["profile"]["certificate"]["delta"] == f"{2 ** 108 - 1}/{2 ** 128}"
+        assert got["profile"]["certificate"]["theorem"] == theorem
+        assert got["profile"]["certificate"]["delta"] == "1/100"
 
 
 def test_drawn_points_certify_alike(certify_server) -> None:

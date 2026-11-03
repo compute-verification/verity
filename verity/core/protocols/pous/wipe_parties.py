@@ -28,7 +28,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Int, List, Message, Phase, Refused, Schema
 
@@ -109,7 +109,7 @@ class MemoryChallengerParty:
             self.c = sw.WipeMemoryChallenger(secret, self.request["node"].encode(), session, self.wp, self.signer,
                                              log=self.log, clock=self._clock)
             self.phase.expect()
-            return [Record({"commitment": self.c.commitment.to_json()}, "structure"),
+            return [LogEntry({"commitment": self.c.commitment.to_json()}, "structure"),
                     *self._after_reading(self._fill_start)]
         if m.type == "FillAck":
             self.phase.expect("Coins")

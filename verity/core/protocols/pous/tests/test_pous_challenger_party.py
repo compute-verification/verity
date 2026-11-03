@@ -27,6 +27,7 @@ from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, run
+from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.wire import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
@@ -54,15 +55,15 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: i
     got: dict = {}
 
     def side() -> None:
-        with a, a.makefile("rwb") as f:
-            got["session"] = CP.serve(f, CP.request_of("n0", point, root), signer=signer, log=ts.session_log(),
-                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups,
-                                      draw=draw)
+        with a:
+            got["session"] = CP.serve(CP.Polled(a), CP.request_of("n0", point, root), signer=signer,
+                                      log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(),
+                                      warmups=warmups, draw=draw)
 
     t = threading.Thread(target=side)
     t.start()
-    with b, b.makefile("rwb") as f:
-        rounds = CP.answer(f, point.params.block_bytes, respond)
+    with b:
+        rounds = CP.answer(CP.Polled(b), point.params.block_bytes, respond)
     t.join()
     return *got["session"], rounds
 
@@ -142,6 +143,40 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     assert r.outcomes[CP.CHALLENGER] == {"outcome": {"session": old.to_json(), "session_id": sid.hex()},
                                          "refused": None}
     assert r.outcomes[CP.PROVER] == {"outcome": rounds, "refused": None}
+
+
+class Script:
+    """A socket whose reads follow `steps`: bytes, or None while nothing has arrived. It records whether each read
+    polled (`MSG_DONTWAIT`) or blocked."""
+
+    def __init__(self, *steps: bytes | None) -> None:
+        self.steps, self.reads = list(steps), []
+
+    def recv_into(self, view, n: int, flags: int = 0) -> int:
+        polled = bool(flags & socket.MSG_DONTWAIT)
+        self.reads.append("poll" if polled else "block")
+        step = self.steps.pop(0)
+        if step is None:
+            assert polled, "a blocking read waits for bytes"
+            raise BlockingIOError
+        view[:len(step)] = step
+        return len(step)
+
+
+def test_a_polled_read_polls_for_its_budget_then_blocks_and_gathers_the_frame() -> None:
+    """Each wait polls until `spin_ns` has passed on the side's clock since it began, then blocks; any bytes start the
+    next wait afresh, and the frame comes back whole."""
+    sock = Script(None, None, None, b"abc", b"de", None, None, b"fgh")
+    clock = iter([0, 5, 10, 20, 30]).__next__
+    assert CP.Polled(sock, spin_ns=10, clock=clock).read(8) == b"abcdefgh"
+    assert sock.reads == ["poll", "poll", "poll", "block", "poll", "poll", "poll", "block"]
+
+
+def test_a_polled_read_the_peer_ends_early_is_short_and_refused() -> None:
+    sock = Script(bytes(3), None, b"")
+    clock = iter([0]).__next__
+    with pytest.raises(ConnectionError, match="closed after 3 of 8 bytes"):
+        CP.Frames().read(CP.Polled(sock, spin_ns=10, clock=clock))
 
 
 def test_a_short_answer_is_refused_by_the_prover() -> None:
@@ -321,3 +356,32 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert CP.placement("n0", "auditor-host") == {
         "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
         CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
+
+
+def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:
+    """A request naming its audit carries setup's published outputs and the point's parameters, its setup refused unless
+    its root is the binding, its blocks and parameters the session's and its salt PoUS's; the kept record is the request
+    and the id the challenger designated, 0600 in a 0700 directory, written once."""
+    _, point, published, _, _ = _in_process()
+    req = CP.request_of("n0", point, published.root, audit=AUDIT, published=published)
+    assert CP.setup_of(req) == req["published"] | {"params": req["params"]}
+    assert run.Setup.from_json(req["published"]) == published
+    assert P2Params(**req["params"]) == point.params and CP.setup_of(CP.request_of("n0", point, published.root)) is None
+    q = point.params
+    for bad, why in (({"root": "11" * 64}, "not the session's binding"), ({"blocks": q.blocks + 1}, "blocks"),
+                     ({"salt": "00"}, "salt PoUS's"), ({"extra": 1}, "a request's published outputs are")):
+        with pytest.raises(ValueError, match=why):
+            CP.setup_of(req | {"published": req["published"] | bad})
+    for params, why in ((req["params"] | {"segments": q.segments + 1}, "not the session's blocks"),
+                        ({k: v for k, v in req["params"].items() if k != "w"}, "a setup's params are")):
+        with pytest.raises(ValueError, match=why):
+            CP.setup_of(req | {"params": params})
+    with pytest.raises(ValueError, match="a request's published outputs are"):
+        CP.setup_of({k: v for k, v in req.items() if k != "published"})
+    sid = bytes(range(32))
+    path = CP.keep(tmp_path, sid, req)
+    assert path == tmp_path / CP.SETUPS / f"{sid.hex()}.json"
+    assert json.loads(path.read_text()) == {"request": req, "session_id": sid.hex()}
+    assert [p.stat().st_mode & 0o777 for p in (path.parent, path)] == [0o700, 0o600]
+    with pytest.raises(FileExistsError):
+        CP.keep(tmp_path, sid, req | {"node": "another"})

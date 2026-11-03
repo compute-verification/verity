@@ -108,15 +108,20 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
 
 def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
     """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
-    ``missing``."""
+    ``missing``. Its answer is the row's verdict, reason, commitment and public outputs, and its profile's ``placement``
+    where the answer has one (which host ran each party)."""
     if row.get("verdict") == "missing":
         return None
     if source not in ("real", "fixture"):
         raise ValueError(f"source {source!r}: real or fixture")
     a = row["answer"]
     quantity, error, error_from = _quantity(name, row)
+    answer = {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")}
+    placement = a["profile"].get("placement") if isinstance(a.get("profile"), Mapping) else None
+    if placement is not None:
+        answer["profile"] = {"placement": placement}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
-            "answer": {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")},
+            "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
             "runs": list(runs)}
 

@@ -69,7 +69,7 @@ def load_layout(P, d: str) -> None:
 
 
 class PrefixInput:
-    """`instance_sequence.Prog`'s reads of a warm request's `prefix` Input node (`pfx`: node -> (C, KVH*D, layer numbers))."""
+    """`instance_sequence.RootView`'s reads of a warm request's `prefix` Input node (`pfx`: node -> (C, KVH*D, layer numbers))."""
 
     pfx: dict = {}
 

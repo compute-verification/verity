@@ -2,7 +2,7 @@
 # The sm_89 (L40S) census probes: build scalar.cu (SRC=uniform: uniform.cu; SRC=ji16 or ji32: ji.py's grids) for
 # sm_89, gate it, then gate again and time on one leased GPU, with nvidia-smi's clocks, power and throttle reasons sampled beside it. From a pushed commit:
 #
-#   research run --on vy-dc-l40s --project verity --source <tree> --cwd source --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/sm89/run.sh [-- probe.py run flags]
 #
 # $OUT gets probe.py run's census.csv (`since` sm89), rows.jsonl, gate.json and times.jsonl, the SASS, and the trace.

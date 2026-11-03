@@ -83,7 +83,7 @@ ALLOWED = {
     # Its challenger, ZK server, workers and verifier are
     # parties of the deployment layer (`parties`), their messages the wire's.
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
-                                      "ml.randomness", "core.protocols.profile"},
+                                      "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
@@ -111,6 +111,8 @@ ALLOWED = {
     # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
+    # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
+    "core.protocols.record": set(),
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
@@ -140,7 +142,9 @@ ML_IMPORTS_CORE = {
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
-                                             "core imports them from there, and this entry goes",
+                                             "core imports them from there, and this entry then covers only rec_live's coin "
+                                             "server, which takes the inner session's coin tree from the challenger's device "
+                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`)",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
     "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
@@ -690,7 +694,7 @@ def test_a_benchmarks_import_is_found() -> None:
     found; a path into another directory, a mere mention of ``benchmarks/``, and ``benchmarks/``'s own files are not."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
-                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.pouw.tool:POUW_VLLM'\n"),
+                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
@@ -704,7 +708,7 @@ def test_a_benchmarks_import_is_found() -> None:
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
-        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.pouw.tool"],
+        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/rho']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],

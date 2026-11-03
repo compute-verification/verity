@@ -91,7 +91,7 @@
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.layout.FunctionCall` imported but unused"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.refs.Coll` imported but unused"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.types.Array` imported but unused"},
-    {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.types.Record` imported but unused"},
+    {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.types.RecordType` imported but unused"},
     {"file": "tests/program/padded_commit_tiny.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"},
     {"file": "tests/program/test_artifact_applicability_independent.py", "kind": "F402", "symbol": "_r9_recorded_applicability", "detail": "Import `field` shadowed by loop variable"},
     {"file": "tests/program/test_broadcast_bias_add.py", "kind": "F401", "symbol": "<module>", "detail": "`pytest` imported but unused"},
