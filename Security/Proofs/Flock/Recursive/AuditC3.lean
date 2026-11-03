@@ -9,7 +9,7 @@ import Proofs.Flock.Recursive.LeafFinder
 /-!
 # The recursive audit at candidate 3 (trusted)
 
-`RecursiveAuditC3` is `PublicAudit` at candidate 3's inner protocol, the design that runs: the inner session's
+`RecursiveAuditHolo` is `PublicAudit` at candidate 3's inner protocol, the Holo design: the inner session's
 circuits have hidden unit circuits, whose templates are the registered table R's, opened by the sparse phase and R's
 registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conjunction:
 
@@ -80,7 +80,7 @@ What it takes, against `PublicAudit`:
 * V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; the
   `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
-Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
+Its proof is `Flock.SecurityProofs.RecursiveAuditHolo` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
 word the runs open (`Recursive/RegExtract.lean`), which reads piece (a)'s runs (`FlockC3.Fork.holo_runs_sound`). Its
 non-vacuity needs VBridgeCOff at candidate 3 (piece (b), `FlockC3.Compose`) and
 V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
@@ -333,7 +333,7 @@ The attribute makes any accidental crossing fail fast. -/
 attribute [local irreducible] holoAt
 
 /-- **The recursive audit at candidate 3's soundness half, at coin types `CT` and the record map `im`**
-(`RecursiveAuditC3` reads it at the inner session's coin kinds, `holoCTs`, and the verifier's map, `holoMap`).
+(`RecursiveAuditHolo` reads it at the inner session's coin kinds, `holoCTs`, and the verifier's map, `holoMap`).
 
 For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
 parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, and R's
@@ -755,18 +755,18 @@ coins of their coin kinds in the run's order (`holoCTs`: the link points, then t
 `holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
 `RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
-`Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
-below the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates
-to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_open`) and does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
-statements follows from it (`bitsLin2On_of_ksLin2On`).
+`Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
+bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
+and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
+(`Flock.SecurityProofs.RecursiveKS`) but does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
+statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `verity/sampled-proofs/recursive/v1`
+accepts, is `RecursiveAuditC3`, at `λ₂ = 100`.
 -/
-def RecursiveAuditC3 : Prop :=
+def RecursiveAuditHolo : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
 
-/-- **`RecursiveAuditC3` with no A3**: `RecursiveAuditC3` with its first part with no A3. -/
-def RecursiveAuditC3NoA3 : Prop :=
+/-- **`RecursiveAuditHolo` with no A3**: `RecursiveAuditHolo` with its first part with no A3. -/
+def RecursiveAuditHoloNoA3 : Prop :=
   RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveFirewallPrivate
 
 end Flock.Guarantees

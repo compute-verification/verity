@@ -12,8 +12,9 @@ entry exceeds its measurement, and a lower bound on `cost100` at these prices ho
 forms. Round 7's `h100Measured` is kept as it was measured.
 
 **A measurement, not a floor**. `int32 = 34` is two-source IADD and `other = 36` is two-source
-HADD2. The immediate forms (IADD a+K, HADD2 a+K) were never measured and could reach 32, the dispatch bound for a
-writer of one register. The floor is `h100Floor` (`Pouw.Dimension.H100Floor`): this table with `int32 = other = 32`,
+HADD2. The immediate forms (IADD a+K, HADD2 a+K) were never measured on the H100 SXM and could reach 32, the dispatch
+bound for a writer of one register. On the H200 they do: IADD with an immediate costs 32.35, and two-source HADD2
+with an immediate 32.28. The floor is `h100Floor` (`Pouw.Dimension.H100Floor`): this table with `int32 = other = 32`,
 a floor except at `tc`, which both tables take from this board's legacy `mma.sync`. The hardware
 citations are `DistinctWritesLoopFree` (these prices, for the measured forms) and `DistinctWritesFloor` (every scalar
 form and every `wgmma` shape, and legacy tensor-core forms as measured).

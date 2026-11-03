@@ -5,7 +5,7 @@ changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
 records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
-`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
 path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
@@ -278,25 +278,24 @@ installs it first, so a machine without elan works), must pass clean and fail on
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
 - **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
-  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
-  whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the
-  spec of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency
-  (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
-  nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
-  package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
-  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
-  the proofs tree (the trees check judges those).
-- **The trees**: `trees` names which module prefixes are the definitions tree (what a reader reads:
-  each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
-  and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
-  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
-  (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
-  statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
-  off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
-  ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
-  excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
-  The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
-  package's (`unread_spec` in `report.json`).
+  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
+  whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
+  of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency (the
+  toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
+  nothing of it. `reads_exempt` ({prefix: the reason}) lists the module prefixes a guarantee may read outside the spec
+  (a package whose statements are about its executable, not about a model of it); an entry that exempts no read outside
+  the spec fails, and no entry covers a spec module outside `meaning`, nor a module of the proofs tree (the trees check
+  judges those).
+- **The trees**: `trees` names the module prefixes of the definitions tree (each area's vocabulary, named assumptions
+  and guarantee statements), the properties tree (statements about the code) and the proofs tree (every proof, lemma and
+  proof-only definition); a module's tree is that of its longest prefix (`Proofs.Properties` before `Properties`), and a
+  package's trees reach those that require it by path (`Security`'s reach `Security/Properties` and `Security/Proofs`).
+  The check refuses a guarantee or property whose statement reads a definition in the proofs tree (move it to the
+  definitions tree, or unlist it as a lemma), and a module of the definitions or properties tree that imports one.
+  `except` ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that
+  excepts nothing fails. Excepted modules are still recorded. `Security`'s `except` is the cleanup's to-do. The report
+  also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
+  in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
@@ -489,8 +488,8 @@ module docstring has the layout and the rules. In short:
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
 - The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off` and `LAKE_ARTIFACT_CACHE=false`. Check's audit and
   a records run name their node's own Lake cache instead (`--artifacts`, `lean_audit.LakeArtifacts`), which only a
-  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose sha256
-  key (`module_keys.py`, imports read by `headers.py`) it indexes, and builds any other from source.
+  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose key
+  (`module_keys.py`, the task graph's key of its compile) it indexes, and builds any other from source.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

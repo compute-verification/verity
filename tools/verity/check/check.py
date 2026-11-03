@@ -380,8 +380,8 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
-    next takes the next slot) and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's, so it takes the next
+    slot ahead of drive's unranked Lean checks) and --twin for one of a check's twins."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
@@ -865,7 +865,9 @@ def _version(v: str) -> tuple[int, ...]:
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its pinned commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
+    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
+    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -887,7 +889,9 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], s["sessions"][0]["expect"])
+        e = s["sessions"][0]["expect"]
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
+                          {"accepted": e.get("upstream_accepted", e["accepted"])})
     return list(out.values())
 
 
@@ -1370,12 +1374,16 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
     """`--cc-records-from ART@SHA256`: the records step's tarball (`cc_records`), from the run record ART, unpacked into
     circuit-check's cache ``cache`` once its bytes have that sha256 and the tree it was built from is this one; else why it is
     refused, and nothing unpacked.  Each record goes in by rename, so a circuit-check reading the cache meanwhile sees it whole
-    or not at all, and one counts only while its own reads still match (`circuit_check.units`)."""
+    or not at all, and one counts only while its own reads still match (`circuit_check.units`).  The tarball is fetched and
+    unpacked in a hidden directory inside the cache as its path resolves, so no rename crosses a filesystem when that path is a
+    link or mount onto another disk; circuit-check lists records only in their key's directory and `verdicts` walks no hidden
+    directory, so neither reads it."""
     art, _, sha = spec.partition("@")
     if not art.startswith("art:") or not re.fullmatch(r"[0-9a-f]{64}", sha):
         return f"{spec} is not ART@SHA256"
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    d = Path(tempfile.mkdtemp(prefix="cc-records-", dir=cache.parent))
+    cache.mkdir(parents=True, exist_ok=True)
+    root = cache.resolve()
+    d = Path(tempfile.mkdtemp(prefix=".cc-records-", dir=root))
     try:
         try:
             tar = fetch(art, d)
@@ -1393,7 +1401,7 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
             t.extractall(d / "x", filter="data")
         n = 0
         for p in sorted((d / "x" / "cache").rglob("*.json")):
-            (to := cache / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
+            (to := root / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
             os.replace(p, to)
             n += 1
         print(f"check: circuit-check: {n} binding record(s) from {art} ({sha[:12]}) into {cache}", flush=True)

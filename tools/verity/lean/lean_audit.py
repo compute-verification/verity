@@ -103,9 +103,12 @@ def _module(path: Path, name: str):
     return m
 
 
-#: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them) and `common.py` (`test_lean_audit.py` holds it)
+#: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them), `common.py` and the task graph's
+#: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
 COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
+#: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
+CONTRACT = "tools/verity/graph/verity_graph/contract.py"
 
 
 def _sha(p: Path) -> str:
@@ -167,7 +170,7 @@ def tool_files(files: list[str]) -> list[str]:
     """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
             and f[len(LEAN_TOOL):] not in NOT_READ]
-    return sorted({*tool, "tools/verity/check/common.py"})
+    return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
 
 
 def inputs(pkg: str, files: list[str]) -> list[str]:
@@ -714,7 +717,7 @@ def prune_replays(cache: Path, kept: int | None = None) -> int:
 ARTIFACTS_CAP = 20 << 30
 ARTIFACT = MK.ARTIFACT
 #: a bundle's members: the index's entries and the artifacts they name, nothing else
-MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{64}\.json")
+MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
 #: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
 BUNDLE_CAP = 3 << 30
 #: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
@@ -725,8 +728,8 @@ SHARED_LIMIT = 12
 
 class LakeArtifacts:
     """The node's Lake artifact cache: Lake's artifacts (`artifacts/<hash>.<ext>`) and an index of the modules they are the
-    outputs of, each under its sha256 key (`keys/<key>.json`, `module_keys`): the module, its package, Lake's input hash, the
-    outputs its trace names and the sha256 of each. The builds of check's audit and of a records run read it through a Lake
+    outputs of, each under its key (`keys/<key>.json`, `module_keys`): the module, its package, Lake's input hash, the
+    outputs its trace names and the digest of each. The builds of check's audit and of a records run read it through a Lake
     cache directory of their own, which `module_keys.stage` fills with the modules whose keys it indexes (`check.py
     --artifacts`), and never write it; after a run passes, each module its build compiled in the sandbox goes in (`put`). A
     module version any earlier passing run on this node built is then restored whatever tree comes next, not only the one
@@ -754,7 +757,8 @@ class LakeArtifacts:
         the index. Only a build whose report says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
         as its module's. A module goes in only when `module_keys.indexable`, when each output its trace names is in the
-        build with that hash (`<file>.hash`), and once every workspace module it imports is indexed; its artifacts before
+        build with that hash (`<file>.hash`), and once every workspace module it loads is indexed, under the key the
+        outputs the build holds of those give it (`module_keys.read_digests`); its artifacts before
         the entry naming them, one the cache holds already kept only with the same bytes. A newer build replaces the entry
         under the same key, so the entries of a module and its imports stay one build's."""
         with self._lock():
@@ -770,9 +774,13 @@ class LakeArtifacts:
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
+                outs = MK.read_digests(keyed, {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
+                                               for a, (_, d) in b[2].items()})
                 indexed: set[str] = set()
                 for mod, k in keyed.items():
-                    if all(i in indexed for i in k.imports) and (got := self._index(mod, k, built[mod])) is not None:
+                    loaded = MK.loads(mod, keyed)
+                    if all(i in indexed for i in loaded) and (key := MK.key(mod, keyed, outs, loaded)) is not None \
+                            and (got := self._index(mod, key, k.package.name, built[mod])) is not None:
                         indexed.add(mod)
                         n += got
             self.prune()
@@ -781,7 +789,7 @@ class LakeArtifacts:
     @staticmethod
     def _built(mod: str, keyed: dict, pkgs: list, since: float | None,
                owners: dict | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
-        """(Lake's input hash, the outputs its trace names, {artifact: (its file, its sha256)}) of ``mod`` as its build
+        """(Lake's input hash, the outputs its trace names, {artifact: (its file, its digest)}) of ``mod`` as its build
         compiled it, or why it isn't indexed: not compiled since ``since``, restored, or not `indexable` (``owners``)."""
         build = keyed[mod].package.build()
         trace = build / "lib" / "lean" / MK.path_of(mod, ".trace")
@@ -810,16 +818,16 @@ class LakeArtifacts:
             files[name] = (f, MK.digest(f))
         return (h, out, files) if files else "a trace that names no artifact"
 
-    def _index(self, mod: str, k, built) -> bool | None:
-        """Index ``mod`` under ``k`` from ``built`` (`_built`): True for a new entry, False for one kept or replaced, None when
-        it has none."""
-        at = self.store / MK.INDEX / f"{k.key}.json"
-        old = MK.entry(self.store, k, mod)
+    def _index(self, mod: str, key: str, scope: str, built) -> bool | None:
+        """Index ``mod`` of package ``scope`` under ``key`` from ``built`` (`_built`): True for a new entry, False for one
+        kept or replaced, None when it has none."""
+        at = MK.entry_path(self.store, key)
+        old = MK.entry(self.store, key, mod, scope)
         if isinstance(built, str):
             return None if old is None else False
         h, out, files = built
         shas = {n: s for n, (_, s) in files.items()}
-        if old is not None and old["hash"] == h and old["sha256"] == shas:
+        if old is not None and old["hash"] == h and old["digests"] == shas:
             os.utime(at)
             return False
         arts = self.store / "artifacts"
@@ -839,11 +847,11 @@ class LakeArtifacts:
             os.chmod(tmp, 0o444)
             os.replace(tmp, dst)
         at.parent.mkdir(exist_ok=True)
-        tmp = at.parent / f".{k.key}.{os.getpid()}.tmp"
-        tmp.write_text(json.dumps({"module": mod, "scope": k.package.name, "hash": h, "outputs": out, "sha256": shas},
+        tmp = at.parent / f".{at.stem}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps({"module": mod, "scope": scope, "hash": h, "outputs": out, "digests": shas},
                                   sort_keys=True))
         os.replace(tmp, at)
-        self.added.append((f"{MK.INDEX}/{k.key}.json", sorted(files)))
+        self.added.append((at.relative_to(self.store).as_posix(), sorted(files)))
         return old is None
 
     def bundle(self, dest: Path, cap: int = BUNDLE_CAP) -> int:
@@ -926,7 +934,7 @@ class LakeArtifacts:
 
     def _unpack(self, part: Path) -> int:
         """Take in the entries of the bundle at ``part`` (`MEMBER`, of the shape `module_keys.valid` reads) under keys this
-        cache lacks, and the artifacts they name that it lacks, each only with a sha256 an entry names for it; an entry
+        cache lacks, and the artifacts they name that it lacks, each only with a digest an entry names for it; an entry
         once every artifact it names is here. A file here is never replaced. The number of entries added."""
         entries: dict[str, dict] = {}
         want: dict[str, set[str]] = {}
@@ -942,19 +950,16 @@ class LakeArtifacts:
                         continue
                     if not dst.exists() and MK.valid(e):
                         entries[m.name] = e
-                        for a, sha in e["sha256"].items():
-                            want.setdefault(a, set()).add(sha)
+                        for a, d in e["digests"].items():
+                            want.setdefault(a, set()).add(d)
                     continue
                 if dst.exists() or m.name.split("/", 1)[1] not in want:
                     continue
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
-                d = hashlib.sha256()
                 with t.extractfile(m) as src, open(tmp, "wb") as f:
-                    for chunk in iter(lambda: src.read(1 << 20), b""):
-                        d.update(chunk)
-                        f.write(chunk)
-                if d.hexdigest() not in want[m.name.split("/", 1)[1]]:
+                    shutil.copyfileobj(src, f, 1 << 20)
+                if MK.digest(tmp) not in want[m.name.split("/", 1)[1]]:
                     tmp.unlink()
                     continue
                 os.chmod(tmp, 0o444)
@@ -962,7 +967,7 @@ class LakeArtifacts:
         n = 0
         for name, e in entries.items():
             dst = self.store / name
-            if dst.exists() or not all((self.store / "artifacts" / a).exists() for a in e["sha256"]):
+            if dst.exists() or not all((self.store / "artifacts" / a).exists() for a in e["digests"]):
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
