@@ -5,7 +5,8 @@ description: >
   goal is (an outcome with one owner and a date), tags from the fixed list of projects, tiers (derived from what waits
   on what, overridable), what a goal waits on (links to goals and Daniel's asks, never free text), why an off-track goal
   is off track, and how to write the description so Daniel can skim it (one plain opening sentence, then the shape that
-  fits: landing, research or proof; bold only for key expressions). Covers `research goals
+  fits: landing, research or proof; bold only for key expressions; a lead-in line for every list, math in LaTeX, and no
+  word he has said he doesn't know, all three refused by the site). Covers `research goals
   show|set|confirm|done|remove|replace` and the API it calls. Use when writing, updating or confirming a goal, adding a
   dependency, or rewriting your goals for a sync.
 ---
@@ -69,12 +70,18 @@ within two days."
 Rules:
 
 - Bold only key expressions: numbers, dates and decisions waiting on Daniel. Never a sentence or a clause.
-- No fixed labels. A plain lead-in ("So far, on the pilot:", "Plan:", "Proved:", "Left:") only where it helps.
+- No fixed labels, but every list has a lead-in line ending in a colon that says what it is, in the goal's own words:
+  "So far, on the pilot:", "Plan:", "Proved:", "Left:", "By Tue 6 AM:". The site refuses a list without one.
+- Math is LaTeX between dollar signs: $\rho$, $p = C/H$. The site refuses a Greek character (ρ, ε) outside math or code.
 - No "why it matters" when the title already says it. No "to check it" unless the evidence isn't obvious, and then one
   line naming it.
 - Sub-bullets are welcome: indent them three spaces under their item.
 - Times are Pacific, written like "Mon 10 PM", with no zone and never UTC.
-- No PR numbers, ticket ids, branch names, run ids, agent ids or file paths. Name teams by handle (ci, proofs).
+- No PR numbers, ticket ids, branch names, run ids, agent ids, file paths or code names (a package, module or
+  function: "te_core", "page_rho"). Say what the thing does. Name teams by handle (ci, proofs).
+- The site refuses a word Daniel has said he doesn't know, and its refusal says what to write instead. The list is
+  `UNKNOWN` in the website repository's goals check (`plain.ts`); when he says he doesn't know a word, tell dashboard,
+  who adds it with his words.
 - Define a term the first time you use it. Give numbers with units and what they compare to.
 - Link another goal with `[text](#goal-id)` and an ask with `[text](ask:<card id>)`; both render as chips.
 
