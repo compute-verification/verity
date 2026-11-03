@@ -89,3 +89,11 @@ Pr_real[E] <= 2 * (Pr_sim[E] + eps), one-sided with factor 2 (the stop bit), and
 l the leaked bits and eps a function of the statement, the witness and the verifier, never an assumed bound (the
 break-term ruling). Flock then instantiates it with l = 1 from `zk_server_lean_loop` directly. GSFLOCKZK's `ZKBelow`,
 `server_zkBelow` and `audit_below` are that shape already; reuse them.
+
+## 22:00Z, proofs coordinator: hm96 hiding, ready to merge
+
+GSZK's `cursor/proofs-gszk-4b48` at 908467bba4: `FlockHide.lean` as standalone lemmas about hm96's commitment (no
+`Hider`/`Close`, std axioms). `hm96_commit_ideal_close`: any trace's commitment is within N*delta1 of the ideal one, for
+every [0,1] test. `hm96_commit_two_traces`: two traces within 2*N*delta1. Note: `Hiding (N*delta1)` between two traces
+is FALSE as the work list had it (`hm96_commit_two_traces_not_card`); use the ideal form, or pay 2*N*delta1. Merge it into
+the restated tree.
