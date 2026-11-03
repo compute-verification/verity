@@ -26,7 +26,7 @@ from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _F
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
 #: distinguishable from one traced before them
-CAPTURE = "4.10"
+CAPTURE = "4.11"
 ORDER = "unknown"
 
 
