@@ -1,150 +1,125 @@
 module
 
-public import Proofs.Flock.SampledGeneric.Defs
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
 
 /-!
-# hm96's leaf commitment hides, in the generic interface (`Hider.Hiding`)
+# hm96's hiding commitment to `N` leaves: the hybrid over the leaves
 
-`GenericSampledZK` and `audit_below` take the commitment's hiding against every post-processing
-(`Hider.Hiding`). Here hm96's leaf commitment to a vector of digests (leaf `i` is `H(x_i + M·y_i, c(y_i))` at its own
-salt `y_i`) is `2·N·δ₁`-hiding over `N` leaves, from `Claims.Hm96Hiding M c δ₁`:
+The trace is a digest at each of `N = |ι|` hiding leaves, and the prover's coins are a uniform salt per leaf. Leaf `i`
+of the commitment to the trace `X` under the salts `y` is `H(X i + My (y i), c (y i))`: hm96's
+`H(p_leaf ‖ x ⊕ Φy ‖ H(p_salt ‖ y))`, with XOR the addition of the group `B`. Leaf `i` of the ideal commitment is
+`H(U i, c (y i))` with `U i` fresh and uniform; it reads no trace. A test is a function of the `N` leaves with values in
+`[0,1]`: whatever runs on the commitment, as its probability of an event given the leaves.
 
-* `Hider.pr_andThen_exp`: post-processing a commitment is an average over the prover's coins;
-* `avg_test_le`: on finite uniform coins, a bound on every event of two random variables is a bound on every test with
-  values in `[0, 1]` (take the event that the first variable's value is likelier than the second's);
-* `hm96_event_le`: the commitments to two vectors are within `2·N·δ₁` on every event, through ideal leaves, which read
-  no digest (`ZK.ideal_leaves_swap_fintype`, then `ZK.real_leaves_swap_fintype`), as `Session.session_shvzk_hm96` pays
-  `2·|Hid|·δ₁`;
-* `hm96Hider_hiding`.
+* `hm96_commit_ideal_close`: from `Claims.Hm96Hiding` at `δ₁` per leaf, the commitment to any trace and the ideal
+  commitment give every test expectations within `N·δ₁` of each other, both ways (`ideal_leaves_swap_fintype` and
+  `real_leaves_swap_fintype` on events, lifted to tests by `avg_le_of_prCoin`);
+* `hm96_commit_two_traces`: the commitments to two traces are within `2·N·δ₁`, through the ideal one;
+* `hm96_commit_two_traces_not_card`: the `2` is needed. One leaf with a constant mask satisfies `Hm96Hiding` at
+  `δ₁ = 1/2`, yet its commitment is the trace itself, `1` apart between two traces.
 -/
 
 @[expose] public section
 
 namespace FlockSoundness.SampledGeneric
 
-open Game
+open Game ZK Discharge.ZkCoins
 open scoped ENNReal
 
-/-- Post-processing a commitment is the average, over the prover's coins, of the post-processing at each commitment. -/
-theorem Hider.pr_andThen_exp {Tr Rnd Com W : Type} [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com) (Xv : Tr)
-    (f : Com → Exp W) (E : W → Prop) :
-    ((H.exp Xv).andThen f).pr E = avg fun r => (f (H.commit Xv r)).pr E :=
-  rfl
+theorem prCoin_unit_prod {Ω : Type} [Fintype Ω] (P : Ω → Prop) :
+    prCoin (fun p : Unit × Ω => P p.2) = prCoin P :=
+  (prCoin_prod_split fun (_ : Unit) (y : Ω) => P y).trans (avg_const _)
 
-open Classical in
-/-- An average of a function of `a` is a sum over any finite set holding `a`'s values, each weighted by its
-probability. -/
-theorem avg_comp_eq_sum {Ω C : Type} [Fintype Ω] (a : Ω → C) (S : Finset C) (hS : ∀ ω, a ω ∈ S)
-    (f : C → ℝ≥0∞) : avg (fun ω => f (a ω)) = ∑ c ∈ S, f c * prCoin fun ω => a ω = c := by
-  simp only [prCoin, avg, Finset.mul_sum]
-  rw [Finset.sum_comm]
-  refine Finset.sum_congr rfl fun ω _ => ?_
-  rw [Finset.sum_eq_single_of_mem (a ω) (hS ω) fun c _ hc => by simp [Ne.symm hc]]
-  simp [mul_comm]
+variable {ι Y B C D : Type} [Fintype ι] [DecidableEq ι] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
 
-open Classical in
-/-- The probability that `x` lands in `P` is the sum over `P` of the probability of each value. -/
-theorem prCoin_mem_eq_sum {Ω C : Type} [Fintype Ω] (x : Ω → C) (P : Finset C) :
-    prCoin (fun ω => x ω ∈ P) = ∑ c ∈ P, prCoin fun ω => x ω = c := by
-  simp only [prCoin, avg]
-  rw [Finset.sum_comm]
-  refine Finset.sum_congr rfl fun ω _ => ?_
-  rw [← Finset.mul_sum]
-  congr 1
-  by_cases hx : x ω ∈ P
-  · rw [Finset.sum_eq_single_of_mem (x ω) hx fun c _ hc => by simp [Ne.symm hc]]
-    simp [hx]
-  · rw [Finset.sum_eq_zero fun c hc => by simp [show x ω ≠ c from fun h => hx (by rw [h]; exact hc)]]
-    simp [hx]
+/-- **hm96's commitment to `N` leaves hides, as a hybrid over the leaves**: from `Claims.Hm96Hiding` at `δ₁` per leaf,
+for every trace `X` and every test `Γ` of the `N = |ι|` leaves with values in `[0,1]`, the commitment to `X` and the
+ideal commitment, which reads no trace, give `Γ` expectations within `N·δ₁` of each other, both ways. -/
+theorem hm96_commit_ideal_close (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁)
+    (H : B × C → D) (X : ι → B) (Γ : (ι → D) → ℝ≥0∞) (hΓ : ∀ d, Γ d ≤ 1) :
+    avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i))) ≤
+        avg (fun u : ι → B × Y => Γ fun i => H ((u i).1, c (u i).2)) + Fintype.card ι * δ₁ ∧
+      avg (fun u : ι → B × Y => Γ fun i => H ((u i).1, c (u i).2)) ≤
+        avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i))) + Fintype.card ι * δ₁ := by
+  classical
+  have : Nonempty B := ⟨0⟩
+  let g : (ι → Y) → ι → D := fun y i => H (X i + My (y i), c (y i))
+  let g' : (ι → B × Y) → ι → D := fun u i => H ((u i).1, c (u i).2)
+  let S : Finset (ι → D) := Finset.univ.image g ∪ Finset.univ.image g'
+  have hS : ∀ y, g y ∈ S := fun y => Finset.mem_union_left _ (Finset.mem_image_of_mem g (Finset.mem_univ y))
+  have hS' : ∀ u, g' u ∈ S := fun u => Finset.mem_union_right _ (Finset.mem_image_of_mem g' (Finset.mem_univ u))
+  have toIdeal : ∀ P : (ι → D) → Prop,
+      prCoin (fun y => P (g y)) ≤ prCoin (fun u => P (g' u)) + Fintype.card ι * δ₁ := fun P =>
+    calc prCoin (fun y => P (g y))
+        = prCoin (fun p : Unit × (ι → Y) => P (g p.2)) := (prCoin_unit_prod fun y => P (g y)).symm
+      _ ≤ prCoin (fun p : Unit × (ι → B × Y) => P (g' p.2)) + Fintype.card ι * δ₁ :=
+          ideal_leaves_swap_fintype My c hT1 H (Ω := Unit) (fun _ => X) (fun _ L => P L)
+      _ = prCoin (fun u => P (g' u)) + Fintype.card ι * δ₁ := by rw [prCoin_unit_prod fun u => P (g' u)]
+  have toReal : ∀ P : (ι → D) → Prop,
+      prCoin (fun u => P (g' u)) ≤ prCoin (fun y => P (g y)) + Fintype.card ι * δ₁ := fun P =>
+    calc prCoin (fun u => P (g' u))
+        = prCoin (fun p : Unit × (ι → B × Y) => P (g' p.2)) := (prCoin_unit_prod fun u => P (g' u)).symm
+      _ ≤ prCoin (fun p : Unit × (ι → Y) => P (g p.2)) + Fintype.card ι * δ₁ :=
+          real_leaves_swap_fintype My c hT1 H (Ω := Unit) (fun _ => X) (fun _ L => P L)
+      _ = prCoin (fun y => P (g y)) + Fintype.card ι * δ₁ := by rw [prCoin_unit_prod fun y => P (g y)]
+  exact ⟨avg_le_of_prCoin g g' S hS hS' toIdeal Γ hΓ, avg_le_of_prCoin g' g S hS' hS toReal Γ hΓ⟩
 
-/-- A test with values in `[0, 1]` gains at most the excess mass where `pa` exceeds `pb`. -/
-theorem sum_mul_le_filter {C : Type} (S : Finset C) (g pa pb : C → ℝ≥0∞) (hg : ∀ c, g c ≤ 1) :
-    ∑ c ∈ S, g c * pa c ≤ ∑ c ∈ S, g c * pb c + ∑ c ∈ S.filter (fun c => pb c < pa c), (pa c - pb c) := by
-  rw [Finset.sum_filter, ← Finset.sum_add_distrib]
-  refine Finset.sum_le_sum fun c _ => ?_
-  split_ifs with hq
-  · calc g c * pa c = g c * pb c + g c * (pa c - pb c) := by rw [← mul_add, add_tsub_cancel_of_le hq.le]
-      _ ≤ g c * pb c + (pa c - pb c) := add_le_add le_rfl (mul_le_of_le_one_left zero_le (hg c))
-  · rw [add_zero]
-    gcongr
-    exact not_lt.1 hq
+/-- **The commitments to two traces are within `2·N·δ₁`**: `N·δ₁` from the first to the ideal commitment and `N·δ₁`
+from it to the second (`hm96_commit_ideal_close`). The `2` is needed (`hm96_commit_two_traces_not_card`). -/
+theorem hm96_commit_two_traces (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁)
+    (H : B × C → D) (X X' : ι → B) (Γ : (ι → D) → ℝ≥0∞) (hΓ : ∀ d, Γ d ≤ 1) :
+    avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i))) ≤
+      avg (fun y : ι → Y => Γ fun i => H (X' i + My (y i), c (y i))) + 2 * Fintype.card ι * δ₁ :=
+  calc avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i)))
+      ≤ avg (fun u : ι → B × Y => Γ fun i => H ((u i).1, c (u i).2)) + Fintype.card ι * δ₁ :=
+        (hm96_commit_ideal_close My c hT1 H X Γ hΓ).1
+    _ ≤ (avg (fun y : ι → Y => Γ fun i => H (X' i + My (y i), c (y i))) + Fintype.card ι * δ₁) +
+          Fintype.card ι * δ₁ :=
+        add_le_add (hm96_commit_ideal_close My c hT1 H X' Γ hΓ).2 le_rfl
+    _ = avg (fun y : ι → Y => Γ fun i => H (X' i + My (y i), c (y i))) + 2 * Fintype.card ι * δ₁ := by
+        rw [add_assoc, ← two_mul, ← mul_assoc]
 
-open Classical in
-/-- **Events to tests**: if every event of `a` is at most `δ` likelier than the same event of `b`, every test with
-values in `[0, 1]` has expectation at most `δ` more at `a` than at `b`. -/
-theorem avg_test_le {Ω₁ Ω₂ C : Type} [Fintype Ω₁] [Fintype Ω₂] [Nonempty Ω₂] (a : Ω₁ → C) (b : Ω₂ → C)
-    {δ : ℝ≥0∞} (h : ∀ G : C → Prop, prCoin (fun ω => G (a ω)) ≤ prCoin (fun ω => G (b ω)) + δ)
-    (g : C → ℝ≥0∞) (hg : ∀ c, g c ≤ 1) :
-    avg (fun ω => g (a ω)) ≤ avg (fun ω => g (b ω)) + δ := by
-  obtain ⟨S, ha, hb⟩ : ∃ S : Finset C, (∀ ω, a ω ∈ S) ∧ ∀ ω, b ω ∈ S :=
-    ⟨Finset.univ.image a ∪ Finset.univ.image b,
-      fun ω => Finset.mem_union_left _ (Finset.mem_image_of_mem a (Finset.mem_univ ω)),
-      fun ω => Finset.mem_union_right _ (Finset.mem_image_of_mem b (Finset.mem_univ ω))⟩
-  obtain ⟨pa, hpa⟩ : ∃ pa : C → ℝ≥0∞, ∀ c, pa c = prCoin fun ω => a ω = c := ⟨_, fun _ => rfl⟩
-  obtain ⟨pb, hpb⟩ : ∃ pb : C → ℝ≥0∞, ∀ c, pb c = prCoin fun ω => b ω = c := ⟨_, fun _ => rfl⟩
-  have ea : avg (fun ω => g (a ω)) = ∑ c ∈ S, g c * pa c := by
-    rw [avg_comp_eq_sum a S ha g]
-    simp only [hpa]
-  have eb : avg (fun ω => g (b ω)) = ∑ c ∈ S, g c * pb c := by
-    rw [avg_comp_eq_sum b S hb g]
-    simp only [hpb]
-  rw [ea, eb]
-  refine (sum_mul_le_filter S g pa pb hg).trans (add_le_add le_rfl ?_)
-  obtain ⟨P, hP⟩ : ∃ P : Finset C, P = S.filter fun c => pb c < pa c := ⟨_, rfl⟩
-  rw [← hP]
-  have hev : prCoin (fun ω => a ω ∈ P) ≤ prCoin (fun ω => b ω ∈ P) + δ := h (· ∈ P)
-  rw [prCoin_mem_eq_sum a P, prCoin_mem_eq_sum b P] at hev
-  simp only [← hpa, ← hpb] at hev
-  have h1 : ∑ c ∈ P, (pa c - pb c) + ∑ c ∈ P, pb c = ∑ c ∈ P, pa c := by
-    rw [← Finset.sum_add_distrib]
-    refine Finset.sum_congr rfl fun c hc => tsub_add_cancel_of_le ?_
-    rw [hP] at hc
-    exact (Finset.mem_filter.1 hc).2.le
-  have hfin : ∑ c ∈ P, pb c ≠ ⊤ := ENNReal.sum_ne_top.2 fun c _ => by
-    rw [hpb]
-    exact ZK.prCoin_ne_top _
-  refine (ENNReal.add_le_add_iff_right hfin).1 ?_
-  rw [h1, add_comm δ]
-  exact hev
+/-- A constant mask hides at `δ₁ = 1/2`: the point `0` is `1/2` from uniform on `ZMod 2`. -/
+theorem hm96Hiding_const_half : Claims.Hm96Hiding (fun _ : Unit => (0 : ZMod 2)) (fun _ : Unit => ()) (1 / 2) := by
+  intro E
+  by_cases hE : E (0, ())
+  · have hc : (Fintype.card (ZMod 2 × Unit) : ℝ≥0∞) = 2 := by simp [ZMod.card]
+    have hsum : (2 : ℝ≥0∞)⁻¹ ≤ Claims.PrENNReal (fun p : ZMod 2 × Unit => E (p.1, ())) := by
+      unfold Claims.PrENNReal
+      calc (2 : ℝ≥0∞)⁻¹
+          = (Fintype.card (ZMod 2 × Unit) : ℝ≥0∞)⁻¹ * @ite _ (E (0, ())) (Classical.propDecidable _) 1 0 := by
+            rw [hc, ite_eq_left hE, mul_one]
+        _ ≤ _ := Finset.single_le_sum (f := fun p : ZMod 2 × Unit => (Fintype.card (ZMod 2 × Unit) : ℝ≥0∞)⁻¹ *
+              @ite _ (E (p.1, ())) (Classical.propDecidable _) 1 0) (fun _ _ => zero_le) (Finset.mem_univ (0, ()))
+    calc Claims.PrENNReal (fun _ : Unit => E (0, ()))
+        = 1 := by simp [Claims.PrENNReal, hE]
+      _ = 2⁻¹ + 1 / 2 := by rw [one_div, ENNReal.inv_two_add_inv_two]
+      _ ≤ _ := add_le_add hsum le_rfl
+  · calc Claims.PrENNReal (fun _ : Unit => E (0, ()))
+        = 0 := by simp [Claims.PrENNReal, hE]
+      _ ≤ _ := zero_le
 
-/-- **hm96's leaves** for the digests `Xv` at the salts `y`: leaf `i` is `H(Xv_i + M·y_i, c(y_i))`. -/
-def hm96Leaves {ι Y B C D : Type} [Add B] (My : Y → B) (c : Y → C) (H : B × C → D) (Xv : ι → B) (y : ι → Y) :
-    ι → D :=
-  fun i => H (Xv i + My (y i), c (y i))
-
-/-- **hm96's leaf commitment** as a commitment to digest vectors under the prover's salts. -/
-def hm96Hider {ι Y B C D : Type} [Add B] (My : Y → B) (c : Y → C) (H : B × C → D) : Hider (ι → B) (ι → Y) (ι → D) :=
-  ⟨hm96Leaves My c H⟩
-
-/-- **The commitments to two digest vectors are within `2·N·δ₁` on every event**, through ideal leaves. -/
-theorem hm96_event_le {ι Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B] [Fintype ι]
-    [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D)
-    (G : (ι → D) → Prop) (Xv Xw : ι → B) :
-    prCoin (fun y : ι → Y => G (hm96Leaves My c H Xv y)) ≤
-      prCoin (fun y : ι → Y => G (hm96Leaves My c H Xw y)) + 2 * Fintype.card ι * δ₁ := by
-  have e : ∀ Xu : ι → B, prCoin (fun p : Unit × (ι → Y) => G fun i => H (Xu i + My (p.2 i), c (p.2 i))) =
-      prCoin fun y : ι → Y => G (hm96Leaves My c H Xu y) := fun Xu =>
-    ZK.prCoin_congr_equiv (Equiv.punitProd (ι → Y)) (fun y => G (hm96Leaves My c H Xu y))
-  have h1 : prCoin (fun p : Unit × (ι → Y) => G fun i => H (Xv i + My (p.2 i), c (p.2 i))) ≤
-      prCoin (fun p : Unit × (ι → B × Y) => G fun i => H ((p.2 i).1, c (p.2 i).2)) + Fintype.card ι * δ₁ :=
-    ZK.ideal_leaves_swap_fintype My c hT1 H (fun _ => Xv) (fun _ L => G L)
-  have h2 : prCoin (fun p : Unit × (ι → B × Y) => G fun i => H ((p.2 i).1, c (p.2 i).2)) ≤
-      prCoin (fun p : Unit × (ι → Y) => G fun i => H (Xw i + My (p.2 i), c (p.2 i))) + Fintype.card ι * δ₁ :=
-    ZK.real_leaves_swap_fintype My c hT1 H (fun _ => Xw) (fun _ L => G L)
-  rw [← e Xv, ← e Xw, mul_assoc, two_mul, ← add_assoc]
-  exact h1.trans (add_le_add h2 le_rfl)
-
-/-- **hm96's leaf commitment is `2·N·δ₁`-hiding** against every post-processing, from `Claims.Hm96Hiding M c δ₁`. -/
-theorem hm96Hider_hiding {ι Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B] [Fintype ι]
-    [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) :
-    (hm96Hider (ι := ι) My c H).Hiding (2 * Fintype.card ι * δ₁) := by
-  intro W Xv Xw f E
-  have key : ∀ Xa Xb : ι → B, avg (fun y => (f (hm96Leaves My c H Xa y)).pr E) ≤
-      avg (fun y => (f (hm96Leaves My c H Xb y)).pr E) + 2 * Fintype.card ι * δ₁ := fun Xa Xb =>
-    avg_test_le (hm96Leaves My c H Xa) (hm96Leaves My c H Xb) (fun G => hm96_event_le My c hT1 H G Xa Xb)
-      (fun cm => (f cm).pr E) fun cm => prob_le_one E (f cm).g (f cm).s
-  rw [Hider.pr_andThen_exp, Hider.pr_andThen_exp]
-  exact ⟨key Xv Xw, key Xw Xv⟩
+/-- **Two traces' commitments need not be within `N·δ₁`**: `hm96_commit_two_traces` at `N·δ₁` in place of `2·N·δ₁`
+is false. One leaf with a constant mask satisfies `Hm96Hiding` at `δ₁ = 1/2` (`hm96Hiding_const_half`), but its
+commitment is the trace itself, so the test "the leaf is `0`" is `1` at the trace `0` and `0` at the trace `1`, more
+than `N·δ₁ = 1/2` apart. -/
+theorem hm96_commit_two_traces_not_card :
+    ¬ ∀ (ι Y B C D : Type) [Fintype ι] [DecidableEq ι] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
+      (My : Y → B) (c : Y → C) (δ₁ : ℝ≥0∞), Claims.Hm96Hiding My c δ₁ →
+      ∀ (H : B × C → D) (X X' : ι → B) (Γ : (ι → D) → ℝ≥0∞), (∀ d, Γ d ≤ 1) →
+        avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i))) ≤
+          avg (fun y : ι → Y => Γ fun i => H (X' i + My (y i), c (y i))) + Fintype.card ι * δ₁ := by
+  intro h
+  have h10 : (1 : ZMod 2) ≠ 0 := by decide
+  let Γ : (Unit → ZMod 2 × Unit) → ℝ≥0∞ := fun d => if (d ()).1 = 0 then 1 else 0
+  have hΓ : ∀ d, Γ d ≤ 1 := fun d => by by_cases hd : (d ()).1 = 0 <;> simp [Γ, hd]
+  have e : ∀ x : ZMod 2, avg (fun _ : Unit → Unit => Γ fun _ => id (x + 0, ())) = if x = 0 then 1 else 0 := by
+    intro x
+    by_cases hx : x = 0 <;> simp [avg, Γ, hx]
+  have h0 := h Unit Unit (ZMod 2) Unit (ZMod 2 × Unit) (fun _ => 0) (fun _ => ()) (1 / 2) hm96Hiding_const_half id
+    (fun _ => 0) (fun _ => 1) Γ hΓ
+  rw [e, e, ite_eq_left rfl, ite_eq_right h10, zero_add, Fintype.card_unit, Nat.cast_one, one_mul] at h0
+  exact absurd h0 (not_le.2 (ENNReal.half_lt_self one_ne_zero ENNReal.one_ne_top))
 
 end FlockSoundness.SampledGeneric
