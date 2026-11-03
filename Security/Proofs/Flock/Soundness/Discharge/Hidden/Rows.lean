@@ -366,9 +366,9 @@ theorem outRows_single {c : Circuit} (hsum : c.outRowPorts.foldl (· + ·) 0 = c
   rw [← hsum]
   exact hr
 
-/-- **Output row `j` of one-port runs** is output port `j`'s: its first word `outAt c j`, its words the port's. -/
-theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {j : ℕ}
-    (hj : j < c.outPorts.size) : HmOut.outGroup c j = (j, 1, outAt c j, (c.outPorts.getD j default).2) := by
+/-- **Output row `j` of `N` one-port runs** is output port `j`'s: its first word `outAt c j`, its words the port's. -/
+theorem outGroup_singleN {c : Circuit} {N : ℕ} (hr : c.outRowPorts = Array.replicate N 1) {j : ℕ} (hj : j < N)
+    (hjo : j < c.outPorts.size) : HmOut.outGroup c j = (j, 1, outAt c j, (c.outPorts.getD j default).2) := by
   have e1 : (c.outRowPorts.extract 0 j).foldl (· + ·) 0 = j := by
     rw [hr, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, Array.toList_replicate,
       List.drop_zero, List.take_replicate, Nat.sub_zero, foldl_replicate_one']
@@ -376,6 +376,7 @@ theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.ou
   have e2 : c.outRowPorts.getD j 0 = 1 := by
     rw [hr, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
     simp [hj]
+  have hj := hjo
   have hl : j < c.outPorts.toList.length := by simpa using hj
   simp only [HmOut.outGroup, e1, e2, Prod.mk.injEq, true_and]
   refine ⟨?_, ?_⟩
@@ -385,6 +386,11 @@ theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.ou
       foldl_snd_eq, Nat.zero_add, List.drop_eq_getElem_cons hl, Array.getD_eq_getD_getElem?,
       Array.getElem?_eq_getElem hj, Option.getD_some]
     simp
+
+/-- **Output row `j` of one-port runs** is output port `j`'s (`outGroup_singleN`). -/
+theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {j : ℕ}
+    (hj : j < c.outPorts.size) : HmOut.outGroup c j = (j, 1, outAt c j, (c.outPorts.getD j default).2) :=
+  outGroup_singleN hr hj hj
 
 /-- **`sha512/row/v1` rows' output rows**: unsegmented, one per output port, each after the input rows and of
 `2 · words = 128 · chunks` bytes (`ParseFacts.portWords`): a `sha512/row/v1` row is no bit row, so each output row is a
