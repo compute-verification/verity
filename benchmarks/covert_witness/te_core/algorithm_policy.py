@@ -434,9 +434,9 @@ def checked(q: dict) -> dict:
     if len(q["note"]) > console.NOTE_MAX:
         raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
     if bad := console.refused(q):
-        raise ValueError(f"{PANEL}: the panels route refuses it ({'; '.join(bad[:3])}; te_core.console.refused): at "
-                         f"most {console.COLUMNS_MAX} columns, each cell a number, a string of at most "
-                         f"{console.CELL_MAX} characters or null")
+        raise ValueError(f"{PANEL}: the panels route refuses it ({'; '.join(bad[:3])}; te_core.console.refused): a "
+                         f"source of at most {console.SOURCE_MAX} characters, at most {console.COLUMNS_MAX} columns, "
+                         f"each cell a number, a string of at most {console.CELL_MAX} characters or null")
     return q
 
 
@@ -625,9 +625,10 @@ def main(argv=None) -> int:
                          f"{console.PANELS_URL}/{PANEL}")
     a = ap.parse_args(argv)
     d, scored = frontier_fit.scored_rows(a)
-    runs, extra, fit_source = frontier_fit.inputs(a, scored, d["shapes"], d)
-    fp, info = frontier_fit.build(scored, d["shapes"], runs, fit_source, extra)
-    source = a.source or fit_source.replace("te_core.frontier_fit", f"te_core.{NAME.replace('-', '_')}", 1)
+    me = f"te_core.{NAME.replace('-', '_')}"
+    runs, extra, source = frontier_fit.inputs(a, scored, d["shapes"], d, me)
+    fp, info = frontier_fit.build(scored, d["shapes"], runs, a.source or source.replace(me, "te_core.frontier_fit", 1),
+                                  extra)
     p = build(info, source, fp["updated_at"])
     own = coverage(p)
     tables = a.out / "tables"

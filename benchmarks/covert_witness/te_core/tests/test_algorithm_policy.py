@@ -518,7 +518,8 @@ def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scr
     fits = {d["data"]: d for d in plots.frame(fp) if d["row"] == "fit"}
     assert fits["v3"]["status"].startswith("provisional fit: 4 of its points from scratch, under 5; ")
     assert fits["v2.3-pilot"]["status"].startswith("fit; ")
-    assert f"; 5 ladder points, {FF.LADDER} from its manifest)" in fp["source"]
+    assert fp["source"].endswith(f"; 5 ladder points ({FF.LADDER[:16]}))")
+    assert p["source"] == fp["source"].replace("te_core.frontier_fit", "te_core.algorithm_policy", 1)
     assert fp["note"].startswith(FF.note() + " ") and len(fp["note"]) <= console.NOTE_MAX
     f, gates = fitted(fp, "v3"), per_mac("gemm/bf16")
     assert f["E"] == pytest.approx(1.2, abs=1e-3)
@@ -553,8 +554,7 @@ def test_the_rows_te_core_refuses_are_listed_and_counted_never_scored(tmp_path, 
     kinds = "2 data-dependent, 1 read-backs unchecked"
     assert f"3 valid checkpoints are refused by te_core.formalism, never scored, so in no cell ({kinds}; " in \
         (got["out"] / "tables" / "coverage.md").read_text()
-    assert "; 3 refused (te_core.formalism.refusal); " in got["panel"]["source"] and \
-        "; 3 refused (te_core.formalism.refusal); " in got["fit"]["source"]
+    assert "; 3 refused; " in got["panel"]["source"] and "; 3 refused; " in got["fit"]["source"]
     out = capsys.readouterr().out
     assert f"3 valid checkpoints refused, never scored: {kinds}" in out
     assert f" 3 valid checkpoints refused by te_core.formalism, never scored ({kinds})." in \
