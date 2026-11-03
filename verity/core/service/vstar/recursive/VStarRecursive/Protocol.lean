@@ -1,7 +1,7 @@
 /-
-Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v2's audit
-(`SampledProofs.OneStageZk`) with its one verdict of record computed by V*'s compiled check, the recursive verifier the
-auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
+Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
+(`SampledProofs.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
+verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 
 * **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
   the inner statement's circuit file, its draw (`--rec-inner-draw`), its public file and the circuit registration
@@ -22,11 +22,13 @@ auditor runs (`flock-verify verify --zk` once per V* part with that part's recur
   (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
   with the part's `--circuit`, `--public`, `--partition`, `--program`, `--registered`, `--rec-inner`, `--rec-part j`,
   `--rec-bindings` and `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
-  `--rec-inner-partition`, `--rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os
-  --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and `--rec-inner-registration`, and one `--session`
+  `--rec-inner-partition`, `--rec-inner-program`, `--rec-inner-statement verity/flock-circuit+plain-leaves
+  --rec-inner-statement-coins os --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and
+  `--rec-inner-registration`, no link table (no `--rec-links`), and one `--session`
   (`partVerdict`, the C-Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
-  v1's `check` on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units
-  are the inner public file's units at the inner record's draw.
+  v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's when the params name
+  one) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
+  inner public file's units at the inner record's draw.
 
 **Form.** Only the dense form, the one `Flock.Guarantees.RecursiveKSAt`'s statements (`RecDeploy.DenseAt`) cover: the
 inner circuits are public (no `--hide`), there is no RecSparse phase (no `--sparse`), and an inner circuit whose META
@@ -194,7 +196,7 @@ def metaOf (b : ByteArray) : V Json := do
       let e := lineEnd b at_
       let some line := String.fromUTF8? (b.extract at_ e) | throw "rec inner circuit: not UTF-8"
       if line.startsWith "META " then
-        match Json.parse (line.drop 5).toString with
+        match Flock.JsonParse.parse (line.drop 5).toString with
         | .ok m => return m
         | .error err => throw s!"rec inner circuit: META is not JSON: {err}"
       at_ := e + 1
@@ -210,22 +212,23 @@ def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray)
   let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
   pure { i with holo := false, sparse := none, stacked := none }
 
-/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, the known rows and the template parameters the
-ports read. -/
+/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, `true` (`flock-verify` runs `checkComplete` on
+every registered file), the known rows and the template parameters the ports read. -/
 def registeredOf (j : Json) :
-    V (Array Flock.Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
+    V (Array Flock.Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
   let own ← Flock.Registered.ofJson j
   let known ← Flock.Registered.knownOf j
   Flock.Registered.checkKnownAll own known
-  pure (own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
+  pure (own, true, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
     ← Flock.Registered.paramsOf j)
 
 /-- `pure ()` when `b`, else the refusal `why`. -/
 def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
 /-- The bound on a file every part's session encodes as one field (the staged public file, the inner record and the coin
-server's transcript): each field's length is one 8-byte word, so the verifier refuses a file of `2^56` bytes or more,
-under which the statement's own fields keep every encoded field under `2^64`. -/
+server's transcript), and on the whole statement the inputs name (`statementFits`): each field's length is one 8-byte
+word, so the verifier refuses a file or statement of `2^56` bytes or more, under which every encoded field stays under
+`2^64`. -/
 def FIELD_MAX : Nat := 2 ^ 56
 
 /-- `need` on a file's size: `what` is under `FIELD_MAX` bytes. -/
@@ -243,7 +246,7 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let coins := Flock.Coins.os
   let rtags := tags.withCoins coins
   let some t := String.fromUTF8? drawB | throw "draw: not UTF-8"
-  let draw := some (Flock.norm (← (Json.parse t).mapError fun e => s!"draw: not JSON: {e}"))
+  let draw := some (Flock.norm (← (Flock.JsonParse.parse t).mapError fun e => s!"draw: not JSON: {e}"))
   let partition := some o.partition
   let program := some o.program
   let (_, n) ← Flock.HmRow.stratifiedLaw o.partition o.program 1
@@ -286,7 +289,8 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
-      form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB } }
+      form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB },
+      program := some o.program }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let transcriptB ← bs.get pr.transcript "rec inner transcript"
   fits transcriptB "rec inner transcript"
@@ -296,14 +300,14 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
     let some s := String.fromUTF8? (← bs.get d "rec inner registration") | throw "rec inner registration: not UTF-8"
     pure s
   let commits ← Flock.RecSetup.commits (some shape) (pure t) (pure reg) bound record
-  let link ← match Json.parse t with
+  let link ← match Flock.JsonParse.parse t with
     | .ok j => Flock.RecVStar.innerLink j record
     | .error e => throw s!"rec inner transcript: not JSON: {e}"
   let rowsB ← bs.get pr.rows "the staged rows"
   fits rowsB "the staged rows"
   let rows ← (do
       let some t := String.fromUTF8? rowsB | throw "not UTF-8"
-      pure (← registeredOf (← (Json.parse t).mapError (s!"not JSON: " ++ ·))).1).mapError (s!"rec rows: " ++ ·)
+      pure (← registeredOf (← (Flock.JsonParse.parse t).mapError (s!"not JSON: " ++ ·))).1).mapError (s!"rec rows: " ++ ·)
   pure { shape, src, bound, commits, link, rows }
 
 /-- One part's verdict: `verifyCmd`'s `--zk` path at part `j`'s recursive inputs and the inner session held, on its one
@@ -320,9 +324,9 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
   fits pubB s!"part {j}'s public file"
   let tags := Flock.Zk.tags (tags0.withCoins coins) (Flock.Zk.maskLogOf circuitB) count
   let tables : List (String × ByteArray) := []
-  let (registered, known, regParams) ← match p.registered with
-    | none => pure (none, #[], #[])
-    | some r => (fun (own, k, ps) => (some own, k, ps)) <$> registeredOf r
+  let (registered, complete, known, regParams) ← match p.registered with
+    | none => pure (none, false, #[], #[])
+    | some r => (fun (own, c, k, ps) => (some own, c, k, ps)) <$> registeredOf r
   let rows := some h.rows
   let bindings ← Flock.RecVStar.ownBindingsOfJson p.bindings
   let partition := some p.partition
@@ -336,13 +340,17 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     match (do
         Flock.Registered.checkProgram program registered.isSome
         Flock.RecSetup.checkInner inner recCoins h.bound
+        Flock.RecLinkPart.checkShape inner none
+        Flock.RecBudget.regs inner registered
+        Flock.RecBudget.statements inner
         let r ← OneStageZk.buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
-        if let some own := registered then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c own
+        if complete then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (registered.getD #[])
         r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c program partition registered regParams
         r.2.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c known
         Flock.RecSetup.checks inner recCommits tags0 tables r.2 circuitB partition program registered (some j) (some bindings)
           rows
         Flock.RecSetup.oneFull inner r.2
+        Flock.RecBudget.table inner r.2
         r.2.forM Flock.Zk.shapeOk
         r.2.forM (Flock.RecCoins.check · registered (Flock.RecCoins.Source.atC3 recCoins inner recCommits)
           (Flock.RecSetup.c3 inner recCommits))
@@ -350,6 +358,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         Flock.RecVStar.checkLinkRounds h.shape h.link
         r.2.forM (Flock.RecVStar.checkTopRows · registered (some h.link))
         r.2.forM (Flock.RecCoins.checkLink · registered (Flock.RecCoins.Source.atC3 recCoins inner recCommits) (some h.link))
+        r.2.forM (Flock.RecLinkPart.check · registered recCoins none)
         Flock.RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
@@ -382,9 +391,88 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
 (`holo = false`), no RecSparse phase and no R. -/
 def dense (i : Flock.RecVStar.Inner) : Bool := !i.holo && i.sparse.isNone && i.stacked.isNone
 
+/-- `j`'s canonical bytes (`Flock.canon`): the form the statement the component's inputs name carries a parsed field
+in. -/
+def canonBytes (j : Json) : V ByteArray := do
+  pure (← Flock.canon j).toUTF8
+
+/-- What the statement the inputs name encodes beside one Flock statement's or the whole's files: its length words,
+flags and format strings. -/
+def STMT_OVER : Nat := 1024
+
+/-- **Part `j`'s bytes in the statement the inputs name**: its statement's name, circuit, staged public file and program,
+and the canonical bytes of its partition, registered reads, draw (the one `partVerdict` reads off its record) and
+bindings. -/
+def partSize (j : Nat) (p : PartOwn) (s : PartProof) (bs : Core.Blobs) : V Nat := do
+  let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  let circuitB ← bs.get p.circuit s!"part {j}'s circuit"
+  let pubB ← bs.get s.pub s!"part {j}'s public file"
+  let tags := Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+    (Flock.Zk.maskLogOf circuitB) 1
+  let some record := String.fromUTF8? (← bs.get s.record s!"part {j}'s record")
+    | throw s!"part {j}'s record is not UTF-8"
+  let drawB ← (if tags.hm96Rows then Flock.Witness.recordDraw record else none).mapM canonBytes
+  let regB ← p.registered.mapM canonBytes
+  let partitionB ← canonBytes p.partition
+  let bindingsB ← canonBytes p.bindings
+  pure (STMT_OVER + STATEMENT.toUTF8.size + circuitB.size + pubB.size + p.program.size + partitionB.size +
+    (regB.map (·.size)).getD 0 + (drawB.map (·.size)).getD 0 + bindingsB.size)
+
+/-- The parts' bytes in the statement, part `j` on. -/
+def partsSize (bs : Core.Blobs) : Nat → List PartOwn → List PartProof → V Nat
+  | j, p :: ps, s :: ss => do
+    let a ← partSize j p s bs
+    let b ← partsSize bs (j + 1) ps ss
+    pure (a + b)
+  | _, _, _ => pure 0
+
+/-- **A bound on the bytes of the statement the inputs name** (`Names`): the inner statement's name, circuit, public file,
+draw and program and its partition's canonical bytes, the inner shape's canonical bytes, the registration and each
+part's (`partsSize`). -/
+def statementSize (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Nat := do
+  let circuitB ← bs.get o.circuit "the inner circuit"
+  let pubB ← bs.get o.pub "the inner public file"
+  let drawB ← bs.get o.draw "the inner statement's draw"
+  let regB ← o.registration.mapM fun d => bs.get d "rec inner registration"
+  let partitionB ← canonBytes o.partition
+  let shapeB ← canonBytes h.shape.toJson
+  let partsB ← partsSize bs 0 o.parts.toList pr.parts.toList
+  pure (STMT_OVER + (STMT_OVER + INNER_STATEMENT.toUTF8.size + circuitB.size + pubB.size + drawB.size + o.program.size +
+    partitionB.size) + shapeB.size + (regB.map (·.size)).getD 0 + partsB)
+
+/-- `need` on the statement's size: it is under `limit` bytes (`FIELD_MAX` in `partVerdicts`), so every part's
+statement, which encodes it, keeps its length words under `2^64`. -/
+def statementFits (limit : Nat) (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Unit := do
+  let n ← statementSize h o pr bs
+  need (n < limit) s!"the statement the inputs name is {n} bytes, {limit} or more"
+
+/-- Whether each parsed field's canonical bytes parse back to it (the draw up to `Flock.norm`, the inner shape through
+`Inner.ofJson`): that `Names`' canonical pins agree with its parsed ones at these inputs. The difftest's, at the honest
+session. -/
+def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Bool := do
+  let back (j : Json) : V Bool := do pure ((Flock.JsonParse.parse (← Flock.canon j)).toOption == some j)
+  let shapeOk := (do Flock.RecVStar.Inner.ofJson (← Flock.JsonParse.parse (← Flock.canon h.shape.toJson))).toOption == some h.shape
+  let mut ok := shapeOk && (← back o.partition)
+  let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  for (p, s) in o.parts.zip pr.parts do
+    let circuitB ← bs.get p.circuit "a part's circuit"
+    let tags := Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+      (Flock.Zk.maskLogOf circuitB) 1
+    let record := (String.fromUTF8? (← bs.get s.record "a part's record")).getD ""
+    let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
+    let drawOk ← match draw with
+      | none => pure true
+      | some d => do pure ((Flock.JsonParse.parse (← Flock.canon d)).toOption.map Flock.norm == some d)
+    let regOk ← match p.registered with
+      | none => pure true
+      | some r => back r
+    ok := ok && drawOk && regOk && (← back p.partition) && (← back p.bindings)
+  pure ok
+
 /-- **The recursive session's verdict**: the inner session held (`innerHeld`), one part per V* statement at its shape
-(`RecVStar.statements`), in order, and each part's verdict (`partVerdict`). Each part's verdict, by its statement's name,
-and the session's: accepted exactly when every part's is. -/
+(`RecVStar.statements`), in order, and each part's verdict (`partVerdict`), and the statement the inputs name under
+`FIELD_MAX` bytes (`statementFits`). Each part's verdict, by its statement's name, and the session's: accepted exactly when
+every part's is. -/
 def partVerdicts (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (InnerHeld × Array (String × V Unit)) := do
   let h ← innerHeld o pr bs
   let ss ← Flock.RecVStar.statements h.shape
@@ -393,7 +481,9 @@ def partVerdicts (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (InnerHeld × Arr
     s!"recursive: the verifier holds {o.parts.size} parts, and V* has {ss.size} statements at the inner shape"
   need (pr.parts.size == ss.size)
     s!"recursive: the evidence has {pr.parts.size} part sessions, and V* has {ss.size} statements at the inner shape"
-  pure (h, (← partsAt h ss o pr bs (List.range ss.size)).toArray)
+  let vs ← partsAt h ss o pr bs (List.range ss.size)
+  statementFits FIELD_MAX h o pr bs
+  pure (h, vs.toArray)
 where
   /-- The parts `js`' verdicts, in order: part `j`'s at V*'s statement `j`. -/
   partsAt (h : InnerHeld) (ss : Array VStar.Stmt) (o : Own) (pr : Proofs) (bs : Core.Blobs) :
@@ -462,7 +552,7 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
   | some session =>
   match verdicts p.own session e.proofs (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
-  | .ok vs => OneStage.check p.base c { e.base with verdicts := vs }
+  | .ok vs => OneStage.checkLive p.base c { e.base with verdicts := vs }
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -499,6 +589,24 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if (r.toOption.map fun vs => vs.all (·.2.toBool)).getD false then 0 else 1
+  | "statement" :: limit :: own :: proofs :: blobs =>
+    let bs := Core.Blobs.ofArray (← blobs.toArray.mapM fun (f : String) => IO.FS.readBinFile f)
+    let ownB ← IO.FS.readBinFile own
+    let proofsB ← IO.FS.readBinFile proofs
+    let r : V Json := do
+      let pr ← proofsOf (← Core.canonicalJson proofsB)
+      let o ← ownOfJson (← Core.canonicalJson ownB)
+      let h ← innerHeld o pr bs
+      let fitsWhy := match statementFits limit.toNat! h o pr bs with
+        | .ok () => ""
+        | .error e => e
+      pure (Json.mkObj [("size", Lean.toJson (← statementSize h o pr bs)), ("round_trips", Json.bool (← roundTrips h o pr bs)),
+        ("fits", Json.str fitsWhy)])
+    let line := match r with
+      | .ok j => j
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toOption.isSome then 0 else 1
   | _ => protocol.main args
 
 #guard lineEnd "ab\ncd".toUTF8 0 == 2
