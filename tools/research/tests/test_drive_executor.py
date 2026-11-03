@@ -8,8 +8,8 @@ import json
 import pytest
 
 from research.drive import AFTER_LANDING
-from research.executor import (AFTER_LANDING_PRIORITY, SHADOW_WAIT_S, Executor, FileTransport, Shadowed, agrees, compare, keyed,
-                               shadow_records, shadow_report)
+from research.executor import (AFTER_LANDING_PRIORITY, ERROR, SHADOW_WAIT_S, Executor, FileTransport, Shadowed, agrees, compare,
+                               keyed, shadow_records, shadow_report)
 from research.store import vocab
 from test_drive_review import Review, _main
 from test_queue import World, _git
@@ -89,6 +89,47 @@ def test_the_executor_enqueues_a_graph_with_a_key_for_each_task_and_folds_each_k
     fake.finish(K_LEAN, "fail")
     assert ex.verdicts([K_SUITE, K_LEAN, keys["flock-rust-tests"]]) == {K_SUITE: "pass", K_LEAN: "fail",
                                                                       keys["flock-rust-tests"]: "pending"}
+
+
+def test_a_keys_verdict_is_its_newest_label_and_error_is_not_run(tmp_path):
+    """A false fail (a run that gave no result, labelled fail) written over as error reads as not run, and the key's rerun
+    that passes is its verdict; error never reads as pass or fail."""
+    fake = FileTransport(tmp_path)
+    ex = Executor(fake)
+    for v in ("fail", ERROR):
+        fake.finish(K_SUITE, v)
+    fake.finish(K_LEAN, ERROR)
+    assert ex.verdicts([K_SUITE, K_LEAN]) == {K_SUITE: "pending", K_LEAN: "pending"}
+    fake.finish(K_SUITE, "pass")
+    fake.finish(K_LEAN, "fail")
+    assert ex.verdicts([K_SUITE, K_LEAN]) == {K_SUITE: "pass", K_LEAN: "fail"}
+    assert ERROR in vocab.TASK_VERDICTS, "the store takes the executor's error label"
+
+
+def test_the_queue_transport_pulls_every_key_not_passed_here(monkeypatch):
+    """A key failed here may since have been written over as error or rerun on the remote, so only a passed key (which the
+    executor never reruns) is read from the local store alone."""
+    from types import SimpleNamespace
+
+    from research.executor import QueueTransport
+    from research.store import labels_sync
+
+    new = "c" * 128
+    here = {f"task:{K_SUITE}": ["pass"], f"task:{K_LEAN}": ["fail"]}
+    remote = {f"task:{K_LEAN}": ["fail", ERROR], f"task:{new}": ["pass"]}
+
+    class Store:
+        def __init__(self):
+            self.remote = object()
+
+        def labels(self, target, key=None):
+            return [SimpleNamespace(value=v) for v in here.get(target, [])]
+
+    pulled = []
+    monkeypatch.setattr(labels_sync, "pull_targets",
+                        lambda store, targets, jobs: pulled.extend(targets) or here.update({t: remote[t] for t in targets}))
+    assert Executor(QueueTransport(Store())).verdicts([K_SUITE, K_LEAN, new]) == {K_SUITE: "pass", K_LEAN: "pending", new: "pass"}
+    assert pulled == [f"task:{K_LEAN}", f"task:{new}"]
 
 
 def test_the_comparison_is_per_task_where_the_run_records_one_and_per_job_where_it_records_the_job_whole():
