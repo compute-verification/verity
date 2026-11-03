@@ -187,6 +187,150 @@ def survey(a, net, rec, theta, params: dict, names: list[str]) -> int:
     return 0
 
 
+def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
+    """`--first-order K`: plain SGD on S by backprop, its update written as a seed log. The update rule reads and
+    writes S's fp32 masters (Δ_t, 32 bits a value) and passes on the batch gradient over S (Δ_grad, 32 bits a value, no
+    optimizer state), so Fit's reduction clause holds S to about k/64 values. Each E is θ′_S − θ_S projected onto K ≥ |S|
+    shared-seed directions (`prepare.seedlog_step`'s z_j, seeds `seed + j`) by the least-norm solve, exact up to the
+    coefficients' rounding: Δ is K coefficients and d is K·|S| FMAs. The lr is `--lr`, or `--lr-auto F` over the
+    three-point curvature along the first batch's gradient (F/λ_g, the quadratic model's best step at F = 1)."""
+    dev, vocab = prepare.DEVICE, rec["config"]["vocab"]
+    live = [params[n] for n in names]
+    masters = [w.detach().float().clone() for w in live]
+    base = [m.clone() for m in masters]
+    d = sum(m.numel() for m in masters)
+    K = a.first_order
+    if K < d:
+        raise SystemExit(f"train: --first-order {K} directions can't hold an update of S's {d} values; K >= |S|")
+    blob0 = prepare.encode_seedlog(names, a.seed, [0.0] * K, a.coeff)
+    if 8 * len(blob0) > a.max_bits:
+        raise SystemExit(f"train: K = {K} coefficients are {8 * len(blob0)} bits, over --max-bits {a.max_bits}")
+    gen = torch.Generator(device=dev)
+    Z = torch.empty(d, K, dtype=torch.float32, device=dev)
+    for j in range(K):
+        gen.manual_seed(a.seed + j)
+        Z[:, j] = torch.cat([torch.randn(m.shape, generator=gen, device=dev, dtype=torch.float32).reshape(-1)
+                             for m in masters])
+    zzt = Z @ Z.T
+
+    def coefficients() -> list[float]:
+        delta = torch.cat([(m - b).reshape(-1) for m, b in zip(masters, base)])
+        return (-(Z.T @ torch.linalg.solve(zzt, delta))).to(prepare.DTYPES[a.coeff]).float().tolist()
+
+    def encoded() -> bytes:
+        return prepare.encode_seedlog(names, a.seed, coefficients(), a.coeff)
+
+    for w in live:
+        w.requires_grad_(True)
+    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed, ctx=a.ctx)
+    xc = prepare.TrainData(rec["tokenizer"], seed=a.data_seed + 3000, ctx=a.ctx).next(a.curv_batch)
+    budget = prepare.budget(a.start)
+    trainable = {"full": names}
+    per_tok = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": 1, "ctx": a.ctx}])["flops"]
+    flop_cap = a.budget_fraction * budget["train_flops"]
+    if a.max_flops:
+        flop_cap = min(flop_cap, a.max_flops)
+    n_steps = int(flop_cap // (a.batch * a.ctx * per_tok)) - 1
+    if a.steps:
+        n_steps = min(n_steps, a.steps)
+    if hooks is not None:
+        hooks.plan(1 + n_steps)
+    deadline = T_MAIN + (a.time_budget or 0.92 * budget["gpu_seconds"])
+
+    def grad_on(x: torch.Tensor) -> float:
+        for w in live:
+            w.grad = None
+        tot = 0.0
+        for xm in x.split(a.micro):
+            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16, enabled=a.precision == "bf16"):
+                logits = net(xm[:, :-1])
+            loss = F.cross_entropy(logits.float().view(-1, vocab), xm[:, 1:].reshape(-1)) * (xm.shape[0] / x.shape[0])
+            loss.backward()
+            tot += float(loss)
+        return tot
+
+    @torch.no_grad()
+    def loss32() -> torch.Tensor:
+        tot = torch.zeros((), dtype=torch.float32, device=dev)
+        for xm in xc.split(a.micro):
+            tot += F.cross_entropy(net(xm[:, :-1]).float().view(-1, vocab), xm[:, 1:].reshape(-1)).float() * xm.shape[0]
+        return tot / xc.shape[0]
+
+    t0 = time.perf_counter()
+    grad_on(data.next(a.batch))
+    g = [w.grad.detach().float().clone() for w in live]
+    gnorm = torch.sqrt(sum((x * x).sum() for x in g))
+    rms = float(torch.sqrt(sum((m * m).sum() for m in masters) / d))
+    eps = a.curv_rel * rms * math.sqrt(d)
+    tf32 = torch.backends.cuda.matmul.allow_tf32
+    torch.backends.cuda.matmul.allow_tf32 = False
+    with torch.no_grad():
+        l0 = loss32()
+        ls = []
+        for sign in (1.0, -1.0):
+            for w, m, x in zip(live, masters, g):
+                w.copy_(m - sign * eps * x / gnorm)
+            ls.append(loss32())
+        for w, m in zip(live, masters):
+            w.copy_(m)
+    torch.backends.cuda.matmul.allow_tf32 = tf32
+    lam = ((ls[0] + ls[1] - 2 * l0) / eps**2).clamp(min=1e-30)
+    lr0 = torch.tensor(a.lr, dtype=torch.float32, device=dev) if a.lr is not None else a.lr_auto / lam
+    print(json.dumps({"d": d, "K": K, "steps": n_steps, "flop_cap": flop_cap, "rms": rms, "grad_norm": float(gnorm),
+                      "eps": eps, "lambda_g": float(lam), "lr": float(lr0), "l0": float(l0),
+                      "s": round(time.perf_counter() - t0, 1)}), flush=True)
+
+    cps, ema, every, n_done = [], None, max(1, n_steps // CHECKPOINTS), 0
+    for i in range(n_steps):
+        if time.perf_counter() > deadline:
+            break
+        if i > 0 and i % every == 0:
+            blob = encoded()
+            cps.append({"step": i, "e_bytes": len(blob), "delta_bits": 8 * len(blob), "loss_ema": ema})
+        lr_i = lr0 * (1 - i / n_steps) if a.schedule == "linear" else lr0
+        loss = grad_on(data.next(a.batch))
+        with torch.no_grad():
+            for w, m in zip(live, masters):
+                m.sub_(lr_i * w.grad.float())
+                w.copy_(m)
+        ema = loss if ema is None else 0.99 * ema + 0.01 * loss
+        n_done = i + 1
+        if (i + 1) % 100 == 0:
+            print(json.dumps({"step": i + 1, "loss_ema": ema, "lr": float(lr_i),
+                              "s": round(time.perf_counter() - T_MAIN, 1)}), flush=True)
+    for w in live:
+        w.requires_grad_(False)
+        w.grad = None
+
+    blob = encoded()
+    rebuilt = [b.clone() for b in base]
+    for j, c in enumerate(coefficients()):
+        prepare.seedlog_step(rebuilt, a.seed + j, c, gen)
+    err = float(torch.sqrt(sum(((r - m) ** 2).sum() for r, m in zip(rebuilt, masters))
+                           / sum(((m - b) ** 2).sum() for m, b in zip(masters, base)).clamp(min=1e-30)))
+    macs = K * d
+    c_gates = 4096 * (prepare.STORE.get(a.start, {}).get("shape", {}).get("forward_macs_per_token")
+                      or per_tok / 2) * GEMM_BF16_GATES
+    notes = {"method": "seedlog-sgd", "args": vars(a), "steps": n_done, "K": K, "names": names, "d": d,
+             "lambda_g": float(lam), "lr": float(lr0), "eps": eps, "l0_cal": float(l0), "projection_rel_error": err,
+             "mechanism": {"label": a.label, "description": a.description},
+             "delta_bits": 8 * len(blob), "delta_t_bits": 32 * d,
+             "delta_grad": {"trainable": d, "grad_bits": 32 * d, "adam_bits": 0, "muon_bits": 0, "latent_bits": 32 * d,
+                            "bits": 32 * d, "bytes": 4 * d,
+                            "what": "the batch gradient over S at fp32 (plain SGD, no state); S's fp32 masters are "
+                                    "Delta_t, the form the update rule reads and writes"},
+             "decoder": {"macs": macs, "gates": macs * F32_FMA_GATES, "d_over_c": macs * F32_FMA_GATES / c_gates,
+                         "c_gates": c_gates, "rule": "prepare.rebuild_macs (K x |S| fp32 FMAs) at F32Fma_v4's gates"},
+             "checkpoints": cps}
+    steps = [{"op": "train", "tokens": (n_done + 1) * a.batch * a.ctx, "ctx": a.ctx},
+             {"op": "forward", "tokens": 3 * a.curv_batch * a.ctx, "ctx": a.ctx}]
+    model = dict(theta) | {n: m.to(theta[n].dtype).cpu() for n, m in zip(names, masters)}
+    prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=names, notes=notes)
+    print(json.dumps({"submitted": len(blob), "steps": n_done, "projection_rel_error": err,
+                      "s": round(time.perf_counter() - T_MAIN, 1)}), flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
@@ -224,13 +368,18 @@ def main() -> int:
     ap.add_argument("--label", default="")
     ap.add_argument("--description", default="")
     ap.add_argument("--survey", type=int, default=0, help="measure N batches' per-tensor G, E[ĝ²] and tr H at θ, no run")
+    ap.add_argument("--first-order", type=int, default=0, metavar="K",
+                    help="plain SGD on S by backprop, each E its update projected onto K >= |S| shared-seed directions")
     a = ap.parse_args()
-    if a.survey:
+    if a.survey or a.first_order:
+        if a.first_order and (a.lr is None) == (a.lr_auto is None):
+            raise SystemExit("train: give one of --lr and --lr-auto")
         net, rec, theta = prepare.load_start(a.start)
         params = net.params()
         for p in params.values():
             p.requires_grad_(False)
-        return survey(a, net, rec, theta, params, select(params, rec, a.names))
+        run = survey if a.survey else first_order
+        return run(a, net, rec, theta, params, select(params, rec, a.names))
     if (a.lr is None) == (a.lr_auto is None):
         raise SystemExit("train: give one of --lr and --lr-auto")
     a.warm_batch = a.warm_batch or a.batch
