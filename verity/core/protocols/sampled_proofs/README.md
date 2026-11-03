@@ -9,10 +9,14 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
-(`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
-composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
-component accepts.
+`verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW's period (`verity/pouw/period/v1`)
+and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols.
+In each, the composite's verifier runs `VStar.Recursive.Sampled`'s Lean check as a component, in the form its params
+name: the audit on the proofs (one-stage v2, `verity/sampled-proofs/one-stage/v2`) or the recursive audit
+(`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in the one-stage audit's live check on its
+verdict of record). One-stage v1 (`verity/sampled-proofs/one-stage/v1`), whose verdicts are the evidence's, is refused
+by name: a one-stage form whose params or evidence name no `proofs` is v1's (`VStar.Recursive.Sampled.V1_REFUSED`). The
+composite accepts only when every component accepts.
 
 ## Guarantee and assumptions
 
@@ -32,14 +36,14 @@ over the statement circuit. It rests on these named assumptions:
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
-On `main`, both composites' sampled-proofs component is one-stage v1 (`verity/sampled-proofs/one-stage/v1`), which
-takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --zk` produces them, and the link from a
-composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
+In the one-stage form the verdicts are the component's own run of `flock-verify verify --zk`'s one-stage path on the
+sessions' files, which come in as blobs (under "Where things are"), so a composite accepts in that form only where that
+run accepts. No Lean statement yet carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
-verifier's own draw), under three Lean premises, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
-onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where things are").
+before any coin. In the remote protocol the coins come from the auditor's challenger, under three Lean premises,
+`ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`; onsite adds two prose premises, `CoinsConfidential`
+and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -49,8 +53,8 @@ onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where thing
 2. The developer registers a record that fixes everything a drawn proof block's statement can depend on: the program, the query
    that partitions it, the sampling design, the commitment scheme and the roots. The verifier checks the record against
    its own copies and logs a receipt before it draws.
-3. The verifier draws proof blocks from its operating system's randomness under the agreed sampling design and sends the draw
-   in the clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
+3. The verifier draws proof blocks on the challenger's coins under the agreed sampling design and sends the draw in the
+   clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
 4. The drawn proof blocks are proved in one session, whose statement is the drawn proof blocks'.
 5. The Lean verifier checks the proofs, and its verdict is the one that counts; the Python beside it is its mirror.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
@@ -132,19 +136,18 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   their slots in class, stratum and block order.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
-  circuit and public files' digests and the verifier's registered file, its evidence names the session's record and
-  rep files by SHA-512 in place of `verdicts` (one session, as step 4 says: none or several refuse), and the files
-  come in as `Core.Blobs`; the public file's header must be the registration's (`Record.matchesPublic`), and its
-  population the program's proof blocks in order (`Slots.popOk`). Its draw's coins are the challenger's (naming none
-  refuses), read as v1 reads them (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`).
-  The check runs `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
-  evidence's `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins. So
-  are the session's: before its verdict, the check holds its record to the coin trees the signed release log shows
-  the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its
-  `coin_tree` the one tree logged, its link points and round coins that tree's openings after its link's roots and
-  each round's message.
+  circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
+  record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
+  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose population
+  isn't the program's proof blocks in order (`Slots.popOk`), and parameters naming no challenger coins. It reads the
+  draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
+  the session's record to the coin trees the signed release log shows the challenger sampled and opened
+  (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
+  link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
+  `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) still read v1.
+  to `verify`'s.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
@@ -467,10 +470,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the drawn
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (`test_profile_counts_wrong_units`, `test_the_record_states_the_one_profile_in_its_recorded_bytes`,
-`test_audit_record_needs_every_check_and_verdict`, `test_audit_record_holds_the_served_draw_and_the_sessions_roots`,
-`test_the_wrong_unit_bound_matches_worst_case_and_scales`, `test_audit_record_under_the_stratified_law`,
-`test_the_subset_bound_is_now_the_exact_count`, `test_a4_under_the_stratified_rule`, `test_audit_record_under_the_work_law`).
+Pinned by `tests/test_one_stage.py` (the profile, audit record and wrong-unit bound tests, under each sampling design).
 
 ### The consumers
 

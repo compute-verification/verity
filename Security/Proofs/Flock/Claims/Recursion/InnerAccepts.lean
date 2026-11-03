@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Recursion.InnerAbort
 `InnerAccepts` (`Recursion/Inner.lean`) is the code fact that wherever `E_O` gives witnesses on an accepted run, the
 inner view read off them is accepted. This file reduces it to what V*'s circuits compute, at each inner shape the
 recursion's claims cover, read off the compiled verifier's own inner shape (`Form`): dense (`Form.Dense`: public inner
-units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circuits; `RecursiveAuditC3`'s) and sparse
+units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circuits; `RecursiveAuditHolo`'s) and sparse
 (`Form.Sparse`: public inner units with candidate 3's RecSparse phase). The three cover every form
 (`Form.shape_cases`), so no statement falls outside them.
 
@@ -33,7 +33,7 @@ open Claims
 /-- **Dense**: public inner units and no sparse phase (`PublicAudit`'s inner protocol). -/
 def Form.Dense (f : Form) : Prop := f.holo = false ∧ f.sparse = none
 
-/-- **Holo**: private inner circuits (`RecursiveAuditC3`'s inner protocol). -/
+/-- **Holo**: private inner circuits (`RecursiveAuditHolo`'s inner protocol). -/
 def Form.Holo (f : Form) : Prop := f.holo = true
 
 /-- **Sparse**: public inner units with candidate 3's RecSparse phase. -/
