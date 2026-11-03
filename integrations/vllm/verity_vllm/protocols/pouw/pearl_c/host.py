@@ -2,8 +2,8 @@
 process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
-their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`) and its
-completion behind its step (`behind`).
+their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`), its calls' work issued
+behind them (`launched`) and its completion behind its step (`behind`).
 """
 from __future__ import annotations
 
@@ -48,9 +48,12 @@ WRITE_THREADS = 8
 #: the pinned host bytes a device's copies to its retained files land in (`_Arena`): this many rings of this many bytes
 RING_BYTES = 1 << 30
 ARENA_RINGS = 4
+#: the device bytes of retained calls given to `launched` and not yet issued, past which a caller waits (one call any size)
+LAUNCH_BYTES = 1 << 30
 _writers: tuple[int, ThreadPoolExecutor] | None = None     # the pool and the process it was made in
 _finisher: tuple[int, ThreadPoolExecutor] | None = None    # the thread `behind` runs on, and its process
 _copiers: dict[tuple[int, int | None], Any] = {}           # each (process, device)'s `_Copies`
+_launchers: dict[tuple[int, int | None], Any] = {}         # each (process, device)'s `_Launcher`
 
 
 def torch_uint8() -> Any:
@@ -449,6 +452,42 @@ def behind(fn: Callable[[], None]) -> Future:
     if _finisher is None or _finisher[0] != os.getpid():
         _finisher = (os.getpid(), ThreadPoolExecutor(1, thread_name_prefix="pearl-c-retain-end"))
     return _finisher[1].submit(fn)
+
+
+class _Launcher:
+    """The thread that issues a device's retained calls' work behind the calls, one call at a time in the order given, with
+    the device current; a caller waits while the calls given and not yet issued hold `LAUNCH_BYTES` of the device's
+    memory."""
+
+    def __init__(self, device: Any):
+        import torch
+        self.cv, self.queued = threading.Condition(), 0
+        self.pool = ThreadPoolExecutor(1, thread_name_prefix="pearl-c-retain-launch",
+                                       initializer=lambda: torch.zeros(1, device=device))
+
+    def submit(self, fn: Callable[[], None], nbytes: int) -> Future:
+        with self.cv:
+            while self.queued and self.queued + nbytes > LAUNCH_BYTES:
+                self.cv.wait()
+            self.queued += nbytes
+
+        def run() -> None:
+            try:
+                fn()
+            finally:
+                with self.cv:
+                    self.queued -= nbytes
+                    self.cv.notify_all()
+        return self.pool.submit(run)
+
+
+def launched(device: Any, fn: Callable[[], None], nbytes: int) -> Future:
+    """`fn`, a retained call's work behind it holding `nbytes` of `device`'s memory, on `device`'s launch thread
+    (`_Launcher`); its future, which the pass's end joins before its writes."""
+    key = (os.getpid(), device.index)
+    if key not in _launchers:
+        _launchers[key] = _Launcher(device)
+    return _launchers[key].submit(fn, nbytes)
 
 
 def joined(pending: list[Future]) -> None:
