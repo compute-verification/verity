@@ -182,6 +182,11 @@ search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smok
 (note:training-20261102T2215Z-report-training-formalism-v2), analytically: gates, token blocks' gates, σ, the affected
 gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
 lists the approximations.
+`dataset/` is what the search produces, its dataset: every checkpoint at the pin with its ρ inputs and their bases, ρ
+over the dial, each branch point's envelopes and `training/frontier-branches`' rows, and the qualitative record (the
+runs, the board's lines, the methods, each direction's ideas and the lessons). `python -m dataset.export` builds it from
+te_core's ledger, the scorer's directory, the dated board (`tools/merge_board.py --out FILE`) and
+`dataset/curation.json`, and publishes it to the store; `dataset/README.md` is its schema.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
 `/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`
