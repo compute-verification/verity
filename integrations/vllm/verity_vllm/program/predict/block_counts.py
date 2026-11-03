@@ -101,17 +101,19 @@ def primitives(fns: Iterable[Any]) -> dict[str, Any]:
 
 def gate_table(prims: Mapping[str, Any]) -> tuple[dict[str, int], list[str]]:
     """Each primitive's two-input Boolean gates (module docstring), and the keys of those it can't price."""
-    work, table, unpriced = CE.BooleanWork(), {}, []
+    table, unpriced, keys, fns = {}, [], [], []
     for key, p in sorted(prims.items()):
         try:
-            got = work.of(p if BL.is_boolean(p) else boolean_version(p))
+            fns.append(p if BL.is_boolean(p) else boolean_version(p))
+            keys.append(key)
         except LookupError:
-            got = key
+            unpriced.append(key)
+    for key, got in zip(keys, CE.boolean_gates(fns)):
         if isinstance(got, str):
             unpriced.append(key)
         else:
-            table[key] = sum(g for g, _ in got.values())
-    return table, unpriced
+            table[key] = got
+    return table, sorted(unpriced)
 
 
 def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Counter]] | None = None) -> tuple[int, Counter]:
