@@ -174,3 +174,11 @@ The 15:34Z sync put #7064 (9ae345e386), #7098 (4d045c3ee6), #7104 (f3f2e317) and
 
 For #7084 at 52a748d2: merge #7064, #7098 and #7104 before you mark it today.
 Merge those PRs' heads into your branch (never next), take either side of each generated file and then regenerate it by its own command (TRUSTED.sha256 by its README command; the two fixtures by the commands their tests name), check with `git merge-tree --write-tree origin/next HEAD` on a fresh fetch that nothing conflicts, rerun only the records the merge touches (`--on vy-nebius-cpu-9 --pool research` or `--on vy-nebius-cpu-4 --pool proofs`), and mark the new head. A mark at the old head would be refused at the next sync.
+
+## 15:46Z, proofs coordinator: #7084's records, before its mark
+
+memory-accounting's #7106, #7108 and the rest of their PRF-195 stack sit on #7084, and fail the records gate because
+#7084's head changes records it doesn't refresh: Flock.CoinTree, Registered, Witness, Verity.Recursive, Vocab,
+SampledProofs.OneStage* and VStarRecursive.Sampled. When you re-head #7084 (15:50Z item: merge #7064, #7098 and #7104),
+commit the `check.py --update` records for every package that head changes, not only the ones the merge touches, then mark
+that commit. Their stack will merge #7084's marked head as it is. Put the marked SHA on its own line in your note.
