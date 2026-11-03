@@ -1,10 +1,13 @@
 """The status export: each lock guarantee proved, resting on named assumptions, or unknown, and the results of record."""
 from __future__ import annotations
 
+import gzip
 import importlib.util
 import json
 import subprocess
 from pathlib import Path
+
+import pytest
 
 _spec = importlib.util.spec_from_file_location("status_export", Path(__file__).parents[1] / "console" / "status_export.py")
 se = importlib.util.module_from_spec(_spec)
@@ -62,11 +65,14 @@ def _status(doc: dict) -> dict[str, tuple[str, list[str], bool]]:
     return {g["name"]: (g["status"], g["assumptions"], g["premises_read"]) for g in doc["guarantees"]}
 
 
-def test_a_guarantee_is_proved_only_when_its_premises_were_read_and_name_no_assumption(tmp_path):
+@pytest.mark.parametrize("name", ["facts.json.gz", "facts.json"])
+def test_a_guarantee_is_proved_only_when_its_premises_were_read_and_name_no_assumption(tmp_path, name):
+    """The audit keeps its facts gzipped (`facts.json.gz`); an older run's plain `facts.json` reads the same."""
     root = _repo(tmp_path / "repo", {"Sec/lean-audit.json": LOCK, "x/tests/lean-audit.json": LOCK})
     facts = tmp_path / "facts"
     (facts / "audit-Sec" / "proved-in-Proofs").mkdir(parents=True)
-    (facts / "audit-Sec" / "proved-in-Proofs" / "facts.json").write_text(json.dumps(FACTS))
+    data = json.dumps(FACTS).encode()
+    (facts / "audit-Sec" / "proved-in-Proofs" / name).write_bytes(gzip.compress(data) if name.endswith(".gz") else data)
     doc, _ = se.export(root, facts=facts)
     assert _status(doc) == {
         "A.SecurityProofs.Hyp": ("assumes", ["A.Assumptions.One"], False),
