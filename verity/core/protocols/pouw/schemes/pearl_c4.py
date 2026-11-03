@@ -114,6 +114,7 @@ from fractions import Fraction
 from functools import lru_cache
 
 from verity.errors import InvalidArtifact
+from verity.ml.commitments import domains
 from verity.ml.circuits.silicon import fp32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 
@@ -137,7 +138,8 @@ ALIGN_K = 128
 PEEL_K = 2 * R
 TILE = C.TILE
 ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
-LABELS = {"seed-A": b"pearl-c4/v1/seed-A", "seed-B": b"pearl-c4/v1/seed-B", "line": b"pearl-c4/v2/line"}
+LABELS = {"seed-A": domains.PEARL_C4_SEED_A.encode(), "seed-B": domains.PEARL_C4_SEED_B.encode(),
+          "line": domains.PEARL_C4_LINE.encode()}
 #: SHA-512(ℓ ‖ \0 zero-padded to one 128-byte block ‖ x): `pearl_c.s512`'s construction under Pearl-C4's labels, the
 #: block a precomputed first compression.  The seeds keep its first 32 bytes; a line block keeps all 64 (four lines)
 LABEL_BLOCKS = {r: (label + b"\0").ljust(128, b"\0") for r, label in LABELS.items()}

@@ -28,7 +28,7 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import s8 as BS8
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 from verity.core.protocols.pouw import grind as GR
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import hashes as H
@@ -102,7 +102,7 @@ def _tile_params(S):
 
 
 def _tile_ret(S, receipt):
-    return Record(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", receipt))
+    return RecordType(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", receipt))
 
 
 def _unit_signature(S):

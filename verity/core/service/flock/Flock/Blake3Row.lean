@@ -203,8 +203,8 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
     let dom ← pub.fv3Bytes "domain_ids" port.name
     if (← J.str (← J.get fv "schemas" "public file.frame_v3") port.name "public file.frame_v3.schemas") != SCHEMA then
       throw s!"input port {port.name}: schema is not {SCHEMA}"
-    let leaves := (Array.range pub.n).map fun i => FV3.leaf dom i SCHEMA (pub.digest i p np)
-    if FV3.root dom leaves != (← pub.fv3Bytes "roots" port.name) then
+    let leaves := (Array.range pub.n).map fun i => FV3.leaf dom i SCHEMA (pub.digest i p np) Sha256.hash
+    if FV3.root dom leaves Sha256.hash != (← pub.fv3Bytes "roots" port.name) then
       throw s!"input port {port.name}: the row digests do not hash to the header's frame-v3 root"
     if Blake3.keyedHash c.key (ByteArray.mk (Array.replicate (2 * port.words) 0)) != c.dummyDigests.getD p ByteArray.empty then
       throw s!"the pinned padding digest of port {port.name} is not the zero row's"

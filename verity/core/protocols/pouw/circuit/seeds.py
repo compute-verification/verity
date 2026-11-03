@@ -50,7 +50,9 @@ from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
 from verity.ml.circuits.types import Array
+from verity.ml.commitments import domains
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail, words_be
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import hashes as H
 from . import words as W
@@ -60,11 +62,11 @@ try:
 except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
     _ports = None
 
-SEED_TAG = b"verity/pouw/seed/v2".ljust(24, b"\0")
-RECEIPT_TAG = b"verity/pouw/receipt/v1".ljust(24, b"\0")
-NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0")
+SEED_TAG = domains.POUW_SEED.encode().ljust(24, b"\0")
+RECEIPT_TAG = domains.POUW_RECEIPT.encode().ljust(24, b"\0")
+NOISE_TAG = domains.POUW_NOISE.encode().ljust(24, b"\0")
 #: J10-R's call seed (`call_seed`)
-CALL_SEED_TAG = b"verity/pouw/call-seed/v1".ljust(24, b"\0")
+CALL_SEED_TAG = domains.POUW_CALL_SEED.encode().ljust(24, b"\0")
 M32 = W.M32
 #: a digest (the salt, a root, a seed, a noise block) as 16 big-endian halves; a position or a block counter as 2
 DIGEST = Array(16, W.U32)
@@ -73,7 +75,7 @@ POS = Array(2, W.U32)
 SEED_PAIR = Array(2, DIGEST)
 DIGEST_BITS = BL.bit_type(DIGEST)
 POS_BITS = BL.bit_type(POS)
-BLOCK_BITS = 512
+BLOCK_BITS = 8 * DIGEST_BYTES["sha512"]
 
 
 def types(boolean: bool) -> tuple[Array, Array]:
@@ -91,7 +93,7 @@ def _u64(x: int) -> bytes:
 
 def _tagged(tag: bytes, salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
     for what, v in (("salt", salt), ("root_a", root_a), ("root_b", root_b)):
-        if len(v) != 64:
+        if len(v) != DIGEST_BYTES["sha512"]:
             raise ValueError(f"{what} is a 64-byte digest, not {len(v)} bytes")
     p = _u64(position)
     data = tag + bytes(salt) + bytes(root_a) + bytes(root_b)
@@ -116,7 +118,7 @@ def call_seed(salt: bytes, call: int, root_a: bytes, root_b: bytes) -> bytes:
 
 def noise_block(seed_j: bytes, t: int) -> bytes:
     """Block t of the noise stream of seed_j."""
-    if len(seed_j) != 64:
+    if len(seed_j) != DIGEST_BYTES["sha512"]:
         raise ValueError(f"a seed is a 64-byte digest, not {len(seed_j)} bytes")
     return hashlib.sha512(NOISE_TAG + bytes(seed_j) + _u64(t)).digest()
 

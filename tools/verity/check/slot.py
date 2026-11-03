@@ -295,7 +295,7 @@ def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
         return None
     gb = round(slot["mem"] * 2 ** 30 / 1e9, 1)                  # mem= is in GiB (`memory_gb`), research.mem's GB are 10^9 bytes
     path = RAMLOCK / f"check-{slot['name']}.json"
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = research_run_dir()
     doc = {"owner": "check", "gb": gb, "started": f"{now:%Y-%m-%dT%H:%M:%SZ}", "pid": os.getpid(),
            "note": f"check slot {slot['name']}: {run_id() or os.getcwd()}",
            **({"priority": True} if priority else {}), **({"run_id": run_id(), "run_dir": run_dir} if run_dir else {})}
@@ -329,6 +329,14 @@ DISK = Path("/workspace")
 DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 
 
+def cache_disk() -> Path:
+    """Where the check cache (`check.py`'s $CHECK_CACHE, default ~/.cache/verity-check) lives: its nearest existing directory.
+    Its Lean build trees reach tens of GB, so its disk counts as DISK does; it is another disk (the 247 GB root) wherever
+    vm_setup.sh's link onto /workspace is missing."""
+    cache = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+    return next((p for p in (cache, *cache.parents) if p.is_dir()), Path("/"))
+
+
 def disk_short(path: Path | None = None) -> str | None:
     """Why the disk holding `path` (DISK) can't take a check now, or None; a missing path is no refusal."""
     if not (path or DISK).is_dir():
@@ -349,7 +357,7 @@ def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
     for raw, start, minutes, _note in _windows(slot):
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
-    if short := disk_short():
+    if short := disk_short() or disk_short(cache_disk()):
         return short
     train = priority or bool(slot.get("trains"))
     if slot.get("mem") and (free := memory_gb() - (held := reserved_gb(priority=train))) < slot["mem"]:
@@ -464,6 +472,11 @@ def describe(who: dict) -> str:
     return ", ".join(p for p in parts if p)
 
 
+def research_run_dir() -> str | None:
+    """The run dir of the `research run` this process runs in (RESEARCH_RUN_DIR), else None."""
+    return os.environ.get("RESEARCH_RUN_DIR")
+
+
 def _read(p: Path) -> dict:
     try:
         return json.loads(p.read_text() or "{}")
@@ -539,6 +552,32 @@ def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotoni
                                "reason": f"slot.py --run-max: {run_max:g} s from taking check slot {slot}"}) + "\n")
     os.replace(tmp, ctl)
     return f"slot: the run's timeout is now {t:g} s from its start: {run_max:g} s from taking slot {slot}"
+
+
+def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
+    """Move the `research run` in ``run_dir``'s timeout ``waited_s`` later, the time it spent in ``line`` (a wait with no limit of
+    its own, as a Lean audit slot's), so the wait doesn't use up the time its work was given. Its timeout now is RUN_TIMEOUT's
+    when that was set, else its status.json's. What was done, in a line; None when there is nothing to move (no wait, not in a
+    `research run`, or a run with no timeout)."""
+    if not run_dir or waited_s <= 0:
+        return None
+    ctl = Path(run_dir) / RUN_TIMEOUT
+    doc = _read(ctl)
+    now = doc.get("timeout_s") if isinstance(doc, dict) else doc
+    if not isinstance(now, (int, float)) or isinstance(now, bool):
+        now = _read(Path(run_dir) / "status.json").get("timeout_s")
+    if not isinstance(now, (int, float)) or isinstance(now, bool) or now <= 0:
+        return None
+    t = round(now + waited_s, 3)
+    try:
+        ctl.parent.mkdir(parents=True, exist_ok=True)
+        tmp = ctl.with_name(f".{ctl.name}.{os.getpid()}")
+        tmp.write_text(json.dumps({"timeout_s": t, "actor": "timeout",
+                                   "reason": f"{now:g} s, plus {waited_s:g} s waited in {line}"}) + "\n")
+        os.replace(tmp, ctl)
+    except OSError as e:
+        return f"{line}: the run's timeout stays {now:g} s from its start, counting this {waited_s:g} s wait ({ctl}: {e})"
+    return f"{line}: the run's timeout is now {t:g} s from its start: {now:g} s, plus the {waited_s:g} s it waited here"
 
 
 def record_slot(run_dir: str | None, doc: dict) -> None:
@@ -848,7 +887,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = research_run_dir()
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
              **({"rank": rank} if rank is not None else {})}
     record_slot(run_dir, {"state": "waiting", **since})

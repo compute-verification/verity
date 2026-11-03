@@ -142,9 +142,9 @@ def certified_md(d: dict | None) -> list[str]:
     elif d["declared"]:
         basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
                  f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the warden "
-                 f"form's public parameters, the honest-δ form of draft:per-server-ingress's bound (a faulty ingress unit's "
-                 f"{fmt(d['faulty_unit_bits'])} bits are excluded, and 0 when every ingress unit is drawn); line rate, "
-                 f"{fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
+                 f"form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect "
+                 f"ingress unit's {fmt(d['faulty_unit_bits'])} bits are excluded, and 0 when every ingress unit is "
+                 f"drawn); line rate, {fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
     else:
         basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:declared-ingress)"
     return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
@@ -164,14 +164,14 @@ def operating_md(points: list[operating.Point]) -> list[str]:
     return out
 
 
-def faulty_md(reg: Registry, fo: operating.Row) -> list[str]:
-    if math.isinf(fo.capacity):
-        return ["Faulty outputs: no sampled proofs, so nothing detects them.", ""]
-    drawn = "every unit proved" if fo.q >= 1 else f"steps the sampled proofs draw at q = {fmt(fo.q)} a step"
-    head = (f"Faulty outputs ({drawn}): {fmt(fo.capacity)} bits before the first detection, except with chance "
-            f"δ = {fmt(fo.delta)}.")
+def incorrect_md(reg: Registry, inc: operating.Row) -> list[str]:
+    if math.isinf(inc.capacity):
+        return ["Incorrect outputs: no sampled proofs, so nothing detects them.", ""]
+    drawn = "every unit proved" if inc.q >= 1 else f"steps the sampled proofs draw at q = {fmt(inc.q)} a step"
+    head = (f"Incorrect outputs ({drawn}): {fmt(inc.capacity)} bits before the first detection, except with chance "
+            f"δ = {fmt(inc.delta)}.")
     out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]
-    out += [f"| {n} | {fmt(reg[f'exfil.{n}.bits'])} | {fmt(p)} |" for n, p in fo.detect.items()]
+    out += [f"| {n} | {fmt(reg[f'exfil.{n}.bits'])} | {fmt(p)} |" for n, p in inc.detect.items()]
     return out + [""]
 
 
@@ -208,7 +208,7 @@ def estimates_md(f: FamilyResult) -> list[str]:
 
 
 def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Term],
-                points: list[operating.Point], faulty: list[str]) -> list[str]:
+                points: list[operating.Point], incorrect: list[str]) -> list[str]:
     s = r.scenario
     c = s.context
     delta = s.regime.delta(c)
@@ -217,7 +217,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
                f"ε_dark {c.fleet.eps_dark:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
-               f"{c.horizon.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
+               f"{c.period.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
                f"(T_0 = {s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     st = s.structure
     best = picked(r)
@@ -255,7 +255,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
            "remains): "
            + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
            f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
-    out += certified_md(certified(s)) + operating_md(points) + faulty
+    out += certified_md(certified(s)) + operating_md(points) + incorrect
     for f in r.families:
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", ""]
         out += estimates_md(f)
@@ -348,8 +348,8 @@ def main() -> None:
         by_status = {st: analysis.at(reg, name, None, analysis.upto(st)) for st in analysis.STATUSES[:3]}
         terms = analysis.attribution(r)
         points = operating.points(reg, r)
-        fo = operating.faulty(reg, r.scenario)
-        md += scenario_md(r, by_status, terms, points, faulty_md(reg, fo))
+        inc = operating.incorrect(reg, r.scenario)
+        md += scenario_md(r, by_status, terms, points, incorrect_md(reg, inc))
         swings = analysis.tornado(reg, name)
         md += ["Tornado (the lower bound at each parameter's plausible ends):", "",
                "| parameter | low | high | slowdown ≥ at low | slowdown ≥ at high | decades |",
@@ -395,7 +395,7 @@ def main() -> None:
             "slowdown_by_status": by_status,
             "attribution": [vars(t) for t in terms], "monitored": monitored(r),
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
-            "faulty_outputs": {"capacity_bits": fo.capacity, "detect": dict(fo.detect)},
+            "incorrect_outputs": {"capacity_bits": inc.capacity, "detect": dict(inc.detect)},
             "families": {f.family: {"slowdown": f.lo, "attack": f.attack, "excluded": list(f.combined.excluded),
                                     "contradictions": list(f.contradictions),
                                     "bounds": [row(e) for e in f.bounds], "combined": row(f.combined),

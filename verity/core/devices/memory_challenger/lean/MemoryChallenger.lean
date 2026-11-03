@@ -1,4 +1,4 @@
-import MemoryChallenger.FrameV3
+import Attest
 import MemoryChallenger.SignedMessage
 import MemoryChallenger.Records
 import MemoryChallenger.Verdict
@@ -7,5 +7,4 @@ import MemoryChallenger.Judge
 import MemoryChallenger.StreamedWipe
 import MemoryChallenger.WipeJudge
 import MemoryChallenger.WipeProtocol
-import MemoryChallenger.Attest
 import MemoryChallenger.Difftest

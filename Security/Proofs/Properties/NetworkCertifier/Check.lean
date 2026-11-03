@@ -49,10 +49,10 @@ theorem toOption_true {ε : Type} {x : Except ε Bool} : (x.toOption == some tru
 theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified}
     (hr : recordsOf c d l w = [r]) : verifies p r = true ↔ ∃ dg, Signs p c d l w r dg := by
   obtain ⟨hd, hl, hw⟩ := recordsOf_mem (hr ▸ List.mem_singleton_self r)
-  unfold verifies Signs LmsVerifies
+  unfold verifies Signs LmsVerifies NetworkCheck.Check.Certificate.signs
   simp only [Bool.and_eq_true, beq_iff_eq, ba_beq]
   constructor
-  · rintro ⟨⟨⟨⟨⟨hk, hcl⟩, hcd⟩, hcw⟩, hdg⟩, hsig⟩
+  · rintro ⟨⟨⟨⟨hcl, hcd⟩, hcw⟩, hdg⟩, hk, hsig⟩
     cases hdig : r.head.digest with
     | error _ => rw [hdig] at hdg; cases hdg
     | ok dg =>
@@ -74,7 +74,7 @@ theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} 
             rw [← hk, ← hcl.trans hl, ← hcd.trans hd, ← hcw', ← hcdg]
             exact hm
   · rintro ⟨dg, -, hdig, hcdg, hk, hcl, hcd, hcw, m, hm, s, hs, hv⟩
-    refine ⟨⟨⟨⟨⟨hk, hcl.trans hl.symm⟩, hcd.trans hd.symm⟩, ?_⟩, ?_⟩, ?_⟩
+    refine ⟨⟨⟨⟨hcl.trans hl.symm, hcd.trans hd.symm⟩, ?_⟩, ?_⟩, hk, ?_⟩
     · rw [hw, hcw]
     · rw [hdig]; exact ba_beq.mpr hcdg
     · rw [hk, hcl, hcd, hcw, hcdg, hm, hs]

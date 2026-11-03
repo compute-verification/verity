@@ -1,0 +1,24 @@
+# An auditor party's signed period roots and liveness records as executable Lean (`verity.core.attest`): the
+# frame-v3-sha512 range tree and the period and liveness checks, which every auditor party's protocol requires. Code: Lean
+# core and the packages below, no Mathlib and nothing of Security.
+name = "core_attest"
+defaultTargets = ["Attest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[require]]
+name = "core_randomness"
+path = "../../primitives/randomness"
+
+[[require]]
+name = "lms"
+path = "../../primitives/lms/lean"
+
+[[lean_lib]]
+name = "Attest"

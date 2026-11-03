@@ -1,4 +1,5 @@
 import Properties.Pous.WipeSigned
+import Properties.Pous.Component
 import Proofs.Properties.Pous.WipeSigned.Header
 import Proofs.Properties.Pous.WipeSigned.Inputs
 import Proofs.Properties.Pous.WipeSigned.Run
@@ -29,7 +30,8 @@ session at r20261026-094403-bb5f's parameters and clock readings, and the compil
 (`measured_accepts`, by LMS's correctness). `wipeSigned_nontrivial` is its nontrivial lemma: a session with a batch no
 record encodes, signed under the empty key, is no run of the idle challengers, and both adversaries output nothing
 there, since the run hashes nothing and the signature signs nothing; so a check that accepts it, as a verifier that
-accepts everything does (`wipeSigned_acceptAll`), does not have `WipeSigned`'s conclusion.
+accepts everything (`Pous.Component.AcceptsAll`) does (`wipeSigned_acceptAll`), does not have `WipeSigned`'s
+conclusion.
 -/
 
 namespace MemoryChallenger.Properties.SecurityProofs
@@ -84,7 +86,8 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return ⟨reasons.isEmpty, reasons, StreamedWipe.egressUnits s.egressBits⟩
+  return (MemoryChallenger.StreamedWipe.Findings.mk reasons (StreamedWipe.egressUnits s.egressBits),
+    MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) :
@@ -119,6 +122,10 @@ private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : N
         false ∧
       (b == 0 && decide (s.batches[b].sendNs < s.fillEndNs)) = false
 
+private theorem waccepted_acceptIf (f : MemoryChallenger.StreamedWipe.Findings) (b : Bool) :
+    MemoryChallenger.StreamedWipe.Verdict.accepted (f, MemoryChallenger.acceptIf b) = b := by
+  cases b <;> rfl
+
 private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (h : (wtail s c r0).accepted = true) : r0 = #[] ∧ ∀ b < s.batches.size, WGood s c b := by
   unfold wtail at h
@@ -136,7 +143,8 @@ private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commi
   rw [show ∀ (x : Id (Array String)) (f : Array String → Id StreamedWipe.Verdict), (x >>= f) = f x.run from
     fun _ _ => rfl] at h
   simp only [Id.run] at m1 m2 h
-  have h0 : L.size = 0 := by simpa using (show Array.isEmpty L = true from h)
+  have h0 : L.size = 0 := by
+    simpa using (show Array.isEmpty L = true from (waccepted_acceptIf _ L.isEmpty).symm.trans h)
   exact ⟨Array.eq_empty_of_size_eq_zero (by omega), fun b hb => m2 (by omega) b (by simp; omega)⟩
 
 private theorem wpre_empty (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
@@ -226,19 +234,19 @@ theorem signed_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {
       wipeSessionStrings pk c e fs fe batches eg := by
   simp [wipeSessionStrings, hm, hI]
 
-theorem own_mem {s : StreamedWipe.Signed} {dev : Challenger} {x : ByteArray}
+theorem own_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {x : ByteArray}
     (hx : x ∈ wipeSessionStrings s.publicKey s.commitment s.ended s.fillStartNs s.fillEndNs s.batches s.egressBits) :
     x ∈ wipeRunStrings s dev :=
   List.mem_append_left _ (List.mem_append_left _ hx)
 
-theorem wipe_mem {s : StreamedWipe.Signed} {dev : Challenger} {r : WipeRun} (hr : r ∈ dev.wipes s.publicKey)
+theorem wipe_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : WipeRun} (hr : r ∈ dev.wipes s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
     (hx : x ∈ wipeSessionStrings s.publicKey r.commitment e r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits) :
     x ∈ wipeRunStrings s dev := by
   refine List.mem_append_left _ (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩))
   simpa only [he] using hx
 
-theorem pous_mem {s : StreamedWipe.Signed} {dev : Challenger} {r : Run} (hr : r ∈ dev.device.sessions s.publicKey)
+theorem pous_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : Run} (hr : r ∈ dev.device.sessions s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
     (hx : x ∈ sessionStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ wipeRunStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
@@ -248,7 +256,7 @@ theorem pous_mem {s : StreamedWipe.Signed} {dev : Challenger} {r : Run} (hr : r 
 
 /-- Under no collision among the run's strings, a wipe whose message the challenger signed is one of its wipes, with
 that wipe's commitment, ending, fill readings, batches and egress. -/
-theorem same_run {s : StreamedWipe.Signed} {dev : Challenger} (cf : CF (wipeRunStrings s dev)) {m M : ByteArray}
+theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wipeRunStrings s dev)) {m M : ByteArray}
     (hm : s.message = .ok m)
     (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
     (hsig : dev.Signed s.publicKey M) :
@@ -369,7 +377,8 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
 /-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
-    wtail s c r0 = ⟨r0.isEmpty, r0, StreamedWipe.egressUnits s.egressBits⟩ := by
+    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0 (StreamedWipe.egressUnits s.egressBits),
+      MemoryChallenger.acceptIf r0.isEmpty) := by
   unfold wtail
   simp only [Id.run]
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
@@ -425,7 +434,7 @@ private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commit
       .accept (WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits))
         (c.params, StreamedWipe.egressUnits s.egressBits) := by
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
-      ⟨true, #[], StreamedWipe.egressUnits s.egressBits⟩ := by
+      (MemoryChallenger.StreamedWipe.Findings.mk #[] (StreamedWipe.egressUnits s.egressBits), Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
       wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
   show WipeProtocol.check SCHEMES p c ⟨some s⟩ = _
@@ -658,14 +667,14 @@ theorem wipeSigned_nontrivial :
     · rw [Wipe.unencoded_forger] at hf
       cases hf
 
-/-- **`WipeSigned` fails at a verifier that accepts everything**: such a check accepts the unencoded session, where
-the conclusion fails (`wipeSigned_nontrivial`). -/
+/-- **`WipeSigned` fails at a verifier that accepts everything** (`Pous.Component.AcceptsAll`): such a check accepts
+the unencoded session, where the conclusion fails (`wipeSigned_nontrivial`). -/
 theorem wipeSigned_acceptAll
     (check : WipeProtocol.Params → StreamedWipe.Commitment → WipeProtocol.Evidence →
       Core.Outcome WipeProtocol.Public (StreamedWipe.Params × Int))
-    (hall : ∀ p c e, ∃ out prof, check p c e = .accept out prof) :
+    (hall : Pous.Component.AcceptsAll check) :
     ¬ ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
-      (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int) (dev : Challenger),
+      (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int) (dev : SignedWipeParty),
       check p c e = .accept out prof → WipeRanAccepted dev p c e := by
   intro h
   obtain ⟨out, prof, hc⟩ := hall unencodedParams measuredCommitment ⟨some unencoded⟩
