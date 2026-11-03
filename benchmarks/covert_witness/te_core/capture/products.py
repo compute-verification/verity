@@ -29,6 +29,8 @@ from __future__ import annotations
 import math
 import operator
 
+import torch
+
 from te_core import io_bound
 from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
 
@@ -393,21 +395,88 @@ def _sizes(vs: _Values) -> list[int]:
     return [max(b // max(w, 1), 1) for b, w in zip(vs.flow.bits, vs.flow.width)]
 
 
+#: ops whose output is their first argument's entries, its shape unchanged: casts and copies
+_SAME = {"_to_copy", "to", "clone", "contiguous", "detach", "alias", "lift_fresh_copy", "lift_fresh", "type_as"}
+#: views that only add or drop dims of size 1, or merge none
+_RESHAPE = {"unsqueeze", "squeeze", "view", "_unsafe_view", "reshape", "_reshape_alias", "view_as", "flatten",
+            "unflatten", "squeeze_copy", "unsqueeze_copy", "view_copy"}
+#: ops that broadcast their first argument to their output's shape
+_EXPAND = {"expand", "expand_as", "broadcast_to", "expand_copy"}
+
+
+def _shape_of(x) -> tuple | None:
+    v = x.meta.get("val") if hasattr(x, "meta") else None
+    return tuple(int(s) for s in v.shape) if hasattr(v, "shape") else None
+
+
+def _broadcast_dims(flat, shape: tuple, out: tuple) -> frozenset | None:
+    """The dims of `out` along which a value of `shape` that is flat along `flat` is, broadcast to it."""
+    if flat is None or shape is None or len(shape) > len(out):
+        return None
+    k = len(out) - len(shape)
+    return frozenset(i for i in range(len(out)) if out[i] > 1 and (i < k or shape[i - k] == 1 or i - k in flat))
+
+
+def _flats(vs: _Values, src: list) -> list:
+    """Each value's flat dims: those of size above 1 along which what it reads of θ′ doesn't vary, so it is a broadcast
+    along them (None: unknown, or it doesn't depend on θ′). A value that is its own source (`_sources`) has none; a
+    map, cast, copy or broadcast is flat where every affected argument is, broadcast to its shape, and a view that adds
+    or drops dims of size 1, or permutes them, keeps its argument's; every other op's are unknown."""
+    flow, dep = vs.flow, vs.dep
+    written = {v for _, v, _ in flow.writes}
+    flat: list = [None] * len(flow.preds)
+    for v, s in enumerate(src):
+        if s is not None and s == frozenset((v,)):
+            flat[v] = frozenset()
+    for n in vs.nodes:
+        v = flow.val.get(n)
+        if n.op != "call_function" or not isinstance(v, int) or not dep[v] or flat[v] is not None or v in written:
+            continue
+        out, name = _shape_of(n), _pk(n.target)
+        if out is None:
+            continue
+        first = n.args[0] if n.args and hasattr(n.args[0], "op") else None
+        own = flow.val.get(first) if first is not None else None
+        shape = _shape_of(first) if first is not None else None
+        f = flat[own] if isinstance(own, int) else None
+        if name in _EXPAND or name in _SAME or name in _MULTIPLY or torch.Tag.pointwise in getattr(n.target, "tags", ()):
+            got = [_broadcast_dims(flat[x] if isinstance(x := flow.val.get(a), int) else None, _shape_of(a), out)
+                   for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+            flat[v] = None if not got or None in got else frozenset.intersection(*got)
+        elif name in _RESHAPE and f is not None and shape is not None:
+            ins, outs = [i for i, x in enumerate(shape) if x > 1], [i for i, x in enumerate(out) if x > 1]
+            if [shape[i] for i in ins] == [out[i] for i in outs]:
+                flat[v] = frozenset(outs[j] for j, i in enumerate(ins) if i in f)
+        elif name in ("permute", "transpose", "t", "numpy_T", "mT") and f is not None and shape is not None:
+            order = list(range(len(shape)))
+            if name == "permute":
+                order = [int(d) % len(shape) for d in n.args[1]]
+            elif len(shape) >= 2:
+                d0, d1 = ((int(n.args[1]), int(n.args[2])) if name == "transpose" else (-2, -1))
+                d0, d1 = d0 % len(shape), d1 % len(shape)
+                order[d0], order[d1] = order[d1], order[d0]
+            flat[v] = frozenset(i for i, d in enumerate(order) if d in f and out[i] > 1)
+    return flat
+
+
 def _elementwise_products(vs: _Values) -> list[dict]:
     """The measured step's matrix products written with elementwise ops, which no row is and whose outputs the
     whole-making system would miss: a multiplication of two values that depend on θ′ whose result has more entries
-    than the sources (`_sources`) of either have (each broadcast or repeated along a dim the other lacks: an outer
-    product, a GEMM with K = 1, or a matrix product once summed, as (x.unsqueeze(-1) * W).sum(-2) writes x @ W, whatever
-    maps or copies the broadcast passes through first), and a sum by index (`_sums_by_index`) of a multiplication of
-    two such values one of which carries a gather's rows (a sparse product: gather, mul and index_add), in the forward
-    or the backward. A gather's rows and such a multiplication are carried by every view, and by every other op with
-    one affected argument and no fewer entries (a cast, a map, a broadcast). A multiplication of two values of its own size (a norm's, a
-    gate's) is elementwise, and so is one with an operand that doesn't depend on θ′, whose product is θ's and never
-    counted (P-match checks its broadcast). [{"op", "count", "macs"}] by op, the multiplications' MACs."""
+    than the sources (`_sources`) of either have, each broadcast or repeated along a dim the other isn't (`_flats`;
+    dims it can't tell never exempt): an outer product, a GEMM with K = 1, or a matrix product once summed, as
+    (x.unsqueeze(-1) * W).sum(-2) writes x @ W, whatever maps or copies the broadcast passes through first. Two
+    broadcasts along the same dims (a token's code over lanes times the token's scale) are elementwise. And a sum by
+    index (`_sums_by_index`) of a multiplication of two such values one of which carries a gather's rows (a sparse
+    product: gather, mul and index_add), in the forward or the backward. A gather's rows and such a multiplication are
+    carried by every view, and by every other op with one affected argument and no fewer entries (a cast, a map, a
+    broadcast). A multiplication of two values of its own size (a norm's, a gate's) is elementwise, and so is one with
+    an operand that doesn't depend on θ′, whose product is θ's and never counted (P-match checks its broadcast).
+    [{"op", "count", "macs"}] by op, the multiplications' MACs."""
     phases = _phases(vs.gm)
     dep = vs.dep
     made = _made(vs)
     src, size = _sources(vs), _sizes(vs)
+    flat = _flats(vs, src)
     gathered: set = set()
     product: dict = {}
     found: dict = {}
@@ -415,6 +484,17 @@ def _elementwise_products(vs: _Values) -> list[dict]:
     def ent(n, a) -> int:
         s = frozenset().union(*(src[x] for x in _reads(vs, n, a) if dep[x]))
         return min(io_bound._numel(a), sum(size[x] for x in s))
+
+    def dims(n, a) -> frozenset | None:
+        own = vs.flow.val.get(a)
+        if not isinstance(own, int) or _reads(vs, n, a) - {own}:
+            return None
+        return _broadcast_dims(flat[own], _shape_of(a), _shape_of(n))
+
+    def mixes(n, a, b) -> bool:
+        """Whether each operand is a broadcast along a dim the other isn't (unknown: it may be)."""
+        fa, fb = dims(n, a), dims(n, b)
+        return fa is None or fb is None or not (fa <= fb or fb <= fa)
 
     def add(name: str, macs: int) -> None:
         c, m = found.get(name, (0, 0))
@@ -441,7 +521,7 @@ def _elementwise_products(vs: _Values) -> list[dict]:
             continue
         if both:
             out = io_bound._numel(n)
-            if out > ent(n, a) and out > ent(n, b):
+            if out > ent(n, a) and out > ent(n, b) and mixes(n, a, b):
                 add(name, out)
             elif gathered & (_reads(vs, n, a) | _reads(vs, n, b)):
                 product.update(dict.fromkeys(outs, out))

@@ -327,9 +327,9 @@ def test_a_trace_captured_before_the_elementwise_check_is_unmeasured_until_retra
     assert why == formalism.FRESH_UNCHECKED
 
 
-def _elementwise(m, x) -> list[dict]:
+def _elementwise(m, x, y=None) -> list[dict]:
     g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
-                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone()))
+                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone() if y is None else y))
     return products.rows(g, policy.CONSOLE[1])["elementwise_products"]
 
 
@@ -385,6 +385,34 @@ def test_an_embeddings_rows_are_no_broadcast(form, found):
     g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1),
                      lambda mm, b: tF.cross_entropy(mm(b[0]).flatten(0, 1), b[1].flatten()), (tok, tok.clone()))
     assert products.rows(g, policy.CONSOLE[1])["elementwise_products"] == found
+
+
+class Lanes(nn.Module):
+    """A token's value spread over 8 lanes by constants, as the wildcard adapter's decoder unpacks a packed word, times
+    the token's own scale (`same`) or a trained vector of the lanes (`outer`), then a head."""
+
+    def __init__(self, form: str) -> None:
+        super().__init__()
+        self.form = form
+        self.w = nn.Linear(32, 32, bias=False)
+        self.lanes = nn.Parameter(torch.randn(8))
+        self.head = nn.Linear(8, 8, bias=False)
+        self.register_buffer("freqs", torch.arange(1.0, 9.0))
+
+    def forward(self, x):
+        h = self.w(x)
+        code = torch.sin(h.sum(-1, keepdim=True) * self.freqs)
+        return self.head(code * (h.pow(2).mean(-1, keepdim=True) if self.form == "same" else self.lanes))
+
+
+@pytest.mark.parametrize("form, found", (("same", []), ("outer", [{"op": "mul", "count": 1, "macs": 2 * 16 * 8}])))
+def test_two_broadcasts_along_the_same_dim_are_elementwise(form, found):
+    """A token's code over 8 lanes times its own scale: both are broadcasts along the lanes, so neither is one along a
+    dim the other isn't, and the multiplication is elementwise (`products._flats`), where its entries alone would make
+    it a product (4.12.9's check first found the wildcard adapter's decoder so). Times a trained vector of the lanes,
+    it is an outer product, found."""
+    torch.manual_seed(0)
+    assert _elementwise(Lanes(form), torch.randn(2, 16, 32), torch.randn(2, 16, 8)) == found
 
 
 class MatVec(nn.Module):
