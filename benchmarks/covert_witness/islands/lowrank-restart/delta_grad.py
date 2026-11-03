@@ -25,7 +25,9 @@ entries or whole rows), so the messages, the store and an elementwise optimizer'
 keeps its row and column factors); E codes the scattered Δ once at `--e-bits`. `--lora R` trains each target as
 W + B A instead (B zero, A drawn from `--seed`), as a forward hook adding B (A x) to the frozen W x, so no weight
 gradient of W is formed: a block's message is its factor gradients, the factors are the optimizer's tensors and the
-store's, and E is CWLORA2 at `--e-bits` (4 or 8).
+store's, and E is CWLORA2 at `--e-bits` (4 or 8). `--grow` makes the adapters grow in phases (`grow`), so one run's
+checkpoints land at several sizes of Δ: each phase from its share of the steps on raises its targets to its rank, B A
+unchanged; the meter prices every step at the last phase's ranks, and notes.grow has each phase's accounting.
 `--targets gains` makes the norm gains of `--blocks` and the final norm the trained set instead (elementwise: `--opt
 sign` or `adamw`), coded, reduced and stored like the matrices, for a state small enough for Fit at the default dial
 (`gains:mlp_norm+norm --blocks 5-5`, 1,024 values on s-t20, is Fit at 8 KiB).
@@ -179,6 +181,7 @@ class Store:
 
     def __init__(self, shape, kind: str, group: int, gen: torch.Generator, e_bits: int = 8, sticky: bool = False):
         self.shape, self.kind, self.gen, self.sticky = tuple(shape), kind, gen, sticky
+        self.group, self.e_bits = group, e_bits
         n = math.prod(self.shape)
         if kind == "bf16":
             self.d = torch.zeros(self.shape, dtype=torch.bfloat16, device=DEV)
@@ -206,6 +209,16 @@ class Store:
         else:
             codes, self.scales = self.code.encode(new)
             self.codes = codes.to(torch.uint8)
+
+    def grow_(self, rows: torch.Tensor) -> None:
+        """`rows` appended along the first axis, the values already held kept exactly (a row is whole groups)."""
+        more = Store(rows.shape, self.kind, self.group, self.gen, self.e_bits, self.sticky)
+        more.add_(rows)
+        self.shape = (self.shape[0] + rows.shape[0], *self.shape[1:])
+        if self.kind == "bf16":
+            self.d = torch.cat([self.d, more.d])
+        else:
+            self.codes, self.scales = torch.cat([self.codes, more.codes]), torch.cat([self.scales, more.scales])
 
     def entry(self, theta_w: torch.Tensor) -> dict:
         if self.kind == "bf16" and self.e_code is None:
@@ -325,6 +338,22 @@ class Opt:
                 self.c[n] = torch.zeros(sh[1], device=DEV)
             elif mom_bits:
                 self._set_m(n, torch.zeros((mom_rank, max(sh)) if mom_rank else sh, device=DEV))
+
+    def grow(self, n: str, sh: tuple) -> None:
+        """n's state, zero-padded to the grown shape sh (a grown LoRA factor's new rows or columns have no history)."""
+
+        def pad(t: torch.Tensor) -> torch.Tensor:
+            out = torch.zeros(sh, device=DEV)
+            out[tuple(slice(0, k) for k in t.shape)] = t
+            return out
+
+        if self.kind == "adamw":
+            for d in (self.m, self.v):
+                d[n] = pad(d[n]) if n in d else torch.zeros(sh, device=DEV)
+        elif self.mom_bits:
+            self._set_m(n, pad(self._m(n)) if n in self.m else torch.zeros(sh, device=DEV))
+        self.shapes[n] = sh
+        self.n = sum(math.prod(s) for s in self.shapes.values())
 
     def n_m(self) -> int:
         """The momentum's entries (muon, sign)."""
@@ -473,6 +502,10 @@ def main() -> int:
     ap.add_argument("--support-kind", choices=("entries", "rows"), default="entries")
     ap.add_argument("--lora", type=int, default=0,
                     help="rank R: each target trains as W + B A (B zero, A from the seed); E is CWLORA2 at --e-bits")
+    ap.add_argument("--grow", default="",
+                    help="LoRA whose adapters grow: phases FRAC:TARGETS:RANK joined by ',' (FRACs from 0 up, below 1), "
+                         "each raising TARGETS (as --targets names them, in --blocks) to RANK from that share of the "
+                         "steps on; instead of --lora and --targets")
     ap.add_argument("--group", type=int, default=128)
     ap.add_argument("--leaf", type=int, default=4, help="sequences of 1024 tokens a leaf block")
     ap.add_argument("--lr", type=float, required=True)
@@ -500,14 +533,21 @@ def main() -> int:
     sparse = a.support < 1
     if sparse and (a.opt == "muon" and a.mom_bits or not 1 <= a.e_bits <= 8):
         raise SystemExit("delta_grad: a sparse --support takes no muon momentum, and codes E at 1 <= --e-bits <= 8")
-    if a.mom_rank and (a.opt != "muon" or not a.mom_bits or sparse or a.lora or a.proj_every < 1):
+    if a.mom_rank and (a.opt != "muon" or not a.mom_bits or sparse or a.lora or a.grow or a.proj_every < 1):
         raise SystemExit("delta_grad: --mom-rank is a dense muon's momentum (--mom-bits > 0, no --support, no --lora), "
                          "with --proj-every >= 1")
     if a.rotate and (a.vote or a.msg_bits >= 32 and not 0 < a.mom_bits < 32):
-        raise SystemExit("delta_grad: --rotate codes the messages or the momentum; with --vote or nothing coded it has no use")
+        raise SystemExit("delta_grad: --rotate codes the messages or the momentum; with --vote or nothing coded it has "
+                         "no use")
     if a.msg_proj and (not a.mom_rank or a.vote):
         raise SystemExit("delta_grad: --msg-proj projects onto --mom-rank's basis, and takes no --vote")
-    lora = a.lora > 0
+    phases = [(float(f), t, int(r)) for f, t, r in (p.split(":") for p in a.grow.split(","))] if a.grow else []
+    if phases and (a.lora or a.opt == "adafactor" or phases[0][0] != 0 or not phases[-1][0] < 1
+                   or any(x[0] >= y[0] for x, y in zip(phases, phases[1:])) or min(r for *_, r in phases) < 1):
+        raise SystemExit("delta_grad: --grow's FRACs start at 0 and increase below 1, its ranks are >= 1, and it takes "
+                         "no --lora and no adafactor (a grown factor's row and column moments would have no history)")
+    phases = phases or ([(0.0, a.targets, a.lora)] if a.lora else [])
+    lora = bool(phases)
     if lora and (sparse or a.e_bits not in prepare.LORA2_BITS):
         raise SystemExit(f"delta_grad: --lora takes no --support, and codes E as CWLORA2 at --e-bits in "
                          f"{prepare.LORA2_BITS}")
@@ -526,9 +566,15 @@ def main() -> int:
     n_layer = 1 + max(int(n.split(".")[1]) for n in params if n.startswith("blocks."))
     lo = int(a.blocks.split("-")[0]) if gains and a.blocks != "all" else 0
     hi = int(a.blocks.split("-")[1]) if gains and a.blocks != "all" else n_layer - 1
+    plan = []
+    for f, t, r in phases:
+        ranks, named = dict(plan[-1][1]) if plan else {}, targets_of(params, t, a.blocks)
+        if not named or any(ranks.get(n, 0) > r for n in named):
+            raise SystemExit(f"delta_grad: --grow's {t} --blocks {a.blocks} names no matrix, or lowers a rank")
+        plan.append((f, {**ranks, **{n: r for n in named}}))
     targets = sorted(n for n, p in params.items() if p.ndim == 1 and n.split(".")[-1] in kinds and (
         n == "norm" or n.startswith("blocks.") and lo <= int(n.split(".")[1]) <= hi)) if gains \
-        else targets_of(params, a.targets, a.blocks)
+        else sorted(plan[-1][1]) if lora else targets_of(params, a.targets, a.blocks)
     if not targets:
         raise SystemExit(f"delta_grad: --targets {a.targets} --blocks {a.blocks} names no tensor")
     lo = lo if gains else min(int(n.split(".")[1]) for n in targets)
@@ -542,16 +588,46 @@ def main() -> int:
     gen = torch.Generator(device=DEV).manual_seed(a.seed)
     sup = {n: Support(shapes[n], a.support, a.support_kind, a.group, gen) for n in targets} if sparse else {}
     trained = {n: (sup[n].k,) for n in targets} if sparse else shapes
+
+    def factor_shapes(ranks: dict) -> dict:
+        return {k: sh for n, r in sorted(ranks.items())
+                for k, sh in ((n + "#A", (r, shapes[n][1])), (n + "#B", (shapes[n][0], r)))}
+
     if lora:
-        trained = {k: sh for n in targets for k, sh in ((n + "#A", (a.lora, shapes[n][1])),
-                                                        (n + "#B", (shapes[n][0], a.lora)))}
-        if any(math.prod(s) % a.group for s in trained.values()):
-            raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every factor's entries")
+        trained = {}
+        if any(d % a.group for n in targets for d in shapes[n]):
+            raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every target's sides (a factor's store "
+                             "rows)")
     dense_opt = not sparse or a.opt in ("adafactor", "muon")
     opt_shapes = shapes if dense_opt and not lora else trained
     stores = {k: Store(sh, a.store, a.group, gen, a.e_bits, a.store_scale == "sticky") for k, sh in trained.items()}
-    for n in targets if lora else ():
-        stores[n + "#A"].add_(torch.randn(trained[n + "#A"], generator=gen, device=DEV) / math.sqrt(shapes[n][1]))
+    factors, opt = {}, None
+
+    def grow(ranks: dict) -> None:
+        """The adapters raised to `ranks`: A gains rows drawn as at the start and B zero columns, so B A, and θ′, are
+        unchanged. A factor's store holds A and Bᵀ, so both grow by whole rows, and the values already held are kept
+        exactly (`Store.grow_`); the optimizer's state for the new entries starts at zero (`Opt.grow`)."""
+        for n, r in sorted(ranks.items()):
+            (d_out, d_in), r0 = shapes[n], trained[n + "#A"][0] if n + "#A" in trained else 0
+            if r == r0:
+                continue
+            rows = {n + "#A": torch.randn((r - r0, d_in), generator=gen, device=DEV) / math.sqrt(d_in),
+                    n + "#B": torch.zeros((r - r0, d_out), device=DEV)}
+            for k, v in rows.items():
+                if k not in stores:
+                    stores[k] = Store((0, v.shape[1]), a.store, a.group, gen, a.e_bits, a.store_scale == "sticky")
+                stores[k].grow_(v)
+                trained[k] = (r, d_in) if k.endswith("#A") else (d_out, r)
+                if opt is not None:
+                    opt.grow(k, trained[k])
+            factors[n] = tuple(torch.zeros(trained[n + x], device=DEV, requires_grad=True) for x in ("#A", "#B"))
+
+    def factor(k: str) -> torch.Tensor:
+        """A LoRA factor as the adapters read it, from its store (which holds Bᵀ for B)."""
+        return stores[k].value().T if k.endswith("#B") else stores[k].value()
+
+    if lora:
+        grow(plan[0][1])
     e_code = Code(a.e_bits, a.group, gen) if sparse else None
     msg = Vote(gen) if a.vote else Code(a.msg_bits, a.group, gen, a.rotate) if a.msg_bits < 32 else None
     opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen, a.mom_rank, a.proj_every, a.msg_proj,
@@ -564,14 +640,10 @@ def main() -> int:
         raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every range message's entries (R × short side)")
     for n in ([] if lora else targets) + norms:
         params[n].requires_grad_(True)
-    factors = {}
     for n in targets if lora else ():
-        fa = torch.zeros(trained[n + "#A"], device=DEV, requires_grad=True)
-        fb = torch.zeros(trained[n + "#B"], device=DEV, requires_grad=True)
-        factors[n] = (fa, fb)
-
-        def adapter(mod, inp, out, fa=fa, fb=fb):
-            return out + F.linear(F.linear(inp[0], fa), fb)
+        def adapter(mod, inp, out, n=n):
+            f = factors.get(n)
+            return out if f is None else out + F.linear(F.linear(inp[0], f[0]), f[1])
 
         net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(adapter)
     nopt = torch.optim.AdamW([params[n] for n in norms], lr=a.norm_lr, betas=(0.9, 0.95), weight_decay=0.0) \
@@ -581,7 +653,7 @@ def main() -> int:
 
     def delta(n: str) -> torch.Tensor:
         if lora:
-            return stores[n + "#B"].value() @ stores[n + "#A"].value()
+            return factor(n + "#B") @ factor(n + "#A")
         return sup[n].scatter(stores[n].value()) if sparse else stores[n].value()
 
     def entry(n: str) -> dict:
@@ -593,8 +665,7 @@ def main() -> int:
 
     tokens = a.batch * prepare.EVAL_CTX
     leaves = a.batch // a.leaf
-    trainable = {"full": sorted(norms), "adapters": {n: a.lora for n in targets}} if lora \
-        else {"full": sorted(targets + norms)}
+    trainable = {"full": sorted(norms), "adapters": dict(plan[-1][1])} if lora else {"full": sorted(targets + norms)}
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     n_entries = acct["n_message_entries"]
     codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 0)) if a.tree == "heap" else 2 * leaves - 1
@@ -602,7 +673,15 @@ def main() -> int:
     extra = code_flops * n_entries * (codings + 1) + opt.flops(opt_shapes)
     if a.msg_proj:
         extra += sum(2 * a.mom_rank * math.prod(shapes[n]) for n in targets) * leaves * (a.proj_every + 1) // a.proj_every
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + extra))
+
+    def extra_of(sh: dict) -> int:
+        return code_flops * sum(math.prod(s) for s in sh.values()) * (codings + 1) + opt.flops(sh)
+
+    ends = [f for f, _ in plan[1:]] + [1.0]
+    mean_extra = sum((e - f) * extra_of(factor_shapes(r)) for (f, r), e in zip(plan, ends)) if lora else extra
+    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + mean_extra))
+    grow_at = {round(f * n_steps): r for f, r in plan[1:]}
+    grown = [{"step": 0, "ranks": dict(plan[0][1]), **acct}] if lora else []
     hooks.plan(n_steps)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net) if a.compile else net
@@ -614,7 +693,7 @@ def main() -> int:
 
     def encode() -> bytes:
         if lora:
-            f = {n: (stores[n + "#A"].value(), stores[n + "#B"].value(), 1.0) for n in targets}
+            f = {n: (factor(n + "#A"), factor(n + "#B"), 1.0) for n in factors}
             return prepare.encode_lora2(f, a.e_bits, full={n: params[n].detach() for n in norms})
         e = {n: entry(n) for n in targets}
         e.update({n: {"kind": "full", "t": params[n].detach().to(theta[n].dtype)} for n in norms})
@@ -650,13 +729,21 @@ def main() -> int:
         the factors the adapters' hooks read, the weights staying θ)."""
         with torch.no_grad():
             for n, (fa, fb) in factors.items():
-                fa.copy_(stores[n + "#A"].value())
-                fb.copy_(stores[n + "#B"].value())
+                fa.copy_(factor(n + "#A"))
+                fb.copy_(factor(n + "#B"))
             for n in [] if lora else targets:
                 params[n].data.copy_((theta_dev[n].float() + delta(n)).to(theta_dev[n].dtype))
 
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup)
+        if step in grow_at:
+            grow(grow_at[step])
+            acct = accounting(a, trained, acct["n_norm_entries"], opt, tau_bits)
+            extra = extra_of(trained)
+            grown.append({"step": step, "ranks": dict(grow_at[step]), **acct})
+            if a.compile:
+                torch._dynamo.reset()
+                fwd = torch.compile(net)
         rows = data.next(a.batch)
         load_weights()
         tree, total = Tree(msg, a.tree, leaves), torch.zeros((), device=DEV)
@@ -698,7 +785,7 @@ def main() -> int:
                     s = sup[k].gather(opt.step(k, sup[k].scatter(g[k]), a.lr * frac))
                 else:
                     s = opt.step(k, g[k], a.lr * frac)
-                stores[k].add_(-s)
+                stores[k].add_(-(s.T if lora and k.endswith("#B") else s))
         if nopt:
             for grp in nopt.param_groups:
                 grp["lr"] = a.norm_lr * frac
@@ -732,7 +819,7 @@ def main() -> int:
              "fit": fit(acct, 8 * len(blob)), "delta_grad": delta_grad, "E_bytes": len(blob),
              "delta_bits_final": 8 * len(blob), "steps": n_steps, "tail_loss": round(tail, 5),
              "program": "islands/lowrank-restart/delta_grad.py", "program_sha256": hashlib.sha256(src).hexdigest(),
-             "train_log": log[-40:]}
+             "train_log": log[-40:], **({"grow": grown} if a.grow else {})}
     prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=changed, notes=notes)
     print(json.dumps({"E_bytes": len(blob), "changed": len(changed), "tail_loss": round(tail, 5)}), flush=True)
     return 0
