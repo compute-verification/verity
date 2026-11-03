@@ -511,6 +511,44 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     assert out["values"] == _fresh(edited)["values"]
 
 
+#: `cli._owners` with the CPU seconds it has of each binding written beside the tree (``<root>-seconds.json``)
+OWNERS = """
+owners = cli._owners
+def weighed(plan, tasks, n):
+    (root.parent / f"{root.name}-seconds.json").write_text(json.dumps({e.name: e.seconds for e in plan.entries}))
+    return owners(plan, tasks, n)
+cli._owners = weighed
+"""
+
+
+@pytest.mark.slow
+def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside_its_record(tmp_path):
+    """A record holds what its binding's build gave and read, never how long the build took: ``--records-only`` into a fresh
+    cache stores the very records it stored before, the catalog's roots record (`units.store_roots`) with them, names and
+    bytes, so a tarball of them (the circuit-catalog task's) has one digest.  The CPU seconds of each binding built apart are kept beside its record (``<entry>.seconds``), and a forked run
+    from a copy of the cache weighs each binding by them (`cli._owners`)."""
+    from circuit_check import units as UN
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    _records_only(root)
+    first = {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)}
+    shutil.rmtree(root / "cache")
+    _records_only(root)
+    assert {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)} == first and len(first) == 6
+    assert not any("seconds" in json.loads(b)["report"] for b in first.values())
+    # by `units.Entry.name`, as `cli._owners` weighs them: a registered record's with its index
+    took = {",".join(t[1]) + (f":{t[2]}" if tuple(t[1]) == UN.REGISTERED else ""): float(s.read_text())
+            for p in _records(root) if (s := p.with_suffix(".seconds")).is_file()
+            for t in [json.loads(p.read_text())["key"]["request"]["target"]]}
+    assert len(took) >= 4, took
+    warm = _copied(root, tmp_path / "warm")
+    out = _run(warm, FORKED.replace("rep = cli.run(", OWNERS + "rep = cli.run("))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0}
+    weighed = json.loads((tmp_path / "warm-seconds.json").read_text())
+    assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
+
+
 #: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
 #: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
@@ -831,6 +869,28 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
     monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
     with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
         UN.call_families([], nothing, {})
+
+
+#: what `targets.on_demand_boolean_families` registers, in order, given word Call families made on demand
+ON_DEMAND = """
+from circuit_check import targets as TG
+from verity.ml.circuits.defs import REGISTRY
+import verity.ml.definitions.boolean
+
+before = set(dict.keys(REGISTRY.defs))
+TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",
+                               "GatherBf16x8_v1", "GatherI32x2_v1", "GatherI32x4_v1", "GatherI32x8_v1", "F32Add_v1"})
+print([fid for fid in dict.keys(REGISTRY.defs) if fid not in before])
+"""
+
+
+def test_the_boolean_versions_made_on_demand_register_in_one_order_under_any_hash_seed():
+    """`targets.on_demand_boolean_families` makes the Boolean versions in the same order whatever the process's hash seed: each
+    one made registers, and the catalog's roots record notes the order (`units._noting`), so a set's order would give an
+    unchanged catalog's rebuild other bytes."""
+    got = {subprocess.run([sys.executable, "-c", ON_DEMAND], capture_output=True, text=True, check=True, cwd=REPO,
+                          env={**os.environ, "PYTHONHASHSEED": str(seed)}).stdout for seed in (1, 2, 3, 4)}
+    assert len(got) == 1, got
 
 
 #: the catalog over the synthetic bindings, in a process of its own: built whole (``whole``, `targets.suite`), each binding built
