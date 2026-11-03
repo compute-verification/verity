@@ -967,10 +967,12 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     the te_core that captured them: at 4.8 with the trace's order unknown, which `fresh_products` never measures, and
     an upcast operand's product an expansion; at 4.10 and 4.11 with no `system`, which it reads as products of no
     trace, by the one-class rule (`ONE_CLASS`) that misses attention's chains; at 4.12 with a system that counts the
-    products reading gathered rows, which its rows can't name. `complete` reads them as this te_core's ingest of the
-    same rows over the same traced steps (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a
-    stand-in), so rows captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed`
-    and `gathered` are measured on their system, with no re-ingest; products a record has of its own stand."""
+    products reading gathered rows, which its rows can't name; at 4.12.1 at the console's k only, though the trace
+    keeps rows at each k of the dial (`at`). `complete` reads them as this te_core's ingest of the same rows over the
+    same traced steps (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a stand-in), so rows
+    captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered` are
+    measured on their system, at each k their trace keeps rows at (the served block's here), with no re-ingest;
+    products a record has of its own stand."""
     row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
            "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
            "rates": [16.0, 16.0], "paid": [True, False], "self": False, "b_c": 32, "k_whole": 512,
@@ -991,7 +993,7 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
 
     c, k, out = 1e11, 65536.0, {"output": {"e_bytes": 10}}
 
-    def fresh(f):
+    def fresh(f, k=k):
         b = F.bound(F.complete(f, out, SHAPE), c, k)
         return b["terms"]["fresh_products"], b["unmeasured"].get("fresh_products"), b["inputs"]["fresh_products"]
 
@@ -1019,11 +1021,19 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     for old, rows in ((at_48, now), (at_411, now), (at_412, now_412)):
         assert F.complete(old, out, SHAPE).products == rows["products"]
         assert fresh(old)[:2] == (None, F.FRESH_RETRACE)
-    now = F.of_record(record(block | {"capture": F.SYSTEM_FROM, "p_match": [],
-                                      "rows": [r | {"gathered": [False, False]} for r in fed]}))
+    captured = block | {"capture": F.SYSTEM_FROM, "p_match": [],
+                        "rows": [r | {"gathered": [False, False]} for r in fed]}
+    now = F.of_record(record(captured))
     assert now["products"]["system"] is not None
     term, why, got = fresh(before_412(now))
     assert (term, why) == fresh(now)[:2] and term > 0 and why is None and got["whole_making"] != F.ONE_CLASS
+    served = 145_568.0
+    dial = F.of_record(record(captured | {"at": {f"{served:.0f}": {"k": served, "rows": captured["rows"],
+                                                                   "p_match": []}}}))
+    at_4121 = dial | {"products": {x: v for x, v in dial["products"].items() if x != "at"}}
+    assert "keep none at it" in fresh(at_4121 | {"trace": {}}, served)[1]
+    term, why, got = fresh(at_4121, served)
+    assert why is None and term > 0 and (term, why) == fresh(dial, served)[:2] and got["k_classified"] == served
     own = {"k": 65536.0, "order": "chain", "products": []}
     assert F.complete(now | {"products": own}, out, SHAPE).products == own
 
