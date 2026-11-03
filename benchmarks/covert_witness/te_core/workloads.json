@@ -17,12 +17,12 @@
   "k": 145568,
   "defaults": {
    "standard": {
-    "rho": 6391.744,
+    "rho": 6377.174,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 6391.744, "token": null, "decoding": null},
+    "terms": {"fresh_products": 6377.174, "token": null, "decoding": null},
     "partial": true,
-    "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+    "whole_making": {"e": 0.02273521, "whole_chain": 1.034296, "diverged": []},
     "target": {"rho": 10.44411, "basis": "target"},
     "sensitivities": {
      "reduction": 9884.086,
@@ -30,7 +30,7 @@
      "token_form": 10.44411,
      "decoding_form": 0.9997032,
      "per_gate": null,
-     "fresh_cell": 82236.97,
+     "fresh_cell": 80844.02,
      "fresh_converged": null
     },
     "fit_fails": ["compute", "reduction", "update"],
@@ -39,12 +39,12 @@
     "b": [510]
    },
    "diloco": {
-    "rho": 6378.557,
+    "rho": 6363.888,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 6378.557, "token": null, "decoding": null},
+    "terms": {"fresh_products": 6363.888, "token": null, "decoding": null},
     "partial": true,
-    "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+    "whole_making": {"e": 0.02273521, "whole_chain": 1.034296, "diverged": []},
     "target": {"rho": 10.43482, "basis": "target"},
     "sensitivities": {
      "reduction": 9875.313,
@@ -52,7 +52,7 @@
      "token_form": 10.43482,
      "decoding_form": 0.9988137,
      "per_gate": null,
-     "fresh_cell": 82067.31,
+     "fresh_cell": 80675.59,
      "fresh_converged": null
     },
     "fit_fails": ["compute", "reduction", "update"],
@@ -61,12 +61,12 @@
     "b": [510]
    },
    "rl": {
-    "rho": 6061.891,
-    "basis": "fresh_products",
-    "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 6061.891, "token": null, "decoding": null},
-    "partial": true,
-    "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+    "rho": null,
+    "basis": "unmeasured",
+    "binding_kind": null,
+    "terms": {"fresh_products": null, "token": null, "decoding": null},
+    "partial": false,
+    "whole_making": {"e": null, "whole_chain": null, "diverged": [64.0, 256.0, 512.0, 1024.0, 1408.0, 50304.0, 65536.0]},
     "target": {"rho": 10.43819, "basis": "target"},
     "sensitivities": {
      "reduction": 9123.512,
@@ -74,23 +74,23 @@
      "token_form": 10.43819,
      "decoding_form": 0.9997261,
      "per_gate": null,
-     "fresh_cell": 74605.79,
+     "fresh_cell": null,
      "fresh_converged": null
     },
     "fit_fails": ["compute", "reduction", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
+    "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
     "b": [64912, 510]
    },
    "inference": {
-    "rho": 1121.857,
+    "rho": 1112.619,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 1121.857, "token": null, "decoding": null},
+    "terms": {"fresh_products": 1112.619, "token": null, "decoding": null},
     "partial": true,
-    "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+    "whole_making": {"e": 0.06229481, "whole_chain": 1.094883, "diverged": []},
     "target": {"rho": 42.12958, "basis": "target"},
-    "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 42.12958, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 16915.17, "fresh_converged": null},
+    "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 42.12958, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 16271.47, "fresh_converged": null},
     "fit_fails": ["compute", "update"],
     "token_A": "unmodelled",
     "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
@@ -102,7 +102,7 @@
     "binding_kind": null,
     "terms": {"fresh_products": null, "token": null, "decoding": null},
     "partial": false,
-    "whole_making": "void under the traced class system (te_core 4.12)",
+    "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
     "target": {"rho": 1.0, "basis": "target"},
     "sensitivities": {
      "reduction": 103.9381,
@@ -119,12 +119,12 @@
     "b": [366]
    },
    "distill": {
-    "rho": 1513.784,
+    "rho": 1510.333,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 1513.784, "token": null, "decoding": null},
+    "terms": {"fresh_products": 1510.333, "token": null, "decoding": null},
     "partial": true,
-    "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+    "whole_making": {"e": 0.02273521, "whole_chain": 1.034296, "diverged": []},
     "target": {"rho": 2.473524, "basis": "target"},
     "sensitivities": {
      "reduction": 9897.045,
@@ -132,7 +132,7 @@
      "token_form": 2.473524,
      "decoding_form": 0.236764,
      "per_gate": null,
-     "fresh_cell": 19476.53,
+     "fresh_cell": 19146.63,
      "fresh_converged": null
     },
     "fit_fails": ["compute", "reduction", "update"],
@@ -154,12 +154,12 @@
  },
  "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
-  "fresh_products": "P-width and P-chain, reference circuit; no A1 (coordinator 12:09Z): te_core.io_bound's Loomis-Whitney bound with \u039b proved (cursor/te-io-bound-4207 at 3c2afa62aa, by te_core.formalism.fresh_products) on the model's products of two fresh operands by the standard algorithm, under P-width (every operand entry paid at its passed width and every partial sum at 32 bits) and P-chain (each output entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation 1); attention's products uncounted; \u039b's whole-making factor by io_bound's one-class rule on a dense model's products (one-class rule; the traced class system lowers dense steps by under 1%), and an adapter's term unmeasured (void under the traced class system (te_core 4.12)); the figure under P-cell beside it (fresh_cell)",
+  "fresh_products": "P-width and P-chain, reference circuit; no A1 (coordinator 12:09Z): te_core.io_bound's Loomis-Whitney bound with \u039b proved (cursor/te-io-bound-4207 at 3c2afa62aa, by te_core.formalism.fresh_products) on the model's products of two fresh operands by the standard algorithm, under P-width (every operand entry paid at its passed width and every partial sum at 32 bits) and P-chain (each output entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation 1); attention's products uncounted; \u039b's whole-making factor by te_core.io_bound.whole_chain_of on the model's whole-making system, its products by chain length as a traced step's (io_bound.chain_classes; coordinator 15:50Z), the term unmeasured where it has no fixed point, as on every adapter's products; the figure under P-cell beside it (fresh_cell)",
   "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them; a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
   "none": "no kind exceeds 1: Fit fails and every valid kind is measured, none with a term above 1, so rho is 1 (coordinator 12:20Z)",
-  "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh products are unmeasured on an adapter's products (void under the traced class system (te_core 4.12)) and for a circuit that declares a tree (none does), the token and decoding kinds without a trace"
+  "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh products are unmeasured where the model's whole-making system has no fixed point (every adapter's products: te_core.formalism's FRESH_VOID) and for a circuit that declares a tree (none does), the token and decoding kinds without a trace"
  },
  "reading_a": {
   "unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), from a trace's entries and op log, which a model hasn't",
@@ -302,17 +302,17 @@
      },
      "rho": {
       "default": {
-       "rho": 265541.2,
+       "rho": 265426.4,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 265426.4, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
+       "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.653459, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
        "target": {"rho": 413.8229, "basis": "target"},
        "sensitivities": {
         "reduction": 21542.15,
@@ -320,7 +320,7 @@
         "token_form": 413.8229,
         "decoding_form": 0.9997032,
         "per_gate": null,
-        "fresh_cell": 5007794.0,
+        "fresh_cell": 4983966.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -403,17 +403,17 @@
      },
      "rho": {
       "default": {
-       "rho": 202999.7,
+       "rho": 202689.1,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 202999.7, "token": null, "decoding": null},
+       "terms": {"fresh_products": 202689.1, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.354669, "share": 0.7642779, "numerical": 206428.0, "attention_share": 0.185738},
+       "whole_making": {"e": 0.01969506, "whole_chain": 1.029688, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.372917, "share": 0.7642779, "numerical": 206428.0, "attention_share": 0.185738},
        "target": {"rho": 643.8972, "basis": "target"},
        "sensitivities": {
         "reduction": 21548.12,
@@ -421,7 +421,7 @@
         "token_form": 643.8972,
         "decoding_form": 0.9995382,
         "per_gate": null,
-        "fresh_cell": 4607728.0,
+        "fresh_cell": 4542222.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -504,17 +504,17 @@
      },
      "rho": {
       "default": {
-       "rho": 301929.3,
+       "rho": 301866.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 301929.3, "token": null, "decoding": null},
+       "terms": {"fresh_products": 301866.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.633248, "share": 0.928281, "numerical": 307304.5, "attention_share": 0.04189688},
+       "whole_making": {"e": 0.002434349, "whole_chain": 1.003654, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.63896, "share": 0.928281, "numerical": 307304.5, "attention_share": 0.04189688},
        "target": {"rho": 20.53651, "basis": "target"},
        "sensitivities": {
         "reduction": 3416837.0,
@@ -522,7 +522,7 @@
         "token_form": 20.53651,
         "decoding_form": 0.9996763,
         "per_gate": null,
-        "fresh_cell": 5735809.0,
+        "fresh_cell": 5715677.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -611,12 +611,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 267926.3,
+        "rho": 267810.5,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 267926.3, "token": null, "decoding": null},
+        "terms": {"fresh_products": 267810.5, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
         "target": {"rho": 415.5739, "basis": "target"},
         "sensitivities": {
          "reduction": 21735.64,
@@ -624,7 +624,7 @@
          "token_form": 417.564,
          "decoding_form": 0.999823,
          "per_gate": null,
-         "fresh_cell": 5052774.0,
+         "fresh_cell": 5028732.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -633,12 +633,12 @@
         "b": [29]
        },
        "model": {
-        "rho": 265541.2,
+        "rho": 265426.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 265426.4, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
         "target": {"rho": 413.8229, "basis": "target"},
         "sensitivities": {
          "reduction": 21542.15,
@@ -646,7 +646,7 @@
          "token_form": 413.8229,
          "decoding_form": 0.9997032,
          "per_gate": null,
-         "fresh_cell": 5007794.0,
+         "fresh_cell": 4983966.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -719,12 +719,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 266795.4,
+        "rho": 266208.1,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 266795.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 266208.1, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.0208278, "whole_chain": 1.031404, "diverged": []},
         "target": {"rho": 410.3227, "basis": "target"},
         "sensitivities": {
          "reduction": 21529.46,
@@ -732,7 +732,7 @@
          "token_form": 413.603,
          "decoding_form": 0.993392,
          "per_gate": null,
-         "fresh_cell": 5031446.0,
+         "fresh_cell": 4912057.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -741,12 +741,12 @@
         "b": [29]
        },
        "model": {
-        "rho": 263757.7,
+        "rho": 263177.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 263757.7, "token": null, "decoding": null},
+        "terms": {"fresh_products": 263177.2, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.0208278, "whole_chain": 1.031404, "diverged": []},
         "target": {"rho": 408.8702, "basis": "target"},
         "sensitivities": {
          "reduction": 21284.33,
@@ -754,7 +754,7 @@
          "token_form": 408.8702,
          "decoding_form": 0.9877386,
          "per_gate": null,
-         "fresh_cell": 4974159.0,
+         "fresh_cell": 4856130.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -835,12 +835,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 254143.2,
+        "rho": 253572.0,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 254143.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 253572.0, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.02082839, "whole_chain": 1.031405, "diverged": []},
         "target": {"rho": 473.9488, "basis": "target"},
         "sensitivities": {
          "reduction": 17312.76,
@@ -848,7 +848,7 @@
          "token_form": 473.9495,
          "decoding_form": 0.9959238,
          "per_gate": null,
-         "fresh_cell": 4792840.0,
+         "fresh_cell": 4678891.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -857,12 +857,12 @@
         "b": [47, 48, 8]
        },
        "model": {
-        "rho": 254937.1,
+        "rho": 254364.1,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 254937.1, "token": null, "decoding": null},
+        "terms": {"fresh_products": 254364.1, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.02082839, "whole_chain": 1.031405, "diverged": []},
         "target": {"rho": 502.614, "basis": "target"},
         "sensitivities": {
          "reduction": 17023.24,
@@ -870,7 +870,7 @@
          "token_form": 502.614,
          "decoding_form": 0.9925011,
          "per_gate": null,
-         "fresh_cell": 4807813.0,
+         "fresh_cell": 4693508.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -962,12 +962,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 258914.2,
+        "rho": 258652.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 258914.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 258652.4, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.01037844, "whole_chain": 1.015608, "diverged": []},
         "target": {"rho": 318.6908, "basis": "target"},
         "sensitivities": {
          "reduction": 38051.4,
@@ -975,7 +975,7 @@
          "token_form": 318.6909,
          "decoding_form": 0.977225,
          "per_gate": null,
-         "fresh_cell": 4903159.0,
+         "fresh_cell": 4842845.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -984,12 +984,12 @@
         "b": [53, 53]
        },
        "model": {
-        "rho": 260635.1,
+        "rho": 260371.5,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 260635.1, "token": null, "decoding": null},
+        "terms": {"fresh_products": 260371.5, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.01037844, "whole_chain": 1.015608, "diverged": []},
         "target": {"rho": 330.8567, "basis": "target"},
         "sensitivities": {
          "reduction": 38457.36,
@@ -997,7 +997,7 @@
          "token_form": 330.8567,
          "decoding_form": 0.9711549,
          "per_gate": null,
-         "fresh_cell": 4935748.0,
+         "fresh_cell": 4875034.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -1161,17 +1161,17 @@
      },
      "rho": {
       "default": {
-       "rho": 265102.2,
+       "rho": 264986.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 264986.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
+       "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.653459, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
        "target": {"rho": 413.4547, "basis": "target"},
        "sensitivities": {
         "reduction": 21523.03,
@@ -1179,7 +1179,7 @@
         "token_form": 413.4547,
         "decoding_form": 0.9988137,
         "per_gate": null,
-        "fresh_cell": 4999515.0,
+        "fresh_cell": 4975709.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -1274,17 +1274,17 @@
      },
      "rho": {
       "default": {
-       "rho": 265102.2,
+       "rho": 264986.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 264986.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
+       "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.653459, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
        "target": {"rho": 413.4547, "basis": "target"},
        "sensitivities": {
         "reduction": 21523.03,
@@ -1292,7 +1292,7 @@
         "token_form": 413.4547,
         "decoding_form": 0.9988137,
         "per_gate": null,
-        "fresh_cell": 4999515.0,
+        "fresh_cell": 4975709.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -1396,7 +1396,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+       "whole_making": {"e": 0.008344941, "whole_chain": 1.012543, "diverged": []},
        "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.09090451},
        "target": {"rho": 1.287338, "basis": "fit"},
        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 0.0, "decoding_form": 0.9800636, "per_gate": null, "fresh_cell": 0.0, "fresh_converged": null},
@@ -1499,12 +1499,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 254553.0,
+        "rho": 254439.3,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 254553.0, "token": null, "decoding": null},
+        "terms": {"fresh_products": 254439.3, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.008338516, "whole_chain": 1.012534, "diverged": []},
         "target": {"rho": 475.9997, "basis": "target"},
         "sensitivities": {
          "reduction": 17023.78,
@@ -1512,7 +1512,7 @@
          "token_form": 476.0006,
          "decoding_form": 0.9968911,
          "per_gate": null,
-         "fresh_cell": 4800569.0,
+         "fresh_cell": 4777654.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -1521,12 +1521,12 @@
         "b": [0, 24, 24, 0]
        },
        "model": {
-        "rho": 255477.1,
+        "rho": 255363.0,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 255477.1, "token": null, "decoding": null},
+        "terms": {"fresh_products": 255363.0, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.008338516, "whole_chain": 1.012534, "diverged": []},
         "target": {"rho": 505.8288, "basis": "target"},
         "sensitivities": {
          "reduction": 17128.41,
@@ -1534,7 +1534,7 @@
          "token_form": 505.8288,
          "decoding_form": 0.9988494,
          "per_gate": null,
-         "fresh_cell": 4817996.0,
+         "fresh_cell": 4794998.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -1629,12 +1629,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 263714.4,
+        "rho": 263626.5,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 263714.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 263626.5, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.004975139, "whole_chain": 1.007472, "diverged": []},
         "target": {"rho": 329.6702, "basis": "target"},
         "sensitivities": {
          "reduction": 39362.34,
@@ -1642,7 +1642,7 @@
          "token_form": 329.6704,
          "decoding_form": 0.996838,
          "per_gate": null,
-         "fresh_cell": 4994063.0,
+         "fresh_cell": 4973709.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -1651,12 +1651,12 @@
         "b": [0, 53, 53, 0]
        },
        "model": {
-        "rho": 264330.9,
+        "rho": 264242.8,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 264330.9, "token": null, "decoding": null},
+        "terms": {"fresh_products": 264242.8, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.004975139, "whole_chain": 1.007472, "diverged": []},
         "target": {"rho": 340.2834, "basis": "target"},
         "sensitivities": {
          "reduction": 39553.24,
@@ -1664,7 +1664,7 @@
          "token_form": 340.2834,
          "decoding_form": 0.9988248,
          "per_gate": null,
-         "fresh_cell": 5005738.0,
+         "fresh_cell": 4985336.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -1843,17 +1843,17 @@
      },
      "rho": {
       "default": {
-       "rho": 255744.8,
+       "rho": 235267.9,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 255744.8, "token": null, "decoding": null},
+       "terms": {"fresh_products": 235267.9, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.680342, "share": 0.8291986, "numerical": 265072.0, "attention_share": 0.1296857},
+       "whole_making": {"e": 0.4665727, "whole_chain": 1.776051, "diverged": []},
+       "fresh": {"order": "chain", "lam": 2.900279, "share": 0.8291986, "numerical": 265072.0, "attention_share": 0.1296857},
        "target": {"rho": 413.7225, "basis": "target"},
        "sensitivities": {
         "reduction": 19884.49,
@@ -1861,7 +1861,7 @@
         "token_form": 413.7225,
         "decoding_form": 0.9997261,
         "per_gate": null,
-        "fresh_cell": 4729436.0,
+        "fresh_cell": 2619671.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -1986,11 +1986,11 @@
        "terms": {"fresh_products": null, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
+        "fresh_products": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
+       "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 256.0, 512.0, 1024.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.02011237, "numerical": null, "attention_share": 0.1723373},
        "target": {"rho": 37.48825, "basis": "target"},
        "sensitivities": {
@@ -2112,27 +2112,18 @@
        "rho": null,
        "basis": "unmeasured",
        "binding_kind": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
+       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
-       "fresh": {"order": "chain", "lam": null, "share": 0.0, "numerical": null, "attention_share": 0.03786783},
+       "whole_making": {"e": 0, "whole_chain": 1.0, "diverged": []},
+       "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03786783},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {
-        "reduction": 0.424401,
-        "update": 0.0282934,
-        "token_form": 0.0,
-        "decoding_form": 0.7055986,
-        "per_gate": null,
-        "fresh_cell": null,
-        "fresh_converged": null
-       },
+       "sensitivities": {"reduction": 0.424401, "update": 0.0282934, "token_form": 0.0, "decoding_form": 0.7055986, "per_gate": null, "fresh_cell": 0.0, "fresh_converged": null},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000019,
@@ -2244,7 +2235,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 256.0, 512.0, 1408.0]},
         "target": {"rho": 3779135.0, "basis": "target"},
         "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 3779145.0, "decoding_form": 0.08645909, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
@@ -2258,7 +2249,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 256.0, 512.0, 1408.0]},
         "target": {"rho": 408.5118, "basis": "target"},
         "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
@@ -2357,12 +2348,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 195018.1,
+        "rho": 168309.8,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 195018.1, "token": null, "decoding": null},
+        "terms": {"fresh_products": 168309.8, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.4382844, "whole_chain": 1.724913, "diverged": []},
         "target": {"rho": 42669640.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -2370,7 +2361,7 @@
          "token_form": 42669630.0,
          "decoding_form": 0.6872964,
          "per_gate": null,
-         "fresh_cell": 4810990.0,
+         "fresh_cell": 2266588.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "update"],
@@ -2379,14 +2370,14 @@
         "b": [2]
        },
        "model": {
-        "rho": 196389.8,
+        "rho": 169493.6,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 196389.8, "token": null, "decoding": null},
+        "terms": {"fresh_products": 169493.6, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.4382844, "whole_chain": 1.724913, "diverged": []},
         "target": {"rho": 12955.63, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 12955.63, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4844829.0, "fresh_converged": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 12955.63, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2282531.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
@@ -2483,12 +2474,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 226644.5,
+        "rho": 202844.9,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 226644.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 202844.9, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.388312, "whole_chain": 1.635802, "diverged": []},
         "target": {"rho": 71327920.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -2496,7 +2487,7 @@
          "token_form": 71327820.0,
          "decoding_form": 0.7560941,
          "per_gate": null,
-         "fresh_cell": 6077956.0,
+         "fresh_cell": 3350582.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "update"],
@@ -2505,14 +2496,14 @@
         "b": [2]
        },
        "model": {
-        "rho": 225321.5,
+        "rho": 201660.9,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 225321.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 201660.9, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.388312, "whole_chain": 1.635802, "diverged": []},
         "target": {"rho": 11733.26, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11733.26, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 6042478.0, "fresh_converged": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11733.26, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3331024.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
@@ -2614,7 +2605,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 256.0, 768.0, 2112.0]},
         "target": {"rho": 5462653.0, "basis": "target"},
         "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5462648.0, "decoding_form": 0.08448638, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
@@ -2628,7 +2619,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 256.0, 768.0, 2112.0]},
         "target": {"rho": 197.75, "basis": "target"},
         "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 197.75, "decoding_form": 1.024589, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
@@ -2744,19 +2735,19 @@
      },
      "rho": {
       "default": {
-       "rho": 50026.6,
+       "rho": 49959.44,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 50026.6, "token": null, "decoding": null},
+       "terms": {"fresh_products": 49959.44, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.281715, "share": 0.1636943, "numerical": 51125.62, "attention_share": 0.7898069},
+       "whole_making": {"e": 0.02340635, "whole_chain": 1.035314, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.289586, "share": 0.1636943, "numerical": 51125.62, "attention_share": 0.7898069},
        "target": {"rho": 1669.825, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1669.825, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1240864.0, "fresh_converged": null},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1669.825, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1231013.0, "fresh_converged": null},
        "token_A": "unmodelled",
        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
@@ -2832,19 +2823,19 @@
      },
      "rho": {
       "default": {
-       "rho": 137563.2,
+       "rho": 137538.1,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 137563.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 137538.1, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.4583596, "numerical": 143575.0, "attention_share": 0.5002847},
+       "whole_making": {"e": 0.006114801, "whole_chain": 1.009186, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.647994, "share": 0.4583596, "numerical": 143575.0, "attention_share": 0.5002847},
        "target": {"rho": 1670.214, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1670.214, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2594280.0, "fresh_converged": null},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1670.214, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2590688.0, "fresh_converged": null},
        "token_A": "unmodelled",
        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
@@ -2920,19 +2911,19 @@
      },
      "rho": {
       "default": {
-       "rho": 179917.3,
+       "rho": 179890.9,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 179917.3, "token": null, "decoding": null},
+       "terms": {"fresh_products": 179890.9, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.246291, "share": 0.5040848, "numerical": 180820.5, "attention_share": 0.4219617},
+       "whole_making": {"e": 0.001803746, "whole_chain": 1.002707, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.24897, "share": 0.5040848, "numerical": 180820.5, "attention_share": 0.4219617},
        "target": {"rho": 212.6351, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 212.6351, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4953704.0, "fresh_converged": null},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 212.6351, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4942739.0, "fresh_converged": null},
        "token_A": "unmodelled",
        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
@@ -3010,12 +3001,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 139035.2,
+        "rho": 136969.6,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 139035.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 136969.6, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.06548631, "whole_chain": 1.099821, "diverged": []},
         "target": {"rho": 40983030.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -3023,7 +3014,7 @@
          "token_form": 40983160.0,
          "decoding_form": 0.5001703,
          "per_gate": null,
-         "fresh_cell": 3456759.0,
+         "fresh_cell": 3168210.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "update"],
@@ -3032,14 +3023,14 @@
         "b": [2]
        },
        "model": {
-        "rho": 141157.3,
+        "rho": 139060.3,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 141157.3, "token": null, "decoding": null},
+        "terms": {"fresh_products": 139060.3, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.06548631, "whole_chain": 1.099821, "diverged": []},
         "target": {"rho": 8138.254, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8138.254, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3509522.0, "fresh_converged": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8138.254, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3216568.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
@@ -3119,12 +3110,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 170323.3,
+        "rho": 168576.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 170323.3, "token": null, "decoding": null},
+        "terms": {"fresh_products": 168576.2, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.04628527, "whole_chain": 1.070225, "diverged": []},
         "target": {"rho": 60155300.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -3132,7 +3123,7 @@
          "token_form": 60155390.0,
          "decoding_form": 0.5713246,
          "per_gate": null,
-         "fresh_cell": 4575552.0,
+         "fresh_cell": 4286148.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "update"],
@@ -3141,14 +3132,14 @@
         "b": [5]
        },
        "model": {
-        "rho": 169785.8,
+        "rho": 168044.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 169785.8, "token": null, "decoding": null},
+        "terms": {"fresh_products": 168044.2, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.04628527, "whole_chain": 1.070225, "diverged": []},
         "target": {"rho": 5978.385, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5978.385, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4561112.0, "fresh_converged": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5978.385, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4272621.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
@@ -3299,11 +3290,11 @@
        "terms": {"fresh_products": null, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
+        "fresh_products": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
+       "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.00775526, "numerical": null, "attention_share": 0.1666025},
        "target": {"rho": 18.74757, "basis": "target"},
        "sensitivities": {
@@ -3411,11 +3402,11 @@
        "terms": {"fresh_products": null, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
+        "fresh_products": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
+       "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.0007846717, "numerical": null, "attention_share": 0.03708479},
        "target": {"rho": 23.80487, "basis": "target"},
        "sensitivities": {
@@ -3521,11 +3512,11 @@
        "terms": {"fresh_products": null, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
+        "fresh_products": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
+       "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 512.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.0004471915, "numerical": null, "attention_share": 0.03712898},
        "target": {"rho": 15.25384, "basis": "target"},
        "sensitivities": {
@@ -3626,11 +3617,11 @@
        "terms": {"fresh_products": null, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
+        "fresh_products": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
+       "whole_making": {"e": null, "whole_chain": null, "diverged": [1.0, 64.0, 512.0, 1024.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 3.66201e-05, "numerical": null, "attention_share": 0.1687454},
        "target": {"rho": 1.0, "basis": "target"},
        "sensitivities": {
@@ -3728,15 +3719,14 @@
        "rho": null,
        "basis": "unmeasured",
        "binding_kind": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
+       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "void under the traced class system (te_core 4.12)",
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "void under the traced class system (te_core 4.12)",
-       "fresh": {"order": "chain", "lam": null, "share": 0.0, "numerical": null, "attention_share": 0.03718992},
+       "whole_making": {"e": 0, "whole_chain": 1.0, "diverged": []},
+       "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03718992},
        "target": {"rho": 1.0, "basis": "target"},
        "sensitivities": {
         "reduction": 0.4906123,
@@ -3744,11 +3734,11 @@
         "token_form": 0.0,
         "decoding_form": 0.7414784,
         "per_gate": null,
-        "fresh_cell": null,
+        "fresh_cell": 0.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000019,
@@ -3834,7 +3824,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [4.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 400.8307, "basis": "target"},
         "sensitivities": {
          "reduction": 23.5721,
@@ -3856,7 +3846,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [4.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 5.802122, "basis": "target"},
         "sensitivities": {
          "reduction": 23.717,
@@ -3953,7 +3943,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 45.3986, "basis": "target"},
         "sensitivities": {
          "reduction": 180.9999,
@@ -3975,7 +3965,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 45.20673, "basis": "target"},
         "sensitivities": {
          "reduction": 181.2103,
@@ -4083,7 +4073,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
         "target": {"rho": 44.77084, "basis": "target"},
         "sensitivities": {
          "reduction": 454.2071,
@@ -4105,7 +4095,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
         "target": {"rho": 45.19439, "basis": "target"},
         "sensitivities": {
          "reduction": 454.9642,
@@ -4213,7 +4203,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 65536.0]},
         "target": {"rho": 20.44363, "basis": "target"},
         "sensitivities": {
          "reduction": 377.0092,
@@ -4235,7 +4225,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 65536.0]},
         "target": {"rho": 20.5631, "basis": "target"},
         "sensitivities": {
          "reduction": 372.862,
@@ -4343,7 +4333,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 2112.0, 65536.0]},
         "target": {"rho": 20.19619, "basis": "target"},
         "sensitivities": {
          "reduction": 904.4564,
@@ -4365,7 +4355,7 @@
         "binding_kind": null,
         "terms": {"fresh_products": null, "token": null, "decoding": null},
         "partial": false,
-        "whole_making": "void under the traced class system (te_core 4.12)",
+        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 2112.0, 65536.0]},
         "target": {"rho": 20.51047, "basis": "target"},
         "sensitivities": {
          "reduction": 901.9155,
@@ -4519,17 +4509,17 @@
      },
      "rho": {
       "default": {
-       "rho": 62889.26,
+       "rho": 62862.07,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 62889.26, "token": null, "decoding": null},
+       "terms": {"fresh_products": 62862.07, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.1999576, "numerical": 64685.46, "attention_share": 0.02827088},
+       "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.653459, "share": 0.1999576, "numerical": 64685.46, "attention_share": 0.02827088},
        "target": {"rho": 98.00745, "basis": "target"},
        "sensitivities": {
         "reduction": 21865.37,
@@ -4537,7 +4527,7 @@
         "token_form": 98.00745,
         "decoding_form": 0.236764,
         "per_gate": null,
-        "fresh_cell": 1186017.0,
+        "fresh_cell": 1180374.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -4623,17 +4613,17 @@
      },
      "rho": {
       "default": {
-       "rho": 265541.2,
+       "rho": 265426.4,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 265426.4, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
+       "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.653459, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
        "target": {"rho": 413.8229, "basis": "target"},
        "sensitivities": {
         "reduction": 21542.15,
@@ -4641,7 +4631,7 @@
         "token_form": 413.8229,
         "decoding_form": 0.9997032,
         "per_gate": null,
-        "fresh_cell": 5007794.0,
+        "fresh_cell": 4983966.0,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -4727,17 +4717,17 @@
      },
      "rho": {
       "default": {
-       "rho": 8362.963,
+       "rho": 8359.347,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 8362.963, "token": null, "decoding": null},
+       "terms": {"fresh_products": 8359.347, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
-       "fresh": {"order": "chain", "lam": 1.645903, "share": 0.0265902, "numerical": 8601.82, "attention_share": 0.003759439},
+       "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
+       "fresh": {"order": "chain", "lam": 1.653459, "share": 0.0265902, "numerical": 8601.82, "attention_share": 0.003759439},
        "target": {"rho": 13.03295, "basis": "target"},
        "sensitivities": {
         "reduction": 21976.9,
@@ -4745,7 +4735,7 @@
         "token_form": 13.03295,
         "decoding_form": 0.03148468,
         "per_gate": null,
-        "fresh_cell": 157715.6,
+        "fresh_cell": 156965.2,
         "fresh_converged": null
        },
        "token_A": "unmodelled",
@@ -4838,12 +4828,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 125365.6,
+        "rho": 125222.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 125365.6, "token": null, "decoding": null},
+        "terms": {"fresh_products": 125222.4, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.02730984, "whole_chain": 1.041243, "diverged": []},
         "target": {"rho": 312.6342, "basis": "target"},
         "sensitivities": {
          "reduction": 6058.645,
@@ -4851,7 +4841,7 @@
          "token_form": 312.6333,
          "decoding_form": 0.5736186,
          "per_gate": null,
-         "fresh_cell": 2310280.0,
+         "fresh_cell": 2289945.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -4860,12 +4850,12 @@
         "b": [0, 9]
        },
        "model": {
-        "rho": 125327.2,
+        "rho": 125184.0,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 125327.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 125184.0, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.02730984, "whole_chain": 1.041243, "diverged": []},
         "target": {"rho": 352.2618, "basis": "target"},
         "sensitivities": {
          "reduction": 6056.822,
@@ -4873,7 +4863,7 @@
          "token_form": 352.2618,
          "decoding_form": 0.535919,
          "per_gate": null,
-         "fresh_cell": 2309572.0,
+         "fresh_cell": 2289243.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -4968,12 +4958,12 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 123529.4,
+        "rho": 123453.3,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 123529.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 123453.3, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.01312323, "whole_chain": 1.019749, "diverged": []},
         "target": {"rho": 222.4367, "basis": "target"},
         "sensitivities": {
          "reduction": 12377.86,
@@ -4981,7 +4971,7 @@
          "token_form": 222.4365,
          "decoding_form": 0.561411,
          "per_gate": null,
-         "fresh_cell": 2315959.0,
+         "fresh_cell": 2302576.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
@@ -4990,12 +4980,12 @@
         "b": [0, 18]
        },
        "model": {
-        "rho": 123366.9,
+        "rho": 123290.8,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 123366.9, "token": null, "decoding": null},
+        "terms": {"fresh_products": 123290.8, "token": null, "decoding": null},
         "partial": true,
-        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
+        "whole_making": {"e": 0.01312323, "whole_chain": 1.019749, "diverged": []},
         "target": {"rho": 249.6824, "basis": "target"},
         "sensitivities": {
          "reduction": 12361.57,
@@ -5003,7 +4993,7 @@
          "token_form": 249.6824,
          "decoding_form": 0.5110959,
          "per_gate": null,
-         "fresh_cell": 2312911.0,
+         "fresh_cell": 2299546.0,
          "fresh_converged": null
         },
         "fit_fails": ["compute", "reduction", "update"],
