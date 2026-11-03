@@ -52,7 +52,7 @@
    "and": 13466,
    "type": "ae12b5c3950227ed5f2336e57aa77ae057e469a9359ecdf2a73ae5b8180267a27d751229d91c6c85dd3a9085d113c98bc68b4addff6665c2b8dade7b25d9c8c6"
   },
-  "Int8RowQuant_v6{K=4,R=2}": {
+  "Int8RowQuant_v6{K=4,R=2,ROUND=0}": {
    "and": 13466,
    "type": "684eacc566bb8a3ed18558fa6d88f5f3d43195b35f7af7422d31ae776c44fafa2337ac396b43aded0876cc78c0677249dd5dc021ec76581d3e1ae4dc2791faca"
   },
