@@ -415,6 +415,107 @@ def test_two_broadcasts_along_the_same_dim_are_elementwise(form, found):
     assert _elementwise(Lanes(form), torch.randn(2, 16, 32), torch.randn(2, 16, 8)) == found
 
 
+class Dequantized(nn.Module):
+    """lowrank's quant-format refresh: a trained 4 x 8 weight rounded once a step onto a constant 4-level codebook by
+    each row's f16 RMS and decoded, cb[codes] * s, its update the decode minus the weight (`decode`); or, the control,
+    the weight plus a trained vector's outer product with its column means (`outer`)."""
+
+    def __init__(self, form: str) -> None:
+        super().__init__()
+        self.form = form
+        self.A = nn.Parameter(torch.randn(4, 8))
+        if form == "outer":
+            self.u = nn.Parameter(torch.randn(4))
+        self.register_buffer("cb", torch.tensor([-1.5, -0.5, 0.5, 1.5]))
+        self.register_buffer("dA", torch.zeros(4, 8))
+
+    def forward(self, x):
+        if self.form == "outer":
+            return tF.linear(x, self.A + self.u[:, None] * self.A.mean(0)[None, :])
+        with torch.no_grad():
+            s = self.A.pow(2).mean(1).sqrt().half().float()[:, None]
+            codes = torch.bucketize(self.A / s, (self.cb[1:] + self.cb[:-1]) / 2)
+            self.dA.copy_(self.cb[codes] * s - self.A)
+        return tF.linear(x, self.A + self.dA)
+
+
+@pytest.mark.parametrize("form, found", (("decode", []), ("outer", [{"op": "mul", "count": 1, "macs": 32}])))
+def test_a_codebook_decode_is_elementwise_and_an_outer_product_beside_it_is_found(form, found):
+    """lowrank's minimal case: each decoded entry is its own code's level times its row's scale, so the decode is
+    elementwise (4.12.7's check found it, as a mul of 32 multiplications; 4.12.9's doesn't), while the weight plus an
+    outer product of a trained vector and its column means is one, found by both."""
+    torch.manual_seed(0)
+    assert _elementwise(Dequantized(form), torch.randn(2, 16, 8), torch.randn(2, 16, 4)) == found
+
+
+class Messages(nn.Module):
+    """lowrank's coded gradient message: a trained 4 x 64 weight in two groups of 128, each group's entries coded at
+    `bits` by its absmax, packed 8 // bits to a byte and unpacked, so the update is the decode minus the weight; the
+    decode is each level times its group's scale (`scale`), or, the control, the levels times a trained vector of a
+    group's 128 entries (`vector`), which varies along the lanes the levels are flat along."""
+
+    def __init__(self, bits: int, form: str = "scale") -> None:
+        super().__init__()
+        self.bits, self.form = bits, form
+        self.A = nn.Parameter(torch.randn(4, 64))
+        if form == "vector":
+            self.v = nn.Parameter(torch.randn(128))
+        self.register_buffer("shifts", torch.arange(8 // bits) * bits)
+        self.register_buffer("dA", torch.zeros(4, 64))
+
+    def forward(self, x):
+        bits, per, L = self.bits, 8 // self.bits, 2 ** (self.bits - 1) - 1
+        with torch.no_grad():
+            g = self.A.reshape(1, 2, 128)
+            sc = g.abs().amax(-1, keepdim=True)
+            c = (torch.round(g / sc * L) + L).long().reshape(1, 256 // per, per)
+            codes = (c << self.shifts).sum(-1).to(torch.uint8)
+            q = (((codes.long()[..., None] >> self.shifts) & (2 ** bits - 1)).float() - L) / L
+        if self.form == "vector":
+            return tF.linear(x, self.A + (q.view(1, 2, 128) * self.v).view(4, 64))
+        with torch.no_grad():
+            self.dA.copy_((q.view(1, 2, 128) * sc).view(4, 64) - self.A)
+        return tF.linear(x, self.A + self.dA)
+
+
+class Flattened(nn.Module):
+    """An outer product of two trained vectors, u ⊗ w, written as a multiplication of their broadcasts each flattened
+    by a view, as an update to a frozen weight."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.A = nn.Parameter(torch.randn(4, 8), requires_grad=False)
+        self.u, self.w = nn.Parameter(torch.randn(4)), nn.Parameter(torch.randn(8))
+
+    def forward(self, x):
+        uw = self.u[:, None].expand(4, 8).reshape(32) * self.w[None, :].expand(4, 8).reshape(32)
+        return tF.linear(x, self.A + uw.view(4, 8))
+
+
+@pytest.mark.parametrize("bits", (2, 4, 8))
+def test_a_coded_messages_levels_times_their_groups_scale_are_elementwise_through_the_view_that_groups_them(bits):
+    """lowrank's minimal case: unpacked levels [1, 256 // per, per] are flat along their per lanes, and the view to the
+    groups [1, 2, 128] merges the lanes with 128 // per bytes into one dim, which no dim of its own can say flat; their
+    multiplication by each group's scale [1, 2, 1] is elementwise, since on the grid both shapes share ([1, 2, 128 //
+    per, per], `products._grid`) the scale is flat along the bytes and the lanes, the levels along the lanes. 4.12.9's
+    check found it at 2 bits (a mul of 256 multiplications), where the levels have fewer entries than the step's, and
+    not at 4 and 8."""
+    torch.manual_seed(0)
+    assert _elementwise(Messages(bits), torch.randn(2, 16, 64), torch.randn(2, 16, 4)) == []
+
+
+@pytest.mark.parametrize("make, found", ((lambda: Messages(2, "vector"), [{"op": "mul", "count": 1, "macs": 256}]),
+                                         (Flattened, [{"op": "mul", "count": 1, "macs": 32}])))
+def test_a_product_behind_a_view_that_groups_its_dims_is_found(make, found):
+    """The grid that exempts a coded message's decode still finds a product: the 2-bit levels times a trained vector
+    of the group's entries, which varies along the lanes the levels are flat along and is flat along the groups, and
+    an outer product whose two broadcasts are each flattened by a view."""
+    torch.manual_seed(0)
+    m = make()
+    x = torch.randn(2, 16, m.A.shape[1])
+    assert _elementwise(m, x, torch.randn(2, 16, 4)) == found
+
+
 class MatVec(nn.Module):
     """A layer plus a bias made by a matrix-vector product of its weight and a trained vector (aten.mv)."""
 
