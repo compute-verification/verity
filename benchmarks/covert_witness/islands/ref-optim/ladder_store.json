@@ -1,6 +1,6 @@
 {
  "schema": "covert-witness/starts-store/v1",
- "art": "art:8e2ff3459bc0cd5d4568475d858d65c682993f988eeb147c3f909d4a1a86e059",
+ "art": "art:b3f973f24f7cc33d7aade2daa7a79101374e9077879b9c3fc37b5f386609e83d",
  "path": "out/starts",
  "starts": {
   "s-t20": {
@@ -34,6 +34,14 @@
     "theta.safetensors": "f9d531a9e2bd373810d0981888685a9244b68fd7fb4acd8cd48312a237bd8456"
    },
    "bytes": 381098886
+  },
+  "l16-t20": {
+   "digest": "2eea9e6b4590f2b0adba3038c51710910418e917cca79746ff78e7d182eccdc0",
+   "files": {
+    "start.json": "6dc6a12525da3915a56d2eb9a877cd211ae94aceb2f6a7da903e2fc1459b280d",
+    "theta.safetensors": "29a6f58e6d8e1375529e4d09cb89357641200632a0fb6441e6250a0b6e2144b7"
+   },
+   "bytes": 1028294508
   }
  }
 }
