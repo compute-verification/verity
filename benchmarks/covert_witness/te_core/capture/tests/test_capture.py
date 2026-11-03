@@ -1,5 +1,5 @@
 """`capture_step` / `capture_fn` on toy models against hand counts: every GEMM's MACs, phase and role as a multiset
-derived from the architecture alone, the upstream counts and φ, the token dims, and the refusals."""
+derived from the architecture alone, the upstream counts, φ and the cut, the token dims, and the refusals."""
 from __future__ import annotations
 
 from collections import Counter
@@ -11,11 +11,13 @@ import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
 from te_core.capture import CaptureRefused, capture_fn, capture_step, phase
-from te_core.flops import gather_selects
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
-LOOKUP = gather_selects(V) * H  # an updated (tied) table's lookup per token
+H2, HI, ATT = H * H, H * I, S * H
+#: one block's updated MACs per token when its input is the run's own: ln1 and ln2 with their gains, q k v o, SDPA's
+#: scalings of q and k, QK and PV, up and down
+LAYER = 2 * H + 4 * H2 + 2 * H + 2 * ATT + 2 * HI
 
 
 def lm_batch():
@@ -26,9 +28,19 @@ def roles(g) -> Counter:
     return Counter((m.phase, m.role, m.macs) for m in g.matmuls)
 
 
-def fwd_layer(role_w: str) -> Counter:
-    """One block's forward: q, k, v, o (T·H² each), up and down (T·H·I), with weight role `role_w`; QK and PV (T·S·H)."""
-    return Counter({("forward", role_w, T * H * H): 4, ("forward", role_w, T * H * I): 2, ("forward", "neither", T * S * H): 2})
+def fwd_layer(role: str) -> Counter:
+    """One block's forward: q, k, v, o (T·H² each), up and down (T·H·I), QK and PV (T·S·H), all with role `role`."""
+    return Counter({("forward", role, T * H * H): 4, ("forward", role, T * H * I): 2, ("forward", role, T * S * H): 2})
+
+
+def layer_upstream(b: int) -> list[int]:
+    """A block's forward GEMMs' updated MACs per token upstream (q, k, v, QK, PV, o, up, down), `b` above its input."""
+    qkv = b + H
+    qk = qkv + 2 * H2 + 2 * H
+    pv = qk + ATT + H2
+    o = pv + ATT
+    up = o + H2 + H
+    return [qkv] * 3 + [qk, pv, o, up, up + HI]
 
 
 # --- the 2-layer MLP ---------------------------------------------------------------------------------------------------
@@ -40,22 +52,23 @@ def test_mlp_full_training():
                      (torch.empty(N, Fi), torch.empty(N, dtype=torch.long)))
     assert g.tokens == N and g.axes == {"batch": N}
     # fc1 and fc2 forward, fc2's dX (fc1's input needs no gradient), dW of both; bias grads are sums, not GEMMs
-    assert roles(g) == Counter({("forward", "using", N * Fi * Hh): 1, ("forward", "using", N * Hh * O): 1,
-                                ("backward", "using", N * O * Hh): 1, ("backward", "producing", N * O * Hh): 1,
+    assert roles(g) == Counter({("forward", "updated", N * Fi * Hh): 1, ("forward", "updated", N * Hh * O): 1,
+                                ("backward", "neither", N * O * Hh): 1, ("backward", "producing", N * O * Hh): 1,
                                 ("backward", "producing", N * Hh * Fi): 1})
     assert g.macs == N * (2 * Fi * Hh + 3 * Hh * O)
     fc1, fc2, dx2, dw2, dw1 = g.matmuls
     assert fc1.params == (None, "0.weight", "0.bias") and fc1.operands == ("activation", "updated", "updated")
     assert dx2.operands == ("gradient", "updated") and dw2.operands == ("gradient", "activation")
-    assert (fc1.upstream, fc2.upstream, dx2.upstream) == (0, 1, 2)
-    assert (fc1.upstream_macs, fc2.upstream_macs, dx2.upstream_macs) == (0, Fi * Hh, Fi * Hh + Hh * O)
+    assert (fc1.upstream, fc2.upstream, dx2.upstream) == (0, 1, 0)   # depth is the forward's
+    assert (fc1.upstream_macs, fc2.upstream_macs, dx2.upstream_macs) == (0, Fi * Hh, 0)
     assert fc1.per_token == Fi * Hh
     assert fc1.token_dims == {"m": ("batch",)} and dw1.token_dims == {"k": ("batch",)}
     assert dw1.result == "parameter" and fc1.result == "token"
-    # φ at D = 1 using GEMM upstream: fc2 and dX2
-    assert g.phi(1, "matmuls") == Fraction(2 * Hh * O, 2 * Fi * Hh + 3 * Hh * O)
-    assert g.phi(Fi * Hh) == g.phi(1, "matmuls") and g.phi(Fi * Hh + 1) == Fraction(N * O * Hh, g.macs)
-    assert g.trained == g.updated == {"0.weight", "0.bias", "2.weight", "2.bias"}
+    # φ at D = 1 updated GEMM upstream: fc2, over the step's |C|
+    assert g.phi(1, "matmuls") == Fraction(N * Hh * O, g.c_macs) and g.phi(0) == Fraction(N * (Fi + O) * Hh, g.c_macs)
+    assert g.phi(Fi * Hh) == g.phi(1, "matmuls") and g.phi(Fi * Hh + 1) == 0
+    assert g.trained == g.updated == {"0.weight", "0.bias", "2.weight", "2.bias"} == set(g.dependent) == set(g.sinks)
+    assert g.cut_bits == 32 * (Fi * Hh + Hh + Hh * O + O)   # a dense update: every parameter at its width
     kinds = Counter(c["kind"] for c in g.step_crossing)
     assert kinds == {"parameter": 4, "optimizer_state": 12}   # step, exp_avg, exp_avg_sq per parameter
 
@@ -68,7 +81,7 @@ def test_mlp_frozen_first_layer_is_registered():
     fc1 = g.matmuls[0]
     assert fc1.operands == ("activation", "registered", "registered") and fc1.role == "neither"
     assert g.trained == {"2.weight", "2.bias"}
-    assert [m.role for m in g.matmuls] == ["neither", "using", "producing"]   # fc1, fc2, dW2: no dX is needed
+    assert [m.role for m in g.matmuls] == ["neither", "updated", "producing"]   # fc1, fc2, dW2: no dX is needed
 
 
 # --- the tiny transformer ----------------------------------------------------------------------------------------------
@@ -79,38 +92,33 @@ def test_transformer_full_training():
     assert g.tokens == T and g.axes == {"batch": B, "seq": S}
     want = Counter()
     for _ in range(L):
-        want += fwd_layer("using")
+        want += fwd_layer("updated")
         # dX and dW of q, k, v, o (T·H²), up and down (T·H·I); attention's backward: four T·S·H bmm
-        want += Counter({("backward", "using", T * H * H): 4, ("backward", "producing", T * H * H): 4,
-                         ("backward", "using", T * H * I): 2, ("backward", "producing", T * H * I): 2,
+        want += Counter({("backward", "neither", T * H * H): 4, ("backward", "producing", T * H * H): 4,
+                         ("backward", "neither", T * H * I): 2, ("backward", "producing", T * H * I): 2,
                          ("backward", "neither", T * S * H): 4})
-    want += Counter({("forward", "using", T * H * V): 1, ("backward", "using", T * H * V): 1, ("backward", "producing", T * H * V): 1})
+    want += Counter({("forward", "updated", T * H * V): 1, ("backward", "neither", T * H * V): 1,
+                     ("backward", "producing", T * H * V): 1})
     assert roles(g) == want
     assert g.macs == 3 * T * H * V + L * (12 * T * H * H + 6 * T * H * I + 6 * T * S * H)
-    fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "using"]
-    assert [m.upstream for m in fwd] == [0, 0, 0, 3, 4, 5, 6, 6, 6, 9, 10, 11, 12]
-    h2, hi = H * H, H * I
-    # the updated table's lookup is a using node at position 0, the circuit's gather of its rows (LOOKUP per token); each
-    # norm with updated gains is a using node of H MACs per token upstream of the GEMMs after it
-    lookup, *gains = g.using_elementwise
-    assert lookup.node == "embedding" and lookup.upstream_macs == 0 and lookup.per_token == LOOKUP
-    norms = [1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5]
-    assert len(gains) == 2 * L + 1 and all(m.per_token == H for m in gains)
-    assert [m.upstream_macs for m in fwd] == [LOOKUP + n * H + u for n, u in zip(norms, [
-        0, 0, 0, 3 * h2, 4 * h2, 4 * h2 + hi, 4 * h2 + 2 * hi, 4 * h2 + 2 * hi, 4 * h2 + 2 * hi, 7 * h2 + 2 * hi,
-        8 * h2 + 2 * hi, 8 * h2 + 3 * hi, 8 * h2 + 4 * hi])]
-    head_dx = next(m for m in g.matmuls if m.phase == "backward" and m.role == "using")
-    assert head_dx.macs == T * V * H and head_dx.upstream == 13 and head_dx.upstream_fwd == 13
-    assert head_dx.upstream_macs == LOOKUP + 8 * h2 + 4 * hi + H * V + 5 * H
+    fwd = [m for m in g.matmuls if m.phase == "forward"]
+    assert [m.upstream for m in fwd] == [0, 0, 0, 2, 4, 5, 6, 7, 8, 8, 8, 10, 12, 13, 14, 15, 16]
+    # the updated table's lookup moves its rows with no MAC; each norm with updated gains and each of SDPA's scalings
+    # of q and k is an updated node of H MACs per token
+    assert len(g.updated_elementwise) == 4 * L + 1 and all(m.per_token == H for m in g.updated_elementwise)
+    assert "embedding" not in [m.node for m in g.updated_elementwise]
+    assert [m.upstream_macs for m in fwd] == layer_upstream(0) + layer_upstream(LAYER) + [L * LAYER + H]
+    assert all(m.upstream == 0 and m.upstream_macs == 0 for m in g.matmuls if m.phase == "backward")
     q0 = fwd[0]
-    assert q0.params == (None, "blocks.0.q.weight") and q0.token_dims == {"m": ("batch", "seq")} and q0.per_token == h2
+    assert q0.params == (None, "blocks.0.q.weight") and q0.token_dims == {"m": ("batch", "seq")} and q0.per_token == H2
     qk = next(m for m in g.matmuls if m.op == "aten.bmm.default")
     assert qk.token_dims == {"batch": ("batch",), "m": ("seq",), "n": ("seq",)} and qk.operands == ("activation", "activation")
+    assert qk.role == "updated"   # q and k are the run's own: attention's products are updated
     dw = [m for m in g.matmuls if m.role == "producing"]
     assert all(m.token_dims == {"k": ("batch", "seq")} and m.result == "parameter" for m in dw)
-    using = g.role_macs("using")
-    assert g.phi(1, "matmuls") == Fraction(using - 3 * T * h2, g.macs)
-    assert g.phi(0) == Fraction(using, g.macs) == Fraction(2 * T * H * V + L * (8 * T * h2 + 4 * T * hi), g.macs)
+    assert g.updated_macs() == T * (L * LAYER + H + H * V)
+    assert g.phi(1, "matmuls") == Fraction(g.updated_macs() - T * (3 * H2 + H), g.c_macs)   # all but layer 0's ln1, q, k, v
+    assert g.phi(0) == Fraction(g.updated_macs(), g.c_macs)
 
 
 def test_transformer_lora():
@@ -119,22 +127,31 @@ def test_transformer_lora():
     g = capture_step(model, torch.optim.AdamW(trainable), lm_loss, lm_batch())
     assert g.trained == {f"blocks.{l}.{p}.{ab}.weight" for l in range(L) for p in "qv" for ab in "AB"}
     a = T * H * R   # each LoRA GEMM: x·Aᵀ, (xA)·Bᵀ, dB, d(xA), dA, dX through A
-    want = Counter({("forward", "neither", T * H * V): 1, ("backward", "neither", T * H * V): 1})
+    want = Counter({("forward", "updated", T * H * V): 1, ("backward", "neither", T * H * V): 1})
     for l in range(L):
-        want += fwd_layer("neither") + Counter({("forward", "using", a): 4})
+        if l == 0:   # layer 0's k and base q and v read θ and the tokens only: a cache
+            want += Counter({("forward", "neither", T * H * H): 3, ("forward", "updated", T * H * H): 1,
+                             ("forward", "updated", T * H * I): 2, ("forward", "updated", T * S * H): 2})
+        else:
+            want += fwd_layer("updated")
+        want += Counter({("forward", "updated", a): 4})
         want += Counter({("backward", "neither", T * H * I): 2, ("backward", "neither", T * H * H): 1})   # down, up, o dX
         want += Counter({("backward", "producing", a): 4})   # dB, dA of q and v
         if l == 0:   # the embedding is frozen: nothing below layer 0's projections needs a gradient
-            want += Counter({("backward", "neither", T * S * H): 3, ("backward", "using", a): 2})
+            want += Counter({("backward", "neither", T * S * H): 3, ("backward", "neither", a): 2})
         else:
             want += Counter({("backward", "neither", T * S * H): 4, ("backward", "neither", T * H * H): 3,
-                             ("backward", "using", a): 4})
+                             ("backward", "neither", a): 4})
     assert roles(g) == want
-    fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "using"]
-    assert [m.upstream for m in fwd] == [0, 1, 0, 1, 4, 5, 4, 5]
-    assert all(m.weight == "updated" for m in fwd)
+    fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "updated"]
+    # layer 0: q's A and B, v's A and B, QK, PV, o, up, down; layer 1 (base q, q.A, q.B, k, base v, v.A, v.B, ...); head
+    assert [m.upstream for m in fwd] == [0, 1, 0, 1, 2, 5, 6, 7, 8, 9, 9, 10, 9, 9, 9, 10, 13, 17, 18, 19, 20, 21]
     base_q = next(m for m in g.matmuls if m.params[1:] == ("blocks.0.q.base.weight",))
     assert base_q.operands == ("activation", "registered") and base_q.role == "neither"
+    # a θ weight times the run's own activations is updated
+    base_q1 = next(m for m in g.matmuls if m.params[1:] == ("blocks.1.q.base.weight",))
+    assert base_q1.operands == ("activation", "registered") and base_q1.role == "updated"
+    assert g.cut_bits == 32 * 4 * L * H * R   # the adapters, dense
 
 
 def test_transformer_top_layer_only():
@@ -145,16 +162,18 @@ def test_transformer_top_layer_only():
     top.requires_grad_(True)
     g = capture_step(model, torch.optim.AdamW(top.parameters()), lm_loss, lm_batch())
     assert g.trained == {f"blocks.{L - 1}.{n}" for n, _ in top.named_parameters()}
-    want = Counter({("forward", "neither", T * H * V): 1, ("backward", "neither", T * H * V): 1})
-    want += fwd_layer("neither") + fwd_layer("using")
+    # the frozen head reads the top block's output: updated
+    want = Counter({("forward", "updated", T * H * V): 1, ("backward", "neither", T * H * V): 1})
+    want += fwd_layer("neither") + fwd_layer("updated")
     # the top block: dX and dW of q, k, v, o, up, down (q, k, v's dX feed ln1's weight gradient), attention's four bmm
-    want += Counter({("backward", "using", T * H * H): 4, ("backward", "producing", T * H * H): 4,
-                     ("backward", "using", T * H * I): 2, ("backward", "producing", T * H * I): 2,
+    want += Counter({("backward", "neither", T * H * H): 4, ("backward", "producing", T * H * H): 4,
+                     ("backward", "neither", T * H * I): 2, ("backward", "producing", T * H * I): 2,
                      ("backward", "neither", T * S * H): 4})
     assert roles(g) == want
-    fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "using"]
-    assert [m.upstream for m in fwd] == [0, 0, 0, 3, 4, 5]
-    assert g.phi(1, "matmuls") == Fraction(g.role_macs("using") - 3 * T * H * H, g.macs)
+    fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "updated"]
+    assert [m.upstream for m in fwd] == [0, 0, 0, 2, 4, 5, 6, 7, 8]
+    assert [m.upstream_macs for m in fwd] == layer_upstream(0) + [LAYER]   # ln_f's gains are θ's: no MAC
+    assert g.phi(1, "matmuls") == Fraction(g.updated_macs() - T * (3 * H2 + H), g.c_macs)
 
 
 def test_transformer_mezo_forward_only():
@@ -179,14 +198,16 @@ def test_transformer_mezo_forward_only():
                     p.sub_(lr * g * z)
 
     g = capture_fn(mezo, model, lm_batch())
-    one = Counter({("forward", "using", T * H * V): 1})
+    one = Counter({("forward", "updated", T * H * V): 1})
     for _ in range(L):
-        one += fwd_layer("using")
+        one += fwd_layer("updated")
     assert roles(g) == one + one
     assert g.role_macs("producing") == 0
     assert g.trained == g.updated == {n for n, _ in model.named_parameters()}
-    fwd = [m.upstream for m in g.matmuls if m.role == "using"]
-    assert fwd == [0, 0, 0, 3, 4, 5, 6, 6, 6, 9, 10, 11, 12] * 2   # the second pass reads no product of the first
+    fwd = [m.upstream for m in g.matmuls if m.role == "updated"]
+    assert fwd == [0, 0, 0, 2, 4, 5, 6, 7, 8, 8, 8, 10, 12, 13, 14, 15, 16] * 2   # the second pass reads no product of the first
+    # the update is one 32-bit loss difference times a seeded direction
+    assert g.cut_bits == 32 and g.beta == 32 / (g.updated_macs() / T)
 
 
 def test_with_updated_reclassifies_without_recapture():
@@ -194,7 +215,8 @@ def test_with_updated_reclassifies_without_recapture():
     g = capture_step(model, torch.optim.AdamW(model.parameters()), lm_loss, lm_batch())
     first = g.with_updated(())   # the period's first step reads θ: nothing it multiplies is new
     assert first.digest == g.digest and first.macs == g.macs
-    assert first.role_macs("using") == 0 and first.role_macs("producing") == g.role_macs("producing")
+    assert first.role_macs("updated") == 0 and first.role_macs("producing") == g.role_macs("producing")
+    assert first.dependent == [] and first.cut_bits == 0 and first.beta is None
 
 
 def test_tied_head_reads_the_embedding():
@@ -204,13 +226,13 @@ def test_tied_head_reads_the_embedding():
     g = capture_step(model, torch.optim.AdamW(model.parameters()), lm_loss,
                      (torch.empty(B, S, dtype=torch.long), torch.empty(B, S, dtype=torch.long)))
     head = [m for m in g.matmuls if m.macs == T * H * Vt]
-    assert sorted((m.phase, m.role) for m in head) == [("backward", "producing"), ("backward", "using"), ("forward", "using")]
+    assert sorted((m.phase, m.role) for m in head) == [("backward", "neither"), ("backward", "producing"), ("forward", "updated")]
     assert head[0].params[1] == "emb.weight" and head[0].operands[1] == "updated"
 
 
-def test_embedding_rows_are_activations():
-    """Attention straight on an updated embedding's rows: rows gathered by token ids are token-indexed, so both of its
-    operands are activations and it isn't a using GEMM, as te_core.flops counts it."""
+def test_embedding_rows_are_dependent():
+    """Attention straight on an updated embedding's rows: rows gathered by token ids are token-indexed activations, and
+    the run's own, so attention on them is updated, with no MAC for the gather."""
     class Bare(torch.nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -227,8 +249,9 @@ def test_embedding_rows_are_activations():
     g = capture_step(model, torch.optim.AdamW(model.parameters()), lm_loss, lm_batch())
     fwd = [m for m in g.matmuls if m.phase == "forward"]
     assert sorted((m.role, m.operands, m.macs) for m in fwd) == [
-        ("neither", ("activation", "activation"), T * S * H), ("neither", ("activation", "activation"), T * S * H),
-        ("using", ("activation", "updated"), T * H * V)]
+        ("updated", ("activation", "activation"), T * S * H), ("updated", ("activation", "activation"), T * S * H),
+        ("updated", ("activation", "updated"), T * H * V)]
+    assert fwd[0].upstream_macs == 2 * H   # SDPA's scalings of q and k
 
 
 def test_conv_net():
@@ -239,8 +262,9 @@ def test_conv_net():
     conv = Bc * K * (side - 2) ** 2 * C * 9
     lin = Bc * K * (side - 2) ** 2 * O
     # the conv's input needs no gradient: convolution_backward runs its weight GEMM only
-    assert roles(g) == Counter({("forward", "using", conv): 1, ("forward", "using", lin): 1, ("backward", "using", lin): 1,
-                                ("backward", "producing", lin): 1, ("backward", "producing", conv): 1})
+    assert roles(g) == Counter({("forward", "updated", conv): 1, ("forward", "updated", lin): 1,
+                                ("backward", "neither", lin): 1, ("backward", "producing", lin): 1,
+                                ("backward", "producing", conv): 1})
     cb = next(m for m in g.matmuls if m.part == "grad_weight")
     assert cb.token_dims == {"k": ("batch",)}
 
