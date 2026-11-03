@@ -1,0 +1,9 @@
+# pilot.sh s 256 TAG pilots-s.txt: s at 20 tokens per parameter (5 and 10 as annealed extras), 256 x 1024 a step, one GPU
+lr010 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.01
+lr015 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.015
+lr020 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.02
+lr030 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.03
+lr040 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.04
+emb003 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.02 --embed-lr 0.003 --norm-lr 0.003
+emb012 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.02 --embed-lr 0.012 --norm-lr 0.012
+wd025 --branches 20 --extra 5,10 --micro 64 --mat-lr 0.02 --wd 0.025

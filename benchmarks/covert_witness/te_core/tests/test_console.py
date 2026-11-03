@@ -49,6 +49,15 @@ def test_the_route_refuses_more_than_24_columns_and_a_repeated_name():
     assert console.refused(p | {"columns": [*P1[:-1], "start"]}) and console.refused(p | {"columns": []})
 
 
+def test_the_route_refuses_a_source_over_300_characters():
+    """The panels route answers 400 to it ("source must be 1 to 300 characters: a run, commit, PR, command or URL")."""
+    p = p1(2, 1)
+    assert not console.refused(p | {"source": "s" * 300})
+    assert console.refused(p | {"source": "s" * 301}) == ["its source is 301 characters, not 1 to 300"]
+    assert console.refused(p | {"source": ""}) == console.refused(p | {"source": None}) == [
+        "its source is 0 characters, not 1 to 300"]
+
+
 def test_write_cuts_every_panel(tmp_path):
     from te_core.plots import NAMES
     for n in NAMES:

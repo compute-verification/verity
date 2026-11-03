@@ -1,0 +1,694 @@
+[
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 1696109428736.0,
+"macs": 134217728,
+"op": "bmm",
+"phase": "fwd",
+"products": [
+[
+4,
+1024,
+32,
+1024
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 1696109428736.0,
+"macs": 134217728,
+"op": "bmm",
+"phase": "fwd",
+"products": [
+[
+4,
+1024,
+1024,
+32
+]
+],
+"widths": [
+32,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+192,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 1696109428736.0,
+"macs": 134217728,
+"op": "bmm",
+"phase": "fwd",
+"products": [
+[
+4,
+1024,
+32,
+1024
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 1696109428736.0,
+"macs": 134217728,
+"op": "bmm",
+"phase": "fwd",
+"products": [
+[
+4,
+1024,
+1024,
+32
+]
+],
+"widths": [
+32,
+16
+]
+},
+{
+"class": "registered",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+192,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 1696109428736.0,
+"macs": 134217728,
+"op": "bmm",
+"phase": "fwd",
+"products": [
+[
+4,
+1024,
+32,
+1024
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "activation",
+"gates": 1696109428736.0,
+"macs": 134217728,
+"op": "bmm",
+"phase": "fwd",
+"products": [
+[
+4,
+1024,
+1024,
+32
+]
+],
+"widths": [
+32,
+16
+]
+},
+{
+"class": "activation",
+"gates": 12416188416.0,
+"macs": 8388608,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "updated",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "updated",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "updated",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+192,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "registered",
+"gates": 9759124094976.0,
+"macs": 6593445888,
+"op": "mm",
+"phase": "fwd",
+"products": [
+[
+1,
+2048,
+64,
+50304
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 9759124094976.0,
+"macs": 6593445888,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+2048,
+50304,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+64,
+2048,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+2048,
+64,
+192
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+192,
+2048,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+2048,
+192,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+192,
+2048,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "grad",
+"gates": 37248565248.0,
+"macs": 25165824,
+"op": "mm",
+"phase": "bwd",
+"products": [
+[
+1,
+2048,
+192,
+64
+]
+],
+"widths": [
+16,
+16
+]
+},
+{
+"class": "rest",
+"gates": 58566223446.0,
+"macs": null,
+"op": "rest",
+"phase": "fwd",
+"products": [],
+"widths": null
+},
+{
+"class": "rest",
+"gates": 15242049885.0,
+"macs": null,
+"op": "rest",
+"phase": "bwd",
+"products": [],
+"widths": null
+},
+{
+"class": "rest",
+"gates": 3733273088.0,
+"macs": null,
+"op": "rest",
+"phase": "other",
+"products": [],
+"widths": null
+}
+]

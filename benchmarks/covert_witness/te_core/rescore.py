@@ -18,7 +18,8 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
   `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT
   (its training panels, te_core.panels' and te_core.algorithm_policy's, read the ledger and the quantities through
   `arguments` and `load`);
-- `formalism.jsonl`: each kept row's block, its source and its refusal (None: scored);
+- `formalism.jsonl`: each kept row's block, its source and its refusal (None: scored); it and `frontier.json` carry
+  te_core's VERSION (`te_core_version`);
 - with the measured quantities and the analysis in the checkout, `compare.json` and `compare.md`: each scored row's
   quantities beside the analysis's for the same checkpoint (their ratios), the policy's S and route per start and
   target under each, and each route row's Slowdown bound measured over analysis as the ratios of its factors
@@ -26,7 +27,8 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
 
 `--quantities measured` (the default) scores the rows whose `formalism` block ingest measured on the record's traced
 step (te_core.capture.circuit through `annotate.with_structures`: σ, the affected share, the consumed tokens, τ, a,
-u_in, u, t, Δ_grad; Δ stays 8 |E|); a valid row with none is left out, listed in `frontier.json` as `not_measured`.
+u_in, u, t, Δ_grad; Δ stays 8 |E|, and a straight-through run's Δ_t is its fp32 latents as the analysis reads them,
+`with_latents`); a valid row with none is left out, listed in `frontier.json` as `not_measured`.
 `--tail frozen` reads t as the trace's contiguous frozen tail above the forward's last update read
 (`frozen_tail_share`) instead of every op that reads no update value, the comparison with the analysis's t.
 `--charge-context` scores with te_core.formalism's context charge, a sensitivity for A1: every earlier token's
@@ -81,6 +83,7 @@ LABELS = {
                     "every other run's is Delta",
     "u1_bits": f"upper bound (witness): u(1) = Delta, every token's path reads the whole update ({SOURCE})",
 }
+LATENTS = LABELS["delta_t_bits"]
 EVEN = {"u": f"assumption (A1): evenly spread, u(x) = x * u(1) ({SOURCE})",
         "u_in": f"assumption (A1'): evenly spread, u_in = u ({SOURCE})"}
 TAIL = {"u": f"assumption (A1): frozen layers above the run's highest update, their share t of a token's affected work "
@@ -151,6 +154,20 @@ def frozen_tail(rows: list[dict]) -> list[dict]:
             u = formalism.with_tail(tuple(map(tuple, f["u_in"])), t)
             r = r | {"formalism": f | {"tail_share": t, "u": [list(p) for p in u],
                                        "labels": f.get("labels", {}) | FROZEN}}
+        out.append(r)
+    return out
+
+
+def with_latents(rows: list[dict], blocks: dict[tuple, tuple[dict, str | None]]) -> list[dict]:
+    """The measured rows of a straight-through run with its fp32 latents as Δ_t (the coordinator's 00:47Z ruling), as
+    the analysis reads them from the run's record (per run, so a checkpoint the analysis lacks gets them too)."""
+    latents = {run: b[0]["delta_t_bits"] for (run, _), b in blocks.items() if b[0].get("delta_t_bits") is not None}
+    out = []
+    for r in rows:
+        if frontier.measured(r) and r.get("run_id") in latents:
+            f = r["formalism"]
+            r = r | {"formalism": f | {"delta_t_bits": latents[r["run_id"]],
+                                       "labels": f.get("labels", {}) | {"delta_t_bits": LATENTS}}}
         out.append(r)
     return out
 
@@ -259,7 +276,7 @@ def compare_markdown(c: dict) -> str:
     for r in c["rows"]:
         q, qa, x, v, va = r["measured"], r["analysis"], r["ratio"], r["cell"], r["cell_analysis"]
         lines.append(
-            f"| {r['id'][-12:]}@{r['checkpoint_step']} | {r['start']} | {r['direction']}/{r['mechanism']} | "
+            f"| {r['id']}@{r['checkpoint_step']} | {r['start']} | {r['direction']}/{r['mechanism']} | "
             f"{_g(x['sigma'])} | {_g(x['affected_share'])} | {_g(x['w'])} | {_g(x['a_bits'])} | "
             f"{_g(q['tail_share'])}, {_g(qa['tail_share'])} | {_g(x['u1_bits'])} | {_g(x['delta_bits'])} | "
             f"{_g(x['delta_grad_bits'])} | {_g(x['gates'])} | {_g(v['rho'])} ({_g(v['x0'])}, {_g(v['s_star'])}) | "
@@ -328,7 +345,7 @@ def load(a) -> dict:
     blocks = analysed(a.analysis, a.scorer, ledger.root, a.out / "analysis-gates.json") \
         if mode != STUBS and a.analysis.exists() else {}
     if mode == MEASURED:
-        rows = frozen_tail(rows) if a.tail == "frozen" else rows
+        rows = with_latents(frozen_tail(rows) if a.tail == "frozen" else rows, blocks)
         source = {r["id"]: MEASURED if frontier.measured(r) else STUBS for r in rows}
         keep, how, word = frontier.measured, f"measured (trace; t {a.tail})", f"measured, t {a.tail}"
     else:
@@ -365,7 +382,7 @@ def main(argv=None) -> int:
     missing = sorted(r["id"] for r in valid if keep is not None and not keep(r))
     refused = {i: v[len(frontier.REFUSED):] for i, v in rep["skipped"].items() if v.startswith(frontier.REFUSED)}
     (a.out / "frontier.json").write_text(json.dumps(
-        {"pin": list(pin), "left_out": left_out, "quantities": how,
+        {"te_core_version": VERSION, "pin": list(pin), "left_out": left_out, "quantities": how,
          "not_analysed": missing if mode == ANALYSED else [], "not_measured": missing if mode == MEASURED else [],
          "refused": refused} | rep, indent=1, default=str) + "\n")
     (a.out / "frontier.md").write_text(frontier.formalism_markdown(rep) + "\n")
@@ -374,7 +391,7 @@ def main(argv=None) -> int:
             f.write(json.dumps({"id": r["id"], "run_id": r.get("run_id"), "start": r["start"],
                                 "checkpoint_step": r.get("checkpoint_step"), "source": source[r["id"]],
                                 "family": r.get("family"), "refused": refused.get(r["id"]),
-                                "formalism": r.get("formalism")}, default=str) + "\n")
+                                "formalism": r.get("formalism"), "te_core_version": VERSION}, default=str) + "\n")
     if mode == MEASURED and blocks:
         arows, asource = attach(rows, blocks)
         arows = with_context(arows, shapes) if a.charge_context else arows
