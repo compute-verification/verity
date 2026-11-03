@@ -1,8 +1,7 @@
 """trace/v1 spans over a check run: `spans.jsonl` beside `steps.jsonl`, the queryable summary layer the watcher and the
 dashboard read (the observability report's section 2; the first slice of the job schema).
 
-One span is one JSON line.  The shape, FROZEN 14 Oct 2026 19:13Z (a contract infra's watcher builds against; change no
-field):
+One span is one JSON line.  The shape is frozen (a contract the watcher builds against; change no field):
 
     {"trace_id": "<run id>", "span_id": "...", "parent_span_id": null, "name": "...",
      "start_utc": "...", "end_utc": null, "status": null, "attributes": {"step": "pytest", "rc": 0}}
@@ -13,19 +12,24 @@ field):
 
 The file is append-only, so an open span is a line with `end_utc`/`status` null and its completion is a later line with
 the same `span_id`: the last line per `span_id` wins.  The root span (the check itself) opens when the run's `Steps`
-is made, so a watcher sees the check live; each step becomes a completed child span as `steps.jsonl` gets its record;
-the root completes when the run ends.  `trace_id` is the recorded run's id (`RESEARCH_RUN_ID`), so the store's custody
+is made, so a watcher sees the check live; each step opens a child span as its process starts and completes it as
+`steps.jsonl` gets its record (a step that never started, a skip, is one completed line); the root completes when the run
+ends.  So the steps running now are the open children, each since its own start (`research status RUN` reads them).  `trace_id` is the recorded run's id (`RESEARCH_RUN_ID`), so the store's custody
 ties the trace to the Attempt; outside a recorded run it is a local id, and the file is still written for humans.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
-import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+_spec = importlib.util.spec_from_file_location("spans_settings", Path(__file__).resolve().parent / "settings.py")
+#: every environment variable check reads, declared once (`settings.py`)
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
 SPANS_LOG = "spans.jsonl"
 
 #: a steps.jsonl status -> a span status (the frozen shape's three values)
@@ -48,7 +52,7 @@ def check_memory(root: Path = Path("/")) -> dict:
     """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the cgroup this process runs in,
     when that is the check's own scope (SCOPE_ENV names it); else nothing, since a shared session scope's numbers are other
     runs' too. GB are 10^9 bytes, one decimal."""
-    unit = os.environ.get(SCOPE_ENV)
+    unit = SETTINGS.get(SCOPE_ENV)
     if not unit:
         return {}
     try:
@@ -62,32 +66,41 @@ def check_memory(root: Path = Path("/")) -> dict:
 
 
 class SpanLog:
-    """The one writer of a run's `spans.jsonl`: the open root line at construction, one completed child line per step
-    record, and the root's completion line at `close`.  Append-only; the caller (`Steps`) serializes writes."""
+    """The one writer of a run's `spans.jsonl`: the open root line at construction, a step's open child line as it starts
+    (`open`) and its completion from its record (`step`), and the root's completion line at `close`.  Append-only; the
+    caller (`Steps`) serializes writes."""
 
     def __init__(self, out: Path, trace_id: str | None = None):
         self.path = out / SPANS_LOG
-        self.trace_id = trace_id or os.environ.get("RESEARCH_RUN_ID") or f"local-{uuid.uuid4().hex[:12]}"
+        self.trace_id = trace_id or SETTINGS.RESEARCH_RUN_ID or f"local-{uuid.uuid4().hex[:12]}"
         self.root_id = uuid.uuid4().hex[:16]
         self.root_start = _now_utc()
         self.closed = False
+        self.opened: dict[str, tuple[str, str]] = {}
         self.path.unlink(missing_ok=True)
         self._write(self.root_id, None, "check", self.root_start, None, None, {})
 
+    def open(self, name: str) -> None:
+        """The step's open child span, as its process starts; `step` completes it."""
+        span_id, start = uuid.uuid4().hex[:16], _now_utc()
+        self.opened[name] = (span_id, start)
+        self._write(span_id, self.root_id, name, start, None, None, {"step": name})
+
     def step(self, rec: dict) -> None:
-        """The step's completed child span, from its `steps.jsonl` record (its end minus its `seconds` is its start)."""
+        """The step's completed child span, from its `steps.jsonl` record: the span `open` started, else a new one whose start
+        is its end minus its `seconds`."""
         ended = rec.get("ended_utc") or _now_utc()
         try:
             t1 = datetime.strptime(ended, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             start = (t1 - timedelta(seconds=float(rec.get("seconds") or 0.0))).strftime("%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
             start = ended
+        span_id, start = self.opened.pop(str(rec.get("step")), (uuid.uuid4().hex[:16], start))
         cache = rec.get("cache") or {}
         attributes = {"step": rec.get("step"), "rc": rec.get("rc"), "log": rec.get("log"),
                       "cache_key": cache.get("hit") or cache.get("stored"), "detail": rec.get("detail")}
         attributes = {k: v for k, v in {**attributes, **check_memory()}.items() if v is not None and _scalar(v)}
-        self._write(uuid.uuid4().hex[:16], self.root_id, str(rec.get("step")), start, ended,
-                    STATUS.get(rec.get("status"), "failed"), attributes)
+        self._write(span_id, self.root_id, str(rec.get("step")), start, ended, STATUS.get(rec.get("status"), "failed"), attributes)
 
     def close(self, status: str) -> None:
         """The root's completion line (`ok`, `failed` or `cancelled`); once. In its own scope it carries the check's peak."""

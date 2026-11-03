@@ -43,7 +43,7 @@ def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
 
 def _core(name: str) -> bool:
     """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
-    (the catalog, the kernels, C-Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
+    (the catalog, the kernels, Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")

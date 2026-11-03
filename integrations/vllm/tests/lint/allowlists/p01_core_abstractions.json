@@ -1,23 +1,14 @@
 {
   "rule": "P1 (use core's abstractions; never copy or patch them)",
   "entries": [
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "core-private", "symbol": "_spec_id_memo", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/pipeline/build.py", "kind": "core-private", "symbol": "_spec_histogram", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.ml.circuits.codec._as_specialized"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.ml.circuits.codec._static_functions"},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_fid", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/program/frontend/correspond.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/frontend/correspond.py", "kind": "core-private", "symbol": "_statics_diff", "detail": "verity.ml.circuits.defs._plain_static"},
-    {"file": "verity_vllm/program/frontend/derive.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._encode_body"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.defs._static_key"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "core-patch", "symbol": "with_ordinary", "detail": "verity.ml.circuits.defs.REGISTRY.add()"},
-    {"file": "verity/ml/definitions/registry/lifted.py", "kind": "core-private", "symbol": "address_map_modulo_guards", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity/ml/definitions/registry/lifted.py", "kind": "core-private", "symbol": "request_boundaries", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "_canonicalize", "detail": "verity.ml.circuits.codec._encode_definition"},
-    {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "_spec_id", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity/ml/definitions/call_scope.py", "kind": "core-private", "symbol": "spec_statics", "detail": "verity.ml.circuits.codec._split_record"}
   ]
 }

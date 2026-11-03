@@ -248,7 +248,7 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
-    {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0) (hdn : Claims.Recursion.Form.Dense st0.form)
+    {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0) (hdn : Claims.Recursion.Form.Dense st0.form)
     (hlev : s < (OpenLower.schAt (xIOf x) 0).levels.size)
     {i : RecIns} {lk : RecVStar.InnerLink} (hi : insO xO = some i) (hlk : i.link = some lk)
     {qo : ℕ} (hqo : c.ports.findIdx? (·.name == "out") = some qo)
@@ -596,7 +596,7 @@ theorem levelCap_get {sh : VStar.Algebra.Shape} {K : Array VStar.Stmt} (h : VSta
 `l ≠ 0` is V\*'s later cap at level `l` (`FlockC3.Reps.list_ok`, the list's parts holding no cap), holding
 `2 · 2^cap` nodes (`VStar.levelCapStatements`), twice the schedule's `(l − 1)`-th top's (`RecVStar.checkTopsListed`),
 at table 0's schedule (`inner_m`). -/
-theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hdn : Claims.Recursion.Form.Dense st0.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {s' l N : ℕ} (hsv : ss[s']? = some (.cap l N)) (hl : l ≠ 0)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) :
@@ -609,7 +609,7 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.Stmt} (hst : parse x = s
     cases hs : r.shape.sparse with
     | none => rfl
     | some _ => simp [hs] at h2
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, n0, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hss
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, hT, hLk, rfl⟩ := FlockC3.Reps.list_ok hss
   obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
   obtain ⟨sch, sp, ps, hsch, -, -, hAe⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hge : A.size ≤ s' := by
@@ -618,7 +618,7 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.Stmt} (hst : parse x = s
     have hm := Array.mem_of_getElem? hsv
     rw [hAe] at hm
     simp at hm
-  rw [Array.append_assoc, Array.getElem?_append_right hge, Array.empty_append] at hsv
+  rw [Array.append_assoc, Array.getElem?_append_right hge, Array.empty_append, Array.append_assoc] at hsv
   have hsz := topsListed_size hT hrs
   by_cases hgK : s' - A.size < K.size
   · rw [Array.getElem?_append_left hgK, Array.getElem?_eq_getElem hgK] at hsv
@@ -651,12 +651,10 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.Stmt} (hst : parse x = s
     rw [hg, hnn, e, hnn2, ← hl1]
   · exfalso
     rw [Array.getElem?_append_right (by omega)] at hsv
-    by_cases he : s' - A.size - K.size = 0
-    · rw [he] at hsv
-      simp at hsv
+    rcases Array.mem_append.1 (Array.mem_of_getElem? hsv) with hm | hm
+    · rcases FlockC3.VStarList.linkStatements_ok hLk with ⟨-, rfl⟩ | ⟨_, -, rfl⟩ <;> simp at hm
+    · simp at hm
       omega
-    · rw [Array.getElem?_eq_none (by simp; omega)] at hsv
-      cases hsv
 
 /-- **Rep 0's level-`g + 1` top in the link has the schedule's `g`-th top's nodes** (`round_view`, `topSizes_at`). -/
 theorem top0_eq {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)
@@ -696,7 +694,7 @@ than its low `HH` bits): at a staged level part whose check 5 loads the inner se
 `LANES` lanes and `HH` siblings and both reps, a piece `ownQR` gives the part is at level `l`, one of its `q`
 queries of rep 0 or 1, and its rep's position there is `posAt`'s. -/
 theorem posRaw_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
     (hI : InnerCoinsR untr b Bk s x c) {xO : Msg} (hsh : showsPart untr b s x xO c) {i : RecIns}
     {spec : SessionSpec} {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (ht : 0 < sts.size)

@@ -6,6 +6,7 @@ constraint at once (`verifyInner`). The session around the reps is `Flock.verify
 -/
 import Flock.Verify
 import Flock.ZkLigerito
+import Flock.JsonParse
 
 namespace Flock.Zk
 
@@ -281,7 +282,7 @@ def verifyInner (lay : PadLayout) (pr : InnerProof) (finalC : F128) (cons : Arra
 
 /-- Table `i`'s rep `r` (`Flock.verifyRep` for a `--zk` proof): the masked replay, the opening with the masked claims'
 checks as constraints, level 0's hiding, the inner proof; returns the proof's flattened cap. -/
-def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     V ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -372,7 +373,7 @@ def maskLogOf (circuit : ByteArray) : Nat :=
     match String.fromUTF8? (circuit.extract (e1 + 1) e2) with
     | none => 14
     | some line =>
-      match Json.parse (line.drop 5).toString with
+      match JsonParse.parse (line.drop 5).toString with
       | .ok j => (j.getObjValAs? Nat "mask_log").toOption.getD 14
       | .error _ => 14
 

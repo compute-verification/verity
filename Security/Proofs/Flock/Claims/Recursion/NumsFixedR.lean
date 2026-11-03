@@ -86,7 +86,7 @@ theorem setupTables_okH' {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
+  · exact Or.inl ⟨by assumption, _, FlockSoundness.Discharge.Exec.ok_of_refuse (by assumption), rfl, rfl⟩
   all_goals
     obtain ⟨hsz, -⟩ := range_mapM_ok (by assumption)
     exact Or.inr ⟨by omega, hsz⟩
@@ -222,13 +222,9 @@ theorem staged_one {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
   rw [hinner, insO_staged_part hins] at hC
   have hn := ResLower.checkStmt_name (checks_stmt hC 0 (by omega))
   obtain ⟨⟨nm, hf⟩, coins, hI⟩ := ResLower.insO_tags hins
-  have hf' := hf
-  unfold Flock.Tags.find? at hf'
-  have hnm : nm = Flock.Tags.circuit.name := by
-    have h2 : i.base.stmtTags.name = nm := by simpa using List.find?_some hf'
-    rw [← h2, hn]
+  have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
-  rw [FlockSoundness.Discharge.Recursion.find?_circuit] at hf
+  rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
     rw [hI, hT]

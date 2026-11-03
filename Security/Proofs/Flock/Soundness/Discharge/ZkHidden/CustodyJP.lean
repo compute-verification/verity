@@ -14,10 +14,11 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
   at `own`, from `Hidden.setupHidden_specP` and the draw over the public input ports (`HmIn.drawn`, which is
   `HmRow.drawn` at the circuit with those ports as its output ports), at the statement circuit `c`
   (`HmOut.parseStmt`, whose `g` is the committed circuit's: `unrolled_g`).
-* `drawOkZKHJP_of_file`: from `DrawFileZK dj (subset kd) pop`, with `nTab I` dividing `kd`, `DrawOkZKHJP` holds at
-  `mPtsOf c.g (kd / nTab I)` link points at every draw `S`, by `drawOkZKHJ_of_file`'s argument.
-* `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJP` (`live-verifier` at
-  `own`).
+* `drawOkZKHJP_of_size`: from `DrawFileZK dj law pop`, at a draw `S` whose file decodes only to `kd` units, with
+  `nTab I` dividing `kd`, `DrawOkZKHJP` holds at `mPtsOf c.g (kd / nTab I)` link points, by `drawOkZKHJ_of_size`'s
+  argument.
+* `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJPLaw` (`live-verifier`
+  at `own` and the registration's law), at a law whose draw files decode only to `kd` units.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -60,10 +61,12 @@ end MPts
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The coin server's draws are `DrawOkZKHJP`** (`ZkReg.drawOkZKHJ_of_file` at `own`). -/
-theorem drawOkZKHJP_of_file (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
+/-- **The coin server's draws are `DrawOkZKHJP` at a draw of `kd` units, under any law** (`drawOkZKHJ_of_size` at
+`own`). -/
+theorem drawOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd pop : ℕ)
+    (hdiv : kd % nTab I = 0) (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (hq : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
     DrawOkZKHJP I own dj (mPtsOf c.g (kd / nTab I)) S := by
   intro j
   have hty : ∀ j : ℕ, (tagsAt (zkTags I) I.count j).typed = false := fun j =>
@@ -87,7 +90,7 @@ theorem drawOkZKHJP_of_file (I : Inputs) (own : Option ByteArray) (ht : I.tags.t
     exact (hj ud hud).elim
   obtain ⟨D, hDj⟩ := hD
   have hDe := hdj S D hDj
-  have hsz : D.units.size = kd := (ofJson_shape hDj).2.2 kd (by rw [hDe]; rfl)
+  have hsz : D.units.size = kd := hq D hDj
   have hS : D.units = ((S.image Fin.val).sort (· ≤ ·)).toArray := by rw [hDe]; rfl
   by_cases h1 : I.count ≤ 1
   · have hn : nTab I = 1 := by simp [nTab, h1]
@@ -154,19 +157,23 @@ theorem drawOkZKHJP_of_file (I : Inputs) (own : Option ByteArray) (ht : I.tags.t
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
 /-- **The decoder at the live hidden-output tables at `own`, under `live-verifier`** (`decodesZCJH_liveIP` at
-`RecordCustodyZKJP`): the record's custody at `own` gives the record's half (`hRec`), and its draw file the coin
-server's draws (`drawOkZKHJP_of_file`), at `mPtsOf c.g (kd / nTab I)` link points. -/
+`RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`), and its draw file, which decodes
+only to `kd` units under the registration's law, the coin server's draws (`drawOkZKHJP_of_size`), at
+`mPtsOf c.g (kd / nTab I)` link points. -/
 theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % nTab I = 0)
+    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd : ℕ)
+    (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (L : Law n) (hT : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr kd) :
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hsz : ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
     DecodesOnZKJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
-  decodesZCJH_liveIP I own ht dj y₀ wr L hT hCust.1 fun _ => drawOkZKHJP_of_file I own ht hcS kd n hdiv dj hCust.2 _
+  decodesZCJH_liveIP I own ht dj y₀ wr L hT hCust.1 fun ω =>
+    drawOkZKHJP_of_size I own ht hcS law kd n hdiv dj hCust.2 (L.draw ω) (hsz (L.draw ω))
 
 end FlockSoundness.Discharge.ZkHidden

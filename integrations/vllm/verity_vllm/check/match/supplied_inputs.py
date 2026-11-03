@@ -1,7 +1,7 @@
 """A `registered_values` Program's supplied inputs in the comparator: the registered `values` and a request's `run_<i>`.
 
-`Prog.supplied_fields[node]` = sorted [(leaf offset, name, width)] of the one Input node a supplied Record lowers to, and
-`Prog.supplied_owner[node]` = the request index of a run parameter, None for the registered values.  A read canonicalises as
+`RootView.supplied_fields[node]` = sorted [(leaf offset, name, width)] of the one Input node a supplied Record lowers to, and
+`RootView.supplied_owner[node]` = the request index of a run parameter, None for the registered values.  A read canonicalises as
 ("SUPPLIED", name, lo, hi) with lo/hi relative to the field on both sides: the fold's layout comes from program.json (`supplied`,
 `supplied.input_nodes`), the derived Program's from its derive-report (`provenance.supplied`)."""
 

@@ -4,19 +4,25 @@ any kernel whose floating-point instructions aren't the Definition's: every tens
 (D/16 of them in QK^T's unrolled k loop, 4 D/16 in _s16's, at least one in PV's and in the _ref kernels'), the cvt an
 F2FP.BF16(.F32).PACK_AB, and no other floating-point instruction (an HFMA2.MMA of -RZ and RZ, the compiler's way of loading
 a constant, adds nothing, and an FSEL whose operands carry no negation or absolute value moves a word unchanged).
+ptxas's report and the SASS listing are read by s8_linear's sass_gate.py (`ptxas_report`, `sass_functions`).
 
   python3 sass_gate.py ARCH PTXAS_TXT SASS_TXT OUT_JSON
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import sys
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location("s8_sass_gate", Path(__file__).resolve().parents[1] / "s8_linear" / "sass_gate.py")
+SG = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SG)
 
 HMMA = "HMMA.16816.F32.BF16"
 CVT = re.compile(r"^F2FP\.BF16(\.F32)?\.PACK_AB$")
-MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FSEL|FCHK|FRND|FSWZADD|MUFU|F2F|F2I|I2F|DADD|DMUL|DFMA|DSETP|DMNMX|"
                    r"HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|HSET2|F2FP)(\.[\w.]+)?\b")
 CONSTANT = re.compile(r"\bHFMA2\.MMA R\d+, -RZ, RZ\b")
@@ -27,39 +33,23 @@ WANT = {f"attn_{op}_d{d}{tile}": ((4 if tile == "_s16" else 1) * d // 16 if op =
 
 
 def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
-    problems = [line for line in ptxas.splitlines() if re.search(r"warning|error|C7514|serializ", line, re.I)]
-    funcs: dict[str, dict] = {}
-    for m in re.finditer(r"Compiling entry function '(\w+)' for '(\w+)'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
-        if m.group(2) != arch:
-            problems.append(f"{m.group(1)}: compiled for {m.group(2)}, want {arch}")
-        body = m.group(3)
-        regs = re.search(r"Used (\d+) registers", body)
-        frame = re.search(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads", body)
-        funcs[m.group(1)] = {"regs": int(regs.group(1)) if regs else None, "stack": int(frame.group(1)) if frame else None,
-                             "spill_stores": int(frame.group(2)) if frame else None,
-                             "spill_loads": int(frame.group(3)) if frame else None}
-    cur = None
-    for line in sass.splitlines():
-        fm = re.search(r"Function : (\w+)", line)
-        if fm:
-            cur = fm.group(1)
-            funcs.setdefault(cur, {}).update({"HMMA": 0, "F2FP": 0, "LDL": 0, "STL": 0, "other_mma": [], "float": []})
-            continue
-        if not cur:
-            continue
-        r = funcs[cur]
-        for op in ("LDL", "STL"):
-            r[op] += bool(re.search(r"\b" + op + r"\b", line))
-        for mm in MMA.finditer(line):
-            if mm.group(0) == HMMA:
-                r["HMMA"] += 1
-            else:
-                r["other_mma"].append(mm.group(0))
-        for fl in FLOAT.finditer(line):
-            if CVT.match(fl.group(0)):
-                r["F2FP"] += 1
-            elif not CONSTANT.search(line) and not (fl.group(1) == "FSEL" and SELECT.search(line)):
-                r["float"].append(fl.group(0))
+    funcs, problems = SG.ptxas_report(ptxas, arch)
+    for cur, lines in SG.sass_functions(sass).items():
+        r = funcs.setdefault(cur, {})
+        r.update({"HMMA": 0, "F2FP": 0, "LDL": 0, "STL": 0, "other_mma": [], "float": []})
+        for line in lines:
+            for op in ("LDL", "STL"):
+                r[op] += bool(re.search(r"\b" + op + r"\b", line))
+            for mm in SG.MMA.finditer(line):
+                if mm.group(0) == HMMA:
+                    r["HMMA"] += 1
+                else:
+                    r["other_mma"].append(mm.group(0))
+            for fl in FLOAT.finditer(line):
+                if CVT.match(fl.group(0)):
+                    r["F2FP"] += 1
+                elif not CONSTANT.search(line) and not (fl.group(1) == "FSEL" and SELECT.search(line)):
+                    r["float"].append(fl.group(0))
     for name, r in funcs.items():
         if r.get("regs") is None or r.get("stack") is None:
             problems.append(f"{name}: no ptxas resource line")

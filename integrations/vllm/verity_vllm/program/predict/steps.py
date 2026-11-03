@@ -176,7 +176,7 @@ class Compiled:
 
     @property
     def transfer_gates(self) -> tuple[str, ...]:
-        """The templates whose units hold transfer gates, which a window draws whole: each request's ingress parse
+        """The templates whose units hold transfer gates, which a window samples whole: each request's ingress parse
         (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
         their place. No model-step template is among them."""
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}

@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # The ingress tie in zero knowledge (n2_tie_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
 # C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier
-# built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots:
-#   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env N2_MEM_GB=56 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/network_traces/n2_tie_zk.sh
+# built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a job of at most 180
+# minutes:
+#   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#     --by LANE -- bash benchmarks/network_traces/n2_tie_zk.sh
 # On a GPU node with N2_GPU=1, the prover is a8_gpu.sh's CUDA build (70-class-sweep.sh BUILD_ONLY=1, kept under
-# FLOCK_WORK) on the GPU the run leased:
-#   research run --on GPU_NODE --gpus 1 --cpus 32 --mem-gb 96 --source . --project verity --cwd clone --timeout 180m \
-#     --env N2_MEM_GB=96 --env N2_GPU=1 --env N2_CLASS=served -- bash benchmarks/network_traces/n2_tie_zk.sh
+# FLOCK_WORK) on the GPU the run leased, as a job of one GPU, 32 CPUs and 96 GB:
+#   env N2_MEM_GB=96 N2_GPU=1 N2_CLASS=served bash benchmarks/network_traces/n2_tie_zk.sh
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_PORT (--port; the members are proved one after
 #      another)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
 #      (--debug-clear)  N2_DRY=1 (the instances and references only)  N2_CLASS (--class: test, served or warden)
@@ -19,7 +18,7 @@
 set -uo pipefail
 export HZ_CONFIGS=n2tie HZ_MEM_GB=${N2_MEM_GB:?}
 if [ "${N2_GPU:-0}" = 1 ]; then
-  [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "N2_GPU=1 needs the run's leased GPU (research run --gpus 1)" >&2; exit 7; }
+  [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "N2_GPU=1 needs the run's leased GPU (a job of one GPU)" >&2; exit 7; }
   export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || exit 7
   unset CARGO_TARGET_DIR
   for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do

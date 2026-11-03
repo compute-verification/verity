@@ -130,7 +130,7 @@ def test_li_is_leans_half_steps_and_a_checkpoint_moves_at_the_changes_lowest_bit
 
 
 def test_the_e2e_key_rule_is_weaker_than_key_ok_r9():
-    """E2E's xin keys (segment.XA0, XA1) are drawn under Λ8 alone; one of them fails key_ok and another KJ19."""
+    """E2E's xin keys (segment.XA0, XA1) are sampled under Λ8 alone; one of them fails key_ok and another KJ19."""
     xa0, xa1 = F.e2e_xin_keys()
     assert not F.key_ok_r9(xa0[1]) and F.lambda8_ok(xa0[1])
     assert F.key_ok_r9(xa1[0]) and not F.kj19(xa1[0])

@@ -64,7 +64,7 @@ def paley28() -> torch.Tensor:
 
 class Rotation:
     """x -> x Q for Q = diag(signs) (H_a x R_b): kind `q` is exact_grid.rotation(k) (a = k / odd Sylvester, R a random
-    odd x odd orthogonal, both drawn from the generator seeded k, R first), kind `h` the flat one (R = H_28 / sqrt(28)
+    odd x odd orthogonal, both sampled from the generator seeded k, R first), kind `h` the flat one (R = H_28 / sqrt(28)
     when 7 divides k; the same signs). Applied through the Kronecker factors in FP32."""
 
     def __init__(self, k: int, kind: str, device):
@@ -261,7 +261,7 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
-    the calibration windows' served inputs) or dithered like the activations (fresh bits every call, drawn after the
+    the calibration windows' served inputs) or dithered like the activations (fresh bits every call, sampled after the
     activations'). The integer product is exact (s8 x s8 -> s32), scaled after. `density` < 1: the activations'
     dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest rounded on the
     same scale; a weight-side coin (the `peel` step's U) sits on every position. `dither_bits` = b widens every
@@ -654,7 +654,7 @@ def _check_peel(p):
 @attention_step("peel", phase="integer", check=_check_peel, source="D4-ATTN")
 def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
     """Low-rank noise the server adds and peels exactly: E_ik = U_{i, k mod 32}, U (tokens x 32) uniform on
-    {+-1..+-width}, one draw per layer shared by its heads; on P only where key <= query, P served as P - offset + E
+    {+-1..+-width}, one sample per layer shared by its heads; on P only where key <= query, P served as P - offset + E
     (within int8), the offset added back as offset sum_{k <= i} V_k. The served products, peeled ((Q + E) K^T - U (W^T
     K^T), the causal prefix scan for P), are the direct ones exactly: checked on the check window for every layer, KV
     group and P block. The quantizer's top must leave room (Q: q_top + width <= 127)."""
@@ -813,7 +813,7 @@ def coin_positions(mm, k: int, density: float) -> torch.Tensor:
 
 
 def weight_bits(mm, shape, mode: str = "dither") -> torch.Tensor:
-    """The weight's coins: one draw per (seed, layer, linear), so every window (and shard) serves one weight; fair bits
+    """The weight's coins: one sample per (seed, layer, linear), so every window (and shard) serves one weight; fair bits
     (`dither`) or uniforms in [0, 1) (`sr`)."""
     g = torch.Generator(device=mm.device)
     g.manual_seed(zlib.crc32(f"w/{mm.seed}/{mm.layer}/{mm.name}".encode()))
@@ -859,7 +859,7 @@ def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dithe
                 scales: str = "odd", density: float = 1.0):
     """Both operands on a low-bit grid (`GRIDS`: fp4c, fp4, int5): activations one scale per token, weights one per
     output row, both applied after the exact integer product; each `round`ed, `dither`ed or `sr` (`on_grid`), the
-    weight's coins drawn once per seed and layer (`weight_bits`). `block = 16`: NVFP4's block scales over k on both
+    weight's coins flipped once per seed and layer (`weight_bits`). `block = 16`: NVFP4's block scales over k on both
     operands, integers from SCALES[`scales`] chosen per block from the data (`on_blocks`), multiplied into the integer
     operands, the per-row and per-token float scales after accumulation. `density` < 1: only a coin-chosen
     density * 64 of every k64 word's positions carry the coin, on both operands (`coin_positions`); the rest round."""
@@ -923,7 +923,7 @@ def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", 
                    p_sink: bool = False):
     """Both attention matmuls on a low-bit grid (`GRIDS`), each operand `round`ed or `dither`ed (`on_grid`): Q and K one
     scale per (head, token), P one per query row (`p_sink`: key 0 in a block of its own, read and scaled on its own),
-    V one per (KV head, channel). K's and V's bits are fresh for every query head; P's are drawn only where key <= query
+    V one per (KV head, channel). K's and V's bits are fresh for every query head; P's are sampled only where key <= query
     (the mask is structure), so a dithered P serves no future key."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
@@ -1189,7 +1189,7 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     on E4M3; e2m1i, e2m1x2 on E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or
     `dither`ed (the level below or above by a fresh bit), the activations' coins first, then the weights', fresh every
     call (Dither-2S's
-    order). `act_grid = int8`: the activations Dither's own (`act_quant` at top 127, the int8 design's draws), the
+    order). `act_grid = int8`: the activations Dither's own (`act_quant` at top 127, the int8 design's samples), the
     weights native: the hybrid that serves int8 activations as limbs; `act_grid` a native grid: the activations on
     that grid, the weights on `grid` (tensor or channel scales). tensor, channel and the integer blocks give
     integers, so the product is the gated exact one; mx's power-of-two blocks give dyadic operands, multiplied

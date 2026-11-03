@@ -2,7 +2,8 @@
 
 Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
 release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
-residual, one `Window` per certifier window, each field's values in the order its reader asks for them:
+residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
+order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
   (`derived.Residual.hits`);
@@ -23,8 +24,8 @@ and are halved past 2^16, so the model is public. `Encoder` and `Decoder` take t
 codes with contexts of its own (the replay's egress contexts). `encode` and `decode` drive them over `Window`s, where a
 window's `arrived` bits take as context the run of decisions since the last arrival.
 
-**Prefix-free, canonical, self-delimiting.** LEAK-LEAN's `BitsCount` (#3533) holds when the charge is at least the length
-of a prefix-free encoding.
+**Prefix-free, canonical, self-delimiting.** The sampled leak bound's count (`hAs`: at most 2^c advice values charged c
+or less) holds when the charge is at least the length of a prefix-free encoding.
 - A segment's symbols are fixed by its counts, so the decoder knows where the segment's message ends. The coder's
   termination (`code.ArithEncoder.finish`: the pending bits and two more) names a dyadic interval inside the message's
   final interval. Distinct messages have disjoint final intervals, so no encoder output is a prefix of another's, and
@@ -60,6 +61,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.core.protocols.certifier.window_charge import Window
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -77,24 +80,6 @@ C = _load("code")
 
 
 # ------------------------------------------------------------------------------------------------------ the residual
-
-
-@dataclass(frozen=True)
-class Window:
-    """What one certifier window is charged (the module's docstring)."""
-
-    arrived: tuple[bool, ...] = ()
-    hits: tuple[int, ...] = ()
-    resumes: tuple[int, ...] = ()
-    order: tuple[tuple[int, tuple[int, ...]], ...] = ()
-    lag: tuple[bool, ...] = ()
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "arrived", tuple(bool(b) for b in self.arrived))
-        object.__setattr__(self, "hits", tuple(int(h) for h in self.hits))
-        object.__setattr__(self, "resumes", tuple(int(p) for p in self.resumes))
-        object.__setattr__(self, "order", tuple((int(s), tuple(int(i) for i in idx)) for s, idx in self.order))
-        object.__setattr__(self, "lag", tuple(bool(b) for b in self.lag))
 
 
 @dataclass(frozen=True)
