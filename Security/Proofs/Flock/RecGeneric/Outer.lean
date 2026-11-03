@@ -230,21 +230,23 @@ def OuterSessionsKS : Prop :=
 /-- **The composite extractor's cost** (lemma O2): `E*` (`Comp.E` at `L.toComp`) reruns the prover at most
 `(1 + m_Π·K_Π)·(1 + Σ_s ρ(sh_s))` times on every coin where `A` reruns at most `ρ`; in expectation at most
 `(1 + m_Π·k_Π)·(1 + Σ_s e(sh_s))` where `A` reruns at most `e` in expectation (Wald, over `E^rep`'s fresh reruns); and it
-makes at most `(1 + m_Π·K_Π)·Σ_s h(sh_s)` SHA-512 calls beyond its reruns' where `A` makes at most `h`. The inner
-`E^rep`'s and `E_O`'s reruns multiply; their errors do not (`Comp.κ`: `N_I` times `κ_O`). -/
+makes at most `(1 + m_Π·K_Π)·(Σ_s h(sh_s) + n)` SHA-512 calls beyond its reruns' where `A` makes at most `h` and
+`Open(Π, S)` at most `n` on any witnesses' inner messages (`Comp.innerLog`): each of `E^rep`'s reruns is `E_O`'s
+sessions and the inner view's run, whose calls are `E*`'s own (`Comp.decProg`). The inner `E^rep`'s and `E_O`'s reruns
+multiply; their errors do not (`Comp.κ`: `N_I` times `κ_O`). -/
 def ExtractCost : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (A : Arg Coin)
-    (L : Compiled Coin A) (I : Proto Coin W) (S : Server) (ρ h : A.Sh → ℕ) (e : A.Sh → ℝ),
+    (L : Compiled Coin A) (I : Proto Coin W) (S : Server) (ρ h : A.Sh → ℕ) (e : A.Sh → ℝ) (n : Msg → ℕ),
     A.WF → L.Sessions H →
-      (A.RerunsLe H ρ → ExtractRunsLe H (L.toComp.E I S H) fun x =>
+      (A.RerunsLe H ρ → ExtractRunsLe H (L.toComp.E I S) fun x =>
         (1 + I.waits (L.xI x) * I.cap (L.xI x)) * (1 + ∑ s : Fin (L.nS x), ρ (L.sh x s))) ∧
-      (A.RerunsExpLe H e → ExtractRunsExpLe H (L.toComp.E I S H) fun x =>
+      (A.RerunsExpLe H e → ExtractRunsExpLe H (L.toComp.E I S) fun x =>
         (1 + I.waits (L.xI x) * I.k (L.xI x) : ℝ) * (1 + ∑ s : Fin (L.nS x), e (L.sh x s))) ∧
-      (A.HashLe H h → ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin)
-        (c : (L.toComp.E I S H).C x),
-        ((L.toComp.E I S H).eval H P x ω r c).2.1 ≤
-          (1 + I.waits (L.xI x) * I.cap (L.xI x)) * ∑ s : Fin (L.nS x), h (L.sh x s) +
-          ((((L.toComp.E I S H).ext x r c).rerunsAt H (run H P L.V x ω)).map fun r' =>
+      (A.HashLe H h → (∀ x r ws, (L.toComp.innerLog (S.IVStar I.V I.ans) H x r ws).length ≤ n x) →
+        ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : (L.toComp.E I S).C x),
+        ((L.toComp.E I S).eval H P x ω r c).2.1 ≤
+          (1 + I.waits (L.xI x) * I.cap (L.xI x)) * (∑ s : Fin (L.nS x), h (L.sh x s) + n x) +
+          ((((L.toComp.E I S).ext x r c).rerunsAt H (run H P L.V x ω)).map fun r' =>
             (run H P L.V x ω r').pLog.length + (run H P L.V x ω r').vLog.length).sum)
 
 end Claims.RecGeneric

@@ -68,7 +68,7 @@ def GenericRecursiveKS : Prop :=
     I.WF → I.KSAbortLin H → I.LastCoinFree H → ∀ x : Msg, K.OuterKSAt H x → 0 ≤ K.κO x → 0 ≤ K.γO x →
     K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x →
     ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (m : Fin I.nT → ℕ) (M : ℕ),
-      PrBad H K.V (K.R I) (K.E I S H) x P ≤ K.err I S H P x m M
+      PrBad H K.V (K.R I) (K.E I S) x P ≤ K.err I S H P x m M
 
 /-- **L2: the recursion as a compiler, generic in the inner protocol, the outer argument and the server.** For every
 `Π` as in L1, outer argument `A` that is well formed and knowledge sound (`Arg.WF`, `Arg.KS`), server `S` and compiler
@@ -84,7 +84,7 @@ def GenericRecursiveKSCompiled : Prop :=
     I.WF → I.KSAbortLin H → I.LastCoinFree H → A.WF → A.KS H → (compile C I S).Sessions H →
     ∀ x : Msg, (compile C I S).toComp.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x →
     ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (m : Fin I.nT → ℕ) (M : ℕ),
-      PrBad H (compile C I S).V ((compile C I S).toComp.R I) ((compile C I S).toComp.E I S H) x P ≤
+      PrBad H (compile C I S).V ((compile C I S).toComp.R I) ((compile C I S).toComp.E I S) x P ≤
         (compile C I S).toComp.err I S H P x m M
 
 end Flock.Guarantees

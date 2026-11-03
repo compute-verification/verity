@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.Proto
 public import Proofs.Flock.RecGeneric.Plans
+public import Definitions.Claims.Sampling
 
 /-!
 # The composition: a compiled verifier with any outer extraction
@@ -18,9 +19,11 @@ session by session (`Proofs.Flock.RecGeneric.Outer`, `Compiled.toComp`) is one; 
 (`Claims.Recursion.EO`) at today's compiled record is another (`Proofs.Flock.RecGeneric.AtFlock`).
 
 `E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that rerun, the
-inner view read off `E_O`'s witnesses (`Comp.dec`) as the run of `Open(Π, S)` on the messages they give. Its
-knowledge error is the inner protocol's, `N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the
-composite's reruns (`Comp.innerModel`, `Comp.verModel`).
+inner view read off `E_O`'s witnesses (`Comp.decProg`) as the run of `Open(Π, S)` on the messages they give. `E*` is a
+rerun program that reads no `H`: the inner view's run is a rerun program too (`Comp.replayProg`, each step an `ofOC`), so
+each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
+`N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the composite's reruns (`Comp.innerModel`,
+`Comp.verModel`), each charged the rerun's calls with the inner view's (`Comp.rerunCost`).
 
 `Comp.Contract H K IV x` is what the compiled verifier must give at the statement `x`, each a code fact proved per
 compiler (and, for `forks` and `accepts`, per circuit V* proves, where some run accepts `x`); `Comp.OuterKSAt` is
@@ -69,13 +72,45 @@ def dec (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fi
   | some w => K.view IV H x r w
   | none => ⟨[], .rej⟩
 
+/-- **`IV`'s run on the prover messages `as`, as a rerun program**: `n` rounds after the prover messages `sent` and the
+messages `ms`, each round putting `as`'s next to `IV`'s next step at the coins `cs`, as `run` does against
+`replay as`. The step is an `ofOC`, so each SHA-512 call `IV` makes is a `.hash` node, which `RP.eval` charges; a
+verifier that has not decided when the rounds run out rejects. -/
+def replayProg {R : Type} (IV : Verifier Coin) (xI : Msg) (as : List Msg) (cs : ℕ → Coin) :
+    ℕ → List Msg → List (Msg × Out) → RP R Seen
+  | 0, _, ms => .ret ⟨ms, .rej⟩
+  | n + 1, sent, ms =>
+    (Claims.Sampling.ofOC (IV.next xI (sent ++ [as.getD sent.length []])
+        ((List.range (sent.length + 1)).map cs))).bind fun b =>
+      match b with
+      | .msg m =>
+        replayProg IV xI as cs n (sent ++ [as.getD sent.length []]) (ms ++ [(as.getD sent.length [], .msg m)])
+      | .acc => .ret ⟨ms ++ [(as.getD sent.length [], .acc)], .acc⟩
+      | .rej => .ret ⟨ms ++ [(as.getD sent.length [], .rej)], .rej⟩
+
+/-- **The inner view `E_O`'s output gives, as a rerun program**: `IV`'s run, at the compiled verifier's first coins, of
+the inner messages the witnesses give (`replayProg`, `dec`'s view at every `H`); a rejected view where `E_O` gave up. -/
+def decProg (K : Comp Coin) (IV : Verifier Coin) (x : Msg) (r : Fin (K.V.k x) → Coin) :
+    Option K.WO → RP (Fin (K.V.k x) → Coin) Seen
+  | some w =>
+    replayProg IV (K.xI x) (K.msgs x w) (coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq r i.val) (IV.k (K.xI x)) [] []
+  | none => .ret ⟨[], .rej⟩
+
+/-- **The outer stage at a draw**: `E_O` at the draw's run coins and its own coins, then the inner view its output gives
+(`decProg`). It is `outerStage` with the decoding a rerun program. -/
+def stage (K : Comp Coin) (IV : Verifier Coin) (x : Msg) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
+    RP (Fin (K.V.k x) → Coin) Seen :=
+  (K.EO.ext x d.1 d.2).bind (K.decProg IV x d.1)
+
 /-- **`E*`, the composite extractor**: the inner protocol's `E^rep` at the inner statement, over reruns of the compiled
 verifier's coins and `E_O`'s, each rerun served by `E_O` there and seen as the inner view of `Open(Π, S)` its witnesses
-give, opened (`Server.openView`) for the inner protocol's `opens`. Its extractors' composition is `served`'s. -/
-def E (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg) : Extractor Coin W K.V :=
-  served K.V K.EO (K.dec (S.IVStar I.V I.ans) H) (fun x => I.waits (K.xI x)) (fun x => I.k (K.xI x))
-    (fun x => I.cap (K.xI x)) (fun v => I.opens (S.openView v)) (fun x => I.assemble (K.xI x))
-    (fun x => I.check (K.xI x))
+give (`stage`), opened (`Server.openView`) for the inner protocol's `opens`. It is `served` with each stage a rerun
+program, and reads no `H`: every SHA-512 call it makes, `E_O`'s and the inner view's, is one of its `.hash` nodes. -/
+def E (K : Comp Coin) (I : Proto Coin W) (S : Server) : Extractor Coin W K.V where
+  C x := K.EO.C x × (Fin (I.waits (K.xI x)) → Fin (I.cap (K.xI x)) → (Fin (K.V.k x) → Coin) × K.EO.C x)
+  ext x r₀ c := serve (K.stage (S.IVStar I.V I.ans) x)
+    (erep (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x)) (fun v => I.opens (S.openView v))
+      (I.assemble (K.xI x)) (I.check (K.xI x)) (r₀, c.1) c.2)
 
 /-- **The relation, inherited**: `x` parses into the relation's form and the inner relation holds at its inner
 statement. -/
@@ -112,13 +147,25 @@ def ownAt (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : List (Msg × Msg) :=
   K.own H x (run H P K.V x ω u.1).msgs
 
-/-- **A rerun's SHA-512 calls**: the compiled run's, both parties', `E_O`'s, and one per evaluation a finder searches
-there (`rerunCalls`, `ownAt`), which it evaluates itself to search them. A run finder's cost is these over the reruns it
-names (`RunFinder.finder`), so its declared cost is every call its search makes. -/
-def rerunCost (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+/-- The inner verifier's calls in the inner view's run at a rerun's witnesses. -/
+def innerLog (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin) (w : K.WO) :
+    List (Msg × Msg) :=
+  (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog
+
+/-- The inner verifier's calls in the inner view's run at a rerun (`innerLog` at its witnesses), none where `E_O` gave
+up: what deciding whether the inner view accepts evaluates. -/
+def viewCalls (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : List (Msg × Msg) :=
+  ((K.wits H P x ω u).map (K.innerLog IV H x u.1)).getD []
+
+/-- **A rerun's SHA-512 calls**: the compiled run's, both parties', `E_O`'s, the inner view's run's (`viewCalls`, which
+deciding the rerun's acceptance in `innerModel` evaluates), and one per evaluation a finder searches there (`rerunCalls`,
+`ownAt`), which it evaluates itself to search them. A run finder's cost is these over the reruns it names
+(`RunFinder.finder`), so its declared cost is every call its search makes. -/
+def rerunCost (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : ℕ :=
   (run H P K.V x ω u.1).pLog.length + (run H P K.V x ω u.1).vLog.length + (K.EO.eval H P x ω u.1 u.2).2.1 +
-    (K.rerunCalls H P x ω u).length + (K.ownAt H P x ω u).length
+    (K.viewCalls IV H P x ω u).length + (K.rerunCalls H P x ω u).length + (K.ownAt H P x ω u).length
 
 /-- **The composite's reruns, as the inner terms' finders read them**: each run of the model is a rerun; a fork at the
 inner round `j` keeps the compiled coins before `min j k_Π`; a rerun is accepted where the inner view `E_O`'s witnesses
@@ -130,7 +177,7 @@ def innerModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type
   acc ω u := (K.dec IV H x u.1 (K.wits H P x ω u)).out = .acc
   coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
   log := K.rerunCalls H P x
-  cost := K.rerunCost H P x
+  cost := K.rerunCost IV H P x
 
 /-- **The composite's reruns, as `B_I` and the link read them**: as `innerModel`, but a rerun is accepted where `E_O`
 gives witnesses, and its evaluations are the compiled verifier's own as well. -/
@@ -140,7 +187,7 @@ def verModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} 
   acc ω u := (K.wits H P x ω u).isSome = true
   coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
   log ω u := K.rerunCalls H P x ω u ++ K.ownAt H P x ω u
-  cost := K.rerunCost H P x
+  cost := K.rerunCost IV H P x
 
 /-! ## The compiler's contract, at a statement -/
 
@@ -171,29 +218,25 @@ def CallsTrue (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     K.Gives H P x ω r c w → ∀ e ∈ K.calls H x r w, H e.1 = e.2
 
-/-- **The inner verifier's calls are searched**: at given witnesses at `x`, the inner view's run's calls are among
-`calls` and the compiled verifier's own, or two of those collide. -/
+/-- **The inner verifier's calls are searched**: at given witnesses at `x` in the outer relation, the inner view's run's
+calls are among `calls` and the compiled verifier's own, or two of those collide. -/
 def CallsLogColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
-    K.Gives H P x ω r c w →
+    K.Gives H P x ω r c w → K.RO x w →
       (∀ e ∈ (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog,
         e ∈ K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) ∨
       ∃ u v, findColl (K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) = some (u, v) ∧ Collision H u v
 
-/-- The inner verifier's calls in the inner view's run at a rerun's witnesses. -/
-def innerLog (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin) (w : K.WO) :
-    List (Msg × Msg) :=
-  (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog
-
 /-- **The commitments bind across forks** (from the server's `Binds` and V\*'s reading of the run's commit strings),
 modulo what the inner extractor reads at the last inner round: at `x`, two accepted reruns forked at an inner round `j`
-whose witnesses give inner views that differ at `j` show a collision among the two reruns' evaluations, where `j` is
-before the last inner round, or the two views differ in what the inner extractor reads of them (`rd`) or in the set
-of the inner verifier's calls. Two last messages read alike (as the deployed reader reads a trailing space) are one
-view to `E*`, so they need no collision. -/
+whose witnesses are in the outer relation and give inner views that differ at `j` show a collision among the two
+reruns' evaluations, where `j` is before the last inner round, or the two views differ in what the inner extractor
+reads of them (`rd`) or in the set of the inner verifier's calls. Two last messages read alike (as the deployed reader
+reads a trailing space) are one view to `E*`, so they need no collision. A rerun whose witnesses fail the outer relation
+is `E_O`'s failure, charged to `N_I·κ_O` (`Comp.κ`). -/
 def ForksBind {β : Type} (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (rd : Seen → β) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (j : ℕ) (ω : Ω) (r r' : Fin (K.V.k x) → Coin) (c c' : K.EO.C x) (w w' : K.WO),
-    j < IV.k (K.xI x) → K.Gives H P x ω r c w → K.Gives H P x ω (fork j r r') c' w' →
+    j < IV.k (K.xI x) → K.Gives H P x ω r c w → K.Gives H P x ω (fork j r r') c' w' → K.RO x w → K.RO x w' →
     ((K.view IV H x r w).msgs.map Prod.fst).getD j [] ≠
       ((K.view IV H x (fork j r r') w').msgs.map Prod.fst).getD j [] →
     (j + 1 < IV.k (K.xI x) ∨ rd (K.view IV H x r w) ≠ rd (K.view IV H x (fork j r r') w') ∨

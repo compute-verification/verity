@@ -83,8 +83,9 @@ namespace Flock.Guarantees
 open Claims Claims.RecGeneric FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric
 open scoped ENNReal
 
-/-- **B1: a claims-core proof system through the sampled compiler.** For every oracle `H`, claims verifier `V` with
-relation `Rl` and extractor `E` whose error at each sampled statement is at most `err` on every prover
+/-- **B1: a claims-core proof system through the sampled compiler.** For every claims verifier `V` with relation `Rl`
+and extractor `E`, both fixed before the oracle `H` (so `E` reaches `H` only through its `.hash` nodes), and every `H`
+at which `E`'s error at each sampled statement is at most `err` on every prover
 (`PrBad ≤ err`), sampling design `L`, binding commitment `B` to the trace, proof blocks' correctness `Correct`,
 statements `stmt` and witnesses' openings (`reads`, `opens`) that are sound for the proof blocks
 (`JointExtractor.Sound`), and nonnegative budget `t`: at every audit prover `σ` whose link finders meet ecr/sha-512
@@ -94,8 +95,8 @@ $$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{err}(\mathr
 with `R` the registration, `P_S` the claims prover `σ` plays on the sample `S`, `F` the incorrect set of the plurality
 of the trials and `ε_bind` their binding term. -/
 def GenericSampledKSClaims : Prop :=
-  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)
-    (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ) (Reg Dh : Type)
+  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Verifier Coin) (Rl : Rel W)
+    (E : Claims.Extractor Coin W V) (H : Claims.Msg → Claims.Msg) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ) (Reg Dh : Type)
     (Hc : List UInt8 → Dh) (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
     (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
@@ -127,15 +128,15 @@ def RecursiveSampledKS : Prop :=
     I.WF → I.KSAbortLin H → I.LastCoinFree H →
     (∀ S R, K.OuterKSAt H (stmt S R) ∧ 0 ≤ K.κO (stmt S R) ∧ 0 ≤ K.γO (stmt S R) ∧
       K.Contract H (Sv.IVStar I.V I.ans) (fun v => I.opens (Sv.openView v)) (stmt S R)) →
-    (jointOf H K.V (K.R I) (K.E I Sv H) stmt B reads opens t).Sound Correct → (∀ S R, 0 ≤ t S R) → 1 ≤ M →
+    (jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens t).Sound Correct → (∀ S R, 0 ≤ t S R) → 1 ≤ M →
     ∀ σ : Strategy (audit L Reg (proofSystemOf H K.V stmt).session),
-      ((jointOf H K.V (K.R I) (K.E I Sv H) stmt B reads opens t).toTrials L).CR (reg σ) (cont σ) M →
+      ((jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens t).toTrials L).CR (reg σ) (cont σ) M →
       prob (fun o => o.1 = true) (audit L Reg (proofSystemOf H K.V stmt).session) σ ≤
         L.escape (incorrect B Correct (reg σ)
-            (((jointOf H K.V (K.R I) (K.E I Sv H) stmt B reads opens t).toTrials L).plur (reg σ) (cont σ))) +
+            (((jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens t).toTrials L).plur (reg σ) (cont σ))) +
           avg (fun ω => ⨆ u ∈ L.draw ω,
             ENNReal.ofReal (K.err I Sv H (proverOf (x := stmt (L.draw ω) (reg σ)) (cont σ ω))
               (stmt (L.draw ω) (reg σ)) mI Mo)) +
-          ((jointOf H K.V (K.R I) (K.E I Sv H) stmt B reads opens t).toTrials L).bindErr (reg σ) (cont σ) M
+          ((jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens t).toTrials L).bindErr (reg σ) (cont σ) M
 
 end Flock.Guarantees
