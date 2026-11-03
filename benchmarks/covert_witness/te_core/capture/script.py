@@ -5,11 +5,14 @@ a run the runtime counter measured.
         [--out FILE] -- TRAIN_ARGS...
 
 The program runs as te_core.run runs it (cw.py: prepare from the nearest directory above the script, the script as
-``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends. Each
-ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase (``backward`` inside
-`torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`, else ``forward``) and its
-step, cut as the harness cuts a standalone program's: at each `TrainData.next` once the step in progress has read tokens
-(`te_core.flops.TOKEN_INDEX`), or at `hooks.step()`'s boundaries. prepare's start, data and output calls are stubbed:
+``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends, or
+to its end, where its last step ends as te_core.run's `close` ends it (so A may be its last step, which no step follows:
+its Δ_grad ends where its update meets the carried values, and te_core.capture.structure's cut, to the values a next
+step's forward reads, is 0). Each ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase
+(``backward`` inside `torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`,
+else ``forward``) and its step, cut as the harness cuts a standalone program's: at each `TrainData.next` once the step
+in progress has read tokens (`te_core.flops.TOKEN_INDEX`), or at `hooks.step()`'s boundaries. prepare's start, data
+and output calls are stubbed:
 
 - `start_record`, `load_theta` and `load_start`: the start's record (``--starts``), θ as fakes of its tensors, the model
   built from its config as prepare builds it;
@@ -344,6 +347,11 @@ class _Recorder:
             self.step = 0
         yield self.step
         self._end()
+
+    def close(self) -> None:
+        """The program returned: its last step ends (te_core.run's `close`)."""
+        if not self.explicit and self.step >= 0 and self.read_tokens:
+            self._end()
 
     @contextlib.contextmanager
     def phase(self, name: str):
@@ -780,17 +788,20 @@ def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: l
                 sdpa_kernel([SDPBackend.MATH]), fake, _Function(rec), _Dispatch(rec):
             sys.modules["__main__"] = main
             try:
-                _exec_lifted(script, main.__dict__)
+                try:
+                    _exec_lifted(script, main.__dict__)
+                except SystemExit as e:
+                    if e.code not in (None, 0):
+                        raise CaptureRefused("trace", None, f"the program exited {e.code} at step {rec.step}") from e
+                rec.close()
             except _Stop:
                 pass
-            except SystemExit as e:
-                if e.code not in (None, 0):
-                    raise CaptureRefused("trace", None, f"the program exited {e.code} at step {rec.step}") from e
     finally:
         sys.argv, sys.path[:] = argv0, path0
         sys.modules["__main__"] = main0
     if rec.step < stop:
-        raise CaptureRefused("trace", None, f"the program ended at step {rec.step}, before step {stop} ended")
+        raise CaptureRefused("trace", None, f"the program ended after {max(rec.step, 0)} steps, before step {stop - 1} "
+                                            f"ended")
     return rec
 
 

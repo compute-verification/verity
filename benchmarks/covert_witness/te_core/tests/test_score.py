@@ -92,6 +92,42 @@ def test_with_structures_carries_the_traced_formalism():
         k: formalism.TRACED[k] for k in ("tau_bits", "affected_gates", "token_gates", "u", "u_in")}
 
 
+def test_a_traced_step_that_updates_nothing_takes_its_measured_delta_grad():
+    """A step before the first update, traced (Δ_grad 0, affected share 0), keeps its own U (none) and takes its trace's
+    measured quantities and read-backs: its Δ_grad 0 is a measurement, so Fit binds on the updating step's where it
+    failed at every k; traced with no updating step traced, it is left as it was."""
+    from te_core import formalism
+
+    rec = record(3)
+    rec["structures"]["z"] = {"updated": [], "log": []}
+    rec["steps"][0]["struct"] = "z"
+    for s in rec["steps"]:
+        s["by"] = {"fwd/x": 1000}
+    zero = {"affected_share": 0.0, "token_factor": 1.0, "delta_grad_bits": 0, "partial_cut_bits": 0, "grad_cut_bits": 0,
+            "u1_bits": 0.0}
+    idle = {"updated": [], "cut_bits": 0, "formalism": TRACE | zero}
+    s_trace = {"updated": [[50, 0, 800, 16, 16]], "cut_bits": 640, "formalism": TRACE}
+
+    def row(traced):
+        return {"formalism": formalism.of_record(with_structures(rec, traced)), "output": {"e_bytes": 100}}
+
+    def fit(traced):
+        return formalism.measure(row(traced), {"vocab": 16, "d_model": 8}).fit_delta_grad_bits
+
+    out = with_structures(rec, {"s": s_trace, "z": idle})
+    z = out["structures"][out["steps"][0]["struct"]]
+    assert z["updated"] == [] and (z["delta_grad_bits"], z["affected_share"], z["token_factor"]) == (0, 0.0, 1.0)
+    assert [s.updated_macs for s in annotate(out).steps] == [0, 50 * 8, 50 * 8]
+    assert out["formalism"]["a_bits"] == TRACE["a_bits"] and out["formalism"]["u1_bits"] == TRACE["u1_bits"]
+    parts = row({"s": s_trace, "z": idle})["formalism"]["parts"]
+    assert (parts[0]["delta_grad_bits"], parts[0]["affected_gates"], parts[1]["delta_grad_bits"]) == (0, 0, 640)
+    assert fit({"s": s_trace, "z": idle}) == 640 and fit({"s": s_trace}) is None
+    clip = {"kind": "a comparison of a read-back float", "where": "train.py:9", "steps": [0, 0], "count": 1}
+    dirty = dict(idle, formalism=idle["formalism"] | {"data_dependent": [clip]})
+    assert formalism.refusal(row({"s": s_trace, "z": dirty})).startswith("data-dependent")
+    assert with_structures(rec, {"z": idle}) == with_structures(rec, {})
+
+
 def test_with_structures_lists_the_read_backs_of_every_traced_structure_its_steps_take():
     """The record's `trace` takes the most-MACs structure's quantities and every taken structure's read-back lists; a
     structure traced before te_core 4.2 (no lists) leaves them out, so te_core.formalism refuses the row as unchecked."""
