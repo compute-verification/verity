@@ -1,5 +1,5 @@
-"""`period_reports`: the memory challenger's sessions as sampling blocks of its party's certification period, under a small
-HSS key (H = 4). Each session's one output is its liveness record; once the period closes, `verdict` accepts every
+"""`period_reports`: the memory challenger's sessions as execution phases of its party's certification period, under a
+small HSS key (H = 4). Each session's one output is its liveness record; once the period closes, `verdict` accepts every
 session against the closed period under the device's identity, and refuses an edited session, another period's root,
 another deployment or party, and an identity it doesn't trust."""
 from __future__ import annotations
