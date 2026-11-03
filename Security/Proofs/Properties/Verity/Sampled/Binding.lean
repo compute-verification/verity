@@ -69,8 +69,8 @@ theorem ofRelease_of_iff (x y : Release) : (Read.ofRelease x).Of y ↔ x = y := 
 
 theorem forall₂_ofRelease_iff : ∀ l l' : List Release, List.Forall₂ Read.Of (l.map Read.ofRelease) l' ↔ l = l'
   | [], [] => ⟨fun _ => rfl, fun _ => .nil⟩
-  | [], _ :: _ => ⟨fun h => nomatch h, fun h => nomatch h⟩
-  | _ :: _, [] => ⟨fun h => nomatch h, fun h => nomatch h⟩
+  | [], _ :: _ => ⟨nofun, nofun⟩
+  | _ :: _, [] => ⟨nofun, nofun⟩
   | x :: xs, y :: ys => by
     constructor
     · intro h
@@ -328,7 +328,7 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
       · rw [if_neg hk'] at hx''
         cases hx''
     obtain ⟨u, v, hf, hv⟩ := findSome_forgeryOf hd hl hmem
-    refine ⟨u, v, hf, fun h => by cases h, ?_⟩
+    refine ⟨u, v, hf, (fun h => by cases h), ?_⟩
     show Verity.lmsVerify (((keyOf θ).map fun k => k.pub.data.toList).getD []) u v = true
     rw [hk]
     exact hv
@@ -354,7 +354,7 @@ theorem logged_le (V : Vocab d α) (k : Verity.Registration.Composite) (reads : 
         obtain ⟨x, hx, hk, hbr⟩ := hb _ hθ hv hl
         exact finders_of_break V dev θ F c σ hkey t hx hk hbr
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
-    _ = _ := by rw [Verity.Game.prCoin_eq_ofReal_pr, Verity.Game.prCoin_eq_ofReal_pr]; rfl
+    _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
 
 /-- **(a) at the leg's constructions with this read finder and forger** (`withBinding`). -/
 theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (k : Verity.Registration.Composite)
