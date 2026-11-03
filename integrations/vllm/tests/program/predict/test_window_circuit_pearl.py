@@ -36,7 +36,9 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF
 
-PEARL = PearlTables(words=16)
+#: the scheme the remote demo's Pearl+ serves under, on the H200
+SCHEME = "pearl-c-h100-v1-h3"
+PEARL = PearlTables(SCHEME, words=16)
 #: each position's cut linears' K and N, calls 0 to 7 in node order: each layer's q/k/v, o, gate/up and down
 CALLS = ((64, 128), (64, 64), (64, 256), (128, 64)) * 2
 #: a call's rows by round: round 0 both slots' prompts of 4, round 1 a row a slot
@@ -82,7 +84,7 @@ def test_pearls_tables_are_named_by_round_and_call_at_the_rows_its_calls_commit(
     assert [PEARL.a_rows(cls, 0) for cls in (CLASS, WindowClass(4, 4, 2), WindowClass(2, 9, 2))] == [16, 16, 32] == [
         -(-m // ROW_ALIGN) * ROW_ALIGN for m in (8, 16, 18)]
     with pytest.raises(ValueError, match="a positive number of words, not 0"):
-        PearlTables(words=0)
+        PearlTables(SCHEME, words=0)
     with pytest.raises(ValueError, match="'pearl-x' is no PoUW scheme"):
         PearlTables(scheme="pearl-x")
 
@@ -197,7 +199,7 @@ def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_re
     (_int8, INT8_GRAIN, PEARL, CLASS, r"Int8RowQuant_v1\{K=64[,}].*: an int8 linear, and Pearl\+'s tables cut BF16 linears"),
     (_registered, GRAIN, PEARL, WindowClass(2, 4, 2, lanes=1), "Pearl\\+'s tables are read at a fixed load's rows, every "
                                                                "slot at the window's one boundary"),
-    (_registered, GRAIN, PearlTables(words=48), CLASS, r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), "
+    (_registered, GRAIN, PearlTables(SCHEME, words=48), CLASS, r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), "
                                                        r"\(128, 64\)\], whose y no rows of Pearl\+'s 48 words doubled hand "
                                                        r"on in one unit within 256 rows that C-Flock proves")])
 def test_a_circuit_pearls_tables_cant_cut_is_refused(registered, grain, tables, cls, why):
@@ -212,7 +214,7 @@ def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves()
     grain, with y handed on in rows of 64 words (128 bytes, as at Llama 3.2 1B's head dimension), every template of the cut
     circuit is a proof block C-Flock's composer takes (`interface.check_proof_block`): the A rows (256 and 512 words) and
     the y rows (2N words) are past 111 bytes."""
-    c = WC.class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN, tables=PearlTables(words=64))
+    c = WC.class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN, tables=PearlTables(SCHEME, words=64))
     n = {_label(fn): k for fn, k in c.templates}
     P = PROVABLE_CLASS.positions * PROVABLE_CLASS.slots
     want = {"Gemm_v2{K=128,N=64}": 8 * P, "Gemm_v2{K=128,N=1}": P}

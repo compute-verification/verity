@@ -155,11 +155,12 @@ class PearlTables(FixedLoad):
     call of it commits them: round s's call c, the c-th cut linear of the round's forward, has its A rows (x widened to FP32,
     K words a row; `linear_cut.LinearARow`), its `rows` rows then zero rows up to `a_rows`, and its y (each BF16 word widened
     to FP32, N words a row; `linear_cut.LinearOut`), its `rows` rows. A cut linear hands its y on to its readers in rows of
-    ``words``, doubled where its unit would be no proof block (`window_circuit.linears`). ``scheme`` is PoUW's scheme whose
-    credited product a tie would hold y to (`window_circuit.census`)."""
+    ``words``, doubled where its unit would be no proof block (`window_circuit.linears`). ``scheme`` is the PoUW scheme the
+    window's Pearl+ serves under, whose credited product a tie would hold y to (`window_circuit.census`): the deployment
+    states it, since it names the device."""
     WHAT = "Pearl+'s tables"
+    scheme: str
     words: int = 64
-    scheme: str = "pearl-c-h100-v1-h3"
 
     def __post_init__(self) -> None:
         if type(self.words) is not int or self.words < 1:
