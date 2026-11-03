@@ -26,8 +26,9 @@ ships this island from the branch `cursor/te-wildcard-NNNN` and runs `train.py`.
 - `--ia3 --set 'blocks\.\d+\.(wk|wv|w_up)\.weight'`: IA3, a trained fp32 scale per output channel, E as
   `encode_lora2`'s magnitudes over zero factors (exactly diag(l)·W).
 - `--grow 1 --adapter r [--adapter-z q]`: a bottleneck adapter as a grown top block with zero attention and r live MLP
-  units. E is `encode_model`, which no snapshot encoder takes, so only the submission is scored; its narrowest cut lies
-  below a trained matrix (`cut-below-update`), so read its ρ at the adapter output's width too.
+  units. E is `encode_model`, a snapshot encoder since te_core's ae84902a46, so a grown run's `--snaps` are scored
+  (`--snap-decay` puts them inside a wsd decay); its narrowest cut lies below a trained matrix (`cut-below-update`), so
+  read its ρ at the adapter output's width too.
 
 Run: `python benchmarks/covert_witness/launch.py s-t20 --island wildcard --note "topcode ..." -- --set 'blocks\..*' --method muon --cut 6:dq2b4`.
 The note's first word is the mechanism the scorer files the record under.

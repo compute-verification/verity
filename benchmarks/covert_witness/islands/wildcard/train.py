@@ -1118,7 +1118,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         raise SystemExit("wildcard: --ema is for full-tensor sets")
     ema = {n: params[n].detach().clone() for n in tuned} if a.ema else None
     steps, snaps = [], []
-    marks = {round(n_steps * k / (a.snaps + 1)) for k in range(1, a.snaps + 1)}
+    lo = n_steps - round(a.decay_frac * n_steps) if a.snap_decay else 0
+    marks = {lo + round((n_steps - lo) * k / (a.snaps + 1)) for k in range(1, a.snaps + 1)}
     print(json.dumps({"steps": n_steps, "tuned": tuned, "flops_per_step": per_step, "extra": extra}), flush=True)
     probes = {}
 
@@ -1191,7 +1192,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
                 with torch.no_grad():
                     for n in tuned:
                         ema[n].lerp_(params[n].detach(), 1 - a.ema)
-            if step + 1 in marks and not GROWN:
+            if step + 1 in marks:
                 snaps.append((encode(ema if ema is not None else params), len(steps)))
                 if getattr(a, "probe", None) is not None:
                     print(json.dumps({"step": step + 1, "flops": prepare.train_flops(rec, trainable, steps)["flops"],
@@ -1201,9 +1202,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
     info = {"steps": n_steps, "lora_rank": a.lora_rank}
     if GROWN:
-        info["grown"] = {"config": GROWN["config"], "new_from_block": GROWN["start"],
-                         "snapshots": "none: te_core takes checkpoints from the encoders it wraps, and encode_model "
-                                      "isn't one, so only the submission is scored"}
+        info["grown"] = {"config": GROWN["config"], "new_from_block": GROWN["start"]}
         if GROWN.get("adapter"):
             j, r = GROWN["start"], GROWN["adapter"]
             info["grown"]["adapter"] = {"live_units": r, "z_bits": a.adapter_z, "z_rotate": a.z_rotate,
@@ -1661,6 +1660,8 @@ def main() -> int:
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--snaps", type=int, default=7)
+    ap.add_argument("--snap-decay", action="store_true",
+                    help="place the --snaps snapshots evenly inside the wsd decay instead of over the whole run")
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--suite", default="", help="a JSON list of argument overrides run one after another in this run; "
                     "each is scored on the same probe windows and the least probe loss is submitted (no snapshots)")
@@ -1681,6 +1682,8 @@ def main() -> int:
         raise SystemExit("wildcard: --block-adapter-z codes a --block-adapter's units, r a multiple of 8 (whole bytes)")
     if a.grow_copy and (not a.grow or a.adapter):
         raise SystemExit("wildcard: --grow-copy starts --grow's new blocks as copies of θ's (not an --adapter)")
+    if a.snap_decay and a.schedule != "wsd":
+        raise SystemExit("wildcard: --snap-decay places snapshots inside a --schedule wsd decay")
     if a.z_rotate and not (a.adapter_z or a.block_adapter_z):
         raise SystemExit("wildcard: --z-rotate rotates an --adapter-z or --block-adapter-z code")
     ext = {k: n for k, n in (("prefix", a.prefix), ("adapter", a.block_adapter)) if n}
