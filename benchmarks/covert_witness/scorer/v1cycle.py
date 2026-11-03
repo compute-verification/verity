@@ -429,6 +429,79 @@ def trace_resources(runs: int) -> tuple[int, int]:
     return workers, min(200, 12 + 4 * workers)
 
 
+#: the captures whose node runs size a shard (`run_peaks`): on 4.12.7's a run's capture alone took 28 to 404 GB, past
+#: its shard's 36, and r20261103-083440-8d5e's grew to 404 GB until the kernel killed it at 20:45Z on cpu-1
+#: (r20261103-193201-8666; coordinator 20:56Z). A request is a reservation, not a bound
+PEAKS_SINCE = "4.12.7"
+#: each taken node run's {run: GB} (`node_peaks`)
+PEAKS = ON_POOL.with_name("peaks.json")
+#: a capture that peaks at this many GB or more is a heavy run's: a shard of its own, asking for it (`shard_resources`)
+HEAVY_GB = 8
+#: the share of a machine's available memory the shards placed on it at once may ask (`plan`)
+MEM_SHARE = 0.8
+MEMINFO = b"print(int(next(x.split()[1] for x in open('/proc/meminfo') if x.startswith('MemAvailable:'))) >> 20)\n"
+
+
+def node_peaks(node: str) -> dict[str, float] | None:
+    """The peak RSS (GB) of each heavy run's capture in node run `node`, from its fetched resources.jsonl, None when
+    that isn't here: a capture is a subprocess that lives as long as its run traces, so the longest-lived subprocesses
+    at HEAVY_GB or more are the slowest runs' of the node's pack (one unfinished or killed the slowest, a timed out
+    one TRACE_TIMEOUT, another error none)."""
+    d = Path.home() / ".research" / "runs" / node
+    packs = sorted((d / "inputs").glob("trace40-pack-*.tar"))
+    if not (d / "resources.jsonl").exists() or not packs:
+        return None
+    runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(packs[0]), "./runs.json"],
+                                                           capture_output=True, check=True).stdout)]
+    traced = json.loads((d / "out" / "traced.json").read_text()) if (d / "out" / "traced.json").exists() else {}
+
+    def took(run: str) -> float:
+        err = (traced.get(run) or {}).get("error") or ""
+        if run not in traced or "killed" in err:
+            return math.inf
+        return float(trace40.TRACE_TIMEOUT) if "timed out" in err else traced[run].get("wall") or 0.0
+    life: dict[int, list[float]] = {}
+    for line in (d / "resources.jsonl").open():
+        r = json.loads(line)
+        if r.get("kind") != "process":
+            continue
+        for p in r.get("processes") or []:
+            x = life.setdefault(p["pid"], [r["t_mono"], r["t_mono"], 0.0])
+            x[1], x[2] = r["t_mono"], max(x[2], (p.get("rss_bytes") or 0) / 1e9)
+    heavy = sorted((x for x in life.values() if x[2] >= HEAVY_GB), key=lambda x: x[0] - x[1])
+    return {run: round(x[2], 1) for run, x in zip(sorted(runs, key=lambda r: -took(r)), heavy)}
+
+
+def run_peaks() -> dict[str, float]:
+    """Each run's greatest capture peak (`node_peaks`) over the node runs of PEAKS_SINCE's captures and later, those
+    taken (cached in PEAKS) and those pending, fetched here."""
+    seen = json.loads(PEAKS.read_text()) if PEAKS.exists() else {}
+    taken, pending = set(), set()
+    for te in layers():
+        if version(capture_version(te)) >= version(PEAKS_SINCE):
+            c = trace40.cache(te)
+            if (c / "traced.json").exists():
+                taken |= {v.get("by") for v in json.loads((c / "traced.json").read_text()).values()} - {None}
+            if (c / "pending.json").exists():
+                pending |= set(json.loads((c / "pending.json").read_text()))
+    for n in sorted(taken - set(seen)):
+        if (got := node_peaks(n)) is not None:
+            seen[n] = got
+    PEAKS.write_text(json.dumps(seen, indent=1, sort_keys=True))
+    out: dict[str, float] = {}
+    for v in (*seen.values(), *(node_peaks(n) or {} for n in sorted(pending - taken))):
+        for run, gb in v.items():
+            out[run] = max(out.get(run, 0.0), gb)
+    return out
+
+
+def shard_resources(runs: list[str], peaks: dict[str, float]) -> tuple[int, int]:
+    """trace_resources' for a shard of `runs`, and for a heavy run (`run_peaks`) half again its capture's peak past the
+    4 GB a worker it gives."""
+    workers, gb = trace_resources(len(runs))
+    return workers, gb + sum(max(0, math.ceil(1.5 * peaks[r]) - 4) for r in runs if r in peaks)
+
+
 def on_pool() -> dict[str, str]:
     """ON_POOL's node runs still pending in some layer's cache, each with its machine."""
     x = json.loads(ON_POOL.read_text()) if ON_POOL.exists() else {}
@@ -437,48 +510,68 @@ def on_pool() -> dict[str, str]:
     return {r: m for r, m in x.items() if r in flying}
 
 
-def pool_room() -> tuple[list[tuple[str, str]], dict[str, str]]:
-    """A (machine, pool) per shard that may launch now, in TRACE_POOLS' order: each pool's free slots that fit a shard,
-    past its waiters (auto.py's read of `slot.py --status --json` over the ssh `research run --on` uses), at most its
-    cap less the shards in flight there (`on_pool`); a pool that can't be read takes none. Also what each pool said."""
+def pool_room() -> tuple[list[tuple[str, str, int | None]], dict[str, str], dict[str, float]]:
+    """A (machine, pool, the slot's GB, None where the pool gives a run what it asks) per shard that may launch now, in
+    TRACE_POOLS' order: each pool's free slots that fit a shard, past its waiters (auto.py's read of `slot.py --status
+    --json` over the ssh `research run --on` uses), at most its cap less the shards in flight there (`on_pool`); a pool
+    that can't be read takes none. Also what each pool said, and the GB shards may ask on each machine (MEM_SHARE of
+    its available memory)."""
     from research import auto
     if not Path(auto.__file__).resolve().is_relative_to(HERE.parents[2]):
-        return [], {m: f"not read: research.auto is {auto.__file__}, not {HERE.parents[2]}'s" for m, _, _ in TRACE_POOLS}
+        return [], {m: f"not read: research.auto is {auto.__file__}, not {HERE.parents[2]}'s"
+                    for m, _, _ in TRACE_POOLS}, {}
     workers, gb = trace_resources(TRACE_SHARD)
     flying = collections.Counter(on_pool().values())
 
-    def one(item: tuple[str, str, int]) -> tuple[int, str]:
+    def one(item: tuple[str, str, int]) -> tuple[int, str, int | None, float]:
         m, p, _ = item
         try:
             r = auto._ssh(auto._reach(m), auto.payload(HERE.parents[2], workers, None, [p]))
-            _, free, waiting, why = auto._pool(json.loads(r.stdout).get(p), workers, gb)
+            doc = json.loads(r.stdout).get(p)
+            _, free, waiting, why = auto._pool(doc, workers, gb)
+            avail = int(auto._ssh(auto._reach(m), MEMINFO).stdout)
         except Exception as e:  # noqa: BLE001 - a pool that can't be read takes no shard, whatever stopped the read
-            return 0, f"not read: {str(e)[:120] or type(e).__name__}"
-        return max(0, free - waiting), why
+            return 0, f"not read: {str(e)[:120] or type(e).__name__}", None, 0.0
+        mems = [s.get("mem") for s in doc.get("slots") or [] if s.get("holder") is None and not s.get("blocked")]
+        return max(0, free - waiting), why, None if None in mems else max(mems, default=gb), MEM_SHARE * avail
     with ThreadPoolExecutor(max_workers=len(TRACE_POOLS)) as ex:
         seen = list(ex.map(one, TRACE_POOLS))
-    slots, said = [], {}
-    for (m, p, cap), (room, why) in zip(TRACE_POOLS, seen):
-        n = min(room, max(0, cap - flying[m]))
-        slots += [(m, p)] * n
-        said[m] = f"{why}; {flying[m]} of ours in flight, cap {cap}, {n} launched"
-    return slots, said
+    slots, said, room = [], {}, {}
+    for (m, p, cap), (n, why, slot_gb, avail) in zip(TRACE_POOLS, seen):
+        n = min(n, max(0, cap - flying[m]))
+        slots += [(m, p, slot_gb)] * n
+        room[m] = avail
+        said[m] = f"{why}; {avail:.0f} GB to ask; {flying[m]} of ours in flight, cap {cap}, {n} launched"
+    return slots, said, room
 
 
-def plan(tes: list[Path], slots: list[tuple[str, str]]) -> dict[Path, list[tuple[list[str], str, str]]]:
-    """Each launching layer's shards, each with the slot it takes, as many as there are `slots`: every layer's runs to
-    trace (`to_trace`) in shards of TRACE_SHARD in its own order, the shards taken in retrace order across layers (by
-    their runs' ranks, then the layer's place in `tes`)."""
-    shards = []
+def plan(tes: list[Path], slots: list[tuple[str, str, int | None]], room: dict[str, float]
+         ) -> tuple[dict[Path, list[tuple[list[str], str, str]]], dict[str, int]]:
+    """Each launching layer's shards, each with the slot it takes: every layer's runs to trace (`to_trace`) in its own
+    order, a heavy run (`run_peaks`) in a shard of its own and the rest in shards of TRACE_SHARD, the shards taken in
+    retrace order across layers (by their runs' ranks, then the layer's place in `tes`), each in the first of `slots`
+    whose slot gives what it asks (`shard_resources`) on a machine with that much `room` left. Also each heavy run left
+    waiting for memory, with the GB it asks."""
+    peaks, shards = run_peaks(), []
     for i, te in enumerate(tes):
         pf = trace40.cache(te) / "pending.json"
         todo = to_trace(te, {r for runs in (json.loads(pf.read_text()) if pf.exists() else {}).values() for r in runs})
-        shards += [(tuple(k for k, _ in todo[j:j + TRACE_SHARD]), i, j, te, [r for _, r in todo[j:j + TRACE_SHARD]])
-                   for j in range(0, len(todo), TRACE_SHARD)]
-    out = {te: [] for te in tes}
-    for (*_, te, runs), slot in zip(sorted(shards, key=lambda s: s[:3]), slots):
-        out[te].append((runs, *slot))
-    return out
+        light = [x for x in todo if x[1] not in peaks]
+        shards += [((k,), i, -1, te, [r]) for k, r in todo if r in peaks]
+        shards += [(tuple(k for k, _ in light[j:j + TRACE_SHARD]), i, j, te, [r for _, r in light[j:j + TRACE_SHARD]])
+                   for j in range(0, len(light), TRACE_SHARD)]
+    out, waiting, left, room = {te: [] for te in tes}, {}, list(slots), dict(room)
+    for *_, te, runs in sorted(shards, key=lambda s: s[:3]):
+        gb = shard_resources(runs, peaks)[1]
+        at = next((s for s in left if (s[2] is None or s[2] >= gb) and room.get(s[0], 0) >= gb), None)
+        if at is None:
+            if left and len(runs) == 1 and runs[0] in peaks:
+                waiting[runs[0]] = gb
+            continue
+        left.remove(at)
+        room[at[0]] -= gb
+        out[te].append((runs, at[0], at[1]))
+    return out, waiting
 
 
 def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te: Path = trace40.TE40_WT,
@@ -515,7 +608,7 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
     # the ended node runs taken first, so the runs they failed (under an older CODE) are traced again in this one
     settle()
     pf.write_text(json.dumps(pending, indent=1))
-    packed = {"runs": sum(len(s[0]) for s in shards)}
+    packed, peaks = {"runs": sum(len(s[0]) for s in shards)}, run_peaks() if shards else {}
     for i, (shard, machine, pool) in enumerate(shards):
         pack = out / f"trace40-pack-{i}.tar"
         p = subprocess.run([*cw, "pack", "--out", str(pack), "--te", str(te), "--only", ",".join(shard)],
@@ -525,7 +618,7 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
             continue
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
-        workers, gb = trace_resources(len(runs))
+        workers, gb = shard_resources(runs, peaks)
         # the pool slot's cores are the run's, so no --cpus
         r = subprocess.run(["research", "run", "--on", machine, "--pool", pool, "--as", TRACE_LANE,
                             "--project", "verity", "--source", str(HERE.parents[2]),
@@ -790,14 +883,14 @@ def main() -> int:
     nxt, retrace, held = (None, None, {}) if final else (next_capture(newest), None, {})
     top = nxt or trace40.TE40_WT
     tiered = [] if final else [p for p in (tier_layer(t, top, newest) for t in TIER_FROM) if p]
-    shards, pools, tiers = {}, {}, {}
+    shards, pools, tiers, mem_wait = {}, {}, {}, {}
     if not final and not args.no_trace:
         # the launching layers' ended node runs taken first, so the runs they failed (under an older CODE) are
         # planned again in this refresh
         for te in (*tiered, top):
             measured_ledger(out / f"settle-{te.name}", (), te, build=False, wait=False)
-        slots, pools = pool_room()
-        shards = plan([*tiered, top], slots)
+        slots, pools, room = pool_room()
+        shards, mem_wait = plan([*tiered, top], slots, room)
     for te in tiered:
         tiers[layer_tier(te)] = measured_ledger(out / f"tier-{te.name}", shards.get(te, []), te, build=False,
                                                 wait=False) | {"te_core": capture_version(te),
@@ -894,6 +987,8 @@ def main() -> int:
         meta["pools"] = pools
     if left:
         meta["put_held_for"] = left
+    if mem_wait:
+        meta["trace_mem_wait"] = mem_wait
     if held:
         meta["held"] = held
     if traced:
