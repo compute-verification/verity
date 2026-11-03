@@ -37,7 +37,9 @@ def test_figures_scale_one_session_to_every_machine_window():
     assert dc["window"]["cost"]["cores_per_machine"] == 300.0 / w and dc["window"]["cost"]["fits_window"]
     assert dc["window"]["leak"]["bits"] == math.log2(5)
     t = math.log2(fl["world"]["gpus"] * w) + F.HASH_RATE_LOG2
-    assert dc["window"]["ks"]["error_log2"] == world["window"]["ks"]["error_log2"] == round(t - F.LAM2, 2)
+    kappa = F.log2_add(F.KAPPA_LOG2, F.KNOWLEDGE_LOG2)
+    assert dc["window"]["ks"] == world["window"]["ks"]
+    assert dc["window"]["ks"]["world"]["error_log2"] == round(F.log2_add(kappa, t + F.EPS_LOG2), 2)
     year = dict(F.PERIODS)["year"]
     y = dc["periods"]["year"]
     R = year // w
@@ -45,10 +47,27 @@ def test_figures_scale_one_session_to_every_machine_window():
     assert y["cost"]["cpu_s"] == y["sessions"] * 300.0 and y["cost"]["core_years"] == y["sessions"] * 300.0 / year
     assert y["leak"]["bits_per_stream"] == F.log2_binom_sum(R * 4, R)
     assert y["leak"]["bits"] == fl["datacenter"]["machines"] * y["leak"]["bits_per_stream"]
-    assert y["ks"]["error_log2"] == round(math.log2(fl["world"]["gpus"] * year) + F.HASH_RATE_LOG2 - F.LAM2, 2)
+    for a in F.ADVERSARIES:
+        T = math.log2(fl[a]["gpus"] * year) + F.HASH_RATE_LOG2
+        k = y["ks"][a]
+        assert k["error_log2"] == round(F.log2_add(math.log2(y["sessions"]) + kappa, T + F.EPS_LOG2), 2)
+        assert math.isclose(k["share_per_and_log2"], k["error_log2"] - math.log2(y["covered_ands"]), abs_tol=0.02)
     assert world["periods"]["year"]["sessions"] == fl["world"]["machines"] * R
     assert F.figures(_doc(), times, budget=2)["fleets"]["world"]["periods"]["week"]["leak"]["budget"] == 2
     assert "datacenter | year" in F.markdown(fig)
+
+
+def test_the_ks_error_at_the_census_pools_t_eps_over_the_period():
+    """κ + t·ε pooled: against the world's calls, the window, week, month and year; against the datacenter's own, the
+    year; and the year's share of the sessions, a machine-window each, for the datacenter and the world."""
+    times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
+    fl = F.figures(_doc(), times)["fleets"]
+    world = [fl["world"]["window"]["ks"]["world"]["error_log2"]] + [
+        fl["world"]["periods"][p]["ks"]["world"]["error_log2"] for p in ("week", "month", "year")]
+    assert [round(x, 1) for x in world] == [-107.9, -97.9, -95.8, -92.2]
+    assert round(fl["datacenter"]["periods"]["year"]["ks"]["datacenter"]["error_log2"], 1) == -100.4
+    assert [round(fl[f]["periods"]["year"]["ks"]["world"]["share_per_session_log2"], 1)
+            for f in ("datacenter", "world")] == [-121.5, -129.7]
 
 
 def test_a_session_missing_a_step_has_no_total():

@@ -72,8 +72,10 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **The figures** (`figures.py`, the result's `figures` and the table's last section): the session's cost, its
   knowledge-soundness error and its stop-leak bound, for one window and pooled over a week, a month and a year, over the
   reference datacenter and the world's compute (`benchmarks/census`), each with its basis: measured (the run), proved (the
-  Lean theorem it reads and what that assumes) or scaled (a session a machine a window, each as this one). The module's
-  docstring states every figure.
+  Lean theorem it reads and what that assumes) or scaled (a session a machine a window, each as this one). The
+  knowledge-soundness error is κ + t·ε a session (κ and ε proved), pooled by the union bound as sessions·κ + T·ε against
+  the SHA-512 calls of the world's GPUs and of the datacenter's, and as a share of the sessions and of the ANDs they cover.
+  The module's docstring states every figure.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
   rep 0 flipped (the pod script's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
   statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no
