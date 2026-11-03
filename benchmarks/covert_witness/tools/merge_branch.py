@@ -10,7 +10,11 @@ Before touching the tree it refuses:
 - any branch but the toolsmith's (`TOOLSMITH`) whose commits since the merge base change a file under te_core/: a
   te_core change reaches covert-witness only as a VERSION of the toolsmith's, so the toolsmith carries it;
 - a toolsmith's commit that moves products.CAPTURE off `FROZEN` or moves any `*_FROM` gate in te_core's code: the
-  capture is frozen through the finals, and a moved gate makes a 4.12.9 trace read stale.
+  capture is frozen through the finals, and a moved gate makes a 4.12.9 trace read stale;
+- a toolsmith's commit that changes the capture's code (te_core/capture/, its tests and docs aside) without
+  `--capture-ruled WHY`: a trace made after the merge could read differently from one made before under the same
+  products.CAPTURE, so it merges only once the coordinator has ruled the change may keep the label (WHY, which the
+  merge's commit message carries).
 
 A merge of the toolsmith's leaves te_core exactly as REV has it (a VERSION is the toolsmith's whole te_core, so a
 te_core conflict resolves to theirs), and any other merge leaves it as it was. A conflict outside te_core stops before
@@ -54,8 +58,9 @@ def gates(repo: Path, rev: str) -> dict[str, str]:
     return out
 
 
-def refusal(repo: Path, branch: str, rev: str) -> str | None:
-    """Why `rev` on `branch` may not merge into HEAD, or None."""
+def refusal(repo: Path, branch: str, rev: str, ruled: str = "") -> str | None:
+    """Why `rev` on `branch` may not merge into HEAD, or None; `ruled` is the coordinator's ruling that a change to the
+    capture's code may keep products.CAPTURE."""
     base = git(repo, "merge-base", "HEAD", rev).stdout.strip()
     changed = git(repo, "diff", "--name-only", base, rev, "--", TE_CORE).stdout.split()
     if not changed:
@@ -77,6 +82,13 @@ def refusal(repo: Path, branch: str, rev: str) -> str | None:
         return (f"{at} moves te_core's version gates ({shown}), so a 4.12.9 trace would read stale; the capture is "
                 f"frozen at {FROZEN} through the finals, so post why it is refused and ask the toolsmith for a VERSION "
                 f"that keeps them")
+    code = [p.removeprefix(f"{TE_CORE}/") for p in changed
+            if p.startswith(f"{TE_CORE}/capture/") and "/tests/" not in p and not p.endswith(".md")]
+    if code and not ruled:
+        return (f"{at} changes the capture's code ({', '.join(code)}) under products.CAPTURE {FROZEN}, so a trace "
+                f"made after the merge could read differently from one made before under the same label; the capture "
+                f"is frozen through the finals, so post why it is refused, or, once the coordinator rules the change "
+                f"may keep the label, merge with --capture-ruled WHY")
     return None
 
 
@@ -86,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--at", help="a commit on BRANCH to merge (default: its head)")
     ap.add_argument("-m", dest="what", default="", help="what the merge brings, for the commit message")
     ap.add_argument("--check", action="store_true", help="say whether it may merge, and change nothing")
+    ap.add_argument("--capture-ruled", metavar="WHY", default="",
+                    help="the coordinator's ruling that the VERSION's change to the capture's code keeps its label")
     a = ap.parse_args(argv)
     repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").stdout.strip())
     if git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
@@ -99,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     if not git(repo, "merge-base", "--is-ancestor", rev, "HEAD", check=False).returncode:
         print(f"merge_branch: {a.branch} at {rev[:10]} is already merged")
         return 0
-    why = refusal(repo, a.branch, rev)
+    why = refusal(repo, a.branch, rev, a.capture_ruled)
     if why:
         print(f"merge_branch: refused: {why}", file=sys.stderr)
         return 1
@@ -120,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"merge_branch: conflicts outside te_core ({', '.join(conflicts)}): resolve them, `git add` them and "
               f"`git commit`; te_core is already right", file=sys.stderr)
         return 1
-    git(repo, "commit", "-q", "-m", f"Merge {a.branch} at {rev[:10]}" + (f" ({a.what})" if a.what else ""))
+    notes = [n for n in (a.what, a.capture_ruled and f"its capture code change ruled: {a.capture_ruled}") if n]
+    git(repo, "commit", "-q", "-m", f"Merge {a.branch} at {rev[:10]}" + (f" ({'; '.join(notes)})" if notes else ""))
     merged = git(repo, "rev-parse", "--short", "HEAD").stdout.strip()
     print(f"merge_branch: merged {a.branch} at {rev[:10]} as {merged}")
     return 0

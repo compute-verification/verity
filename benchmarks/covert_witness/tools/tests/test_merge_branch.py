@@ -1,6 +1,7 @@
 """merge_branch on a toy remote: an island's branch merges while it leaves te_core alone and is refused once it touches
-it; the toolsmith's VERSION merges with te_core exactly theirs, a te_core conflict included, and is refused when it
-moves products.CAPTURE or a version gate; --check changes nothing."""
+it; the toolsmith's VERSION merges with te_core exactly theirs, a te_core conflict included, is refused when it moves
+products.CAPTURE or a version gate, and needs the coordinator's ruling when it changes the capture's code; --check
+changes nothing."""
 from __future__ import annotations
 
 import subprocess
@@ -82,7 +83,9 @@ def test_an_island_that_changes_te_core_is_refused(work: Path, capsys: pytest.Ca
 
 def test_the_toolsmiths_version_merges_with_te_core_theirs(work: Path) -> None:
     sha = write(work, {FORMALISM: 'ELEMENTWISE_FROM = "4.12.9"  # why\nX = 3\n', f"{M.TE_CORE}/priced.py": "p\n",
-                       f"{M.TE_CORE}/tests/test_products.py": 'CAPTURE = "4.12.13"\n', "README.md": "theirs\n"},
+                       f"{M.TE_CORE}/tests/test_products.py": 'CAPTURE = "4.12.13"\n', "README.md": "theirs\n",
+                       f"{M.TE_CORE}/capture/README.md": "the capture\n",
+                       f"{M.TE_CORE}/capture/tests/test_new.py": "x = 1\n"},
                 "te_core 4.12.13", M.TOOLSMITH)
     write(work, {f"{M.TE_CORE}/local.py": "mine\n", FORMALISM: 'ELEMENTWISE_FROM = "4.12.9"  # why\nX = 2\n'},
           "a te_core edit on the lane, conflicting with the VERSION's")
@@ -106,6 +109,19 @@ def test_a_version_that_moves_the_capture_or_a_gate_is_refused(work: Path, capsy
     err = capsys.readouterr().err
     assert named in err and f"frozen at {M.FROZEN}" in err
     assert git(work, "rev-parse", "HEAD") == head and not git(work, "status", "--porcelain")
+
+
+def test_a_change_to_the_captures_code_merges_only_once_ruled(work: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    sha = write(work, {PRODUCTS: f'CAPTURE = "{M.FROZEN}"\nLISTS = "fewer"\n'}, "te_core 4.12.13", M.TOOLSMITH)
+    head = git(work, "rev-parse", "HEAD")
+    assert M.main([M.TOOLSMITH]) == 1
+    err = capsys.readouterr().err
+    assert f"changes the capture's code (capture/products.py) under products.CAPTURE {M.FROZEN}" in err
+    assert "--capture-ruled" in err and git(work, "rev-parse", "HEAD") == head
+    assert M.main([M.TOOLSMITH, "-m", "4.12.13", "--capture-ruled", "the coordinator: it only removes listings"]) == 0
+    assert git(work, "log", "-1", "--format=%s").strip() == (
+        f"Merge {M.TOOLSMITH} at {sha[:10]} (4.12.13; its capture code change ruled: the coordinator: it only "
+        f"removes listings)")
 
 
 def test_check_changes_nothing_and_a_commit_off_the_branch_is_refused(work: Path,
