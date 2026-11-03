@@ -60,7 +60,7 @@ theorem k_mem {x : Msg} (h : q.Sized x) :
 /-- **The extractor's expected reruns at the deployment's sizes, from above**: `N_I = 1 + 210·k_I ≤ 2592237061` and
 `1 + Σ_s 210·k_s ≤ 41475792961` over at most `16` parts. -/
 theorem runs_le {x : Msg} (h : q.Sized x) : q.runs x ≤ 2592237061 * 41475792961 := by
-  obtain ⟨hI, hP⟩ := q.k_mem h
+  obtain ⟨⟨-, hI⟩, hP⟩ := q.k_mem h
   obtain ⟨-, -, hn, -⟩ := h
   have hNI : Claims.Recursion.NI q.D q.I x ≤ 2592237061 := by
     show 1 + 210 * q.I.k (Claims.Recursion.xI q.D x) ≤ 2592237061
@@ -79,12 +79,12 @@ theorem runs_le {x : Msg} (h : q.Sized x) : q.runs x ≤ 2592237061 * 4147579296
 /-- **The extractor's expected reruns at the deployment's sizes, from below**: `N_I = 1 + 210·k_I ≥ 316471`, and where
 `x` stages a part, `1 + Σ_s 210·k_s ≥ 316471` too. -/
 theorem runs_ge {x : Msg} (h : q.Sized x) : 316471 ≤ q.runs x ∧ (0 < q.D.nS x → 316471 ^ 2 ≤ q.runs x) := by
-  obtain ⟨hI, hP⟩ := q.k_mem h
+  obtain ⟨⟨hI, -⟩, hP⟩ := q.k_mem h
   have hNI : 316471 ≤ Claims.Recursion.NI q.D q.I x := by
     show 316471 ≤ 1 + 210 * q.I.k (Claims.Recursion.xI q.D x)
     omega
   unfold Dep.runs
-  refine ⟨hNI.trans (Nat.le_mul_of_pos_right _ (by omega)), fun hn => ?_⟩
+  refine ⟨(Nat.mul_one 316471).symm.le.trans (Nat.mul_le_mul hNI (Nat.le_add_right 1 _)), fun hn => ?_⟩
   have h0 : 210 * 1507 ≤ (q.D.nums x ⟨0, hn⟩).waits * (q.D.nums x ⟨0, hn⟩).k := by
     show 210 * 1507 ≤ 210 * (q.D.nums x ⟨0, hn⟩).k
     exact Nat.mul_le_mul_left 210 (hP ⟨0, hn⟩).1
