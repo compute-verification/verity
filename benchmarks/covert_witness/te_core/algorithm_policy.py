@@ -305,8 +305,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
         raise ValueError(f"{PANEL}: {len(wrong)} cells where a row's columns don't give te_core.formalism.at's rho "
                          f"({'; '.join(wrong[:3])}): the dial (page_rho) has no context charge (--charge-context), "
                          f"and its inputs have {INPUT_DIGITS} significant digits")
-    return {"id": PANEL, "title": f"Algorithm against policy: p = C/H against rho at each gain target (C, H and c in "
-                                  f"{UNIT})",
+    return {"id": PANEL, "title": f"Algorithm against policy: p = C/H against rho per gain target ({UNIT})",
             "kind": "table", "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
             "note": note(), "columns": COLUMNS, "rows": rows}
 
@@ -500,8 +499,9 @@ def checked(q: dict) -> dict:
         raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
     if bad := console.refused(q):
         raise ValueError(f"{PANEL}: the panels route refuses it ({'; '.join(bad[:3])}; te_core.console.refused): a "
-                         f"source of at most {console.SOURCE_MAX} characters, at most {console.COLUMNS_MAX} columns, "
-                         f"each cell a number, a string of at most {console.CELL_MAX} characters or null")
+                         f"title of at most {console.TITLE_MAX} characters, a source of at most {console.SOURCE_MAX}, "
+                         f"at most {console.COLUMNS_MAX} columns, each cell a number, a string of at most "
+                         f"{console.CELL_MAX} characters or null")
     return q
 
 
