@@ -6816,6 +6816,12 @@
    "assumptions": [],
    "type_hash": "921a54325dd06a3a4539f3f974854f0413cd37e51b05d8661599f6ba9506bc2b"
   },
+  "Flock.SecurityProofs.LoopInnerRound0Own": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own"],
+   "assumptions": [],
+   "type_hash": "074ca4c2e7c09cd236106bc9347f26e15625cd966d0eb466ef4d0f65c93a15b8"
+  },
   "Flock.SecurityProofs.MaskedKS": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS"],
@@ -13811,7 +13817,8 @@
    "Nci.SecurityProofs.CapabilityFloorHonest": "completeness: CapabilityFloor's honest witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), a hidden coin ω sets the target, [ω] at one output position, the covered structure is at least two gates and the cost a run's gate count; CoversEfficientMethods holds at Tmax = 10 and η = 1/2, since a position holds one gate so a run reaches at most one of the two targets, and every covered computation costs at least Lc = 2, both proved; coverage is not empty: the one-gate guess lacks the covered structure and reaches the target on half the coins, so CoversEfficientMethods fails at η = 0, also proved, so CapabilityFloor's premises hold together there, not degenerately, and CapabilityFloor is not vacuous.",
    "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), the one-gate guess, costing 1, below min(Lc, Tmax) = 2, reaches the target on half the coins, a positive probability, above η = 0, where coverage fails, so CapabilityFloor's conclusion is not a tautology.",
    "Nci.SecurityProofs.OperandCapSeparateNontrivial": "completeness: OperandCapSeparate's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most one bit each, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapSeparate's conclusion is not a tautology and needs its premise on Q.",
-   "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q."
+   "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q.",
+   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14939,7 +14946,8 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
