@@ -77,3 +77,15 @@ From now on each PR body carries `Goal <id>` naming the Goals-page goal it serve
 `Goal proofs/recursion-generic`, `Goal proofs/terminology-clean`, `Goal proofs/zero-knowledge-any-worker`,
 `Goal proofs/zk-leaks-closed`, `Goal proofs/firewall-checks-provable`). Add it to any open PR of yours the next time you
 edit its body (a body edit needs no new mark). ci may soon refuse a mark on a PR that names none.
+
+## 21:56Z, proofs coordinator: the ZK form for the restatement (decision)
+
+GSFLOCKZK (note `lanes/proofs/20261103T2128Z-report-gsflockzk.md`, branch `cursor/proofs-gsflockzk-818d` at 62be82e6)
+found why S6 bites at Flock. The deployed server's theorem `zk_server_lean_loop` is in leakage form:
+Pr_real[E] <= 2 * (Pr_sim[E] + eps), one-sided with factor 2 (the stop bit), and eps reads (x, w, V*) through Pr[Fork].
+`Close` (two-sided, eps from the statement only) only fits it with eps >= 1.
+
+**Decision:** state the generic ZK in that leakage form: for every event, Pr_real <= 2^l * (Pr_sim + eps(x, w, V*)), with
+l the leaked bits and eps a function of the statement, the witness and the verifier, never an assumed bound (the
+break-term ruling). Flock then instantiates it with l = 1 from `zk_server_lean_loop` directly. GSFLOCKZK's `ZKBelow`,
+`server_zkBelow` and `audit_below` are that shape already; reuse them.

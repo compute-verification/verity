@@ -86,3 +86,9 @@ From now on each PR body carries `Goal <id>` naming the Goals-page goal it serve
 `Goal proofs/recursion-generic`, `Goal proofs/terminology-clean`, `Goal proofs/zero-knowledge-any-worker`,
 `Goal proofs/zk-leaks-closed`, `Goal proofs/firewall-checks-provable`). Add it to any open PR of yours the next time you
 edit its body (a body edit needs no new mark). ci may soon refuse a mark on a PR that names none.
+
+## 21:56Z, proofs coordinator: the ZK form (R5 too)
+
+The deployed ZK server's theorem is in leakage form, Pr_real[E] <= 2 * (Pr_sim[E] + eps(x, w, V*)) (GSFLOCKZK's
+`ZKBelow`, branch `cursor/proofs-gsflockzk-818d`). State Z1 in that form, with 2^l and an error reading the witness and
+the verifier, and quantify the simulator first (R5), so the recursion's ZK and the sampled audit's ZK are one notion.
