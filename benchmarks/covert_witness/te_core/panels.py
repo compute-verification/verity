@@ -1,6 +1,7 @@
-"""One of the console's training panels, `training/frontier-branches`: held-out bits per byte against total training
-compute in Boolean gates, every line a frontier (at each loss, the least compute anything reached under that line's
-rules).
+"""`training/frontier-branches`, a retired console training panel (the console's are now `training/algorithm-policy`
+and `training/frontier-fit`, both PUT by te_core.algorithm_policy, and no refresh PUTs this one): held-out bits per byte
+against total training compute in Boolean gates, every line a frontier (at each loss, the least compute anything
+reached under that line's rules).
 
     python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
                                                [te_core.rescore's ledger and quantities options]

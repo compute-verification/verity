@@ -443,8 +443,9 @@ TRACED = {
                    "optimizer in none) over its gates",
     "affected_gates": "measured (trace): the traced step's token ops that depend on theta' over its gates, times "
                       "|C_j|; 0 for a step before the first update",
-    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut at 32 bits or more an element, plus "
-                       "the carried state the token ops don't read",
+    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut, each value at the width the step "
+                       "passes it (a coded message at its code's) and a reduction over the tokens at 32 bits or more "
+                       "an element, plus the carried state the token ops don't read",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, "
                 "and its other inputs",
     "a_bits": "upper bound (witness, trace): the narrowest cut across the forward's affected path, per consumed token",
