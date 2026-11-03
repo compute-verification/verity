@@ -928,10 +928,10 @@ PEARLPLUS="PoUW: Pearl+'s own served run on this card after the window's (POUW=p
 LIVE_GATE=$H1_GATE LIVE_LANE=${H1_LANE:-vllm} LEAD=
 if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then
   LIVE_GATE=$PEARLC_CHALLENGER_GATE LIVE_LANE=$PEARLC_CHALLENGER_LANE
-  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, and its replay's draws the Lean verifier's IO.getRandomBytes; a development piece under the lane's development key, it credits nothing"
+  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece under the lane's development key, it credits nothing"
 elif [ "$POUW" = pearlplus ]; then
   LEAD="Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "
-  H1_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes; a development piece, it credits nothing"
+  H1_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece, it credits nothing"
 fi
 if [ -n "$LIVE_GATE" ]; then
   if [ -n "${MAIN_FILE:-}" ]; then
