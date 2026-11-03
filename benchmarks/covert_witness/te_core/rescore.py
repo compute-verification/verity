@@ -24,7 +24,8 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
 
 `--quantities measured` (the default) scores the rows whose `formalism` block ingest measured on the record's traced
 step (te_core.capture.circuit through `annotate.with_structures`: σ, the affected share, the consumed tokens, τ, a,
-u_in, u, t, Δ_grad; Δ stays 8 |E|); a valid row with none is left out, listed in `frontier.json` as `not_measured`.
+u_in, u, t, Δ_grad; Δ stays 8 |E|, and a straight-through run's Δ_t is its fp32 latents as the analysis reads them,
+`with_latents`); a valid row with none is left out, listed in `frontier.json` as `not_measured`.
 `--tail frozen` reads t as the trace's contiguous frozen tail above the forward's last update read
 (`frozen_tail_share`) instead of every op that reads no update value, the comparison with the analysis's t.
 `--charge-context` scores with te_core.formalism's context charge, a sensitivity for A1: every earlier token's
@@ -40,6 +41,8 @@ formula of its own, te_core.formalism is the one:
   (forward gates over the start's forward gates per token), its token blocks' gates (forward and backward, so
   σ = their share of |C|), their affected gates, and Δ_grad (the run's optimizer state at its widths);
 - τ (one token id), a (d_model x 16), Δ = 8 |E|, and u(1) = Δ;
+- Δ_t, the update application's weights (the coordinator's 00:47Z ruling): a straight-through run's fp32 latents, 32
+  bits a value as its record counts them, else Δ;
 - u and u_in, A1's and A1''s profiles: evenly spread where the run has no frozen tail; with one (its share t above the
   run's highest update, the tied head included), u is 0 up to t and u_in jumps to the full update at once.
 
@@ -76,6 +79,8 @@ LABELS = {
     "u1_bits": f"upper bound (witness): u(1) = Delta, every token's path reads the whole update ({SOURCE})",
     "decoder_gates": "stub: the decoder's gates d unmeasured, taken as 0 (rho 1 where Fit holds)",
 }
+LATENTS = (f"{SOURCE}: a straight-through run's fp32 latents, 32 bits a value as its record counts them; every other "
+           "run's is Delta")
 EVEN = {"u": f"assumption (A1): evenly spread, u(x) = x * u(1) ({SOURCE})",
         "u_in": f"assumption (A1'): evenly spread, u_in = u ({SOURCE})"}
 TAIL = {"u": f"assumption (A1): frozen layers above the run's highest update, their share t of a token's affected work "
@@ -109,8 +114,9 @@ def block(c: dict, r: dict, tau: float) -> dict:
     t = t if 0 < t < 1 else 0.0
     return {"parts": [{"gates": c["gates"], "tokens": c["tokens"], "token_gates": c["token_gates"],
                        "affected_gates": c["affected_gates"], "steps": 1, "delta_grad_bits": r["delta_grad"]}],
-            "tau_bits": tau, "a_bits": r["a"], "delta_bits": c["delta"], "u1_bits": c["delta"], "u": c["u"],
-            "u_in": c["u_in"], "tail_share": t, "decoder_gates": None, "labels": LABELS | (TAIL if t else EVEN)}
+            "tau_bits": tau, "a_bits": r["a"], "delta_bits": c["delta"], "delta_t_bits": r.get("delta_t"),
+            "u1_bits": c["delta"], "u": c["u"], "u_in": c["u_in"], "tail_share": t, "decoder_gates": None,
+            "labels": LABELS | {"delta_t_bits": LATENTS} | (TAIL if t else EVEN)}
 
 
 def analysed(path: Path, scorer: Path, ledger: Path, cache: Path) -> dict[tuple, tuple[dict, str | None]]:
@@ -145,6 +151,20 @@ def frozen_tail(rows: list[dict]) -> list[dict]:
             u = formalism.with_tail(tuple(map(tuple, f["u_in"])), t)
             r = r | {"formalism": f | {"tail_share": t, "u": [list(p) for p in u],
                                        "labels": f.get("labels", {}) | FROZEN}}
+        out.append(r)
+    return out
+
+
+def with_latents(rows: list[dict], blocks: dict[tuple, tuple[dict, str | None]]) -> list[dict]:
+    """The measured rows of a straight-through run with its fp32 latents as Δ_t (the coordinator's 00:47Z ruling), as
+    the analysis reads them from the run's record (per run, so a checkpoint the analysis lacks gets them too)."""
+    latents = {run: b[0]["delta_t_bits"] for (run, _), b in blocks.items() if b[0].get("delta_t_bits") is not None}
+    out = []
+    for r in rows:
+        if frontier.measured(r) and r.get("run_id") in latents:
+            f = r["formalism"]
+            r = r | {"formalism": f | {"delta_t_bits": latents[r["run_id"]],
+                                       "labels": f.get("labels", {}) | {"delta_t_bits": LATENTS}}}
         out.append(r)
     return out
 
@@ -315,7 +335,7 @@ def load(a) -> dict:
     blocks = analysed(a.analysis, a.scorer, ledger.root, a.out / "analysis-gates.json") \
         if mode != STUBS and a.analysis.exists() else {}
     if mode == MEASURED:
-        rows = frozen_tail(rows) if a.tail == "frozen" else rows
+        rows = with_latents(frozen_tail(rows) if a.tail == "frozen" else rows, blocks)
         source = {r["id"]: MEASURED if frontier.measured(r) else STUBS for r in rows}
         keep, how, word = frontier.measured, f"measured (trace; t {a.tail})", f"measured, t {a.tail}"
     else:

@@ -17,6 +17,7 @@ TAU = 16
 MACS = {[4e14, 1e15, 6e14]!r}
 E = {[9e7, 9e7, 8e4]!r}
 T = [0.5, 0.0, 0.0]
+LATENTS = [3e9, None, None]
 
 def gate_factors(cache):
     cache.write_text("{{}}")
@@ -31,7 +32,7 @@ def profiles(u1, t):
     return [[0.0, 0.0], [1.0, u1]], [[0.0, 0.0], [1.0, u1]]
 
 def build(subs, launch, starts, counted, g):
-    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": T[i],
+    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": T[i], "delta_t": LATENTS[i],
                             "family": "full" if i < 2 else "adapter"}} for i in range(3)}}
     cps = []
     for i in range(3):
@@ -160,6 +161,23 @@ def test_charge_context_charges_each_run_its_facts_place(tmp_path, monkeypatch):
     assert formalism.at(m1, c, k)["rho"] == formalism.at(formalism.measure(plain[1], SHAPE), c, k)["rho"]
     with pytest.raises(SystemExit, match="--facts"):
         run(tmp_path, monkeypatch, "--charge-context")
+
+
+@pytest.mark.parametrize("quantities", ["measured", "analysis"])
+def test_a_straight_through_runs_latents_are_its_delta_t(tmp_path, monkeypatch, quantities):
+    """r0's run trains its code through its rounding with 3e9 bits of fp32 latents (the analysis reads them from its
+    record): its block carries them as Δ_t, measured or analysed, labelled, and the update application reads them;
+    r1's run has none, so its Δ_t is Δ (the coordinator's 00:47Z ruling)."""
+    out, _ = run(tmp_path, monkeypatch, "--quantities", quantities)
+    k0, k1 = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()][:2]
+    assert k0["formalism"]["delta_t_bits"] == 3e9 and k0["formalism"]["labels"]["delta_t_bits"] == rescore.LATENTS
+    assert k1["formalism"].get("delta_t_bits") is None
+    m0, m1 = formalism.measure(k0, SHAPE), formalism.measure(k1, SHAPE)
+    assert m0.delta_t == 3e9 != m0.delta_bits and m1.delta_t == m1.delta_bits
+    c, _ = policy.cells(SHAPE)["reference"]
+    k = 3e9 + m0.delta_grad_bits
+    assert formalism.at(m0, c, k)["parts"][0]["fit"]["update"]
+    assert not formalism.at(m0, c, k * (1 - 1e-9))["parts"][0]["fit"]["update"]
 
 
 @pytest.mark.parametrize("tail", ["literal", "frozen"])
