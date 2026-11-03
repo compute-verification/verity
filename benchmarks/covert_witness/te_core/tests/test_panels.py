@@ -207,7 +207,8 @@ def test_the_candidates_give_every_throttled_row(tmp_path, monkeypatch):
     assert {d["run"] for d in throttled} <= set(cand) <= {d["run"] for d in throttled} | {d["run"] for d in uncut
                                                                                           if d["curve"] == "honest"}
     for d in cand.values():
-        assert set(json.loads(d["rho_inputs"])) == set(panels.PACKED) and len(d["rho_inputs"]) <= console.CELL_MAX
+        assert set(json.loads(d["rho_inputs"])) == {*panels.PACKED, panels.FRESH}
+        assert len(d["rho_inputs"]) <= console.CELL_MAX
         assert d["compute_total_gates"] == pytest.approx(d["start_compute_gates"] + d["compute_after_gates"], rel=1e-3)
         assert (d["c_tokens_per_block"], d["k_bits"], d["S"], d["basis"]) == (None,) * 4
     for t in throttled:
