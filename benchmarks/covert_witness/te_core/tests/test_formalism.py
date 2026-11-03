@@ -430,6 +430,36 @@ def test_the_cells_are_the_grid_and_the_reference_shapes_at_their_exact_c_and_k(
     assert {v for k, v in cells.items() if k not in policy.MARKS} == set(policy.grid(SHAPE))
 
 
+def test_the_consoles_c_is_one_full_session_of_the_reference_model():
+    """The dashboard's ruling: the console's block is one session of the 45M reference, 4,096 tokens in and 1,024 out,
+    attention and the LM head included, every MAC at the bf16 GEMM price: 1.5739 times the old 5,120 x 2N x 740."""
+    s = policy.session(45_029_888, 4096, 1024)
+    assert s["shape"] == {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 50_304}
+    assert s["macs"] == {"matrices": 5120 * 6 * (4 * 512 ** 2 + 3 * 512 * 1408), "lm_head": 5120 * 512 * 50_304,
+                         "attention": 2 * 6 * 512 * (4096 ** 2 + 1024 * 4096 + 1024 * 1025 // 2)}
+    assert s["gates"] == 362_592_337_920 * 1480.125 == policy.CONSOLE[0] == policy.session_gates(45_029_888, 4096, 1024)
+    assert s["k_bits"] == policy.CONSOLE[1] == 65_536
+    assert round(policy.CONSOLE[0] / (5_120 * 2 * 45e6 * 740), 6) == 1.573884
+    # attention over the whole prompt at each prompt token, as te_core.flops counts the causal SDPA
+    assert policy.session(45_029_888, 8, 0)["attended"] == 64 and policy.session(45_029_888, 8, 2)["attended"] == 64 + 19
+    with pytest.raises(ValueError, match="no stated shape"):
+        policy.session(7e9, 4096, 1024)
+    with pytest.raises(ValueError, match="parameters, not"):
+        policy.session(45_029_888, 4096, 1024, policy.SHAPES[35_658_240])
+
+
+def test_each_starts_shape_is_stated_and_its_counted_forward_is_the_sessions_products():
+    """Every start's size has a stated shape with its parameters, d_model, layers and vocabulary; a token's products at
+    the start's context are its counted forward MACs but its elementwise ops, under 0.1% of them."""
+    for name, shape in policy.starts().items():
+        sh = policy.SHAPES[shape["parameters"]]
+        assert policy.parameters(sh) == shape["parameters"], name
+        assert (sh["d_model"], sh["n_layer"], sh["vocab"]) == (shape["d_model"], shape["n_layer"], shape["vocab"]), name
+        assert sh["d_model"] // sh["n_head"] == 64, name
+        products = sum(policy.session(shape["parameters"], shape["ctx"], 0)["macs"].values()) / shape["ctx"]
+        assert 0 < shape["forward_macs_per_token"] - products < 1e-3 * shape["forward_macs_per_token"], name
+
+
 def test_honest_is_the_least_gates_of_any_checkpoint_and_s_is_at_least_one():
     """The coordinator's 19:50Z rule: H and W* read every checkpoint of every valid record, a mid-schedule one
     included; each cell carries W*'s Slowdown terms."""
