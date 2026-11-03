@@ -1247,6 +1247,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -2521,6 +2522,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -4504,6 +4506,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9839505013150606,
    "tau_bits": 16.015625,
    "u": [
@@ -7929,6 +7932,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9981917317164438,
    "tau_bits": 16.015625,
    "u": [
@@ -8216,7 +8220,7 @@
  "program": "islands/wildcard/train.py at 9460fcd228 on the tiny start, --batch 2 --micro 2 --warmup 1, traced at step 1 (te_core.capture.script)",
  "rests_on": {
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-  "fresh_products": "theorem for this circuit: the Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition (te_core.io_bound), given the standard algorithm and the widths the step passes",
+  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, each operand and partial sum at its passed width, at the chain constant (its premise P-chain; products summed in a tree, or in an order the trace doesn't give, take the tree constant, which io_bound doesn't have yet), given its premises P-cell, P-width (a reference circuit's) and P-share and the standard algorithm",
   "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
  },
  "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
@@ -8902,7 +8906,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 11.065531262155444,
    "rho": 11.065531262155444,
    "rho_fit": 1.0,
@@ -8920,7 +8924,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9000,7 +9004,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9018,7 +9022,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9098,7 +9102,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9116,7 +9120,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9196,7 +9200,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9214,7 +9218,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9294,7 +9298,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9312,7 +9316,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9392,7 +9396,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9410,7 +9414,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9490,7 +9494,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9508,7 +9512,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9588,7 +9592,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9606,7 +9610,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9686,7 +9690,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9704,7 +9708,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9784,7 +9788,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9802,7 +9806,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9882,7 +9886,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 8.35335685982954,
    "rho": 8.35335685982954,
    "rho_fit": 1.0,
@@ -9900,7 +9904,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -9980,7 +9984,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -9998,7 +10002,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10078,7 +10082,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10096,7 +10100,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10176,7 +10180,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.9996631800490919,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10194,7 +10198,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10274,7 +10278,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10292,7 +10296,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10372,7 +10376,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 2.7344655410785834,
    "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
@@ -10390,7 +10394,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10470,7 +10474,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
@@ -10488,7 +10492,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10568,7 +10572,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
@@ -10586,7 +10590,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10666,7 +10670,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
@@ -10684,7 +10688,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   },
   {
@@ -10764,7 +10768,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": "inf",
@@ -10782,10 +10786,10 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
    }
   }
  ],
- "version": "4.5",
+ "version": "4.6",
  "w_fwd_gates": 4925098176.0
 }
