@@ -6,7 +6,8 @@ Each queue line is `CLASS START ; NOTE ; TRAIN_ARGS` (`#` comments). A line laun
 `launch.py --no-wait --island ISLAND --node NODE` from this checkout, whose island must be clean (the run ships HEAD's);
 `--class CLASS` is added to TRAIN_ARGS when they lack it, and NODE is whichever of `--nodes` holds fewer of the queue's
 runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`,
-retried on the next passes (its slot held) when that yields no row, up to five tries. Every
+retried on the next passes (its slot held) when that yields no row, up to five tries; once collected, its points are
+cached by `curve.py` and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every
 launch and collection goes to `state.jsonl` beside the queue, from which a restarted driver resumes. No launch at or
 after `--stop`.
 
@@ -25,6 +26,9 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import curve  # noqa: E402
+
 REPO = HERE.parents[3]
 LAUNCH = REPO / "benchmarks" / "covert_witness" / "launch.py"
 RUNS = Path.home() / ".research" / "runs"
@@ -96,6 +100,9 @@ def main() -> int:
             record({"key": key, "run": s["run"], "state": state, "row": rows[-1] if rows else None,
                     "collect_rc": r.returncode, "err": r.stderr[-500:] if not rows else ""})
             print(f"{utc():%H:%M}Z ended {state}: {key}  {rows[-1] if rows else r.stderr[-300:]}", flush=True)
+            if rows and curve.load(s["run"]):
+                # the VM's disk is shared: once curve.py has cached its fields, drop the local copies the store holds
+                research("data", "custody", s["run"], "--publish")
         flying = {k: s for k, s in flying.items()
                   if not any(json.loads(x).get("key") == k and "row" in json.loads(x)
                              for x in state_path.read_text().splitlines())}
