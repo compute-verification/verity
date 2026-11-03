@@ -4,6 +4,9 @@ on the device, timed against stock vLLM on the same card at the panel's two shap
   python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
+On an H100 or H200 the kernel directory is ``benchmarks/pouw/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
+``PEARLC_KERNEL``), and ``--tag`` names another model in the shape names (`SHAPES`).
+
 The run:
 - **Model:** Llama-3.1-8B-Instruct, TP 1, eager, prefix caching off.  Every linear is in the kernels' domain: k is 4,096 or
   14,336, and n is 6,144, 4,096 or 28,672.
@@ -53,7 +56,7 @@ the no-write control's not; prefill's rows are not committed in it.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
-the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pearl-C v1 and v2.
+the untimed quality run: WikiText-2's test split through bf16, stock fp8, and the kernel directory's Pearl-C schemes (`QUALITY`).
 """
 from __future__ import annotations
 
@@ -122,29 +125,33 @@ PROMPTS = [
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 SERVED_RECORD = "served.json"
-#: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
-QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
+#: the quality run's schemes by kernel directory, each in an arm engine of its own: Pearl-C v1 (G = 4), and on sm_120 v2 (no
+#: promotion), which has no sm_90a record
+QUALITY = {"pearl_c_sm120": {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"},
+           "pearl_c_sm90": {"pearlc-v1": "pearl-c-h100-v1-h3"}}
 #: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
 WINDOW, PPL_BATCH, PPL_WINDOWS_A_PASS = 2048, 2048, 8
-#: the panel's shape names for the two phases
-SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+#: the panel's shape names for the two phases, each naming the model by ``--tag`` (the panel's model by default)
+TAG = "llama31-8b"
+SHAPES = {"prefill_8192": f"e2e-{TAG}-vllm-m8192", "decode_b32_step": f"e2e-{TAG}-vllm-m32"}
 
 
 def configure(args) -> None:
-    """``--batch``, ``--prompt`` and ``--prefill`` in this process (the controller's, and each engine's: spawn re-imports this
-    module).  Off the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step`` when the prompt
-    isn't 64 tokens, and the prefill key its length, ``prefill_<P>``, so `panel_rows.py` (``decode_b32_step``,
+    """``--batch``, ``--prompt``, ``--prefill`` and ``--tag`` in this process (the controller's, and each engine's: spawn
+    re-imports this module).  Off the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step``
+    when the prompt isn't 64 tokens, and the prefill key its length, ``prefill_<P>``, so `panel_rows.py` (``decode_b32_step``,
     ``prefill_8192``) never reads a sweep point as the panel's row."""
     global BATCH, PROMPT, PREFILL, CAPTURE_SIZES
     BATCH, PROMPT = getattr(args, "batch", BATCH_DEFAULT), getattr(args, "prompt", PROMPT_DEFAULT)
     PREFILL = getattr(args, "prefill", PREFILL_DEFAULT)
+    tag = getattr(args, "tag", TAG)
     CAPTURE_SIZES = [s for s in CAPTURE_32 if s < BATCH] + [BATCH]
     for phase in ("prefill_", "decode_"):
         SHAPES.pop(next((k for k in SHAPES if k.startswith(phase)), None), None)
-    SHAPES[prefill_key()] = f"e2e-llama31-8b-vllm-m{PREFILL}"
-    SHAPES[decode_key() + "_step"] = f"e2e-llama31-8b-vllm-m{BATCH}" + (f"-p{PROMPT}" if PROMPT != PROMPT_DEFAULT else "")
+    SHAPES[prefill_key()] = f"e2e-{tag}-vllm-m{PREFILL}"
+    SHAPES[decode_key() + "_step"] = f"e2e-{tag}-vllm-m{BATCH}" + (f"-p{PROMPT}" if PROMPT != PROMPT_DEFAULT else "")
 
 
 def prefill_key() -> str:
@@ -990,15 +997,17 @@ def quality_summary(parts: dict) -> dict:
 def perplexity(args) -> int:
     """The untimed quality run, in groups (one engine each) whose results are kept beside --out as they finish, so a
     restart (a preempted or a continued fill chunk) skips them: stock fp8; bf16 and Pearl-C v1 in one arm engine (bf16 with the
-    wrapper off); Pearl-C v2 (`QUALITY`).  Each mode's WikiText-2 prompt log-probs and its greedy tokens on the chat prompts;
-    Pearl-C's arm is gated first.  A chunk runs at least one group, and starts no other once --chunk-min has passed.  Returns
-    0 when every group is done, 99 when groups remain."""
+    wrapper off); Pearl-C v2 where the kernel directory has it (`QUALITY`).  Each mode's WikiText-2 prompt log-probs and its
+    greedy tokens on the chat prompts; Pearl-C's arm is gated first.  A chunk runs at least one group, and starts no other once
+    --chunk-min has passed.  Returns 0 when every group is done, 99 when groups remain."""
     import copy
     ctx, t0 = mp.get_context("spawn"), time.perf_counter()
     d = args.out.parent
     windows = wikitext_windows(args.model, args.ppl_windows)
-    groups = [("fp8", "base", None, ("fp8",)), ("v1", "arm", QUALITY["pearlc-v1"], ("bf16", "pearlc-v1")),
-              ("v2", "arm", QUALITY["pearlc-v2"], ("pearlc-v2",))]
+    quality = QUALITY[Path(getattr(args, "kernel", None) or HERE.parent / "pearl_c_sm120").name]
+    groups = [("fp8", "base", None, ("fp8",)), ("v1", "arm", quality["pearlc-v1"], ("bf16", "pearlc-v1"))]
+    if "pearlc-v2" in quality:
+        groups.append(("v2", "arm", quality["pearlc-v2"], ("pearlc-v2",)))
     ran = False
     for epoch, (name, group, scheme, modes) in enumerate(groups):
         path = d / f"quality-{name}.json"
@@ -1052,6 +1061,7 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=BATCH_DEFAULT, help="the decode batch: its prompts, and each decode call's m")
     ap.add_argument("--prompt", type=int, default=PROMPT_DEFAULT, help="each decode prompt's tokens (the context decode starts at)")
     ap.add_argument("--prefill", type=int, default=PREFILL_DEFAULT, help="the prefill prompt's tokens, and the engines' batch budget")
+    ap.add_argument("--tag", default=TAG, help="the model's name in the shape names (SHAPES), the panel's model by default")
     ap.add_argument("--mem-base", type=float, default=0.2, help="the FP8 engine's gpu_memory_utilization (weights about 8 GB)")
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
@@ -1113,7 +1123,8 @@ def main() -> None:
         sys.exit(perplexity(args))
     ctx, coins, p = mp.get_context("spawn"), epoch_coins(args, 0), prompts(args.reps)
     records: list[dict] = []
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "model": args.model, "revision": args.revision,
+                 "kernel": Path(args.kernel).name, "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
                  "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
                  "whole_step": args.whole_step, "whole_defer": args.whole_defer, "whole_defer_a": args.whole_defer_a,
                  "whole_fork_stats": args.whole_fork_stats, "whole_tree_sm": args.whole_tree_sm, "capture": args.capture,

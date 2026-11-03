@@ -2872,6 +2872,45 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
         E2E.perplexity(args)
 
 
+def test_the_quality_run_on_sm90a_runs_its_one_pearl_c_scheme(tmp_path, monkeypatch):
+    """On pearl_c_sm90's kernels the quality run's Pearl-C group is ``pearl-c-h100-v1-h3`` alone, since sm_90a has no
+    unpromoted record, so it finishes after two groups instead of asking for an sm_120 scheme on an H200."""
+    E2E = load("pearl_c_vllm_e2e_sm90", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setattr(E2E, "wikitext_windows", lambda model, limit: [[1, 2, 3]])
+    started = []
+
+    class Fake:
+        live: ClassVar[list] = []
+
+        def __init__(self, ctx, args, group, coins):
+            started.append((group, args.scheme))
+            self.ready = {"gate": [{"ok": True}], "committer": "x"} if group == "arm" else {}
+
+        def ask(self, **cmd):
+            return {"nll": 1.0, "tokens": 2, "top1": [2, 3]} if cmd["op"] == "ppl" else {"tokens": [[1, 2]], "texts": ["t"]}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(E2E, "Worker", Fake)
+    args = types.SimpleNamespace(out=tmp_path / "quality.json", model="m", ppl_windows=None, chunk_min=0.0,
+                                 kernel=str(KERNEL.parent / "pearl_c_sm90"))
+    assert [E2E.perplexity(args) for _ in range(2)] == [99, 0]
+    assert started == [("base", None), ("arm", "pearl-c-h100-v1-h3")]
+    doc = json.loads(args.out.read_text())
+    assert set(doc["summary"]) == {"fp8", "bf16", "pearlc-v1"} and doc["summary"]["pearlc-v1"]["scheme"] == "pearl-c-h100-v1-h3"
+
+
+def test_a_tag_names_another_model_in_the_shape_names():
+    """``--tag`` puts another model's name in both phases' shape names, so a Llama 3.2 1B row is never read as the panel's
+    Llama-3.1-8B one; without it the names are the panel's."""
+    E2E = load("pearl_c_vllm_e2e_tag", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64, tag="llama32-1b"))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama32-1b-vllm-m8192", "decode_b32_step": "e2e-llama32-1b-vllm-m32"}
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+
+
 # ---- one install path: the run behind the Stack ------------------------------------------------------------------------
 
 def _stack_sites(weights):
