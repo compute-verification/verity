@@ -76,7 +76,8 @@ theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flo
       CoinOpen.shaH wk x w :=
   liveRoundEqOwn_ofLoopLink vs _ src real wk x w
     (liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hL0 hV)
-    (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc hcaus wk hV hC hL0 hrows)
+    (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc
+      (Loop.swCausalOn_swOk Masked.dataE vs hcaus) wk hV hC hL0 hrows)
 
 /-- **At the honest worker and values**: `liveRoundEqOwn_withInner` at `Loop.valsWk honestVals`, whose premises on the
 worker and the values hold there (`Loop.takesValsOwn_honestVals`, `RefSession.swCausal_vals`,

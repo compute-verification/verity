@@ -1,5 +1,5 @@
 import Proofs.Flock.SessionLoop.FinInnerOwn
-import Proofs.Flock.SessionLoop.L0Fixed
+import Proofs.Flock.SessionLoop.L0FixedHonest
 
 /-!
 # `LiveInner` at every worker taking some `vs`'s values, on its own histories
@@ -21,11 +21,11 @@ taking `vs`'s values at its own histories (`Loop.TakesValsOwn`, which gives `Liv
   premises `liveInner_withInner_at` takes at a rep's inner rounds. Each from the parts in `FinInnerParts`, and
   `finInner_returns_own` (`FinInnerOwn`): the finish returns there.
 * **`LeanRelease.liveInnerOwn_withInner`**: `LiveInnerOwn` at `withInner` on the finish's rounds (`Loop.finOf`), at every
-  worker taking some `vs`'s values at its own histories (`Loop.TakesValsOwn`), where `vs` meets `SwCausal`,
-  `Loop.FinalCFixed`, `Loop.L0Fixed` and `Loop.RowsOK`; a worker taking no `vs`'s values is outside it. Its premises
-  on the session (`Tables`, `TapeOK`), the statement, the tables and the loop's inputs are `SessionLoopZKDeployed`'s
-  own (`Loop.realOf`, `Claims.Flock.Scope`, the witness, `Loop.Serves`, `Loop.Src`). It takes neither `TakesFinalC`
-  nor `TakesTau`.
+  worker taking some `vs`'s values at its own histories (`Loop.TakesValsOwn`), where `vs` meets `SwCausalOn` at
+  `Loop.SwOk`, `Loop.FinalCFixed`, `Loop.L0Fixed` and `Loop.RowsOK`; a worker taking no `vs`'s values is outside it.
+  Its premises on the session (`Tables`, `TapeOK`), the statement, the tables and the loop's inputs are
+  `SessionLoopZKDeployed`'s own (`Loop.realOf`, `Claims.Flock.Scope`, the witness, `Loop.Serves`, `Loop.Src`). It takes
+  neither `TakesFinalC` nor `TakesTau`.
   `LeanRelease.liveInnerOwn_honestVals`: at the honest values and `Loop.valsWk`, every premise over the worker and the
   values holds.
 -/
@@ -105,7 +105,7 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
     (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
-    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
+    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
     (hSch : LiveSchedOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w)
     (hC : Loop.FinalCFixed vs x w)
@@ -183,7 +183,7 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
-    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
+    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
     (hSch : LiveSchedOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w)
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w)
@@ -224,9 +224,9 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
 finish's rounds (`Loop.finOf`, at `L₁`'s frame draws), at a statement in the masked scope with a witness that the loop
 serves, on the loop's own tables (`Loop.realOf`) and inputs (`Loop.Src`), at the session's `Tables` and `TapeOK`,
 `LiveInnerOwn` holds at every worker whose free words are `vs`'s at its own histories (`Loop.TakesValsOwn`), for every
-`vs` that is causal (`SwCausal`), whose `final_c` its round-1c values fix (`Loop.FinalCFixed`), whose level-0 words
-are the clear Ligerito's (`Loop.L0Fixed`) and whose rows hold (`Loop.RowsOK`): there the worker's scheduled rounds are
-the switched session's (`liveSchedOwn_ofLoopLink`). -/
+`vs` causal at the coins `Loop.SwOk` admits (`SwCausalOn`), whose `final_c` its round-1c values fix
+(`Loop.FinalCFixed`), whose level-0 words are the clear Ligerito's (`Loop.L0Fixed`) and whose rows hold (`Loop.RowsOK`):
+there the worker's scheduled rounds are the switched session's (`liveSchedOwn_ofLoopLink`). -/
 theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -242,7 +242,7 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
-    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
+    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
     (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
     (hC : Loop.FinalCFixed vs x w) (hL0 : Loop.L0Fixed vs x w) (hrows : Loop.RowsOK vs x w) :
@@ -270,9 +270,10 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     · exact Loop.vsTau_size _ _ _ _ _ _ _ _
 
 /-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesValsOwn`
-(`Loop.takesValsOwn_honestVals`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix
-their `final_c` (`Loop.finalCFixed_honestVals`), their level-0 words (`Loop.l0Fixed_honestVals`) and their rows
-(`Loop.rowsOK_honestVals`), so `liveInnerOwn_withInner` holds there with no premise over the worker or the values. -/
+(`Loop.takesValsOwn_honestVals`), and they are causal at the session's causality (`RefSession.swCausal_vals`), hence at
+the coins `Loop.SwOk` admits (`Loop.swCausalOn_swOk`), fix their `final_c` (`Loop.finalCFixed_honestVals`), their
+level-0 words (`Loop.l0Fixed_honestVals`) and their rows (`Loop.rowsOK_honestVals`), so `liveInnerOwn_withInner` holds
+there with no premise over the worker or the values. -/
 theorem liveInnerOwn_honestVals
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -293,7 +294,8 @@ theorem liveInnerOwn_honestVals
       (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real
       (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals
         (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)) x w :=
-  liveInnerOwn_withInner _ L₁ src real hreal x w hTab hTape hR hSv hsc hSrc (RefSession.swCausal_vals _ hc) _
+  liveInnerOwn_withInner _ L₁ src real hreal x w hTab hTape hR hSv hsc hSrc
+    (Loop.swCausalOn_swOk Masked.dataE _ (RefSession.swCausal_vals _ hc)) _
     (Loop.takesValsOwn_honestVals _ src real x w) (Loop.finalCFixed_honestVals x w)
     (Loop.l0Fixed_honestVals x w (Masked.live_of hsc hR) hR) (Loop.rowsOK_honestVals hR)
 

@@ -42,7 +42,7 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Src (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src x w)
-    (hcaus : finS.SwCausal vs) (wk : (relIn L₁ src real).toSrv.Worker)
+    (hcaus : finS.SwCausalOn (SwOk Masked.dataE) vs) (wk : (relIn L₁ src real).toSrv.Worker)
     (hSch : LeanRelease.LiveSchedOwn vs (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src real wk
       x w) (hC : FinalCFixed vs x w)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (relIn L₁ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)}

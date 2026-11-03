@@ -2,6 +2,7 @@ import Proofs.Flock.SessionLoop.FinInner
 import Proofs.Flock.SessionLoop.FinInnerRec
 import Proofs.Flock.SessionLoop.FinInnerCut
 import Proofs.Flock.SessionLoop.FinPiopRet
+import Proofs.Flock.SessionLoop.SwTakeOn
 import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
@@ -285,7 +286,7 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
           0 :: piopBody
             (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8).pending.data.toList
             (Masked.stAt x j).m (Masked.stAt x j).c.kLog (_root_.Flock.Setup.ofCircuit (Masked.stAt x j)).digest cp rt
-            (Masked.layE x j) ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val).masked jj := by
+            (Masked.layE x j) ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val).masked jj := by
   have hj := Masked.lt_of_jOf j
   obtain ⟨schs, hs, hsj⟩ := Masked.schedsPZk_live hx
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
@@ -298,29 +299,29 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     exact (hall i hi').2.2
   let cmOf : ℕ → FlockComplete.Commit := fun i =>
     Classical.choose (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i))
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))
   have hcm : ∀ i, (FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
       _root_.Flock.Hashes V) _root_.Flock.MerkleScheme.hm96Sha512 (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i) : V _) = .ok (cmOf i) := fun i =>
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i) : V _) = .ok (cmOf i) := fun i =>
     (Classical.choose_spec (FlockComplete.commit0Cut_cap (schs[i]!.1.levels.getD 0 default)
-      (Masked.swSrcE x C w (vs x w ν C) t i))).1
+      (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))).1
   have hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
           _root_.Flock.Hashes FlockComplete.PS)
         (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x C w (vs x w ν C) t i)).go l =
+        (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i)).go l =
       (.ok ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).map cmOf), l) := by
     intro l
     have hq : FlockComplete.quietS.R
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash : _root_.Flock.Hashes V)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x C w (vs x w ν C) t i))
+            (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i))
         ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
           FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
               _root_.Flock.Hashes FlockComplete.PS)
             (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default)
-            (Masked.swSrcE x C w (vs x w ν C) t i)) :=
+            (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i)) :=
       _root_.Flock.With.Sim.mapM_array FlockComplete.quietS _ fun i =>
         FlockComplete.CutEq.commit0Cut_quiet _ _ _ _
     rw [hq l, FlockComplete.mapM_ok_mem cmOf _ fun i hi => ?_]
@@ -331,12 +332,12 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
       _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-    ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val)
+    ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val)
   have hic : ∀ l, (FlockComplete.padsTreeCut Masked.hsE
       (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
         (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
         _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-      ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val)).go l = (.ok ic, l) := fun l => by
+      ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val).rep r.val)).go l = (.ok ic, l) := fun l => by
     rw [FlockComplete.CutEq.padsTreeCut_quiet _ _ _ l, hic0]
   -- the bounds
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
@@ -350,7 +351,8 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     exact (hall j.val hj).2.1
   have hc32 := (FlockComplete.JsonRT.zkSchedule_cap0 hm1 hm2 (Masked.zkTab x j).hz).2
   have hclt := FlockComplete.JsonRT.zkSchedule_cap0_lt hm1 hm2 (Masked.zkTab x j).hz
-  obtain ⟨cm, hcm', hlt⟩ := FlockComplete.commit0Cut_cap_lt _ (Masked.swSrcE x C w (vs x w ν C) t j.val) hclt hc32
+  obtain ⟨cm, hcm', hlt⟩ :=
+    FlockComplete.commit0Cut_cap_lt _ (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t j.val) hclt hc32
   have hjt : j.val < (Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).size := by
     simpa [FlockDeploy.tabsOf] using hj
   have hcj : ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).map cmOf)[j.val]! = cm := by
@@ -365,9 +367,9 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
     rw [Masked.repBase_eq hsx]
     unfold FlockComplete.repStartZk
     omega
-  have hrc := Masked.runCut_piopBody hx C (Masked.swSrcE x C w (vs x w ν C) t) hsx hs hcms j r hN0 hext hic
-    (Masked.tabsOf_stAt x j) (jj := jj) hjj
-  have hsrc : Masked.swSrcE x C w (vs x w ν C) t =
+  have hrc := Masked.runCut_piopBody hx C (Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t) hsx hs hcms j r hN0
+    hext hic (Masked.tabsOf_stAt x j) (jj := jj) hjj
+  have hsrc : Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x C) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) :=
     rfl
   rw [enc_finS_of C (by omega) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
@@ -389,16 +391,17 @@ theorem map_take_pad (S : RefSession) {K n : ℕ} (ops : List (Msg × Msg)) (hK 
 set_option maxHeartbeats 1000000 in
 /-- **A scheduled round of the worker's own history is the switched session's at the opened coins**: on a live history
 of fewer than `refK x` openings whose openings pass, the release's own run (`ZkServer.OwnHist`), where `LiveSchedOwn`
-holds and `vs` is causal, message `n + 1` (`1 ≤ n`), whose round the loop schedules (`schedOf`), is the switched
-session's round `n` at the opened coins, without its leading domain frame: `LiveSchedOwn` at the history's prefix, whose
-coins agree with the opened ones below the round (`swMsgAt_take`). -/
+holds and `vs` is causal at the coins `SwOk` admits, message `n + 1` (`1 ≤ n`), whose round the loop schedules
+(`schedOf`), is the switched session's round `n` at the opened coins, without its leading domain frame: `LiveSchedOwn`
+at the history's prefix, whose coins agree with the opened ones below the round and which `SwOk` admits, as it does the
+opened coins, since the live history shows no refusal (`swOk_take_of_live`, `swOk_of_live`, `swMsgAt_take_on`). -/
 theorem msg_liveSchedOwn (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
-    (hSch : LeanRelease.LiveSchedOwn vs L₀ src real wk x w) (hcaus : finS.SwCausal vs) {ν : finS.Nonce}
-    {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)}
-    (hlt : ops.length < refK x)
+    (hSch : LeanRelease.LiveSchedOwn vs L₀ src real wk x w) (hcaus : finS.SwCausalOn (SwOk Masked.dataE) vs)
+    {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk} {m₀ ρ₀ : Msg}
+    {ops : List (Msg × Msg)} (hlt : ops.length < refK x)
     (hl : (LeanRelease.ofLoopLink L₀ src real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
     (hok : ((allOk (finS.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval CoinOpen.shaH).1 = true)
     (hown : (LeanRelease.ofLoopLink L₀ src real).toSrv.OwnHist (LeanRelease.ofLoopLink L₀ src real).fillOf wk x w
@@ -448,8 +451,20 @@ theorem msg_liveSchedOwn (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     have := hok i (by simp only [List.length_map]; omega)
     simpa [List.getElem_map, List.getElem_take] using this
   · congr 1
-    rw [map_take_pad finS ops hlt.le hn.le, finS.swMsgAt_take vs x w ν hcaus t _ n (by omega),
-      ite_eq_left (by omega : n < refK x)] <;> rfl
+    have hkF : (LeanRelease.ofLoopLink L₀ src real).kindAt x ((m₀, ρ₀) :: ops).length = .masked := by
+      simp only [List.length_cons]
+      exact LeanRelease.kindAt_mid hlast (by omega) (by omega)
+    have hrF := (LeanRelease.ofLoopLink L₀ src real).refusesCoins_of_live wk x w (ν, t) κ _ hkF hl
+    have hO : SwOk Masked.dataE x
+        (finS.pad ((List.ofFn (finS.pad (K := refK x) (ops.map fun (p : Msg × Msg) => finS.decOf p.2))).take n)) := by
+      rw [← map_take_pad finS ops hlt.le hn.le]
+      exact LeanRelease.swOk_take_of_live Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real
+        wk x w (ν, t) κ m₀ ρ₀ ops hlt.le hl hrF n
+    have hO' : SwOk Masked.dataE x (finS.pad (K := refK x) (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) :=
+      LeanRelease.swOk_of_live Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real wk x w
+        (ν, t) κ m₀ ρ₀ ops hlt.le hl hrF
+    rw [map_take_pad finS ops hlt.le hn.le, finS.swMsgAt_take_on vs (SwOk Masked.dataE) x w ν hcaus t _ n
+      (by omega) hO hO'] <;> rfl
 
 variable (L₁ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -592,17 +607,17 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 4000000 in
 /-- **The loop's request at a rep's inner round, on the worker's own history**: at a history `InnerHist` holds at, where
-`LiveSchedOwn` holds and `vs` is causal, the request for rep stream `2j + r` (`repInOf`) has `zp 64` values, `vs`'s below
-it but at `final_c`'s pad (`vsWord`, at the coins the openings open), and the tape's pads. The history's rounds of the
-rep's PIOP are scheduled (`sched_piop`) and show no refusal (`LeanRelease.unrefused_prefix`), so they are the switched
-session's PIOP bodies at one binding (`msg_liveSchedOwn`, `enc_piop_all`); the loop's frame takes back the masked values
-they carry (`maskedOf_piop`), `vs`'s under the tape's pads (`swSrcE_masked_vsWord`), and the request's pads are the
-tape's (`Masked.pads_frame_eq`). -/
+`LiveSchedOwn` holds and `vs` is causal at `SwOk`, the request for rep stream `2j + r` (`repInOf`) has `zp 64` values,
+`vs`'s below it but at `final_c`'s pad (`vsWord`, at the coins the openings open), and the tape's pads. The history's
+rounds of the rep's PIOP are scheduled (`sched_piop`) and show no refusal (`LeanRelease.unrefused_prefix`), so they are
+the switched session's PIOP bodies at one binding (`msg_liveSchedOwn`, `enc_piop_all`); the loop's frame takes back the
+masked values they carry (`maskedOf_piop`), `vs`'s under the tape's pads (`swSrcE_masked_vsWord`), and the request's
+pads are the tape's (`Masked.pads_frame_eq`). -/
 theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Src (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src x w)
-    (hcaus : finS.SwCausal vs) (wk : (relIn L₁ src real).toSrv.Worker)
+    (hcaus : finS.SwCausalOn (SwOk Masked.dataE) vs) (wk : (relIn L₁ src real).toSrv.Worker)
     (hSch : LeanRelease.LiveSchedOwn vs (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src real wk
       x w) {ν : finS.Nonce} {t : finS.Tape}
     {κ : (relIn L₁ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)} {j : Fin (Masked.jOf x)} {r : Fin 2}
@@ -674,7 +689,8 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
       ((ops.getD (Masked.repBase x (2 * j.val + r.val) + jj) ([], [])).1).tail =
         FlockSoundness.Refine.encs (piopFr (Masked.stAt x j).m (Masked.stAt x j).c.kLog
           (_root_.Flock.Setup.ofCircuit (Masked.stAt x j)).digest cp rt (Masked.layE x j)
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked jj) ++
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked
+            jj) ++
           (FlockSoundness.Refine.Frame.sq (piopK jj) (piopN (Masked.stAt x j).m jj)).enc := by
     intro jj hjj
     have hp : Masked.repBase x (2 * j.val + r.val) + jj < ops.length := by omega
@@ -716,7 +732,8 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
       (seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val))[jj]? =
         some (ByteArray.mk (FlockSoundness.Refine.encs (piopFr (Masked.stAt x j).m (Masked.stAt x j).c.kLog
             (_root_.Flock.Setup.ofCircuit (Masked.stAt x j)).digest cp rt (Masked.layE x j)
-            ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked jj) ++
+            ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep
+              r.val).masked jj) ++
           (FlockSoundness.Refine.Frame.sq (piopK jj) (piopN (Masked.stAt x j).m jj)).enc).toArray,
           piopN (Masked.stAt x j).m jj,
           wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (Masked.repBase x (2 * j.val + r.val) + jj)) := by
@@ -767,7 +784,8 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     omega
   obtain ⟨tail, htail⟩ := maskedOf_piop (Masked.layE x j) (L₁.draws (ν, t) (2 * j.val + r.val)) none
     (Masked.stAt x j).m (Masked.stAt x j).c.kLog (by omega) hk6 (lt_of_le_of_lt hm35 (by norm_num)) hnM hnL _ _ _ hdg
-    hcp hrt ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked
+    hcp hrt
+    ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked
     (fun jj => wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (Masked.repBase x (2 * j.val + r.val) + jj)) _ hrs
     hwords hout
   have hM := congrArg List.length htail
@@ -1040,7 +1058,7 @@ theorem finInner_accepts_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Src (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src x w)
-    (hcaus : finS.SwCausal vs) (wk : (relIn L₁ src real).toSrv.Worker)
+    (hcaus : finS.SwCausalOn (SwOk Masked.dataE) vs) (wk : (relIn L₁ src real).toSrv.Worker)
     (hSch : LeanRelease.LiveSchedOwn vs (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src real wk
       x w) (hC : FinalCFixed vs x w) {ν : finS.Nonce} {t : finS.Tape}
     {κ : (relIn L₁ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)} {j : Fin (Masked.jOf x)} {r : Fin 2}
@@ -1173,7 +1191,7 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Src (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src x w)
-    (hcaus : finS.SwCausal vs) (wk : (relIn L₁ src real).toSrv.Worker)
+    (hcaus : finS.SwCausalOn (SwOk Masked.dataE) vs) (wk : (relIn L₁ src real).toSrv.Worker)
     (hSch : LeanRelease.LiveSchedOwn vs (LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src real wk
       x w) (hC : FinalCFixed vs x w) (hrows : RowsOK vs x w)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (relIn L₁ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)}
@@ -1328,9 +1346,9 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     src real wk hSv (ν, t) κ m₀ ρ₀ ops hlt.le hl hrf j
   have hrowsAt := hrows ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) t j hout
   have hsw : Masked.SwRows x (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) w
-      (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2))) t j r cons := by
+      (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) (finS.seenOf x t)) t j r cons := by
     refine Masked.repConsC_rows x hx w hR t (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) ops.length hnr
-      s0 spec hs j r (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2))) hrowsAt _
+      s0 spec hs j r (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) (finS.seenOf x t)) hrowsAt _
       (by
         simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
         rw [hQx]
@@ -1383,9 +1401,9 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     congrArg FlockComplete.PadsZk.tauSalt hPQ
   rw [htc, hipt, hLI, hPQ, hsalt, tau_congr (Masked.innerLayE x j) (Masked.innerPadsE x t j r) cons he hgc,
     Masked.swTau_of_rows hs (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) w
-      (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2))) t j r cons hsw]
+      (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) (finS.seenOf x t)) t j r cons hsw]
   exact (Masked.swSrcE_tauCom x (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) w
-    (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2))) t j r hrowsAt).symm
+    (vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) (finS.seenOf x t)) t j r hrowsAt).symm
 
 end Loop
 
