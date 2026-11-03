@@ -192,18 +192,57 @@ def _product(form: str, u, v):
         return u @ v
     if form == "broadcast":
         return (u.unsqueeze(-1) * v).sum(-2)
+    if form.startswith("hidden-"):
+        return _Hidden.apply(u, v, form.removeprefix("hidden-"))
     rows, cols = (x.flatten() for x in torch.meshgrid(torch.arange(v.shape[0]), torch.arange(v.shape[1]), indexing="ij"))
     return torch.zeros(*u.shape[:-1], v.shape[1], dtype=u.dtype).index_add(-1, cols, u[..., rows] * v.flatten())
+
+
+def _through(t, how: str):
+    """`t` as it is, or passed through a map (neg twice), a scaling and an addition, or a copy in place."""
+    if how == "neg":
+        return t.neg().neg()
+    if how == "scale":
+        return t * 1.0 + 0.0
+    if how == "copy":
+        buf = torch.empty_like(t)
+        buf.copy_(t)
+        return buf
+    return t
+
+
+def _hide(u, v, how: str):
+    """u @ v as a broadcast multiplication and a sum, the broadcast passed through `how` first (`_through`, or a
+    multiplication by ones, which don't depend on θ′)."""
+    e = u.unsqueeze(-1).expand(*u.shape, v.shape[-1])
+    e = u.unsqueeze(-1) * torch.ones(v.shape[-1], dtype=u.dtype) if how == "ones" else _through(e, how)
+    return (e * v).sum(-2)
+
+
+class _Hidden(torch.autograd.Function):
+    """u @ v written by `_hide` in the forward and the backward both, so no op autograd writes shows the product."""
+
+    @staticmethod
+    def forward(ctx, u, v, how):
+        ctx.save_for_backward(u, v)
+        ctx.how = how
+        return _hide(u, v, how)
+
+    @staticmethod
+    def backward(ctx, g):
+        u, v = ctx.saved_tensors
+        return (_hide(g, v.t(), ctx.how), _hide(u.reshape(-1, u.shape[-1]).t(), g.reshape(-1, g.shape[-1]), ctx.how),
+                None)
 
 
 class Adapted(nn.Module):
     """Two stacked rank-16 adapters on frozen 512 x 512 matrices, the adapters' products written `form`; `sparse` adds
     a trained sparse matrix with one entry per row, applied by gather, multiplication and index_add, so no entry of
-    its operand is read twice."""
+    its operand is read twice, the gather's rows and the product each passed through `how` (`_through`)."""
 
-    def __init__(self, form: str, d: int = 512, r: int = 16) -> None:
+    def __init__(self, form: str, d: int = 512, r: int = 16, how: str = "plain") -> None:
         super().__init__()
-        self.form = form
+        self.form, self.how = form, how
         self.w = nn.ParameterList(nn.Parameter(torch.randn(d, d) / d ** 0.5, requires_grad=False) for _ in range(2))
         self.a = nn.ParameterList(nn.Parameter(torch.randn(d, r) / d ** 0.5) for _ in range(2))
         self.b = nn.ParameterList(nn.Parameter(torch.randn(r, d) / r ** 0.5) for _ in range(2))
@@ -214,7 +253,8 @@ class Adapted(nn.Module):
     def forward(self, x):
         for w, a, b in zip(self.w, self.a, self.b):
             if self.form == "sparse":
-                s = torch.zeros_like(x).index_add(-1, self.cols, x.index_select(-1, self.rows) * self.vals)
+                rows = _through(x.index_select(-1, self.rows), self.how)
+                s = torch.zeros_like(x).index_add(-1, self.cols, _through(rows * self.vals, self.how))
                 x = x @ w + (x @ a) @ b + s
             else:
                 x = x @ w + _product(self.form, _product(self.form, x, a), b)
@@ -282,6 +322,69 @@ def test_a_trace_captured_before_the_elementwise_check_is_unmeasured_until_retra
     _, why, _ = formalism.fresh_products(dataclasses.replace(m_, products=formalism.products_of_trace(got)),
                                          *policy.CONSOLE)
     assert why != formalism.FRESH_UNCHECKED
+    _, why, _ = formalism.fresh_products(dataclasses.replace(m_, products=formalism.products_of_trace(
+        got | {"capture": "4.12.7"})), *policy.CONSOLE)
+    assert why == formalism.FRESH_UNCHECKED
+
+
+def _elementwise(m, x) -> list[dict]:
+    g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
+                     lambda mm, b: tF.mse_loss(mm(b[0]), b[1]), (x, x.clone()))
+    return products.rows(g, policy.CONSOLE[1])["elementwise_products"]
+
+
+@pytest.mark.parametrize("how", ("plain", "neg", "scale", "ones", "copy"))
+def test_a_broadcast_product_is_found_whatever_its_broadcast_passes_through(how):
+    """The adapters' products as custom autograd functions that write each, forward and backward, as a broadcast
+    multiplication and a sum, the broadcast first passed through a map, a scaling and an addition, a multiplication by
+    ones, or a copy in place. 4.12.7's check lost a broadcast at any op but a view and found none of these; a value's
+    entries are its sources' (`products._sources`), so each is found as the plain form is, all ten products."""
+    torch.manual_seed(0)
+    found = _elementwise(Adapted(f"hidden-{how}").to(torch.bfloat16), torch.randn(2, 16, 512, dtype=torch.bfloat16))
+    assert found == [{"op": "mul", "count": 10, "macs": 2_621_440}]
+
+
+@pytest.mark.parametrize("how", ("plain", "neg", "scale", "copy"))
+def test_a_sparse_product_is_found_whatever_its_rows_pass_through(how):
+    """sparse's gather, multiplication and index_add, the gathered rows and their product each passed through a map,
+    a scaling and an addition, or a copy in place before the sum by index: found at both of its sums, as written
+    plainly."""
+    torch.manual_seed(0)
+    found = _elementwise(Adapted("sparse", how=how).to(torch.bfloat16), torch.randn(2, 16, 512, dtype=torch.bfloat16))
+    assert found == [{"op": "index_add", "count": 2, "macs": 2 * 2 * 16 * 512}]
+
+
+class Looked(nn.Module):
+    """A trained embedding of 64 rows of 32, looked up `form`, then a norm, a layer and a head."""
+
+    def __init__(self, form: str) -> None:
+        super().__init__()
+        self.form = form
+        self.emb = nn.Embedding(64, 32)
+        self.g = nn.Parameter(torch.ones(32))
+        self.w = nn.Linear(32, 32, bias=False)
+        self.head = nn.Linear(32, 64, bias=False)
+
+    def forward(self, tok):
+        x = (self.emb(tok) if self.form == "embedding" else self.emb.weight[tok] if self.form == "index" else
+             self.emb(tok + 0))
+        h = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * self.g
+        return self.head(x + self.w(h))
+
+
+@pytest.mark.parametrize("form, found", (("embedding", []), ("index", []),
+                                         ("computed", [{"op": "mul", "count": 3, "macs": 3 * 16_384}])))
+def test_an_embeddings_rows_are_no_broadcast(form, found):
+    """512 tokens of a 64-row embedding: its rows repeat as the tokens do, which is the data and no broadcast, so the
+    norm's multiplication of a token's row by its scale is elementwise (4.12.7's check took it for a product once a
+    step had more tokens than the table has rows, which every large-batch dense step does). A lookup is a module
+    tensor's rows by a graph input (`products._lookup`): an index the program computes is none, so there it is found."""
+    torch.manual_seed(0)
+    tok = torch.randint(0, 64, (8, 64))
+    m = Looked(form)
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1),
+                     lambda mm, b: tF.cross_entropy(mm(b[0]).flatten(0, 1), b[1].flatten()), (tok, tok.clone()))
+    assert products.rows(g, policy.CONSOLE[1])["elementwise_products"] == found
 
 
 class MatVec(nn.Module):
