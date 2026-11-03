@@ -35,7 +35,8 @@ commitments hide nothing and bind nothing a verdict may read: two seeded serves 
 pass's transcript root, activation roots and counts), which they give only where the served path commits the same bytes
 for the same load.  It writes the passes compared and the fields of each that differ, by name and never by value, to
 ``--out``, prints one line and exits 0 only when every pass is the same; it refuses serves that aren't both seeded, that
-served different loads or that drew different salts.
+served different loads or that drew different salts, and a serve with nothing committed to compare (no pass with calls, or
+one without its roots).
 
 ``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
@@ -260,6 +261,10 @@ def same(args: argparse.Namespace) -> int:
 
     def load(d: dict) -> list:
         return [d.get(k) for k in LOAD] + [(d.get("engine") or {}).get("max_num_batched_tokens")]
+
+    def bare(d: dict) -> bool:
+        called = [p for p in d.get("passes") or [] if p.get("units")]
+        return not called or not all(p.get("transcript_root") and p.get("activation_roots") for p in called)
     a, b = (d.get("passes") or [] for d in docs)
     refused = next((why for why, bad in (
         (f"a serve wrote no document ({', '.join(missing)})", missing),
@@ -267,10 +272,12 @@ def same(args: argparse.Namespace) -> int:
          "own", not all(d.get("seeded") and d.get("retained") is False for d in docs)),
         ("the serves served different loads", load(docs[0]) != load(docs[1])),
         ("the serves drew different salts, so they weren't seeded alike",
-         (docs[0].get("coins") or {}).get("salt") != (docs[1].get("coins") or {}).get("salt"))) if bad), None)
+         (docs[0].get("coins") or {}).get("salt") != (docs[1].get("coins") or {}).get("salt")),
+        ("a serve committed nothing to compare: no pass with calls, or one without its transcript root and activation "
+         "roots", any(map(bare, docs)))) if bad), None)
     differ = [] if refused else [{"pass": i, "fields": f} for i, (p, q) in enumerate(zip(a, b))
                                  if (f := [k for k in KEEP if p.get(k) != q.get(k)])]
-    n, calls = len(a), sum(p.get("units") or 0 for p in a)
+    n, called, calls = len(a), sum(1 for p in a if p.get("units")), sum(p.get("units") or 0 for p in a)
     doc = {"schema": "verity-pouw/pearl-plus-served-same/v1", "serves": [str(args.a), str(args.b)],
            "load": dict(zip((*LOAD, "max_num_batched_tokens"), load(docs[0]))), "passes": [len(a), len(b)], "calls": calls,
            "refused": refused, "differ": differ, "ok": refused is None and len(a) == len(b) and not differ}
@@ -279,8 +286,8 @@ def same(args: argparse.Namespace) -> int:
     if refused:
         doc["line"] = f"same: refused: {refused} -> FAIL"
     elif doc["ok"]:
-        doc["line"] = (f"{head}: {n} passes, {calls} calls, every pass's transcript root, activation roots and counts "
-                       f"equal, so the served path committed the same bytes for the same load -> OK")
+        doc["line"] = (f"{head}: {n} passes ({called} with calls), {calls} calls, every pass's transcript root, activation "
+                       f"roots and counts equal, so the served path committed the same bytes for the same load -> OK")
     else:
         first = (f"; first pass {differ[0]['pass']}: {', '.join(differ[0]['fields'])}" if differ else "")
         doc["line"] = (f"{head}: {len(differ)} of {min(len(a), len(b))} passes differ{first}"

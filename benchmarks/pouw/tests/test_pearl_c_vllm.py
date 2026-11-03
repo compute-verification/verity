@@ -1225,7 +1225,8 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
     """`same`: two seeded serves of one load (spec, arm, requests, tokens and batched tokens) and one salt are the same
     when every pass's `KEEP` fields are; a pass that differs is named with its fields, never their values, and a serve
     with another pass count fails.  Serves that aren't both seeded and unretained, that served different loads or that
-    drew different salts are refused."""
+    drew different salts are refused, and so are two whose passes committed nothing, which would otherwise be the same
+    for want of any root."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     passes = [{"pass": i, "timed": i > 0, "units": 64, "base": 64 * i, "tiles": 5888, "screened_rows": 8192,
                "failing_rows": 0, "unsure_rows": 0, "excluded_rows": 0, "transcript_root": f"{7 + i:0128x}",
@@ -1248,7 +1249,10 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
     rc, got, _ = same(doc(), doc())
     assert rc == 0 and got["ok"] and got["passes"] == [3, 3] and got["calls"] == 192 and got["differ"] == []
     assert got["line"].startswith("same: two seeded serves of one load (8 requests of 1024 tokens, 1 out, 8192 a step): "
-                                  "3 passes, 192 calls") and got["line"].endswith("-> OK")
+                                  "3 passes (3 with calls), 192 calls") and got["line"].endswith("-> OK")
+    empty = {**passes[0], "pass": 3, "units": 0, "tiles": 0, "transcript_root": None, "activation_roots": None}
+    rc, got, _ = same(doc(passes=[*passes, empty]), doc(passes=[*passes, empty]))
+    assert rc == 0 and got["ok"] and "4 passes (3 with calls), 192 calls" in got["line"]
     other = [dict(p) for p in passes]
     other[1]["activation_roots"] = [other[1]["activation_roots"][0], f"{999:0128x}", other[1]["activation_roots"][2]]
     rc, got, text = same(doc(), doc(passes=other))
@@ -1261,6 +1265,11 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
                    (doc(coins={"source": "seeded", "salt": "cd" * 32}), "different salts")):
         rc, got, _ = same(doc(), b)
         assert rc == 1 and not got["ok"] and why in got["refused"] and got["line"].startswith("same: refused: "), why
+    rootless = [{**p, "transcript_root": None, "activation_roots": None} for p in passes]
+    for a in (doc(passes=rootless), doc(passes=[{**passes[0], "activation_roots": []}, *passes[1:]]), doc(passes=[empty]),
+              doc(passes=[])):
+        rc, got, _ = same(a, a)
+        assert rc == 1 and not got["ok"] and "committed nothing to compare" in got["refused"], a["passes"]
 
 
 def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
