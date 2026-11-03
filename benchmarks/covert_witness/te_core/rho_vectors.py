@@ -24,14 +24,21 @@ set no subset of which has a proved Λ, or one with a product fed by chains with
 `term`, and the share of the counted MACs it keeps). `dial` holds the term
 as the console's dial reads it from a row's rho_inputs, each case's and the 45M step's term over c at every k of the
 dial (`formalism.fresh_per_c`), and the term and fresh_cell at each of those k and a few c, which are c times it.
+`grid` holds the same at every k of the console's grid (te_core.policy's `K_GRID`, a session's input ids at 16 bits
+for 1,024 to 32,768 input tokens) and the serving block's 145,568 bits (`grid_k`), at the console's c, on the 45M
+start's dense step and s-t20's at full size (`GRID_STEPS`, each its product rows at those k, `grid_rows`): only a
+captured step gives rows at a k, and a trace keeps them at the dial's k alone.
 `published` holds te_core.formalism.published under
 reading A at a cell for each case of its rule (`PUBLISHED`): Fit; the measured max above 1, partial where a kind is
 unmeasured; None where a kind is unmeasured and no measured term exceeds 1; 1, binding none.
 
 `sessions` holds the console's c, te_core.policy's `session` at every size it states a shape for (`SHAPES`) and each
 session of `SESSIONS`: its inputs (parameters, input and output tokens, the shape) and its outputs (the tokens that run
-a forward, the positions attended, each product's MACs, the gates a MAC, the gates and the input ids' bits), and
-`console` the policy every producer reads (`policy.CONSOLE`).
+a forward, the positions attended, each product's MACs, the gates a MAC, the gates and the input ids' bits),
+`console` the policy every producer reads (`policy.CONSOLE`), and for each of the console's reference sizes
+(`policy.REFERENCE_SIZES`) and each start (`policy.starts`) its shape, its session's c and k at the console's session,
+and at each k of the console's grid (`dial`) the products term's inputs: the c of a session of k/16 input tokens and
+the console's output tokens, and that session's input ids in bits (k at vocab 50,304, 15/16 of it at 32,000).
 """
 from __future__ import annotations
 
@@ -93,6 +100,16 @@ DIAL_TOKENS = (1, 4096)
 #: the 45M start's dense step's product rows (te_core.capture.products on te_core.io_bound.capture("dense", "s", 32000,
 #: batch 2, ctx 256, one micro-step) at the console's k)
 DENSE_45M = "dense_45m.products.json"
+#: the steps `grid` reads, each by its fixture under `GRID_FIXTURES` (its product rows at every k of `grid_k`,
+#: `grid_rows`) and the te_core.io_bound.capture arguments of its dense step: the 45M start's, as `DENSE_45M`, and
+#: s-t20's at full size, 256 sequences of 1,024 tokens in four micro-batches
+GRID_FIXTURES = Path(__file__).parent / "tests" / "fixtures"
+GRID_STEPS = {
+    "the 45M start's dense step": ("dense_45m.grid.products.json",
+                                   {"size": "s", "vocab": 32000, "batch": 2, "ctx": 256, "micro_steps": 1}),
+    "s-t20's dense step at full size": ("s_t20.grid.products.json",
+                                        {"size": "s", "vocab": 32000, "batch": 256, "ctx": 1024, "micro_steps": 4}),
+}
 #: the lowrank worker's battery programs on s-t20 whose fresh-products term is void, each traced
 #: step's product rows at the console's k: DoRA rank 16 on all 42 matrices and LoRA rank 16 on every block's MLP
 BATTERY_VOID = ("battery_void.products.json", {
@@ -109,14 +126,30 @@ SESSION_RULE = ("c = (tokens·n_layer·(4·d_model² + 3·d_model·d_ff) + token
                 " x gates_per_mac, tokens = in + out, attended = in² + out·in + out·(out + 1)/2 (a prompt token over "
                 "the whole prompt, the j-th output token over the prompt and the output tokens up to itself); k = in x "
                 "ceil(log2 vocab)")
+SESSION_DIAL = ("each k of the console's grid (te_core.policy's K_GRID): a session of in_tokens = k/16 input tokens and "
+                "out_tokens output tokens, c its gates (te_core.policy.session_gates), the products term's c at k, and "
+                "k_bits its input ids at the model's own vocabulary (k at 50,304, 15/16 of it at 32,000)")
 
 
 def sessions() -> dict:
+    out = policy.CONSOLE_SESSION[1]
+
+    def named(name: str, params: int) -> dict:
+        s = policy.session(params, *policy.CONSOLE_SESSION)
+        dial = [policy.session(params, n, out) for n in policy.DIAL_IN_TOKENS]
+        return {"name": name, "params": params, "shape": s["shape"], "c": s["gates"], "k_bits": s["k_bits"],
+                "dial": [{"k": k, "in_tokens": d["in_tokens"], "c": d["gates"], "k_bits": d["k_bits"]}
+                         for k, d in zip(policy.K_GRID, dial)]}
+
     return {"rule": SESSION_RULE,
             "about": "te_core.policy.session: one session of the reference model, each of its tokens a forward, every "
                      "product of two operands at the served precision's GEMM price; the elementwise ops left out",
             "console": {"params": policy.REFERENCE_PARAMS, "in_tokens": policy.CONSOLE_SESSION[0],
                         "out_tokens": policy.CONSOLE_SESSION[1], "c": policy.CONSOLE[0], "k": policy.CONSOLE[1]},
+            "dial": {"about": SESSION_DIAL, "k": list(policy.K_GRID), "in_tokens": list(policy.DIAL_IN_TOKENS),
+                     "out_tokens": out},
+            "sizes": [named(name, p) for name, p in policy.REFERENCE_SIZES.items()],
+            "starts": [named(name, shape["parameters"]) for name, shape in policy.starts().items()],
             "vectors": [policy.session(p, i, o) for p in policy.SHAPES for i, o in SESSIONS]}
 
 
@@ -195,6 +228,57 @@ def dial(ms: dict[str, formalism.Measured]) -> dict:
             "k": list(DIAL_K), "vectors": out}
 
 
+def grid_k() -> tuple[int, ...]:
+    """`grid`'s k: the console's grid (te_core.policy's `K_GRID`) and the serving block's (te_core.panels' `SERVED`)."""
+    from .panels import SERVED
+
+    return tuple(sorted({*policy.K_GRID, SERVED[1]}))
+
+
+def grid_rows(graph) -> dict:
+    """A captured step's product rows at every k of `grid_k` in a trace's form (te_core.capture.products'
+    `rows_on_dial`'s): `rows` at the console's k, and under "at" each other k's rows and P-match check."""
+    from .capture import products
+
+    out = products.rows(graph, policy.CONSOLE[1])
+    out["at"] = {}
+    for k in grid_k():
+        if k != policy.CONSOLE[1]:
+            b = products.rows(graph, float(k))
+            out["at"][str(k)] = {x: b[x] for x in ("k", "rows", "p_match")}
+    return out
+
+
+def grid(base: formalism.Measured) -> dict:
+    """The fresh-products term at every k of `grid_k` on each step of `GRID_STEPS`, measured as `dial` measures the 45M
+    step (its fixture's rows as `Measured.products` on `base`, one part of |C| gates): `formalism.fresh_per_c`, and at
+    each k the term (without P-cell) and fresh_cell (with it), which are c times it, at the console's c and at the k's
+    own: the 45M reference's session of k/16 input tokens and the console's output tokens on the grid, the serving
+    block's c at its k (te_core.panels' `SERVED`); null where unmeasured, with the reason."""
+    from .panels import SERVED
+
+    own = {k: policy.session_gates(policy.REFERENCE_PARAMS, n, policy.CONSOLE_SESSION[1])
+           for n, k in zip(policy.DIAL_IN_TOKENS, policy.K_GRID)} | {SERVED[1]: SERVED[0]}
+    out = []
+    for name, (fixture, _) in GRID_STEPS.items():
+        rows = json.loads((GRID_FIXTURES / fixture).read_text())
+        C = rows["gates"]
+        m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
+                    products=formalism.products_of_trace(rows))
+        cells = []
+        for k in grid_k():
+            for c in dict.fromkeys((policy.CONSOLE[0], own[k])):
+                term, why, got = formalism.fresh_products(m, c, k)
+                cells.append({"c": c, "k": k, "term": term, "fresh_cell": got.get("fresh_cell"), "why": why})
+        out.append({"name": name, "C_gates": C, "fresh_per_c": formalism.fresh_per_c(m), "cells": cells})
+    return {"rule": "term(c, k) = c × fresh_per_c[k][0] (without P-cell), fresh_cell = c × fresh_per_c[k][1] (with "
+                    "it), at each k of the console's grid (a session's input ids at 16 bits) and the serving block's, "
+                    "and at the console's c and the k's own (the 45M reference's session of k/16 input tokens and "
+                    f"{policy.CONSOLE_SESSION[1]:,} output tokens; the serving block's c at its k); null where "
+                    "fresh_per_c[k] is null",
+            "k": list(grid_k()), "vectors": out}
+
+
 def published(measured: dict[str, formalism.Measured]) -> list[dict]:
     """`formalism.published` under reading A at each cell of `PUBLISHED`."""
     out = []
@@ -233,7 +317,7 @@ def build() -> dict:
         "published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, "
                           "binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: "
                           "null, binding unmeasured, why naming it. Else: 1, binding none.",
-        "fresh": fresh(ms["dense"]), "dial": dial(ms), "published": published(ms),
+        "fresh": fresh(ms["dense"]), "dial": dial(ms), "grid": grid(ms["dense"]), "published": published(ms),
         "kinds": list(formalism.KINDS), "rests_on": formalism.RESTS_ON, "sensitivities": formalism.SENSITIVITIES,
         "w_fwd_gates": W_FWD, "start": TINY, "program": PROGRAM,
         "cases": {name: {k: v for k, v in case.items() if k not in ("delta_bits", "decoder_gates")}
@@ -244,7 +328,16 @@ def build() -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--write", action="store_true", help=f"write {OUT.name} beside this module")
+    ap.add_argument("--fixtures", action="store_true",
+                    help="first capture each step of GRID_STEPS and write its fixture (about 30 s on a CPU)")
     a = ap.parse_args(argv)
+    if a.fixtures:
+        GRID_FIXTURES.mkdir(exist_ok=True)
+        for fixture, args in GRID_STEPS.values():
+            path = GRID_FIXTURES / fixture
+            path.write_text(json.dumps(grid_rows(io_bound.capture("dense", **args)), sort_keys=True,
+                                       separators=(",", ":")) + "\n")
+            print(f"{path}: {path.stat().st_size:,} bytes", file=sys.stderr)
     text = json.dumps(build(), indent=0, sort_keys=True) + "\n"
     if a.write:
         OUT.write_text(text)
