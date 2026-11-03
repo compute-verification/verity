@@ -48,22 +48,29 @@ def test_the_vectors_are_the_bound_on_their_inputs():
 
 
 def test_each_vectors_term_solves_its_cap():
-    """What a port of the bound checks without this module: N·Γ + B·√N = G at each Λ, ρ = N·c/|C|."""
+    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ + Λ·L = G at each Λ, the blocks the
+    larger, ρ = N·c/|C|."""
+    forms = Counter()
     for v in json.loads(iob.VECTORS.read_text())["vectors"]:
         i, cap, term = v["inputs"], v["cap"], v["term"]
         G = term["share"] * i["C_gates"]
         assert 0 <= term["share"] < 1, v["name"]
         for lam in ("proved", "numerical"):
-            n, L = term[f"{lam}_blocks"], cap[f"lam_{lam}"]
-            if not i["products"] or L is None:   # nothing counted, or Λ void
+            n, lv = term[f"{lam}_blocks"], cap[f"lam_{lam}"]
+            if not i["products"] or lv is None:   # nothing counted, or Λ void
                 assert n == 0 and term[f"{lam}_rho"] == 0
                 continue
-            gamma, B = L * cap["gamma0"], L * i["k"] / 2 * math.sqrt(cap["Q"])
-            assert n * gamma + B * math.sqrt(n) == pytest.approx(G, rel=1e-9), v["name"]
+            gamma, B = lv * cap["gamma0"], lv * i["k"] / 2 * math.sqrt(cap["Q"])
+            root, linear = term[f"{lam}_blocks_root"], term[f"{lam}_blocks_linear"]
+            assert root * gamma + B * math.sqrt(root) == pytest.approx(G, rel=1e-9), v["name"]
+            assert linear == pytest.approx(max(0.0, (G - lv * cap["L"]) / gamma), rel=1e-12), v["name"]
+            assert n == max(root, linear)
+            forms["linear" if linear > root else "root"] += 1
             assert term[f"{lam}_rho"] == pytest.approx(n * i["c"] / i["C_gates"], rel=1e-12)
             assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * i["c"] / i["C_gates"], rel=1e-12)
             assert term[f"{lam}_rho_no_cell"] <= term[f"{lam}_rho"] <= term[f"{lam}_rho_main"]
         assert term["proved_rho"] <= term["numerical_rho"]
+    assert forms["linear"] and forms["root"]   # the vectors exercise both forms
     void = [v for v in json.loads(iob.VECTORS.read_text())["vectors"] if v["cap"]["lam_proved"] is None]
     assert [v["cap"]["whole_chain"] for v in void] == [None]
 
@@ -76,6 +83,7 @@ def test_the_cap_at_the_consoles_policy():
     assert iob.alpha(65536, 2, 2, 8) == pytest.approx(570772.5, rel=1e-6)
     assert iob.alpha(65536, 1, 1, 1) == pytest.approx(3228776.7, rel=1e-6)
     assert iob.beta(65536, 16, 16) == 2048
+    assert iob.mu(65536, 16, 16, 32) == pytest.approx(0.918559, rel=1e-6)
     assert 3.41e14 / (23682 / 16) / iob.alpha(65536, 16, 16, 32) == pytest.approx(6.458e6, rel=1e-3)
 
 
@@ -123,23 +131,28 @@ def test_loomis_whitney():
 
 
 def test_one_blocks_cap():
-    """√(x·y·(t/b_C + s)) ≤ α + β√s for every split of k into x·b_A + y·b_B + t, and α is reached."""
+    """√(x·y·(t/b_C + s)) ≤ α + β√s and ≤ α + μ·s·b_C for every split of k into x·b_A + y·b_B + t; α is reached, and
+    the line meets the most over the split at s·b_C = 16k/27, its tangent there."""
     rng = random.Random(2)
     for _ in range(20000):
         k, ba, bb, bc = rng.uniform(1, 1e6), rng.choice(WIDTHS), rng.choice(WIDTHS), rng.choice((8, 16, 32))
         w = [rng.random() for _ in range(3)]
         x, y, t = (k * v / sum(w) for v in w)
-        s = rng.choice((0.0, rng.uniform(0, 1e6)))
+        s = rng.choice((0.0, rng.uniform(0, 1e6), rng.uniform(0, 2 * k / bc)))
         lhs = math.sqrt(x / ba * (y / bb) * (t / bc + s))
         assert lhs <= (iob.alpha(k, ba, bb, bc) + iob.beta(k, ba, bb) * math.sqrt(s)) * (1 + 1e-12)
+        assert lhs <= (iob.alpha(k, ba, bb, bc) + iob.mu(k, ba, bb, bc) * s * bc) * (1 + 1e-12)
     k = 3e4
     assert math.sqrt((k / 3 / 16) ** 2 * (k / 3 / 32)) == pytest.approx(iob.alpha(k, 16, 16, 32))
+    E = 16 * k / 27   # past k/2 the best split reads no partial sums: x·b_A = y·b_B = k/2
+    line = iob.alpha(k, 16, 16, 32) + iob.mu(k, 16, 16, 32) * E
+    assert (k / 2) * math.sqrt(E / (16 * 16 * 32)) == pytest.approx(line)
 
 
 def _chain_partition(I, L, J, block_of, ba, bb, bc) -> None:
     """A product's MACs split into blocks by `block_of(i, l, j)`, each output's chain running l = 0, 1, ...: LW on each
     block at the bits it reads (its operand entries, and a partial sum for each chain it touches but doesn't start), and
-    the amortized cap M ≤ N·α + β·√(N·|O|) at the largest block's bits."""
+    the amortized caps M ≤ N·α + β·√(N·|O|) and M ≤ N·α + μ·b_C·|O| at the largest block's bits."""
     blocks = defaultdict(list)
     for p in itertools.product(range(I), range(L), range(J)):
         blocks[block_of(*p)].append(p)
@@ -151,6 +164,7 @@ def _chain_partition(I, L, J, block_of, ba, bb, bc) -> None:
         bits.append(x * ba + y * bb + (z - starts) * bc)
     k, N = max(bits), len(blocks)
     assert I * L * J <= (N * iob.alpha(k, ba, bb, bc) + iob.beta(k, ba, bb) * math.sqrt(N * I * J)) * (1 + 1e-12)
+    assert I * L * J <= (N * iob.alpha(k, ba, bb, bc) + iob.mu(k, ba, bb, bc) * bc * I * J) * (1 + 1e-12)
 
 
 def test_the_amortized_cap_on_partitions_of_a_chain_product():
@@ -166,7 +180,8 @@ def test_the_amortized_cap_on_partitions_of_a_chain_product():
 
 
 def test_products_splitting_one_blocks_bits():
-    """Σ_P g_P·(α_P(k_P) + β_P(k_P)·√s_P) ≤ Γ₀(k) + (k/2)·√(Σ_P g_P²·s_P/(b_A·b_B)) for Σ k_P = k (arrays disjoint)."""
+    """Σ_P g_P·(α_P(k_P) + β_P(k_P)·√s_P) ≤ Γ₀(k) + (k/2)·√(Σ_P g_P²·s_P/(b_A·b_B)) and Σ_P g_P·(α_P(k_P) +
+    μ_P(k_P)·b_C·s_P) ≤ Γ₀(k) + Σ_P g_P·μ_P(k)·b_C·s_P for Σ k_P = k (arrays disjoint)."""
     rng = random.Random(4)
     for _ in range(5000):
         k = rng.uniform(1e3, 1e6)
@@ -176,6 +191,10 @@ def test_products_splitting_one_blocks_bits():
         lhs = sum(g * (iob.alpha(kp, a, b) + iob.beta(kp, a, b) * math.sqrt(s)) for (a, b, g), kp, s in zip(ps, ks, ss))
         rhs = max(g * iob.alpha(k, a, b) for a, b, g in ps) + k / 2 * math.sqrt(
             sum(g * g * s / (a * b) for (a, b, g), s in zip(ps, ss)))
+        assert lhs <= rhs * (1 + 1e-12)
+        lhs = sum(g * (iob.alpha(kp, a, b) + iob.mu(kp, a, b) * s * 32) for (a, b, g), kp, s in zip(ps, ks, ss))
+        rhs = max(g * iob.alpha(k, a, b) for a, b, g in ps) + sum(
+            g * iob.mu(k, a, b) * s * 32 for (a, b, g), s in zip(ps, ss))
         assert lhs <= rhs * (1 + 1e-12)
 
 
@@ -189,6 +208,10 @@ def test_a_linear_layers_three_products_do_at_most_share_of_one():
         x, wt, y, tf, td, tw = (k * v / sum(w) for v in w)
         macs = sum(math.sqrt(p / b * (q / b) * (t / bc)) for p, q, t in ((x, wt, tf), (y, wt, td), (y, x, tw)))
         assert macs <= iob.SHARE * cap * (1 + 1e-12)
+        ss = [rng.choice((0.0, rng.uniform(0, 2 * k / bc))) for _ in range(3)]   # chains each product starts
+        macs = sum(math.sqrt(p / b * (q / b) * (t / bc + s))
+                   for (p, q, t), s in zip(((x, wt, tf), (y, wt, td), (y, x, tw)), ss))
+        assert macs <= iob.SHARE * (cap + iob.mu(k, b, b, bc) * sum(ss) * bc) * (1 + 1e-12)
     u, t = 2 * k / 9, k / 9
     assert 3 * math.sqrt(u / b * (u / b) * (t / bc)) == pytest.approx(iob.SHARE * cap)
 
@@ -205,6 +228,9 @@ def test_a_fed_pair_does_at_most_feed_of_one():
             n = nb / bc
             macs = math.sqrt(x1 / b * (y1 / b) * n) + math.sqrt(n * (y2 / b) * (z2 / bc))
             assert macs <= iob.feed(b, bc) * cap * (1 + 1e-12)
+            s1, s2 = (rng.choice((0.0, rng.uniform(0, 2 * k / bc))) for _ in range(2))   # chains P1 and P2 start
+            macs = math.sqrt(x1 / b * (y1 / b) * (n + s1)) + math.sqrt(n * (y2 / b) * (z2 / bc + s2))
+            assert macs <= iob.feed(b, bc) * (cap + iob.mu(k, b, b, bc) * (s1 + s2) * bc) * (1 + 1e-12)
 
 
 # -- captured steps -----------------------------------------------------------------------------------------------------

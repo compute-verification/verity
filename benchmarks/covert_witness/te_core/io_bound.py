@@ -12,21 +12,27 @@ chain over L in a b_C-bit partial sum (`ACC_BITS`: the GEMM gadget accumulates f
 S ⊆ I×L×J satisfy |S|² ≤ |π_IL S|·|π_LJ S|·|π_IJ S| (Loomis–Whitney: slice S by l; a slice has at most
 min(|A_l|·|B_l|, |π_IJ S|) ≤ √(|A_l|·|B_l|·|π_IJ S|) MACs; Cauchy–Schwarz over l). Under P-width (below) each A or B
 entry the block uses costs it b_A or b_B input bits of its own, and each output entry it touches either starts its
-chain in the block (s of them) or has its partial sum read (b_C bits). With x·b_A + y·b_B + t ≤ k,
-|S| ≤ √(x·y·(t/b_C + s)) ≤ α + β√s, maximized at x·b_A = y·b_B = t = k/3 and at x·b_A = y·b_B = k/2:
+chain in the block (s of them) or has its partial sum read (b_C bits). With x·b_A + y·b_B + t ≤ k and E = s·b_C,
+|S| ≤ √(x·y·(t/b_C + s)), whose most over the split is h(E) = ((k + E)/3)^{3/2}/√(b_A·b_B·b_C) for E ≤ k/2 and
+(k/2)·√(E/(b_A·b_B·b_C)) beyond. Two bounds on h sum over blocks:
 
-    α = (k/3)^{3/2} / √(b_A·b_B·b_C)        β = (k/2) / √(b_A·b_B)
+    h ≤ α + β·√s        h ≤ α + μ·E
+    α = (k/3)^{3/2} / √(b_A·b_B·b_C)        β = (k/2) / √(b_A·b_B)        μ = (3√3/16)·√k / √(b_A·b_B·b_C)
 
-Each output's chain starts in one block, so over N blocks Σ s ≤ |O| and M ≤ N·α + β·√(N·|O|).
+The first splits the root; the second is h's concave envelope, the line from h(0) = α tangent to h at E = 16k/27. Each
+output's chain starts in one block, so over N blocks Σ s ≤ |O|: M ≤ N·α + β·√(N·|O|) and M ≤ N·α + μ·b_C·|O|.
 
 **A step.** Over the counted products P (`Row.kind` "fresh") at g_P gates a MAC, a block splitting its budget as
-k = Σ k_P has Σ g_P·α_P(k_P) ≤ max_P g_P·α_P(k) (α grows as k^{3/2}) and Σ g_P·β_P(k_P)·√s_P ≤
-(k/2)·√(Σ g_P²·s_P/(b_A·b_B)), so with Cauchy–Schwarz over the blocks
+k = Σ k_P has Σ g_P·α_P(k_P) ≤ max_P g_P·α_P(k) (α grows as k^{3/2}), Σ g_P·β_P(k_P)·√s_P ≤
+(k/2)·√(Σ g_P²·s_P/(b_A·b_B)) and μ_P(k_P) ≤ μ_P(k), so with Cauchy–Schwarz over the blocks for the first form
 
-    G = Σ g_P·M_P ≤ Λ·(N·Γ₀ + (k/2)·√(N·Q)),    Γ₀ = max_P g_P·α_P,    Q = Σ_P g_P²·|O_P|/(b_A·b_B),
+    G = Σ g_P·M_P ≤ Λ·(N·Γ₀ + (k/2)·√(N·Q)),    G ≤ Λ·(N·Γ₀ + L),
+    Γ₀ = max_P g_P·α_P,    Q = Σ_P g_P²·|O_P|/(b_A·b_B),    L = Σ_P g_P·μ_P·b_C·|O_P|.
 
-N ≥ ((√(B² + 4ΓG) − B)/(2Γ))² with Γ = Λ·Γ₀ and B = Λ·(k/2)·√Q (`blocks`), and ρ = N·c/|C| at the best partition is at
-least that times c/|C| (`bound`). Dropping B gives ρ ≥ σ·c/Γ, σ = G/|C| the counted share (`rho_main`).
+N is at least the larger of ((√(B² + 4ΓG) − B)/(2Γ))² and (G − Λ·L)/Γ, with Γ = Λ·Γ₀ and B = Λ·(k/2)·√Q (`blocks`),
+and ρ = N·c/|C| at the best partition is at least that times c/|C| (`bound`). The linear form binds where blocks start
+few chains each (long chains: a dense step's), the root form where they start many (a rank-16 adapter's). Dropping
+both gives ρ ≥ σ·c/Γ, σ = G/|C| the counted share (`rho_main`).
 
 Λ covers a block that does several products at once. Products sharing their arrays (a linear layer's forward, dX and
 dW read X, W and dY two times each) do at most 2/√3 of the single-product cap (`SHARE`: Cauchy–Schwarz, then
@@ -36,7 +42,9 @@ from chains it runs itself, their own operands read or made whole in turn, numbe
 e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sources sharing arrays), worth `whole_chain` =
 (1 + e)^{3/2}. K is the shortest chain that makes a counted operand whole by itself (`Row.k_whole`: an operand that
 also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root
-and the proved bound is void. Proved: Λ = SHARE·feed·whole_chain, at the counted products' widest operand. Found by
+and the proved bound is void. Proved: Λ = SHARE·feed·whole_chain, at the counted products' widest operand. Each
+factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
+width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
 
 **Premises.**
@@ -68,7 +76,7 @@ import json
 import math
 import operator
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 ACC_BITS = 32
@@ -90,6 +98,11 @@ def alpha(k: float, b_a: float, b_b: float, b_c: float = ACC_BITS) -> float:
 def beta(k: float, b_a: float, b_b: float) -> float:
     """The coefficient of √s, s the chains the block starts."""
     return (k / 2) / math.sqrt(b_a * b_b)
+
+
+def mu(k: float, b_a: float, b_b: float, b_c: float = ACC_BITS) -> float:
+    """The linear form's slope: MACs a block adds for each bit of b_C·s, s the chains it starts."""
+    return 3 * math.sqrt(3) / 16 * math.sqrt(k) / math.sqrt(b_a * b_b * b_c)
 
 
 def feed(b: float, b_c: float = ACC_BITS) -> float:
@@ -118,30 +131,36 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
     """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
     each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
     no chain makes an operand whole by itself): the cap's terms, Λ proved and numerical, and for each the blocks and ρ
-    with P-cell, without its B term (`rho_main`) and without P-cell. A void Λ (`whole_chain` past r = 1/4) is None, its
-    blocks and ρ 0."""
+    with P-cell (the larger of the root form's, `blocks_root`, and the linear form's, `blocks_linear`), without the
+    chain-start terms (`rho_main`) and without P-cell. A void Λ (`whole_chain` past r = 1/4) is None, its blocks and ρ
+    0."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
-    zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks": 0.0, "rho": 0.0, "rho_main": 0.0, "blocks_no_cell": 0.0,
-            "rho_no_cell": 0.0}
+    zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks_root": 0.0, "blocks_linear": 0.0, "blocks": 0.0, "rho": 0.0,
+            "rho_main": 0.0, "blocks_no_cell": 0.0, "rho_no_cell": 0.0}
     if not ps:
-        return out | {"gamma0": 0.0, "Q": 0.0, "feed": 1.0, "whole_chain": 1.0, "proved": zero, "numerical": zero}
+        return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0, "proved": zero,
+                      "numerical": zero}
     gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
     Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
+    L = sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps)
     fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
     whole = [p["k_whole"] for p in ps if p.get("k_whole")]
     wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
     cell = max(p["cell_gates"] for p in ps)
-    out |= {"gamma0": gamma0, "Q": Q, "feed": fd, "whole_chain": wc if math.isfinite(wc) else None}
+    out |= {"gamma0": gamma0, "Q": Q, "L": L, "feed": fd, "whole_chain": wc if math.isfinite(wc) else None}
     for name, lam in (("proved", SHARE * fd * wc), ("numerical", SHARE)):
         if not math.isfinite(lam):
             out[name] = zero | {"lam": None, "gamma": None, "B": None}
             continue
         gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
-        n, n_cell = blocks(G, gamma, B), blocks(G, gamma + k * cell, B)
-        out[name] = {"lam": lam, "gamma": gamma, "B": B, "blocks": n, "rho": n * c / C, "rho_main": G / gamma * c / C,
-                     "blocks_no_cell": n_cell, "rho_no_cell": n_cell * c / C}
+        root, linear = blocks(G, gamma, B), max(0.0, (G - lam * L) / gamma)
+        n = max(root, linear)
+        n_cell = max(blocks(G, gamma + k * cell, B), (G - lam * L) / (gamma + k * cell))
+        out[name] = {"lam": lam, "gamma": gamma, "B": B, "blocks_root": root, "blocks_linear": linear, "blocks": n,
+                     "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell,
+                     "rho_no_cell": n_cell * c / C}
     return out
 
 
@@ -705,10 +724,12 @@ def vectors() -> dict:
     for name, (c, k), C, ps in cases:
         b = bound(ps, c, k, C)
         cap = {"alpha": [alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps], "beta": [beta(k, p["b_a"], p["b_b"]) for p in ps],
-               "gamma0": b["gamma0"], "Q": b["Q"], "feed": b["feed"], "whole_chain": b["whole_chain"],
-               "lam_proved": b["proved"]["lam"], "lam_numerical": b["numerical"]["lam"]}
+               "mu": [mu(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps], "gamma0": b["gamma0"], "Q": b["Q"], "L": b["L"],
+               "feed": b["feed"], "whole_chain": b["whole_chain"], "lam_proved": b["proved"]["lam"],
+               "lam_numerical": b["numerical"]["lam"]}
         term = {f"{lam}_{x}": b[lam][x] for lam in ("proved", "numerical")
-                for x in ("blocks", "rho", "rho_main", "rho_no_cell")} | {"share": b["share"]}
+                for x in ("blocks_root", "blocks_linear", "blocks", "rho", "rho_main", "rho_no_cell")} | \
+            {"share": b["share"]}
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": ps}, "cap": cap, "term": term})
     return {"about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms, "
                      "`term` the blocks and ρ (python -m te_core.io_bound vectors)", "vectors": out}
