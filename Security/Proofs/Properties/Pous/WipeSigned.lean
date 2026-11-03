@@ -1,4 +1,5 @@
 import Properties.Pous.WipeSigned
+import Properties.Pous.Component
 import Proofs.Properties.Pous.WipeSigned.Header
 import Proofs.Properties.Pous.WipeSigned.Inputs
 import Proofs.Properties.Pous.WipeSigned.Run
@@ -29,7 +30,8 @@ session at r20261026-094403-bb5f's parameters and clock readings, and the compil
 (`measured_accepts`, by LMS's correctness). `wipeSigned_nontrivial` is its nontrivial lemma: a session with a batch no
 record encodes, signed under the empty key, is no run of the idle challengers, and both adversaries output nothing
 there, since the run hashes nothing and the signature signs nothing; so a check that accepts it, as a verifier that
-accepts everything does (`wipeSigned_acceptAll`), does not have `WipeSigned`'s conclusion.
+accepts everything (`Pous.Component.AcceptsAll`) does (`wipeSigned_acceptAll`), does not have `WipeSigned`'s
+conclusion.
 -/
 
 namespace MemoryChallenger.Properties.SecurityProofs
@@ -665,12 +667,12 @@ theorem wipeSigned_nontrivial :
     · rw [Wipe.unencoded_forger] at hf
       cases hf
 
-/-- **`WipeSigned` fails at a verifier that accepts everything**: such a check accepts the unencoded session, where
-the conclusion fails (`wipeSigned_nontrivial`). -/
+/-- **`WipeSigned` fails at a verifier that accepts everything** (`Pous.Component.AcceptsAll`): such a check accepts
+the unencoded session, where the conclusion fails (`wipeSigned_nontrivial`). -/
 theorem wipeSigned_acceptAll
     (check : WipeProtocol.Params → StreamedWipe.Commitment → WipeProtocol.Evidence →
       Core.Outcome WipeProtocol.Public (StreamedWipe.Params × Int))
-    (hall : ∀ p c e, ∃ out prof, check p c e = .accept out prof) :
+    (hall : Pous.Component.AcceptsAll check) :
     ¬ ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
       (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int) (dev : SignedWipeParty),
       check p c e = .accept out prof → WipeRanAccepted dev p c e := by

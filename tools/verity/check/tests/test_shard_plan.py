@@ -236,3 +236,40 @@ def test_combine_refuses_auto_shards_of_two_plans_and_a_hand_plans_shard_running
     store, tree, head, ids, _ = _auto_shards(tmp_path / "hand", monkeypatch, no_plan)
     assert shard_set(store, tree, head, ids, "check", COMMAND) == (
         None, "the shards ran different steps outside their parts, or a job outside its parts")
+
+
+def test_record_sends_an_auto_shard_its_plan_as_the_runs_input_and_refuses_one_without(tmp_path, monkeypatch):
+    """Drive's `after_landing_shards = "auto"`: `--record --shard auto:K/N --shard-plan-file PLAN --on M` launches shard K of
+    PLAN with PLAN sent as the run's `AUTO_PLAN` input, where the run's own `--shard auto:K/N` finds it, and with the parts of
+    that shard alone; an auto shard without a plan, a plan without an auto shard or --on, and a plan of other steps are
+    refused before anything launches."""
+    import research.store.local
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            sent = {Path(cmd[i + 1]).name: Path(cmd[i + 1]).read_text() for i, x in enumerate(cmd) if x == "--send"}
+            launched.append((cmd, sent))
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(research.store.local, "LocalStore", lambda: None)
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(subprocess, "run", run)
+    steps = "pytest,circuit-check"
+    doc = CHECK.auto_plan(({}, {}, {}), 4, deferred=steps, n=2)
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps(doc))
+    shard = ["--deferred", steps, "--shard", "auto:2/2"]
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", *shard, "--shard-plan-file", str(plan)]) == 0
+    [(cmd, sent)] = launched
+    assert cmd[-len(shard):] == shard and "--shard-plan-file" not in cmd, cmd
+    assert json.loads(sent[CHECK.AUTO_PLAN]) == doc and json.loads(sent[CHECK.SHARD_PARTS]) == doc["shards"][1]["parts"]
+    launched.clear()
+    for argv in (["--on", "vy-x", *shard], ["--on", "vy-x", "--deferred", steps, "--shard", "2/2", "--shard-plan-file", str(plan)],
+                 [*shard, "--shard-plan-file", str(plan)], ["--on", "vy-x", "--deferred", "pytest", "--shard", "auto:2/2",
+                                                            "--shard-plan-file", str(plan)]):
+        assert CHECK.record(["--base", "HEAD", *argv]) == 2 and not launched, argv
