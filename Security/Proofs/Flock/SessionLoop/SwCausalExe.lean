@@ -737,7 +737,7 @@ theorem ofCircuit_fold (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).fold.kLog
 
 /-- A bound on a pad's position or its place in the absorbed order, at the pads layout's positions (`pl_*`). -/
 local macro "place_tac" : tactic =>
-  `(tactic| ((try simp only [layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp, pl_lgOod,
+  `(tactic| ((try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp, pl_lgOod,
     pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopLen, piopNR] at *); first | (split_ifs <;> omega) | omega))
 
 section SwRep
@@ -872,7 +872,7 @@ theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
       (fun k hk => (hA.ab (by omega) k hk).2)
       fun k hk => freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac) fun k hk => hcc k (by omega)
   · obtain ⟨h1, h2⟩ := hA.lc i hi hn
-    rw [em, ef] at hn
+    rw [em] at hn
     rw [ef] at hi
     exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
         (by place_tac) fun k hk => hcc k (by omega)),
