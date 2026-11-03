@@ -11,8 +11,8 @@ the scan of the ingress rows accepts every bucket, its Programs' row at each req
 for bit, and every egress bucket's row, by the reference and by the gates, is the network certifier's. A server that
 sends one output past the stop id, or one short, or nothing (the network certifier fails it late) leaves the ingress rows
 and so the scan's state as they were, and the first egress bucket whose row isn't the network certifier's is the bucket
-of the first cell at which the lanes differ, every differing cell of it on that connection: that bucket's proof doesn't
-open."""
+of the first cell at which the lanes differ, every differing cell of it on that connection, by the reference and by the
+gates: that bucket's proof doesn't open."""
 from __future__ import annotations
 
 import importlib.util
@@ -153,3 +153,5 @@ def test_a_lane_off_its_programs_n_is_refused_at_the_bucket_of_its_first_differi
     assert differ and {_cells(egress[t])[i][1] for i in differ} == {_cells(rendered)[i][1] for i in differ} == {q}
     i = differ[0]
     assert i % CLS.r == first % CLS.r and (_cells(egress[t])[i][0], _cells(rendered)[i][0]) == (theirs, ours)
+    gates = evaluate_bits(EGRESS, *[np.asarray([a], dtype=np.uint8) for a in EG.bucket_arguments(SHAPE, ch.view(t))])
+    assert np.asarray(gates).reshape(-1).tolist() == EG.output_bits(SHAPE, ch.view(t))
