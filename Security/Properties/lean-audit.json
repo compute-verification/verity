@@ -14,6 +14,7 @@
   "Properties.Pouw.Credit",
   "Properties.Pouw.Lead.Commit",
   "Properties.Pouw.Lead.V2",
+  "Properties.Pouw.PearlPlus",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
@@ -874,9 +875,15 @@
     "Properties.Pouw.ServedFreed",
     "Properties.Pouw.ServedWork",
     "Properties.Pouw.ServedValues",
-    "Properties.Pouw.Lead.V2"
+    "Properties.Pouw.Lead.V2",
+    "Properties.Pouw.PearlPlus"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Pouw.PearlPlus": {
+   "imports": ["PouwPearlPlus"],
+   "except": [],
+   "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
