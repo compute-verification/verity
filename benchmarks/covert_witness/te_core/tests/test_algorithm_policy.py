@@ -171,6 +171,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
                 assert (d["reached"], d["record"]) == ("yes" if hit else "no", f"{run_id}@{r['checkpoint_step']}")
                 assert (d["start_loss"], d["end_loss"]) == (L0[start], r["val_bpb"])
                 assert (d["start_compute_gates"], d["C_gates"]) == pytest.approx((c0, r["formalism"]["parts"][0]["gates"]))
+                assert d["start_effective_gates"] == pytest.approx(FF.c_eff(f, L0[start]))
                 assert d["gain"] == pytest.approx(FF.c_eff(f, r["val_bpb"]) / c0) and (d["gain"] >= g) == bool(hit)
                 assert d["H_gates"] == (h and pytest.approx(h))
                 assert d["p"] == (h and pytest.approx(d["C_gates"] / h))
@@ -305,6 +306,18 @@ def test_the_coverage_is_the_least_p_reached_row_else_the_best_failed_attempt_el
     assert line.endswith("32 of 36 cells EMPTY.")
 
 
+def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):
+    """The scorer's refresh posts the first Markdown table under the first line of the output naming coverage: that is
+    tables/coverage.md's table, every gain target and data a row."""
+    assert run(tmp_path, monkeypatch)[0] == 0
+    lines = capsys.readouterr().out.splitlines()
+    at = next(i for i, x in enumerate(lines) if "coverage" in x.lower())
+    first = next(i for i in range(at, len(lines)) if lines[i].startswith("|"))
+    table = lines[first:next(i for i in range(first, len(lines)) if not lines[i].startswith("|"))]
+    md = (tmp_path / "out" / "tables" / "coverage.md").read_text().splitlines()
+    assert table == [x for x in md if x.startswith("|")] and len(table) == 2 + len(AP.GAINS) * len(panels.DATA)
+
+
 def test_kept_is_the_coverage_rows_and_each_groups_p_rho_front_and_best_failed_attempt():
     rows = [row("s", 2, "adapter", "yes", 1.0, 50.0, 2.1, "a"), row("s", 2, "adapter", "yes", 2.0, 10.0, 2.0, "b"),
             row("s", 2, "adapter", "yes", 3.0, 20.0, 2.0, "dominated"), row("s", 2, "adapter", "yes", 5.0, 5.0, 2.2, "c"),
@@ -335,18 +348,22 @@ def test_the_cut_is_the_table_when_it_fits_else_the_first_tier_that_does(monkeyp
         AP.cut(p, art)
 
 
-def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art_id(tmp_path, monkeypatch):
+def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art_id(tmp_path, monkeypatch, capsys):
     """--publish puts tables/ in the evidence store (the uncut panel, its coverage and the fit's panel and points) and
-    PUTs training/frontier-fit, then the cut, whose note names the art id; a refused PUT fails the command."""
+    PUTs training/frontier-fit, then the cut, whose note names the art id, a line each; a refused PUT fails the
+    command."""
     sent, stored = [], []
     monkeypatch.setattr(console, "put", lambda q: sent.append(q) or "200")
     monkeypatch.setattr(AP, "store", lambda path, meta: stored.append(sorted(f.name for f in path.iterdir()))
                         or "art:" + "a" * 64)
     runs = RUNS + DOMINATED
     assert run(tmp_path / "dry", monkeypatch, runs=runs)[0] == 0 and not stored and not sent
+    capsys.readouterr()
     code, got = run(tmp_path / "fits", monkeypatch, "--publish", runs=runs)
     assert code == 0 and stored == [["algorithm-policy.json", "coverage.json", "coverage.md", "frontier-fit.json",
                                      "frontier-points.json"]]
+    puts = [x for x in capsys.readouterr().out.splitlines() if x.startswith("PUT ")]
+    assert puts == [f"PUT {console.PANELS_URL}/{FF.PANEL}: 200", f"PUT {console.PANELS_URL}/{AP.PANEL}: 200"]
     assert [q["id"] for q in sent] == [FF.PANEL, AP.PANEL] and console.body(sent[1]) == console.body(got["console"])
     assert len(sent[1]["rows"]) == len(got["panel"]["rows"]) and sent[1]["note"].endswith(f" Tables art:{'a' * 64}.")
     monkeypatch.setattr(console, "BODY_MAX", len(console.body(sent[1])) - 1)

@@ -9,7 +9,8 @@ It reads what te_core.frontier_fit reads, and that fit: the valid records of the
 where the scoring cap admits them (te_core.policy's `eligible`), each checkpoint on its data (`panels.data_of`: `v3`,
 harness v3's OLMo 2 mix, or `v2.3-pilot`). A checkpoint's gain is effective compute over its start's own: C_eff(l)/C0,
 l its held-out loss and C_eff the compute at which its data's fit (te_core.frontier_fit, `training/frontier-fit`)
-reaches l. At a gain target g (`GAINS`: 1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is the fit's
+reaches l; a row carries C0 (`start_compute_gates`) and the start's own effective compute C_eff(l0)
+(`start_effective_gates`, over C0 the start's own gain). At a gain target g (`GAINS`: 1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is the fit's
 at g·C0, and H is the least |C| of any scored checkpoint from the start on the same data reaching it, every checkpoint
 of every run pooled (null when none does). Every run from the start has a row at every target: `reached` "yes" at its
 first checkpoint reaching it, C that checkpoint's |C| and p = C/H >= 1; else "no" at its last checkpoint, C its total
@@ -66,14 +67,14 @@ INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "
           "delta_t_bits", "d_gates", "delta_grad_bits"]
 #: the inputs of ρ with columns of their own, beside `rho_inputs` (te_core.panels' candidate layout)
 SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
-COLUMNS = ["start", "start_compute_gates", "start_loss", "end_loss", "gain_target", "gain", "reached", "C_gates",
-           "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data", "estimated",
-           "rho_inputs", *SPLIT]
+COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
+           "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
+           "estimated", "rho_inputs", *SPLIT]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the console copy's compute and ρ inputs, so its dial reproduces ρ and its gains and p
 #: recompute, and of its other numbers
 INPUT_DIGITS, DIGITS = 6, 4
-EXACT = ("start_compute_gates", "C_gates", "H_gates", "delta_bits", "w_fwd_gates")
+EXACT = ("start_compute_gates", "start_effective_gates", "C_gates", "H_gates", "delta_bits", "w_fwd_gates")
 #: the cut's tiers, the finest first: the groups whose (p, ρ) fronts and best failed attempts it keeps
 TIERS = ("family", "start", "coverage")
 #: each column whose value rests on a record's labelled quantities, and those quantities (te_core.formalism's names), the
@@ -210,7 +211,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
         f = info["fits"].get(st.data)
         if f is None:
             continue
-        runs, dials = runs_of(st), {}
+        runs, dials, own = runs_of(st), {}, frontier_fit.c_eff(f, st.l0)
         for g in GAINS:
             target = frontier_fit.loss_at(f, g * st.c0)
             if st.l0 <= target:
@@ -224,7 +225,8 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                     dials[r["id"]] = panels.dial(r["measured"], st.w)
                 v = dials[r["id"]][panels.DEFAULT]
                 gain = frontier_fit.gain(f, r["val_bpb"], st.c0)
-                row = [st.label, st.c0, st.l0, r["val_bpb"], g, None if math.isinf(gain) else gain,
+                row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
+                       None if math.isinf(gain) else gain,
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None,
                        None if math.isinf(v["rho"]) else v["rho"], "fit" if v["fit"] else "target", plots.method(r),
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data, estimated(r["measured"])]
@@ -510,12 +512,15 @@ def main(argv=None) -> int:
     frontier_fit.write(fp, info, tables, a.out)
     (tables / f"{NAME}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
     (tables / "coverage.json").write_text(json.dumps(cov, allow_nan=False, indent=1) + "\n")
-    (tables / "coverage.md").write_text(coverage_md(cov, info["fits"], p["updated_at"]))
+    md = coverage_md(cov, info["fits"], p["updated_at"])
+    (tables / "coverage.md").write_text(md)
     art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
                          "rows": len(p["rows"]), "source": source}) if a.publish else None
     q = cut(p, art)
     (a.out / "console" / f"{NAME}.json").write_bytes(console.body(q))
     png = figure(p, a.out)
+    # first: the scorer's refresh posts the first Markdown table under the first line that names coverage
+    print(md)
     print(frontier_fit.summary(info))
     print(summary(p, info))
     reached = {dd: sum(r[COLUMNS.index("reached")] == "yes" for r in p["rows"] if r[COLUMNS.index("data")] == dd)
@@ -528,8 +533,10 @@ def main(argv=None) -> int:
           f"{png.name}")
     print("board: " + board_line(cov, info["fits"], p["updated_at"], art))
     if a.publish:
-        status = [console.put(fp), console.put(q)]
-        print(f"PUT {console.PANELS_URL}/{frontier_fit.PANEL}: {status[0]}; {console.PANELS_URL}/{PANEL}: {status[1]}")
+        status = []
+        for panel in (fp, q):
+            status.append(console.put(panel))
+            print(f"PUT {console.PANELS_URL}/{panel['id']}: {status[-1]}")
         return 0 if all(s.startswith("2") for s in status) else 1
     return 0
 
