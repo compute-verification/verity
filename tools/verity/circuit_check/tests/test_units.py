@@ -250,6 +250,44 @@ def test_what_a_body_build_registers_leaves_every_record_counting(tmp_path):
     assert out["values"] == _fresh(root)["values"] and out["values"]["SynLate_v1"] == [0x0105 - 3]
 
 
+#: the registered roots the catalog starts from, two, each of a module of its own
+TWO_REGISTERED = """def registered():
+    from verity.ml.circuits.defs import bind
+    from syn import idle, xdef
+    return [bind(idle.SynIdle), bind(xdef.SynX)]
+
+
+"""
+
+
+def test_the_registered_roots_are_runs_in_their_order_each_a_record_of_its_own():
+    """`units.registered_entries`: at most `units.REGISTERED_RECORDS` runs of the registered roots, in their order, each keyed
+    and named apart; one when there are none."""
+    from circuit_check import units as UN
+
+    roots = [f"r{i}" for i in range(3 * UN.REGISTERED_RECORDS - 1)]
+    es = UN.registered_entries(roots)
+    assert [r for e in es for r in e.roots] == roots and len(es) == UN.REGISTERED_RECORDS
+    assert len({e.name for e in es}) == len({json.dumps(e.key, sort_keys=True) for e in es}) == len(es)
+    assert all(e.units == UN.REGISTERED for e in es)
+    assert [(e.name, e.roots) for e in UN.registered_entries([])] == [("<registered>:0", [])]
+
+
+def test_an_edit_of_a_registered_roots_module_rebuilds_only_the_record_that_holds_it(tmp_path):
+    """Two registered roots take a record each (`units.registered_entries`): an edit of SynX's module rebuilds SynX's record
+    alone, SynIdle's counts, and the run gives the verdicts a full build gives."""
+    root = _tree(tmp_path / "t")
+    _edit(root, "syn/catalog.py", "BINDINGS = [", TWO_REGISTERED + "BINDINGS = [")
+    first = _run(root)
+    assert first["stats"]["units"] == {"stored": 4}
+    assert {"SynIdle_v1", "SynX_v1", "SynXor_v1"} <= set(first["values"])
+    _edit(root, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    out = _run(root)
+    assert out["stats"]["units"]["rebuilt"] == ["<registered>:1"], out["stats"]["units"]
+    assert out["stats"]["units"]["reused"] == 3 and out["stats"]["units"]["stored"] == 1
+    assert out["values"] == _fresh(root)["values"]
+
+
 def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
     """SynKn's body reads `syn.knob.N`, which a binding that makes no root sets from `syn.ksize`, a module SynKn's binding never
     reads: every record holds that binding, so an edit of `syn.ksize` misses them all, the run builds the whole catalog, and
@@ -489,6 +527,8 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     cache stores the very records it stored before, the catalog's roots record (`units.store_roots`) with them, names and
     bytes, so a tarball of them (the circuit-catalog task's) has one digest.  The CPU seconds of each binding built apart are kept beside its record (``<entry>.seconds``), and a forked run
     from a copy of the cache weighs each binding by them (`cli._owners`)."""
+    from circuit_check import units as UN
+
     root = _tree(tmp_path / "t")
     _bindings(root, *BINDINGS)
     _records_only(root)
@@ -497,8 +537,10 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     _records_only(root)
     assert {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)} == first and len(first) == 6
     assert not any("seconds" in json.loads(b)["report"] for b in first.values())
-    took = {",".join(json.loads(p.read_text())["key"]["request"]["target"][1]): float(s.read_text())
-            for p in _records(root) if (s := p.with_suffix(".seconds")).is_file()}
+    # by `units.Entry.name`, as `cli._owners` weighs them: a registered record's with its index
+    took = {",".join(t[1]) + (f":{t[2]}" if tuple(t[1]) == UN.REGISTERED else ""): float(s.read_text())
+            for p in _records(root) if (s := p.with_suffix(".seconds")).is_file()
+            for t in [json.loads(p.read_text())["key"]["request"]["target"]]}
     assert len(took) >= 4, took
     warm = _copied(root, tmp_path / "warm")
     out = _run(warm, FORKED.replace("rep = cli.run(", OWNERS + "rep = cli.run("))
