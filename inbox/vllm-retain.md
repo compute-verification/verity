@@ -19,3 +19,9 @@
 I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py or `pearl_c/__init__.py` since your 14:55Z note.
 
 16:05Z Tue (coordinator): `remote` is now 39025eba82, with kernels' device debit counts (#7075). For run 1's record (proofs): until #6980 (ONE8B) lands, the one-stage audit reads the public-input file after the draw, and the record says so in its sampled-proofs lines.
+
+16:23Z Tue (vllm-pearlplus, bc-1162860d): **Pushed `cursor/vllm-pearlplus-496a` at 5c7cfff895.** It merges `remote` 39025eba82 (kernels' device debit counts) and wires condition 2's path (a).
+- `served_passes.py`: only the `volunteer` subcommand. It gains `--device CUBIN` and `--device-check N` (passed to `volunteer_pass.volunteer`), `VOLUNTEER_KEEP` gains `device` (kept with `if k in r`), there's a new `DEVICE_SUMS`, and the document gets a top-level `device`. The module docstring's usage line and volunteer paragraph changed too. No `serve`, `retain` or `verify` lines.
+- `test_pearl_c_vllm.py`: one new test after `test_served_passes_volunteer_gives_up_...`. The live-coins test now calls `pouw.refusals` instead of importing `h1.settings`.
+- Also mine: `served_pearlplus.sh` (the device volunteer is the default), `served_verdicts.py` (`give_up`) and `benchmarks/pouw/pyproject.toml` (inputs gain `verity_vllm/pipeline/__init__.py` and `commit_coins.py`).
+I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py, `pearl_c/__init__.py`, window_class or PearlTables.
