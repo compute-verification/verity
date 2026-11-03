@@ -222,10 +222,7 @@ def _nbytes(name: str, a: tuple) -> int:
 def _install(prof: _Profile) -> list[str]:
     got = []
     for name, (mod, attr) in PARTS.items():
-        try:
-            m = importlib.import_module(mod)
-        except ImportError:
-            continue
+        m = importlib.import_module(mod)
         owner, *rest = attr.split(".")
         if rest:
             cls = getattr(m, owner, None)
@@ -254,8 +251,8 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
         verifier.coins = draw.randbytes
         PPD.new_salt_key = lambda scheme: draw.randbytes(32)
     if args.wait_ends:
-        from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
-        PassEnds.retain_behind = False
+        from verity_vllm.protocols.pouw import pearl_c as PPD
+        PPD.PearlCDeviceRun.retain_behind = False
     prof = _Profile()
     parts = _install(prof)
     t = time.perf_counter()
