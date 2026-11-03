@@ -69,6 +69,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
     rw [hjj]
     exact getElem!_pos _ j hj
   have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
+  have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   have hm14 : 14 ≤ (Masked.stsOf x)[j].m := by have := (hall j hj).1; omega
   have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
@@ -94,6 +95,10 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
     unfold FlockComplete.repStartZk; omega
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stsOf x)[j]!.m + (Masked.stsOf x)[j]!.c.kLog - 6 := ⟨_, rfl⟩
+  have hAN : A < N := by
+    rw [hNd, hAd, hst, hstj]
+    unfold FlockComplete.piopRoundsZk
+    omega
   obtain ⟨s, hs⟩ : ∃ s, s = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + A := ⟨_, rfl⟩
   have hbs : Masked.rankSlot x j r = s := by
     unfold Masked.rankSlot
