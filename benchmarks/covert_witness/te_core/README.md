@@ -130,17 +130,25 @@ loading (`rescore.arguments`, `rescore.load`), so they score the measured quanti
 pilot's unless `--pin` names the commits. `training/frontier-fit` is `frontier_fit`'s: per data (`v3` or
 `v2.3-pilot`), L(C) = E + A·C^(−γ) fitted to its unconstrained frontier, the least held-out bits per byte at each total
 training compute in gates (from scratch: the pilot's pretraining runs, or the v3 ladder's from `--ladder-points` and
-`--ladder-fit`; each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their
-residuals; a data with neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then
-converts its from-scratch losses or prices C0. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and
-gain target g (1.1, 2 and 11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's
-first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any
-checkpoint from the start on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against
-the policy's slowdown ρ, and the inputs the console's dial recomputes ρ from at any (c, k) (te_core 4.x's per-part
-Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ; `build` refuses a row whose columns miss
-`formalism.at` at a dial cell. Its coverage (gain target by data by decade of ρ) names the cells nothing reaches, and
-counts the valid checkpoints `formalism.refusal` refuses, which no cell holds (`tables/refused.json` gives each one's
-reason). `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+`--ladder-fit`, else `frontier_fit.LADDER`'s, each start of the ladder's manifest at its counted C0 and held-out bpb;
+each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their residuals; a
+data with neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then converts its
+from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one on fewer than five from scratch
+(`FIT_TARGET`) is provisional: its status and note say so, the note with its points' residuals and the ladder's runs
+off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
+11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
+g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ
+under reading B (`reading`), at the dial's default (`rho_default`) and the console's (`rho_console`), with the kind
+it binds on (`binding_kind`), each kind's term of te_core's one bound (`rho_terms`, the kinds outside the max as
+sensitivities), the te_core that priced it (`te_core`), and, in one JSON cell (`rho_inputs`), the inputs the console's
+dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u and u_in exact), so S =
+pρ; `build` refuses a row whose cells miss `formalism.at` at a dial cell or the console's default. Its coverage (gain
+target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
+refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
+and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
+this build fills less of, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
+empties a populated panel. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
 `page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
@@ -242,11 +250,11 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key |
 | `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
-| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 24 columns; `refused`), and one panel's PUT |
+| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
-| `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`) |
-| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels |
+| `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
+| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with the dashboard's cells (`rho_inputs`, `rho_terms`, `binding`) and ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
 | `tiles.py` | reading A's matrix-product tiles: a record's ops as products (`of_log` from a `macs_log`, `of_graph` from a traced step, `products`), the most MACs a tile reading k bits holds (`volume`) and each op's tile cap (`cap`, `caps`) |
 | `rho_vectors.py` | the one bound's test vectors (`rho_vectors.json`, `--write`): wildcard's grown adapter, a dense and a LoRA step on the tiny start at the dial's cells, under reading A, each case's op log beside its circuit |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
