@@ -91,9 +91,11 @@
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
-#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
-#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) and proves them, its composes made
-#     before it with V3C_WARM_JOBS (at `v3c_audit`); then
+#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
+#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on a local development challenger
+#     session's coins (--challenger local, pinned on main's first-parent line: MAIN_FILE's, kept as
+#     $OUT/v3c-audit/main.txt, else MAIN_SHA's) and proves them, its composes made before it with V3C_WARM_JOBS (at
+#     `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -387,9 +389,17 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
 }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc tie=() cache=() ports=${V3C_PORTS:-16}
+  local run leanb m0 rc tie=() cache=() ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
+  mkdir -p "$OUT/v3c-audit"
+  if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
+    [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
+    [ "$MAIN_FILE" -ef "$main" ] || cp "$MAIN_FILE" "$main"
+  else
+    git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
+      || { say "V3C-AUDIT: no first-parent line of main for its challenger session to pin on (MAIN_FILE unset, and ${MAIN_SHA:-HEAD} has none in this tree): set MAIN_FILE"; return 1; }
+  fi
   if [ -n "${H1_TIE:-}" ]; then
     tie=(--tie "$D/h1/w$K/registration.json" --tie-prefix h1/)
     [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
@@ -397,7 +407,6 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   fi
   leanb=$TREE/verity/core/service/flock/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
-  mkdir -p "$OUT/v3c-audit"
   if [ -n "${V3C_WARM_JOBS:-}" ]; then
     v3c_warm
     cache=(--compose-cache "$VW/compose-cache")
@@ -405,7 +414,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
-    --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
+    --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null

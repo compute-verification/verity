@@ -939,8 +939,9 @@ if a[0] == "warm":
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
-    assert ("--tie" in a) == ("--tie-prefix" in a)
+    assert ("--tie" in a) == ("--tie-prefix" in a) and a[a.index("--challenger") + 1] == "local"
     open(os.environ["ORDER"] + ".audit", "w").write(json.dumps(a))
+    open(os.environ["ORDER"] + ".main", "w").write(open(a[a.index("--main") + 1]).read())
     out.mkdir(parents=True)
     (out / "summary.json").write_text("{}")
     print("RECORDS " + json.dumps({"verdict": "accept", "population": 37, "window": 7}))
@@ -952,6 +953,7 @@ if os.environ.get("FAIL_PERIOD"):
 out.write_text(json.dumps({"free": 0}))
 print("PERIOD " + json.dumps({"verdict": "accept"}))
 '''
+TOY_MAIN = f"{'ef' * 20}\n{'01' * 20}\n"
 CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.args"; echo "chain on window $2"'
 PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
 
@@ -959,9 +961,9 @@ PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"ver
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
          records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
-    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed and
-    the split certifier's two commands set (``extra`` adds to the environment, None unsetting): the exit status, the
-    verdict lines, the steps in order and the limits."""
+    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
+    main's first-parent line a toy MAIN_FILE and the split certifier's two commands set (``extra`` adds to the
+    environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
@@ -975,6 +977,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
     _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
+    (tmp_path / "main.txt").write_text(TOY_MAIN)
     # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
     # shadow the installed verity
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
@@ -986,7 +989,8 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
-           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512"}
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
+           "MAIN_FILE": str(tmp_path / "main.txt")}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -1239,6 +1243,41 @@ def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree
     with every compose inside the audit's limit: before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_WARM_JOBS=jobs)
     assert (rc, lines, order) == (3, [line], [])
+
+
+@pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
+def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_parent_line(tmp_path, given):
+    """records_audit samples only on the auditor's challenger's coins, so V3c's audit takes a local development session's
+    (--challenger local), pinned on main's first-parent line: MAIN_FILE's, else MAIN_SHA's in the tree, kept as
+    $OUT/v3c-audit/main.txt, the --main the audit reads."""
+    extra, line = {}, TOY_MAIN
+    if given == "MAIN_SHA":
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        git = lambda *a: subprocess.run(["git", "-C", str(tree), "-c", "user.name=t", "-c", "user.email=t@t", *a],  # noqa: E731
+                                        check=True, capture_output=True, text=True).stdout
+        git("init", "-q")
+        for m in ("one", "two", "three"):
+            git("commit", "-q", "--allow-empty", "-m", m)
+        extra, line = {"MAIN_FILE": None, "MAIN_SHA": git("rev-parse", "HEAD~1").strip()}, git("rev-list", "--first-parent", "HEAD~1")
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert len(line.split()) == 2 and (tmp_path / "order.main").read_text() == line
+    assert (tmp_path / "out" / "v3c-audit" / "main.txt").read_text() == line
+
+
+@pytest.mark.parametrize("main, head, tail", [
+    ("gone.txt", "V3C-AUDIT: MAIN_FILE ", ", main's first-parent line its challenger session pins on, is missing or empty"),
+    (None, "V3C-AUDIT: no first-parent line of main for its challenger session to pin on (MAIN_FILE unset, and HEAD has "
+           "none in this tree): set MAIN_FILE", ""),
+])
+def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_path, main, head, tail):
+    """A MAIN_FILE that isn't there, or none in a tree without MAIN_SHA's line, leaves the session nothing to pin on: V3c
+    says so and runs no audit, which records_audit would refuse."""
+    rc, lines, order, _limits = _v3c(tmp_path, MAIN_FILE=main and str(tmp_path / main),
+                                     GIT_CEILING_DIRECTORIES=str(tmp_path))
+    assert rc == 1 and "audit" not in order, (lines, order)
+    assert sum(x.startswith(head) and x.endswith(tail) for x in lines) == 1, lines
 
 
 def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
