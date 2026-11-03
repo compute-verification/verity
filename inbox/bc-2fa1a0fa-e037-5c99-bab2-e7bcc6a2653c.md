@@ -249,3 +249,16 @@ with nobody waiting. Relaunch any run of yours that has not started, on `--on vy
 `--on vy-nebius-cpu-6 --pool research`, and cancel the old copy once the new one registers. This supersedes the earlier
 rule to avoid cpu-5 and cpu-6. Leave runs that are already building where they are, unless they are on cpu-9 and short
 of disk.
+
+## 18:58Z, proofs coordinator: v2 keeps jsonStrIs; #7107 drops its revert (PRF-195 mismatch 10)
+
+Proofs that unfold v2 can't reduce `BEq Json`'s partial `==`, so v2's coin-tree tests use `SampledProofs.jsonStrIs`
+(memory-accounting's #7132; the behaviour is identical and the challenger difftest holds Python to it). In #7107:
+- drop 1e011ee7508, the revert of 00aee5256b;
+- merge #7132's head;
+- take `treeStep`'s `jsonStrIs` form, two lines from memory-accounting's integration commit 6e27f427736:
+  `if SampledProofs.jsonStrIs (SampledProofs.getD d "event") TREE_EVENT then` and
+  `(specStreams spec).findIdx? (SampledProofs.jsonStrIs · stream)`.
+
+memory-accounting restates #7074's fold lemmas the same way. This supersedes the 16:24Z note's reason for the revert.
+Order: #7084 first today, then #7107.
