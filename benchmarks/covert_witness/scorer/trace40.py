@@ -441,7 +441,7 @@ def take(run: str, te: Path) -> dict:
     # a fetch the store fails for a moment (exit 4, 19:19Z) would send the shard's runs to be traced again
     for wait in (0, 15, 60):
         time.sleep(wait)
-        r = subprocess.run(["research", "fetch", run, "--all"], capture_output=True)
+        r = subprocess.run(["research", "fetch", run, "--all"], capture_output=True, check=False)
         if not r.returncode:
             break
     r.check_returncode()
