@@ -13,13 +13,16 @@ at most `N₀` of them, with the data `κ U u` of unit `u` of the workload `U`.
 * **A program** (`LeadProg`) is a strategy for each unit, among those the node's processors run (`can`), chosen as any
   function of the other units' coins: a unit's tables are fixed before its own coins, never before the others'.
 * **The run** (`costModel`) commits unit `u` when the lead's verifier accepts its call (`Accepted`), as an ideal
-  commitment that is correct by construction (`unitCommit`), and leaves a refused call blank. It costs the units'
-  priced W1 work (`unitWork`), makes no oracle call, and hashes with `sha` what each unit's execution hashed and what
-  the honest commitment of its words hashes (`unitHashed`), the messages the lead's `Break` reads.
+  commitment that is correct by construction (`unitCommit`), and leaves a refused call blank. It costs each unit's
+  priced W1 work plus `betaLead` a bit it exchanged (`unitCost`), as `G` and `G_tail` charge a call, makes no oracle
+  call, and hashes with `sha` what each unit's execution hashed and what the honest commitment of its words hashes
+  (`unitHashed`), the messages the lead's `Break` reads.
 * **The protocol** (`protocol`) compares no checked value, so a unit is correct exactly when its call is accepted, and
   declares `W_ref = ⌊32 · honestRegs⌋`, the honest priced work, for every unit.
 * **The gap** `gamma` is `1 − 32 · (honestRegs − gapFixed) / W_ref`, so `(1 − gamma) · W_ref` is the work below which
-  `G_tail` bounds a call's acceptance, and the error `eta` is `N · etaLead`, a union bound over the units.
+  `G_tail` bounds a call's acceptance, and the error `eta` is `N · etaLead`, a union bound over the units. `gamma` is
+  below 1 when the fixed gap is below the honest work (`FixedGapBelow`), which `Pouw.Guarantees.Lead.NontrivialTail`
+  proves at the three points.
 -/
 
 namespace Pouw.Lead.Game
@@ -66,9 +69,13 @@ noncomputable def unitCommit (sha : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Com
     else none
   else none
 
-/-- Unit `u`'s priced W1 work at the salt `s`; zero past `N₀`. -/
-def unitWork (prc : Prices100) {can : Strategy L → Prop} (p : LeadProg L N₀ can) (s : Salt L N₀) (u : ℕ) : ℕ :=
-  if h : u < N₀ then (p.play s ⟨u, h⟩).work prc (s ⟨u, h⟩) else 0
+/-- Unit `u`'s cost at the salt `s`: its priced W1 work plus `betaLead` a bit it exchanged, as `G` charges a call;
+zero past `N₀`. -/
+def unitCost (prc : Prices100) (C : Pouw.Lead.Commit L) {can : Strategy L → Prop} (p : LeadProg L N₀ can)
+    (s : Salt L N₀) (u : ℕ) : ℚ :=
+  if h : u < N₀ then
+    ((p.play s ⟨u, h⟩).work prc (s ⟨u, h⟩) : ℚ) + betaLead L C * ((p.play s ⟨u, h⟩).exec (s ⟨u, h⟩)).egress
+  else 0
 
 /-- What unit `u`'s execution hashed at the salt `s` and what the honest commitment of its words hashes. -/
 def unitHashed (sha : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
@@ -86,7 +93,7 @@ noncomputable def costModel (Q R : Type) (prc : Prices100) (sha : Hash.Msg → H
     Pouw.CostModel Q R (Salt L N₀) where
   Prog := LeadProg L N₀ can
   run p _ U _ _ s := unitCommit sha C κ p U s
-  cost p _ U _ _ s := ∑ u ∈ Finset.range U.layout.N, (unitWork prc p s u : ℝ)
+  cost p _ U _ _ s := ∑ u ∈ Finset.range U.layout.N, (unitCost prc C p s u : ℝ)
   calls _ _ _ _ _ _ := 0
   sha := sha
   hashed p _ U _ _ s := (List.range U.layout.N).flatMap (unitHashed sha C κ p U s)
@@ -108,6 +115,10 @@ variable {N₀}
 /-- The gap: `(1 − gamma) · W_ref = 32 · (honestRegs − gapFixed)`. -/
 noncomputable def gamma (C : Pouw.Lead.Commit L) : ℝ :=
   1 - ((32 * (honestRegs L C - gapFixed L C) : ℚ) : ℝ) / (⌊32 * honestRegs L C⌋₊ : ℝ)
+
+/-- **The fixed gap is below the honest work**: `gapFixed < honestRegs`, so `gamma < 1`. At `gamma ≥ 1` a budget bounds
+nothing (`T / (1 − gamma) ≤ 0`), so the game's statements take it. -/
+def FixedGapBelow (C : Pouw.Lead.Commit L) : Prop := gapFixed L C < honestRegs L C
 
 /-- The error at `N` units: `N · etaLead`. -/
 noncomputable def eta : ℕ → ℕ → ℝ := fun _ N => N * etaLead L
