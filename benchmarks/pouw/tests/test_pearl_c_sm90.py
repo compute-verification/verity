@@ -195,6 +195,61 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 
+def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypatch):
+    """`Debit.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
+    chunk's rows in the one copy put before it), and after its first call nothing else: no copy, synchronization or
+    allocation, so `Dev.timed` times the count's kernels alone."""
+    class Dev:
+        def __init__(self, cubin):
+            self.log, self.top = [], 1 << 20
+
+        def open(self):
+            pass
+
+        def alloc(self, n):
+            self.log.append(("alloc", n))
+            p, self.top = self.top, self.top + -(-n // 256) * 256
+            return p
+
+        def free(self, p):
+            self.log.append(("free", p))
+
+        def ck(self, f, *a):
+            self.log.append((f,))
+
+        def launch(self, name, grid, block, p=(), i=(), **kw):
+            self.log.append((name, grid, block, p, i))
+
+        def sync(self):
+            self.log.append(("sync",))
+
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setitem(sys.modules, "run", RUN)
+    monkeypatch.setattr(RUN, "Dev", Dev)
+    deb = load("pearl_c_sm90_debit", HERE / "debit.py")
+    rng = np.random.default_rng(7)
+    a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
+    budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
+    w, r = deb.Debit(b"", budget), deb.Debit(b"", budget)
+    w.words(a, b)
+    body = r.resident(a, b)
+    put = [e for e in r.dev.log if e[0] == "cuMemcpyHtoD_v2"]
+    body()
+    r.dev.log.clear()
+    body()
+    assert len(put) == 2 and all(e[0].startswith("debit_") for e in r.dev.log)
+    want = [e for e in w.dev.log if e[0].startswith("debit_")]
+
+    def named(d, e, a_at):
+        by = {p: n for n, (p, _) in d.live.items()}
+        return e[0], e[1], e[2], e[4], tuple("A′" if x == a_at else by.get(x, x) for x in e[3])
+
+    assert len(want) == len(r.dev.log) == 9
+    for i, (got, ref) in enumerate(zip(r.dev.log, want)):
+        assert named(r, got, r.live["a_all"][0] + i // 3 * deb.BLOCK_ROWS * k) == named(w, ref, w.live["a"][0])
+    sys.modules.pop("pearl_c_sm90_debit")
+
+
 def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
     """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
     gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
