@@ -27,7 +27,7 @@ names its order: default_rng(data_seed), step x batch). `--ema D` submits an exp
 The submitted model is always decode(θ, E).
 
 Checkpoints: the harness scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so E is encoded at
-the first step of each 5%. `--arms "lr=1e-4;lr=3e-4"` splits the budget into runs from θ in turn (a sweep in one
+the first step of each 5%, and a single arm's end is the submission's checkpoint. `--arms "lr=1e-4;lr=3e-4"` splits the budget into runs from θ in turn (a sweep in one
 candidate), in proportion to each arm's `share` (default 1; `share=1;share=2;share=4` sweeps run length, each arm's end
 fully decayed): no other encode shares an arm's last 5%, so every arm's end is a checkpoint; later arms' checkpoints carry
 the earlier arms' MACs; E is the arm whose last tenth of batches (each unseen when its loss is taken) had the lowest loss.
@@ -320,7 +320,8 @@ def main() -> int:
         return math.ceil((g + 1) * CHECKPOINTS / total)
 
     ends = np.cumsum([n for _, _, n in plans]) - 1
-    end_buckets = {bucket(int(e)) for e in ends}
+    # one arm's end is the submission, always a checkpoint, so its last 5% also gets the E at its first step
+    end_buckets = {bucket(int(e)) for e in ends} if len(arms) > 1 else set()
     fwd = torch.compile(net) if a.compile else net
     fused = prepare.DEVICE.startswith("cuda")
     steps, report, blobs, encoded = [], [], [], set()
