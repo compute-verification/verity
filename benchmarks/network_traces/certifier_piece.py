@@ -425,9 +425,9 @@ def rehearsed(run: Path) -> None:
 
 def release_run(r: dict) -> str | None:
     """The network certifier's run a served request's release names (requests.jsonl's ``release``, [run, N] under
-    ``--admit release-order``), None without one."""
+    ``--admit release-order``, run "" without the run header), None without one."""
     rel = r.get("release")
-    return rel[0] if isinstance(rel, list) and len(rel) == 2 else None
+    return (rel[0] or None) if isinstance(rel, list) and len(rel) == 2 else None
 
 
 def bind(reqs: list[dict], io: dict, run_id: str | None = None, served: list[dict] | None = None) -> dict[str, dict]:

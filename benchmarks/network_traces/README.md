@@ -134,8 +134,10 @@ refuses it or the leak bound's term that charges it, and the reason its verdict 
 process between the network certifier's server connections and the endpoint, playing an attack on the responses
 (timing, chunking, padding, an altered or extra id) or on the connections (one answered without the endpoint, a copy
 served around the network certifier); `certifier_piece.py front --attack NAME` puts it in a served rehearsal, and
-`judge NAME --front OUT --serve SERVE_DIR` reads that rehearsal as the attack's verdict. `tests/test_attacks.py` plays
-each attack on the network certifier at the scan's schedule on a virtual clock.
+`judge NAME --front OUT --serve SERVE_DIR` reads that rehearsal as the attack's verdict. `rehearse PORT SERVE_DIR OUT
+[--attacks NAME,...] -- FRONT_FLAGS` is served_verdicts.sh's `CERTIFIER_FRONT` for a serve step that plays the attacks
+one front after another against one serve-openai, each judged, their public verdicts in OUT/attacks.public.json.
+`tests/test_attacks.py` plays each attack on the network certifier at the scan's schedule on a virtual clock.
 
 ## The chain's run of record
 

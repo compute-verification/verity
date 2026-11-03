@@ -7,6 +7,7 @@ attack's served rehearsal as its verdict.
     python benchmarks/network_traces/attacks.py relay --attack NAME --listen PORT --to PORT --cell-bytes B
         [--bucket-ms 100] [--delay 27] [--nth 1] [--log FILE]
     python benchmarks/network_traces/attacks.py judge NAME --front OUT --serve SERVE_DIR
+    python benchmarks/network_traces/attacks.py rehearse PORT SERVE_DIR OUT [--attacks NAME,NAME...] -- FRONT_FLAGS...
 
 **The attacks** (`ATTACKS`). Each names its case (`CASES`), the party that plays it, what it does, its outcome
 (``refused``; ``charged``, inside a term the bound already counts; or ``gap``, what no check on the served path sees),
@@ -46,11 +47,21 @@ the same width), a request served around the network certifier, whose answer it 
 the connection, the attack, its bytes each way, the holds and the bits (the prover's own record, kept on its node).
 
 **The judge** (`judge`): an attack's served rehearsal (`certifier_piece.py front --attack`, its OUT's
-``session.json``, and the serve dir it kept the run in) read as the attack's verdict (`verdict`): the network
-certifier's check's outcome, and the piece's steps 1 and 2 (`bound`) on every request the endpoint received during the
-network certifier's run (its ``times.received`` within the run's span, a link-window either side, the front's
-warm-ups aside), so a request around the network certifier is read wherever its Commit window falls. ``ok`` when both
-are the attack's and the piece names the attack's reason.
+``session.json`` and `SPAN`, and the serve dir it kept the run in) read as the attack's verdict (`verdict`): the network
+certifier's check's outcome, and the piece's steps 1 and 2 (`bound`) on the requests the endpoint recorded for the run,
+the front's warm-ups aside: each carrying the run's release, and each carrying no run's that the endpoint received
+(``times.received``) while the front ran, by the node's clock (`SPAN`), so a request around the network certifier is
+read wherever its Commit window falls and another front's never. ``ok`` when both are the attack's and the piece names
+the attack's reason.
+
+**The rehearsal** (`rehearse`): served_verdicts.sh's ``CERTIFIER_FRONT`` (``LOAD=front``, the fronts' groups the run's
+load), one front after another against the one serve-openai, each playing one attack (``--attacks``, `SERVED` by
+default, in their order) at the front's flags after ``--`` and the attack's ``--tokens`` where it names one (``pad`` and
+``token-pad`` under the egress cells' cap, ``pad-cap`` at it: `UNDER_CAP`, `AT_CAP`), each judged. OUT/NAME is attack
+NAME's front's OUT, with its `SPAN` and verdict.json; OUT/attacks.json holds the verdicts, which name the run's requests
+and stay on the node, and OUT/attacks.public.json and stdout their public forms (`public`). Exit 0 when every verdict is
+``ok``. The piece reads exactly one kept run, so a serve dir that a rehearsal of more than one attack served answers no
+piece: the rehearsal's run is the serve step alone.
 """
 from __future__ import annotations
 
@@ -59,7 +70,9 @@ import asyncio
 import json
 import re
 import secrets
+import subprocess
 import sys
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,7 +86,6 @@ import warden_chain as WC  # noqa: E402
 import warden_serve as WS  # noqa: E402
 
 from verity.core.protocols.certifier import io_tie as IT  # noqa: E402
-from verity.core.protocols.certifier import warden as W  # noqa: E402
 from verity.core.protocols.certifier.active import id_request  # noqa: E402
 from verity.core.protocols.certifier.release import RELEASE_HEADER, RUN_HEADER  # noqa: E402
 
@@ -114,6 +126,8 @@ class Attack:
     relay: str | None = None
     waits: tuple[str, ...] = ()
     tests: tuple[str, ...] = ()
+    #: the front's ``--tokens`` its served rehearsal plays it at (the front's own when None)
+    tokens: int | None = None
 
     def __post_init__(self) -> None:
         if self.case not in CASES or self.outcome not in OUTCOMES or self.kind not in KINDS:
@@ -135,6 +149,9 @@ A5 = "benchmarks/one_stage/tests/test_a5_warden.py"
 TESTS = "benchmarks/network_traces/tests/test_attacks.py"
 FAILED = ("inside k_fail: where a connection fails is the server's choice, which log2(cap + 1) a connection counts; "
           "the rehearsal certifies no served answer")
+#: the front's ids out for a response at V3c's scan class's egress cells' cap (its ids and the trailer), and one under
+AT_CAP = CP.SS.A.SCAN_CLASSES[CP.V3C_SCAN_CLASS][0] - 1
+UNDER_CAP = AT_CAP - 1
 
 ATTACKS = {a.name: a for a in [
     Attack("jitter", "timing or chunking games", "server", "each id event held 0 or half a bucket by a secret bit",
@@ -151,10 +168,10 @@ ATTACKS = {a.name: a for a in [
     Attack("pad", "size padding", "server", "a cell of padding bytes before the response's trailer", "refused",
            f"the certified egress (warden_chain.io): a DATA cell that is no output's, which the piece rejects; "
            f"{AUDIT} refuses the client's response (complete False)", NOT_ID, "device", gate=False, piece="reject",
-           relay="pad", tests=(TESTS,)),
+           relay="pad", tests=(TESTS,), tokens=UNDER_CAP),
     Attack("pad-cap", "size padding", "server", "the padding cell on a response at the egress cells' cap",
            "charged", f"{AUDIT}: the connection failed closed at its last egress cell; {FAILED}", LIMIT, "device",
-           gate=False, piece="missing", relay="pad", tests=(TESTS,)),
+           gate=False, piece="missing", relay="pad", tests=(TESTS,), tokens=AT_CAP),
     Attack("pad-read", "size padding", "prover", "a statement reading a pad in a data cell's place", "refused",
            REGISTERED, "made for another units' wiring", "proof", tests=(A5,)),
     Attack("pad-named-read", "size padding", "prover", "a pad in a data cell's place, its rows under the Program's "
@@ -162,7 +179,7 @@ ATTACKS = {a.name: a for a in [
     Attack("token-pad", "size padding", "server", "one more id event before the trailer", "refused",
            f"{BIND}: the certified output is one id longer than the endpoint's (a cell count the server moves is "
            "inside k_sched; the ids are the egress tie's)", OTHER_OUTPUT, "clear", gate=True, piece="reject",
-           relay="token-pad", waits=("the egress tie",), tests=(TESTS,)),
+           relay="token-pad", waits=("the egress tie",), tests=(TESTS,), tokens=UNDER_CAP),
     Attack("token", "an altered output token", "server", "the first event's id one other", "refused",
            f"{BIND}: the certified output isn't the endpoint's", OTHER_OUTPUT, "clear", gate=True, piece="reject",
            relay="token", waits=("the egress tie",), tests=(TESTS,)),
@@ -374,20 +391,22 @@ async def serve_relay(attack: str, listen: int, to: int, *, cell_bytes: int, buc
 # --- the judge ---------------------------------------------------------------------------------------------------------
 
 BOUND = "every request served is a certified one, each once, and every certified request is served"
+#: the node's clock around a rehearsal's front, which `rehearse` writes beside its session
+SPAN = "span.json"
 
 
 def received(r: dict) -> float | None:
     return (r.get("times") or {}).get("received")
 
 
-def piece_of(warden: Path, rows: list[dict] | Callable[[W.WardenParams], list[dict]]) -> dict:
+def piece_of(warden: Path, rows: list[dict] | Callable[[str], list[dict]]) -> dict:
     """The piece's steps 1 and 2 on the network certifier run `warden` (`certifier_piece.rehearsed`, then
-    `certifier_piece.bind` of the endpoint's requests `rows`, or of those `rows` gives at the run's schedule):
+    `certifier_piece.bind` of the endpoint's requests `rows`, or of those `rows` gives for the run's id):
     ``{"verdict": "bound" | "reject" | "missing", "why"}``."""
     try:
         CP.rehearsed(warden)
-        dep, params = WC.deployment(warden)
-        rows = rows(params) if callable(rows) else rows
+        dep, _ = WC.deployment(warden)
+        rows = rows(dep["run_id"]) if callable(rows) else rows
         CP.bind(rows, WC.io(warden), dep["run_id"], rows)
     except CP.Rejected as e:
         return {"verdict": "reject", "why": str(e)}
@@ -398,18 +417,19 @@ def piece_of(warden: Path, rows: list[dict] | Callable[[W.WardenParams], list[di
     return {"verdict": "bound", "why": BOUND}
 
 
-def bound(serve_dir: Path, session: dict, skip: set[str] = frozenset()) -> dict:
-    """`piece_of` the front's kept run and every request the endpoint received in the run's span (its
-    ``times.received``), a link-window either side, but the users `skip`."""
+def bound(serve_dir: Path, session: dict, span: tuple[float, float], skip: set[str] = frozenset()) -> dict:
+    """`piece_of` the front's kept run and the requests the endpoint recorded for it, but the users `skip`: each
+    carrying the run's release, and each carrying no run's that it received (its ``times.received``, the node's clock)
+    within `span`, the node's clock around the front, or that has no such stamp."""
     run = session.get("run")
     if not run:
         return {"verdict": "missing", "why": f"the front kept no run: {session.get('refused')}"}
+    lo, hi = span
 
-    def rows(params: W.WardenParams) -> list[dict]:
-        T = params.window * params.bucket_ms / 1000
-        lo, hi = session["origin_unix"] - T, session["origin_unix"] + session["session_s"] + T
+    def rows(run_id: str) -> list[dict]:
         return [r for r in CP._lines(serve_dir / "requests.jsonl") if r.get("user") not in skip
-                and (received(r) is None or lo <= received(r) <= hi)]
+                and (CP.release_run(r) == run_id
+                     or (CP.release_run(r) is None and (received(r) is None or lo <= received(r) <= hi)))]
 
     unpacked = None
     try:
@@ -437,9 +457,54 @@ def verdict(name: str, session: dict, piece: dict) -> dict:
 
 def judge(name: str, front: Path, serve_dir: Path) -> dict:
     session = json.loads((front / "session.json").read_text())
+    span = json.loads((front / SPAN).read_text())
     warm = front / "warmup.json"
     skip = {r["user"] for r in json.loads(warm.read_text())["requests"]} if warm.is_file() else set()
-    return verdict(name, session, bound(serve_dir.resolve(), session, skip))
+    return verdict(name, session, bound(serve_dir.resolve(), session, (span["start_unix"], span["end_unix"]), skip))
+
+
+# --- the rehearsal -----------------------------------------------------------------------------------------------------
+
+#: the served attacks in the order a rehearsal plays them: those around the network certifier last, so no copy of theirs
+#: falls in another front's span
+SERVED = tuple(a.name for a in ATTACKS.values() if a.served)
+PUBLIC = ("attack", "case", "outcome", "kind", "gate_accepted", "piece", "expected", "ok")
+
+
+def public(v: dict) -> dict:
+    """A verdict as it leaves the node: the outcomes, the attack's and whether the piece named its reason, never the
+    piece's why, which names the run's requests."""
+    return {k: v[k] for k in PUBLIC} | {"named": ATTACKS[v["attack"]].reason in v["why"]}
+
+
+def rehearse(port: int, serve_dir: Path, out: Path, names: list[str], flags: list[str], *,
+             run: Callable[[list[str]], int] = lambda argv: subprocess.run(argv).returncode,
+             clock: Callable[[], float] = time.time) -> list[dict]:
+    """Each attack of `names` in turn: `certifier_piece.py front PORT SERVE_DIR OUT/NAME FLAGS --attack RELAY` (and
+    ``--tokens`` the attack's, when it names one), the node's clock around it in OUT/NAME/`SPAN`, then `judge`'s
+    verdict in OUT/NAME/verdict.json and its public form (`public`) on stdout. OUT/attacks.json gets every verdict,
+    OUT/attacks.public.json their public forms."""
+    out.mkdir(mode=0o700, parents=True, exist_ok=True)
+    got = []
+    for name in names:
+        a, front = ATTACKS[name], out / name
+        argv = [sys.executable, str(HERE / "certifier_piece.py"), "front", str(port), str(serve_dir), str(front),
+                *flags, "--attack", a.relay, *(["--tokens", str(a.tokens)] if a.tokens is not None else [])]
+        start = clock()
+        rc = run(argv)
+        front.mkdir(parents=True, exist_ok=True)
+        (front / SPAN).write_text(json.dumps({"start_unix": start, "end_unix": clock(), "rc": rc}) + "\n")
+        try:
+            v = judge(name, front, serve_dir)
+        except (OSError, ValueError, KeyError) as e:
+            v = verdict(name, {}, {"verdict": "missing", "why": f"the front (exit {rc}) left no session: "
+                                                                f"{type(e).__name__}: {e}"})
+        (front / "verdict.json").write_text(json.dumps(v, indent=1, sort_keys=True) + "\n")
+        got.append(v)
+        print(f"ATTACK {json.dumps(public(v), sort_keys=True)}", flush=True)
+    (out / "attacks.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+    (out / "attacks.public.json").write_text(json.dumps([public(v) for v in got], indent=1, sort_keys=True) + "\n")
+    return got
 
 
 def parser() -> argparse.ArgumentParser:
@@ -460,11 +525,27 @@ def parser() -> argparse.ArgumentParser:
     j.add_argument("name", choices=sorted(a.name for a in ATTACKS.values() if a.served))
     j.add_argument("--front", type=Path, required=True, help="the front's OUT")
     j.add_argument("--serve", type=Path, required=True, help="the serve dir the front kept its run in")
+    h = sub.add_parser("rehearse")
+    h.add_argument("port", type=int)
+    h.add_argument("serve_dir", type=Path)
+    h.add_argument("out", type=Path)
+    h.add_argument("--attacks", default=",".join(SERVED), help=f"NAME,NAME...: of {','.join(SERVED)} (all of them); "
+                   "after them, -- and the fronts' flags")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
-    a = parser().parse_args(argv)
+    argv, flags = sys.argv[1:] if argv is None else list(argv), []
+    if argv[:1] == ["rehearse"] and "--" in argv:
+        argv, flags = argv[:argv.index("--")], argv[argv.index("--") + 1:]
+    p = parser()
+    a = p.parse_args(argv)
+    if a.cmd == "rehearse":
+        names = [x for x in a.attacks.split(",") if x]
+        if not names or (bad := sorted(set(names) - set(SERVED))):
+            p.error(f"--attacks {a.attacks!r}: names of {','.join(SERVED)}, not {bad or 'none'}")
+        got = rehearse(a.port, a.serve_dir.resolve(), a.out.resolve(), names, flags)
+        return 0 if all(v["ok"] for v in got) else 1
     if a.cmd == "table":
         print(table(a.markdown))
         return 0

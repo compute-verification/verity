@@ -385,31 +385,89 @@ def test_the_relays_copy_is_the_requests_own_but_its_release_and_user():
     assert AT.other_event(event, PARAMS.payload) == AT.IT.id_event(40, PARAMS.payload)
 
 
-def test_the_judge_reads_a_kept_front_and_its_serve_dir(tmp_path, honest):
-    """`judge` on the gate's layout: the front's session.json, the kept fetch under the serve dir's private/certifier,
-    and requests.jsonl, the requests the endpoint received outside the run's span and the warm-ups not read."""
+def _kept(serve: Path, run: str, played: Played) -> None:
+    """`played`'s network certifier run kept as the front keeps the gate's fetch, under the serve dir's
+    private/certifier."""
     import tarfile
-    run, serve = "r-honest", tmp_path / "serve"
     kept = serve / CP.PRIVATE / run
     kept.mkdir(parents=True)
-    end = tmp_path / "end.json"
-    end.write_text(json.dumps(honest.session))
+    end = serve.parent / f"{run}-end.json"
+    end.write_text(json.dumps(played.session))
     with tarfile.open(kept / "fetch.tar.gz", "w:gz") as tar:
-        tar.add(honest.out, arcname=f"{run}/witness")
+        tar.add(played.out, arcname=f"{run}/witness")
         tar.add(end, arcname=f"{run}/end.json")
-    origin, span = 1000.0, PARAMS.window * PARAMS.bucket_ms / 1000
-    rows = [dict(r, times={"received": origin + 1}) for r in honest.served]
-    stray = dict(honest.served[0], engine_id="old", user="varied.0", release=None, times={"received": origin - 9 * span})
-    warm = dict(honest.served[0], engine_id="warm", user="warmup-ab-0", release=None, times={"received": origin - 1})
-    (serve / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [stray, warm, *rows]))
+
+
+def _front(front: Path, played: Played, run: str, span: tuple[float, float]) -> None:
+    front.mkdir(parents=True, exist_ok=True)
+    (front / "session.json").write_text(json.dumps(played.session | {"run": run}))
+    (front / AT.SPAN).write_text(json.dumps({"start_unix": span[0], "end_unix": span[1]}))
+
+
+def test_the_judge_reads_a_kept_front_and_its_serve_dir(tmp_path, honest):
+    """`judge` on the gate's layout: the front's session.json and span, the kept fetch under the serve dir's
+    private/certifier, and requests.jsonl, of which another run's requests, those without a release the endpoint
+    received outside the front's span, and the warm-ups aren't read."""
+    run, serve = "r-honest", tmp_path / "serve"
+    _kept(serve, run, honest)
+    start = 1000.0
+    rows = [dict(r, times={"received": start + 1}) for r in honest.served]
+    stray = dict(honest.served[0], engine_id="old", user="varied.0", release=None, times={"received": start - 1})
+    other = dict(honest.served[0], engine_id="other", release=["cd" * 16, 0], times={"received": start + 2})
+    warm = dict(honest.served[0], engine_id="warm", user="warmup-ab-0", release=None, times={"received": start + 1})
+    (serve / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [stray, other, warm, *rows]))
     front = tmp_path / "front"
-    front.mkdir()
-    (front / "session.json").write_text(json.dumps(honest.session | {"run": run, "origin_unix": origin,
-                                                                      "session_s": span}))
+    _front(front, honest, run, (start, start + 60))
     (front / "warmup.json").write_text(json.dumps({"requests": [{"user": "warmup-ab-0"}]}))
     got = AT.judge("jitter", front, serve)
     assert (got["piece"], got["ok"]) == ("bound", True), got
     (serve / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [warm | {"user": "x"}, *rows]))
     got = AT.judge("bypass", front, serve)
     assert (got["piece"], got["ok"]) == ("reject", True), got
-    assert not list(kept.glob("unpacked-*"))
+    assert not list((serve / CP.PRIVATE / run).glob("unpacked-*"))
+
+
+def test_a_rehearsal_plays_each_attack_in_a_front_of_its_own_and_publishes_its_verdict_alone(tmp_path, honest,
+                                                                                               capsys, monkeypatch):
+    """`rehearse` with a stand-in front: each attack's front at the rehearsal's flags, the attack's relay and its tokens;
+    its span on the node's clock; the verdict judged from what the front kept, its public form without the piece's
+    why; and a front that kept nothing is the certifier missing."""
+    serve, out, ticks = tmp_path / "serve", tmp_path / "out", itertools.count(1000.0, 10.0)
+    serve.mkdir()
+    (serve / "requests.jsonl").write_text("".join(json.dumps(dict(r, times={"received": 1001.0})) + "\n"
+                                                  for r in honest.served))
+    argvs = []
+
+    def front(argv: list[str]) -> int:
+        argvs.append(argv)
+        if argv[argv.index("--attack") + 1] == "jitter":
+            _kept(serve, "r-jitter", honest)
+            _front(Path(argv[5]), honest, "r-jitter", (0.0, 0.0))
+            return 0
+        Path(argv[5]).mkdir(parents=True)
+        (Path(argv[5]) / "session.json").write_text(json.dumps({"refused": "the gate is busy"}))
+        return 4
+
+    got = AT.rehearse(7, serve, out, ["jitter", "pad", "bypass-user"], ["--gate", "local", "--tokens", "4"],
+                      run=front, clock=lambda: next(ticks))
+    assert [a[a.index("--attack") + 1] for a in argvs] == ["jitter", "pad", "bypass-user"]
+    assert all(a[2:7] == ["front", "7", str(serve), str(out / n), "--gate"] for a, n in
+               zip(argvs, ["jitter", "pad", "bypass-user"]))
+    assert argvs[1][-2:] == ["--tokens", str(AT.UNDER_CAP)] and "--tokens" not in argvs[0][-2:]
+    assert json.loads((out / "jitter" / AT.SPAN).read_text()) == {"start_unix": 1000.0, "end_unix": 1010.0, "rc": 0}
+    assert [(v["attack"], v["piece"], v["ok"]) for v in got] == [("jitter", "bound", True), ("pad", "missing", False),
+                                                                 ("bypass-user", "missing", False)]
+    assert "the gate is busy" in got[1]["why"]
+    pub = json.loads((out / "attacks.public.json").read_text())
+    assert pub == [AT.public(v) for v in got] and all("why" not in v for v in pub)
+    assert json.loads((out / "attacks.json").read_text()) == got
+    assert json.loads((out / "pad" / "verdict.json").read_text()) == got[1]
+    lines = [x for x in capsys.readouterr().out.splitlines() if x.startswith("ATTACK ")]
+    assert [json.loads(x.removeprefix("ATTACK ")) for x in lines] == pub
+    called = []
+    monkeypatch.setattr(AT, "rehearse", lambda *a: called.append(a) or [{"ok": True}])
+    assert AT.main(["rehearse", "7", "s", "o", "--attacks", "late,extra", "--", "--gate", "local", "--tokens", "3"]) == 0
+    assert called == [(7, Path("s").resolve(), Path("o").resolve(), ["late", "extra"],
+                       ["--gate", "local", "--tokens", "3"])]
+    with pytest.raises(SystemExit):
+        AT.main(["rehearse", "7", "s", "o", "--attacks", "swapped-read", "--", "--gate", "local"])
