@@ -18,8 +18,10 @@ For a submission it checks, in order, and records every result in the witness re
 3. changed: the declared set covers every tensor that differs from θ or isn't θ's; φ and the lowest updated layer are
    computed from it, at the model's own positions;
 4. the harness's record (`te_core.run --script`, RUN.json) is this E's (`harness_submission`) and found nothing invalid;
-   FLOPs, 2x the MACs it counted, within TRAIN_FLOP_BUDGET x HARNESS_FLOP_SLACK; its steps' wall seconds within
-   GPU_SECONDS_CAP; the declared trainable set covers `changed` (the analytic `prepare.train_flops` is recorded beside it);
+   FLOPs, 2x the MACs it counted, within its tier's budget (`prepare.budget`: TRAIN_FLOP_BUDGET, or the long tier's
+   LONG_C0 x the start's C0, which a board assignment names, `tier_assigned`) x HARNESS_FLOP_SLACK; its steps' wall
+   seconds within the tier's; the declared trainable set covers `changed` (the analytic `prepare.train_flops` is recorded
+   beside it);
 5. the training job's whole process tree (TREE.json, sandbox.py): every process's CPU seconds but the harness's own
    within TREE_CPU_SLACK, and no process but the harness's computed on a GPU, or on a GPU it didn't lease
    (`tree_counted`); the seconds from the job's start to the submitted E's write are recorded;
@@ -91,12 +93,13 @@ def check(sub: Path, timing: Path, run: Path, tree: Path, island: Path, scored: 
     rec = prepare.start_record(meta["start"])
     theta = prepare.load_theta(meta["start"])
     isl = json.loads(island.read_text()) if island.is_file() else None
+    b = prepare.budget(meta["start"]) | {"flop_slack": prepare.HARNESS_FLOP_SLACK,
+                                         "assigned_by": os.environ.get("CW_TIER_BY") or None}
     out = {"schema": "covert-witness/witness/v5", "version": prepare.VERSION, "data": prepare.DATA,
            "measurement_commit": os.environ.get("RESEARCH_SOURCE_SHA", ""), "island": isl,
-           "start": meta["start"], "theta_digest": rec["digest"],
-           "budget": {"train_flops": prepare.TRAIN_FLOP_BUDGET, "flop_slack": prepare.HARNESS_FLOP_SLACK,
-                      "gpu_seconds": prepare.GPU_SECONDS_CAP}, "checks": {}, "notes": meta.get("notes")}
+           "start": meta["start"], "theta_digest": rec["digest"], "budget": b, "checks": {}, "notes": meta.get("notes")}
     c = out["checks"]
+    c["tier_assigned"] = b["tier"] == "search" or bool(b["assigned_by"])
     c["theta"] = meta["theta_digest"] == rec["digest"]
     c["source_clean"] = source_clean()
     c["island_recorded"] = bool(isl and isl.get("commit") and isl.get("digest"))
@@ -156,9 +159,9 @@ def check(sub: Path, timing: Path, run: Path, tree: Path, island: Path, scored: 
     c["harness_theta"] = r.get("start", {}).get("digest") == rec["digest"]
     c["harness_submission"] = r.get("submitted", {}).get("e_sha256") == out["E"]["sha256"]
     c["harness_valid"] = not r.get("invalid")
-    c["flop_budget"] = flops <= prepare.HARNESS_FLOP_SLACK * prepare.TRAIN_FLOP_BUDGET
+    c["flop_budget"] = flops <= prepare.HARNESS_FLOP_SLACK * b["train_flops"]
     out["gpu_seconds"] = tot["wall_s"]
-    c["gpu_seconds"] = tot["wall_s"] <= prepare.GPU_SECONDS_CAP
+    c["gpu_seconds"] = tot["wall_s"] <= b["gpu_seconds"]
     out["implied_flop_per_second"] = flops / tot["wall_s"] if tot["wall_s"] else None
     out["tree"], c["tree_counted"] = tree_of(json.loads(tree.read_text()) if tree.is_file() else None, r)
     t = json.loads(timing.read_text())

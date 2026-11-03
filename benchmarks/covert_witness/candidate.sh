@@ -24,15 +24,19 @@ LF=${CW_LF_CORPUS:-/workspace/research/scratch/learning-frontier/fineweb-edu-gpt
 STARTS=${CW_STARTS:-/workspace/research/te/starts}
 SEALED=${CW_SEALED:-/workspace/research/te/sealed}
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-training:covert-witness}
-# the seconds cap, the training job's hard limit (1.2x the cap, plus loading, encoding and the family checks), the
-# evaluation job's, and the GPU lease's in minutes
-read -r cap kill ekill lease <<< "$("$P" -c "import sys; sys.path.insert(0, '$here'); import prepare; c = prepare.GPU_SECONDS_CAP
-print(int(c), int(1.2 * c + 600), 1200, int((1.2 * c + 600 + 1200) / 60 + 5))")"
+# START's budget at the run's tier (prepare.budget, CW_TIER): the seconds cap, the training job's hard limit (1.2x the
+# cap, plus loading, encoding and the family checks), the evaluation job's, the GPU lease's in minutes, and its MACs
+limits() {
+  "$P" -c 'import sys; sys.path.insert(0, sys.argv[1]); import prepare; b = prepare.budget(sys.argv[2]); c = b["gpu_seconds"]
+print(int(c), int(1.2 * c + 600), 1200, int((1.2 * c + 600 + 1200) / 60 + 5), b["train_flops"] / 2)' "$here" "$1"
+}
 
 if [ "${1:-}" = --leased ]; then
   shift
   start=$1 S=$2 island=$3 program=$4
   shift 4
+  read -r cap kill ekill lease bmacs <<< "$(limits "$start")"
+  [ -n "$bmacs" ] || { echo "candidate: no budget for $start at tier ${CW_TIER:-search}"; exit 2; }
   fraction=0.98 prev=
   for x in "$@"; do
     case "$x" in --budget-fraction=*) fraction=${x#*=} ;; esac
@@ -81,7 +85,7 @@ print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
        --env HF_HUB_OFFLINE=1 --env CUDA_CACHE_PATH=/tmp/cuda --env "CW_ROOT=$R" --env "CW_LF_CORPUS=$LF"
        --env "CW_STARTS=$STARTS" --env "CW_SEALED=$SEALED" --env "RESEARCH_RUN_ID=${RESEARCH_RUN_ID:-}"
        --env "RESEARCH_COMMIT=${RESEARCH_SOURCE_SHA:-}")
-  for k in CW_DEVICE CW_FINAL CW_NODE CUDA_DEVICE_ORDER OMP_NUM_THREADS PYTORCH_CUDA_ALLOC_CONF; do
+  for k in CW_DEVICE CW_FINAL CW_NODE CW_TIER CUDA_DEVICE_ORDER OMP_NUM_THREADS PYTORCH_CUDA_ALLOC_CONF; do
     [ -n "${!k:-}" ] && env+=(--env "$k=${!k}")
   done
   dev=()
@@ -103,7 +107,8 @@ print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
   timeout --signal=TERM --kill-after=30 "$kill" sudo -n /usr/bin/python3 -I "$here/sandbox.py" --root "$S/root" \
     --uid "$(id -u)" --gid "$(id -g)" --tree "$S/tree.json" --cwd "$here" "${ro[@]}" --rw "$T" "${dev[@]}" "${env[@]}" \
     -- "$P" -m te_core.run --script "islands/$island/$program" --out "$T/run" --families "$T/families" \
-    --budget-fraction "$fraction" --budget-minutes "$("$P" -c "print($cap / 60)")" --meta "$meta" \
+    --budget-fraction "$fraction" --budget-macs "$("$P" -c 'import sys; print(float(sys.argv[1]) * float(sys.argv[2]))' "$fraction" "$bmacs")" \
+    --budget-minutes "$("$P" -c "print($cap / 60)")" --meta "$meta" \
     -- --start "$start" --out "$T/sub" "$@" > "$OUT/train.log" 2>&1
   rc=$?
   t1=$(date +%s.%N)
@@ -130,6 +135,8 @@ if [ ! -d "$STARTS/$start" ] && [ -n "${2:-}" ] && [ -d "$STARTS/$2" ]; then
   exit 2
 fi
 shift
+read -r cap kill ekill lease bmacs <<< "$(limits "$start")"
+[ -n "$lease" ] || { echo "candidate: no budget for $start at tier ${CW_TIER:-search}"; exit 2; }
 island=${CW_ISLAND:?candidate: name the island (CW_ISLAND; launch.py sets it)} program=${CW_PROGRAM:-train.py}
 case "$island/$program" in
   /*|*..*|*//*) echo "candidate: island $island and program $program must be names inside islands/"; exit 2 ;;

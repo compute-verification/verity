@@ -95,6 +95,11 @@ HARNESS_FLOP_SLACK = 1.1
 #: the candidate's steps' wall seconds as the harness times them (its own loading, encoding and evaluation excluded), on one
 #: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
 GPU_SECONDS_CAP = 3000.0
+#: the run's tier (`budget`): search, or long (`launch.py --long`, only for a run the board assigns as long), whose budget
+#: is LONG_C0 times the start's own training compute and LONG_GPU_SECONDS of its steps
+TIER = os.environ.get("CW_TIER", "search")
+LONG_C0 = 100
+LONG_GPU_SECONDS = 30 * 3600.0
 MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWLORA2\n": "lora2", b"CWSEED1\n": "seedlog",
          b"CWSPAR1\n": "sparse", b"CWQUAN1\n": "quant", b"CWMODL1\n": "model"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
@@ -145,6 +150,29 @@ def start_record(name: str) -> dict:
     if rec["digest"] != START_DIGESTS.get(name):
         raise SystemExit(f"prepare: start {name}'s registered digest is not prepare.START_DIGESTS's")
     return rec
+
+
+def c0_flops(name: str) -> float:
+    """A search start's own training compute in FLOPs, 2x its MACs: its shape's counted `c0_macs` (`starts_store.json`),
+    else three forward passes' MACs per training token (te_core.policy.c0's stub)."""
+    if name not in STORE:
+        raise SystemExit(f"prepare: {name} is not a search start (starts_store.json), so it has no C0")
+    shape = STORE[name]["shape"]
+    return 2.0 * float(shape.get("c0_macs") or 3 * shape["forward_macs_per_token"] * shape["tokens"])
+
+
+def budget(name: str, tier: str | None = None) -> dict:
+    """A training job's budget on start `name` at `tier` (default TIER): its FLOPs, 2x the MACs the harness counts (within
+    HARNESS_FLOP_SLACK), and its steps' wall seconds. search: TRAIN_FLOP_BUDGET and GPU_SECONDS_CAP; long: LONG_C0 x
+    `c0_flops` and LONG_GPU_SECONDS."""
+    tier = tier or TIER
+    if tier == "search":
+        return {"tier": tier, "train_flops": TRAIN_FLOP_BUDGET, "gpu_seconds": GPU_SECONDS_CAP}
+    if tier == "long":
+        c0 = c0_flops(name)
+        return {"tier": tier, "train_flops": LONG_C0 * c0, "gpu_seconds": LONG_GPU_SECONDS, "c0_flops": c0,
+                "c0_multiple": LONG_C0}
+    raise SystemExit(f"prepare: no tier {tier!r} (search or long)")
 
 
 def load_theta(name: str, check: bool = True) -> dict[str, torch.Tensor]:
