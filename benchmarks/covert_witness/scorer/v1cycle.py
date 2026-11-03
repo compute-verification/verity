@@ -651,6 +651,43 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
             "untraced_runs": sum(bool(v.get("error")) for v in traced.values()), "ledger": built, **log}
 
 
+#: `python -c LEAN MODULE ARGS` runs te_core's MODULE with each record's copy of its run's trace swapped, as the ledger
+#: reads it, for one object per distinct trace: at 21:56Z 5598 records carried 1.16 GB of traces, 230 distinct (46 MB),
+#: and the copies took the 21:31Z re-score past this VM's memory (killed at 9.4 GB). A module that changed a shared
+#: trace would change every record that shares it, so a changed one stops the module before any PUT and at its exit
+#: (rc 70)
+LEAN = """
+import atexit, hashlib, json, os, runpy, sys
+from te_core import console, ledger
+shared = {}
+def key(tr):
+    return hashlib.sha256(json.dumps(tr).encode()).hexdigest()
+class Json:
+    def __getattr__(self, name):
+        return getattr(json, name)
+    def loads(self, s, *a, **k):
+        x = json.loads(s, *a, **k)
+        f = x.get("formalism") if isinstance(x, dict) else None
+        tr = f.get("trace") if isinstance(f, dict) else None
+        if isinstance(tr, dict):
+            f["trace"] = shared.setdefault(key(tr), tr)
+        return x
+def check():
+    changed = sum(key(tr) != k for k, tr in shared.items())
+    if changed:
+        print(f"v1cycle LEAN: {changed} shared traces changed in place; this run's output doesn't hold",
+              file=sys.stderr, flush=True)
+        os._exit(70)
+put = console.put
+def checked_put(*a, **k):
+    check()
+    return put(*a, **k)
+ledger.json, console.put = Json(), checked_put
+atexit.register(check)
+runpy.run_module(sys.argv.pop(1), run_name="__main__", alter_sys=True)
+"""
+
+
 def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None = None, extra: list[str] = ()) -> str:
     """te_core.rescore into `out` (module docstring, 2) on the ledger at `root` with `extra` options, or with
     FINAL_DIR's values for `final` through v1final.py and v1runs.py's per-run P4 (final, and the search's prefixed
@@ -661,7 +698,7 @@ def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None
     args = [*ledger_args(out, root), *extra]
     runs = [sys.executable, str(HERE / "v1runs.py"), *args]
     cmds = ([[sys.executable, str(HERE / "v1final.py"), str(final), *args], [*runs, "--final", str(final)],
-             [*runs, "--prefix", "search-runs-"]] if final else [[sys.executable, "-m", "te_core.rescore", *args]])
+             [*runs, "--prefix", "search-runs-"]] if final else [[sys.executable, "-c", LEAN, "te_core.rescore", *args]])
     logs = []
     for c in cmds:
         r = subprocess.run(c, cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
@@ -669,14 +706,15 @@ def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None
         logs.append(r.stdout + r.stderr)
         (out / "rescore.log").write_text("\n".join(logs))
         if r.returncode:
-            raise SystemExit(f"v1cycle: {' '.join(c[1:3])} failed (rc {r.returncode}):\n{r.stderr[-2000:]}")
+            what = c[3] if c[1] == "-c" else " ".join(c[1:3])
+            raise SystemExit(f"v1cycle: {what} failed (rc {r.returncode}):\n{r.stderr[-2000:]}")
     return logs[0].strip().splitlines()[-1]
 
 
 def branches(out: Path, put: bool, root: Path | None = None) -> str:
     """te_core.panels' frontier-branches into `out` after the re-score (its gate cache reused), on the ledger at
     `root`, PUT with `put`; the PUT's status, or why there is none."""
-    r = subprocess.run([sys.executable, "-m", "te_core.panels", FB, *ledger_args(out, root), *ladder_fit(),
+    r = subprocess.run([sys.executable, "-c", LEAN, "te_core.panels", FB, *ledger_args(out, root), *ladder_fit(),
                         *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
     (out / "panels.log").write_text(r.stdout + r.stderr)
@@ -745,7 +783,7 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
         return {"algorithm-policy": "not run (the builder's v2 isn't on this te_core yet)"}
     d = out / "algorithm-policy"
     ladder, cap = ladder_points(out / "ladder"), ladder_fit()
-    r = subprocess.run([sys.executable, "-m", "te_core.algorithm_policy", *ledger_args(d, root),
+    r = subprocess.run([sys.executable, "-c", LEAN, "te_core.algorithm_policy", *ledger_args(d, root),
                         *(x for p in ladder for x in ("--ladder-points", str(p))), *cap,
                         *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
