@@ -430,6 +430,36 @@ def test_the_cells_are_the_grid_and_the_reference_shapes_at_their_exact_c_and_k(
     assert {v for k, v in cells.items() if k not in policy.MARKS} == set(policy.grid(SHAPE))
 
 
+def test_the_consoles_c_is_one_full_session_of_the_reference_model():
+    """The dashboard's ruling: the console's block is one session of the 45M reference, 4,096 tokens in and 1,024 out,
+    attention and the LM head included, every MAC at the bf16 GEMM price: 1.5739 times the old 5,120 x 2N x 740."""
+    s = policy.session(45_029_888, 4096, 1024)
+    assert s["shape"] == {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 50_304}
+    assert s["macs"] == {"matrices": 5120 * 6 * (4 * 512 ** 2 + 3 * 512 * 1408), "lm_head": 5120 * 512 * 50_304,
+                         "attention": 2 * 6 * 512 * (4096 ** 2 + 1024 * 4096 + 1024 * 1025 // 2)}
+    assert s["gates"] == 362_592_337_920 * 1480.125 == policy.CONSOLE[0] == policy.session_gates(45_029_888, 4096, 1024)
+    assert s["k_bits"] == policy.CONSOLE[1] == 65_536
+    assert round(policy.CONSOLE[0] / (5_120 * 2 * 45e6 * 740), 6) == 1.573884
+    # attention over the whole prompt at each prompt token, as te_core.flops counts the causal SDPA
+    assert policy.session(45_029_888, 8, 0)["attended"] == 64 and policy.session(45_029_888, 8, 2)["attended"] == 64 + 19
+    with pytest.raises(ValueError, match="no stated shape"):
+        policy.session(7e9, 4096, 1024)
+    with pytest.raises(ValueError, match="parameters, not"):
+        policy.session(45_029_888, 4096, 1024, policy.SHAPES[35_658_240])
+
+
+def test_each_starts_shape_is_stated_and_its_counted_forward_is_the_sessions_products():
+    """Every start's size has a stated shape with its parameters, d_model, layers and vocabulary; a token's products at
+    the start's context are its counted forward MACs but its elementwise ops, under 0.1% of them."""
+    for name, shape in policy.starts().items():
+        sh = policy.SHAPES[shape["parameters"]]
+        assert policy.parameters(sh) == shape["parameters"], name
+        assert (sh["d_model"], sh["n_layer"], sh["vocab"]) == (shape["d_model"], shape["n_layer"], shape["vocab"]), name
+        assert sh["d_model"] // sh["n_head"] == 64, name
+        products = sum(policy.session(shape["parameters"], shape["ctx"], 0)["macs"].values()) / shape["ctx"]
+        assert 0 < shape["forward_macs_per_token"] - products < 1e-3 * shape["forward_macs_per_token"], name
+
+
 def test_honest_is_the_least_gates_of_any_checkpoint_and_s_is_at_least_one():
     """The coordinator's 19:50Z rule: H and W* read every checkpoint of every valid record, a mid-schedule one
     included; each cell carries W*'s Slowdown terms."""
@@ -532,8 +562,8 @@ def test_a_union_of_witnesses_bounds_every_gate_so_per_gate_caps_are_a_sensitivi
 
 def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names():
     """The max is over the token, decoding and fresh-products kinds; the token kind binds where Δ isn't counted
-    (decoding then equals it, and ties bind the kind resting on less); fresh products are unmeasured until
-    te_core.io_bound is in the tree; reading B isn't a reading of the bound."""
+    (decoding then equals it, and ties bind the kind resting on less); fresh products are unmeasured on a record with
+    no product rows; reading B isn't a reading of the bound."""
     c = 1e11
     coded = one_segment(delta=500.0, decoder=5e10)
     b = F.bound(coded, c, 2800)
@@ -550,6 +580,72 @@ def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names()
         F.at(coded, c, 2800, "B")
     with pytest.raises(ValueError, match="some of"):
         F.bound(coded, c, 2800, kinds=("tokens",))
+
+
+#: one bf16 product of two fresh operands over K = 512, half of one_segment's 1e12 gates
+SQUARE = {"macs": 0.5e12 / (23682 / 16), "outputs": 0.5e12 / (23682 / 16) / 512, "k_dim": 512, "k_whole": 512, "b_a": 16,
+          "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
+
+
+def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
+    """The term is te_core.io_bound's bound with Λ proved on the record's products and |C|, measured only where the
+    capture says the products are summed in a chain (io_bound's constant): where the trace doesn't give the order, or
+    gives a tree, the tree constant applies, which io_bound doesn't have, so it's unmeasured with io_bound's chain
+    figure in the inputs; so is a term at a k other than the one the products were classified at. The term is the same
+    over S steps of the same products, and the products survive the record's JSON."""
+    from te_core import io_bound
+
+    c, k = 1e11, policy.CONSOLE[1]
+    chain = replace(one_segment(), products={"k": k, "order": "chain", "products": [SQUARE]})
+    b = F.bound(chain, c, k)
+    rho = io_bound.bound([SQUARE], c, k, 1e12)["proved"]["rho"]
+    assert 100 < rho < 1e3 and b["terms"]["fresh_products"] == rho and b["binding"] == "fresh_products"
+    assert "fresh_products" not in b["unmeasured"]
+    assert b["inputs"]["fresh_products"]["io_bound"]["share"] == pytest.approx(0.5, rel=1e-12)
+    assert F.published(chain)["reading"] == ("A" if F.READING_A else "B")
+    assert F.published(chain, reading="A")["binding_kind"] == "fresh_products"
+    assert F.published(chain, reading="A")["rho"] == pytest.approx(rho * policy.CONSOLE[0] / c, rel=1e-12)
+    for order, why in ((None, "isn't in the trace, so the tree constant applies"), ("tree", "summed in a tree")):
+        other = F.bound(replace(chain, products=chain.products | {"order": order}), c, k)
+        assert other["terms"]["fresh_products"] is None and why in other["unmeasured"]["fresh_products"]
+        assert "chain constant only" in other["unmeasured"]["fresh_products"]
+        assert other["inputs"]["fresh_products"]["io_bound"]["proved"]["rho"] == rho
+    elsewhere = F.bound(chain, c, 80_000)
+    assert elsewhere["terms"]["fresh_products"] is None and "classified at k = 65536" in elsewhere["unmeasured"][
+        "fresh_products"]
+    S = 7
+    steps = replace(chain, parts=(replace(chain.parts[0], gates=S * 1e12, tokens=S * 1e3, token_gates=S * 1e12,
+                                          affected_gates=S * 5e11),),
+                    products=chain.products | {"products": [SQUARE | {"macs": S * SQUARE["macs"],
+                                                                      "outputs": S * SQUARE["outputs"]}]})
+    assert F.bound(steps, c, k)["terms"]["fresh_products"] == pytest.approx(rho, rel=1e-10)
+    assert F.from_json(chain.to_json()).products == chain.products
+    assert "fresh operands" in F.RESTS_ON["fresh_products"] and "P-chain" in F.RESTS_ON["fresh_products"]
+
+
+def test_products_of_takes_io_bounds_fresh_rows_from_captured_steps():
+    """`products_of` is io_bound.rows_of's fresh rows of each captured step at k, their MACs and output entries times
+    the segment's steps: a low-rank chain through trained weights, whose a and b products and, at rank 64, last's are
+    fresh (test_io_bound's)."""
+    import torch
+    import torch.nn.functional as tF
+    from torch import nn
+
+    from te_core import io_bound
+    from te_core.capture import capture_step
+
+    torch.manual_seed(0)
+    m = nn.Sequential(nn.Linear(256, 256, bias=False), nn.Linear(256, 64, bias=False), nn.Linear(64, 256, bias=False),
+                      nn.Linear(256, 256, bias=False))
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: tF.mse_loss(mm(b[0]), b[1]),
+                     (torch.empty(6, 256), torch.empty(6, 256)))
+    fresh = [r.product() for r in io_bound.rows_of(g, "bfloat16", policy.CONSOLE[1]) if r.kind == "fresh"]
+    got = F.products_of([(3, g), (2, g)])
+    assert fresh and got["k"] == policy.CONSOLE[1] and got["order"] is None
+    assert got["products"] == [p | {"macs": n * p["macs"], "outputs": n * p["outputs"]} for n in (3, 2) for p in fresh]
+    assert F.products_of([(1, g)], k=1024, order="chain")["k"] == 1024.0
+    with pytest.raises(ValueError, match="one of"):
+        F.products_of([(1, g)], order="split")
 
 
 def test_reduction_update_and_the_token_form_are_sensitivities_never_the_bound():

@@ -79,7 +79,8 @@ from te_core.formalism import READ_BACKS
 __all__ = ["Scalar", "record"]
 
 aten = torch.ops.aten
-_ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant")
+_ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant",
+             "encode_model")
 #: the stubbed data stream's length (the corpus's order of magnitude, so a program's windows never run out)
 STREAM_TOKENS = 3 * 10 ** 9
 _NP = {torch.float32: np.float32, torch.float64: np.float64, torch.float16: np.float16, torch.int64: np.int64,
