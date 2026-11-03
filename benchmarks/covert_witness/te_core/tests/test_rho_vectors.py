@@ -86,14 +86,14 @@ def test_a_dense_step_and_a_lora_step_have_a_finite_token_term_at_the_console_de
     and tiles still holds a few percent of c, so the token term is finite (4.4's runs alone gave ∞, the
     full-token-state overclaim), above 1, and binds: ρ is it, below the per-gate sensitivity, which isn't closed under
     unions. With k = 8 Mbit (dense) or 800 kbit (LoRA, whose update is 10 times smaller) a block holds c: the term is
-    the affected share. Fresh products are unmeasured at these k (the fixtures' products are classified at the
-    console's), and nearly every token gate is in a tile."""
+    the affected share. Fresh products are a measured 0 at these k (the fixtures' products are classified at each k
+    of the console's dial, and none is fresh), and nearly every token gate is in a tile."""
     default = rho_vectors.CELLS[0]
     for case, k in (("dense", 8_000_000), ("lora", 800_000)):
         a = by(built, case, *default)
         assert 1 < a["terms"]["token"] < math.inf and a["binding"] == "token" and a["rho"] == a["terms"]["token"]
         assert a["terms"]["token"] < a["sensitivities"]["per_gate"]
-        assert a["terms"]["fresh_products"] is None and "fresh_products" in a["unmeasured"]
+        assert a["terms"]["fresh_products"] == 0 and "fresh_products" not in a["unmeasured"]
         assert a["inputs"]["token"]["unplaced"] < 0.01
         at = by(built, case, default[0], k)
         assert at["terms"]["token"] == pytest.approx(at["inputs"]["token"]["share"])
@@ -130,13 +130,13 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     kind with what it rests on, and since 4.5's packer (`READING_A`; the coordinator's 09:02Z: reading B until then) a
     row whose token kind is measured publishes reading A, `at`'s ρ, with the bound's terms and its reduction and update
     sensitivities (the console's cell has room for no more). At the
-    dial's default the dense, LoRA and grown-adapter steps bind on the token kind, partial since their fresh products
-    are classified at the console's k; the adapter with its live code has no measured kind above 1 and fresh products
-    unmeasured there, so it publishes None, saying so (coordinator 12:20Z), its reduction sensitivity above 9 beside
-    it. A row without entries or an op log
+    dial's default the dense, LoRA and grown-adapter steps bind on the token kind with every kind measured (their
+    fresh products are a measured 0 at each k of the dial); the adapter with its live code has no kind above 1, so it
+    publishes 1, binding none, its reduction sensitivity above 9 beside it, and off the dial (`OFF_DIAL`), where its
+    fresh products are unmeasured, None, saying so (coordinator 12:20Z). A row without entries or an op log
     publishes reading B, Slowdown's token form, a target, and so does every row where `READING_A` is off (on since
-    the coordinator's 11:18Z ruling); read under A, such a row measures no kind, so it publishes None,
-    binding none and resting on `unmeasured`, never 1 (coordinator 09:46Z)."""
+    the coordinator's 11:18Z ruling); read under A, such a row measures only the fresh-products kind (a 0 here), so
+    it publishes None, binding none and resting on `unmeasured`, never 1 (coordinator 09:46Z)."""
     default = rho_vectors.CELLS[0]
     for case in rho_vectors.CASES:
         v = by(built, case, *default)
@@ -149,12 +149,15 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         assert one["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if one["rho"] is None else one["binding_kind"]]
         if case != "adapter-live":
             assert (one["rho"], one["binding_kind"]) == (num(v["rho"]), "token") == (num(v["rho"]), v["binding"])
-            assert one["partial"] and one["why"] is None
-    live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
-    assert (live["rho"], live["binding_kind"], live["partial"]) == (None, "unmeasured", False)
-    assert live["why"] == "the measured kinds give at most 1; fresh products unmeasured"
-    assert max(num(t) for t in live["terms"].values() if t is not None) <= 1
-    assert live["sensitivities"]["reduction"] > 9
+            assert not one["partial"] and one["why"] is None
+    live = formalism.from_json(built["measured"]["adapter-live"])
+    one = formalism.published(live, v["c"], v["k"], "A")
+    assert (one["rho"], one["binding_kind"], one["partial"]) == (1.0, "none", False)
+    assert one["sensitivities"]["reduction"] > 9
+    off = formalism.published(live, v["c"], rho_vectors.OFF_DIAL, "A")
+    assert (off["rho"], off["binding_kind"], off["partial"]) == (None, "unmeasured", False)
+    assert off["why"] == "the measured kinds give at most 1; fresh products unmeasured"
+    assert max(num(t) for t in off["terms"].values() if t is not None) <= 1
     for gone in ("entries", "ops"):
         m = formalism.from_json(built["measured"]["dense"] | {gone: None})
         b, at = formalism.published(m, v["c"], v["k"]), formalism.at(m, v["c"], v["k"])
@@ -163,8 +166,9 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         assert b["rests_on"] == formalism.RESTS_ON_CELL["target"]
         a = formalism.published(m, v["c"], v["k"], "A")
         assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "unmeasured", "unmeasured")
-        assert a["why"] == "no kind is measured"
-        assert set(a["terms"]) == set(formalism.KINDS) and all(t is None for t in a["terms"].values())
+        assert a["why"] == "the measured kinds give at most 1; token, decoding unmeasured"
+        assert set(a["terms"]) == set(formalism.KINDS) and a["terms"] == {
+            "fresh_products": 0.0, "token": None, "decoding": None}
     m = formalism.from_json(built["measured"]["dense"])
     assert formalism.published(m) == formalism.published(m, *policy.CONSOLE)
 
@@ -203,6 +207,47 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     assert dense["inputs"]["products"]["trace_order"] == "unknown"
     assert round(dense["term"]) == 163_708 and round(dense["fresh_cell"]) == 2_870_251 and dense["subset"] is None
     assert dense["inputs"]["products"]["system"] is not None and dense["inputs"]["products"]["p_match"] == []
+
+
+def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_with_and_without_p_cell(built):
+    """The console's dial ports the fresh-products term from a row's rho_inputs (te_core.panels' `rho_columns`, which
+    holds `formalism.fresh_per_c` to its digits): at each k of the dial the term is c times its entry's first number
+    and fresh_cell c times its second, null where the entry is null, each cell `formalism.fresh_products` there. The
+    45M dense step's term is measured at the dial's three least k and void above them; the tiny start's cases have no
+    fresh product at any k."""
+    from dataclasses import replace
+
+    from te_core import panels
+    from te_core.capture.products import DIAL_K
+
+    d = built["dial"]
+    assert d["k"] == list(DIAL_K) == list(panels.K_LEVELS)
+    ms = {name: formalism.from_json(built["measured"][name]) for name in rho_vectors.CASES}
+    rows = json.loads((rho_vectors.FIXTURES / rho_vectors.DENSE_45M).read_text())
+    C = rows["gates"]
+    ms["the 45M start's dense step"] = replace(
+        ms["dense"], parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
+        products=formalism.products_of_trace(rows))
+    assert [v["name"] for v in d["vectors"]] == list(ms)
+    for v in d["vectors"]:
+        per = v["fresh_per_c"]
+        assert list(per) == [str(k) for k in DIAL_K] and v["C_gates"] == ms[v["name"]].gates
+        assert len(v["cells"]) == len(DIAL_K) * (1 + len(rho_vectors.DIAL_TOKENS))
+        for cell in v["cells"]:
+            entry = per[str(cell["k"])]
+            if entry is None:
+                assert (cell["term"], cell["fresh_cell"], cell["why"]) == (None, None, formalism.FRESH_VOID)
+            else:
+                assert cell["term"] == pytest.approx(cell["c"] * entry[0], rel=1e-12) and cell["why"] is None
+                assert cell["fresh_cell"] == pytest.approx(cell["c"] * entry[1], rel=1e-12)
+        cols = json.loads(panels.rho_columns(ms[v["name"]], rho_vectors.W_FWD)["rho_inputs"])[panels.FRESH]
+        assert cols.keys() == per.keys() and all(
+            (a is None) == (b is None) and (a is None or a == pytest.approx(b, rel=1e-5)) for a, b in
+            zip(cols.values(), per.values()))
+        if v["name"] in rho_vectors.CASES:
+            assert all(e == [0.0, 0.0] for e in per.values())
+    dense = d["vectors"][-1]["fresh_per_c"]
+    assert [dense[str(k)] is None for k in DIAL_K] == [False] * 3 + [True] * 4
 
 
 def test_the_published_vectors_take_each_case_of_the_rule(built):
