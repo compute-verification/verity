@@ -43,7 +43,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
@@ -953,7 +954,7 @@ DECLARATION_SECONDS = 60
 """A stated parameter: an execution phase's length in a deployment, which scales a monitoring period's declarations and
 the layout's capacity in each."""
 TICKS_PER_SECOND = 10 ** 9
-PERIODS = {"week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "year": 365 * 24 * 3600}
+PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 def pooled(lines: Sequence[Mapping[str, Any]]) -> tuple[Fraction, int, int]:
@@ -1222,7 +1223,7 @@ class Verifier:
             self.public["refused"] = {"name": refused, "detail": detail}
         self.public["lines"] = self.lines
         out = [Send(p, msg("Done", 0)) for p in self.peers()]
-        return [*out, Record(self.public, "output"), Finish(self.public, refused)]
+        return [*out, LogEntry(self.public, "output"), Finish(self.public, refused)]
 
     def on(self, r: Received) -> list[Any]:
         try:
@@ -1323,7 +1324,7 @@ class Verifier:
                 "answers": {i: {"verdict": a["verdict"], "reason": a["reason"]} for i, a in answers.items()},
                 "composite": compose(self.protocol, answers)}
         self.lines.append(line)
-        return [Record(line, "output")]
+        return [LogEntry(line, "output")]
 
     def statement(self, k: int, u: int) -> Statement:
         """Unit u of declaration k's statement, from what the verifier holds: the record, the previous record and the

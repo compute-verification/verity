@@ -38,7 +38,7 @@ from verity.errors import InvalidArtifact, ProtocolError
 from . import hm96
 from .identity import identity_digest_sha512
 from .indexed import RangeIndexedDomain
-from .merkle import _LEAF, CommitmentDomain, MerkleTree, _hash, _uint
+from .merkle import _LEAF, CommitmentDomain, MerkleTree, frame_hash, _uint
 from .multiproof import multiproof, verify_multiproof
 from .rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 
@@ -84,7 +84,7 @@ def leaf(domain_id: bytes, rank: int, bc: bytes) -> bytes:
     """The ``frame-v3-sha512`` leaf of the row at ``rank`` whose commit string is ``bc``, from the domain id alone: ``row_leaf``
     over ``hm96.SHA512.tree_leaf(key, bc)`` under ``hm96-sha512/row-seg/v1``."""
 
-    return _hash(_LEAF, domain_id, _uint(rank), _uint(rank), SCHEMA.encode(), INST.tree_leaf(KEY, bc), hash="sha512")
+    return frame_hash(_LEAF, domain_id, _uint(rank), _uint(rank), SCHEMA.encode(), INST.tree_leaf(KEY, bc), hash="sha512")
 
 
 def _string(s: Any) -> bytes:
@@ -219,7 +219,7 @@ def step_domain(context: bytes, step: int, tables: int) -> CommitmentDomain:
 def root_leaf(domain_id: bytes, index: int, root: bytes) -> bytes:
     """The ``frame-v3-sha512`` leaf at ``index`` of a tree over roots, whose value is ``root``, from the domain id alone."""
 
-    return _hash(_LEAF, domain_id, _uint(index), _uint(index), ROOTS_SCHEMA.encode(), _digest(root, "a root"), hash="sha512")
+    return frame_hash(_LEAF, domain_id, _uint(index), _uint(index), ROOTS_SCHEMA.encode(), _digest(root, "a root"), hash="sha512")
 
 
 @dataclass(frozen=True, slots=True)

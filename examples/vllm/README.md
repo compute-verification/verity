@@ -67,8 +67,10 @@ doesn't control.
 
 - The workload: the integration's one (`integrations/vllm/workloads/`) that `placement.toml`'s `row` names, with its
   requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh`
-  fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the Build's manifest in the
-  workload dir that `placement.toml`'s `COMMIT_RUN` names.
+  fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the workload's Build of record,
+  which `verity-vllm predict row` writes from the workload alone before serving. The traced Build in the workload dir
+  that `placement.toml`'s `COMMIT_RUN` names is its cross-check (`predict compare --predicted`), and the endpoint serves
+  only when they agree.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one sampling block of varied requests (`--varied`, or with
   `LOAD=fixed` one full sampling block of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
   burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network certifier's
@@ -86,7 +88,7 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
 
 1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
    that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
-   the Commit the endpoint commits under.
+   the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
