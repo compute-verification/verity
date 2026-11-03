@@ -78,6 +78,29 @@
     "tokens_per_param": 4.76,
     "forward_macs_per_token": 107893504
    }
+  },
+  "s-t20": {
+   "digest": "071d3867a17a5f8e16a15f26b3141b58bf16fbb53c01abacc6a8d6b0b1f360b1",
+   "files": {
+    "start.json": "cc49c326d9745e95cdf1f1a97194b6f4bb545e4edc63b36e95ca99cf64a5f007",
+    "theta.safetensors": "7b3677757171d2013e6b5fd44dbf93e078fd038acc3d69e914500d88fa30c84c"
+   },
+   "bytes": 142652034,
+   "shape": {
+    "family": "lf",
+    "d_model": 512,
+    "n_layer": 6,
+    "vocab": 32000,
+    "ctx": 1024,
+    "tokenizer": "bpe32k",
+    "parameters": 35658240,
+    "tokens": 385482752,
+    "tokens_per_param": 10.81,
+    "forward_macs_per_token": 41983232.0,
+    "c0_macs": 56433095360686437
+   },
+   "art": "art:3fcff2eb18f8dce7a74bee9f42c233f33d33a3cb624a29b3f0bd620ff306fe17",
+   "path": "starts"
   }
  },
  "exported_by": "r20261102-095551-8f54"
