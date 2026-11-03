@@ -12,16 +12,18 @@ and `start_qij` the sets its partial sums received at their width give:
    `b` bits of `U_u` each, and the made ones number at most `e_j k / b` for each of `G`'s classes `j`
    (`System.sum_fanout_le`).
 2. **Several products in a block** (`sum_card_le_shared`): triples `T_q` with `Σ_q |π₁₂ T_q| |π₂₃ T_q| ≤ c H²`,
-   `b H ≤ K₁` and `b_C Σ_q |π₁₃ T_q| ≤ K₂ + b_C s` have `Σ_q |T_q| ≤ √c (K₁ / b) (√(K₂ / b_C) + √s)`: Loomis–Whitney on
+   `b H ≤ K₁` and `b_C Σ_q |π₁₃ T_q| ≤ K₂ + b_C s` have `Σ_q |T_q| ≤ √c (K₁ / b) √(K₂ / b_C + s)`: Loomis–Whitney on
    each, `|T_q| ≤ √(|π₁₂| |π₂₃|) √|π₁₃|`, then Cauchy–Schwarz over `q`.
 3. **A block's whole cells** (`System.sum_card_cellWhole_le`): 2 at `T_qu`, with P-share on `G` and `H` the values
    `I_u` has, `K₁ = k (1 + E)` by 1, and `K₂ = k`, `s = s_u = Σ_q Σ_ij |I_u ∩ start_qij| / b_C` by the partial sums
    received (`Standard.received_sums`), `I_u` reading at most `k` of `G`'s MACs' gates, the MACs being apart
    (`System.sum_card_macs_le`).
-4. **The cap** (`SecurityProofs.SumCap`): 3 summed over blocks, with `Σ_u √s_u ≤ √(m Σ_u s_u)` and `Σ_u s_u ≤ O`, each
-   start held once (`sum_sum_card_inter_le`), and the split cells, `w Σ_u Σ_q |U_u ∩ macs_q| ≤ m w k`
+4. **The cap** (`SecurityProofs.SumCap`): 3 summed over blocks, with
+   `Σ_u √(k / b_C + s_u) ≤ √(m (m k / b_C + Σ_u s_u))` by Cauchy–Schwarz and `Σ_u s_u ≤ O`, each start held once
+   (`sum_sum_card_inter_le`), and the split cells, `w Σ_u Σ_q |U_u ∩ macs_q| ≤ m w k`
    (`Standard.card_le_cellWhole_add`).
-5. **The bound** (`SecurityProofs.SumBound`): the cap inverted by `chainBlocks_le`.
+5. **The bound** (`SecurityProofs.SumBound`): the cap with `√(X Y) ≤ (t X + Y / t) / 2` (`sqrt_mul_le_half_add`),
+   inverted (`div_le_of_le_add_sqrt`).
 
 P-share on a set within one class is P-share at that class's `c_j` (`System.sharedOn_of_shared`).
 -/
@@ -35,20 +37,36 @@ open scoped ENNReal
 
 variable {d : Declaration}
 
-/-- `√(a + b) ≤ √a + √b` for `a, b ≥ 0`. -/
-theorem sqrt_add_le_add {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) : √(a + b) ≤ √a + √b := by
+/-- `√(X Y) ≤ (t X + Y / t) / 2` for `X, Y ≥ 0` and `t > 0`. -/
+theorem sqrt_mul_le_half_add {X Y t : ℝ} (hX : 0 ≤ X) (hY : 0 ≤ Y) (ht : 0 < t) :
+    √(X * Y) ≤ (t * X + Y / t) / 2 := by
   rw [Real.sqrt_le_left (by positivity)]
-  nlinarith [Real.sq_sqrt ha, Real.sq_sqrt hb, mul_nonneg (Real.sqrt_nonneg a) (Real.sqrt_nonneg b)]
+  have h : t * X * (Y / t) = X * Y := by
+    field_simp
+  nlinarith [sq_nonneg (t * X - Y / t)]
+
+/-- **A cap inverted** at `t > 0`: `N ≤ m Γ + h √(m (m a + O))` has
+`(N - h O / (2 t)) / (Γ + h (t + a / t) / 2) ≤ m`. -/
+theorem div_le_of_le_add_sqrt {N m Γ h a O t : ℝ} (hm : 0 ≤ m) (hΓ : 0 ≤ Γ) (hh : 0 ≤ h) (ha : 0 ≤ a) (hO : 0 ≤ O)
+    (ht : 0 < t) (hN : N ≤ m * Γ + h * √(m * (m * a + O))) :
+    (N - h * O / (2 * t)) / (Γ + h * (t + a / t) / 2) ≤ m := by
+  refine div_le_of_le_mul₀
+    (add_nonneg hΓ (div_nonneg (mul_nonneg hh (add_nonneg ht.le (div_nonneg ha ht.le))) zero_le_two)) hm ?_
+  have h1 := mul_le_mul_of_nonneg_left (sqrt_mul_le_half_add hm (add_nonneg (mul_nonneg hm ha) hO) ht) hh
+  have h2 : h * ((t * m + (m * a + O) / t) / 2) = m * (h * (t + a / t) / 2) + h * O / (2 * t) := by
+    field_simp
+    ring
+  linarith
 
 /-- **Several products in a block**: triples `T_q` over `q ∈ G` with `Σ_q |π₁₂ T_q| |π₂₃ T_q| ≤ c H²`, `b H ≤ K₁` and
-`b_C Σ_q |π₁₃ T_q| ≤ K₂ + b_C s` have `Σ_q |T_q| ≤ √c (K₁ / b) (√(K₂ / b_C) + √s)`. -/
+`b_C Σ_q |π₁₃ T_q| ≤ K₂ + b_C s` have `Σ_q |T_q| ≤ √c (K₁ / b) √(K₂ / b_C + s)`. -/
 theorem sum_card_le_shared {ι : Type*} {α β γ : ι → Type*} [∀ q, DecidableEq (α q)] [∀ q, DecidableEq (β q)]
     [∀ q, DecidableEq (γ q)] (G : Finset ι) (T : (q : ι) → Finset (α q × β q × γ q)) {c H K₁ K₂ s b bC : ℝ}
-    (hH : 0 ≤ H) (hb : 0 < b) (hC : 0 < bC) (hK₂ : 0 ≤ K₂) (hs : 0 ≤ s)
+    (hH : 0 ≤ H) (hb : 0 < b) (hC : 0 < bC)
     (hxy : ∑ q ∈ G, (((T q).image fun x => (x.1, x.2.1)).card : ℝ) * ((T q).image fun x => (x.2.1, x.2.2)).card ≤
       c * H ^ 2)
     (hHK : b * H ≤ K₁) (hz : bC * ∑ q ∈ G, (((T q).image fun x => (x.1, x.2.2)).card : ℝ) ≤ K₂ + bC * s) :
-    ∑ q ∈ G, ((T q).card : ℝ) ≤ √c * (K₁ / b) * (√(K₂ / bC) + √s) := by
+    ∑ q ∈ G, ((T q).card : ℝ) ≤ √c * (K₁ / b) * √(K₂ / bC + s) := by
   have hHb : H ≤ K₁ / b := by
     rw [le_div_iff₀ hb]
     linarith
@@ -59,8 +77,8 @@ theorem sum_card_le_shared {ι : Type*} {α β γ : ι → Type*} [∀ q, Decida
       √c * H :=
     calc _ ≤ √(c * H ^ 2) := Real.sqrt_le_sqrt hxy
       _ = √c * H := by rw [Real.sqrt_mul' c (sq_nonneg H), Real.sqrt_sq hH]
-  have h2 : √(∑ q ∈ G, (((T q).image fun x => (x.1, x.2.2)).card : ℝ)) ≤ √(K₂ / bC) + √s :=
-    (Real.sqrt_le_sqrt hz').trans (sqrt_add_le_add (div_nonneg hK₂ hC.le) hs)
+  have h2 : √(∑ q ∈ G, (((T q).image fun x => (x.1, x.2.2)).card : ℝ)) ≤ √(K₂ / bC + s) :=
+    Real.sqrt_le_sqrt hz'
   calc ∑ q ∈ G, ((T q).card : ℝ)
       ≤ ∑ q ∈ G, √((((T q).image fun x => (x.1, x.2.1)).card : ℝ) * ((T q).image fun x => (x.2.1, x.2.2)).card) *
           √(((T q).image fun x => (x.1, x.2.2)).card : ℝ) :=
@@ -71,10 +89,9 @@ theorem sum_card_le_shared {ι : Type*} {α β γ : ι → Type*} [∀ q, Decida
           √(∑ q ∈ G, (((T q).image fun x => (x.1, x.2.2)).card : ℝ)) :=
         Real.sum_sqrt_mul_sqrt_le G (fun _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
           (fun _ => Nat.cast_nonneg _)
-    _ ≤ √c * H * (√(K₂ / bC) + √s) := mul_le_mul h1 h2 (Real.sqrt_nonneg _) (mul_nonneg (Real.sqrt_nonneg _) hH)
-    _ ≤ √c * (K₁ / b) * (√(K₂ / bC) + √s) :=
-        mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hHb (Real.sqrt_nonneg _))
-          (add_nonneg (Real.sqrt_nonneg _) (Real.sqrt_nonneg _))
+    _ ≤ √c * H * √(K₂ / bC + s) := mul_le_mul h1 h2 (Real.sqrt_nonneg _) (mul_nonneg (Real.sqrt_nonneg _) hH)
+    _ ≤ √c * (K₁ / b) * √(K₂ / bC + s) :=
+        mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hHb (Real.sqrt_nonneg _)) (Real.sqrt_nonneg _)
 
 namespace System
 
@@ -143,7 +160,7 @@ theorem card_hadValues_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ �
   linarith [mul_le_mul_of_nonneg_left hmade hb'.le]
 
 /-- **A block's whole cells**: in block `u` of a partition into inference blocks, the MACs of a set `G`'s cells that it
-holds whole number at most `√c_G (k (1 + E) / b) (√(k / b_C) + √s_u)`, `E` the whole-making factors of `G`'s classes
+holds whole number at most `√c_G (k (1 + E) / b) √(k / b_C + s_u)`, `E` the whole-making factors of `G`'s classes
 summed and `s_u` the gates of `G`'s starts it holds over `b_C`. -/
 theorem sum_card_cellWhole_le [Fintype κ] [DecidableEq κ] {c k b bC : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ}
     {μ : κ → ℝ} (hS : ∀ p, (sys.prod p).Wiring) (hV : sys.Values) (hsh : sys.Shared c k cs)
@@ -158,8 +175,8 @@ theorem sum_card_cellWhole_le [Fintype κ] [DecidableEq κ] {c k b bC : ℕ} {cs
     {m : ℕ} {P : Partition d.D m} (hP : P.IsCK d c k) (u : Fin m) :
     ∑ q ∈ G, (((sys.prod q).cellWhole (cell q) (P.gates u)).card : ℝ) ≤
       √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-        (√((k : ℝ) / bC) + √(((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
-          (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC)) := by
+        √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+          (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) := by
   have hI := inferenceBlock_gates hP u
   have hbpos : (0 : ℝ) < b := by exact_mod_cast hb
   have hCpos : (0 : ℝ) < bC := by exact_mod_cast hC
@@ -186,8 +203,7 @@ theorem sum_card_cellWhole_le [Fintype κ] [DecidableEq κ] {c k b bC : ℕ} {cs
     have h2 := h1.trans (Nat.add_le_add_right (sys.sum_card_macs_le hap hI) _)
     exact_mod_cast h2
   exact sum_card_le_shared G (fun q => (sys.prod q).cellWhole (cell q) (P.gates u)) (Nat.cast_nonneg _) hbpos hCpos
-    (Nat.cast_nonneg _) (div_nonneg (Nat.cast_nonneg _) hCpos.le) hxy
-    (sys.card_hadValues_le hS hV hsh hW hM hb hcs hA hμ hI G) hz
+    hxy (sys.card_hadValues_le hS hV hsh hW hM hb hcs hA hμ hI G) hz
 
 end System
 
@@ -217,31 +233,31 @@ theorem SumCap : Guarantees.SumCap := by
       bC ≤ ((∑ q ∈ G, sys.ni q * sys.nj q : ℕ) : ℝ) := by
     rw [← sum_div, div_le_iff₀ hCpos]
     exact_mod_cast hstarts
-  have hsq : ∑ u, √(((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q), (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) /
-      bC) ≤ √((m : ℝ) * (∑ q ∈ G, sys.ni q * sys.nj q : ℕ)) := by
+  have hsq : ∑ u, √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+      (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) ≤
+      √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ))) := by
     have h := Real.sum_sqrt_mul_sqrt_le univ (f := fun _ : Fin m => (1 : ℝ))
-      (g := fun u => ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q), (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) /
-        bC) (fun _ => zero_le_one) (fun _ => div_nonneg (Nat.cast_nonneg _) hCpos.le)
+      (g := fun u => (k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+        (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) (fun _ => zero_le_one)
+      (fun _ => add_nonneg (div_nonneg (Nat.cast_nonneg _) hCpos.le) (div_nonneg (Nat.cast_nonneg _) hCpos.le))
     simp only [Real.sqrt_one, one_mul, sum_const, card_univ, nsmul_eq_mul, mul_one, Fintype.card_fin] at h
     refine h.trans ?_
     rw [← Real.sqrt_mul (Nat.cast_nonneg _)]
-    exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hO (Nat.cast_nonneg _))
+    refine Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left ?_ (Nat.cast_nonneg _))
+    rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+    linarith
   have hT : ∑ u, ∑ q ∈ G, (((sys.prod q).cellWhole (cell q) (P.gates u)).card : ℝ) ≤
-      m * (√cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) * √((k : ℝ) / bC)) +
-        √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-          √((m : ℝ) * (∑ q ∈ G, sys.ni q * sys.nj q : ℕ)) :=
+      √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+        √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ))) :=
     calc _ ≤ ∑ u, √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-          (√((k : ℝ) / bC) + √(((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
-            (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC)) :=
+          √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+            (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) :=
           sum_le_sum fun u _ => sys.sum_card_cellWhole_le hS hV hsh hW hM hb hC hcs hA hμ hsO hap cell start
             (fun q hq => hread q hq) hP u
-      _ = m * (√cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) * √((k : ℝ) / bC)) +
-          √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-            ∑ u, √(((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q), (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) /
-              bC) := by
-          rw [← mul_sum, sum_add_distrib, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
-          ring
-      _ ≤ _ := add_le_add le_rfl (mul_le_mul_of_nonneg_left hsq hL)
+      _ = √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+          ∑ u, √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+            (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) := (mul_sum _ _ _).symm
+      _ ≤ _ := mul_le_mul_of_nonneg_left hsq hL
   have hsplit : ∑ u, ∑ q ∈ G, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤ m * k :=
     calc _ ≤ ∑ _u : Fin m, (k : ℝ) := sum_le_sum fun u _ => by
           exact_mod_cast sys.sum_card_macs_le hap (inferenceBlock_gates hP u)
@@ -253,28 +269,22 @@ theorem SumCap : Guarantees.SumCap := by
     exact sum_le_sum fun q hq => by
       exact_mod_cast (sys.prod q).card_le_cellWhole_add (cell q) (hS q) (hc q hq) P
   calc _ ≤ _ := hN
-    _ ≤ m * (√cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) * √((k : ℝ) / bC)) +
-          √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-            √((m : ℝ) * (∑ q ∈ G, sys.ni q * sys.nj q : ℕ)) + w * (m * k) :=
+    _ ≤ √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+          √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ))) + w * (m * k) :=
         add_le_add hT (mul_le_mul_of_nonneg_left hsplit (Nat.cast_nonneg _))
     _ = _ := by ring
 
 theorem SumBound : Guarantees.SumBound := by
-  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cG cell w hS hV hsh hW hM hsO hap hc hR hb hC hcs hA hμ m P hP
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cG cell w t hS hV hsh hW hM hsO hap hc hR hb hC hcs hA hμ ht m P hP
   have hcap := SumCap d ι κ sys c k b bC cs A μ G cG cell w m P hS hV hsh hW hM hsO hap hc hR hP hb hC hcs hA hμ
   have hbpos : (0 : ℝ) < b := by exact_mod_cast hb
+  have hCpos : (0 : ℝ) < bC := by exact_mod_cast hC
   have hE : 0 ≤ ∑ j ∈ G.image sys.cls, wholeFactor A μ j :=
     sum_nonneg fun j _ => sum_nonneg fun i _ => mul_nonneg (hA _ _) (sys.nonneg_of_postFixed hcs hμ i)
   have hL : 0 ≤ √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) :=
     mul_nonneg (Real.sqrt_nonneg _) (div_nonneg (mul_nonneg (Nat.cast_nonneg _) (by linarith)) hbpos.le)
-  have hm : chainBlocks ((∑ q ∈ G, sys.ni q * sys.K (sys.cls q) * sys.nj q : ℕ) : ℝ)
-      (√cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) * √((k : ℝ) / bC) + w * k)
-      (√cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-        √((∑ q ∈ G, sys.ni q * sys.nj q : ℕ) : ℝ)) ≤ m := by
-    refine chainBlocks_le (Nat.cast_nonneg _) (add_nonneg (mul_nonneg hL (Real.sqrt_nonneg _)) (by positivity))
-      (mul_nonneg hL (Real.sqrt_nonneg _)) (Nat.cast_nonneg _) ?_
-    rw [Real.sqrt_mul (Nat.cast_nonneg (α := ℝ) m) ((∑ q ∈ G, sys.ni q * sys.nj q : ℕ) : ℝ)] at hcap
-    linarith
+  have hm := div_le_of_le_add_sqrt (Nat.cast_nonneg (α := ℝ) m) (by positivity : (0 : ℝ) ≤ w * k) hL
+    (div_nonneg (Nat.cast_nonneg (α := ℝ) k) hCpos.le) (Nat.cast_nonneg _) ht hcap
   unfold sumBound partitionSlowdown
   refine ENNReal.div_le_div_right ?_ _
   rw [show ((m * c : ℕ) : ℝ≥0∞) = (m : ℝ≥0∞) * c from Nat.cast_mul m c, ← ENNReal.ofReal_natCast m]

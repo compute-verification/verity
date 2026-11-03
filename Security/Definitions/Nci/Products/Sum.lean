@@ -13,11 +13,12 @@ given circuit, let the cap count them together:
   disjoint arrays add. A set within one class has it at that class's `c_j` (P-share, `System.Shared`).
 * **Apart** (`System.Apart`): `G`'s products have disjoint MACs.
 
-`sumBound` is the bound on `ρ` that the cap summed over a set (`Nci.Products.Guarantees.SumCap`) gives,
-`chainBlocks N (√c_G (k (1 + E) / b) √(k / b_C) + w k) (√c_G (k (1 + E) / b) √O) · c / |C|` for a set of products with
-`N` MACs and `O` output entries in all, in cells of at most `w` MACs, and `E` the whole-making factors of its classes
+`sumBound` is the bound on `ρ` that the cap summed over a set (`Nci.Products.Guarantees.SumCap`) gives at any `t > 0`,
+`(N - h O / (2 t)) / (w k + h (t + (k / b_C) / t) / 2) · c / |C|` for a set of products with `N` MACs and `O` output
+entries in all, in cells of at most `w` MACs, and `h = √c_G k (1 + E) / b`, `E` the whole-making factors of its classes
 summed: `k (1 + E) / b` bounds the values a block has, paid at their width or made whole, and `k / b_C + s` the output
-entries it touches through whole cells, `s` the chains it starts.
+entries it touches through whole cells, `s` the chains it starts. It is largest at `t² = k / b_C + O / m`, `m` its own
+number of blocks.
 -/
 
 namespace Nci.Products
@@ -44,12 +45,13 @@ def Apart (G : Finset ι) : Prop :=
 
 end System
 
-/-- **The products kind's bound summed over a set**: `chainBlocks N (√c_G (k (1 + E) / b) √(k / b_C) + w k)
-(√c_G (k (1 + E) / b) √O) · c / |C|` for a set of products with `N` MACs and `O` output entries in all, in cells of at
-most `w` MACs, P-share on the set at `c_G`, and `E` the whole-making factors of its classes summed. -/
-noncomputable def sumBound (d : Declaration) (N O w c k b bC : ℕ) (cG E : ℝ) : ℝ≥0∞ :=
-  ENNReal.ofReal (chainBlocks N (√cG * ((k : ℝ) * (1 + E) / b) * √((k : ℝ) / bC) + w * k)
-      (√cG * ((k : ℝ) * (1 + E) / b) * √(O : ℝ))) *
+/-- **The products kind's bound summed over a set**, at `t > 0`:
+`(N - h O / (2 t)) / (w k + h (t + (k / b_C) / t) / 2) · c / |C|`, `0` where it is negative, for a set of products with
+`N` MACs and `O` output entries in all, in cells of at most `w` MACs, `h = √c_G k (1 + E) / b` with P-share on the set
+at `c_G` and `E` the whole-making factors of its classes summed. -/
+noncomputable def sumBound (d : Declaration) (N O w c k b bC : ℕ) (cG E t : ℝ) : ℝ≥0∞ :=
+  ENNReal.ofReal (((N : ℝ) - √cG * ((k : ℝ) * (1 + E) / b) * O / (2 * t)) /
+      (w * k + √cG * ((k : ℝ) * (1 + E) / b) * (t + (k : ℝ) / bC / t) / 2)) *
     (c : ℝ≥0∞) / (d.D.computed.card : ℝ≥0∞)
 
 end Nci.Products
