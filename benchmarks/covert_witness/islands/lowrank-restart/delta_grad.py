@@ -514,7 +514,8 @@ def main() -> int:
     ap.add_argument("--grow", default="",
                     help="LoRA whose adapters grow: phases FRAC:TARGETS:RANK joined by ',' (FRACs from 0 up, below 1), "
                          "each raising TARGETS (as --targets names them, in --blocks) to RANK from that share of the "
-                         "steps on; instead of --lora and --targets")
+                         "steps on; at FRACs that are multiples of 0.05 a checkpoint holds each phase's last step; "
+                         "instead of --lora and --targets")
     ap.add_argument("--group", type=int, default=128)
     ap.add_argument("--leaf", type=int, default=4, help="sequences of 1024 tokens a leaf block")
     ap.add_argument("--lr", type=float, required=True)
@@ -689,7 +690,8 @@ def main() -> int:
     ends = [f for f, _ in plan[1:]] + [1.0]
     mean_extra = sum((e - f) * extra_of(factor_shapes(r)) for (f, r), e in zip(plan, ends)) if lora else extra
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + mean_extra))
-    grow_at = {round(f * n_steps): r for f, r in plan[1:]}
+    # a phase grows one step after its FRAC, so the E encoded first in the next 1/CHECKPOINTS is the old phase's end
+    grow_at = {math.floor(f * n_steps) + 1: r for f, r in plan[1:]}
     grown = [{"step": 0, "ranks": dict(plan[0][1]), **acct}] if lora else []
     hooks.plan(n_steps)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
