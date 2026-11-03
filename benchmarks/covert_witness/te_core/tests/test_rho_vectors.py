@@ -172,8 +172,9 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
 def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_cell_figure_beside_it(built):
     """The console's port of the fresh-products term tests against these: on each of io_bound's hand-written product
     sets the term is io_bound's own vector's proved figure without P-cell and fresh_cell its figure with it, summed in
-    the reference circuit's chain whether the order is declared or not; a circuit that declares a tree is unmeasured;
-    the 45M start's dense step's term is 1.65e5, its fresh_cell 3.04e6."""
+    the reference circuit's chain whether the order is declared or not, with what its best subset dropped, and where no
+    subset has a proved Λ unmeasured (`FRESH_VOID`), never 0; a circuit that declares a tree is unmeasured; the 45M
+    start's dense step's term is 1.65e5, its fresh_cell 3.04e6, on all its products."""
     f = built["fresh"]
     assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
     assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and "without P-cell" in f["rests_on"]
@@ -184,8 +185,14 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
         v = vs[want["name"]]
         assert v["inputs"]["c"] == want["inputs"]["c"] and v["inputs"]["products"]["products"] == want["inputs"][
             "products"]
+        void = want["term"]["proved_rho_no_cell"] is None
         assert (v["term"], v["fresh_cell"], v["order"], v["why"]) == (
-            want["term"]["proved_rho_no_cell"], want["term"]["proved_rho"], "chain", None)
+            want["term"]["proved_rho_no_cell"], want["term"]["proved_rho"], "chain", formalism.FRESH_VOID if void else None)
+        sub = want["term"]["proved_subset_no_cell"]
+        assert v["subset"] == (None if sub is None or not sub["dropped"] else {
+            "dropped": sub["dropped"], "of": len(want["inputs"]["products"]),
+            "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]})
+    assert sum(v["why"] == formalism.FRESH_VOID for v in vs.values()) == 1 and sum(bool(v["subset"]) for v in vs.values())
     square = vs["one product, square, console"]
     assert vs["one product, square, console, no order declared"]["term"] == square["term"] > 1
     tree = vs["one product, square, console, a circuit that declares a tree"]
@@ -194,6 +201,7 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     assert (dense["inputs"]["c"], dense["inputs"]["k"]) == policy.CONSOLE and dense["order"] == "chain"
     assert dense["inputs"]["products"]["trace_order"] == "unknown"
     assert dense["term"] == pytest.approx(1.650e5, rel=1e-3) and dense["fresh_cell"] == pytest.approx(3.041e6, rel=1e-3)
+    assert dense["subset"] is None
 
 
 def test_the_published_vectors_take_each_case_of_the_rule(built):

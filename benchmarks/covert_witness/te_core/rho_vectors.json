@@ -59,6 +59,7 @@
     "name": "one product, square, console",
     "order": "chain",
     "share": 0.7400625,
+    "subset": null,
     "term": 219441.14652435452,
     "why": null
    },
@@ -89,6 +90,7 @@
     "name": "one product, square, panel",
     "order": "chain",
     "share": 0.7400625,
+    "subset": null,
     "term": 83822.25466981716,
     "why": null
    },
@@ -119,6 +121,7 @@
     "name": "short chains, K = 16, none whole by itself",
     "order": "chain",
     "share": 0.7400625,
+    "subset": null,
     "term": 111674.98646481277,
     "why": null
    },
@@ -160,6 +163,7 @@
     "name": "short and long chains: the linear form keeps the long",
     "order": "chain",
     "share": 0.81406875,
+    "subset": null,
     "term": 219441.14652435452,
     "why": null
    },
@@ -190,11 +194,12 @@
     "name": "operands made whole from K = 128 chains",
     "order": "chain",
     "share": 0.7400625,
+    "subset": null,
     "term": 214429.8079620056,
     "why": null
    },
    {
-    "fresh_cell": 0.0,
+    "fresh_cell": null,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -217,10 +222,58 @@
       ]
      }
     },
-    "name": "operands made whole from K = 64 chains: proved bound void",
+    "name": "operands made whole from K = 64 chains: no subset has a proved bound",
     "order": "chain",
     "share": 0.7400625,
-    "term": 0.0,
+    "subset": null,
+    "term": null,
+    "why": "unmeasured: no subset of the counted products has a proved bound at this k: each has an operand made whole by a chain, and even the longest such chain is too short (r = k/(3 K^2 b) past 1/4, te_core.io_bound.whole_chain), so \u039b has no root; a void is never a measured 0"
+   },
+   {
+    "fresh_cell": 4138401.093369211,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 1,
+        "k_whole": 1,
+        "macs": 500000000000.0,
+        "outputs": 500000000000.0
+       }
+      ]
+     }
+    },
+    "name": "a rank-1 adapter's product beside a square one: the best subset drops it",
+    "order": "chain",
+    "share": 0.7408025625,
+    "subset": {
+     "dropped": 1,
+     "dropped_macs_share": 0.0009990009990009652,
+     "k_whole_min": 512,
+     "of": 2
+    },
+    "term": 219441.14652435452,
     "why": null
    },
    {
@@ -261,6 +314,7 @@
     "name": "mixed widths",
     "order": "chain",
     "share": 0.6491,
+    "subset": null,
     "term": 193089.97127249016,
     "why": null
    },
@@ -291,6 +345,7 @@
     "name": "f32 operands",
     "order": "chain",
     "share": 0.63185,
+    "subset": null,
     "term": 234337.0524437246,
     "why": null
    },
@@ -309,6 +364,7 @@
     "name": "nothing counted",
     "order": "chain",
     "share": 0.0,
+    "subset": null,
     "term": 0.0,
     "why": null
    },
@@ -319,7 +375,7 @@
      "c": 536681984163840.0,
      "k": 65536.0,
      "products": {
-      "capture": "4.8",
+      "capture": "4.10",
       "k": 65536.0,
       "kinds_macs": {
        "attention": 2415919104.0,
@@ -525,6 +581,7 @@
     "name": "the 45M start's dense step, its trace's order unknown",
     "order": "chain",
     "share": 0.5515529347520451,
+    "subset": null,
     "term": 165020.69353240656,
     "why": null
    },
@@ -555,6 +612,7 @@
     "name": "one product, square, console, no order declared",
     "order": "chain",
     "share": 0.7400625,
+    "subset": null,
     "term": 219441.14652435452,
     "why": null
    },
@@ -585,6 +643,7 @@
     "name": "one product, square, console, a circuit that declares a tree",
     "order": "tree",
     "share": 0.7400625,
+    "subset": null,
     "term": null,
     "why": "unmeasured: the circuit declares its products summed in a tree, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound"
    }
@@ -8948,8 +9007,9 @@
    "binding_kind": "fit",
    "c": 4925098176.0,
    "case": "dense",
+   "fresh_subset": null,
    "k": 80000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "Fit's construction",
@@ -8970,8 +9030,9 @@
    "binding_kind": "token",
    "c": 20173202128896.0,
    "case": "dense",
+   "fresh_subset": null,
    "k": 80000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "partial": true,
    "reading": "A",
    "rests_on": "A1 (reading A), its family: runs and tiles",
@@ -8989,23 +9050,29 @@
    "why": null
   },
   {
-   "binding_kind": "token",
+   "binding_kind": "fresh_products",
    "c": 536681984163840.0,
    "case": "dense",
+   "fresh_subset": {
+    "dropped": 1,
+    "dropped_macs_share": 0.3529411764705882,
+    "k_whole_min": 1024.0,
+    "of": 4
+   },
    "k": 65536.0,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "partial": false,
    "reading": "A",
-   "rests_on": "A1 (reading A), its family: runs and tiles",
-   "rho": 263.4961717397754,
+   "rests_on": "theorem for this circuit (Loomis-Whitney) under P-width and P-chain, without P-cell",
+   "rho": 735.3416102810884,
    "sensitivities": {
-    "fresh_cell": 0.0,
+    "fresh_cell": 5147.4985695638825,
     "reduction": 0.0,
     "update": 0.0
    },
    "terms": {
     "decoding": 263.4961717397754,
-    "fresh_products": 0.0,
+    "fresh_products": 735.3416102810884,
     "token": 263.4961717397754
    },
    "why": null
@@ -9014,20 +9081,26 @@
    "binding_kind": "token",
    "c": 536681984163840.0,
    "case": "lora",
+   "fresh_subset": {
+    "dropped": 3,
+    "dropped_macs_share": 0.6666666666666667,
+    "k_whole_min": 1024.0,
+    "of": 5
+   },
    "k": 65536.0,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "A1 (reading A), its family: runs and tiles",
    "rho": 95.68434260057813,
    "sensitivities": {
-    "fresh_cell": 0.0,
+    "fresh_cell": 264.63189974664385,
     "reduction": 0.0,
     "update": 0.0
    },
    "terms": {
     "decoding": 95.68434260057813,
-    "fresh_products": 0.0,
+    "fresh_products": 37.803769085442894,
     "token": 95.68434260057813
    },
    "why": null
@@ -9036,8 +9109,9 @@
    "binding_kind": "unmeasured",
    "c": 20173202128896.0,
    "case": "adapter-live",
+   "fresh_subset": null,
    "k": 80000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "unmeasured",
@@ -9058,8 +9132,9 @@
    "binding_kind": "none",
    "c": 20173202128896.0,
    "case": "adapter-live",
+   "fresh_subset": null,
    "k": 65536.0,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "partial": false,
    "reading": "A",
    "rests_on": "no kind exceeds 1",
@@ -9080,7 +9155,7 @@
  "published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, binding unmeasured, why naming it. Else: 1, binding none.",
  "rests_on": {
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, each operand and partial sum at its passed width, given its premises on the reference circuit, P-width and P-chain (each output entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and the standard algorithm; without P-cell, a premise on the partition (the whole-cell figure is the sensitivity fresh_cell)",
+  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, on the best subset of them (every product still in |C|), each operand and partial sum at its passed width, given its premises on the reference circuit, P-width and P-chain (each output entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and the standard algorithm; without P-cell, a premise on the partition (the whole-cell figure is the sensitivity fresh_cell)",
   "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
  },
  "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
@@ -9781,7 +9856,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 11.065531262155444,
    "rho": 11.065531262155444,
    "rho_fit": 1.0,
@@ -9895,7 +9970,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10009,7 +10084,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10123,7 +10198,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10237,7 +10312,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10351,7 +10426,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10465,7 +10540,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10579,7 +10654,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10693,7 +10768,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10807,7 +10882,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -10921,7 +10996,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 8.35335685982954,
    "rho": 8.35335685982954,
    "rho_fit": 1.0,
@@ -11035,7 +11110,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11149,7 +11224,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11263,7 +11338,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.9996631800490919,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11377,7 +11452,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
@@ -11491,7 +11566,7 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 2.7344655410785834,
    "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
@@ -11605,7 +11680,7 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
@@ -11719,7 +11794,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.9999300519868622,
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
@@ -11833,7 +11908,7 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
@@ -11947,7 +12022,7 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.9, reading A",
+   "label": "te_core 4.10, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": "inf",
@@ -11971,6 +12046,6 @@
    }
   }
  ],
- "version": "4.9",
+ "version": "4.10",
  "w_fwd_gates": 4925098176.0
 }
