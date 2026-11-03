@@ -175,6 +175,26 @@ def test_a_command_that_exits_0_without_writing_its_circuit_fails_the_circuit_ch
     assert not (tmp_path / "c" / "compiled.json").exists()
 
 
+def test_compile_holds_a_circuit_its_registration_binds_by_digest_to_a_bindings_compiler_and_prints_no_length(tmp_path, capsys):
+    """``compile``: a circuit whose registration binds no compiler (a class circuit, which ``audit --circuit`` audits) held
+    to the compiler and advice a binding names, given whole or as a document's ``binding`` (a window's advice
+    registration): it prints the verdict's codes, never the advice's length, which ``compile.json`` keeps."""
+    fixed = _write(tmp_path / "fixed", advice=False)
+    reg = IF.commit_advice(COMPILER, ADVICE)
+    bound = IF.advice_binding(COMPILER, reg.root.hex(), 8 * len(ADVICE))
+    files = {"binding": {"binding": bound}, "opening": IF.advice_opening(ADVICE, reg),
+             "compilers": _compilers(tmp_path, fixed.doc)}
+    for name, doc in files.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(doc))
+    args = ["compile", "--circuit", str(fixed.dir / "circuit.json"),
+            *(x for name in files for x in (f"--{name}", str(tmp_path / f"{name}.json"))), "--out", str(tmp_path / "c")]
+    assert "compiler" not in fixed.rec["window"] and RA.main(args) == 0
+    assert capsys.readouterr().out == 'COMPILE {"codes": [], "ok": true}\n'
+    assert json.loads((tmp_path / "c" / "compile.json").read_text())["detail"]["bits"] == 8 * len(ADVICE)
+    (tmp_path / "binding.json").write_text(json.dumps({**bound, "advice": {**bound["advice"], "bits": 8 * len(ADVICE) + 1}}))
+    assert RA.main(args) == 1 and capsys.readouterr().out == 'COMPILE {"codes": ["length"], "ok": false}\n'
+
+
 def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp_path):
     w, doc = written.rec["window"], written.doc
     compilers = _compilers(tmp_path, doc)

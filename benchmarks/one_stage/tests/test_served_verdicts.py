@@ -283,22 +283,31 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
 
 
 def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
+    """The line's leak count charges ℓ_a: its other inputs are the free ones plus the cap, the run figure's and the window
+    figure's, so neither the advice's length nor other inputs less free (which is that length) is in it."""
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
-           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
+           "leak": {"advice_bits": 832, "bound": "vacuous", "free": 785600, "other_inputs": 786432, "registered": 0,
+                    "window": {"free": 512, "other_inputs": 1344, "bound": "vacuous"}}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
             "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
-    line = S.sampled_line(row, part)
+    line = S.sampled_line(row, part, 4096)
     head, _, rec = line.partition(": RECORDS ")
     assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law subset:2), drawn members [0, 2]"
     assert "steps" not in line and "11" not in line
-    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    assert json.loads(rec)["leak"] == {"bound": "vacuous", "free": 785600, "other_inputs": 789696, "registered": 0,
+                                       "window": {"free": 512, "other_inputs": 4608, "bound": "vacuous"}}
+    assert "832" not in line and "786432" not in line and "1344" not in line
     assert "population" not in line and "37" not in line and row["population"] == 37
+    assert S.charged_at_cap({"free": 0, "other_inputs": 832, "bound": "within the charge"}, 4096) == {
+        "free": 0, "other_inputs": 4096, "bound": "within the charge"}
+    assert S.charged_at_cap({"other_inputs": 5000, "bound": "vacuous", "advice_bits": 6000}, 4096) == {
+        "other_inputs": 5000, "bound": "vacuous"}
     (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
     (tmp_path / "p.json").write_text(json.dumps(part))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--cap-bits", "4096", "--partition", str(tmp_path / "p.json")]) == 0
     assert capsys.readouterr().out == line + "\n"
     (tmp_path / "log").write_text("refused\n")
-    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--cap-bits", "4096"]) == 1
 
 
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
@@ -962,6 +971,9 @@ FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+if a[0] == "compiler":
+    print(json.dumps({{"name": "B", "digest": "bb" * 64, "cap_bits": int(a[a.index("--cap-bits") + 1])}}))
+    sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
 if a[0] == "window-circuit":
@@ -978,6 +990,19 @@ from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
 out = Path(a[a.index("--out") + 1])
+if a[0] == "compile":
+    vw, d = out.parent, out.parent.parent
+    held = (a[a.index("--circuit") + 1], a[a.index("--binding") + 1], a[a.index("--opening") + 1])
+    assert held == (str(vw / "window" / "circuit.json"), str(d / "advice" / "w7" / "registration.json"),
+                    str(d / "advice" / "w7" / "private" / "opening.json")), held
+    (b, entry), = json.loads(open(a[a.index("--compilers") + 1]).read()).items()
+    argv = entry["argv"]
+    assert (b, entry["digest"]) == ("B", "bb" * 64) and argv[1].endswith("benchmarks/prove_path/prove_path.py")
+    assert argv[2:] == ["window-circuit", "--serve-run", str(d), "--window", "7", "--row-dir", str(d / "windows" / "w7"),
+                        "--class", "8,32,4,4,16", "--cap-bits", "8388608"], argv
+    failed = os.environ.get("FAIL_COMPILE")
+    print("COMPILE " + json.dumps({"ok": not failed, "codes": ["circuit"] if failed else []}, sort_keys=True))
+    sys.exit(1 if failed else 0)
 if a[0] == "audit":
     out.mkdir(parents=True)
     (out / "summary.json").write_text("{}")
@@ -1040,9 +1065,9 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     audit's, the chain's window): each line is whole in the serve dir's private/verdicts.txt, each file in its private/out."""
     rc, lines, order, limits = _v3c(tmp_path)
     assert rc == 0, lines
-    assert order[:2] == ["window-circuit", "window-commit"] and order[-1] == "period-check"
-    assert sorted(order[2:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
-    assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "60m"
+    assert order[:4] == ["window-circuit", "window-commit", "compiler", "compile"] and order[-1] == "period-check"
+    assert sorted(order[4:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert limits[:3] == ["30m", "120m", "30m"] and sorted(limits[3:-1]) == ["180m", "4h"] and limits[-1] == "60m"
     vw, pieces = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", tmp_path / "out" / "pieces" / "certifier"
     assert (tmp_path / "order.args").read_text().split() == [str(tmp_path / "serve"), "7", str(pieces), str(vw)]
     assert not _window_data(tmp_path / "out", 7), _window_data(tmp_path / "out", 7)
@@ -1052,10 +1077,12 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
     assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
     heads = [line.split(" (")[0].split(":")[0] for line in lines]
-    assert heads[:3] == [f"WINDOW-CIRCUIT class {W63K4}", f"WINDOW-COMMIT class {W63K4}",
-                         f"WINDOW-CIRCUIT-HELD class {W63K4}"] and heads[-1] == "CERTIFIER-PERIOD"
-    assert sorted(heads[3:-1]) == ["CERTIFIER-CHAIN", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD"]
+    assert heads[:4] == [f"WINDOW-CIRCUIT class {W63K4}", f"WINDOW-COMMIT class {W63K4}",
+                         f"WINDOW-CIRCUIT-HELD class {W63K4}", f"V3C-COMPILED class {W63K4}"] and heads[-1] == "CERTIFIER-PERIOD"
+    assert sorted(heads[4:-1]) == ["CERTIFIER-CHAIN", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD"]
     assert lines[2].endswith("PASS") and lines[heads.index("V3C-PERIOD")].endswith('PERIOD {"verdict": "accept"}')
+    assert lines[3].endswith('COMPILE {"codes": [], "ok": true}') and "ℓ_a 8388608 bits" in lines[3]
+    assert {p.name for p in (vw / "compile").iterdir()} == {"compiler.json", "compilers.json", "compile.log"}
     private = tmp_path / "serve" / "private" / "pieces" / "certifier"
     assert (private / "chain.log").read_text().strip() == "chain on window 7"
     assert (private / "period.log").read_text().strip() == "checked"
@@ -1066,13 +1093,23 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     """V3c's audit wrote no period.json: no period check, and `served_verdicts.sh v3c` exits 1 once it has moved the
     chain's log to the serve dir's private/pieces/certifier."""
     rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
-    assert rc == 1 and order[:2] == ["window-circuit", "window-commit"]
-    assert sorted(order[2:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert rc == 1 and order[:4] == ["window-circuit", "window-commit", "compiler", "compile"]
+    assert sorted(order[4:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
     assert any("the audit under it wrote no Program" in x for x in lines[-3:-1])
     assert lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
     pieces = tmp_path / "out" / "pieces" / "certifier"
     assert not (pieces / "answer.json").exists() and not (pieces / "chain.log").exists()
     assert (tmp_path / "serve" / "private" / "pieces" / "certifier" / "chain.log").exists()
+
+
+def test_v3c_whose_circuit_is_not_bs_output_on_the_committed_advice_is_not_audited(tmp_path):
+    """The compile check refuses V3c's circuit (B's output on the advice opened at its committed root is another): no
+    audit, no chain and no period check run, `served_verdicts.sh v3c` exits 16, and the V3C-COMPILED line says the
+    check's codes alone."""
+    rc, lines, order, _limits = _v3c(tmp_path, FAIL_COMPILE="1")
+    assert rc == 16 and order == ["window-circuit", "window-commit", "compiler", "compile"], (rc, order)
+    assert lines[-1].startswith(f"V3C-COMPILED class {W63K4} (records_audit.py compile exit 1): ")
+    assert lines[-1].endswith('COMPILE {"codes": ["circuit"], "ok": false}')
 
 
 @pytest.mark.parametrize("args, extra, line", [

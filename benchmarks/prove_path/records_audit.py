@@ -67,6 +67,13 @@ quotes the warm's beside it.
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
+    records_audit.py compile --circuit FILE --binding FILE --opening FILE --compilers FILE --out DIR [--repo DIR]
+
+``compile``: the compile check alone (`compile_check`), for a circuit whose registration binds it by SHA-512 alone, which
+``audit --circuit`` audits (a window class's circuit, a function of its class): ``--binding``'s compiler and advice
+(`interface.advice_binding`, or a document holding it as ``binding``), the advice opened at its root and compiled by the
+command ``--compilers`` holds for that compiler to this circuit at its registered length. It prints ``COMPILE`` and the
+verdict's codes, never the advice's length, which the verdict in full (``--out``'s ``compile.json``) carries.
 
 ``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
@@ -937,7 +944,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
+    p = sub.add_parser("compile", help="the compile check alone (`compile_check`), of a circuit its registration binds by "
+                       "SHA-512 alone against the compiler and advice a binding names")
+    p.add_argument("--circuit", required=True, type=Path, help="the circuit record (circuit.json)")
+    p.add_argument("--binding", required=True, type=Path, help="the compiler and advice, {compiler, advice} "
+                   "(`interface.advice_binding`), or a document holding them as `binding`")
+    p.add_argument("--opening", required=True, type=Path, help="the advice's opening (interface.advice_opening)")
+    p.add_argument("--compilers", required=True, type=Path, help="as audit's")
+    p.add_argument("--repo", help="as audit's")
+    p.add_argument("--out", required=True, type=Path, help="the check's scratch and its verdict in full, compile.json")
     a = ap.parse_args(argv)
+    if a.cmd == "compile":
+        doc = json.loads(a.binding.read_text())
+        v, _ = compile_check(json.loads(a.circuit.read_text()), doc.get("binding", doc), json.loads(a.opening.read_text()),
+                             json.loads(a.compilers.read_text()), a.out, Path(a.repo) if a.repo else None)
+        (a.out / "compile.json").write_text(json.dumps(v, indent=1, sort_keys=True))
+        print("COMPILE " + json.dumps({"ok": v["ok"], "codes": v["codes"]}, sort_keys=True))
+        return 0 if v["ok"] else 1
     if a.cmd == "period":
         try:
             got = period(a.window, a.audit, pins_of(a.pin, a.pins))

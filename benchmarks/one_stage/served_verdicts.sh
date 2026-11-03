@@ -273,7 +273,24 @@ print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less
       f"window-circuit record: {'PASS' if ok else 'FAIL'}")
 sys.exit(0 if ok else 1)
 EOF
-  [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
+  [ "${PIPESTATUS[0]}" = 0 ] && v3c_compiled && v3c_ok=1
+}
+v3c_compiled() {  # V3c's circuit is B's output on the window's advice, opened at the root its line published before any coin
+  local c=$VW/compile rc
+  mkdir -p "$c"
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") > "$c/compiler.json" \
+    || { say "V3C-COMPILED class $V3C: prove_path.py compiler refused"; return 1; }
+  "$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' \
+    "$c/compiler.json" "$PY" "$TREE/benchmarks/prove_path/prove_path.py" window-circuit --serve-run "$D" --window "$K" \
+    --row-dir "$D/windows/w$K" --class "$V3C" --cap-bits "$CAP" > "$c/compilers.json" || return 1
+  (cd "$TREE" && env -u PYTHONPATH CUDA_VISIBLE_DEVICES='' timeout -k 1m "${WC_TIMEOUT:-30m}" "$TREE/.venv/bin/python" \
+    benchmarks/prove_path/records_audit.py compile --circuit "$VW/window/circuit.json" --binding "$D/advice/w$K/registration.json" \
+    --opening "$D/advice/w$K/private/opening.json" --compilers "$c/compilers.json" --out "$c") > "$c/compile.log" 2>&1
+  rc=$?
+  say "V3C-COMPILED class $V3C (records_audit.py compile exit $rc): B, as prove_path.py window-circuit at the class capped at" \
+    "ℓ_a $CAP bits, on the window's advice opened at the root its ADVICE-LINE published before any coin, is the circuit" \
+    "V3c's registration binds, at the advice's registered length: $(grep -m1 '^COMPILE' "$c/compile.log" || tail -1 "$c/compile.log" | cut -c1-400)"
+  return $rc
 }
 # The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a draw needing more refused before any
 # listens: a subset:K draw opens one for each of at most K members, and records_audit's own default, a port for every
@@ -726,7 +743,7 @@ if [ -f "$SR/registration.json" ]; then
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
 fi
 say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
+  --cap-bits "$CAP" --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote

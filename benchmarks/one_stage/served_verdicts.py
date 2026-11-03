@@ -15,7 +15,7 @@ sampled proofs, and the one record of every verdict (the block record).
                               [--product P]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py advice-line SERVE_DIR --window K --compiler FILE --coins-after T
-    served_verdicts.py sampled-line LOG [--partition FILE]
+    served_verdicts.py sampled-line LOG --cap-bits L [--partition FILE]
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -30,8 +30,8 @@ registration (`public_registration`: the advice's length padded to its compiler'
 verdict on a serve-openai ``--advice`` run (`advice_line`: B registered before the first window, every window's advice
 line before sampled proofs' and the certifier's first coin, the audited window's registration under B), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
-scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+(`sampled_line`: the partition the draw was over, the members it drew, its leak count charging the advice's cap ``--cap-bits``,
+and no length of the advice or count of the scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -479,14 +479,29 @@ def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins
                 + (f" ({'; '.join(why)})" if why else ""))
 
 
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
+def charged_at_cap(leak: Mapping[str, Any], cap_bits: int) -> dict[str, Any]:
+    """A records audit's leak count with the advice charged at ℓ_a, its compiler's cap ``cap_bits``, never at its own
+    length, which the count's ``advice_bits`` says and its ``other_inputs`` less ``free`` would: ``other_inputs`` the free
+    inputs plus ℓ_a (the run figure's and the window figure's), and ``bound`` against ℓ_a."""
+    out = {k: v for k, v in leak.items() if k != "advice_bits"}
+    if "free" in out:
+        out["other_inputs"] = int(out["free"]) + cap_bits
+    if isinstance(out.get("window"), Mapping) and "free" in out["window"]:
+        out["window"] = {**out["window"], "other_inputs": int(out["window"]["free"]) + cap_bits}
+    if "other_inputs" in out:
+        out["bound"] = "vacuous" if int(out["other_inputs"]) > cap_bits else "within the charge"
+    return out
+
+
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, cap_bits: int) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
-    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
-    scope's ``steps``, the window's engine steps, stay on the node too."""
+    templates, its scope's op path and law), which members it drew, and the row with its leak count charging ℓ_a
+    (``cap_bits``, `charged_at_cap`), so it says no length of the advice, and no ``population``, the scope's unpadded
+    member count, which counts the window's tokens. The scope's ``steps``, the window's engine steps, stay on the node
+    too."""
     row = {k: v for k, v in records.items() if k != "population"}
     if isinstance(row.get("leak"), Mapping):
-        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
+        row["leak"] = charged_at_cap(row["leak"], cap_bits)
     part = partition or {}
     scope = part.get("scope") or {}
     over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
@@ -1127,6 +1142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sl = sub.add_parser("sampled-line")
     sl.add_argument("log", type=Path)
     sl.add_argument("--partition", type=Path)
+    sl.add_argument("--cap-bits", type=int, required=True, help="ℓ_a, the advice's cap, which the leak count charges")
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -1161,7 +1177,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not rows:
             print("no RECORDS line")
             return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None, a.cap_bits))
         return 0
     if a.cmd == "front-line":
         try:
