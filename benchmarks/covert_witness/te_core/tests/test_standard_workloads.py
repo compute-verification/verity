@@ -16,7 +16,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy
+from te_core import VERSION, algorithm_policy, console, formalism, panels, policy
 from te_core import standard_workloads as SW
 from te_core.gates import of_log, per_mac
 
@@ -209,9 +209,10 @@ def test_an_input_is_measured_where_te_core_counted_traced_or_read_it_and_assume
 
 
 def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_either_point_rests_on_it():
-    """A step with tokens has no Δ_grad where te_core.annotate gives it no traced structure: before the run's first
-    update (its structure updates nothing), the program's last (the capture refuses it) or one no traced step shares.
-    The label names them, refused unless they number te_core's, and says Fit's verdict at a point rests on them only
+    """A step with tokens has no Δ_grad where te_core.annotate gives it none of the traced structures: one that updates
+    nothing, whose trace measures nothing or has no traced updating step beside it (from te_core 4.11 such a step
+    takes its measured Δ_grad, 0, where both hold), the program's last untraced, or one no traced step shares. The
+    label names them, refused unless they number te_core's, and says Fit's verdict at a point rests on them only
     where Fit holds there with their Δ_grad at 0."""
     struct = {"updated": [[1.0, 2, 3, 4, "x"]]}
     rec = {"steps": [{"step": 0, "struct": "first", "tokens": 64}, {"step": 1, "struct": "train", "tokens": 64},
@@ -219,13 +220,17 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
                      {"step": 4, "struct": "train", "tokens": 64}, {"step": 5, "struct": "end", "tokens": 64}],
            "structures": {"first": {"updated": []}, "train": struct, "odd": struct, "sync": {"updated": []},
                           "end": struct}}
-    gaps = SW.untraced(rec, {0: {"measured": {"delta_grad_bits": 0}}, 1: {"measured": {"delta_grad_bits": 10}}})
-    assert gaps == ["step 0: before the run's first update: its structure updates nothing, so te_core.annotate leaves "
-                    "out its trace, which measures 0 bits", "step 2: no traced step shares its structure",
-                    "step 5: the program's last, its structure having no other step, which te_core.capture refuses to "
-                    "trace, the program ending before the step does"]
-    got = annotate.with_structures(rec, {"first": struct, "train": struct})
-    assert {s["step"] for s in got["steps"] if s["tokens"] and "+traced" not in s["struct"]} == {0, 2, 5}
+    gaps = SW.untraced(rec, {"first": struct, "train": struct})
+    assert gaps == ["step 0: its structure updates nothing, and te_core.annotate takes such a step's trace only where "
+                    "it measures the step and a traced step of the run updates something",
+                    "step 2: no traced step shares its structure",
+                    "step 5: the program's last, its structure having no other step, not traced"]
+    f = {"tail_share": 0.0, "u_in": [[0.0, 0.0], [1.0, 8.0]], "tau_ids": 1.0, "tau_other_bits": 0.0, "u1_bits": 8.0}
+    measured = {"first": {"updated": [], "formalism": f | {"delta_grad_bits": 0}},
+                "train": struct | {"formalism": f | {"delta_grad_bits": 10}}}
+    assert SW.untraced(rec, measured) == gaps[1:]
+    idle = SW.untraced(rec, {"first": measured["first"]})
+    assert [g.split(":")[0] for g in idle] == ["step 0", "step 1", "step 2", "step 4", "step 5"] and idle[0] == gaps[0]
     parts = (formalism.Part(3e12, 100, 2.4e12, 1e12, 3, 1e3), formalism.Part(1e12, 50, 0.8e12, 0, 3, None))
     m = formalism.Measured(parts, 0.0, 8192, formalism.even(1e6), formalism.even(1e6), 1e3, 0.0, {},
                            delta_t_bits=1e3)
