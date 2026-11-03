@@ -110,7 +110,7 @@ T_j·log2 d_jit bits in execution phase j (`GLOSSARY.md`, "The network bound"):
   as ingress, and the registered inputs, the weights among them, don't count;
 - k_skip,j, log2 of the number of possible incorrect sets (which units are incorrect) plus β, the incorrect proof
   blocks' committed bits;
-- T_j·log2 d_jit, the timing (J's d_jit classes over the execution phase's T_j steps).
+- T_j·log2 d_jit, the timing (`JitterBounded`'s d_jit classes over the execution phase's T_j steps).
 
 At δ ≥ miss(1) no unit is incorrect, and the bound is ℓ_a,j + T_j·log2 d_jit. `SampledLeakRegistered` states the same
 count at the registered inputs' registration values rather than the trace's, a disagreement being a SHA-512 collision.

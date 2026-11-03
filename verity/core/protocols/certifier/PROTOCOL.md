@@ -304,23 +304,24 @@ with no public egress profile.
 
 - **The proof block** is `NetworkServedLinkWindow` v4{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s two head checks
   (neither end with a count check unless its end declares a profile), the window's declared sync as its ``sync``
-  parameter, and one gate (`served.gate`)
-  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` and its circuit digest
-  pinned in `served.circuit-check.json`, as the head check's gate names its own, over the two heads' counts,
-  cut from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. OWN is the ingress
-  certifier's own frames at the head of every window's first bucket: 1 with its salt on, else 0. Its one output, the
-  ok bit, is 1 when every ingress count is at most R_in, bucket 0's at least OWN, p and q are nonzero, and the egress
-  counts are `served.derive`'s, of the ingress counts with bucket 0's OWN own frames taken off:
+  parameter, and one gate (`served.gate`) naming the Boolean Definition
+  `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` and its circuit digest pinned in
+  `served.circuit-check.json`, as the head check's gate names its own, over the two heads' counts, cut from the heads
+  the head checks open (so witness), and the window's sync (Δ_sync, num, den), r_sync = num/den. `OWN` is the ingress
+  certifier's own frames at the head of every window's first bucket: 1 with its salt on, else 0. Its one output, the ok
+  bit, is 1 when every ingress count is at most `RIN`, bucket 0's at least `OWN`, num and den are nonzero, and the
+  egress counts are `served.derive`'s, of the ingress counts with bucket 0's `OWN` own frames taken off:
   - each request's anchor is the bucket whose ingress release completes its F_in frames, as the proxy anchors one;
-  - each request is answered by F frames, request after request in canonical order, the k-th frame of a response at
-    logical index k, handed by `schedule.handing_buckets` under the sync;
-  - the egress certifier releases them FIFO, at most R a bucket, left-packed (`grid.released`);
+  - each request is answered by F frames, request after request in canonical order, the λ-th frame of a response at
+    logical index λ, handed by `schedule.handing_buckets` under the sync;
+  - the egress certifier releases them FIFO, at most `R` a bucket, left-packed (`grid.released`);
   - the window ends idle at both ends: the ingress counts sum to a multiple of F_in, and every frame is handed and
     released by bucket T − 1.
 
   The circuit is a closed form of `derive` (`served`'s docstring), and `served.reference` is its reference, which the
-  tests hold to it. Its size (`served.size`) is 678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1, and
-  688,210 at F_in = 2, R = 16, R_in = 4, beside the head checks' openings (1,876,070 each at T = 600); OWN = 1 adds 63.
+  tests hold to it. Its size (`served.size`) is 678,795 ANDs at T = 600, F = 1024, F_in = 1, `R` = 6, `RIN` = 1, and
+  688,210 at F_in = 2, `R` = 16, `RIN` = 4, beside the head checks' openings (1,876,070 each at T = 600); `OWN` = 1
+  adds 63.
 - **Public** (`PUBLIC_SERVED`): the items above, with the occupancy profile on ingress only where the placement fixes
   it and none on egress, the served sizes (F, F_in, OWN and the link's windows, fixed before the run), and each window's
   declared sync as an output of the protocol. That sync is the clock-sync advice the audit already reads and charges
@@ -816,14 +817,14 @@ and for responses of any length. What it doesn't establish:
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
 The Program fixes each real frame's content, its **anchor** (the recorded bucket of the request it answers) and its
-**logical index** λ (its position in its session, never negative). A window declares one clock-sync value
-`ClockSync(δ, ρ)` from the public set 𝒮_sync (`SyncSet`; 16 offsets × 8 rates is 7 bits). A frame is **eligible** at
-`anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's window, the shaper **hands** it to the certifier in canonical order at
-`h(k) = max(eligible(k), h(k−1))`, and the certifier's grid **releases** it. Stated in Lean:
-`Security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
-`constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the certifier
-program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python. The
-certifier signs each egress window's sync, salted, beside its record:
+**logical index** λ (its position in its session, never negative). A window declares one clock-sync value, an offset
+Δ_sync and a rate r_sync (`ClockSync`'s `delta` and `rho`), from the public set 𝒮_sync (`SyncSet`; 16 offsets × 8 rates
+is 7 bits). A frame is **eligible** at anchor + Δ_sync + ⌊λ/r_sync⌋ under the sync of its anchor's window, the shaper
+**hands** it to the certifier in canonical order at `h(k) = max(eligible(k), h(k−1))`, and the certifier's grid
+**releases** it. Stated in Lean: `Security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`,
+`handingBuckets`, `expectedRow` and `constantRate`, the Program whose advice is the content advice and one in-set sync
+per window), with the certifier program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`,
+`run_shaper`) is the Python. The certifier signs each egress window's sync, salted, beside its record:
 [protocol/clock-certificate.md](protocol/clock-certificate.md).
 
 ## The audit (`audit`)
@@ -844,12 +845,12 @@ is `Ac × (Fin W → Sync)`, one sync an execution phase, so over m execution ph
 each at 16 × 8. A sync per link would take |𝒮_sync|^(L·m) over L egress links, L times the bits, and an audit that took
 each link's syncs on their own would accept it.
 
-A declared sync outside 𝒮_sync, or other than the unit's, is an `advice` violation in its own window only. The
-Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
-a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
-earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
-carries forward (`SecurityProofs.ExpectedRowCausal`, for any clock-sync values, in the set or not). So a window before
-the violating one gets the same verdict whatever that window declared, and a later one is checked against the grid the
+A declared sync outside 𝒮_sync, or other than the unit's, is an `advice` violation in its own window only. The Program's
+grids are computed from each link's syncs as declared, out-of-set values included (any Δ_sync ≥ 0 and r_sync > 0 gives a
+schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and earlier
+windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue carries
+forward (`SecurityProofs.ExpectedRowCausal`, for any clock-sync values, in the set or not). So a window before the
+violating one gets the same verdict whatever that window declared, and a later one is checked against the grid the
 declared advice gives it.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
@@ -880,12 +881,12 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per sampling block | Proposition 2 |
 | Accepted runs, with clock-sync advice | log2 #`Ac` (the content advice's values) + m·log2\|𝒮_sync\| bits over m execution phases with a sync, plus log2 d_jit for each bucket of the horizon | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
-| The shipped schedule, over the first m′ ≤ m execution phases | log2 #`Ac` + m′·log2\|𝒮_sync\| bits, plus log2 d_jit for each bucket of a horizon within those m′ | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
-| The shipped schedule, per execution phase | log2 #`Ac` once, then log2\|𝒮_sync\| + T·log2 d_jit bits per execution phase over the run's first m′ ≤ m whole execution phases: 7 bits per execution phase at 16 × 8 sync values under J. Cumulative: a later execution phase may carry more, since content advice and an earlier one's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
+| The shipped schedule, over the first m′ ≤ m execution phases | log2 #`Ac` + m′·log2\|𝒮_sync\| bits, plus log2 d_jit for each bucket of a horizon within those m′ | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and `JitterBounded`, `SecurityProofs.EncardDecodableLeConstantRate` |
+| The shipped schedule, per execution phase | log2 #`Ac` once, then log2\|𝒮_sync\| + T·log2 d_jit bits per execution phase over the run's first m′ ≤ m whole execution phases: 7 bits per execution phase at 16 × 8 sync values without jitter (`JitterBounded`, d_jit = 1). Cumulative: a later execution phase may carry more, since content advice and an earlier one's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The circuit's Program under a sampled audit of its step units, at δ, in execution phase j | ℓ_a,j + k_skip,j + T_j·log2 d_jit bits: ℓ_a,j the free inputs (those other than the ingress) outside the registered inputs (`AsReg`), since `RAcc` pins the inputs to the trace, and k_skip,j log2 of the number of incorrect sets `RAcc δ` allows (in `M_δ`, no unit drawn `All`) plus the most bits one of them commits. It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`). At δ ≥ miss(1) no unit may be incorrect, and it is ℓ_a,j + T_j·log2 d_jit. The count alone takes the free inputs among any 2^`c` values, for `c` bits in place of ℓ_a,j | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
 | The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | k_sched + k_fail bits besides the data: k_sched log2 of the number of schedules, every one the server's secrets can lead it to, cell counts included, and k_fail log2(cap + 1) summed over every connection, one fail choice per cell of its lane or none; on real serving each cell count is in both, a known overcount. Over a certification period of m sampled audits, plus each execution phase's sampled charge (the row above) at the network certifier's rows: the network bound (`GLOSSARY.md`) | for a decoder of the client's view, under `trusted-host`, `Claims.Sampling.KS` and `Commitment.Binds`, `SecurityProofs.PeriodLeakAccepted`; over the period, `Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted` |
-| A fixed clock, under J (d_jit = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (d_jit = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
+| A fixed clock, without jitter (`JitterBounded`, d_jit = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, without jitter (`JitterBounded`, d_jit = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
 | Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole execution phases, plus T·log2 d_jit of jitter in each, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at the horizon `m * T` |
 
@@ -954,23 +955,24 @@ per sampling block (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObs
 is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
 audited, with no record.
 
-The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
-dataflow hypothesis: for every frame function, sync set and operator, over a horizon within the m execution phases
-with advice (`hn : n ≤ W * T`), since those are the execution phases the audit checks. The clock-sync bound is 7 bits
-per execution phase at 16 × 8 sync values, summed from the run's start (`SecurityProofs.EncardAccSeqsLeConstantRate`).
-Under J with one sync value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A horizon
-within the first m′ ≤ m execution phases is charged only those m′ (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`),
-and a decoder of the wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`).
+The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no dataflow
+hypothesis: for every frame function, sync set and operator, over a horizon within the m execution phases with advice
+(`hn : n ≤ W * T`), since those are the execution phases the audit checks. The clock-sync bound is 7 bits per execution
+phase at 16 × 8 sync values, summed from the run's start (`SecurityProofs.EncardAccSeqsLeConstantRate`). Without jitter
+(`JitterBounded`, d_jit = 1) and with one sync value it is 0 bits of timing
+(`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A horizon within the first m′ ≤ m execution phases is charged
+only those m′ (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the wire recovers no more
+(`SecurityProofs.EncardDecodableLeConstantRate`).
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
-execution phase (times d_jit^T for jitter, 1 under J), given the frames' content, on runs whose statuses are all
-complete (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of
-∂X establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of every ingress guarantee:
-`SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
-the two per-window forms. Over the first m whole windows of a run (n = m·T; for the K charge, the run from the last
-wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each window, `T·log2(r_in + 1)` bits, which
-is the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`, and
+execution phase (times d_jit^T for jitter, `JitterBounded`'s, and 1 without it), given the frames' content, on runs
+whose statuses are all complete (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted
+verdict on every link of ∂X establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of
+every ingress guarantee: `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their
+`Contents` versions and the two per-window forms. Over the first m whole windows of a run (n = m·T; for the K charge,
+the run from the last wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each window,
+`T·log2(r_in + 1)` bits, which is the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`, and
 `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` for the `Contents` version).
 
 The `Contents` versions drop the one given content: messages whose frames follow some content assignment in a set `Cs`
@@ -1119,10 +1121,10 @@ Each assumption, and what breaks without it:
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m′
     windows' charges bound the first m′ windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
     the syncs. A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (d_jit = 1
-  is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
-  The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
-  their deadlines, so they stay out of anything published, or they are charged.
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and `JitterBounded`
+  (d_jit = 1 is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads
+  a time. The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice
+  within their deadlines, so they stay out of anything published, or they are charged.
 - **A7, the advice set is fixed before the run.** The codec, the cap ℓ_a and each execution phase's registered width
   ℓ_a,j are registered before the audit's first window, and the audit refuses advice over the cap, as it refuses a sync
   outside 𝒮_sync. The trusted text's log2 #`Ac` needs the set fixed before the run. Without a registered cap, a
@@ -1802,15 +1804,15 @@ them.
   across windows). So an egress window that closes faulted while its queue would still hold frames faults the next
   one too, with the same reason, until a faulted window closes with none.
 - **The slack** bounds how late a tick may run: 25 ms by default, a quarter bucket. A deployment sets it from the jitter
-  its timing bounds assume (J).
+  its timing bounds assume (`JitterBounded`).
 - **The pacer** (`Proxy(paced=…)`, `pacer.Pacer`). One loop runs the ticks and reads the link and every server
-  connection, so when the server writes within a bucket moves when the tick runs, and a bucket written at its tick leaves
-  then: the prover's offset within a bucket reaches the client, against J. With `paced`, a time past the slack, the
-  egress tick hands its bucket to a process of its own, which writes it to the link `paced` after the bucket's boundary
-  on the host's monotonic clock, a time fixed before the bucket is made. A thread would share the loop's interpreter
-  lock, which the loop holds while it reads. So a tick late by up to the slack never moves when a bucket leaves, and a
-  bucket that can't leave at its time fails its window closed (above). `benchmarks/network_traces/certifier_serve.py`
-  paces at 50 ms (`PACED_MS`).
+  connection, so when the server writes within a bucket moves when the tick runs, and a bucket written at its tick
+  leaves then: the prover's offset within a bucket reaches the client, against `JitterBounded`. With `paced`, a time
+  past the slack, the egress tick hands its bucket to a process of its own, which writes it to the link `paced` after
+  the bucket's boundary on the host's monotonic clock, a time fixed before the bucket is made. A thread would share the
+  loop's interpreter lock, which the loop holds while it reads. So a tick late by up to the slack never moves when a
+  bucket leaves, and a bucket that can't leave at its time fails its window closed (above).
+  `benchmarks/network_traces/certifier_serve.py` paces at 50 ms (`PACED_MS`).
 
 The clock and the sleep are injected (`VirtualClock` serves a run driven event by event). `Shaper` and `Bucketer` do no
 I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
@@ -1941,8 +1943,8 @@ how they were read.
 - **0 timing bits, at bucket resolution.**
   - Given n, every cell's bucket is fixed. When the server writes and how it chunks its bytes reach the wire only by
     failing the connection.
-  - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its J). A tick past
-    the slack faults every record's window.
+  - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its `JitterBounded`).
+    A tick past the slack faults every record's window.
   - With `paced` (`Warden(paced=…)`), the tick hands each connection's cells to the egress pacer, as the active
     certifier's pacer (above), which writes them to the connection's socket `paced` after the bucket's boundary, a
     time fixed before the bucket is made. A bucket that reaches the pacer after that time, or whose release starts
