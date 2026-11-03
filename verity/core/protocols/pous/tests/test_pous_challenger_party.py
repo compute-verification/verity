@@ -177,4 +177,4 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert CP.placement("n0", "n0")[CP.PREMISE].startswith("unmet: ")
     assert CP.placement("n0", "auditor-host") == {
         "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
-        CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
+        CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the developer's n0"}

@@ -1,5 +1,5 @@
 """The remote bandwidth session (`period.session`) as two parties of the deployment layer (`verity.core.deploy`): the
-verifier and its challenger (`Verifier`), on a machine the prover doesn't control, and the prover (`Prover`) on its node.
+verifier and its challenger (`Verifier`), on a machine the developer doesn't control, and the prover (`Prover`) on its node.
 
 ~~~text
 prover   -> verifier   Register {blocks} + payload root; per pass Root {t, i} + root; per window Openings {t} + openings
@@ -22,7 +22,7 @@ the period's live secret and the registration's nonce, drawn once. Its clock tim
 The verifier finishes with `{"answer", "case"}` (private: the case holds the openings) once it has recorded the answer
 (`period.answer`, as `RemoteAudit.Protocol.check` gives it): after the last window's verdict, or at the first rejection,
 with the case of the events so far. A prover that leaves, a frame the wire refuses or one out of phase ends it refused
-by name, with the answer as it stands. The prover's machine gives it its store (`capabilities["store"]`, a
+by name, with the answer as it stands. The developer's machine gives it its store (`capabilities["store"]`, a
 `period.Prover`: `period.Local` is the reference); it finishes on `End`, refused `coins` when a challenge it was sent
 doesn't open against the coins disclosed (`period.Prover.end`).
 """

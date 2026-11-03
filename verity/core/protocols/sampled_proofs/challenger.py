@@ -25,7 +25,7 @@ challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`),
 
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
-challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+challenger is auditor-trusted, the auditor's device on a machine the developer doesn't control, under the named assumption
 `trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 **A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body

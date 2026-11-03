@@ -35,7 +35,7 @@ a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's ro
 of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
-`trusted-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
+`trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
 still drawn on the node.
 """

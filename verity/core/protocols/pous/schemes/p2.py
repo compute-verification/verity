@@ -102,10 +102,10 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - counter-mode SHA-512 as a random oracle for the keys (v4's, the spec's P2-EXP-IO), or SHAKE256 for v2's segment seeds
   (whose ChaCha8 streams P2-EXP-IO does not name);
 - the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
-  held plus the help it received, and nothing attests the prover's machine;
+  held plus the help it received, and nothing attests the developer's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
-  that the prover doesn't control and nothing attests (core's `trusted-host`)."""
+  that the developer doesn't control and nothing attests (core's `trusted-host`)."""
 
 WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the

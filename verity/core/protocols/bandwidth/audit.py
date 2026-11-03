@@ -3,9 +3,9 @@ a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_
 from the driver, `read_device`), so devices holding one `W` hold different stores, and the verifier refuses a store
 whose salt is not its device's (`Verifier`).
 
-The verifier (`Verifier`, `Window`, `ChallengerState`) is the auditor's hardware, on a machine the prover doesn't
-control; whatever runs on the GPU's node (`read_device`, the tagger's host) is the prover's, and every bound holds if it
-is adversarial, except that the device id it reads is the prover's word (`PROTOCOL.md` §2).
+The verifier (`Verifier`, `Window`, `ChallengerState`) is the auditor's hardware, on a machine the developer doesn't
+control; whatever runs on the GPU's node (`read_device`, the tagger's host) is the developer's, and every bound holds if it
+is adversarial, except that the device id it reads is the developer's word (`PROTOCOL.md` §2).
 
 1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk
    (`Window.open`); then it derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and

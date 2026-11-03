@@ -1,4 +1,4 @@
-"""The streamed wipe's memory challenger as a party of its own, so it runs on a host the prover doesn't control (the
+"""The streamed wipe's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the
 challenger host, `trusted-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
@@ -182,7 +182,7 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path, extra: Seq
 
 def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
          counted_by: str | None = None) -> dict[str, Any]:
-    """A link leaving the prover's node, as `Accounting.Placed.Links` declares one: its `ends` (the node, and `to` past
+    """A link leaving the developer's node, as `Accounting.Placed.Links` declares one: its `ends` (the node, and `to` past
     its boundary), what carries it (`via`), its capacity in Mb/s when known, and the network certifier that counts what
     leaves on it (`counted_by`), `None` when none does, so its egress is outside the session's count."""
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
@@ -192,20 +192,20 @@ def placement(node: str, host: str, *, verifier: str | None = None, store: Mappi
               simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the prover doesn't control, which is never the prover's node. `kind` names the placement: `own-host`,
-    `simulated` (the challenger a process of its own on the prover's node, standing in for its own host, the premise
+    machine the developer doesn't control, which is never the developer's node. `kind` names the placement: `own-host`,
+    `simulated` (the challenger a process of its own on the developer's node, standing in for its own host, the premise
     assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
-    `links` are the links leaving the prover's node (`link`), and `undeclared` the memory the node has outside the fill's
+    `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
     declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
     held = host != node
     if simulated and held:
-        raise ValueError(f"a simulated placement runs the memory challenger on the prover's node {node}, not on {host}")
+        raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
     kind = "own-host" if held else "simulated" if simulated else "prover-node"
     out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: {"own-host": f"holds: the memory challenger ran on {host}, not the prover's {node}",
-                     "simulated": f"simulated: the memory challenger ran as a process of its own on the prover's node "
-                                  f"{node}, its key in its own scratch, standing in for a host the prover doesn't control",
-                     "prover-node": f"unmet: the memory challenger ran on the prover's node {node}"}[kind],
+           PREMISE: {"own-host": f"holds: the memory challenger ran on {host}, not the developer's {node}",
+                     "simulated": f"simulated: the memory challenger ran as a process of its own on the developer's node "
+                                  f"{node}, its key in its own scratch, standing in for a host the developer doesn't control",
+                     "prover-node": f"unmet: the memory challenger ran on the developer's node {node}"}[kind],
            "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
     return out if store is None else out | {"prover_store": dict(store)}
 

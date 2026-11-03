@@ -68,7 +68,7 @@ def test_each_run_step_needs_its_evidence():
     _says(_ex("placed", runs=[RUN], placement={"prover": "cpu-node", "verifier": "cpu-node"}),
           "put verifier (now cpu-node) on auditor-host")
     _says(_ex("placed", runs=[RUN], placement={"prover": "auditor-host", "verifier": "auditor-host"}),
-          "the prover's roles ['prover'] are on auditor-host")
+          "the developer's roles ['prover'] are on auditor-host")
     _says(_ex("placed", placement={"prover": "gpu-node", "verifier": "auditor-host"}), "run placed: add a run of record")
     assert not E.problems(_ex("placed", runs=[RUN]), ROOT)
 
@@ -91,7 +91,7 @@ def test_the_axes_are_independent():
     assert not E.problems(_ex("moved", "proved", **STATED, proof=PROOF, placement=LOCAL), ROOT), "a local toy, fully proved"
     assert not E.problems(_ex("placed", "none", runs=[RUN]), ROOT), "a placed demo, its guarantee unstated"
     ex = _ex("runs", "none", runs=[RUN], placement=LOCAL)
-    assert E.next_missing(ex, "run", ROOT).startswith("run placed: the auditor's roles run off the prover's node")
+    assert E.next_missing(ex, "run", ROOT).startswith("run placed: the auditor's roles run off the developer's node")
     assert E.next_missing(ex, "proof", ROOT).startswith("proof stated: add [evidence] guarantee")
 
 

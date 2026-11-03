@@ -50,7 +50,7 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("perfect-isolation", "model",
           "Help accounted: on PoUS's challenge schedule some challenge tick t_j has mem_X(t_j) + 2^e·h >= S for the "
           "audited location X, where h is the help X received (console's actual-circuit model; proved at e = 0 for a "
-          "location that does no arithmetic modulo p). Nothing attests the prover's machine",
+          "location that does no arithmetic modulo p). Nothing attests the developer's machine",
           "Help accounted"),
     Entry("sequential-step-floor", "assumption",
           "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "
