@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.SamplingGeneric.Wait
 
 /-!
 # The sampled compiler's bits
@@ -15,13 +16,6 @@ bounds read no strict one (`ExpOwnOf`, `CompilerEfficient`'s second and third co
 @[expose] public section
 
 namespace Claims.SamplingGeneric
-
-theorem maxBelow_nonneg (n : ℕ) (f : ℕ → ℝ) : 0 ≤ maxBelow n f := by
-  unfold maxBelow
-  generalize (List.range n).map f = l
-  induction l with
-  | nil => exact le_rfl
-  | cons a l ih => exact le_max_of_le_right ih
 
 namespace Compiled
 
