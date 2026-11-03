@@ -1,7 +1,9 @@
 """The `lf` model, learning_frontier's dense decoder: Llama-style (RMSNorm, SwiGLU, RoPE, no biases), context 1024, the GPT-2
 vocabulary padded to 50,304 (data v3's starts: bpe32k's 32,000, `Size.config(vocab=32000)`), input and output embeddings
-tied. Its parameter names are the start registry's tensor names. A config's optional `prefix` P gives every block P
-learned key/value pairs behind a zero-initialized per-head gate (prefix tuning), which a start's config doesn't have.
+tied. Its parameter names are the start registry's tensor names. Two optional config keys, which a start's config
+doesn't have, extend every block so that at its initialisation it computes the block without them: `prefix` P, P learned
+key/value pairs behind a zero per-head gate (prefix tuning); `adapter` r, a bottleneck adapter of r units after the MLP
+whose up-projection starts at zero.
 """
 from __future__ import annotations
 
@@ -48,7 +50,7 @@ class Linear(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, size: Size, std: float, out_std: float, prefix: int = 0):
+    def __init__(self, size: Size, std: float, out_std: float, prefix: int = 0, adapter: int = 0):
         super().__init__()
         d = size.d_model
         self.n_head = size.n_head
@@ -63,6 +65,10 @@ class Block(nn.Module):
             # attends to, apart from the sequence, scaled per head by tanh(prefix_gate), so a zero gate is the block
             self.prefix_k, self.prefix_v = Linear(d, prefix, std), Linear(d, prefix, std)
             self.prefix_gate = nn.Parameter(torch.zeros(size.n_head))
+        if adapter:
+            # Pfeiffer et al.'s bottleneck adapter on the block's output, x + up(silu(down(rms_norm(x)))), up zero
+            self.adapter_norm = nn.Parameter(torch.ones(d))
+            self.adapter_down, self.adapter_up = Linear(d, adapter, std), Linear(adapter, d, 0.0)
 
     def forward(self, x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
         b, t, d = x.shape
@@ -78,7 +84,10 @@ class Block(nn.Module):
         a = a.transpose(1, 2).reshape(b, t, d)
         x = x + self.wo(a)
         h = F.rms_norm(x, (d,), self.mlp_norm)
-        return x + self.w_down(F.silu(self.w_gate(h)) * self.w_up(h))
+        x = x + self.w_down(F.silu(self.w_gate(h)) * self.w_up(h))
+        if hasattr(self, "adapter_up"):
+            x = x + self.adapter_up(F.silu(self.adapter_down(F.rms_norm(x, (d,), self.adapter_norm))))
+        return x
 
 
 def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
@@ -87,13 +96,13 @@ def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
 
 
 class LM(nn.Module):
-    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB, prefix: int = 0):
+    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB, prefix: int = 0, adapter: int = 0):
         super().__init__()
         self.size, self.vocab = size, vocab
         std, out_std = 0.02, 0.02 / math.sqrt(2 * size.n_layer)
         self.embed = nn.Parameter(torch.empty(vocab, size.d_model))
         nn.init.normal_(self.embed, std=std)
-        self.blocks = nn.ModuleList(Block(size, std, out_std, prefix) for _ in range(size.n_layer))
+        self.blocks = nn.ModuleList(Block(size, std, out_std, prefix, adapter) for _ in range(size.n_layer))
         self.norm = nn.Parameter(torch.ones(size.d_model))
         hd = size.d_model // size.n_head
         freqs = 1.0 / (ROPE_THETA ** (torch.arange(0, hd, 2, dtype=torch.float32) / hd))

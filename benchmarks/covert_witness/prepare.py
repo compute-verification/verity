@@ -22,7 +22,8 @@ its update, its size or its shape: the training formalism v1 scores what it did 
   and the lowest updated layer.
 
 Positions (`positions`): the embedding lookup is layer 0, block i is layer i + 1, the final norm and the head are layer L + 1;
-inside a block the stages are norm, q/k/v, o, norm, gate/up, down. Node u is upstream of v when u's (layer, stage) is earlier.
+inside a block the stages are norm, q/k/v (with a `prefix` model's prefix), o, norm, gate/up, down, then an `adapter`
+model's norm, down and up. Node u is upstream of v when u's (layer, stage) is earlier.
 φ is the share of the forward's weight-matmul FLOPs (the tied head counted as a matmul, the lookup and the norm gains as
 0-FLOP nodes) whose weight differs from θ and that has an updated node, a lookup or a gain included, upstream.
 """
@@ -194,7 +195,8 @@ class Net(torch.nn.Module):
             from model import LM, VOCAB, Size
 
             self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]),
-                            vocab=config.get("vocab", VOCAB), prefix=config.get("prefix", 0))
+                            vocab=config.get("vocab", VOCAB), prefix=config.get("prefix", 0),
+                            adapter=config.get("adapter", 0))
         elif config["family"] == "hf-neox":
             from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
 
@@ -327,7 +329,8 @@ class TrainData:
 FAMILIES = {
     "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
            "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "prefix_k": 1, "prefix_v": 1, "prefix_gate": 1,
-                      "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4, "w_down": 5}},
+                      "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4, "w_down": 5, "adapter_norm": 6,
+                      "adapter_down": 7, "adapter_up": 8}},
     "hf-neox": {"embed": r"gpt_neox\.embed_in\.weight", "head": r"(?:embed_out|lm_head)\.weight",
                 "final": r"gpt_neox\.final_layer_norm\.(?:weight|bias)",
                 "block": r"gpt_neox\.layers\.(\d+)\.(.+)\.(?:weight|bias)",
