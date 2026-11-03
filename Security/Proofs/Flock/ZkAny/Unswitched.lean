@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.FrameRounds
 
 /-!
 # The release before the `Finish` is the unswitched cut
@@ -26,7 +27,9 @@ at exactly the witnesses zero knowledge at any values is about. Here the release
 * `LeanRelease.LinkRoundEqStop`, `LiveRoundEqStop`, `FillRoundEqStop`: **the per-round byte equalities at the unswitched
   prover**, at the link and at the worker's and the stand-in frame rounds, each asked at the deferred release's own
   histories (`ZkServer.OwnHist`) as `FinalRoundEq` asks its own. Where the rows hold they are `LinkRoundEq`,
-  `LiveRoundEq` and `FillRoundEq` (`LeanRelease.liveRoundEqStop_of_rows`, …).
+  `LiveRoundEq` and `FillRoundEq` (`LeanRelease.liveRoundEqStop_of_rows`, …). The frame rounds' two follow, as
+  today's do, from the device's frames through the frame's masks being the session's unswitched message
+  (`LiveFramesStop`, `LiveHonestStop`, `FillFramesStop`; `LeanRelease.liveRoundEqStop_of_frames`, …).
 * `ZkServer.RefDBelow`, `ZkServer.take_deferred`, `ZkServer.stop_deferred`: `RefDOwn` below the last round alone gives
   the deferred server's first `n x - 1` messages as `P`'s, and, where it stops at its last round, its whole release as
   `P`'s run cut there.
@@ -646,6 +649,69 @@ theorem fillRoundEqStop_of_rows (S : RefSession) (vs : S.SwVals)
     (hE : FillRoundEq S vs L H wk x w) : FillRoundEqStop S vs L H wk x w :=
   fun ν t κ m₀ ρ₀ ops h0 hlt hl hok hrf _ => (hE ν t κ m₀ ρ₀ ops h0 hlt hl hok hrf).trans
     (congrArg dropDom (S.swMsgAt_of_rows x (S.wt x w) (vs x w ν) t _ (by simpa using hlt) (hr ν t _)))
+
+/-- **The live frame rounds in frames at the unswitched prover**: at every live frame round `LiveRoundEqStop` reads,
+the worker's round and the session's unswitched message are a frame round in frames of a rep that has not stopped
+(`RoundFrames`). `LiveFrames` with the unswitched prover, at the release's own histories. -/
+def LiveFramesStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops) →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.RoundFrames x (ν, t) ((m₀, ρ₀) :: ops) false v (S.unMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- **`LiveRoundEqStop` from the live frame rounds in frames at the unswitched prover.** -/
+theorem liveRoundEqStop_of_frames (S : RefSession) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
+    (w : Flock.Wit) (hF : LiveFramesStop S vs L H wk x w) : LiveRoundEqStop S vs L H wk x w :=
+  fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr ho hv =>
+    L.release_of_roundFrames x _ _ false v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr ho hv)
+
+/-- **The live frame rounds of a device at the unswitched prover**: at every live frame round `LiveRoundEqStop` reads,
+the worker's round is the session's unswitched message with each masked value's pad added back (`RoundHonest`): the
+worker's values `vs` on the drawn pads, whether or not its rows hold. `LiveHonest` with the unswitched prover, at the
+release's own histories. -/
+def LiveHonestStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops) →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.RoundHonest x (ν, t) ((m₀, ρ₀) :: ops) v (S.unMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- **`LiveRoundEqStop` from a device's live frame rounds at the unswitched prover.** -/
+theorem liveRoundEqStop_of_honest (S : RefSession) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
+    (w : Flock.Wit) (hF : LiveHonestStop S vs L H wk x w) : LiveRoundEqStop S vs L H wk x w :=
+  liveRoundEqStop_of_frames S vs L H wk x w fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr ho hv =>
+    L.roundFrames_of_honest x _ _ v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr ho hv)
+
+/-- **The stand-in frame rounds in frames at the unswitched prover**: at every stand-in frame round `FillRoundEqStop`
+reads, the firewall's scheduled round, at the values its transcript reports, and the session's unswitched message are
+a frame round in frames of a stopped rep (`RoundFrames`). `FillFrames` with the unswitched prover, at the release's own
+histories. -/
+def FillFramesStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = false →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops) →
+    L.RoundFrames x (ν, t) ((m₀, ρ₀) :: ops) true
+      (L.scheduled x w (ν, t) ((m₀, ρ₀) :: ops) (computedOf (L.computed x w (ν, t) ((m₀, ρ₀) :: ops))))
+      (S.unMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- **`FillRoundEqStop` from the stand-in frame rounds in frames at the unswitched prover.** -/
+theorem fillRoundEqStop_of_frames (S : RefSession) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
+    (w : Flock.Wit) (hF : FillFramesStop S vs L H wk x w) : FillRoundEqStop S vs L H wk x w :=
+  fun ν t κ m₀ ρ₀ ops h0 hlt hl hok hr ho =>
+    L.release_of_roundFrames x _ _ true _ _ (hF ν t κ m₀ ρ₀ ops h0 hlt hl hok hr ho)
 
 /-- **The deferred release refines the unswitched prover below the `Finish`**: at the session with the frame's stops,
 a last round `n x` one past the `Finish` and the `Finish` one past the last coin, on the deferred release's own
