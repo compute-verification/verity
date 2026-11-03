@@ -272,7 +272,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `counterexample.py` | `Family` (the program's writer), `check` (the sampled bit-for-bit rebuild), `coverage` |
 | `score.py` | `checkpoints` (a run's prefixes), `block_c` and `C_PER_FORWARD_TOKEN` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
-| `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
+| `nodes.py` | the node list (`nodes.txt`) that covert_witness's `launch.py` and `promote.py` read: `Node` (its gpu and CPU pools), `nodes`, `vy-dc-h200*` refused |
 | `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
 | `frontier.py` | the valid rows (`status`, `measured`), W\*, honest and S per target and cell with W\*'s x₀ and s\* bounds and best-known values, promotion candidates |
