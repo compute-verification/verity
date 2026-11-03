@@ -2,8 +2,8 @@
 changes nothing; shadow enqueues each checked tip's check with no graph beside its after-landing run, reads the graph the
 executor listed, and records how their verdicts compare by its keys; on enqueues each tip as graph/v2, reads its tasks'
 results by key (a task that reads others by the key the contract's rule gives it), judges a failure by policy.toml's
-allowances, names the landing whose change touches what a red task depends on, and moves `main` only once every task on the
-gate passed.  `QueueTransport` reads the executor's graphs and results through the store's remote."""
+allowances, names the landing whose change touches what a red task depends on (a coarse lean-suites task's, per failed suite
+as a run's), and moves `main` only once every task on the gate passed, never on a run that ran nothing.  `QueueTransport` reads the executor's graphs and results through the store's remote."""
 from __future__ import annotations
 
 import hashlib
@@ -334,6 +334,9 @@ ENVS = {"py": {"spec": ["uv.lock"], "digest": "sha512:" + "e" * 128},
 TEST = "tests/test_x.py::test_y"
 FP8 = "partition/gate-recomputed ScaledMmFp8Block_v1"
 X, A, B, FP8_TASK = "test-file:pkg/tests/test_x.py", "lean-module:A.lean", "lean-module:B.lean", "circuit-binding:fp8"
+LS, L_TEST = "lean-suites:after-lean", "tests/test_l.py::test_z"
+#: `GATED_TREE` with suite `tools/lsuite` (`l-suite`), which declares `shared` an input
+L_TREE = {**GATED_TREE, "tools/lsuite/pyproject.toml": '[project]\nname = "L_Suite"\n[tool.verity.tests]\ninputs = ["shared"]\n'}
 
 
 def _digest(text: str) -> str:
@@ -362,11 +365,13 @@ def _v2(tip: str, *tasks: dict) -> dict:
 WHOLE_V2 = tuple(_task(f"{j}:all", ()) for j in AFTER_LANDING if j not in ("pytest", "lean-audit", "circuit-check"))
 
 
-def _graph_v2(tip: str, whole: bool = True) -> dict:
-    """A test file of suite `pkg/`, Lean module B reading A's olean, a circuit-check binding, and (``whole``) `WHOLE_V2`."""
+def _graph_v2(tip: str, whole: bool = True, lean_suites: tuple[str, ...] = ()) -> dict:
+    """A test file of suite `pkg/`, Lean module B reading A's olean, a circuit-check binding, and (``whole``) `WHOLE_V2`; with
+    ``lean_suites`` (the tree), its lean-suites task is `LS`, one coarse task of suites `tools/lsuite` and `other` reading it."""
+    whole_v2 = [t for t in WHOLE_V2 if not (lean_suites and t["kind"] == "lean-suites")] if whole else []
     return _v2(tip, _task(X, ("pkg/tests/test_x.py", "pkg/x.py"), suite="pkg"), _task(A, ("A.lean",), out=True),
                _task(B, ("B.lean",), reads=(A,), out=True), _task(FP8_TASK, ("pkg/fp8.circuit-check.py",), binding="fp8"),
-               *(WHOLE_V2 if whole else ()))
+               *whole_v2, *([_task(LS, lean_suites, suites="tools/lsuite other")] if lean_suites else ()))
 
 
 def _result(task: dict, key: str, status: str = "pass", **detail) -> dict:
@@ -580,6 +585,104 @@ def test_on_a_red_task_off_the_gate_holds_no_promotion_and_reverts_its_culprit_a
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip
     assert "pkg/fp8.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
+
+
+def _suite_row(name: str, suite: str, *tests: str, **more) -> dict:
+    """A failed suite's row in a lean-suites task's `detail.failed` (`runners/lean_suites.py`'s `row`)."""
+    return {"name": name, "suite": suite, "failed_tests": list(tests), **more}
+
+
+@pytest.mark.parametrize("files, why", [
+    (("a.txt", "tools/lsuite/tests/test_l.py", "tools/lsuite/y.py"),
+     f"its change touches tools/lsuite/tests/test_l.py, which {LS} depends on"),
+    (("a.txt", "shared/z.py", "pkg/y.py"), "its change touches shared/z.py, which is under suite l-suite's declared inputs")])
+def test_on_a_lean_suites_task_is_red_per_failed_suite_and_names_its_culprit_as_a_run_does(world, monkeypatch, tmp_path, files,
+                                                                                          why):
+    """One coarse lean-suites task, its inputs the whole tree (each landing touches them), fails suite `l-suite` on one test.
+    The red is `suite l-suite`, as a run's is, rung to the suite's owner; its culprit is the one landing touching the failed
+    test's file (#3, in the suite's directory, isn't), else, none does, the one touching the suite's declared inputs."""
+    _owning(world, {"lane-2": [], "ls-owner": ["tools/lsuite/"]})
+    _move_main(world, L_TREE)
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    for n, f in enumerate(files, 1):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    tip = _checked(world)
+    g = _graph_v2(tip, lean_suites=files)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g, {LS: {"exit": 1, "suites": {"l-suite": "failed", "other": "passed"},
+                            "failed": [_suite_row("l-suite", "tools/lsuite", L_TEST)]}})
+    h.tick()
+    pl = h.postland()
+    assert list(pl["red"]) == ["suite l-suite"] and pl["failed"] == tip and _main(world) == main
+    r = pl["red"]["suite l-suite"]
+    assert r["culprit"][0] == 2 and r["step"] == "lean-suites" and r["paths"] == [files[1]] and r["why"] == why, r
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert ring.startswith("@lane-2 @ls-owner queue: suite l-suite is red on `checked`"), ring
+    assert f"{LS}: suite l-suite failed {L_TEST}" in ring and f"Culprit: #2 ({why})" in ring, ring
+
+
+@pytest.mark.parametrize("allow, expires, more, red", [
+    ("suite l-suite", LIVE, {}, False), ("suite l-suite", EXPIRED, {}, True),
+    (f"suite l-suite::{L_TEST}", LIVE, {"beyond_tests": False}, False), (f"suite l-suite::{L_TEST}", LIVE, {}, True)])
+def test_on_a_lean_suites_tasks_failed_suite_is_judged_by_its_own_allowance(world, monkeypatch, tmp_path, allow, expires, more,
+                                                                            red):
+    """policy.toml judges each failed suite of a lean-suites task by its report row, as a run's (`Policy.suite`): `suite NAME`
+    covers it and the tip is verified; expired, it is red and the ring names it; `suite NAME::TEST` covers it only when its row
+    says it failed for nothing else (suites.py says so of none, so on either path only a whole suite's allowance covers it)."""
+    _move_main(world, {**L_TREE, "tools/verity/check/policy.toml": _policy((allow, "ci", expires))})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    tip = _land(h, 1)
+    g = _graph_v2(tip, lean_suites=("f1.txt",))
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g, {LS: {"exit": 1, "suites": {"l-suite": "failed", "other": "passed"},
+                            "failed": [_suite_row("l-suite", "tools/lsuite", L_TEST, **more)]}})
+    h.tick()
+    pl = h.postland()
+    rings = [p for p in h.posts if "is red on" in p]
+    if not red:
+        assert _main(world) == tip and pl["verified"] == tip and rings == [] and not pl.get("red"), (h.posts, world.logs)
+        return
+    assert _main(world) == main and pl["failed"] == tip and list(pl["red"]) == ["suite l-suite"]
+    (ring,) = rings
+    assert ("Its allowance in policy.toml expired" in ring) == (expires == EXPIRED), ring
+
+
+def test_on_a_suite_a_lean_suites_task_passes_ends_its_red_and_a_run_that_ran_nothing_holds_main(world, monkeypatch, tmp_path):
+    """Tip 1's lean-suites task fails suites `l-suite` and `other`: each is red.  Tip 2's fails `other` alone: `l-suite`'s red
+    ends there though the tip failed.  Tip 3's runner ran nothing it was to run (a skip): it gives an error, which is no result,
+    so the task stays pending, nothing is gated or verified, and `main` stays."""
+    _move_main(world, L_TREE)
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    other = _suite_row("other", "other", "tests/test_o.py::test_o")
+    for n, failed in ((1, [_suite_row("l-suite", "tools/lsuite", L_TEST), other]), (2, [other])):
+        tip = _land(h, n)
+        g = _graph_v2(tip, lean_suites=tuple(f"f{k}.txt" for k in range(1, n + 1)))
+        fake.list_graph(f"after-landing:{tip}", g)
+        _results(fake, g, {LS: {"exit": 1, "failed": failed,
+                                "suites": {"l-suite": "failed" if n == 1 else "passed", "other": "failed"}}})
+        h.tick()
+        pl = h.postland()
+        assert pl["failed"] == tip and _main(world) == main
+        assert sorted(pl["red"]) == (["suite l-suite", "suite other"] if n == 1 else ["suite other"]), (n, pl["red"])
+    assert pl["green"]["suite l-suite"] == tip and any("suite l-suite passed on `checked`" in x for x in world.logs), world.logs
+    tip = _land(h, 3)
+    g = _graph_v2(tip, lean_suites=("f1.txt", "f2.txt", "f3.txt"))
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, {**g, "tasks": [t for t in g["tasks"] if t["id"] != LS]})
+    ls = next(t for t in g["tasks"] if t["id"] == LS)
+    fake.finish_result({**_result(ls, ls["key"]), "status": "error", "detail": {"error": "not run: tools/lsuite"}})
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == main and pl["run"]["tip"] == tip and pl.get("gated") != tip and pl["verified"] != tip
+    assert pl.get("failed") != tip and sorted(pl["red"]) == ["suite other"]
 
 
 def test_on_a_graph_of_another_commit_is_told_and_the_check_enqueued_again(world, monkeypatch, tmp_path):

@@ -251,6 +251,9 @@ CIRCUIT_RED = "step circuit-check"
 #: not listed is its own job
 JOB_OF_KIND = {"test-file": "pytest", "lean-module": "lean-audit", "lean-lock": "lean-audit", "circuit-binding": "circuit-check",
                "circuit-coverage": "circuit-check", "circuit-catalog": "circuit-check"}
+#: the graph/v2 kind that runs check's lean-suites step whole (`verity_graph.runners.lean_suites`): its fail names each failed
+#: suite (`detail.failed`, suites.py's rows), which drive names, allows and blames as that suite's own red, as it does a run's
+SUITES_KIND = "lean-suites"
 #: the most new failures a circuit-binding result names (`verity_graph.runners.circuit_binding.NAMED`): a list that long may
 #: leave some out, so no allowance covers it
 CIRCUIT_NAMED = 100
@@ -787,14 +790,17 @@ def suite_name(repo: Path, commit: str, suite: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower() if isinstance(name, str) else suite
 
 
-def task_error(tid: str, result: dict) -> str:
-    """What a ring quotes of a failed graph/v2 task: its failed tests (a test-file's), its new failures (a circuit-binding's),
-    or the error its runner gave."""
+def task_error(tid: str, result: dict, suite: str | None = None) -> str:
+    """What a ring quotes of a failed graph/v2 task: its failed tests (a test-file's, or of a lean-suites task's its failed
+    suite ``suite``'s), its new failures (a circuit-binding's), or the error its runner gave."""
     d = result.get("detail") or {}
+    if suite is not None:
+        d = next((r for r in d.get("failed") or () if isinstance(r, dict) and r.get("name") == suite), d)
     named = [str(x) for x in d.get("failed_tests") or d.get("failures") or ()]
     what = (f"failed {', '.join(named[:3])}" + (f" and {len(named) - 3} more" if len(named) > 3 else "") if named
+            else f"outlived its {d['timed_out']:g} s timeout" if isinstance(d.get("timed_out"), int | float)
             else str(d.get("error") or "failed")[:240])
-    return f"{tid}: {what}"
+    return f"{tid}: {what}" if suite is None else f"{tid}: suite {suite} {what}"
 
 
 def task_files(graph: dict, ids: Iterable[str]) -> set[str]:
@@ -1477,11 +1483,13 @@ class Driver:
     def _follow_tasks(self, drive: dict, pl: dict, run: dict) -> None:
         """`executor = "on"`: the after-landing check of ``run["tip"]`` by the executor alone, from the results of its graph/v2
         read by key (`Executor.settle`) once the executor labelled the graph.  A failed task an unexpired allowance of the tip's
-        policy covers is not red (`_task_allowed`); each other is named red at once with its culprit, by the unit a run would
-        name (`_task_unit`: its suite, else its kind's job; `_name_tasks`).  Once every task on the merge gate (its job not in
-        policy.toml's `off_gate`) passed or is covered, the tip is `gated`.  Once none is pending, the tip is verified when every
-        task passed or is covered, each red record at or below it ending, and `_promote` moves `main` there; else it is failed,
-        `main` stays, and each red record whose unit passed here ends.  The check stands for the jobs its graph has tasks of
+        policy covers is not red (`_task_allowed`); each other is named red at once with its culprit, by the units a run would
+        name (`_task_units`: a test-file's suite, each failed suite a lean-suites task's report names, else its kind's job;
+        `_name_tasks`), each unit allowed on its own.  Once every task on the merge gate (its job not in policy.toml's
+        `off_gate`) passed or is covered, the tip is `gated`.  Once none is pending, the tip is verified when every task passed
+        or is covered, each red record at or below it ending, and `_promote` moves `main` there; else it is failed, `main`
+        stays, and each red record whose unit passed here ends (`_unit_states`).  A runner that ran nothing (a skip) gives an
+        error, no result, so its task stays pending and `main` with it.  The check stands for the jobs its graph has tasks of
         (`_job`) and no others: a graph with no task of a job `main` waits for (`_gating`) gates nothing and verifies only the
         jobs it has, so `main` stays, and `CI` is told which it lacks.  A failed baseline check is verified with the jobs whose
         every task passed, as a red baseline run is (`_red_baseline`), and told to `CI`.  A task whose results never come (the
@@ -1510,13 +1518,15 @@ class Driver:
         for i, (s, res) in sorted(states.items()):
             if s != FAIL:
                 continue
-            v = self._task_allowed(tip, tasks[i], res)
-            if v.covered:
+            uncovered = False
+            for unit, row in self._task_units(tip, tasks[i], res).items():
+                v = self._task_allowed(tip, tasks[i], res, row)
+                if not v.covered:
+                    uncovered = True
+                    reds.setdefault(unit, []).append(i)
+                    expired.setdefault(unit, []).extend(v.expired)
+            if not uncovered:
                 covered.add(i)
-                continue
-            unit = self._task_unit(tip, tasks[i])
-            reds.setdefault(unit, []).append(i)
-            expired.setdefault(unit, []).extend(v.expired)
 
         def ok(i: str) -> bool:
             return states[i][0] == PASS or i in covered
@@ -1564,12 +1574,12 @@ class Driver:
                                                   f"`{self.q.into}`")
             return
         pl["failed"] = tip
-        units: dict[str, list[str]] = {}
+        good: dict[str, bool] = {}
         for i, x in tasks.items():
-            if (unit := self._task_unit(tip, x)) in (pl.get("red") or {}):
-                units.setdefault(unit, []).append(i)
-        for key, ids in units.items():
-            if all(ok(i) for i in ids):
+            for unit, passed in self._unit_states(tip, x, states[i], ok(i), {u for u, ids in reds.items() if i in ids}).items():
+                good[unit] = good.get(unit, True) and passed
+        for key in list(pl.get("red") or {}):
+            if good.get(key):
                 self._green(pl, key, tip)
         if not reds:
             self.refuse(drive, f"postland:{tip}", f"{what}: an allowance covers each failure, but the blocked tasks read a task "
@@ -1594,12 +1604,41 @@ class Driver:
             return f"suite {self._suite_name(tip, (task.get('vars') or {}).get('suite') or '.')}"
         return f"step {self._job(task)}"
 
-    def _task_allowed(self, tip: str, task: dict, result: dict) -> policy.Coverage:
+    def _task_units(self, tip: str, task: dict, result: dict) -> dict[str, dict | None]:
+        """The red records failed graph/v2 ``task`` names, each with its suite's report row: a lean-suites task's, each failed
+        suite its `detail.failed` names, `suite NAME` with its row, as a run's lean-suites failures are named; else, and when it
+        names none (a timeout of the whole task), `_task_unit`'s alone."""
+        rows = (result.get("detail") or {}).get("failed") if task["kind"] == SUITES_KIND else None
+        named = {f"suite {r['name']}": r for r in rows or () if isinstance(r, dict) and isinstance(r.get("name"), str)}
+        return named or {self._task_unit(tip, task): None}
+
+    def _suite_units(self, tip: str, task: dict) -> list[str]:
+        """The `suite NAME` of each suite lean-suites ``task`` runs (its var `suites`: suites.py's names, or directories)."""
+        return [f"suite {self._suite_name(tip, s) if '/' in s else s}" for s in (task.get("vars") or {}).get("suites", "").split()]
+
+    def _unit_states(self, tip: str, task: dict, state: tuple[str, dict | None], ok: bool, red: set[str]) -> dict[str, bool]:
+        """{red record: whether ``task`` passed it} (``ok``: the task passed, or an allowance covers its failure; ``red``: the
+        records it is red in here): its `_task_unit`'s, and a lean-suites task's for each suite it runs too, by its report (a
+        suite that passed, or whose failure an allowance covers), none passed until it has one."""
+        if task["kind"] != SUITES_KIND:
+            return {self._task_unit(tip, task): ok}
+        d = (state[1] or {}).get("detail") or {}
+        status = d.get("suites") if isinstance(d.get("suites"), dict) else {}
+        named = {f"suite {r.get('name')}" for r in d.get("failed") or () if isinstance(r, dict)}
+        return {self._task_unit(tip, task): ok, **{
+            u: state[0] == PASS or (state[0] == FAIL and u not in red
+                                    and (status.get(u.removeprefix("suite ")) in ("passed", "cached") or u in named))
+            for u in self._suite_units(tip, task)}}
+
+    def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None) -> policy.Coverage:
         """Whether an allowance of ``tip``'s policy covers failed graph/v2 ``task`` by its ``result``, with the expired ones that
-        would have: a test-file's as its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each failed test,
-        the latter only when pytest exited 1 with failed tests to name); a circuit-check task's by the new failures it names
-        (`Policy.circuit`), fewer than `CIRCUIT_NAMED`; no other kind's."""
+        would have: a failed suite of a lean-suites task's by its report ``row`` (`Policy.suite`, as a run's); a test-file's as
+        its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each failed test, the latter only when pytest exited
+        1 with failed tests to name); a circuit-check task's by the new failures it names (`Policy.circuit`), fewer than
+        `CIRCUIT_NAMED`; no other kind's."""
         pol, now, d = self._policy(tip), self.now(), result.get("detail") or {}
+        if row is not None:
+            return pol.suite(str(row["name"]), row, now)
         if task["kind"] == "test-file":
             tests = [str(x) for x in d.get("failed_tests") or ()]
             row = {"failed_tests": tests, "beyond_tests": not (d.get("exit") == 1 and bool(tests))}
@@ -1612,19 +1651,26 @@ class Driver:
                     states: dict[str, tuple[str, dict | None]], expired: tuple[policy.Allowance, ...] = ()) -> None:
         """Name the culprit of red ``key``, the unit of the failed graph/v2 tasks ``ids`` (`_follow_tasks`), among the landings
         since it last passed (`_base_of`): the one whose own change touches a file one of them depends on (`task_files`: their
-        inputs and envs' spec files, and those of each task they read, transitively).  The executor's check bisects nothing, so
-        several, or none, are rung and nothing is reverted.  The ring (`_ring`), the record, the expired allowances and the
-        revert (`_red_clock`) are a run's red's (`_name`); a key already named for this tip, or whose culprit is still on
-        `checked` unreverted, is left as it is."""
+        inputs and envs' spec files, and those of each task they read, transitively).  A lean-suites task, whose inputs are the
+        whole tree, stands for suite ``key`` by its report row, as a run's suite does (`_name`): its failed test files, else,
+        touching none, the suite's declared inputs (`suite_inputs`).  The executor's check bisects nothing, so several, or none,
+        are rung and nothing is reverted.  The ring (`_ring`), the record, the expired allowances and the revert (`_red_clock`)
+        are a run's red's (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left
+        as it is."""
         red, tip = pl.setdefault("red", {}), run["tip"]
         if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted")
                                                             and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
                 old["seen"] = tip
             return
-        task = next(x for x in graph["tasks"] if x["id"] == ids[0])
-        suite = (task.get("vars") or {}).get("suite") if task["kind"] == "test-file" else None
-        first = "; ".join(task_error(i, states[i][1] or {}) for i in ids[:2])
+        by_id = {x["id"]: x for x in graph["tasks"]}
+        task, name = by_id[ids[0]], key.removeprefix("suite ")
+        coarse = {i for i in ids if by_id[i]["kind"] == SUITES_KIND and key.startswith("suite ")}
+        rows = [x for i in coarse for x in ((states[i][1] or {}).get("detail") or {}).get("failed") or ()
+                if isinstance(x, dict) and x.get("name") == name and isinstance(x.get("suite"), str)]
+        suite = ((task.get("vars") or {}).get("suite") if task["kind"] == "test-file" else None) or next(
+            (x["suite"] for x in rows), None)
+        first = "; ".join(task_error(i, states[i][1] or {}, name if i in coarse else None) for i in ids[:2])
         r = {"tip": tip, "ids": [run["tasks"]["check"]], "first": first + (f"; {len(ids) - 2} more task(s) failed" if len(ids) > 2 else ""),
              "step": self._job(task), "culprit": None, "owner": self._path_owner(suite) if suite else None, "not_run": [],
              "tasks": ids[:20]}
@@ -1637,14 +1683,20 @@ class Driver:
             return
         r["base"] = base
         members = self.landed_since(base, tip)
-        files = task_files(graph, ids)
+        files = task_files(graph, [i for i in ids if i not in coarse]) | {
+            os.path.normpath(os.path.join(x["suite"], str(t).split("::")[0])) for x in rows for t in x.get("failed_tests") or ()}
         hits = [x for x in members if self._own(x) & files]
         r["paths"] = sorted({f for x in hits for f in self._own(x) & files})
+        why = f"which {ids[0]}" + (" and the other failed tasks depend on" if len(ids) > 1 else " depends on")
+        if not hits and rows:
+            ins = sorted({p for x in rows for p in suite_inputs(self.repo, tip, x["suite"])})
+            hits = [x for x in members if any(under(f, ins) for f in self._own(x))]
+            r["paths"] = sorted({f for x in hits for f in self._own(x) if under(f, ins)})
+            why = f"which is under {key}'s declared inputs"
         since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
         if len(hits) == 1:
             r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], rung=self.now(),
-                     why=f"its change touches {', '.join(r['paths'][:4])}, which {ids[0]}"
-                         + (" and the other failed tasks depend on" if len(ids) > 1 else " depends on"))
+                     why=f"its change touches {', '.join(r['paths'][:4])}, {why}")
             self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({r['why']}), of the {since}")
         elif hits:
             self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} each touch what it depends on ({since}), and the "
