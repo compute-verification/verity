@@ -2,7 +2,7 @@
 arm priced by its compute.
 
     python launch.py s-t20 --island hybrid --program grow.py --note "grow ..." -- --grow depth --depth 8 \\
-        --budget-fraction 0.6
+        --tier search --budget-fraction 0.6
 
 `--grow` (an arm key, like every key in ARM_KEYS):
 
@@ -21,8 +21,10 @@ arm priced by its compute.
 Every block matrix is trained by Muon (Newton-Schulz, momentum 0.95, decoupled weight decay `--wd`; each expert's
 matrix on its own), the gains, the router and an unfrozen embedding by AdamW (betas 0.9, 0.95). The tied embedding is
 frozen (`--embed-lr 0`) except in `scratch`. Linear warmup over `--warmup` steps, then linear decay to 0: each arm is a
-complete schedule from θ within its share of the budget, `--budget-fraction` of the run's tier's (`prepare.budget`: the
-search tier's, or `launch.py --long`'s LONG_C0 x the start's C0).
+complete schedule from θ within its share of the budget, `--budget-fraction` of `--tier`'s (`prepare.budget`: `search`,
+or `long`, `launch.py --long`'s LONG_C0 x the start's C0). The tier is an argument rather than the harness's CW_TIER, so a
+replay of the program with its arguments (te_core's capture, which sets no CW_TIER) plans the steps the run took; a
+CW_TIER that names another tier refuses.
 
 Every arm is measured here: θ once, then each arm at `--evals` points of its schedule, by mean cross-entropy in nats per
 token over `--eval-windows` windows of the training stream that no start read and no step trains on (the last windows
@@ -44,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import time
 from pathlib import Path
 
@@ -315,12 +318,16 @@ def main() -> int:
     ap.add_argument("--evals", type=int, default=4, help="in-job measurements per arm, at k/EVALS of its steps")
     ap.add_argument("--eval-windows", type=int, default=512)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--tier", required=True, choices=("search", "long"),
+                    help="the tier whose budget the plan divides: launch.py's (long with --long, else search)")
     a = ap.parse_args()
+    if os.environ.get("CW_TIER", a.tier) != a.tier:
+        fail(f"grow: --tier {a.tier}, but the harness runs this at CW_TIER={os.environ['CW_TIER']}; give launch.py's tier")
     torch.backends.cuda.matmul.allow_tf32 = True
     dev = prepare.DEVICE
     net, rec, theta = prepare.load_start(a.start)
     cfg = rec["config"]
-    tier = prepare.budget(a.start)
+    tier = prepare.budget(a.start, a.tier)
     if cfg["family"] != "lf":
         raise SystemExit("grow: lf starts only")
     arms = parse_arms(a.arms, a)
@@ -416,7 +423,7 @@ def main() -> int:
                     grp["lr"] = lr * frac
             alpha = aa.kd * max(0.0, 1 - k / (aa.kd_frac * n)) if kd_tok else 0.0
             rows = train.next(aa.batch)
-            total = 0.0
+            total = torch.zeros((), device=dev)
             for i in range(0, aa.batch, aa.micro):
                 x = rows[i: i + aa.micro]
                 part = len(x) / aa.batch
@@ -432,7 +439,7 @@ def main() -> int:
                         kl = F.kl_div(logits.log_softmax(-1), teach, log_target=True, reduction="batchmean")
                         loss = (1 - alpha) * ce + alpha * kl
                 (loss * part).backward()
-                total += float(ce.detach()) * part
+                total += ce.detach() * part
             torch.nn.utils.clip_grad_norm_([p for p in lm.parameters() if p.requires_grad], 1.0)
             for o in opts:
                 o.step()
@@ -441,7 +448,7 @@ def main() -> int:
                           "what": f"arm {arm} train step ({aa.grow})", "tokens": tokens})
             steps.append({"op": "extra", "flops": ns, "what": "muon newton-schulz"})
             if (k + 1) % 100 == 0:
-                print(json.dumps({"arm": arm, "step": k + 1, "loss": round(total, 5), "lr_frac": round(frac, 4),
+                print(json.dumps({"arm": arm, "step": k + 1, "loss": round(float(total), 5), "lr_frac": round(frac, 4),
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
             if last and aa.grow == "none" and k + 1 in enc_marks:
                 changed = [nm for nm, p in lm.named_parameters() if p.requires_grad]
