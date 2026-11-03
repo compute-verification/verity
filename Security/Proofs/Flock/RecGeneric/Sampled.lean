@@ -96,7 +96,8 @@ with `R` the registration, `P_S` the claims prover `σ` plays on the sample `S`,
 of the trials and `ε_bind` their binding term. -/
 def GenericSampledKSClaims : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Verifier Coin) (Rl : Rel W)
-    (E : Claims.Extractor Coin W V) (H : Claims.Msg → Claims.Msg) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ) (Reg Dh : Type)
+    (E : Claims.Extractor Coin W V) (H : Claims.Msg → Claims.Msg) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ)
+    (Reg Dh : Type)
     (Hc : List UInt8 → Dh) (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
     (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)

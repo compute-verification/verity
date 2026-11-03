@@ -15,6 +15,11 @@ coin's), and its knowledge error against provers that may abort after its rounds
 nonnegative, and each term's finder meets a bad run at most `d` times as often as one run is bad (`RunFinder.ReadsLe`).
 `Proto.openInner` is the protocol over a server's commitments (`Server.IVStar`), its extractor reading opened views.
 
+The inner extractor is the repetition extractor `E^rep`: it reruns the whole protocol on fresh coins, waits for accepted
+reruns, and assembles a witness from their opened views. So the recursion covers inner protocols whose knowledge
+soundness `E^rep` shows; an inner extractor that forks at a later round (tree extraction) or extracts straight-line
+is not a `Proto`.
+
 Statements only: definitions, no proofs.
 -/
 
@@ -33,9 +38,9 @@ structure Term (Coin : Type) where
   tail : Msg → ℕ → ℝ
   d : Msg → ℕ
 
-/-- **An inner protocol**: `Claims.Recursion.Inner` (its verifier, relation, scope, repetition extractor's pieces,
-`κ` and `γ`), the bytes that answer a round before the last (`ans`, its coin's), and the `nT` terms of its knowledge
-error. `γ` is unread: the terms carry the collision part of the error. -/
+/-- **An inner protocol with a repetition extractor**: `Claims.Recursion.Inner` (its verifier, relation, scope,
+repetition extractor's pieces, `κ` and `γ`), the bytes that answer a round before the last (`ans`, its coin's), and the
+`nT` terms of its knowledge error. `γ` is unread: the terms carry the collision part of the error. -/
 structure Proto (Coin W : Type) extends Claims.Recursion.Inner Coin W where
   ans : Coin → Msg
   nT : ℕ
@@ -64,12 +69,17 @@ def Proto.KSAbortLin (H : Msg → Msg) (I : Proto Coin W) : Prop :=
         (((I.terms i).F (m i)).PrAt H (runModel H I.V P x keep) x + (I.terms i).tail x (m i))
 
 /-- **The inner verifier's last step reads no last coin**: at its last round, two coin lists that agree before the last
-coin give one decision with the same calls. The composite's inner prover sends the plurality of the reruns' last
-messages, decided at its own run's last coin, so the recursion reads this with `Comp.ForksBind` at the last round. It
-holds at a public-coin verifier whose decision reads only the coins that answered earlier messages. -/
+coin give one accept bit with the same calls. `Open(V, S)` reads `V`'s last step only through that bit (`agrees`), so
+its last step then reads no last coin either, decision and calls. The composite's inner prover sends the plurality of
+the reruns' last messages, decided at its own run's last coin, so the recursion reads this with `Comp.ForksBind` at the
+last round. It holds at a public-coin verifier whose decision reads only the coins that answered earlier messages, and
+at the element-level Flock it is `Claims.Recursion.Bound.LastStepFree`, proved at the deployed plain verifier and
+reader. -/
 def Proto.LastCoinFree (H : Msg → Msg) (I : Proto Coin W) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs cs' : List Coin), as.length = I.V.k x → cs.length = as.length →
-    cs'.length = as.length → cs.dropLast = cs'.dropLast → (I.V.next x as cs).eval H = (I.V.next x as cs').eval H
+    cs'.length = as.length → cs.dropLast = cs'.dropLast →
+    (bindOC (I.V.next x as cs) fun b => OC.ret (decide (b = .acc))).eval H =
+      (bindOC (I.V.next x as cs') fun b => OC.ret (decide (b = .acc))).eval H
 
 /-- **The inner protocol over a server's commitments**: its verifier is `Open(V, S)` (`Server.IVStar` at its answers),
 and its extractor reads each view opened (`Server.openView`); its relation, scope, waits, accepted reruns per wait,

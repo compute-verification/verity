@@ -20,8 +20,8 @@ session by session (`Proofs.Flock.RecGeneric.Outer`, `Compiled.toComp`) is one; 
 
 `E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that rerun, the
 inner view read off `E_O`'s witnesses (`Comp.decProg`) as the run of `Open(Π, S)` on the messages they give. `E*` is a
-rerun program that reads no `H`: the inner view's run is a rerun program too (`Comp.replayProg`, each step an `ofOC`), so
-each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
+rerun program that reads no `H`: the inner view's run is a rerun program too (`Comp.replayProg`, each step an
+`ofOC`), so each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
 `N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the composite's reruns (`Comp.innerModel`,
 `Comp.verModel`), each charged the rerun's calls with the inner view's (`Comp.rerunCost`).
 
@@ -159,9 +159,9 @@ def viewCalls (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type}
   ((K.wits H P x ω u).map (K.innerLog IV H x u.1)).getD []
 
 /-- **A rerun's SHA-512 calls**: the compiled run's, both parties', `E_O`'s, the inner view's run's (`viewCalls`, which
-deciding the rerun's acceptance in `innerModel` evaluates), and one per evaluation a finder searches there (`rerunCalls`,
-`ownAt`), which it evaluates itself to search them. A run finder's cost is these over the reruns it names
-(`RunFinder.finder`), so its declared cost is every call its search makes. -/
+deciding the rerun's acceptance in `innerModel` evaluates), and one per evaluation a finder searches there
+(`rerunCalls`, `ownAt`), which it evaluates itself to search them. A run finder's cost is these over the reruns it
+names (`RunFinder.finder`), so its declared cost is every call its search makes. -/
 def rerunCost (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : ℕ :=
   (run H P K.V x ω u.1).pLog.length + (run H P K.V x ω u.1).vLog.length + (K.EO.eval H P x ω u.1 u.2).2.1 +

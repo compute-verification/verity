@@ -229,8 +229,8 @@ def OuterSessionsKS : Prop :=
 
 /-- **The composite extractor's cost** (lemma O2): `E*` (`Comp.E` at `L.toComp`) reruns the prover at most
 `(1 + m_Π·K_Π)·(1 + Σ_s ρ(sh_s))` times on every coin where `A` reruns at most `ρ`; in expectation at most
-`(1 + m_Π·k_Π)·(1 + Σ_s e(sh_s))` where `A` reruns at most `e` in expectation (Wald, over `E^rep`'s fresh reruns); and it
-makes at most `(1 + m_Π·K_Π)·(Σ_s h(sh_s) + n)` SHA-512 calls beyond its reruns' where `A` makes at most `h` and
+`(1 + m_Π·k_Π)·(1 + Σ_s e(sh_s))` where `A` reruns at most `e` in expectation (Wald, over `E^rep`'s fresh reruns); and
+it makes at most `(1 + m_Π·K_Π)·(Σ_s h(sh_s) + n)` SHA-512 calls beyond its reruns' where `A` makes at most `h` and
 `Open(Π, S)` at most `n` on any witnesses' inner messages (`Comp.innerLog`): each of `E^rep`'s reruns is `E_O`'s
 sessions and the inner view's run, whose calls are `E*`'s own (`Comp.decProg`). The inner `E^rep`'s and `E_O`'s reruns
 multiply; their errors do not (`Comp.κ`: `N_I` times `κ_O`). -/

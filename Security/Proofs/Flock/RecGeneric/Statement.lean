@@ -4,9 +4,11 @@ public import Proofs.Flock.RecGeneric.Outer
 public import Proofs.Flock.RecGeneric.ZK
 
 /-!
-# The recursion as a compiler, generic in the inner protocol, the outer argument and the server
+# The recursion as a compiler, generic in the outer argument and the server, over repetition-extracted inner protocols
 
-Three layers, each a statement over the one below:
+Three layers, each a statement over the one below. The inner protocol is any whose knowledge soundness its repetition
+extractor `E^rep` shows (`Proto`); an inner extractor that forks at a later round or extracts straight-line is not
+covered.
 
 * **L1, the composition** (`GenericRecursiveKS`): any inner protocol `Π` (`Proto`) over any server's commitments
   (`Server`), at any compiled verifier with any outer extraction (`Comp`), at each statement where the outer extraction
@@ -20,8 +22,8 @@ Three layers, each a statement over the one below:
   sessions' simulator.
 
 The Flock instance (`Proofs.Flock.RecGeneric.AtFlock`) is L1 at today's compiled record, its `E_O`, the hm96 server
-and the element-level Flock: it gives the deployed theorem's bound (`Claims.Recursion.KSLin2`) at each statement where
-the instance's contract holds.
+and the element-level Flock: it gives the deployed theorem's bound (`Claims.Recursion.KSLin2`) with the gated link's
+term in place of `Fdev`'s (`Claims.RecGeneric.KSLinkOn`) at each statement where the instance's contract holds.
 
 Statements only: definitions, no proofs.
 -/
@@ -54,11 +56,11 @@ namespace Flock.Guarantees
 
 open Claims Claims.RecGeneric
 
-/-- **L1: the recursion's knowledge soundness, generic in the inner protocol and the outer extraction.** For every
-oracle `H`, inner protocol `Π` that is well formed and knowledge sound against aborting provers in run-finder form
-(`Proto.WF`, `Proto.KSAbortLin`) and whose last step reads no last coin (`Proto.LastCoinFree`), server `S`, compiled
-verifier with an outer extraction `E_O`, and statement `x` at which `E_O` is knowledge sound (`Comp.OuterKSAt`) at
-nonnegative `κ_O(x)`, `γ_O(x)` and the compiler meets its contract at `Open(Π, S)` and `Π`'s reading of opened views
+/-- **L1: the recursion's knowledge soundness, generic in the outer extraction, over inner protocols with repetition
+extractors.** For every oracle `H`, inner protocol `Π` that is well formed and knowledge sound against aborting provers
+in run-finder form (`Proto.WF`, `Proto.KSAbortLin`) and whose last step reads no last coin (`Proto.LastCoinFree`),
+server `S`, compiled verifier with an outer extraction `E_O`, and statement `x` at which `E_O` is knowledge sound
+(`Comp.OuterKSAt`) at nonnegative `κ_O(x)`, `γ_O(x)` and the compiler meets its contract at `Open(Π, S)` and `Π`'s reading of opened views
 (`Comp.Contract`: code facts, and V\*'s two where some run accepts `x`): on every prover and at every loop bound,
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ Comp.err`, `E*` the inner `E^rep` served by `E_O` (`Comp.E`). Every accepted
 statement is covered wherever the contract holds at every statement. -/
@@ -70,7 +72,8 @@ def GenericRecursiveKS : Prop :=
     ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (m : Fin I.nT → ℕ) (M : ℕ),
       PrBad H K.V (K.R I) (K.E I S) x P ≤ K.err I S H P x m M
 
-/-- **L2: the recursion as a compiler, generic in the inner protocol, the outer argument and the server.** For every
+/-- **L2: the recursion as a compiler, generic in the outer argument and the server, over inner protocols with
+repetition extractors.** For every
 `Π` as in L1, outer argument `A` that is well formed and knowledge sound (`Arg.WF`, `Arg.KS`), server `S` and compiler
 `C` whose compiled verifier `compile(Π, A, S)` meets the outer sessions' contract (`Compiled.Sessions`), and statement
 `x` where it meets the composition's (`Comp.Contract`): on every prover and at every loop bound,
