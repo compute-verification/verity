@@ -2,7 +2,7 @@
 process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
-their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
+their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`).
 """
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -39,6 +40,9 @@ UPLOAD_SLOTS = 1024
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
 CHECK_ROWS = 16
+#: the threads that write a retained pass's call files behind its calls (`write_behind`)
+WRITE_THREADS = 4
+_writers: tuple[int, ThreadPoolExecutor] | None = None     # the pool and the process it was made in
 
 
 def torch_uint8() -> Any:
@@ -264,15 +268,62 @@ def memmove(dst: int, src: int, n: int, raw: int) -> None:
     ctypes.memmove(dst, src, n)
 
 
+def _entry(path: Path, n: int) -> dict:
+    nested = path.parent.name in ("calls", "weights", "y")
+    return {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": n}
+
+
 def _write(path: Path, data: bytes, digest: bool = True) -> dict:
     """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
     against them."""
     path.write_bytes(data)
-    nested = path.parent.name in ("calls", "weights", "y")
-    out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
+    out = _entry(path, len(data))
     if digest:
         out["sha256"] = hashlib.sha256(data).hexdigest()
     return out
+
+
+def write_behind(files: tuple[tuple[Path, Any, bool], ...], pending: list[Future]) -> list[dict]:
+    """`_write`'s entries for tensors' bytes, each file (path, tensor, digest), with the files written behind the caller:
+    the bytes are copied to host memory of their own before this returns (from a device, to pinned memory, the current
+    stream then synchronized, as `_bytes` leaves them), and `WRITE_THREADS` threads write the files, each write's future
+    appended to `pending`, which the pass's end joins (`joined`) before its manifest names them; a digest's ``sha256``
+    lands in its entry with its write."""
+    import torch
+    staged = []
+    for path, t, digest in files:
+        src = t.contiguous().reshape(-1).view(torch.uint8)
+        if src.is_cuda:
+            host = torch.empty(src.numel(), dtype=torch.uint8, pin_memory=True)
+            host.copy_(src, non_blocking=True)
+        else:
+            host = src.clone()
+        staged.append((path, host, digest, _entry(path, src.numel())))
+    if files and files[0][1].is_cuda:
+        torch.cuda.current_stream(files[0][1].device).synchronize()
+    global _writers
+    if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
+        _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
+    for path, host, digest, entry in staged:
+        pending.append(_writers[1].submit(_write_host, path, host, digest, entry))
+    return [entry for *_, entry in staged]
+
+
+def _write_host(path: Path, host: Any, digest: bool, entry: dict) -> None:
+    data = memoryview(host.numpy())
+    with open(path, "wb") as f:
+        f.write(data)
+    if digest:
+        entry["sha256"] = hashlib.sha256(data).hexdigest()
+
+
+def joined(pending: list[Future]) -> None:
+    """`write_behind`'s writes in `pending` done, and `pending` cleared; the first failed write's error is raised."""
+    try:
+        for f in pending:
+            f.result()
+    finally:
+        pending.clear()
 
 
 def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True) -> dict:

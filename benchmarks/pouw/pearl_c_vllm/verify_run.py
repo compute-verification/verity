@@ -21,8 +21,8 @@
 - **The tiles** are `clear_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
-  forms, with every ``--cross-check``-th tile id replayed on the scalar reference too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
-  own verdict.
+  forms, with the first tile and every ``--cross-check``-th after it, in the draw's order, replayed on the scalar reference
+  too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s own verdict.
 - **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
   its root, and each of the tile's words must be the unscale of the tile's checked U (`pearl_c_u.y`, the kernels'
   epilogue), so the y that leaves the linear is the one the credited rows computed.
@@ -55,6 +55,7 @@ import multiprocessing
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -250,12 +251,16 @@ def load(path: Path, coins: CoinCommitment | None = None, recorded: bool = False
 _JOB: dict = {}
 
 
-def check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None, bool | None]:
-    """One tile's verdict, (pass, tile id, ok, reason, same): on `--fast`, for every `--cross-check`-th tile id whether the
-    scalar reference's verdict is the same one (None where it was not replayed twice)."""
+def check(job: tuple[int, tuple[int, int, int]]) -> tuple[int, int, bool, str | None, bool | None]:
+    """The verdict of the ``i``-th tile in the draw's order, ``job`` = (i, (pass, record position, tile id)): (pass, tile
+    id, ok, reason, same), where on `--fast`, for the first tile and every `--cross-check`-th after it, ``same`` says whether
+    the scalar reference's verdict is the same one (None where it was not replayed twice).  By place, not tile id: an
+    excluded row's tile starts its row of a matmul, at an id that is a multiple of the matmul's column tiles (256 for the
+    1B's gate_up), so a rule on ids takes whole layouts' tiles or none."""
+    i, pick = job
     got = _check(pick)
     every, undo = _JOB.get("cross_check", 0), _JOB.get("undo")
-    if undo is None or not every or got[1] % every:
+    if undo is None or not every or i % every:
         return *got, None
     undo()
     try:
@@ -319,7 +324,8 @@ def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast
            ) -> tuple[list[tuple[int, int, bool, str | None, bool | None]], bool]:
     """`check` on each (pass, record position, tile id) of `todo` over J processes, and whether the batch forms ran:
     `fast` replays on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a promoted device; otherwise the
-    scalar reference), and every `cross_check`-th tile id on the scalar reference too."""
+    scalar reference), and the first tile of `todo` and every `cross_check`-th after it (`check`) on the scalar reference
+    too."""
     scheme = passes[0].scheme
     if any(p.scheme.name != scheme.name for p in passes):
         raise ValueError("the passes are not all of one scheme")
@@ -330,8 +336,8 @@ def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast
         if jobs > 1 and len(todo) > 1:
             # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
             with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
-                return pool.map(check, todo, chunksize=1), fast
-        return [check(p) for p in todo], fast
+                return pool.map(check, list(enumerate(todo)), chunksize=1), fast
+        return [check(job) for job in enumerate(todo)], fast
     finally:
         if _JOB.get("undo") is not None:
             _JOB.pop("undo")()
@@ -341,8 +347,9 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
            cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
     """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
     (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
-    promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
-    too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
+    promoted device; otherwise the scalar reference, ``replay``), and the first of its tiles and every `cross_check`-th after
+    it in the draw's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
+    pass is not accepted."""
     man, digest, named = read(path)
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
            "replay": "batch" if fast else "scalar"}
@@ -447,6 +454,16 @@ def epsilon(t: int, delta: Fraction) -> Fraction:
     return Fraction(math.ceil(-math.expm1(math.log(delta) / t) * 1e9) + 1, 10 ** 9)
 
 
+def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
+    """Each of a record's tiles' credited cells, its credited rows × columns (`UnitRecord.credited`)."""
+    return [len(rows) * len(cols) for rows, cols in (r.credited(x) for x in scheme.tiles(r.matmul.shape))]
+
+
+def pass_macs(p: Pass) -> int:
+    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone)."""
+    return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
+
+
 def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction) -> dict:
     """The run's credit at Pearl's Assumption 1 (`pearl_kw`): a tile that passes the rule cost its credited cells' MACs,
     (1 − ρ) of them at the scheme's cap.  t accepted draws by ticket weight leave at most ε of the tickets' weight on wrong
@@ -455,7 +472,7 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction) -> dict:
     macs, tiles, units = 0, 0, []
     for p in passes:
         for r in p.records:
-            cells = [len(rows) * len(cols) for rows, cols in (r.credited(x) for x in p.scheme.tiles(r.matmul.shape))]
+            cells = credited_cells(p.scheme, r)
             if sum(cells):
                 ticket = CW.ticket_cell(p.scheme, r)
                 macs += sum(cells) * r.k_kept
@@ -470,6 +487,12 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction) -> dict:
     return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps)}
 
 
+def rejected(reason: str, commit: str) -> dict:
+    """A run's verdict that rejects for ``reason``: core's answer form, with neither outputs nor profile, and its line."""
+    return {"answer": {"protocol": PROTOCOL, "verdict": "reject", "reason": reason, "commitment": None, "public": None,
+                       "profile": None}, "line": f"REJECT {PROTOCOL}: {reason}; verifier {commit}"}
+
+
 def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: CoinCommitment, source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
@@ -481,8 +504,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta)}
 
     def reject(reason: str) -> dict:
-        out.update(answer={"protocol": PROTOCOL, "verdict": "reject", "reason": reason, "commitment": None, "public": None,
-                           "profile": None}, line=f"REJECT {PROTOCOL}: {reason}; verifier {commit}")
+        out.update(rejected(reason, commit))
         return out
 
     if not paths:
@@ -549,8 +571,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
-                   help="with --fast, replay every tile whose id is a multiple of N on the scalar reference too; any verdict "
-                        "that differs rejects the pass and exits 2 (0: none)")
+                   help="with --fast, replay the first tile and every N-th after it, in the draw's order, on the scalar "
+                        "reference too; any verdict that differs rejects the pass and exits 2 (0: none)")
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
     p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins: its salt is its beacon's")
     a = p.parse_args(argv)

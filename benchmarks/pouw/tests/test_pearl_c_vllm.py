@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import ctypes
+import dataclasses
+import hashlib
 import importlib.util
 import json
 import math
 import random
 import shutil
 import sys
+import threading
 import types
 from fractions import Fraction
 from pathlib import Path
@@ -17,6 +20,9 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
+from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
+from verity_vllm.protocols.pouw.pearl_c import host as PH
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 torch = pytest.importorskip("torch")
 
@@ -47,14 +53,12 @@ from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -351,6 +355,58 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
         root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+
+
+def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_them(device_run, tmp_path, monkeypatch,
+                                                                                    request):
+    """`host.write_behind`: when a retained call returns, its entries name its files and sizes and its bytes are a copy of
+    their own, which the call's buffers no longer reach; the files (A's rows and tree, y's rows and tree) are written behind
+    it (here only once the buffers have changed), each digest landing in its entry, and the pass's end joins them before
+    its manifest names them.  A write that fails fails the pass's end, which then writes no manifest."""
+    make, _, weights, *_ = device_run
+    gate, write = threading.Event(), PH._write_host
+    request.addfinalizer(gate.set)
+
+    def gated(*a):
+        gate.wait()
+        write(*a)
+    monkeypatch.setattr(PH, "_write_host", gated)
+    run = make()
+    run.begin(retain=str(tmp_path / "ok"))
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    y = run.gemm(0, x, weights[0], None)
+    served = y.contiguous().view(torch.uint8).numpy().tobytes()
+    (sh,) = run.shapes.values()
+    index = run.cur.matmuls[0].index
+    (f,) = run.cur.files
+    assert {k: f[k] for k in ("rows", "tree")} == {"rows": {"path": f"calls/{index}.rows.bf16", "bytes": 2 * 32 * 1024},
+                                                   "tree": {"path": f"calls/{index}.tree", "bytes": f["tree"]["bytes"]}}
+    assert f["y"]["rows"] == {"path": f"y/{index}.rows.bf16", "bytes": 2 * 32 * 256}
+    assert len(run.cur.writes) == 4 and not any((tmp_path / "ok" / g["path"]).exists() for g in (f["rows"], f["y"]["rows"]))
+    with torch.inference_mode():                              # the call's buffers are made as vLLM's calls make them
+        sh.xa.fill_(7.0)
+        sh.buf("tree_a").fill_(7)
+        y.fill_(7.0)
+    gate.set()
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    (u,) = man["matmuls"]
+    assert run.details["passes"][-1]["manifest"] and not run.cur.writes
+    assert (tmp_path / "ok" / u["rows"]["path"]).read_bytes() == x.view(torch.uint8).numpy().tobytes()
+    tree = (tmp_path / "ok" / u["tree"]["path"]).read_bytes()
+    assert u["tree"]["sha256"] == hashlib.sha256(tree).hexdigest() and tree != bytes([7]) * len(tree)
+    assert (tmp_path / "ok" / u["y"]["rows"]["path"]).read_bytes() == served
+    ytree = (tmp_path / "ok" / u["y"]["tree"]["path"]).read_bytes()
+    assert u["y"]["tree"]["sha256"] == hashlib.sha256(ytree).hexdigest()
+    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, run.salt_key)[0].hex()
+
+    def fails(path, *_):
+        raise OSError(f"no space left for {path.name}")
+    monkeypatch.setattr(PH, "_write_host", fails)
+    run.begin(retain=str(tmp_path / "full"))
+    run.gemm(0, x, weights[0], None)
+    with pytest.raises(OSError, match="no space left"):
+        run.end()
+    assert not (tmp_path / "full" / "manifest.json").exists() and not run.cur.writes
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
@@ -959,6 +1015,8 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1, coins=published(path))
     assert fast["replay"] == "batch" and fast["cross_checked"] == fast["tiles"] and "cross_check_failed" not in fast
     assert {k: fast[k] for k in ("accepted", "tiles", "verdicts")} == {k: got[k] for k in ("accepted", "tiles", "verdicts")}
+    by_place = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=2, coins=published(path))
+    assert by_place["accepted"] and by_place["cross_checked"] == by_place["tiles"][::2]
     assert C.form_v1 is SD.FT._SCALAR["form_v1"]
     assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
@@ -1092,6 +1150,55 @@ def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tm
     assert 0 < got["credited"] <= (1 - p.scheme.cap) * (1 - eps) * got["macs"]
 
 
+def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_whole_deduction(tmp_path):
+    """Where served.json says which passes the timed call made, an accepted verdict also carries the credit over those
+    alone (`served_passes.timed_credit`): the run's credited MACs less the warm-up pass's credited cells' MACs at (1 − ρ),
+    rounded up, so the run's deduction for ε falls wholly on the timed pass."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},
+                                     {"pass": 1, "timed": True, "units": 2, "tiles": 4, "manifest": str(b)}]}
+    work = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], SP.DRAWS, Fraction(1, 100))
+    warm = VR.pass_macs(VR.load(a, published(a)))
+    got = SP.timed_credit(served, work, published(a))
+    assert warm == work["macs"] // 2 and got["passes"] == 1 and got["macs"] == work["macs"] - warm
+    assert got["credited"] == work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm) > 0
+    few = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], 3, Fraction(1, 100))
+    assert few["credited"] < (1 - Fraction(few["rho"])) * warm and SP.timed_credit(served, few, published(a))["credited"] == 0
+    assert SP.timed_credit({**served, "passes": [{**p, "timed": True} for p in served["passes"]]}, work, published(a)) == {
+        "passes": 2, "macs": work["macs"], "credited": work["credited"]}
+
+
+def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
+    """A serve run with ``--no-retain`` wrote no pass's manifest, so ``verify`` refuses it (``unretained``), replays
+    nothing, and its core answer rejects with that reason."""
+    d, out = tmp_path / "served", tmp_path / "verify.json"
+    d.mkdir()
+    (d / "served.json").write_text(json.dumps({"run": RUN, "retained": False,
+                                               "passes": [{"pass": i, "units": 2, "tiles": 4, "manifest": None, "macs": None}
+                                                          for i in range(3)]}))
+    rc, doc, answer = served_verify(d, out)
+    assert rc == 1 and doc["refused"][0] == "unretained" and "verdicts" not in doc and doc["line"].startswith("REJECT")
+    assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
+
+
+def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
+    """`served_passes.macs` is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells `clear_work`
+    credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over the pass
+    alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    p = VR.load(path, published(path))
+    assert SP.macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and SP.macs(None) is None
+    assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
+    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < SP.macs(str(path))
+    r = p.records[0]
+    b = min(set(range(r.matmul.shape.n)) - set(r.excluded_b))
+    more = dataclasses.replace(p, records=[dataclasses.replace(r, excluded_b=(*r.excluded_b, b)), *p.records[1:]])
+    assert VR.pass_macs(more) == VR.pass_macs(p) - (r.real_rows - len(r.excluded_a)) * r.k_kept
+
+
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
     """A pass whose call index is 2^32 (`pearl_c.CALL_RANGE`, past the row seed's range) is refused ``call-range``, and one
     holding an index twice ``repeated-call``, before anything is opened."""
@@ -1213,6 +1320,25 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+
+
+def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
+    """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
+    each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
+    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
+    a serve that retained no pass is refused."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
+    before = json.loads(path.read_text())["records_root"]
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["ok"] and [p["manifest"] for p in doc["passes"]] == [str(path)] and doc["over"] and not doc["left"]
+    assert doc["voluntary_a"] + doc["voluntary_b"] > 0
+    assert json.loads(path.read_text())["records_root"] == doc["passes"][0]["records_root"]["after"] != before
+    assert _replay_every_tile(VR.load(path, published(path))) == {}
+    (d / "served.json").write_text(json.dumps({**json.loads((d / "served.json").read_text()), "retained": False}))
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
 
 
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
@@ -2675,7 +2801,7 @@ def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     kept_run = make(schedule="deferred-a")
     kept_run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    kept_run._retained = lambda cur, mm, m, flags, xa, tree: kept.append(tree.data_ptr())
+    kept_run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     kept_run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -2750,7 +2876,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     run = make()
     run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    run._retained = lambda cur, mm, m, flags, xa, tree: kept.append(tree.data_ptr())
+    run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -3134,6 +3260,66 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
         E2E.perplexity(args)
 
 
+def test_the_quality_run_on_sm90a_runs_its_one_pearl_c_scheme(tmp_path, monkeypatch):
+    """On pearl_c_sm90's kernels the quality run's Pearl-C group is ``pearl-c-h100-v1-h3`` alone, since sm_90a has no
+    unpromoted record, so it finishes after two groups instead of asking for an sm_120 scheme on an H200."""
+    E2E = load("pearl_c_vllm_e2e_sm90", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setattr(E2E, "wikitext_windows", lambda model, limit: [[1, 2, 3]])
+    started = []
+
+    class Fake:
+        live: ClassVar[list] = []
+
+        def __init__(self, ctx, args, group, coins):
+            started.append((group, args.scheme))
+            self.ready = {"gate": [{"ok": True}], "committer": "x"} if group == "arm" else {}
+
+        def ask(self, **cmd):
+            return {"nll": 1.0, "tokens": 2, "top1": [2, 3]} if cmd["op"] == "ppl" else {"tokens": [[1, 2]], "texts": ["t"]}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(E2E, "Worker", Fake)
+    args = types.SimpleNamespace(out=tmp_path / "quality.json", model="m", ppl_windows=None, chunk_min=0.0,
+                                 kernel=str(KERNEL.parent / "pearl_c_sm90"))
+    assert [E2E.perplexity(args) for _ in range(2)] == [99, 0]
+    assert started == [("base", None), ("arm", "pearl-c-h100-v1-h3")]
+    doc = json.loads(args.out.read_text())
+    assert set(doc["summary"]) == {"fp8", "bf16", "pearlc-v1"} and doc["summary"]["pearlc-v1"]["scheme"] == "pearl-c-h100-v1-h3"
+
+
+def test_a_tag_names_another_model_in_the_shape_names():
+    """``--tag`` puts another model's name in both phases' shape names, so a Llama 3.2 1B row is never read as the panel's
+    Llama-3.1-8B one; without it the names are the panel's."""
+    E2E = load("pearl_c_vllm_e2e_tag", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64, tag="llama32-1b"))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama32-1b-vllm-m8192", "decode_b32_step": "e2e-llama32-1b-vllm-m32"}
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+
+
+def test_a_base_models_chat_prompts_are_their_text():
+    """A base model (the demo's Llama 3.2 1B) has no chat template, so its chat prompts are their own text instead of the
+    engine failing; an instruct model's are its template's turns, and any other refusal still raises."""
+    E2E = load("pearl_c_vllm_e2e_chat", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+
+    class Tokenizer:
+        def __init__(self, error=None):
+            self.error = error
+
+        def apply_chat_template(self, turns, tokenize, add_generation_prompt):
+            if self.error:
+                raise ValueError(self.error)
+            return f"<user>{turns[0]['content']}<assistant>"
+
+    base = Tokenizer("Cannot use chat template functions because tokenizer.chat_template is not set")
+    assert E2E.chat(base, ["a", "b"]) == ["a", "b"]
+    assert E2E.chat(Tokenizer(), ["a"]) == ["<user>a<assistant>"]
+    with pytest.raises(ValueError, match="other"):
+        E2E.chat(Tokenizer("some other refusal"), ["a"])
+
+
 # ---- one install path: the run behind the Stack ------------------------------------------------------------------------
 
 def _stack_sites(weights):
@@ -3172,7 +3358,13 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     got = stack.passes[-1]
     assert {k: v for k, v in got.items() if k != "manifest"} == {k: v for k, v in want.items() if k != "manifest"}
     a, b = Path(want["manifest"]).parent, Path(got["manifest"]).parent
-    assert (a / "manifest.json").read_text() == (b / "manifest.json").read_text()
+
+    def but_y(d):     # the recording device runs no GEMM, so y's bytes are its fresh buffer's, which no two runs share
+        man = json.loads((d / "manifest.json").read_text())
+        for u in man["matmuls"]:
+            u["y"] = {"rows": u["y"]["rows"], "tree": {k: v for k, v in u["y"]["tree"].items() if k != "sha256"}}
+        return man
+    assert but_y(a) == but_y(b)
     assert all((a / f).read_bytes() == (b / f).read_bytes() for f in ("leaves", "tree_t", "calls/0.rows.bf16", "weights/0.tree"))
 
 

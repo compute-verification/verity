@@ -11,6 +11,7 @@ sampled proofs, and the one record of every verdict (the block record).
                               [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
+    served_verdicts.py pearlplus DIR --served FILE --verify FILE
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY]
     served_verdicts.py public-registration REGISTRATION
@@ -88,6 +89,14 @@ the drawn calls' statements (``--statements``) and the window's live evidence (`
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
+``pearlplus``: PoUW's development piece under POUW=pearlplus (`served_pearlplus.sh`, POUW_CMD's default then), from Pearl+'s
+own served run on the card after the window's serve: ``--served`` (`served_passes.py serve`'s document: every pass retained)
+and ``--verify`` (its ``verify``'s: Pearl+'s verdict over all the passes, the reference replay of the tiles it draws).
+Its verdict is accept when that run served within its caps across at least two pass boundaries and Pearl+'s verdict
+accepts; its document carries the passes, that verdict's line and credit at Pearl's Assumption 1, where its coins came from
+(`PEARLPLUS_COINS`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`PEARLPLUS_WHY`:
+its passes are not the window sampled proofs audited).
+
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
 as `served_integrity.answer` reads it; each other subprotocol's from
@@ -146,7 +155,8 @@ INTEGRITY_OWNER = "compute-accounting"
 #: does), in the chain's order
 PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
-             "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
+             ("H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE), or with POUW=pearlplus "
+              "the reference replay of Pearl+'s own served run (served_pearlplus.sh)")),
     "space": ("PoUS", "pous", "memory-accounting",
               ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
@@ -174,6 +184,17 @@ DEVELOPMENT = "development.json"
 DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
            "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
            "whose open commits its draw K, rows and weights")
+#: why the Pearl+ piece's verdict (`pearlplus`) credits nothing
+PEARLPLUS_WHY = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card after "
+                 "the window's serve, the BF16 checkpoint's linears as its FP8 product, so its passes are not the window "
+                 "sampled proofs audited and nothing ties them to that window's Commit; its epoch's coins are an in-process "
+                 "challenger's, which the serving process holds; and an ACCEPT is the reference replay's (verify_run.py), "
+                 "not PouwCheck's ZK proof")
+#: where Pearl+'s epoch coins and the replay's draws come from (`pearlplus`)
+PEARLPLUS_COINS = {"epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, pouw.challenged), held by "
+                            "the serving process",
+                   "draws": "the Lean verifier's IO.getRandomBytes in verify_run.py, one source for the run, taken once every "
+                            "pass's roots are read"}
 #: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
 COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
                  "file on the node changes its row")
@@ -495,7 +516,21 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
 
 def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     """A development piece's line (`pouw`'s document): its verdict, why it rejects, the window's session and how each
-    check came out, core's credit refusal, and that it credits nothing."""
+    check came out, core's credit refusal, and that it credits nothing. `pearlplus`'s: its verdict, why it rejects, its
+    passes, Pearl+'s verdict's credit (its credited and credited cells' MACs and ε), its shares at the tensor clock, and the
+    unretained serve's wall and declared share there (None without one, or why it has none)."""
+    if doc.get("piece") == "pearlplus":
+        shares = doc.get("shares") or {}
+        at = (shares.get("readings") or {}).get("tensor") or {}
+        un = shares.get("unretained")
+        credit = doc.get("credit")
+        return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
+                **{k: doc.get(k) for k in ("scheme", "passes", "served_tokens", "generate_s")},
+                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
+                "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
+                "unretained": None if un is None else un.get("error") or {
+                    "generate_s": un.get("wall_s"),
+                    "declared_linears_at_tensor_clock": ((un.get("readings") or {}).get("tensor") or {}).get("declared_linears")}}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
             "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
@@ -777,6 +812,53 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
     return doc
 
 
+def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
+              unretained: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
+    ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
+    verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
+    accept when the run served within its caps across at least two pass boundaries and Pearl+'s verdict accepts; it
+    carries that verdict's line and credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``), its shares
+    are `served_shares.pearlplus_shares`'s, and it credits nothing (`PEARLPLUS_WHY`). ``unretained``, the same load served
+    with no pass retained (``serve --no-retain``), adds the shares' ``unretained`` (`served_shares.pearlplus_unretained`),
+    or why there are none; it is a measurement and never decides the verdict."""
+    import served_shares as SS
+
+    out.mkdir(parents=True, exist_ok=True)
+    reasons = []
+    if served is None:
+        reasons.append("no served run: served_passes.py serve wrote no document")
+    elif not served.get("ok"):
+        reasons.append(f"the served run crossed fewer than two pass boundaries or ran over its caps (passes over their "
+                       f"caps: {served.get('over_caps')})")
+    answer = (verified or {}).get("answer") or {}
+    if verified is None:
+        reasons.append("no verdict: served_passes.py verify wrote no document")
+    elif answer.get("verdict") != "accept":
+        reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
+    doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": PEARLPLUS_WHY, "coins": PEARLPLUS_COINS,
+                           "scheme": None, "arm": None, "passes": None, "line": None, "credit": None, "shares": None}
+    if served is not None:
+        doc.update(arm=served.get("arm"), scheme=(served.get("arm") or "").partition(":")[2] or None,
+                   passes=sum(1 for p in served.get("passes") or () if p.get("units")),
+                   **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
+    if verified is not None:
+        doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"))
+    if served is not None and verified is not None and not reasons:
+        try:
+            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified))
+        except (KeyError, TypeError, ValueError) as e:
+            reasons.append(f"no shares: {type(e).__name__}: {e}"[:600])
+        if doc["shares"] is not None and unretained is not None:
+            try:
+                doc["shares"]["unretained"] = SS.pearlplus_unretained(doc["shares"], dict(served), dict(unretained))
+            except (KeyError, TypeError, ValueError) as e:
+                doc["shares"]["unretained"] = {"error": f"{type(e).__name__}: {e}"[:600]}
+    doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
+    (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
+    return doc
+
+
 def check_answer(a: Any) -> dict[str, Any]:
     """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
     the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
@@ -841,7 +923,8 @@ def piece(key: str, pieces_dir: Path, run: str | None = None) -> tuple[dict[str,
 
 def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer; a development piece's is ``missing`` with its document when it
-    accepts (it credits nothing), else ``reject``; a piece that ran (`RAN`) and wrote neither is its ``error``, unless it
+    accepts (it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that ran (`RAN`) and
+    wrote neither is its ``error``, unless it
     refused to run (`REFUSED`); otherwise ``missing``, naming why."""
     _name, comp, owner, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
@@ -851,11 +934,12 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
         if not isinstance(doc, dict):
             return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
         if doc.get("verdict") == "accept":
+            own = doc.get("why") or DEV_WHY
             refused = (doc.get("credit") or {}).get("window")
             if isinstance(refused, list) and len(refused) == 2:
                 refused = f"({refused[0]}) {refused[1]}"
-            why = DEV_WHY if refused is None else (f"{DEV_WHY}; core's credit refuses the window "
-                                                   f"{refused if isinstance(refused, str) else json.dumps(refused)}")
+            why = own if refused is None else (f"{own}; core's credit refuses the window "
+                                               f"{refused if isinstance(refused, str) else json.dumps(refused)}")
             return {"verdict": "missing", "owner": owner, "why": why[:2000], "development": doc}
         return {"verdict": "reject", "owner": owner, "reason": "; ".join(doc.get("reasons") or ())[:2000],
                 "development": doc}
@@ -1046,6 +1130,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
     o.add_argument("--statements", type=Path)
     o.add_argument("--live-evidence", type=Path)
+    pp = sub.add_parser("pearlplus")
+    pp.add_argument("out", type=Path)
+    pp.add_argument("--served", type=Path, help="served_passes.py serve's document")
+    pp.add_argument("--verify", type=Path, help="served_passes.py verify's document")
+    pp.add_argument("--unretained", type=Path, help="served_passes.py serve --no-retain's document of the same load")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -1161,6 +1250,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,
                    check=lambda *x: check_challenger(*x, python=a.python), statements=a.statements,
                    live=a.live_evidence)
+        print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
+        return 0
+    if a.cmd == "pearlplus":
+        doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
+                        _json(a.unretained) if a.unretained else None)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":

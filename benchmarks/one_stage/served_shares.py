@@ -28,6 +28,13 @@ The replay (``--replay S --replay-cpus N``) is the prover's CPU cost beside thos
 replays every tile of its passes, as much work as checking every tile, to give up the rows over a cap
 (`volunteer_pass.py`), and took S seconds on N cores. It is stated as the cores it takes to keep pace with the serving
 (core-seconds a second of the wall), never as a share of θ.
+
+Pearl+'s own served run (`pearlplus_shares`, from `served_passes.py`'s serve and verify documents, the POUW=pearlplus
+piece's) has no step trace: its wall is its timed ``generate`` call's, its declared work that call's passes' linear MACs
+alone, and its credited work the verdict's credit over those passes (the verify document's ``timed``), both at θ. Every
+pass of that run is written whole for the verdict inside its step; the same load served with no pass retained
+(`served_passes.py serve --no-retain`) gives the declared utilization without that write (`pearlplus_unretained`): the
+retained run's declared work over the unretained run's wall.
 """
 from __future__ import annotations
 
@@ -143,6 +150,50 @@ def shares(serve_dir: Path, credit: dict[str, Any] | None = None, model: str | N
             "credit": {"verdict": verdict, "macs": work,
                        "of_linears": work / total["linears"] if total["linears"] else None}, "readings": readings,
             "replay": replay_term(*replay, wall) if replay else None}
+
+
+def pearlplus_shares(served: dict[str, Any], verified: dict[str, Any]) -> dict[str, Any]:
+    """Pearl+'s served run's shares at each reading of the clock (module docstring): ``served`` is `served_passes.py
+    serve`'s document, ``verified`` its ``verify``'s, whose ``timed`` credit an accepted verdict carries; a rejected one
+    credits 0."""
+    wall = served["generate_s"]
+    if not (isinstance(wall, (int, float)) and wall > 0):
+        raise ValueError(f"the served run's timed call has no wall: {wall!r}")
+    timed = [p for p in served["passes"] if p.get("timed")]
+    declared = sum(p["macs"] or 0 for p in timed)
+    answer = verified.get("answer") or {}
+    credited = verified["timed"]["credited"] if answer.get("verdict") == "accept" else 0
+    work = (answer.get("public") or {}).get("work") or {}
+    return {"schema": SCHEMA, "wall_s": wall, "passes": len(timed), "verdict": answer.get("verdict"),
+            "credit": {k: work.get(k) for k in ("rho", "epsilon")} | {"delta": verified.get("delta"), "draws": verified.get("draws")},
+            "macs": {"declared_linears": declared, "credited": credited},
+            "readings": {r: {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "declared_linears": declared / rho / wall,
+                             "credited": credited / rho / wall}
+                         for r, rho in RHO.items()}}
+
+
+#: what two of `served_passes.py serve`'s documents agree on when they served one load
+LOAD = ("arm", "requests", "prompt_tokens", "output_tokens")
+
+
+def pearlplus_unretained(shares: dict[str, Any], served: dict[str, Any], unretained: dict[str, Any]) -> dict[str, Any]:
+    """The declared utilization of `pearlplus_shares`' run (``shares``, of ``served``) without retention: its declared work
+    over the wall of ``unretained``, `served_passes.py serve --no-retain`'s document of the same load, at each reading;
+    ValueError when ``unretained`` retained its passes or served another load (`LOAD` and the engine's batched tokens)."""
+    if unretained.get("retained") is not False:
+        raise ValueError("the unretained run retained its passes")
+
+    def load(d):
+        return [d.get(k) for k in LOAD] + [(d.get("engine") or {}).get("max_num_batched_tokens")]
+    if load(unretained) != load(served):
+        raise ValueError(f"the unretained run served another load: {load(unretained)} against {load(served)}")
+    wall = unretained["generate_s"]
+    if not (isinstance(wall, (int, float)) and wall > 0):
+        raise ValueError(f"the unretained run's timed call has no wall: {wall!r}")
+    declared = shares["macs"]["declared_linears"]
+    return {"wall_s": wall, "retained_over_unretained": shares["wall_s"] / wall,
+            "readings": {r: {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "declared_linears": declared / rho / wall}
+                         for r, rho in RHO.items()}}
 
 
 def main(argv: list[str] | None = None) -> int:
