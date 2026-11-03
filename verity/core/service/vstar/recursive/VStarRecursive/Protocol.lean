@@ -44,6 +44,7 @@ statement at the inner shape, in order. Any other form is refused, as are a part
 Without blobs (`toProtocol`) every check rejects: no blob holds the inner circuit file.
 -/
 import CoreProtocol.Blobs
+import SampledProofs.ChallengerInnerTrees
 import SampledProofs.OneStageZk
 import Flock
 
