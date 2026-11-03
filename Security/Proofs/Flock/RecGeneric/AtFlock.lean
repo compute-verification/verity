@@ -20,19 +20,18 @@ The generic statements (`Proofs.Flock.RecGeneric.Statement`) at today's recursio
   from each session's (`OuterKSOfSessions`, from `Claims.Recursion.OuterKS`, which `outerKS_of_flockKS` gives from
   Flock's KS at the outer record).
 
-There `Comp.err` is at most `KSLin2`'s bound term by term: `κ`, `γ` and `β` equal `KSLin2`'s (`β = βdev2`, from
-`d = 0, 2, k + 1`); `B`'s term at the reruns and the judged run's `B_I` add to `(4k_I + 1)·Pr[B_I]` (`ForkPlansLeBinnerV`);
-`FC`'s and `F0`'s plans at the reruns are `FCI` and `F0I` (`CapPlanIsFCI`, `ConflictPlanIsF0I`); and the gated link
-searches what `FdevV` searches where its first rerun gives witnesses and nothing where it doesn't
-(`LinkPlanLeFdevV`). So L1 gives `KSLin2On` at the statements where the instance's contract holds
-(`RecoversKSLin2On`): at `RecDeploy.DenseAt` it is today's `Flock.Guarantees.RecursiveKS`, and at every statement
-`Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*'s two facts only where some run accepts, and the
-deployed compiled verifier accepts only dense statements, so at the deployment every statement needs V\*'s dense facts
-alone; there `RecursiveKSEvery` also follows from `RecursiveKS` directly (`RecursiveKSEveryOfDense`).
+There `Comp.err` is at most `KSLin2`'s bound term by term but the link's: `κ`, `γ` and `β` equal `KSLin2`'s
+(`β = βdev2`, from `d = 0, 2, k + 1`); `B`'s term at the reruns and the judged run's `B_I` add to `(4k_I + 1)·Pr[B_I]`
+(`ForkPlansLeBinnerV`); `FC`'s and `F0`'s plans at the reruns are `FCI` and `F0I` (`CapPlanIsFCI`,
+`ConflictPlanIsF0I`); and the link term stays the gated link's (`linkPlan` at `verModel`). So L1 gives `KSLinkOn`,
+`KSLin2`'s bound with that link term, at the statements where the instance's contract holds (`RecoversLinkOn`), and at
+every statement `Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*'s two facts only where some run
+accepts, and the deployed compiled verifier accepts only dense statements, so at the deployment every statement needs
+V\*'s dense facts alone.
 
-`FdevV` searches its loop's reruns even where its first rerun gives nothing, which its declared cost doesn't charge; the
-gated link's cost charges every rerun it names (`RunFinder.finder`), so the bits read off `linkPlan` charge what they
-search.
+The link term is not traded for `FdevV`'s: `FdevV` searches its loop's reruns even where its first rerun gives nothing,
+which its declared cost doesn't charge, while the gated link's cost charges every rerun it names (`RunFinder.finder`),
+so bits read off `linkPlan` charge what they search.
 
 Statements only: definitions, no proofs.
 -/
@@ -232,28 +231,44 @@ def ConflictPlanIsF0I (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Floc
         ((compAt D Bd decI DO decO).xI x) =
       PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R
 
-/-- **The gated link finds a collision at most as often as `FdevV`**, where the calls given witnesses record are true
-and those of no witnesses are: where its first rerun gives witnesses the two search the same reruns' true evaluations,
-and where it doesn't the gated link searches nothing. -/
-def LinkPlanLeFdevV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
-    (DO : Claims.Flock.Deploy Coin Col' T') : Prop :=
-  ∀ decI decO (x : Msg), (compAt D Bd decI DO decO).CallsTrue H x →
-    (∀ e ∈ (D.record Bd.IVStar).calls x [], H e.1 = e.2) →
-    ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (M : ℕ),
-      (linkPlan (Coin := Coin) Bd.DE.V.k M).PrAt H
-          ((compAt D Bd decI DO decO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x)
-          ((compAt D Bd decI DO decO).xI x) ≤
-        PrFdevV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M
+/-- **`KSLin2`'s bound with the gated link, at the composite**: at every statement `G` admits, the composite at today's
+compiled record over hm96 and the element-level Flock (`compAt`, `Comp.E`, which reads no `H`) meets
+`κ + √(γ·Pr[B]) + (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) +
+β₂·(Pr[link(M)] + 1/(M+1))`: `KSLin2`'s bound with its link term the gated link's on the composite's reruns
+(`linkPlan` at `verModel`, whose cost charges every rerun it names) in place of `FdevV`'s. -/
+def KSLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
+  ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (M R : ℕ),
+    PrBad H (compAt D Bd decI DO decO).V ((compAt D Bd decI DO decO).R (Proto.ofFlock Bd decI Cp))
+        ((compAt D Bd decI DO decO).E (Proto.ofFlock Bd decI Cp) (Server.ofBound Bd)) x P ≤
+      Claims.Recursion.κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
+        Real.sqrt (Claims.Recursion.γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x *
+          PrB H (D.record Bd.IVStar).V P x) +
+        (4 * (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (D.record Bd.IVStar) x) + 1) *
+          PrBinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+        4 * Cp.width (Claims.Recursion.xI (D.record Bd.IVStar) x) *
+          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
+        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
+          (((Inner.ofFlock Bd.deploy decI).k (Claims.Recursion.xI (D.record Bd.IVStar) x) : ℝ) + 1) /
+            ((R : ℝ) + 1)) +
+        βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
+          ((linkPlan (Coin := Coin) Bd.DE.V.k M).PrAt H
+              ((compAt D Bd decI DO decO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x)
+              ((compAt D Bd decI DO decO).xI x) +
+            1 / ((M : ℝ) + 1))
 
-/-- **L1 at Flock gives `KSLin2` at the statements `G` admits.** From the generic theorem, the element-level Flock's
+/-- **L1 at Flock gives `KSLinkOn` at the statements `G` admits.** From the generic theorem, the element-level Flock's
 KS with no root (`KSFlockLin` at `DE`), each outer session's KS (`OuterKS`), the sessions' nonnegative table errors,
 the record's inner statement being the compiled one's, answers that decode to their coins, `DE`'s nonnegative table
-errors and last step free of its last coin, and at each statement `G` admits the calls of no witnesses true and the
-compiler's contract at `Open(DE, hm96)` and `DE`'s reading of opened views: `KSLin2On` at `G`, through
-`ProtoWFOfFlock`, `KSAbortLinOfFlockLin`, `OuterKSOfSessions`, `IVStarOfBound`, `OpenViewOfBound` and the four term
-comparisons. The error is `KSLin2`'s with no term added: `κ`, `γ`, `β` are equal and every finder's term is at most
-`KSLin2`'s. -/
-def RecoversKSLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+errors and last step free of its last coin (F8, `Bound.LastStepFree`, proved at the deployed reader and plain
+verifier: `RecDeploy.lastCoinFree_ofFlock_R`, `RecDeploy.lastCoinFree_ofFlock_V`), and at each statement `G` admits
+the calls of no witnesses true and the compiler's contract at `Open(DE, hm96)` and `DE`'s reading of opened views:
+`KSLinkOn` at `G`, through
+`ProtoWFOfFlock`, `KSAbortLinOfFlockLin`, `OuterKSOfSessions`, `IVStarOfBound`, `OpenViewOfBound` and the three term
+comparisons. The error is `Comp.err` with `κ`, `γ` and `β` equal to `KSLin2`'s, `B`'s, `FC`'s and `F0`'s terms at most
+`KSLin2`'s, and the gated link's term as it is. -/
+def RecoversLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   _root_.Flock.Guarantees.GenericRecursiveKS → KSFlockLin H Bd.DE Cp →
     (∀ decI, OuterKS H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO) →
@@ -263,7 +278,7 @@ def RecoversKSLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (
     (∀ x, G x → (∀ e ∈ (D.record Bd.IVStar).calls x [], H e.1 = e.2) ∧
       ∀ decI decO, (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
         (fun v => (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v)) x) →
-    KSLin2On H D Bd DO Cp G
+    KSLinkOn H D Bd DO Cp G
 
 end Instance
 
@@ -274,18 +289,18 @@ namespace Flock.Guarantees
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 
-/-- **Knowledge soundness of the recursive verifier at every statement, at a compiled record** `D`: `KSLin2` (no
-restriction to dense statements) at SHA-512, the deployed relation's bound record at the reader `rd`, the deployed
-caps, as `RecursiveKSAtRec` is `KSLin2On` at `RecDeploy.DenseAt`. `Claims.RecGeneric.RecoversKSLin2On` at
-`G := fun _ => True` gives it from the generic theorem and the instance's contract at every statement; V\*'s two facts
-are read only where some run accepts, so at a record that accepts only dense statements they are the dense ones. -/
+/-- **Knowledge soundness of the recursive verifier at every statement, at a compiled record** `D`: the composite's
+bound with the gated link (`Claims.RecGeneric.KSLinkOn`) at every statement, at SHA-512, the deployed relation's bound
+record at the reader `rd`, the deployed caps. `Claims.RecGeneric.RecoversLinkOn` at `G := fun _ => True` gives it from
+the generic theorem and the instance's contract at every statement; V\*'s two facts are read only where some run
+accepts, so at a record that accepts only dense statements they are the dense ones. -/
 def RecursiveKSEveryAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ) : Prop :=
-  Claims.Recursion.KSLin2 FlockDeploy.sha512 D
+  Claims.RecGeneric.KSLinkOn FlockDeploy.sha512 D
     (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w)
-    (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep
+    (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep fun _ => True
 
 /-- **Knowledge soundness of the recursive verifier at every statement, at the deployed reader**: `RecursiveKS` with
 no restriction to dense statements (`RecursiveKSEveryAtRec` at the deployment's record and values). -/
@@ -297,11 +312,5 @@ def RecursiveKSEvery : Prop :=
         { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
         (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR))
       RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR
-
-/-- **Every statement from the dense ones, at the deployment**: the deployed compiled verifier accepts only dense
-statements (`RecDeploy.acc_dense`); where no run accepts, `Pr[run = acc ∧ ¬R] = 0`, and `KSLin2`'s bound is
-nonnegative (the tables' errors are), so `RecursiveKS` gives `RecursiveKSEvery`, with no fact of V\* at another inner
-form. -/
-def RecursiveKSEveryOfDense : Prop := RecursiveKS → RecursiveKSEvery
 
 end Flock.Guarantees
