@@ -11,16 +11,19 @@ last conjunct the bound's negation.
 
 The counting lemma, Slowdown and Security are at `Chain`, at `(c, k) = (1, 1)`: a token of three gates in a chain, of
 which only the first is computed from the token's inputs. Each premise holds at `blocks`, four blocks of one gate,
-priced at `1`. A1 holds at `Chain.entry`, `Chain.state` and `Chain.update`: gate `2`'s block reads the new weight, one
-update bit, and gates `3` and `4`'s each read one value of the token's state. The token kind's work is `X = {3, 4}`, the
-token's gates no block computing it from its inputs holds, with the cap `1`, and Slowdown's other kind is the new
-weight, gate `1`, with the cap `1`, so the bound is `max(1/2, 1/4) = 1/2`.
+priced at `1`. A1 holds at `Chain.witnesses`, the token's three gates as one witness block, which reads one update bit
+and no state: every block that works on the token reads one bit. The token kind's work is `X = {3, 4}`, the
+token's gates no block computing it from its inputs holds, with the cap `1`, Slowdown's other kind is the new weight,
+gate `1`, with the cap `1`, and the partition-level kind is all of `C`, whose bound `1` every partition into blocks of
+one gate meets with its `|C| = 4` blocks, so the bound is `max(1/2, 1/4, 1) = 1`.
 
-* The counting lemma drops the partition into inference blocks: at the kind `{3, 4}` with the cap `1`, its bound `1/2`
-  is above `whole`'s price `1/4`, and `whole`'s one block of four gates is no inference block at `c = 1`.
-* Slowdown and Security drop A1 (`CutCost`): at twice the state, which the block of gate `3` does not pay, A1's budget
-  admits no block that holds a gate of `X`, the cap `0` bounds the token work within it, and the bound is `⊤`, above
-  `blocks`' price `1` and, for Security, above `N n c = 4`.
+* The counting lemma drops the partition into inference blocks: at the kind `{3, 4}` with the cap `1` and the
+  partition-level bound `1`, its bound `1` is above `whole`'s price `1/4`, and `whole`'s one block of four gates is no
+  inference block at `c = 1`.
+* Slowdown and Security drop A1 (`CutCost`): at `Chain.skipping`, the witness block of gates `2` and `4`, which reads
+  one update bit and one bit of state, A1 prices every block that works on the token at two bits, which the block of
+  gate `3` does not read. A1's budget then admits no block that holds a gate of `X`, the cap `0` bounds the token work
+  within it, and the bound is `⊤`, above `blocks`' price `1` and, for Security, above `N n c = 4`.
 * Fit's bounds are at `Honest`: its two blocks fit at `k = 2`, and at `k = 1` they don't and no partition into inference
   blocks exists, since gate `3` reads two values, so `ρ = ⊤`, above `c / (c - d) = 1`.
 
@@ -39,54 +42,62 @@ namespace Nci.Formalism.Guarantees
 open Nci.Formalism Nci.Formalism.Assumptions
 open scoped NNReal ENNReal
 
-/-- **The counting lemma's premises hold** at `Chain`: the kind `{3, 4}` has the cap `1`, and `blocks` is a partition
-into inference blocks at `(c, k) = (1, 1)`. -/
+/-- **The counting lemma's premises hold** at `Chain`: the kind `{3, 4}` has the cap `1`, `1` is a partition-level
+bound, and `blocks` is a partition into inference blocks at `(c, k) = (1, 1)`. -/
 def Counting_honest : Prop :=
-  Caps Chain.d 1 1 (fun _ : Unit => {3, 4}) (fun _ => 1) ∧ Chain.blocks.IsCK Chain.d 1 1
+  Caps Chain.d 1 1 (fun _ : Unit => {3, 4}) (fun _ => 1) ∧ PartitionBound Chain.d 1 1 1 ∧
+    Chain.blocks.IsCK Chain.d 1 1
 
 /-- **The counting lemma is false without a partition into inference blocks**: at `Chain`, `whole` is none at
-`(c, k) = (1, 1)`, and the bound `1/2` of the kind `{3, 4}` with the cap `1` is above its price `1/4`. -/
+`(c, k) = (1, 1)`, and the bound `max(1/2, 1) = 1` of the kind `{3, 4}` with the cap `1` and the partition-level bound
+`1` is above its price `1/4`. -/
 def Counting_nontrivial : Prop :=
-  Caps Chain.d 1 1 (fun _ : Unit => {3, 4}) (fun _ => 1) ∧ ¬ Chain.whole.IsCK Chain.d 1 1 ∧
-    ¬ (⨆ _K : Unit, kindBound Chain.d 1 {3, 4} 1) ≤ partitionSlowdown Chain.d 1 1
+  Caps Chain.d 1 1 (fun _ : Unit => {3, 4}) (fun _ => 1) ∧ PartitionBound Chain.d 1 1 1 ∧
+    ¬ Chain.whole.IsCK Chain.d 1 1 ∧
+    ¬ max (⨆ _K : Unit, kindBound Chain.d 1 {3, 4} 1) (⨆ _J : Unit, (1 : ℝ≥0∞)) ≤ partitionSlowdown Chain.d 1 1
 
 /-- **Slowdown's premises hold** at `Chain`, A1 among them, at `(c, k) = (1, 1)`: its annotation is valid, A1 holds at
-`Chain.entry`, `Chain.state` and `Chain.update`, the cap `1` bounds the token work in `{3, 4}` within A1's budget, the
-new weight has the cap `1`, and `blocks` is a partition into inference blocks. -/
+the witness block of the token's three gates (`Chain.witnesses`), the cap `1` bounds the token work in `{3, 4}` within
+A1's budget, the new weight has the cap `1`, `1` is a partition-level bound, and `blocks` is a partition into inference
+blocks. -/
 def Slowdown_honest : Prop :=
-  Chain.A.Valid ∧ CutCost Chain.d 1 1 Chain.entry Chain.state Chain.update ∧
-    Chain.A.TokenCapAt 1 1 Chain.entry Chain.state Chain.update {3, 4} 1 ∧
-    Caps Chain.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ Chain.blocks.IsCK Chain.d 1 1
+  Chain.A.Valid ∧ CutCost Chain.A 1 1 Chain.entry Chain.witnesses ∧
+    Chain.A.TokenCapAt 1 1 Chain.entry Chain.witnesses {3, 4} 1 ∧
+    Caps Chain.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ PartitionBound Chain.d 1 1 1 ∧
+    Chain.blocks.IsCK Chain.d 1 1
 
-/-- **Slowdown is false without A1**: at `Chain`, at twice the state and the rest as in `Slowdown_honest`, every other
-premise holds, the cap `0` bounding the token work in `{3, 4}` within A1's budget, A1 fails at the block of gate `3`,
-and the bound `⊤` is above `blocks`' price `1`. -/
+/-- **Slowdown is false without A1**: at `Chain`, at the witness block of gates `2` and `4` (`Chain.skipping`) and the
+rest as in `Slowdown_honest`, every other premise holds, the cap `0` bounding the token work in `{3, 4}` within A1's
+budget, A1 fails at the block of gate `3`, and the bound `⊤` is above `blocks`' price `1`. -/
 def Slowdown_nontrivial : Prop :=
-  Chain.A.Valid ∧ ¬ CutCost Chain.d 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update ∧
-    Chain.A.TokenCapAt 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 ∧
-    Caps Chain.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ Chain.blocks.IsCK Chain.d 1 1 ∧
-    ¬ max (kindBound Chain.d 1 {3, 4} 0) (⨆ _K : Unit, kindBound Chain.d 1 {1} 1) ≤ partitionSlowdown Chain.d 4 1
+  Chain.A.Valid ∧ ¬ CutCost Chain.A 1 1 Chain.entry Chain.skipping ∧
+    Chain.A.TokenCapAt 1 1 Chain.entry Chain.skipping {3, 4} 0 ∧
+    Caps Chain.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ PartitionBound Chain.d 1 1 1 ∧
+    Chain.blocks.IsCK Chain.d 1 1 ∧
+    ¬ max (kindBound Chain.d 1 {3, 4} 0) (max (⨆ _K : Unit, kindBound Chain.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) ≤
+      partitionSlowdown Chain.d 4 1
 
 /-- **Security's premises hold** at `Chain`, A1 and A2 among them: its run the one method, with the decoder `silent`,
 `D = ⊤`, the loss `0` and `ℓ* = 0`, `p = 1`, its four blocks in one period of four, and Slowdown's premises as in
 `Slowdown_honest`. -/
 def Security_honest : Prop :=
   EfficiencyFloor Chain.methods silent 1 (fun _ => 0) 0 ⊤ 1 ∧ Chain.r.Among Chain.methods ∧ Chain.r.A.Valid ∧
-    Chain.r.Within silent 1 ⊤ ∧ Chain.r.Reaches (fun _ => 0) 0 ∧
-    CutCost Chain.r.d 1 1 Chain.entry Chain.state Chain.update ∧
-    Chain.r.A.TokenCapAt 1 1 Chain.entry Chain.state Chain.update {3, 4} 1 ∧
-    Caps Chain.r.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ Chain.blocks.IsCK Chain.r.d 1 1 ∧ InPeriods 4 1 4
+    Chain.r.Within silent 1 ⊤ ∧ Chain.r.Reaches (fun _ => 0) 0 ∧ CutCost Chain.r.A 1 1 Chain.entry Chain.witnesses ∧
+    Chain.r.A.TokenCapAt 1 1 Chain.entry Chain.witnesses {3, 4} 1 ∧
+    Caps Chain.r.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ PartitionBound Chain.r.d 1 1 1 ∧
+    Chain.blocks.IsCK Chain.r.d 1 1 ∧ InPeriods 4 1 4
 
-/-- **Security is false without A1**: at `Chain`, at twice the state and the rest as in `Security_honest`, every other
-premise holds, A2 among them, A1 fails at the block of gate `3`, and `ρ̲ p H(ℓ*) = ⊤` is above `N n c = 4`. -/
+/-- **Security is false without A1**: at `Chain`, at the witness block of gates `2` and `4` and the rest as in
+`Security_honest`, every other premise holds, A2 among them, A1 fails at the block of gate `3`, and `ρ̲ p H(ℓ*) = ⊤` is
+above `N n c = 4`. -/
 def Security_nontrivial : Prop :=
   EfficiencyFloor Chain.methods silent 1 (fun _ => 0) 0 ⊤ 1 ∧ Chain.r.Among Chain.methods ∧ Chain.r.A.Valid ∧
-    Chain.r.Within silent 1 ⊤ ∧ Chain.r.Reaches (fun _ => 0) 0 ∧
-    ¬ CutCost Chain.r.d 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update ∧
-    Chain.r.A.TokenCapAt 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 ∧
-    Caps Chain.r.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ Chain.blocks.IsCK Chain.r.d 1 1 ∧ InPeriods 4 1 4 ∧
-    ¬ max (kindBound Chain.r.d 1 {3, 4} 0) (⨆ _K : Unit, kindBound Chain.r.d 1 {1} 1) * ENNReal.ofReal 1 *
-      honestCost Chain.methods (fun _ => 0) 0 ≤ ((1 * 4 * 1 : ℕ) : ℝ≥0∞)
+    Chain.r.Within silent 1 ⊤ ∧ Chain.r.Reaches (fun _ => 0) 0 ∧ ¬ CutCost Chain.r.A 1 1 Chain.entry Chain.skipping ∧
+    Chain.r.A.TokenCapAt 1 1 Chain.entry Chain.skipping {3, 4} 0 ∧
+    Caps Chain.r.d 1 1 (fun _ : Unit => {1}) (fun _ => 1) ∧ PartitionBound Chain.r.d 1 1 1 ∧
+    Chain.blocks.IsCK Chain.r.d 1 1 ∧ InPeriods 4 1 4 ∧
+    ¬ max (kindBound Chain.r.d 1 {3, 4} 0) (max (⨆ _K : Unit, kindBound Chain.r.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) *
+      ENNReal.ofReal 1 * honestCost Chain.methods (fun _ => 0) 0 ≤ ((1 * 4 * 1 : ℕ) : ℝ≥0∞)
 
 /-- **Fit's serving premises hold** at `Honest`: it is Boolean, and its two blocks of one gate are session blocks that
 read a description of one value and one token's one data bit, `Δ + s τ = 2 ≤ k = 2`, with no decoder. -/
@@ -100,14 +111,14 @@ def FitServing_nontrivial : Prop :=
     ¬ slowdown Honest.d 1 1 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞)
 
 /-- **Fit's training premises hold** at `Honest`: it is Boolean, and its two blocks of one gate are compute blocks that
-fit at `k = 2`, with `Δ = Δ_grad = s = τ = 1` and no decoder. -/
+fit at `k = 2`, with `Δ = Δ_t = Δ_grad = s = τ = 1` and no decoder. -/
 def FitTraining_honest : Prop :=
-  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 ∧ TrainingFits 1 1 1 1 2
+  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 1 ∧ TrainingFits 1 1 1 1 1 2
 
 /-- **Fit is false for training blocks that don't fit**: at `Honest`, at `k = 1` the blocks don't fit, no partition into
 inference blocks exists, and `ρ = ⊤`, above `c / (c - d) = 1`. -/
 def FitTraining_nontrivial : Prop :=
-  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 ∧ ¬ TrainingFits 1 1 1 1 1 ∧
+  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 1 ∧ ¬ TrainingFits 1 1 1 1 1 1 ∧
     ¬ slowdown Honest.d 1 1 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞)
 
 end Nci.Formalism.Guarantees

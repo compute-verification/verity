@@ -16,11 +16,12 @@ one registered input, the weight `θ`.
   the token, each a copy of the one before, a chain. `blocks` puts each gate in a block of its own, a partition into
   inference blocks at `(c, k) = (1, 1)`; only gate 2's block computes the token from its inputs, reading the new weight,
   and gates 3 and 4's each read the token's gate before. `whole` is one block of all four gates, which is no partition
-  into inference blocks at `c = 1` and prices them at `1 / 4`. A1's values here are `entry`, where a block's work on the
-  token begins, the token's gates it holds; `state`, the token's state there, the token's values that work reads; and
-  `update`, the update bits a block reads, the new weight when it reads it. The lemmas of the counting lemma, Slowdown
-  and Security are stated here, Security's with a run on the all-zero inputs that is the only one of the methods
-  considered.
+  into inference blocks at `c = 1` and prices them at `1 / 4`. A1's values here are set by witness blocks entering the
+  token at `entry`, one entry for every block: `witnesses`, the token's three gates as one block, which reads the new
+  weight alone, one update bit and no state; and `skipping`, gates 2 and 4, which read the new weight and gate 3's
+  value, one update bit and one bit of state, more than gate 3's block reads. The lemmas of the counting lemma,
+  Slowdown and Security are stated here, Security's with a run on the all-zero inputs that is the only one of the
+  methods considered.
 
 `silent` is the decoder that outputs nothing, so every total update is `⊤`, within `D = ⊤` bits.
 -/
@@ -28,7 +29,6 @@ one registered input, the weight `θ`.
 namespace Nci.Formalism
 
 open Verity
-open scoped NNReal
 
 /-- The decoder that outputs nothing. -/
 def silent : Decoder (List Bool) where
@@ -97,14 +97,14 @@ abbrev blocks : Partition d.D 4 := ⟨![none, some 0, some 1, some 2, some 3], b
 /-- One block of all four gates. -/
 abbrev whole : Partition d.D 1 := ⟨![none, some 0, some 0, some 0, some 0], by decide⟩
 
-/-- Where a block's work on the token begins: the token's gates it holds. -/
-abbrev entry (I : Finset (Fin d.D.N)) (T : Fin 1) : Finset (Fin d.D.N) := I ∩ A.tokens.holds T
+/-- Where a block's work on the token begins: one entry for every block. -/
+abbrev entry (_ : Finset (Fin d.D.N)) (_ : Fin 1) : Unit := ()
 
-/-- The token's state at an entry: the token's values that the work from it reads. -/
-noncomputable abbrev state (T : Fin 1) (S : Finset (Fin d.D.N)) : ℝ≥0 := ((d.D.into S ∩ A.tokens.holds T).card : ℝ≥0)
+/-- The witness blocks: the token's three gates, one block, which reads the new weight alone. -/
+abbrev witnesses : Finset (Finset (Fin d.D.N)) := { {2, 3, 4} }
 
-/-- The update bits a block reads: the new weight, when it reads it. -/
-noncomputable abbrev update (I : Finset (Fin d.D.N)) : ℝ≥0 := ((d.D.into I ∩ A.θ').card : ℝ≥0)
+/-- A witness block that skips gate 3: gates 2 and 4, which read the new weight and gate 3's value. -/
+abbrev skipping : Finset (Finset (Fin d.D.N)) := { {2, 4} }
 
 /-- The run on the all-zero inputs. -/
 abbrev r : Run := ⟨d, 1, A, fun _ => 0⟩
