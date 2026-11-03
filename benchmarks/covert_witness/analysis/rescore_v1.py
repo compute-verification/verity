@@ -101,7 +101,7 @@ def positions(start: dict) -> list[dict]:
         elif name == "norm":
             nodes.append({"param": name, "layer": L + 1, "stage": 0, "macs": 0, "d_in": shape[0], "d_out": shape[0]})
         else:
-            m = re.fullmatch(r"blocks\.(\d+)\.(\w+?)(?:\.weight)?", name)
+            m = re.fullmatch(r"blocks\.(\d+)\.(\w+?)(?:\.weight|\.bias)?", name)
             two = len(shape) == 2
             nodes.append({"param": name, "layer": int(m.group(1)) + 1, "stage": LF_STAGES[m.group(2)],
                           "macs": shape[0] * shape[1] if two else 0, "d_in": shape[1] if two else shape[0],

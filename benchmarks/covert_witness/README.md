@@ -76,7 +76,7 @@ its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and 
 out) and train.py's steps' wall seconds under the harness ≤ 3000 (`GPU_SECONDS_CAP`; the harness runs eager and counted,
 about 2.4x a compiled run). The budget bounds a run's node time; it is not a class. The long tier (`prepare.budget(start,
 "long")`, `launch.py --long 'HH:MMZ who'`, valid only for a run the board assigns it with that line): up to `LONG_C0` = 100
-times the start's C0 in FLOPs and `LONG_GPU_SECONDS`, 30 GPU-hours, of steps.
+times the start's C0 in FLOPs and `LONG_GPU_SECONDS`, 16 GPU-hours, of steps.
 
 The seed islands (`islands/<name>/train.py`), each a program to start from:
 
