@@ -617,6 +617,7 @@ theorem sched_l0Run {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.
         have h1 := l0_size lay hk' hood (i := b + 1) (by omega) (by omega)
         rw [hpi, hord]
         omega
+      rw [← hc1]
       exact l0_step hc hI hsz' (G := G) R.mid_G R.plain_G R.abs_G (hb1.trans hBz) hc1 h2
     · simp [hb] at h2
 
@@ -692,7 +693,8 @@ theorem repState_rho {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]!
       rw [Bool.not_eq_true] at hd
       rw [answer_rho_dependent c'' _ _ _ a a' ho hin hl (by rw [hps, hord]) hrh hd] at ha
       cases ha
-    · simp [hb] at h2
+    · rw [hb, if_pos rfl, hb] at h2
+      cases h2
   · rw [h2] at ha
     simp only [↓reduceIte] at ha
     exact absurd ha (answer_owed_none cs rfl)
@@ -813,7 +815,7 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
   obtain ⟨htsch, -⟩ := htp
   have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
   obtain ⟨hm36, -, -, -⟩ := Count.sched_facts hzt
-  obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
       min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
@@ -863,6 +865,7 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
     exact (Nat.add_right_cancel hplan).symm
   have hx2 : xs.size + 2 = 2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size := by omega
   have hkk : y.sch.k0 = t.sch.k0 := by rw [htsch]
+  have hll : y.sch.levels.size = t.sch.levels.size := by rw [htsch]
   have hOL := Count.openList_length hzt
     (c := (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size)) (by omega)
   have hAP : alg.size + (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size) + 1 =
