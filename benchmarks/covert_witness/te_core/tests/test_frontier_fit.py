@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import console, frontier, plots, rescore
+from te_core import console, frontier, panels, plots, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
 from test_algorithm_policy import C0, LAW, RATE, SCRATCH, SHAPE2, V3_SHAPE, args, law, ledger_rows
@@ -32,10 +32,14 @@ def test_the_fit_recovers_a_law_from_points_on_it(f):
     assert all(float(f"{got[k]:.{FF.DIGITS}g}") == got[k] for k in ("E", "A", "gamma"))
 
 
-def test_a_fit_takes_five_points_spanning_a_decade():
-    assert FF.fit(on(LAW, (1, 10, 30, 100))) is None
-    assert FF.fit(on(LAW, (1, 2, 3, 5, 7, 9))) is None
-    assert FF.fit(on(LAW, (1, 2, 4, 7, 10))) is not None
+def test_a_fit_takes_three_points_spanning_a_decade_and_is_provisional_on_fewer_than_five_from_scratch():
+    """Five points from scratch is the target, not a gate (coordinator 07:58Z): a fit on fewer is provisional."""
+    assert FF.fit(on(LAW, (1, 100))) is None and FF.fit(on(LAW, (1, 2, 3, 5, 7, 9))) is None
+    three = FF.fit(on(LAW, (1, 10, 30)))
+    assert three is not None and (three["points"], three["scratch"], three["provisional"]) == (3, 0, True)
+    scratch = [(x, y, r | {"method_key": panels.SCRATCH}) for x, y, r in on(LAW, (1, 3, 10, 30, 60, 100))]
+    assert [FF.fit(scratch[:n])["provisional"] for n in (4, 5, 6)] == [True, False, False]
+    assert FF.fit(scratch[:4] + on(LAW, (200, 400)))["provisional"]
 
 
 def test_the_fit_reads_the_frontier_from_the_least_c0_up_one_point_a_bin():
@@ -61,17 +65,23 @@ def test_the_ladders_files_give_v3s_from_scratch_points(tmp_path):
     optimal = {"costs": {"gates_per_mac": 2.5},
                "points": [{"train_macs": 5e18, "loss": 1.25, "non_embedding_params": 4e7}]}
     files = {"F.json": {"schema": "te-ladder/F/v1", "annealed": annealed},
+             "F2.json": {"schema": "te-ladder/F/v2", "annealed": annealed},
              "report.json": {"schema": "te-ladder/report/v2", "F": {"annealed": annealed}, "compute_optimal": optimal},
-             "FIT.json": {"schema": "te-ladder/fit/v1"} | optimal, "empty.json": {"schema": "te-ladder/F/v1"}}
+             "report3.json": {"schema": "te-ladder/report/v3", "F": {"annealed": annealed}, "compute_optimal": optimal},
+             "FIT.json": {"schema": "te-ladder/fit/v1"} | optimal, "FIT2.json": {"schema": "te-ladder/fit/v2"} | optimal,
+             "empty.json": {"schema": "te-ladder/F/v1"}}
     for name, doc in files.items():
         (tmp_path / name).write_text(json.dumps(doc))
     gates = per_mac("gemm/bf16")
     f = [(x, y) for x, y, _ in FF.ladder_points(tmp_path / "F.json")]
     assert f == [(1e18 * gates, 1.4), (3e18 * gates, 1.3)]
-    assert [(x, y) for x, y, _ in FF.ladder_points(tmp_path / "report.json")] == f + [(5e18 * 2.5, 1.25)]
+    assert [r["ladder"] for *_, r in FF.ladder_points(tmp_path / "F.json")] == ["s", "m"]
+    assert [(x, y) for x, y, _ in FF.ladder_points(tmp_path / "F2.json")] == f
+    for name in ("report.json", "report3.json"):
+        assert [(x, y) for x, y, _ in FF.ladder_points(tmp_path / name)] == f + [(5e18 * 2.5, 1.25)]
     fit = FF.ladder_points(tmp_path / "FIT.json")
     assert [(x, y) for x, y, _ in fit] == [(5e18 * 2.5, 1.25)] and fit[0][2]["data"] == "v3"
-    assert fit[0][2]["source"] == "ladder fit, N 4e+07 optimal"
+    assert fit[0][2]["source"] == "ladder fit, N 4e+07 optimal" and FF.ladder_points(tmp_path / "FIT2.json") == fit
     with pytest.raises(SystemExit, match="holds no ladder point"):
         FF.ladder_points(tmp_path / "empty.json")
 
@@ -118,7 +128,7 @@ def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeyp
     assert (p["id"], p["kind"], p["columns"]) == (FF.PANEL, "table", FF.COLUMNS) and p["source"] and p["updated_at"]
     assert [q["id"] for q in sent] == [FF.PANEL] and console.body(sent[0]) == (out / "console" / f"{FF.NAME}.json").read_bytes()
     assert len(console.body(p)) <= console.BODY_MAX and not console.refused(p) and len(p["note"]) <= console.NOTE_MAX
-    assert "training/algorithm-policy" in p["note"]
+    assert p["note"] == FF.note() and "0 ladder points)" in p["source"]
     ds = plots.frame(p)
     fits = {d["data"]: d for d in ds if d["row"] == "fit"}
     assert fits["v3"]["E_bpb"] is None and fits["v3"]["status"].startswith("no fit: no start has a scored checkpoint")
