@@ -36,40 +36,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- **The worker's free words are `vs`'s values after one history** `(m₀, ρ₀) :: ops` at the tape `(ν, t)` and the check
-coins `κ`: `TakesVals`'s conclusion there, wherever `LiveRoundEq` reads the history (`0 < ops.length < refK x` openings,
-live, whose openings pass under the tape's nonce), the frame takes the stream's coins and the worker's round is rep
-stream `2j + r`'s. -/
-def TakesValsAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
-    (L : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
-    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
-    (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg)
-    (ops : List (Msg × Msg)) : Prop :=
-  ∀ (v : Msg) (m : _root_.Flock.Firewall.Frame.Masker) (out : ByteArray) (s : _root_.Flock.Firewall.Frame.Masker)
-    (fr : Array ℕ) (j : Fin (Masked.jOf x)) (r : Fin 2),
-    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
-    ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
-      CoinOpen.shaH).1 = true →
-    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
-    L.answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m →
-    _root_.Flock.Firewall.Frame.roundFree (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m with stopped := false } ⟨v.toArray⟩
-      (L.coins x (ops.length + 1)) = .ok (out, s, fr) →
-    L.rep x (ops.length + 1) = 2 * j.val + r.val →
-    ∀ k < fr.size,
-      (_root_.Flock.Firewall.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]! =
-        vsWord vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-          (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
-          (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[m.pos + k]!
-
-/-- `TakesVals` is `TakesValsAt` after every history. -/
-theorem takesVals_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
-    (L : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
-    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) :
-    TakesVals vs L wk x w ↔ ∀ ν t κ m₀ ρ₀ ops, TakesValsAt vs L wk x w ν t κ m₀ ρ₀ ops :=
-  Iff.rfl
-
 /-- **The worker's free words are `vs`'s values at its own histories**: `TakesValsAt` after every history each of whose
 messages is the deferred server's frame of the worker's round before it (`ZkServer.OwnHist`), the only histories the
 deferred server meets. -/
