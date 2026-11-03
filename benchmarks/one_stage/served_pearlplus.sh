@@ -14,8 +14,9 @@
 #      unretained/), whose wall is the option's without writing the passes;
 #   3. `served_passes.py verify` replays each pass on the CPU in PEARLPLUS_JOBS processes (default nproc), PEARLPLUS_PARALLEL
 #      passes at a time (default nproc / 8 rounded up: a pass draws a few tiles and its exclusion tiles, one process
-#      each), on fast_tile's batch forms, a replayed tile whose id is a multiple of 256 on the scalar reference too (a
-#      scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference alone;
+#      each), on fast_tile's batch forms, a pass's first replayed tile and every 256th after it on the scalar reference
+#      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
+#      alone;
 #   4. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, its shares (with the
 #      unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its passes are not the
 #      window sampled proofs audited, so WINDOW names nothing here).

@@ -21,8 +21,8 @@
 - **The tiles** are `clear_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
-  forms, with every ``--cross-check``-th tile id replayed on the scalar reference too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
-  own verdict.
+  forms, with the first tile and every ``--cross-check``-th after it, in the draw's order, replayed on the scalar reference
+  too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s own verdict.
 
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
@@ -139,12 +139,15 @@ class Opened:
 _JOB: dict = {}
 
 
-def check(pick: tuple[int, int]) -> tuple[int, bool, str | None, bool | None]:
-    """One tile's verdict and, on `--fast`, for every `--cross-check`-th tile id whether the scalar reference's verdict is the
-    same one (None where it was not replayed twice)."""
+def check(job: tuple[int, tuple[int, int]]) -> tuple[int, bool, str | None, bool | None]:
+    """The verdict of the pass's ``i``-th tile in the draw's order, ``job`` = (i, pick), and, on `--fast`, for the first
+    and every `--cross-check`-th after it whether the scalar reference's verdict is the same one (None where it was not
+    replayed twice). By place, not tile id: an excluded row's tile starts its row of a matmul, at an id that is a multiple
+    of the matmul's column tiles (256 for the 1B's gate_up), so a rule on ids takes whole layouts' tiles or none."""
+    i, pick = job
     tid, ok, reason = _check(pick)
     every, undo = _JOB.get("cross_check", 0), _JOB.get("undo")
-    if undo is None or not every or tid % every:
+    if undo is None or not every or i % every:
         return tid, ok, reason, None
     undo()
     try:
@@ -177,8 +180,9 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
            cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
     """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
     (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
-    promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
-    too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
+    promoted device; otherwise the scalar reference, ``replay``), and the first of its tiles and every `cross_check`-th after
+    it in the draw's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
+    pass is not accepted."""
     raw = path.read_bytes()
     man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
     named = f"{man.get('run')}:{path} sha256:{digest}"
@@ -223,9 +227,9 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
             if jobs > 1 and len(todo) > 1:
                 # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
                 with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
-                    verdicts = pool.map(check, todo, chunksize=1)
+                    verdicts = pool.map(check, list(enumerate(todo)), chunksize=1)
             else:
-                verdicts = [check(p) for p in todo]
+                verdicts = [check(job) for job in enumerate(todo)]
         finally:
             if _JOB.get("undo") is not None:
                 _JOB.pop("undo")()
@@ -263,8 +267,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
-                   help="with --fast, replay every tile whose id is a multiple of N on the scalar reference too; any verdict "
-                        "that differs rejects the pass and exits 2 (0: none)")
+                   help="with --fast, replay the first tile and every N-th after it, in the draw's order, on the scalar "
+                        "reference too; any verdict that differs rejects the pass and exits 2 (0: none)")
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
     p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins: its salt is its beacon's")
     a = p.parse_args(argv)

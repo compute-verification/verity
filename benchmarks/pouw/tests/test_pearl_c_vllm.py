@@ -933,6 +933,8 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1, coins=published(path))
     assert fast["replay"] == "batch" and fast["cross_checked"] == fast["tiles"] and "cross_check_failed" not in fast
     assert {k: fast[k] for k in ("accepted", "tiles", "verdicts")} == {k: got[k] for k in ("accepted", "tiles", "verdicts")}
+    by_place = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=2, coins=published(path))
+    assert by_place["accepted"] and by_place["cross_checked"] == by_place["tiles"][::2]
     assert C.form_v1 is SD.FT._SCALAR["form_v1"]
     assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
