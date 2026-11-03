@@ -51,7 +51,8 @@ reads. `circuit.measure` reads the formalism's quantities from it, each defined 
 --circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again.
 
 The measured step's quantities also keep its matrix products as `te_core.io_bound`'s bound reads them
-(`formalism["products"]`, `products.rows`, which reads a step captured by `capture_step` or `capture_fn` too): each
+(`formalism["products"]`, which a saved circuit keeps; `products.rows`, which reads a step captured by `capture_step`
+or `capture_fn` too): each
 GEMM's dims and token dims, whether each operand depends on θ′, the width it is passed at, the bits a block pays an
 entry of it at the console's k and the chain that makes one whole, identical rows merged with their count. A recorded
 program reads a weight through the version the previous step's update wrote, so these rates and chains are keyed by

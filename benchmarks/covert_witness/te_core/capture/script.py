@@ -820,10 +820,12 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
         return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
 
     def flagged(g: StepGraph) -> StepGraph:
+        rows = products.rows(g) if g.formalism is not None else None
         if g.circuit is not None:
             g.circuit.read_backs = {k: list(v) for k, v in listed.items()}
+            g.circuit.products = rows
         if g.formalism is not None:
-            g.formalism = g.formalism | listed | {"products": products.rows(g)}
+            g.formalism = g.formalism | listed | {"products": rows}
         return g
 
     base = trace(1)
