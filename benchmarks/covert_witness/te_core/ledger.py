@@ -11,7 +11,7 @@ contend; `index()` reads every agent's. Each record goes to the evidence store a
 --file REC --preserve`, its art id kept beside it in `<id>.art`; `ROOT/index.jsonl` is derived and rebuilt from the
 records. Only the scorer (agent `scorer`) writes promotions and final (test) scores, which the index joins onto their
 submissions. A submission carries its prefix's formalism quantities (`formalism`, te_core.formalism.of_record), which
-`frontier --formalism` scores.
+`frontier` scores.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from . import VERSION
-from .annotate import LOOKUPS_FROM, with_lookups
+from .annotate import LOOKUPS_FROM, with_lookups, with_structures
 from .formalism import of_record
 from .score import checkpoints
 
@@ -175,31 +175,14 @@ def start_tensors(name: str) -> dict:
     return prepare.start_record(name)["tensors"]
 
 
-def facts(record: dict, run_dir: Path, tensors: dict | None = None) -> dict:
-    """What the frontier's rules read beyond a run's price (`frontier.status`), and the program's arguments (`args`,
-    for the record): the tensors the witness saw change and the start's layers (`changed`, `layers`), when the
-    record's `witness.json` sits beside its run directory (a covert_witness record's out/); and, given the start's
-    `tensors`, the steps `cw.readout_leaks` lists (`readout_leaks`)."""
+def facts(record: dict, tensors: dict | None = None) -> dict:
+    """What the frontier's rules read beyond a run's price (`frontier.status`): the program's arguments (`args`, for the
+    record) and, given the start's `tensors`, the steps `cw.readout_leaks` lists (`readout_leaks`)."""
     out = {"args": record.get("script_args")}
-    w = Path(run_dir).parent / "witness.json"
-    if w.is_file():
-        wit = json.loads(w.read_text())
-        out |= {"changed": (wit.get("changed") or {}).get("actual"), "layers": (wit.get("structure") or {}).get("layers")}
     if tensors is not None:
         from .cw import readout_leaks
 
         out["readout_leaks"] = readout_leaks(record, tensors)
-    return out
-
-
-def coverage_of(families: list[dict]) -> dict[int, float]:
-    """Each covered step's least β_t, from a run record's verified families."""
-    out: dict[int, float] = {}
-    for f in families:
-        beta = {int(k): v for k, v in f["beta"].items()}
-        for t in f["covers"]:
-            if t in beta:
-                out[t] = min(beta[t], out.get(t, beta[t]))
     return out
 
 
@@ -221,23 +204,24 @@ def _macs_log(record: dict, through: int | None) -> dict:
 
 
 def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, parent: str = "", run_id: str = "",
-           reference: bool = False, p: float | None = None, lookups: bool = False,
-           tensors: dict | None = None) -> list[dict]:
+           reference: bool = False, lookups: bool = False, tensors: dict | None = None,
+           structures: dict | None = None) -> list[dict]:
     """One submission record per checkpoint of the run in `run_dir` (its `run.json`), with its `facts` (the read-outs
     judged given the start's `tensors`); with `lookups`, a run counted before 3.6 gets the lookups of the start's updated
-    table (`annotate.with_lookups`)."""
+    table (`annotate.with_lookups`); `structures` (structure id -> traced structure) gives its steps their U and cut
+    from the traced step circuit (`annotate.with_structures`)."""
     record = json.loads((Path(run_dir) / "run.json").read_text())
-    known = facts(record, run_dir, tensors)
+    known = facts(record, tensors)
     if lookups and version(record.get("te_core")) < LOOKUPS_FROM:
         record = with_lookups(record, lookup_tables())
+    if structures:
+        record = with_structures(record, structures)
     ev = record.get("evaluation", {})
-    cov = coverage_of(record.get("families", []))
     last = record["steps"][-1]["step"] if record["steps"] else -1
     out = []
-    for sub in checkpoints(record, cov, record["c"], p):
+    for sub in checkpoints(record):
         cp = sub["checkpoint"]
         through = None if cp["step"] >= last else cp["step"]
-        grid = sub["grid"]
         body = {
             "run_id": run_id, "commit": record.get("commit", ""), "program": record.get("program", ""),
             "program_sha256": record.get("program_sha256", ""), "direction": direction, "mechanism": mechanism,
@@ -250,11 +234,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
             "theta_sha256": record["theta_sha256"], "checkpoint_step": cp["step"],
             "fraction": (cp["step"] + 1) / max(record.get("planned_steps") or len(record["steps"]), 1),
             "macs": sub["macs"], "macs_log": _macs_log(record, through), "formalism": of_record(record, through),
-            "annotation": sub["annotation"],
-            "c": sub["c"], "p": sub["p"], "families": record.get("families", []),
-            "phi": {k: v["phi"] for k, v in grid.items()}, "depth": {k: v["depth"] for k, v in grid.items()},
-            "beta": {k: v["beta"] for k, v in grid.items()}, "rho": {k: v["rho"] for k, v in grid.items()},
-            "option": {k: v["option"] for k, v in grid.items()}, "val_bpb": cp.get("val_bpb"),
+            "annotation": sub["annotation"], "c": record["c"], "families": record.get("families", []),
+            "val_bpb": cp.get("val_bpb"),
             "final_bpb": cp.get("test_bpb"), "output": {k: cp[k] for k in ("source", "e_bytes", "e_sha256", "format",
                                                                           "submitted", "output_sha256") if k in cp},
             "flags": record.get("flags", []), "invalid": record.get("invalid", []),
@@ -277,7 +258,8 @@ def main(argv=None) -> int:
     i.add_argument("--parent", default="")
     i.add_argument("--run-id", default="")
     i.add_argument("--reference", action="store_true")
-    i.add_argument("--p", type=float, default=None, help="bits per updated value (default: the width multiplied)")
+    i.add_argument("--structures", type=Path, default=None,
+                   help="JSON, structure id -> traced structure (te_core.capture.script), the steps' U and cut")
     i.add_argument("--lookups", action="store_true",
                    help="price the lookups of the start's updated table in a run counted before te_core 3.6")
     i.add_argument("--readouts", action="store_true",
@@ -290,9 +272,10 @@ def main(argv=None) -> int:
         tensors = (start_tensors(json.loads((a.run_dir / "run.json").read_text())["start"]["name"]) if a.readouts
                    else None)
         recs = ingest(a.run_dir, led, direction=a.direction, mechanism=a.mechanism, parent=a.parent, run_id=a.run_id,
-                      reference=a.reference, p=a.p, lookups=a.lookups, tensors=tensors)
+                      reference=a.reference, lookups=a.lookups, tensors=tensors,
+                      structures=json.loads(a.structures.read_text()) if a.structures else None)
         print(json.dumps([{"id": r["id"], "step": r["checkpoint_step"], "macs": r["macs"], "val_bpb": r["val_bpb"],
-                           "rho": r["rho"]} for r in recs]))
+                           "gates": sum(p["gates"] for p in r["formalism"]["parts"])} for r in recs]))
     elif a.cmd == "index":
         print(f"{len(led.index())} submissions in {led.root / 'index.jsonl'}")
     else:

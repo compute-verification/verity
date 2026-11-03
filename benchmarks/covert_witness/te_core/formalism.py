@@ -21,7 +21,9 @@ Measured per record (`Measured`), each with its source in `labels` ("measured: .
   while computing the token from its inputs. Update bits are values of θ', or of an encoding of it, that a block reads,
   disjoint from the cut values A1 charges as a·m. For an evenly spread update both are x·u(1) (`even`); with frozen
   layers above changed ones, their share t of a token's affected work (`tail_share`), u is 0 up to t and u_in jumps to
-  the changed layers' full update at once (`tail`): the frozen work is always charged (Daniel, 1:58 PM PST).
+  the changed layers' full update at once (`tail`): the frozen work is always charged (Daniel, 1:58 PM PST). Where Δ
+  counts, both are at most Δ (`capped`): a block can read the update code instead ("a shorter update encoding lowers
+  u"), a witness the record exhibits (the checkpoint's, for every step of its prefix).
 
 At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the record's for Slowdown) and
 σ = token_gates / |C|:
@@ -39,15 +41,18 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
   block's, which is handed each token's state at the tail (a + τ bits) and does the tail's share t of its affected
   work reading no update bits, t·min(⌊k/(a + τ)⌋, ⌊c/(t·α_max)⌋), and 0 where there is no tail or x0_known is 1.
 
-A record where Fit holds and Slowdown's bound exceeds c/(c − d) is flagged (`fit-over-slowdown`: the fitting
-partition would refute A1 or A1', or a measurement is wrong).
+Where Fit holds, Δ + sτ ≤ k bounds u_in by k through the cap, so x0's bound is 1 and Slowdown's bound 0: the two never
+disagree.
 
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
 (`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
-4.0's capture gives `cut_bits` per step structure, read as Δ_grad; the rest (A with backward gates, τ, a, u and u_in
-from the traced circuit, Δ's decoder) a run record gives as its own `formalism` block, {"parts": [...], "tau_bits",
-"a_bits", "u", "u_in", "u1_bits", "tail_share", "delta_bits", "decoder_gates", "labels"}, which `of_record` passes
-through field by field.
+4.0 measures them on the record's traced step (te_core.capture.circuit, `TRACED` its labels): each traced structure's
+σ, affected share, token factor and Δ_grad (`TRACED_STRUCTURE`), and the record's τ (`tau_ids` token positions read
+per consumed token at ⌈log2 V⌉ bits, plus `tau_other_bits`), a, u_in, u and t (`of_trace`, with every measured field
+under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of θ' (`trace.update_cut_bits`) is the
+carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
+"u_in", "u1_bits", "tail_share", "delta_bits", "decoder_gates", "labels"}, which `of_record` passes through field by
+field.
 """
 from __future__ import annotations
 
@@ -57,7 +62,6 @@ from dataclasses import asdict, dataclass, field
 from .gates import of_log, per_mac
 
 ACT_BITS = 16
-FIT_OVER_SLOWDOWN = "fit-over-slowdown"
 
 
 @dataclass(frozen=True)
@@ -150,6 +154,25 @@ def tail(u1: float, t: float) -> tuple[tuple[tuple[float, float], ...], tuple[tu
     return ((0.0, 0.0), (t, 0.0), (1.0, float(u1))), ((0.0, 0.0), (0.0, float(u1)), (1.0, float(u1)))
 
 
+def with_tail(u_in, t: float) -> tuple[tuple[float, float], ...]:
+    """A1's profile from a measured u_in and the share t of a token's affected work that reads no update bits: a block
+    does that share handed the cut values (A1's a·m), so 0 up to t; beyond it, the first share x in dependency order
+    with it reads at most u_in(x)."""
+    if not 0 < t < 1:
+        return tuple(map(tuple, u_in))
+    return ((0.0, 0.0), (t, 0.0), (t, u_at(u_in, t)), *((x, b) for x, b in u_in if x > t))
+
+
+def capped(u, cap: float) -> tuple[tuple[float, float], ...]:
+    """min(u(x), cap) at every x, as points: a segment crossing `cap` gets its crossing point."""
+    out = [(u[0][0], min(u[0][1], cap))]
+    for (x0, b0), (x1, b1) in zip(u, u[1:]):
+        if x1 > x0 and (b0 - cap) * (b1 - cap) < 0:
+            out.append((x0 + (x1 - x0) * (cap - b0) / (b1 - b0), cap))
+        out.append((x1, min(b1, cap)))
+    return tuple(out)
+
+
 def u_at(u, x: float) -> float:
     for (x0, u0), (x1, u1) in zip(u, u[1:]):
         if x <= x1:
@@ -178,7 +201,7 @@ def room(u, k: float) -> float:
             v = (k - u0 + m * x0) / (2 * m)
             if x0 < v < x1:
                 xs.append(v)
-        best = max(best, *(x * (k - u_at(u, x)) for x in xs if x > 0))
+        best = max((best, *(x * (k - u_at(u, x)) for x in xs if x > 0)))
     return best
 
 
@@ -196,6 +219,7 @@ def at(m: Measured, c: float, k: float) -> dict:
     docstring)."""
     d = m.decoder_gates or 0.0
     delta = m.delta_bits if d < c else None
+    u, u_in = (m.u, m.u_in) if delta is None else (capped(m.u, delta), capped(m.u_in, delta))
     rho_fit = c / (c - d) if d < c else math.inf
     parts, fits = [], []
     for p in m.parts:
@@ -210,7 +234,7 @@ def at(m: Measured, c: float, k: float) -> dict:
         parts.append({"w": w, "s": s, "fit": kinds, "fit_training": fits[-1]})
     sigma, s = m.sigma, c / m.w
     ratio = m.alpha_mean / m.alpha_max if m.alpha_max else 0.0
-    x0, s_star = bottom_share(m.u_in, k), room(m.u, k) / m.a_bits
+    x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
     bound = _token_form(sigma, x0, s, s_star, ratio)
     fit = all(fits)
     x0_known = 1.0 if all(p["fit"]["compute"] for p in parts) else 0.0
@@ -220,8 +244,7 @@ def at(m: Measured, c: float, k: float) -> dict:
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
     return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
             "slowdown": bound, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
-            "rho": rho_fit if fit else max(1.0, bound), "x0_known": x0_known, "s_star_known": s_star_known,
-            "flags": [FIT_OVER_SLOWDOWN] if fit and bound > rho_fit else []}
+            "rho": rho_fit if fit else max(1.0, bound), "x0_known": x0_known, "s_star_known": s_star_known}
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
@@ -248,7 +271,7 @@ def fit_k(m: Measured, c: float, w_run: float) -> tuple[float | None, float | No
         dg = p.delta_grad_bits
         if dg is None and p.tokens:
             return run, None
-        need.append(max(m.delta_bits + st, *((2 * dg, m.delta_bits + dg) if dg is not None else ())))
+        need.append(max((m.delta_bits + st, *((2 * dg, m.delta_bits + dg) if dg is not None else ()))))
     return run, max(need)
 
 
@@ -272,6 +295,37 @@ V23 = {
     "affected_gates": "stub: forward products that read an updated weight (v2.3's count; understates A)",
 }
 TAIL = "assumption ({a}): frozen layers above changed ones, their share t of a token's affected work, {how}"
+TRACED = {
+    "tokens": "measured (trace): the steps' token counts times the traced step's consumed tokens over its count (the "
+              "union of the positions its token-index ops read, per storage)",
+    "token_gates": "measured (trace): sigma |C_j|, sigma the traced step's token ops (forward and backward, the "
+                   "optimizer in none) over its gates",
+    "affected_gates": "measured (trace): the traced step's token ops that depend on theta' over its gates, times "
+                      "|C_j|; 0 for a step before the first update",
+    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut at 32 bits or more an element, plus "
+                       "the carried state the token ops don't read",
+    "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, "
+                "and its other inputs",
+    "a_bits": "upper bound (witness, trace): the narrowest cut across the forward's affected path, per consumed token",
+    "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one "
+            "token's ops read so far, in program order",
+    "u": "assumption (A1), from the trace: 0 up to t, then u_in",
+    "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
+}
+TRACED_STRUCTURE = ("sigma", "affected_share", "token_factor", "delta_grad_bits")
+
+
+def of_trace(f: dict) -> dict:
+    """The record-level `formalism` fields of a traced step's quantities (te_core.capture.circuit.measure), with every
+    measured field under `trace`. t is 0 where no token op reads an update value (u_in is 0 then)."""
+    t = f["tail_share"] if f["tail_share"] < 1 else 0.0
+    u_in = tuple(map(tuple, f["u_in"]))
+    out = {k: f[k] for k in ("tau_ids", "tau_other_bits", "u1_bits")} | {
+        "u_in": [list(p) for p in u_in], "u": [list(p) for p in with_tail(u_in, t)], "tail_share": t}
+    labels = {k: TRACED[k] for k in ("tau_bits", "u", "u_in", "tail_share")} | {"u1_bits": TRACED["u_in"]}
+    if f.get("a_bits") is not None:
+        out["a_bits"], labels["a_bits"] = f["a_bits"], TRACED["a_bits"]
+    return out | {"labels": labels, "trace": f}
 
 
 def _token_log(log: dict) -> dict:
@@ -310,6 +364,8 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         parts = (_v23_part(row, shape),)
         labels |= {k: v for k, v in V23.items() if k not in labels}
     out = {}
+    if "tau_bits" not in f and "tau_ids" in f:
+        f = f | {"tau_bits": f["tau_ids"] * math.ceil(math.log2(shape["vocab"])) + f.get("tau_other_bits", 0.0)}
     e = (row.get("output") or {}).get("e_bytes")
     defaults = {"tau_bits": math.ceil(math.log2(shape["vocab"])), "a_bits": shape["d_model"] * ACT_BITS,
                 "delta_bits": 8 * e if e is not None else None, "decoder_gates": None}
@@ -352,12 +408,14 @@ def measure(row: dict, shape: dict) -> Measured:
 def of_record(record: dict, through: int | None = None) -> dict:
     """The `formalism` block ingest writes for a run record's prefix through step `through`: one part per step
     structure (its steps' gates by te_core.gates, their tokens, the gates of their token blocks, its affected gates and
-    Δ_grad), and the record's own `formalism` fields over these. A structure's affected gates are the record's when it
-    gives them (`affected_gates`), else its updated forward nodes' MACs (te_core 4.0's capture: every forward MAC with
-    an update-dependent operand; the backward's are not counted yet), at the bf16 GEMM price; its token blocks' gates
-    are its forward and backward (`_token_log`); its Δ_grad is its `delta_grad_bits`, else 4.0's `cut_bits` (the
-    narrowest cut between the step's gradient side and the new values it carries). The setup, and the tail of a whole
-    run, are parts of their own, so |C| is the prefix's whole count, as `ledger._macs_log`'s."""
+    Δ_grad), and the record's own `formalism` fields over these. In a record with traced structures
+    (`annotate.with_structures`), a traced structure's affected gates, token blocks' gates and Δ_grad are its measured
+    shares of its counted gates and its measured Δ_grad, and its tokens are scaled by its token factor (`TRACED`); any
+    other structure there (a step before the first update) has no affected gates. Otherwise a structure's affected
+    gates are the record's when it gives them (`affected_gates`), else its updated forward nodes' MACs at the bf16 GEMM
+    price; its token blocks' gates are its forward and backward (`_token_log`); its Δ_grad is its `delta_grad_bits`,
+    else 4.0's `cut_bits`. The setup, and the tail of a whole run, are parts of their own, so |C| is the prefix's whole
+    count, as `ledger._macs_log`'s."""
     own = dict(record.get("formalism") or {})
     labels = dict(own.get("labels", {}))
     steps = [s for s in record["steps"] if through is None or s["step"] <= through]
@@ -367,6 +425,9 @@ def of_record(record: dict, through: int | None = None) -> dict:
             groups[name] = [record[name]]
     for s in steps:
         groups.setdefault(("step", s["struct"]), []).append(s)
+    traced = any("affected_share" in (st or {}) for st in record["structures"].values())
+    if traced:
+        labels |= {k: TRACED[k] for k in ("tokens", "token_gates", "affected_gates", "delta_grad_bits")}
     parts = []
     for gid, ss in groups.items():
         st = record["structures"].get(gid[1] if isinstance(gid, tuple) else ss[0].get("struct")) or {}
@@ -378,18 +439,24 @@ def of_record(record: dict, through: int | None = None) -> dict:
         for row in st.get("log", []):
             key = " ".join(str(x) for x in row[:4])
             log["ops"][key] = [row[4] * n, row[5] * n]
-        if "affected_gates" in st:
-            affected = st["affected_gates"] * n
+        gates, tokens = of_log(log)["gates"], sum(s.get("tokens", 0) for s in ss)
+        token_gates = of_log(_token_log(log))["gates"]
+        if traced:
+            affected, dg = st.get("affected_share", 0.0) * gates, st.get("delta_grad_bits")
+            tokens *= st.get("token_factor", 1.0)
+            token_gates = st["sigma"] * gates if "sigma" in st else token_gates
         else:
-            affected = sum(u[2] for u in st.get("updated", [])) * n * per_mac("gemm/bf16")
-            labels.setdefault("affected_gates",
-                              "stub: forward MACs with an update-dependent operand (no backward), bf16 GEMM")
-        dg = st.get("delta_grad_bits", st.get("cut_bits"))
-        if "delta_grad_bits" not in st and dg is not None:
-            labels.setdefault("delta_grad_bits", "measured: te_core 4.0's cut (gradient side to the new values)")
-        parts.append({"gates": of_log(log)["gates"], "tokens": sum(s.get("tokens", 0) for s in ss),
-                      "token_gates": of_log(_token_log(log))["gates"], "affected_gates": affected, "steps": n,
-                      "delta_grad_bits": dg})
+            if "affected_gates" in st:
+                affected = st["affected_gates"] * n
+            else:
+                affected = sum(u[2] for u in st.get("updated", [])) * n * per_mac("gemm/bf16")
+                labels.setdefault("affected_gates",
+                                  "stub: forward MACs with an update-dependent operand (no backward), bf16 GEMM")
+            dg = st.get("delta_grad_bits", st.get("cut_bits"))
+            if "delta_grad_bits" not in st and dg is not None:
+                labels.setdefault("delta_grad_bits", "measured: te_core 4.0's cut (gradient side to the new values)")
+        parts.append({"gates": gates, "tokens": tokens, "token_gates": token_gates, "affected_gates": affected,
+                      "steps": n, "delta_grad_bits": dg})
     labels.setdefault("gates", "counted MACs in gates (te_core.gates)")
     labels.setdefault("tokens", "measured: the steps' token counts")
     labels.setdefault("token_gates", "counted: the steps' forward and backward in gates (te_core.gates)")

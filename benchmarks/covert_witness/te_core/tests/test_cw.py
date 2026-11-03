@@ -89,6 +89,9 @@ def test_an_island_runs_unmodified_and_its_encodings_are_scored_by_the_evaluatio
     # each scored model's value is sealed under its output digest, and its score names that digest
     assert {cp["output_sha256"] for cp in cps} <= set(sealed)
     assert all(cp["score"]["slice"]["weights_digest"] == cp["output_sha256"] for cp in cps)
+    # each scored model's own forward, counted: θ's architecture here, so the start's figure
+    assert rec["start"]["forward_macs_per_token"] > 0 and all(
+        cp["forward_gates_per_token"] == rec["start"]["forward_gates_per_token"] and cp["config"] is None for cp in cps)
 
 
 def test_an_e_file_that_is_not_the_recorded_one_is_not_scored(cw_root):

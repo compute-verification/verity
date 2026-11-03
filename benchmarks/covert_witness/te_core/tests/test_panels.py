@@ -16,8 +16,8 @@ RATIO = 1.03
 L_PARAMS = next(iter(panels.FORWARD_MACS))
 
 
-def ledger_rows():
-    return [r | ({"mechanism": "adamw-all"} if r["direction"] == "ref-optim" else {}) for r in rows()]
+def ledger_rows(unbounded=False):
+    return [r | ({"mechanism": "adamw-all"} if r["direction"] == "ref-optim" else {}) for r in rows(unbounded)]
 
 
 def pretraining(root, beaten: bool):
@@ -34,12 +34,12 @@ def pretraining(root, beaten: bool):
     return root
 
 
-def build(tmp_path, monkeypatch, beaten=False, *extra):
+def build(tmp_path, monkeypatch, beaten=False, *extra, unbounded=False):
     tmp_path.mkdir(parents=True, exist_ok=True)
     man = tmp_path / "starts_store.json"
     man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}}}))
-    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(ledger_rows),
-                                                                      "root": tmp_path})())
+    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(
+        lambda: ledger_rows(unbounded)), "root": tmp_path})())
     out = tmp_path / "out"
     code = panels.main([panels.NAME, "--out", str(out), "--pin", "pin", "--manifest", str(man), "--stubs",
                         "--pretraining", str(pretraining(tmp_path / "lf", beaten)), *extra])
@@ -82,6 +82,17 @@ def test_the_frontier_and_its_branches(tmp_path, monkeypatch, beaten):
     q = json.loads((out / "console" / f"{panels.NAME}.json").read_text())
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX and not console.refused(q)
     assert f"x{RATIO:.4f}" in q["note"] and "best unconstrained / constrained learner" in q["note"]
+
+
+def test_an_infinite_rho_is_on_no_throttled_curve(tmp_path, monkeypatch):
+    """r4, the deepest record, reads its whole update (capped at Δ = 8 Mbit) at once: its ρ is infinite in every dial
+    cell with k < Δ (at k = Δ, x0 is 1), where it is on no throttled curve, while it stays on the honest one and the
+    panel strict JSON."""
+    code, out = build(tmp_path, monkeypatch, unbounded=True)
+    ds = plots.frame(json.loads((out / f"{panels.NAME}.json").read_text()))
+    assert code == 0 and "r4@9" in {d["run"] for d in ds if d["curve"] == "honest"}
+    low = [d for d in ds if d["curve"] == "throttled" and d["k_bits"] < 8e6]
+    assert low and "r4@9" not in {d["run"] for d in low}
 
 
 def test_dense_adamw_sets_the_rate_c0_is_counted_at(tmp_path, monkeypatch):

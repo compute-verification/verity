@@ -2,7 +2,7 @@
 Boolean gates, every line a frontier (at each loss, the least compute anything reached under that line's rules).
 
     python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
-                                               [te_core.rescore's ledger and analysis options]
+                                               [te_core.rescore's ledger and quantities options]
 
 Its rows (`COLUMNS`) are the points of three kinds of curve:
 
@@ -16,7 +16,8 @@ Its rows (`COLUMNS`) are the points of three kinds of curve:
   ρ by the formalism v2 at that (c, k) with A1's and A1''s upper bounds, its S = W*/H at its loss and W*'s basis
   (`fit`: ρ = c/(c − d) by Fit; `target`: Slowdown's bound, stated, not proved in Lean). The dial is c in tokens per
   block of the start's own forward (`TOKENS_PER_BLOCK`, c = n·w) by k (`K_BYTES`; bits in the rows). A dial cell whose
-  curve is the honest one (ρ = 1 at every point of it, so S = 1 at every loss) has no rows.
+  curve is the honest one (ρ = 1 at every point of it, so S = 1 at every loss) has no rows, and a checkpoint whose ρ
+  is infinite in a cell (no block there does any of its unreachable work) is on no throttled curve of that cell.
 
 The branch points are the starts (te_core.policy's `starts`), each at (C0, l0) and labelled by its size and tokens per
 parameter, `on_frontier` "yes" when the frontier passes through it (nothing reaches its loss for less), else "no". C0 is
@@ -137,7 +138,8 @@ class Branch:
         for r in on:
             r["dial"] = dial(r["measured"], w)
         self.honest = plots.staircase([(r["gates"], r["val_bpb"], r) for r in on])
-        self.throttled = {key: plots.staircase([(r["gates"] * r["dial"][key]["rho"], r["val_bpb"], r) for r in on])
+        self.throttled = {key: plots.staircase([(r["gates"] * r["dial"][key]["rho"], r["val_bpb"], r) for r in on
+                                                if math.isfinite(r["dial"][key]["rho"])])
                           for key in ((n, kb) for n in TOKENS_PER_BLOCK for kb in K_BYTES)}
         self.on_frontier = False
 
@@ -349,7 +351,7 @@ def main(argv=None) -> int:
     scored, _ = plots.load(d["rows"], pin, shapes, d["keep"])
     runs = pretraining(a.pretraining or fetch(PRETRAINING))
     source = a.source or (f"python -m te_core.panels {NAME} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
-                          f"{len(scored)} valid checkpoints, quantities {'rescore_v1' if d['use'] else 'stubs'})")
+                          f"{len(scored)} valid checkpoints, quantities {d['quantities']})")
     p, info = build(scored, shapes, runs, source)
     q = cut(p, info["ratio"])
     (a.out / f"{NAME}.json").write_text(json.dumps(p, allow_nan=False) + "\n")

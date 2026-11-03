@@ -9,8 +9,9 @@ which every record carries. Findings, negative results and tool announcements go
 
 ## The quantities
 
-The theorem, in MACs (a multiplication is one MAC, so the page's m is 1): for inference blocks of c MACs importing k
-bits, an annotation meeting update hardness at β and deep use at D ≥ k/β gives ρ ≥ φcβ / (k(k + β)).
+te_core scores by the training formalism v2 (note:training-20261102T2215Z-report-training-formalism-v2). |C|, c, w and
+d are Boolean gates (`gates`: each counted op at its circuit Definition's price, a bf16 GEMM MAC being
+`HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 = 1,480.1), every other quantity bits.
 
 - **θ (registered weights)**: a start's weights, registered once at the start of the monitoring period, so every value
   computed during the run is new.
@@ -18,110 +19,83 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   planned steps (or of its MAC budget); for a covert_witness script, the first E it encodes in each 5% of the run, and
   the E it submits.
 - **C, the circuit**: everything the run's process computes through torch, counted by the harness at the Definition
-  level: every multiplication's shape and count over every step and token.
-- **|C|**: C's size in multiply-accumulates (MACs). It sums the MACs of matmuls, attention and convolutions, one MAC per
-  output element of each elementwise multiplication, and n³ per matrix of dense linear algebra (flagged approximate).
-- **MAC (multiplication block)**: one z′ ← x·y + z, the initial accumulator z counted as an operand.
-- **Token block**: one token's computation in one step.
-- **Token-indexed value**: a value computed, within the current step, from the step's token data (an integer tensor
-  indexed into an embedding, or a batch passed to `te.tokens`).
-- **Weight and its roots**: a value that is not token-indexed. Its roots are the persistent tensors it is computed from
-  that differ from θ: a registered weight whose value isn't θ's, bit for bit; any other tensor made before the step that
-  isn't exactly one of θ's tensors (a recast copy that is, such as `p.data = p.data.float()`, is θ's); any value
-  autograd's backward produced.
+  level: every op's shape and count over every step and token. |C| counts MACs (`flops`; one per output element of an
+  elementwise multiplication, n³ per matrix of dense linear algebra, flagged approximate), priced in gates.
 - **Step**: a program's `te.step()`; for a covert_witness script, the work from one call of its data stream
-  (`prepare.TrainData.next`) to the next.
-- **Updated blocks U**: the forward-pass MACs with a token-indexed operand and another operand that has roots, so their
-  weight operand differs from θ. Backward products are left out of U: they read the same weights, so adding them halves
-  β per MAC, doubles φ and leaves φβ unchanged. A read of an updated weight by token data (embedding, index, gather) is
-  in U at its position, priced as the circuit's gather Definition prices it (`flops.gather_selects`: one multiplexer per
-  word selected per level of its tree, about one per row of a table): a tied embedding's update is read at the lookup,
-  so every later updated node has the lookup upstream. A lookup of θ's table is 0. `ledger ingest --lookups` adds the
-  lookups of the start's own table to a record counted before 3.6 (`annotate.with_lookups`).
-- **Inference block S**: a set of at most c MACs that imports at most k bits beyond θ. It holds only computed gates, so
-  its inputs are counted in in(S) and are never its members.
-- **in(S)**: the sender form, the bits of the gates outside S that feed a gate of S plus S's own source gates: the
-  description S is computed from.
-- **c**: the block size, `C_PER_FORWARD_TOKEN` = 4096 times the start model's forward MACs per token, counted by the
-  harness at the start's context.
-- **k**: the bits a block imports, one of 10 kB, 100 kB and 1 MB (8·10⁴, 8·10⁵ and 8·10⁶ bits, `score.K_BITS`).
-- **p**: bits per updated value: by default the narrowest width an updated weight operand is multiplied at (16 under
-  bf16 autocast).
-- **r**: the assumed compressibility of an updated value, one of 1, 10 and 100.
-- **β (update hardness, T1)**: the computed bits a block of at most c MACs imports for each updated MAC of one token it
-  holds. The default is p/r.
-- **Updated MACs per token block**: the smaller of a step's per-row sum over its updated nodes and its updated MACs over
-  its tokens.
-- **D (depth)**: the updated MACs per token upstream of a token's deepest updated multiplication, within its forward
-  pass.
-- **D_min**: k/β, the depth from which an updated MAC counts as deep.
-- **φ (deep use, T2)**: the share of |C| in updated MACs that have at least D_min updated MACs upstream.
-- **Counterexample family X**: a decoder from `codecs/` (a `codecs.Plan`) plus per-step encodings E_t. Each E_t
-  rebuilds its step's updated weights from θ bit for bit, for at most c MACs; declared imported computed values travel
-  in E_t. A covert_witness script declares a step with `prepare.declare_step(base, suffixes)`: its family `E` is
-  decoded by the fixed `prepare.decode` (`cw.CWPlan`), so any E whose decoder rebuilds a step's weights within c (a
-  seed log, low-rank, sparse or quantized updates in a fixed format) is credited, not only adapter factors, each step at
-  no less than its E's `prepare.rebuild_macs`. The
-  decoder may produce more weights than the step read; every weight the step read is compared against its value digest
-  (`flops.KeyedDigest`, keyed from the OS when the run starts, the key in `run.json`).
-- **β_t**: a step's counterexample β, bits(E_t) over the step's updated MACs per token block.
-- **Coverage**: a family covers the sampled steps that rebuild bit for bit (5 sampled steps at search time, 20 at
-  final, sampled with a live coin). A uniform family also covers every step it declares, if every sampled step verified.
-- **U_τ (threshold annotation)**: for τ in {p/r} and the covered steps' β_t below p/r, the uncovered steps' U and the
-  covered steps' with β_t ≥ τ, with β = min(p/r, τ) and φ recomputed on it over the same |C|. A cheap covered step
-  leaves U_τ for every τ above its β_t, so it costs only its own share of φ.
-- **ρ (slowdown)**: max(1, φcβ / (k(k + β))) if D ≥ k/β, else 1, for each U_τ, then the largest, at each (k, r).
+  (`prepare.TrainData.next`) to the next. A part C_j is one step structure's steps (with the setup and the tail).
+- **Token block**: one token's computation in one step, its forward and backward (the optimizer is in none). A step's
+  tokens are the ones it consumes: the union of the positions its token-index ops read in each token input, so
+  micro-batches and a token read twice count once each, and an index computed from token data (a sampled head's
+  unique targets, a QAT code) is no token.
+- **θ' (persistent value)**: a value the run produced that is carried from one step to the next and isn't θ or token
+  data: the new slow weights, an optimizer's state, an error-feedback buffer, a gradient accumulator.
+- **A (affected gates)**: every gate that depends on θ', forward, backward and optimizer, through any path of the
+  traced step (a gather of an affected table is; a cache computed only from θ and token data is not). **σ**: the token
+  blocks' share of |C|; the affected share |A ∩ ∪T| / |C| bins the niches.
+- **w** = the token blocks' gates per token; **s** = c / w, the token blocks a block of c gates holds.
+- **τ**: the inputs outside θ a token block reads: the token inputs' positions it reads per consumed token at
+  ⌈log2 V⌉ bits, and any other input (a seed is 64 bits).
+- **a**: the computed bits a block reads to do any of a token's affected work without computing that token from its
+  inputs: the narrowest cut across the forward's affected path, per consumed token.
+- **u_in(x)** (A1′'s profile): the update bits a block reads to do the first share x of one token's affected work, in
+  program order, computing the token from its inputs; u(1) its per-token update. **t**: the share of that work in ops
+  that read no θ' value at all. **u(x)** (A1's): the update bits for any share x, 0 up to t (a block handed the cut
+  values does those ops), then u_in. Where Δ counts, both are at most Δ (a block can read the update code instead).
+- **Δ**: the bits that describe θ' given θ, 8 |E| for the submitted E, by a decoder of **d** gates (a stub at 0 until
+  measured).
+- **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut at
+  32 bits or more an element, plus the carried state the token ops don't read.
+- **(c, k)**: a block's gates and the bits it imports; `policy.cells` gives each start's grid in decades, from one
+  token's inference block to the start's server block, and its reference shapes at their exact (c, k): the inference
+  block, the reference policy (c = 4096 w, k = 10 kB) and the server block.
+- **Fit** (checked): for training, three kinds of block, compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k and update
+  application Δ + Δ_grad ≤ k (a part with no token blocks has only the compute kind); where every part fits,
+  ρ = c/(c − d).
+- **Slowdown** (the counting lemma at A \ R, a target until Lean proves it): its token form ρ ≥ σ(1 − x₀)·s/s\*
+  (with the largest per-token affected count where token blocks vary), at the assumptions' upper bounds
+  s\* ≤ max_x x(k − u(x))/a (A1) and x₀ ≤ max{x : u_in(x) ≤ k} (A1′), so a frozen tail is always charged. The attack
+  side's best-known x₀ and s\* from exhibited blocks sit beside them (`x0_known`, `s_star_known`: tightness, never the
+  claim). Where Fit holds, Δ ≤ k bounds u_in, so x₀'s bound is 1 and Slowdown's bound 0.
+- **ρ (slowdown)**: c/(c − d) where Fit holds for the training, else max(1, Slowdown's).
+- **Where the quantities come from**: each is measured on the record's traced step (`capture.circuit`, read through
+  `ledger ingest --structures`; `frontier.measured` says whether a row's were), a, u_in, u, t and Δ_grad as upper
+  bounds from that witness. A row without a trace gets labelled stubs (`formalism.STUBS`, and `formalism.V23` for a row
+  ingested before 4.0), and `rescore --quantities analysis` the per-record quantities of covert_witness's
+  `analysis/rescore_v1.py` instead, which has no formula of its own; every row's `labels` name each quantity's source.
+- **Counterexample family X**: a decoder from `codecs/` (a `codecs.Plan`) plus per-step encodings E_t, each rebuilding
+  its step's updated weights from θ bit for bit within c (`prepare.declare_step` for a covert_witness script, decoded by
+  `prepare.decode`). Families are checked and recorded with each run; the formalism doesn't read them.
 - **bpb**: the held-out bits per byte of the output model from the integrator's fixed evaluator: `val` during the search
   (for covert_witness, a paired score on a fresh slice of its search pool, sampled after the output's digest, by its
   evaluation job after the training job ended), `test` when finally scored. An evaluator returns None for a sealed
   split, and the record then holds no test bpb.
 - **l\***: a target bits per byte, the start's bpb less 0.5%, 1%, 2% or 5%.
-- **honest(l\*)**: the least |C| over every checkpoint of every valid submission, of any class or direction, that
+- **H (honest)**: the least |C| over every checkpoint of every valid submission, of any class or direction, that
   reaches val bpb ≤ l\* (the coordinator's 19:50Z ruling, `frontier.target`). The reference directions' alone
-  (ref-optim, ref-data) is printed as context.
-- **W\*(l\*)**: the least |C|·ρ over the same checkpoints as honest(l\*).
-- **Effective slowdown**: W\*(l\*) / honest(l\*), ≥ 1 since ρ ≥ 1.
-- **Niche**: a mechanism tag × β range × φ range × start cell (`frontier.BETA_EDGES`, `PHI_EDGES`).
-- **Elite**: a niche's submission with the least val bpb, ties going to the least |C|·ρ.
-- **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among those
+  (ref-optim, ref-data) is kept as context.
+- **W\***: the least |C|·ρ over the same checkpoints, per cell; **S** = W\* / H, Security's slowdown.
+- **Niche**: a mechanism tag × affected-share range × start cell (`frontier.AFFECTED_EDGES`). **Elite**: a niche's
+  submission with the least val bpb, ties going to the least |C|·ρ.
+- **Frontier**: the submissions that no other beats on both |C|·ρ and val bpb, at a reference shape, among those
   measured by the pinned measurement commit (covert_witness's `pin.py`, a submission's `measurement_commit`); invalid,
   unscored, `other-version` and `duplicate-e` submissions (an E digest an earlier submission had) are left out, and so
-  is one with covered steps whose ρ wasn't priced by thresholds (`re-ingest`: ingested before 3.0), one whose read-outs
-  `cw.readout_leaks` lists (`read-out-leak`), and one that updates the tied embedding with no block below the top
-  (`tied-lookup`) (`frontier.status`; a row ingested before 3.13 gets those facts from `frontier --facts`).
+  is one whose read-outs `cw.readout_leaks` lists (`read-out-leak`) (`frontier.status`; a row ingested before 3.13 gets
+  its read-outs from `frontier --facts`). The scorer's tied-lookup rule (13:32Z) is retired: a tied embedding's update
+  is affected from its lookup on.
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
 
-## The formalism's score (covert_witness v3)
-
-covert_witness v3 scores by the training formalism v2 (note:training-20261102T2215Z-report-training-formalism-v2),
-beside the theorem's ρ above, which every record still carries. |C|, c, w and d are Boolean gates: `gates` prices each
-counted op by the circuits' own Definitions (a bf16 GEMM MAC is `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 =
-1,480.1). Ingest writes each submission's quantities (`formalism.of_record`: per step structure its gates, token blocks,
-the gates in them (forward and backward; the optimizer is in none), its affected gates A and Δ_grad, read from 4.0's
-`cut_bits` where the record has them). `frontier --formalism` gives, per start, target and cell of the start's
-`policy.cells` (the (c, k) grid in decades from one token's inference block to the start's server block, and the
-reference shapes at their exact (c, k): the inference block, the reference policy c = 4096 w, k = 10 kB, and the server
-block), W\* = the least |C|ρ and honest = the least |C| over every checkpoint of every valid record, and Security's
-S = W\*/honest. Fit is checked: for training its three kinds of block, compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k and
-update application Δ + Δ_grad ≤ k, and where they hold ρ = c/(c − d), d the decoder's gates. Elsewhere ρ is Slowdown's,
-the counting lemma at A \ R in its token form, ρ ≥ σ(1 − x₀)·s/s\* (σ the token blocks' share of |C|; with the largest
-per-token affected count where token blocks vary), a target until Lean proves it. The claim takes the assumptions'
-upper bounds, s\* ≤ max_x x(k − u(x))/a (A1) and x₀ ≤ max{x : u_in(x) ≤ k} (A1'), u and u_in counting update bits
-only; a frozen tail is always charged (u is 0 up to its share t, u_in jumps to the changed update at once). The attack
-side's best-known x₀ and s\* from exhibited blocks are reported beside them (`x0_known`, `s_star_known`: tightness,
-never the claim). u(1) is a field of its own (it equals Δ only when every token's path reads the whole update); u, u_in
-are labelled assumptions, a and Δ upper bounds from witnesses, a quantity not measured yet a stub; the row's `labels`
-name each (`formalism.STUBS`, and `formalism.V23` for a row ingested before). `plots` writes five panels (P1-P4 and
-the A2 curve, the least |C| to each target against Δ, per start), each `<name>.json` and its PNG, which are off the
-console; `console` cuts each to the panels route's limits and holds one panel's PUT; and `rescore` re-scores v2.3's
-records with the per-record quantities of covert_witness's `analysis/rescore_v1.py`, which has no formula of its own
-(module docstring). The console's one training panel, `training/frontier-branches`, is `panels`'s: held-out bits per
-byte against total training compute in gates, the best unconstrained learner (the frontier, from scratch or continuing
-a start, at C0 + |C|) and per branch point (each start, `on_frontier` when the frontier passes through it) the best
+`frontier` gives, per start, target and cell, W\*, H and S with W\*'s route and its x₀ and s\* bounds and best-known
+values; `plots` writes five panels (P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each
+`<name>.json` and its PNG, which are off the console; `console` cuts each to the panels route's limits and holds one
+panel's PUT; `rescore` scores v2.3's records in one command, on the measured quantities beside the analysis's (module
+docstring). The console's one training panel, `training/frontier-branches`, is `panels`'s: held-out bits per byte
+against total training compute in gates, the best unconstrained learner (the frontier, from scratch or continuing a
+start, at C0 + |C|) and per branch point (each start, `on_frontier` when the frontier passes through it) the best
 unconstrained and constrained learners starting from it (honest at C0 + |C|; throttled at C0 + |C|ρ per (c, k) of its
-dial, with S = W\*/H). It reads the ledger through `rescore`'s loading (`rescore.arguments`, `rescore.load`).
+dial, with S = W\*/H). It reads the ledger and the quantities through `rescore`'s loading (`rescore.arguments`,
+`rescore.load`), so it scores the measured quantities unless told otherwise.
 
 ## What the integrator calls
 
@@ -130,7 +104,8 @@ covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `
 covert_witness's evaluation job (`cw.score_run`, run by its evaluate.py after the training job, outside that job's
 sandbox) decodes each E with `prepare.decode` and scores it with `prepare.Scorer`: the output's digest, then a fresh
 slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README; the final
-set only in its final mode). A batch from `TrainData.next` is token data through any op that reads it, not only an
+set only in its final mode). It records each scored model's forward MACs and gates per token, counted on that model's
+own forward (`cw.forward_cost`: what runs, so an MoE's active experts), and the start's; nothing caps them. A batch from `TrainData.next` is token data through any op that reads it, not only an
 embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
 harness's own work runs with its own instance of prepare.py, on plain copies of what the program handed it, and with the
 program's torch function modes (a default device among them), global module hooks and profilers off, its own
@@ -150,7 +125,8 @@ python -m te_core.run --script islands/NAME/train.py --out OUT [--families DIR] 
 python -m te_core.launch --script islands/NAME/train.py --tier 0 --agent A --direction D --mechanism M \
     [--nodes FILE] [-- TRAIN_ARGS...]        # FILE: `vy-nebius-2 pool=gpu`
 python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--reference]
-python -m te_core.frontier [--formalism [--json]]     # --formalism: W*, honest and S per target and (c, k) cell
+python -m te_core.frontier [--json OUT]              # W*, honest and S per target and (c, k) cell
+python -m te_core.rescore --out DIR [--quantities measured|analysis|stubs]  # v2.3's records, one command
 python -m te_core.plots --out DIR [--policy reference|inference|server|c1e14/k1e4] [--drop 0.01] [--from-scratch F.json]
 python -m te_core.panels frontier-branches --out DIR [--publish]   # the console's training panel; --publish PUTs it
 python -m te_core.policy [START ...]                 # each start's reference shapes and (c, k) grid
@@ -184,9 +160,10 @@ A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`;
 4. **A run**: `python -m te_core.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --evaluator
    MODULE:FUNCTION --out OUT`, or `python -m te_core.launch ...` to put it on a node. Either one writes `OUT/run.json`.
 5. **Ingest**: `python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M --parent ID --run-id R`
-   writes one submission record per checkpoint, with the program's arguments and, beside a covert_witness record's
-   `witness.json`, the tensors it changed; `--readouts` judges its read-outs against the start's tensors. Reference
-   (honest) runs add `--reference`.
+   writes one submission record per checkpoint, with the program's arguments; `--structures TRACED.json` (structure
+   id -> traced structure, `capture.script`) gives its steps their U, D and the formalism's measured quantities
+   (`frontier.measured`); `--readouts` judges its read-outs against the start's tensors. Reference (honest) runs add
+   `--reference`.
 6. **The frontier**: `python -m te_core.frontier`. Its promotion candidates (`frontier.candidates`) are promoted only
    on the sealed promotion set, one bit each: covert_witness's `promote.py --tier T`, run as the scorer.
 
@@ -197,26 +174,26 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | file | what it does |
 |---|---|
 | `flops.py` | `Counter`: the dispatch-mode harness counting MACs and provenance; `guard_exits`: token data read out of torch; `flags`: uncounted-work flags; `forward_macs_per_token` |
-| `annotate.py` | `annotate(record, through)`: the maximal annotation, per step U, D_t, the depth profile; `Annotation.phi(d_min)` |
+| `annotate.py` | `annotate(record, through)`: the maximal annotation, per step U, D_t, the depth profile and the cut; `with_structures`, a record's traced structures and their measured quantities |
 | `counterexample.py` | `Family` (the program's writer), `check` (the sampled bit-for-bit rebuild), `coverage` |
-| `score.py` | `score` (the largest ρ over the thresholds τ), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
+| `score.py` | `checkpoints` (a run's prefixes), `block_c` and `C_PER_FORWARD_TOKEN` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
 | `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
-| `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates; `--formalism`: W\*, honest and S per target and cell, with W\*'s x₀ and s\* bounds and best-known values |
+| `frontier.py` | the valid rows (`status`, `measured`), W\*, honest and S per target and cell with W\*'s x₀ and s\* bounds and best-known values, promotion candidates |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it; `of_record` (ingest's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even` and `tail` (u, u_in), `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it; `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note), and one panel's PUT |
-| `rescore.py` | v2.3's records scored with the analysis's formalism blocks (or the stubs): the report, the five panels and their cuts, one command; `arguments` and `load`, its ledger and analysis loading |
+| `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | the console's training panel, `training/frontier-branches`: the frontier, each branch point's honest and throttled curves, its console cut, figure and PUT |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `capture/` | the static count: one training step traced on fakes (`make_fx`), its \|C\|, GEMM roles and φ without running, in `flops`'s record form; its own suite. Its op sets are `flops`'s, from `opnames` (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
+| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count
@@ -230,10 +207,15 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
   `--peak-macs-per-s`) and `cpu_macs` show work the count can't vouch for; a check outside the training process (the
   GPU's own busy time against the counted MACs) is what bounds the in-process routes. Torch compilation is disabled and
   CUDA graph replay refused.
-- **Provenance is by value for θ's tensors and by origin for everything else**: a tensor that isn't exactly one of θ's
-  counts as a differing weight even when it computes nothing new (a zero-initialized adapter factor at step 0, say).
-  Any annotation holding a subset of these is still valid, so this error can only raise ρ, and a counterexample family
-  can lower it again. A start's buffers (RoPE tables) are taken as θ's.
+- **The runtime counter's provenance prices |C|'s other forward work**: by value for θ's tensors and by origin for
+  everything else, so a tensor that isn't exactly one of θ's counts as differing even when it computes nothing new (a
+  zero-initialized adapter factor at step 0, say), and a forward op combining it with an activation is counted. A
+  start's buffers (RoPE tables) are taken as θ's.
+- **The measured quantities are one traced step's** (`capture/README.md`'s limits): a record's updated steps all take
+  its representative step's structure, scaled to their tokens; a period of several steps has one cut, which each of
+  them carries. A cut counts a value at its dtype's width, so a sign kept as a float costs 32 bits a value; a circuit
+  that wants the credit stores it narrow. Values are whole tensors: a share of a token's work is a share of its ops'
+  gates, and a lookup reads its whole table.
 - **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
   mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
 - **The held-out guard is the integrator's sandbox, with an in-process hook inside it**: covert_witness's training job
@@ -246,7 +228,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
   (pyarrow, polars, duckdb, `datasets`). Subprocesses are logged to `guard.log`; a thread or a process the program starts
   makes its run invalid, and the sandbox's process-tree record bounds any work outside the count.
 - **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
-  count but coarsens D and φ.
-- **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,
-  counts as a weight.
+  count but coarsens D.
+- **Weight shape (the runtime counter)**: a forward activation with a weight's exact 2-D shape, in a matmul of two
+  token-indexed operands, counts as a weight.
 - **Bit-for-bit rebuilds need the run's kernels**: families are checked on the run's device, right after it trains.
