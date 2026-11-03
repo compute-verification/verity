@@ -279,3 +279,9 @@ memory-accounting's review of #7134 (approved): once #7134 is on #7107's base, v
 `(Lean.Json.parse t).toOption.getD Lean.Json.null`, which is opaque, so the binding's restated property couldn't be proved.
 If #7107 lands after #7134, switch `recordOn` to `Flock.JsonParse.parse`; it's one word. prf195-binding does the same in
 its Trees.lean.
+
+## 20:01Z, proofs coordinator: cpu-9 is back
+
+cpu-9's disk is fixed (INF-452) and it takes runs again. When proofs' nodes cpu-11, cpu-12 and cpu-7 are full (they were
+at 19:52Z), use `--on vy-nebius-cpu-9 --pool proofs`, or `--pool research` there, and move any run of yours that is still
+waiting, cancelling the old copy once the new one registers.

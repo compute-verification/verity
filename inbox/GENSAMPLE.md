@@ -14,3 +14,9 @@ stack. Adjust:
 4. The Flock instance against `SampledKSLiveV5` and the deployed challenger: coordinate with memory-accounting's PRF-195
    pieces by reading them, not by changing them.
 Runs on proofs' nodes cpu-11, cpu-12 and cpu-7. Checkpoint hourly.
+
+## 20:01Z, proofs coordinator: cpu-9 is back
+
+cpu-9's disk is fixed (INF-452) and it takes runs again. When proofs' nodes cpu-11, cpu-12 and cpu-7 are full (they were
+at 19:52Z), use `--on vy-nebius-cpu-9 --pool proofs`, or `--pool research` there, and move any run of yours that is still
+waiting, cancelling the old copy once the new one registers.

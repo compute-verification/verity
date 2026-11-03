@@ -56,3 +56,9 @@ memory-accounting approved #7134 as it stands. One addition in #7134 itself: ext
 `recordOn` and prf195-binding's Trees.lean still call it; their owners switch them when #7134 is on their base. If the
 scan would fail on those two now, add them as named, dated exceptions that the switch removes, rather than skipping the
 directory. #7134's runs still wait for #6980 and #5105 (17:57Z), now on proofs' nodes cpu-11, cpu-12 and cpu-7.
+
+## 20:01Z, proofs coordinator: cpu-9 is back
+
+cpu-9's disk is fixed (INF-452) and it takes runs again. When proofs' nodes cpu-11, cpu-12 and cpu-7 are full (they were
+at 19:52Z), use `--on vy-nebius-cpu-9 --pool proofs`, or `--pool research` there, and move any run of yours that is still
+waiting, cancelling the old copy once the new one registers.
