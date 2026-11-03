@@ -1103,6 +1103,31 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     assert (rc, said) == ((3, [line]) if line else (0, []))
 
 
+@pytest.mark.parametrize("extra, line", [
+    ({"PRODUCT": "onsite"}, "PREFLIGHT: advice-charge serves a test run alone: PRODUCT=remote and H1_GATE empty"),
+    ({"H1_GATE": "ssh gate"}, "PREFLIGHT: advice-charge serves a test run alone: PRODUCT=remote and H1_GATE empty"),
+    ({"SERVE_ARGS": "--h1-receipts --h1-model m"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
+     "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
+    ({"SERVE_ARGS": f"{IDS} --h1-prover"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
+     "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
+    ({"SERVE_ARGS": IDS}, None),
+])
+def test_the_advice_charge_run_serves_remote_with_no_h1_option_serve_openai_would_refuse(tmp_path, extra, line):
+    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, so its preflight
+    refuses an onsite product, an H1 gate, and an H1 option in SERVE_ARGS, which serve-openai refuses only once the node
+    is leased; a run it lets through goes on to the row's files (here absent)."""
+    tree, venv, row = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "row"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SERVE_ROOT": str(tmp_path / "serve"), "ROW": str(row), "PRODUCT": "remote", "H1_GATE": "", **extra}
+    (tmp_path / "out").mkdir()
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "advice-charge"], cwd=tree, env=env,
+                        check=False, capture_output=True).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, [line or f"PREFLIGHT: no {row}/manifest.json"])
+
+
 FAKE_COMPOSITE = '''import json, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),

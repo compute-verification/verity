@@ -150,12 +150,14 @@
 # command names only its path.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # `served_verdicts.sh advice-charge`, with PRODUCT=remote, measures honest serving's advice charge on a test run whose
-# inputs are public, never on a served run: steps 0 to 2 at the run of record's settings, H1_GATE empty (WINDOW_STEPS
-# then set to the run of record's), then every closed window's advice under the prove path's registered compiler,
-# unpadded, at ADVICE_T buckets of ADVICE_TAU seconds (default `verity-vllm advice`'s 600 and 0.1) in the serve dir, and
-# `advice_charge.py`'s record of it, $OUT/advice-charge.json, which names each window and counts its requests: its
-# inputs being public, the run publishes $OUT as it is, with no `publish`. Its record is what a served run's
-# ADVICE_CHARGE names.
+# inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
+# front's tick), H1_GATE empty and so no H1 option in SERVE_ARGS (serve-openai refuses one without H1's --protocols),
+# then every closed window's advice under the prove path's registered compiler, unpadded, at ADVICE_T buckets of
+# ADVICE_TAU seconds (default `verity-vllm advice`'s 600 and 0.1; the network certifier's link-window, its buckets and
+# tick, charges each execution phase) in the serve dir, and `advice_charge.py`'s record of it, $OUT/advice-charge.json,
+# which names each window and counts its requests: its inputs being public, the run publishes $OUT as it is, with no
+# `publish`. Its record is what a served run's ADVICE_CHARGE names. `served_verdicts.sh charge`, in TREE with D and OUT,
+# is its last step alone, on a serve dir D already served.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
@@ -518,9 +520,14 @@ if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
+if [ "${1:-}" = charge ]; then advice_charge; exit $?; fi
 if [ "${1:-}" = advice-charge ]; then
   [ "$PRODUCT" = remote ] && [ -z "$H1_GATE" ] \
     || { say "PREFLIGHT: advice-charge serves a test run alone: PRODUCT=remote and H1_GATE empty"; exit 3; }
+  case " ${SERVE_ARGS:-} " in *" --h1-receipts "* | *" --h1-prover "*)
+    say "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai refuses SERVE_ARGS' --h1-receipts or" \
+      "--h1-prover without H1's --protocols: drop them"; exit 3 ;;
+  esac
 fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
