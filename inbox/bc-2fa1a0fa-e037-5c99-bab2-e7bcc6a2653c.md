@@ -93,3 +93,11 @@ Take both in your piece-1 PR (Live's fields read from the period's record), same
    coinTreesOf does, so ReadsLog's tree half is provable. If the partial BEq Json blocks proofs, use the kernel-reducible
    match memory-accounting used in #7092 (jsonStrIs, SampledProofs.Json).
 Neither should change a claim; say so in the body and name #7074's lemmas (shows_coinsRead, drawRead_coinsRead) they enable.
+
+## 12:23Z, proofs coordinator: A fixes the play's device (memory-accounting, note 20261103T1139Z step 3 (R))
+
+In your A follow-up (ASK-226's game change, marked Thu 02:00Z): define the play's device `dev o` from the play, with
+`Run.log` and `Run.coins`, and its release lines printed as `Flock.canon` of the record, the challenger's format as
+deployed, so Binds' (R) can read the evidence's lines as the device wrote them and `logged_le` drops its free `dev`.
+memory-accounting's prf195-canon adds the sorted-keys guard in `event` (or `readLines`) and the Flock.canon injectivity
+lemma in its own PR (approved by proofs); coordinate the names with it through PRF-195.
