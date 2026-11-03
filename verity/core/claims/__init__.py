@@ -516,12 +516,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
-    # the training formalism v1's assumptions (Security/Definitions/Nci/Assumptions/Formalism.lean): A1 is
+    # the training formalism v2's assumptions (Security/Definitions/Nci/Assumptions/Formalism.lean): A1 is
     # `Nci.Formalism.Assumptions.CutCost`, A2 `Nci.Formalism.Assumptions.EfficiencyFloor`
     Entry("training-cut-cost", "assumption",
-          "A1, cut cost: every set I of at most c gates of the trained circuit reads at least u(max_T x_T(I)) + a·m(I) "
-          "computed bits |in(I) \\ in(C)|, u the update profile and a the cut cost; refuted by exhibiting a block that "
-          "violates it", "A1 cut cost", "conjectured"),
+          "A1, cut cost: every inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
+          "at least u_I + Σ_T a_T(e_T(I)) bits |in(I) \\ θ|, e_T(I) where I's work on token T begins, a_T(e) the bits "
+          "of T's computed state there (the earlier tokens' keys and values that the work reads and doesn't compute "
+          "among them) and u_I the update bits I's work reads, counted once; its values are set only by checked witness "
+          "blocks, and it says no block beats the best witness; refuted by exhibiting an inference block that violates "
+          "it", "A1 cut cost", "conjectured"),
     Entry("training-efficiency-floor", "assumption",
           "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
           "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "

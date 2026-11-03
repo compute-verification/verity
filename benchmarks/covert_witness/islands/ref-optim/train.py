@@ -1,13 +1,14 @@
-"""Island `ref-optim` (class `reference`, no cap on the update): the strongest honest continuation of the start within the
-fixed training-FLOP budget, by its optimizer. Every knob is a flag, so one commit runs a whole sweep and each record's notes
-name its setting. The launcher runs `islands/reference/train.py`, a symlink to this file.
+"""Island `ref-optim` (a reference direction, no cap on the update): the strongest honest continuation of the start within
+its tier's training-FLOP budget (`prepare.budget`), by its optimizer. Every knob is a flag, so one commit runs a whole sweep
+and each record's notes name its setting. `launch.py START --island ref-optim -- FLAGS` runs it.
 
 - matrices: Muon (`--mat-opt muon`, the seed's) or AdamW (`--mat-opt adamw`, the starts' own optimizer); the embedding and the
   norms: AdamW, each with its own rate; `--freeze-embed` keeps the tied embedding at θ (its weight gradient is then not paid);
 - schedule: warmup (steps, or a fraction when below 1) times `linear` (the seed's: 1 - t/T from the first step), `wsd`
   (flat, then the last `--decay-frac` decays, linear or 1 - sqrt), `cosine` or `const`, floored at `--final-frac`;
-- data: `--fresh` continues the start's own data order past the windows it trained on (lf starts: seed 0 from its step),
-  else the stream permuted by `--data-seed` (the seed's 1);
+- data: `--fresh` continues the start's own data order past the windows it trained on (the pilot starts s50-m100: seed 0
+  from its step; a ladder start read its own stream order, so it is refused), else the stream permuted by `--data-seed`
+  (the seed's 1);
 - EMA of the weights (`--ema-frac f`: the average's horizon is f of the steps so far); at each snapshot and at the end the
   raw or EMA weights are submitted, whichever has the lower loss on training-stream windows the run never trains on (each
   such forward is logged and priced);
@@ -16,10 +17,10 @@ name its setting. The launcher runs `islands/reference/train.py`, a symlink to t
   run returns to the weights and optimizer state it forked from (the branch's passes stay in the step log, so every later
   point pays for it).
 
-E is the trained tensors in full (`prepare.encode_full`). This file is the island's one editable file; prepare.py, evaluate.py,
-guard.py and candidate.sh are fixed (README.md, the program).
+E is the trained tensors in full (`prepare.encode_full`). This file is the island's program; prepare.py, evaluate.py,
+candidate.sh and launch.py are fixed (README.md, the program).
 
-    python guard.py islands/reference/train.py --start m100 --out SUB [--mat-lr 0.004] [--embed-lr 3e-4] [--batch 64] ...
+    python benchmarks/covert_witness/launch.py s-t20 --island ref-optim --note "TAG ..." -- [--mat-lr 0.004] [--batch 64] ...
 """
 from __future__ import annotations
 
@@ -33,8 +34,6 @@ import torch
 import torch.nn.functional as F
 
 import prepare
-
-KLASS = "reference"
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
@@ -169,7 +168,7 @@ def main() -> int:
     val_tokens = a.val_rows * prepare.EVAL_CTX
     n_val = ((len(snap_at) + 1) * (2 if a.ema_frac else 1) + len(fork_at)) if a.val_rows else 0
     val_flops = n_val * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": val_tokens}])["flops"]
-    room = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops
+    room = a.budget_fraction * prepare.budget(a.start)["train_flops"] - val_flops
 
     def fork_lens(n: int) -> dict[int, int]:
         return {max(1, round(n * f)): max(1, round(a.fork_len * n * f)) for f in fork_at if 0 < f < 1}
@@ -182,13 +181,12 @@ def main() -> int:
     if a.fresh:
         prov = rec["provenance"]
         if rec["config"]["family"] != "lf" or prov.get("data_seed") != 0:
-            raise SystemExit("train: --fresh needs an lf start trained on data order 0")
+            raise SystemExit("train: --fresh needs a start trained on prepare.TrainData's order 0 (a pilot start, s50-m100)")
         data = prepare.TrainData(rec["tokenizer"], seed=0)
         data.at = int(prov["step"]) * int(prov["batch"])
     else:
         data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    val_idx = data.order[len(data.order) - a.val_rows:] if a.val_rows else None
-    if val_idx is not None and data.at + (n_steps + sum(forks.values())) * a.batch > len(data.order) - a.val_rows:
+    if a.val_rows and data.at + (n_steps + sum(forks.values())) * a.batch > len(data.order) - a.val_rows:
         raise SystemExit("train: the training windows would reach the validation windows")
 
     def loss_of(x: torch.Tensor) -> torch.Tensor:
@@ -201,18 +199,18 @@ def main() -> int:
 
     @torch.no_grad()
     def validate() -> float:
-        c = prepare.EVAL_CTX
         total = 0.0
+        at = data.at
         for i in range(0, a.val_rows, a.micro):
-            idx = sorted(val_idx[i: i + a.micro])
-            rows = torch.stack([torch.from_numpy(data.tokens[j * c: j * c + c + 1].astype("int64")) for j in idx])
-            total += float(lossf(rows.to(prepare.DEVICE))) * len(idx)
+            n = min(a.micro, a.val_rows - i)
+            data.at = len(data.order) - a.val_rows + i
+            total += float(lossf(data.next(n))) * n
+        data.at = at
         steps.append({"op": "forward", "tokens": val_tokens, "what": "validation on held-back training windows"})
         return total / a.val_rows
 
     ema = [p.detach().clone() for p in params.values()] if a.ema_frac else None
     plist = list(params.values())
-    names = list(params)
 
     def swap_ema() -> None:
         for p, e in zip(plist, ema):
@@ -311,7 +309,7 @@ def main() -> int:
     model = info.pop("model", None) or model_of(params, theta, trained)
     final = {"step": n_steps, "weights": which, **info}
     print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
-    prepare.submit(out, a.start, KLASS, prepare.encode_full(model), {**theta, **model}, trainable, steps,
+    prepare.submit(out, a.start, prepare.encode_full(model), {**theta, **model}, trainable, steps,
                    changed=sorted(trained), notes={"direction": "ref-optim", "args": vars(a), "steps": n_steps, "forks": forks,
                                                    "snapshots": snap_log, "final": final})
     return 0

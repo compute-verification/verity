@@ -3,36 +3,35 @@ import Definitions.Core.Annotation
 import Definitions.Nci.Formalism.Inference
 
 /-!
-# The training formalism v1, §3: the annotation and what it defines
+# The training formalism v2, §3: the annotation, and the token kind A1 caps
 
-An **annotation** (`Annotation`) of a declaration's training is an existential witness: the new slow weights `θ'` and
-the token blocks `𝒯`, an annotation of the circuit (`Verity.Annotation`) by token labels. `Annotation.Valid` is what a
-check establishes of it: `θ'` is computed by gates, not inputs, and the token blocks are pairwise disjoint sets of
-gates. That a token block is one token's computation in one step is what the annotation means, and no check reads it.
+An **annotation** (`Annotation`) of a declaration's training is an existential witness: the new slow weights `θ'`,
+computed values, and the token blocks `𝒯`, an annotation of the circuit (`Verity.Annotation`) by token labels.
+`Annotation.Valid` is what a check establishes of it: `θ'` is computed by gates, not inputs, and the token blocks are
+pairwise disjoint sets of gates. That a token block is one token's computation in one step is what the annotation means,
+and no check reads it. `⋃ 𝒯` is `tokenGates`, and `Δ`, the bits a decoder of at most `c` gates needs to describe `θ'`
+given `θ`, is `totalUpdate` (a decoder `M` allowed `c` steps, `Verity.LDL`). `Δ_grad`, the gradient and optimizer state
+passed between blocks, is what a reduction block's children hold (`ReductionBlock`), and `d` is the decoder's gates, the
+room a block leaves it beside at least `c - d` gates of the computation (`SessionBlocks`).
 
-Defined from the annotation, and computed from the circuit and it:
+A1 (`Nci.Formalism.Assumptions.CutCost`) prices an inference block `I` by where its work on each token begins. What it
+reads is not defined from the circuit: its values are set by checked witness blocks, and a theorem reads upper bounds of
+them, never best-known values.
 
-* `Dep` (`dep`), the gates that depend on some value of `θ'`; `T ∩ Dep` (`tokenDep`);
-* the share `x_T(I) = |I ∩ T ∩ Dep| / |T ∩ Dep|` (`share`, `0` when `T` has no dependent gate), and its largest value
-  over the tokens, `max_T x_T(I)` (`maxShare`);
-* `I` enters `T` mid-path (`EntersMidPath`) if `x_T(I) > 0` and `I` reads a value computed by a gate of `T` outside
-  `I`; `m(I)` (`midEntries`) is the number of tokens it enters so;
-* the symbols of the table: `w`, the gates per token block (`work`, the largest); `s = c / w` (`tokensPerBlock`); `τ`,
-  the unregistered inputs a token block reads (`dataPerToken`, the largest); `φ = |Dep ∩ ⋃ 𝒯| / |C|` (`depShare`);
-  `Δ`, the bits a decoder of at most `c` gates needs to describe `θ'` given `θ` (`totalUpdate`, with a decoder `M`
-  allowed `c` steps, `Verity.LDL`). `Δ_grad`, the gradient and optimizer state passed between blocks, is what a tree
-  block's children's states hold (`TreeBlocks`).
+* `e_T(I)` (`e I T`, in a type `E` of entry points): where `I`'s work on token `T` begins;
+* `a_T(x)` (`a T x`, bits): the bits of `T`'s computed state at the entry `x`, the earlier tokens' keys and values that
+  the work reads and doesn't compute among them;
+* `u_I` (`u I`, bits): the update bits `I`'s work reads, counted once.
 
-A1's parameters, the update profile `u` and the cut cost `a`, are not defined from the annotation: they are what A1
-assumes (`Nci.Formalism.Assumptions.CutCost`), reported as the best values known from witnesses. Shares are in `ℝ≥0`,
-`u` maps a share to bits in `ℝ`.
+The token kind's work is a set `X` of token gates (te_core's: the token work no block computing its token from its
+inputs reaches). Defined from it and A1's values:
 
-The Slowdown theorem reads three properties of `u` and the tokens: `PeakBound u k M`, that `M` bounds
-`max_x x (k - u(x))` over shares `x ∈ [0, 1]`; `BottomShare u k x₀`, that every share with `u(x) ≤ k` is at most `x₀`
-(the bottom share is the largest such); and `TokensLinked A ε`, that in each token all but a share `ε` of its dependent
-gates have, two by two, a common ancestor inside the token. Without some such link the Slowdown bound fails: a token
-whose dependent work is two independent halves can be done by two blocks that enter it nowhere mid-path. Its special
-cases read `u(x) = x u(1)` and `FrozenTail u k t`, that `u` is above `k` at every share beyond `t`.
+* `W_T(x, ν)` (`entryWork`): the most gates of `X` in `T` that an inference block holds whose work on `T` begins at `x`
+  and that reads at most `ν` update bits, the token work reachable from `x`;
+* `cap` **bounds the token work within A1's budget** (`TokenCapAt`): at every entry profile `f` and update reads `ν`
+  with `ν + Σ_T a_T(f_T) ≤ k`, `Σ_T W_T(f_T, ν) ≤ cap`;
+* `r(ν)` **bounds the work per bit of state** (`WorkPerBit`): `W_T(x, ν) ≤ r(ν) a_T(x)`, and `M` **bounds the peak**
+  of `(k - ν) r(ν)` (`PeakAtMost`), which together give the cap `M`, `(k - u) max (W / a)`.
 -/
 
 namespace Nci.Formalism
@@ -59,67 +58,40 @@ structure Valid : Prop where
   tokens_computed : ∀ T, A.tokens.holds T ⊆ d.D.computed
   disjoint : Pairwise fun T T' => Disjoint (A.tokens.holds T) (A.tokens.holds T')
 
-open Classical in
-/-- `Dep`, the dependent gates: the gates that depend on some value of `θ'`. -/
-noncomputable def dep : Finset (Fin d.D.N) := d.D.computed.filter fun g => ∃ v ∈ A.θ', DependsOn d.D g v
-
-/-- `T ∩ Dep`: token `T`'s dependent gates. -/
-noncomputable def tokenDep (T : L) : Finset (Fin d.D.N) := A.tokens.holds T ∩ A.dep
-
-/-- **The share** `x_T(I) = |I ∩ T ∩ Dep| / |T ∩ Dep|` of token `T`'s dependent work the gates `I` do. -/
-noncomputable def share (T : L) (I : Finset (Fin d.D.N)) : ℝ≥0 :=
-  ((I ∩ A.tokenDep T).card : ℝ≥0) / ((A.tokenDep T).card : ℝ≥0)
-
-/-- `max_T x_T(I)`: the largest share of one token's dependent work the gates `I` do, `0` with no tokens. -/
-noncomputable def maxShare [Fintype L] (I : Finset (Fin d.D.N)) : ℝ≥0 := univ.sup fun T => A.share T I
-
-/-- **`I` enters `T` mid-path**: `x_T(I) > 0`, and `I` reads a value computed by a gate of `T` outside `I`. -/
-def EntersMidPath (I : Finset (Fin d.D.N)) (T : L) : Prop :=
-  0 < A.share T I ∧ ∃ v ∈ d.D.into I, v ∈ A.tokens.holds T
-
-open Classical in
-/-- `m(I)`: the number of tokens `I` enters mid-path. -/
-noncomputable def midEntries [Fintype L] (I : Finset (Fin d.D.N)) : ℕ :=
-  (univ.filter fun T => A.EntersMidPath I T).card
-
 /-- `⋃ 𝒯`: the gates of the token blocks. -/
 def tokenGates [Fintype L] : Finset (Fin d.D.N) := univ.biUnion A.tokens.holds
-
-/-- **The dependent share** `φ = |Dep ∩ ⋃ 𝒯| / |C|`. -/
-noncomputable def depShare [Fintype L] : ℝ := ((A.dep ∩ A.tokenGates).card : ℝ) / (d.D.computed.card : ℝ)
-
-/-- **The work per token** `w`: the most gates a token block holds. -/
-def work [Fintype L] : ℕ := univ.sup fun T => (A.tokens.holds T).card
-
-/-- **The tokens per block** `s = c / w`. -/
-noncomputable def tokensPerBlock [Fintype L] (c : ℕ) : ℝ := (c : ℝ) / (A.work : ℝ)
-
-/-- **The data per token** `τ`: the most unregistered inputs a token block reads. -/
-def dataPerToken [Fintype L] : ℕ := univ.sup fun T => (dataReads d (A.tokens.holds T)).card
 
 /-- **The total update** `Δ` on the run of `d` on the inputs `a`: the bits the decoder `M` needs to describe `θ'`'s
 values given `θ`'s within `c` steps, the decoder model's form of a decoder of at most `c` gates. -/
 noncomputable def totalUpdate (M : Verity.Decoder (List Bool)) (c : ℕ) (a : d.D.Transcript) : ℕ∞ :=
   Verity.LDL M c (d.D.bits (d.D.eval a) (d.θ.sort (· ≤ ·))) (d.D.bits (d.D.eval a) (A.θ'.sort (· ≤ ·)))
 
-/-- **The tokens are linked** up to a share `ε`: in each token `T`, all but at most `ε |T ∩ Dep|` of its dependent gates
-have, two by two, a common ancestor inside `T`, a gate of `T` that feeds both through gates of `T`. -/
-def TokensLinked (ε : ℝ) : Prop :=
-  ∀ T, ∃ R ⊆ A.tokenDep T, (R.card : ℝ) ≤ ε * (A.tokenDep T).card ∧
-    ∀ g₁ ∈ A.tokenDep T \ R, ∀ g₂ ∈ A.tokenDep T \ R, ∃ h,
-      FeedsWithin d.D (A.tokens.holds T) h g₁ ∧ FeedsWithin d.D (A.tokens.holds T) h g₂
+open Classical in
+/-- **The token work from an entry** `W_T(x, ν)`: the most gates of `X` in token `T` that an inference block holds whose
+work on `T` begins at `x` (`e I T = x`) and that reads at most `ν` update bits (`u I ≤ ν`). -/
+noncomputable def entryWork (c k : ℕ) {E : Type} (e : Finset (Fin d.D.N) → L → E) (u : Finset (Fin d.D.N) → ℝ≥0)
+    (X : Finset (Fin d.D.N)) (T : L) (x : E) (ν : ℝ≥0) : ℕ :=
+  (univ.filter fun I => InferenceBlock d c k I ∧ e I T = x ∧ u I ≤ ν).sup fun I => (I ∩ A.tokens.holds T ∩ X).card
+
+/-- **`cap` bounds the token work within A1's budget**: `X` is a set of token gates, and at every entry profile `f` and
+update reads `ν` with `ν + Σ_T a_T(f_T) ≤ k`, the token work from those entries is at most `cap`,
+`Σ_T W_T(f_T, ν) ≤ cap`. -/
+def TokenCapAt [Fintype L] (c k : ℕ) {E : Type} (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0)
+    (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N)) (cap : ℝ≥0) : Prop :=
+  X ⊆ A.tokenGates ∧
+    ∀ (ν : ℝ≥0) (f : L → E), ν + ∑ T, a T (f T) ≤ k → ∑ T, (A.entryWork c k e u X T (f T) ν : ℝ≥0) ≤ cap
+
+/-- **`r(ν)` bounds the token work per bit of state**: `X` is a set of token gates, and the token work from every entry
+`x` of every token `T`, reading at most `ν` update bits, is at most `r(ν)` a bit of `T`'s state there,
+`W_T(x, ν) ≤ r(ν) a_T(x)`. -/
+def WorkPerBit [Fintype L] (c k : ℕ) {E : Type} (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0)
+    (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N)) (r : ℝ≥0 → ℝ≥0) : Prop :=
+  X ⊆ A.tokenGates ∧ ∀ T x ν, (A.entryWork c k e u X T x ν : ℝ≥0) ≤ r ν * a T x
 
 end Annotation
 
-/-- **`M` bounds the peak** of `x (k - u(x))` over the shares `x ∈ [0, 1]`: Slowdown's `max_x x (k - u(x))`. -/
-def PeakBound (u : ℝ≥0 → ℝ) (k : ℕ) (M : ℝ) : Prop := ∀ x : ℝ≥0, x ≤ 1 → (x : ℝ) * (k - u x) ≤ M
-
-/-- **`x₀` bounds the bottom share**: every share `x ∈ [0, 1]` with `u(x) ≤ k` is at most `x₀`. -/
-def BottomShare (u : ℝ≥0 → ℝ) (k : ℕ) (x₀ : ℝ) : Prop := ∀ x : ℝ≥0, x ≤ 1 → u x ≤ k → (x : ℝ) ≤ x₀
-
-/-- **A frozen tail** of share `t`: `u` is nonnegative, and above `k` at every share beyond `t`: a block that does more
-of a token's dependent work than its frozen tail must read the update. -/
-def FrozenTail (u : ℝ≥0 → ℝ) (k : ℕ) (t : ℝ) : Prop :=
-  (∀ x : ℝ≥0, 0 ≤ u x) ∧ ∀ x : ℝ≥0, t < x → x ≤ 1 → (k : ℝ) < u x
+/-- **`M` bounds the peak** of `(k - ν) r(ν)` over the update reads `ν`: the token work a block reaches with the reads
+`k - ν` its update bits leave, at `r(ν)` a bit. -/
+def PeakAtMost (k : ℕ) (r : ℝ≥0 → ℝ≥0) (M : ℝ≥0) : Prop := ∀ ν : ℝ≥0, ((k : ℝ≥0) - ν) * r ν ≤ M
 
 end Nci.Formalism

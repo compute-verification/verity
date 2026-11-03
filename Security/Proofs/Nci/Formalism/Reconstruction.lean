@@ -2,7 +2,7 @@ import Definitions.Nci.Formalism
 import Proofs.Core.Circuit
 
 /-!
-# The training formalism v1: reconstruction, and the three kinds of a block's inputs
+# The training formalism v2: reconstruction, and the three kinds of a block's inputs
 
 Two lemmas of the formalism (`Definitions.Nci.Formalism`), which its theorems rest on:
 
@@ -11,8 +11,7 @@ Two lemmas of the formalism (`Definitions.Nci.Formalism`), which its theorems re
   of `S`, sorted: evaluating gates of `S` in increasing order, each on what the earlier ones left, from values that are
   the circuit's on `in(S)` and on the gates of `S` not yet evaluated, leaves the circuit's value at every gate of `S`;
 * `reads_split` (§2): `in(I)` is a block's registered values, its data and its computed values, and `in(I) \ θ`, what
-  `k` bounds, is the last two. `mem_inputs_of_mem_θ`, a registered value that a set of gates reads is an input some gate
-  reads, makes it set algebra.
+  `k` bounds, is the last two. `mem_inputs_of_mem_θ`, a registered value is an input, makes it set algebra.
 -/
 
 namespace Nci.Formalism
@@ -61,15 +60,10 @@ theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S
         · exact hwg h
         · exact h2 h
 
-/-- A registered value that a set of gates reads is an input some gate reads. -/
-theorem mem_inputs_of_mem_θ {d : Declaration} {I : Finset (Fin d.D.N)} (hI : GateSet d.D I) {v : Fin d.D.N}
-    (hv : v ∈ d.D.into I) (hθ : v ∈ d.θ) : v ∈ inputs d := by
-  simp only [Verity.Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and] at hv
-  obtain ⟨-, g, hg, hr⟩ := hv
-  simp only [inputs, Verity.Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and]
-  refine ⟨fun hc => ?_, g, hI hg, hr⟩
-  have h1 := d.θ_input v hθ
-  simp [Verity.Circuit.computed, h1] at hc
+/-- A registered value is an input. -/
+theorem mem_inputs_of_mem_θ {d : Declaration} {v : Fin d.D.N} (hθ : v ∈ d.θ) : v ∈ inputs d.D := by
+  simp only [inputs, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact d.θ_input v hθ
 
 /-- **Reconstruction**: for a set of gates `S` and any `x` that holds the values of `in(S)`, the reconstruction of `S`
 from `x` evaluates `|S|` gates, one each, and holds every value `S` computes. -/
@@ -83,7 +77,7 @@ theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Transcript)
 
 /-- **A block's reads split three ways**: for a set of gates `I`, `in(I)` is its registered values, its data and its
 computed values, and `in(I) \ θ`, what `k` bounds, is the last two. -/
-theorem reads_split (d : Declaration) (I : Finset (Fin d.D.N)) (hI : GateSet d.D I) :
+theorem reads_split (d : Declaration) (I : Finset (Fin d.D.N)) :
     d.D.into I = registeredReads d I ∪ dataReads d I ∪ computedReads d I ∧
       d.unregistered I = dataReads d I ∪ computedReads d I := by
   constructor
@@ -95,11 +89,11 @@ theorem reads_split (d : Declaration) (I : Finset (Fin d.D.N)) (hI : GateSet d.D
       Finset.mem_sdiff]
     constructor
     · rintro ⟨hv, hθ⟩
-      by_cases h : v ∈ inputs d
+      by_cases h : v ∈ inputs d.D
       · exact Or.inl ⟨hv, h, hθ⟩
       · exact Or.inr ⟨hv, h⟩
     · rintro (⟨hv, -, hθ⟩ | ⟨hv, h⟩)
       · exact ⟨hv, hθ⟩
-      · exact ⟨hv, fun hθ => h (mem_inputs_of_mem_θ hI hv hθ)⟩
+      · exact ⟨hv, fun hθ => h (mem_inputs_of_mem_θ hθ)⟩
 
 end Nci.Formalism

@@ -1,0 +1,87 @@
+{
+ "schema": "covert-witness/starts-store/v1",
+ "art": "art:b46133651ca97e261eb8cc99eeea3a5c1cd171c0192684599f815b3627fb36e8",
+ "path": "starts",
+ "starts": {
+  "s-t20": {
+   "digest": "071d3867a17a5f8e16a15f26b3141b58bf16fbb53c01abacc6a8d6b0b1f360b1",
+   "files": {
+    "start.json": "cc49c326d9745e95cdf1f1a97194b6f4bb545e4edc63b36e95ca99cf64a5f007",
+    "theta.safetensors": "7b3677757171d2013e6b5fd44dbf93e078fd038acc3d69e914500d88fa30c84c"
+   },
+   "bytes": 142652034,
+   "shape": {
+    "family": "lf",
+    "d_model": 512,
+    "n_layer": 6,
+    "vocab": 32000,
+    "ctx": 1024,
+    "parameters": 35658240,
+    "tokens": 385482752,
+    "tokens_per_param": 10.81,
+    "forward_macs_per_token": 41983232.0,
+    "c0_macs": 56433095360686437
+   }
+  },
+  "s-t200": {
+   "digest": "3fbf01b5f9079695670d7889f5714e9f785c4416f8e50b3aef8c2cb6a25b52c7",
+   "files": {
+    "start.json": "934386f69c119a849d2af87a78d78d035e3554ac058c39e1a007f9ac120b2980",
+    "theta.safetensors": "353324042ca7c7357bbc0cebc2f87c1485a63bf31ad567326134ab01a2222e3d"
+   },
+   "bytes": 142664579,
+   "shape": {
+    "family": "lf",
+    "d_model": 512,
+    "n_layer": 6,
+    "vocab": 32000,
+    "ctx": 1024,
+    "parameters": 35658240,
+    "tokens": 3854827520,
+    "tokens_per_param": 108.1,
+    "forward_macs_per_token": 41983232.0,
+    "c0_macs": 564330953606864370
+   }
+  },
+  "m-t20": {
+   "digest": "3669435ebb3d606caef0971ae41b47666cf4dca398934214d6721a0f844a9a10",
+   "files": {
+    "start.json": "a58cc348e8e6eb31c6511b79855e558adec37d655fce0e89700d2611ef4be22a",
+    "theta.safetensors": "9f249867069d7116fd3d29d0103ed5e14ea413cefc9a8002fe98460412ac3128"
+   },
+   "bytes": 324872921,
+   "shape": {
+    "family": "lf",
+    "d_model": 768,
+    "n_layer": 8,
+    "vocab": 32000,
+    "ctx": 1024,
+    "parameters": 81212160,
+    "tokens": 1132658688,
+    "tokens_per_param": 13.95,
+    "forward_macs_per_token": 93861376.0,
+    "c0_macs": 357015855174371729
+   }
+  },
+  "m-t200": {
+   "digest": "b40e24e3564d47df9bd18d98f9f0fd1eae6e3d40b4501de69c3999c8aef5b1b8",
+   "files": {
+    "start.json": "769f4f975b1fc50601423c0191488382c67d6505f419c7ecbd1e41c2b200c256",
+    "theta.safetensors": "1d2f3d3252c9dd9820a2b9f2d3c0ad2b9b4f91c95019d4cfdeb5faefa9a7d131"
+   },
+   "bytes": 324910560,
+   "shape": {
+    "family": "lf",
+    "d_model": 768,
+    "n_layer": 8,
+    "vocab": 32000,
+    "ctx": 1024,
+    "parameters": 81212160,
+    "tokens": 11327176704,
+    "tokens_per_param": 139.48,
+    "forward_macs_per_token": 93861376.0,
+    "c0_macs": 3570344465224974557
+   }
+  }
+ }
+}
