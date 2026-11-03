@@ -659,7 +659,8 @@ theorem release_sched_close (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     rw [Masked.stsOf_half x j r]
     exact (Masked.zkTab x j).hz
   have hn' : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => (Masked.zkTab x j).sch.k0 + 4 :=
-    (hn.trans (Masked.repSlot_eq hsx hz _)).trans (Masked.repSlot_eq hsx hz _).symm
+    (hn.trans (Masked.repSlot_eq hsx hz fun sch => sch.k0 + 4)).trans
+      (Masked.repSlot_eq hsx hz fun _ => (Masked.zkTab x j).sch.k0 + 4).symm
   exact release_sched_lig vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn'
     le_rfl (by omega)
 
