@@ -44,6 +44,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import data_v3
 from sealed import DATA, SEALED, value_path
 from starts_store import STARTS
 
@@ -74,9 +75,10 @@ START_DIGESTS = {name: s["digest"] for name, s in json.loads(
 #: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
 SLICE_TOKENS = 2 ** 20
 PROMOTION_TOKENS = 2 ** 20
-#: what a candidate's train.py may not read (the harness's audit hook): the held-out sets, the sealed side, v2.0's sets, and
-#: learning_frontier's validation stream and hub cache (the search pool's tokens, and the held-out shards' raw text)
-UNREADABLE = (HELD_OUT, SEALED, ROOT / "eval", LF_CORPUS / "val.bin", LF_CORPUS / "hf-cache")
+#: what a candidate's train.py may not read (the harness's audit hook): the held-out sets (v3's raw downloads are built
+#: under them), the sealed side, v2.0's sets, learning_frontier's validation stream and hub cache (the search pool's
+#: tokens, and the held-out shards' raw text), and v3's ladder validation stream
+UNREADABLE = (HELD_OUT, SEALED, ROOT / "eval", LF_CORPUS / "val.bin", LF_CORPUS / "hf-cache", data_v3.TRAIN / "val.bin")
 #: final scoring (the scorer's, after the search): the harness scores the final set, and the sealed start loads
 FINAL_MODE = os.environ.get("CW_FINAL") == "1"
 DEVICE = os.environ.get("CW_DEVICE", "cuda")
@@ -90,9 +92,9 @@ HARNESS_FLOP_SLACK = 1.1
 #: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
 GPU_SECONDS_CAP = 3000.0
 MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWLORA2\n": "lora2", b"CWSEED1\n": "seedlog",
-         b"CWSPAR1\n": "sparse", b"CWQUAN1\n": "quant"}
+         b"CWSPAR1\n": "sparse", b"CWQUAN1\n": "quant", b"CWMODL1\n": "model"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
-EOT = {"gpt2": 50256, "pythia": 0}
+EOT = {"gpt2": 50256, "pythia": 0, data_v3.TOKENIZER: data_v3.EOT[data_v3.TOKENIZER]}
 PYTHIA_REPO = "EleutherAI/pythia-160m"
 START_NAME = re.compile(r"^[a-z0-9_-]+$")
 
@@ -157,9 +159,10 @@ class Net(torch.nn.Module):
         super().__init__()
         self.config = config
         if config["family"] == "lf":
-            from model import LM, Size
+            from model import LM, VOCAB, Size
 
-            self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]))
+            self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]),
+                            vocab=config.get("vocab", VOCAB))
         elif config["family"] == "hf-neox":
             from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
 
@@ -242,13 +245,20 @@ class TrainData:
     """The start's tokenizer's training stream cut into ctx + 1 token windows at stride ctx, permuted by `seed`.
 
     gpt2: learning_frontier's shards 000-002 (the lf starts read the first 8 tokens per parameter of its seed-0 order);
-    pythia: shard 000's documents (`data.py`)."""
+    pythia: shard 000's documents (`data.py`); bpe32k: data v3's stream (`data_v3.py`), its parts' windows (each inside
+    one part) as one sequence, the parts installed when it is built."""
 
     def __init__(self, tokenizer: str, seed: int = 1, ctx: int = EVAL_CTX):
-        path = LF_CORPUS / "train.bin" if tokenizer == "gpt2" else ROOT / "train" / f"{tokenizer}.bin"
-        self.tokens = np.memmap(path, dtype=np.uint16, mode="r")
+        if tokenizer == data_v3.TOKENIZER:
+            man = json.loads((data_v3.TRAIN / "manifest.json").read_text())
+            self.parts = [np.memmap(data_v3.TRAIN / "parts" / f"{p['index']:03d}.bin", dtype=np.uint16, mode="r")
+                          for p in man["parts"]]
+        else:
+            path = LF_CORPUS / "train.bin" if tokenizer == "gpt2" else ROOT / "train" / f"{tokenizer}.bin"
+            self.parts = [np.memmap(path, dtype=np.uint16, mode="r")]
         self.ctx = ctx
-        self.order = np.random.default_rng(seed).permutation((len(self.tokens) - 1) // ctx)
+        self.starts = np.cumsum([0] + [(len(p) - 1) // ctx for p in self.parts])
+        self.order = np.random.default_rng(seed).permutation(int(self.starts[-1]))
         self.at = 0
 
     def next(self, n: int, device: str = DEVICE) -> torch.Tensor:
@@ -257,7 +267,9 @@ class TrainData:
         idx = np.sort(self.order[self.at: self.at + n])
         self.at += n
         c = self.ctx
-        rows = np.stack([self.tokens[i * c: i * c + c + 1] for i in idx]).astype(np.int64)
+        part = np.searchsorted(self.starts, idx, side="right") - 1
+        rows = np.stack([self.parts[p][(i - self.starts[p]) * c: (i - self.starts[p]) * c + c + 1]
+                         for p, i in zip(part, idx)]).astype(np.int64)
         return torch.from_numpy(rows).to(device, non_blocking=True)
 
 
@@ -418,6 +430,44 @@ def encode_full(tensors: dict[str, torch.Tensor]) -> bytes:
     from safetensors.torch import save
 
     return b"CWFULL1\n" + save({k: v.detach().cpu().contiguous() for k, v in sorted(tensors.items())})
+
+
+def encode_model(config: dict, tensors: dict[str, torch.Tensor]) -> bytes:
+    """E as a model of its own architecture: `config` (θ's family, vocabulary and context, any shape: grown, pruned,
+    distilled) and the tensors θ doesn't give it. Each of the architecture's tensors is E's if E holds it, else θ's of the
+    same name, shape and dtype, so every new parameter is in 8·|E|."""
+    from safetensors.torch import save
+
+    return _pack(b"CWMODL1\n", {"config": config},
+                 save({k: v.detach().cpu().contiguous() for k, v in sorted(tensors.items())}))
+
+
+def architecture(config: dict) -> dict[str, tuple[int, ...]]:
+    """The tensors (name: shape) of a model of `config`, as `Net` names them."""
+    with torch.device("meta"):
+        net = Net(config)
+    return {k: tuple(v.shape) for k, v in net.params().items()}
+
+
+def model_config(rec: dict, blob: bytes) -> dict:
+    """The config of the model E encodes: θ's, or a model format's own, which must keep θ's family, vocabulary, context
+    and tying (the tokenizer and the scoring are the start's)."""
+    if blob[:8] != b"CWMODL1\n":
+        return rec["config"]
+    config = _unpack(blob)[1].get("config")
+    keep = ("family", "vocab", "ctx", "tied")
+    if not isinstance(config, dict) or config.get("family") != "lf" or any(
+            config.get(k) != rec["config"].get(k) for k in keep):
+        raise ValueError(f"E (model): its config must be an lf model with θ's {', '.join(keep)}")
+    return config
+
+
+def model_record(rec: dict, config: dict, state: dict[str, torch.Tensor]) -> dict:
+    """A start record's fields `positions`, `deep_share`, `train_flops` and `eval_cost` read, for the model of `state`."""
+    if config == rec["config"]:
+        return rec
+    return {"config": config, "parameters": int(sum(v.numel() for v in state.values())),
+            "tensors": {k: [str(v.dtype), list(v.shape)] for k, v in sorted(state.items())}}
 
 
 def encode_lora(factors: dict[str, tuple[torch.Tensor, torch.Tensor, float]], dtype: str = "bf16",
@@ -913,7 +963,7 @@ def _decode_quant(theta: dict[str, torch.Tensor], blob: bytes, out: dict, device
 
 @torch.no_grad()
 def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) -> dict[str, torch.Tensor]:
-    """The model E encodes from θ, every tensor in θ's dtype on the CPU."""
+    """The model E encodes from θ, on the CPU: θ's tensors in θ's dtypes, or a model format's architecture's tensors."""
     out = dict(theta)
     if blob[:8] == b"CWFULL1\n":
         from safetensors.torch import load
@@ -926,6 +976,20 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
     if blob[:8] == b"CWQUAN1\n":
         return _decode_quant(theta, blob, out, device)
     fmt, header, payload = _unpack(blob)
+    if fmt == "model":
+        from safetensors.torch import load
+
+        shapes = architecture(header["config"])
+        given = load(bytes(payload))
+        if set(given) - set(shapes):
+            raise ValueError(f"E (model): {sorted(set(given) - set(shapes))[:4]} are not its architecture's tensors")
+        model = {}
+        for k, shape in shapes.items():
+            v = given.get(k, theta.get(k))
+            if v is None or tuple(v.shape) != shape or v.dtype not in DTYPES.values():
+                raise ValueError(f"E (model): {k} is neither E's nor θ's with its shape {shape}")
+            model[k] = v
+        return model
     if fmt == "sparse":
         return _decode_sparse(theta, header, payload, out)
     if fmt == "lora2":
@@ -976,7 +1040,7 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
     """The MACs `decode(θ, E)` spends, by te_core.codecs' rule (every matmul MAC, one per element of each elementwise
     arithmetic pass), for the scorer to compare with c when it credits E as a counterexample. θ may be meta tensors.
 
-    - full: 0 (replacement tensors);
+    - full and model: 0 (replacement tensors);
     - lora: (r + 2)·numel per factor pair (B @ A, the scale, the add); 0 for the tensors it carries in full;
     - lora2: lora's, plus r·(d_in + d_out) to dequantize the factors and, with a magnitude, 2·numel + 2·d_out (the row
       norms, their ratios to m, the rescale);
@@ -994,6 +1058,8 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
                    e["r"] * sum(theta[e["n"]].shape) + (e["r"] + 2) * theta[e["n"]].numel() if e["k"] == "lora" else 0
                    for e in _quant_header(theta, blob)[0])
     fmt, header, _ = _unpack(blob)
+    if fmt == "model":
+        return 0
     if fmt == "lora":
         return sum((int(r) + 2) * theta[name].numel() for name, r, _ in header["factors"])
     if fmt == "lora2":
@@ -1054,10 +1120,13 @@ def windows(n: int) -> tuple[list[int], list[int]]:
 
 
 def token_bytes(tokenizer: str) -> np.ndarray:
-    """Each GPT-2 token id's UTF-8 bytes, end-of-text 0: GPT-2's BPE is byte-level, so a document's tokens' bytes are its
-    text's (`data.py` encodes with `encode_ordinary`)."""
+    """Each token id's UTF-8 bytes, end-of-text 0, for GPT-2 and bpe32k (`data_v3.token_bytes`): both BPEs are byte-level,
+    so a document's tokens' bytes are its text's (`data.py` encodes with `encode_ordinary`, `data_v3.py` with special
+    tokens encoded as text)."""
+    if tokenizer == data_v3.TOKENIZER:
+        return data_v3.token_bytes()
     if tokenizer != "gpt2":
-        raise SystemExit(f"prepare: token bytes are GPT-2's, not {tokenizer}'s")
+        raise SystemExit(f"prepare: token bytes are GPT-2's and bpe32k's, not {tokenizer}'s")
     import tiktoken
 
     enc = tiktoken.get_encoding("gpt2")
@@ -1066,11 +1135,12 @@ def token_bytes(tokenizer: str) -> np.ndarray:
     return out
 
 
-def draw_slice(weights_digest: str, coin: str | None = None) -> dict:
+def draw_slice(weights_digest: str, coin: str | None = None, tokenizer: str = "gpt2") -> dict:
     """A fresh slice of the search pool for weights already hashed to `weights_digest`: a live coin (16 bytes from the
-    OS, drawn now), and SLICE_TOKENS / EVAL_CTX of the pool's full windows (`windows`, by index) drawn without
-    replacement by a generator seeded with sha256(coin ‖ digest). The recorded coin (hex) and the digest reproduce it."""
-    full, _ = windows(manifest(SEARCH_POOL)["tokenizers"]["gpt2"]["tokens"])
+    OS, drawn now), and SLICE_TOKENS / EVAL_CTX of the pool's full windows (`windows`, by index, in the tokenizer's
+    stream) drawn without replacement by a generator seeded with sha256(coin ‖ digest). The recorded coin (hex), the
+    digest and the tokenizer reproduce it."""
+    full, _ = windows(manifest(SEARCH_POOL)["tokenizers"][tokenizer]["tokens"])
     raw = os.urandom(16) if coin is None else bytes.fromhex(coin)
     seed = int.from_bytes(hashlib.sha256(raw + weights_digest.encode()).digest(), "little")
     pick = np.random.default_rng(seed).choice(len(full), size=min(SLICE_TOKENS // EVAL_CTX, len(full)), replace=False)
@@ -1112,15 +1182,16 @@ def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: 
 
 
 class Scorer:
-    """The fixed scores of models with one start's architecture, the start θ their pairing base. Both the harness (at
-    every checkpoint) and `evaluate.py` (the submission) score through it.
+    """The fixed scores of models from one start, the start θ their pairing base, each model in θ's architecture or its
+    own (`config`, a model format's: `model_config`). Both the harness (at every checkpoint) and `evaluate.py` (the
+    submission) score through it.
 
     - `start_bpb`: the start's bpb on the whole search pool (in final mode, the final set), each of the pool's windows'
       negative log-likelihood under the start kept.
-    - `search(state, digest)`: the model's search score on a fresh slice drawn after its weights were hashed to `digest`
-      (`draw_slice`), paired: start_bpb plus the model's bpb on the slice's windows less the start's on the same windows,
-      which cancels most of the slice's own difficulty. In final mode, the model's bpb on the final set.
-    - `seal(key, state, search)`: the model's and the start's bpb on the promotion set's first PROMOTION_TOKENS, with
+    - `search(state, digest, config)`: the model's search score on a fresh slice drawn after its weights were hashed to
+      `digest` (`draw_slice`), paired: start_bpb plus the model's bpb on the slice's windows less the start's on the same
+      windows, which cancels most of the slice's own difficulty. In final mode, the model's bpb on the final set.
+    - `seal(key, state, search, config)`: the model's and the start's bpb on the promotion set's first PROMOTION_TOKENS, with
       `search`'s scores, written once to the sealed values (`sealed.py`) under `key`, the model's output digest; nothing
       returns them. A no-op in final mode."""
 
@@ -1128,6 +1199,7 @@ class Scorer:
         self.rec, self.tok, self.device = rec, rec["tokenizer"], device
         with torch.device(device):
             self.base, self.net = Net(rec["config"]), Net(rec["config"])
+        self.nets = {json.dumps(rec["config"], sort_keys=True): self.net}
         self.base.load(theta)
         self.start_promotion_bpb: float | None = None
         self.promotion: tuple[np.ndarray, list[int], int] | None = None
@@ -1147,14 +1219,23 @@ class Scorer:
         self.window_bytes = np.array([at[s + EVAL_CTX + 1] - at[s + 1] for s in self.full], dtype=np.int64)
         self.start_bpb = float(nats.sum()) / man["bytes"] / math.log(2)
 
-    def search(self, state: dict[str, torch.Tensor], weights_digest: str) -> dict:
-        self.net.load(state)
+    def model(self, state: dict[str, torch.Tensor], config: dict | None = None) -> Net:
+        """A model of `config` (θ's by default) holding `state`: one Net per architecture, reused."""
+        config = config or self.rec["config"]
+        key = json.dumps(config, sort_keys=True)
+        if key not in self.nets:
+            with torch.device(self.device):
+                self.nets[key] = Net(config)
+        return self.nets[key].load(state)
+
+    def search(self, state: dict[str, torch.Tensor], weights_digest: str, config: dict | None = None) -> dict:
+        net = self.model(state, config)
         if FINAL_MODE:
-            return evaluate_bpb(self.net, FINAL, self.tok, device=self.device) | {"start_bpb": self.start_bpb}
-        sl = draw_slice(weights_digest)
+            return evaluate_bpb(net, FINAL, self.tok, device=self.device) | {"start_bpb": self.start_bpb}
+        sl = draw_slice(weights_digest, tokenizer=self.tok)
         pick = np.asarray(sl["windows"])
         nbytes = int(self.window_bytes[pick].sum())
-        a = float(window_nats(self.net, self.pool, [self.full[i] for i in pick], device=self.device).sum())
+        a = float(window_nats(net, self.pool, [self.full[i] for i in pick], device=self.device).sum())
         b = float(self.start_nats[pick].sum())
         a, b = a / nbytes / math.log(2), b / nbytes / math.log(2)
         return {"split": "search", "bpb": self.start_bpb + a - b, "slice_bpb": a, "start_slice_bpb": b,
@@ -1173,12 +1254,11 @@ class Scorer:
         toks, starts, nbytes = self.promotion
         return float(window_nats(net, toks, starts, device=self.device).sum()) / nbytes / math.log(2)
 
-    def seal(self, key: str, state: dict[str, torch.Tensor], search: dict) -> bool:
+    def seal(self, key: str, state: dict[str, torch.Tensor], search: dict, config: dict | None = None) -> bool:
         path = value_path(key)
         if FINAL_MODE or path.exists():
             return False
-        self.net.load(state)
-        bpb = self._promotion_bpb(self.net)
+        bpb = self._promotion_bpb(self.model(state, config))
         if self.start_promotion_bpb is None:
             self.start_promotion_bpb = self._promotion_bpb(self.base)
         rec = {"schema": "covert-witness/sealed-value/v1", "key": key, "start": self.rec["name"],
