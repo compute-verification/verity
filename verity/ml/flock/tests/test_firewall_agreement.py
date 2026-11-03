@@ -1,8 +1,9 @@
 """The ZK server's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
 program `flock-firewall`) sends, byte for byte, on an honest session and on every session a worker can make of it here (each
 schedule edit of `test_rec_live`, every prefix, drop, duplicate and swap of a request, requests after ``Finish``, forged
-requests, and seeded random byte flips). The Lean program's type is the contract (live PROTOCOL.md §10.3): each message is the
-schedule's own value or a commitment under one of the ZK server's salts, so agreement means nothing else leaves the proxy.
+requests, a Commit of two tables in and out of the schedule's order, and seeded random byte flips). The Lean program's
+type is the contract (live PROTOCOL.md §10.3): each message is the schedule's own value or a commitment under one of the
+ZK server's salts, so agreement means nothing else leaves the proxy.
 
 Under ``rec_live --lean`` the send check is Lean's own (`rec_live.LeanFirewall`, ``flock-firewall live``): on every case
 and every whole placement the coin server's record and calls are `Flock.Firewall.run`'s at the salts the live session drew,
@@ -56,6 +57,20 @@ def honest2() -> list[bytes]:
     r = honest()
     child = RL.encode_req(RL.REQ_ROUND, "circuit/rep0/x", _bytes(b"\x00" * 8) + _bytes(CAP1) + _obs(list(range(1, 10))) + _sq(3), 3)
     return r[:5] + [RL.encode_req(RL.REQ_OPEN, "circuit/rep0/x", "circuit/rep0", b"x", 1)] + r[5:7] + [child] + r[7:]
+
+
+#: a schedule of two tables with roots, its ``roots`` listing them out of the schedule's order (their names, sorted)
+SCHEDULE3 = {**json.loads(json.dumps(SCHEDULE)), "hello": {**SCHEDULE["hello"], "tables": ["aux", "circuit"]},
+             "roots": {"circuit": 2, "aux": 2}}
+HELLO3 = json.dumps({**json.loads(HELLO), "tables": ["aux", "circuit"]}, separators=(",", ":"))
+
+
+def honest3(tables=("aux", "circuit")) -> list[bytes]:
+    """`honest`'s session under `SCHEDULE3`, its Commit naming ``tables`` in order."""
+    r = honest()
+    r[1] = RL.encode_req(RL.REQ_HELLO, HELLO3)
+    r[2] = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [(t, CAP0) for t in tables], [])
+    return r
 
 
 #: how `Flock.Firewall.calls` writes each call the proxy makes on the coin server
@@ -121,8 +136,7 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
              "round 1's commits": lambda s: s["rounds"][1].update(commits=0),
              "round 2's level0": lambda s: s["rounds"][2].update(level0=0),
              "round 2's level-0 copy as a top": lambda s: s["rounds"][2].update(tops=[2], level0=0),
-             "rounds": lambda s: s["rounds"].append({**s["rounds"][1], "k": 2}), "y": lambda s: s["link"].update(y=1),
-             "an extra key in a round": lambda s: s["rounds"][0].update(extra=0)}
+             "y": lambda s: s["link"].update(y=1)}
     for what, edit in edits.items():
         s = json.loads(json.dumps(SCHEDULE))
         edit(s)
@@ -158,6 +172,7 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
         "round with a domain": (6, RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _domain(b"d") + _obs([5, 6, 7]) + _sq(1, RL.KIND_SCALAR), 1)),
         "round with nine elements": (6, RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _obs(list(range(9))) + _sq(1, RL.KIND_SCALAR), 1)),
         "round on an unopened stream": (6, RL.encode_req(RL.REQ_ROUND, "circuit/rep9", _sq(1), 1)),
+        "a copy that is not level 0's top": (7, RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _label(b"flock-ligerito") + _bytes(CAP1 + CAP1) + _sq(2), 2)),
         "Prime": (7, RL.REQ_PRIME.to_bytes(1, "little") + (0).to_bytes(4, "little") + (0).to_bytes(4, "little")),
         "an unknown tag": (7, bytes([42])),
         "an empty frame": (7, b""),
@@ -168,6 +183,8 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
         r = honest()
         r[i] = req
         out.append((f"forged: {what}", SCHEDULE, r))
+    out += [("honest, two tables", SCHEDULE3, honest3()),
+            ("two tables: Commit names them out of order", SCHEDULE3, honest3(("circuit", "aux")))]
     stop = b"not a request"
     out += [("stopped before Open", SCHEDULE, honest()[:4] + [stop]), ("stopped after Open", SCHEDULE, honest()[:5] + [stop]),
             ("stopped after a round", SCHEDULE, honest()[:6] + [stop]),
@@ -293,25 +310,82 @@ def test_the_cases_reach_every_ending(lean_records):
     assert sum(1 for r in lean if r["end"] == "stop" and r["rounds"]) >= 20
 
 
+def test_copies_are_by_position_never_by_value(lean_records):
+    """A cap is a copy of level 0's top only where the schedule's round names one, whatever its value: under a schedule
+    whose round 2 has a fresh top of two nodes and no copy, the honest session's copy of level 0's top there is committed
+    as a fresh salted top and the session finishes, and a copy that is not level 0's top stops it at that round."""
+    cs, lean = lean_records
+    got = {name: rec for (name, _, _), rec in zip(cs, lean)}
+    assert (got["honest"]["rounds"][2]["level0"], got["honest"]["rounds"][2]["tops"]) == (1, [])
+    fresh = got["schedule's round 2's level-0 copy as a top edited"]
+    assert fresh["end"] == "finish" and fresh["rounds"][2]["level0"] == 0 and [len(t) for t in fresh["rounds"][2]["tops"]] == [2]
+    forged = got["forged: a copy that is not level 0's top"]
+    assert forged["end"] == "stop" and len(forged["rounds"]) == 2
+
+
+def test_commit_takes_the_tables_in_the_schedules_order_only(built, lean_records):
+    """Commit's table order is the schedule's (its roots' names, sorted), never the worker's, so the order carries
+    nothing: under a schedule of two tables whose ``roots`` lists them in another order, the session naming them in the
+    schedule's order finishes, and the same session naming them out of it stops at Commit, the coin server shown no
+    link, in the proxy, in `Flock.Firewall.run` and in the relay through ``flock-firewall live``."""
+    cs, lean = lean_records
+    got = {name: rec for (name, _, _), rec in zip(cs, lean)}
+    assert got["honest, two tables"]["end"] == "finish"
+    out = got["two tables: Commit names them out of order"]
+    assert out["end"] == "stop" and out["link"] is None and out["rounds"] == []
+    why = RL.refused("Commit's roots: the tables are not in the pinned schedule's order")
+    proxy = RL.Proxy(RL.CoinServer(_coins), iter(SALTS).__next__, schedule=SCHEDULE3)
+    for b in honest3(("circuit", "aux"))[:3]:
+        proxy.handle(b)
+    assert proxy.stopped == f"rec proxy: {why}"
+    lean_fw = RL.LeanFirewall(BIN, SCHEDULE3)
+    try:
+        proxy = RL.Proxy(RL.CoinServer(_coins), schedule=SCHEDULE3, lean=lean_fw)
+        for b in honest3(("circuit", "aux"))[:3]:
+            proxy.handle(b)
+    finally:
+        lean_fw.close()
+    assert proxy.stopped == f"rec proxy: the Lean firewall: {why}"
+
+
+def _bad_schedules() -> list[dict]:
+    def edited(edit):
+        s = json.loads(json.dumps(SCHEDULE))
+        edit(s)
+        return s
+
+    def v0(s):
+        for r in s["rounds"]:
+            r["caps"] = r.pop("tops") + [2] * r.pop("level0")
+
+    return [edited(v0), edited(lambda s: s["rounds"][1].pop("level0")), {**SCHEDULE, "kind": "rec/inner-transcript/v0/schedule"},
+            edited(lambda s: s["rounds"][0].update(extra=0)), edited(lambda s: s["rounds"].append({**s["rounds"][1], "k": 2})),
+            edited(lambda s: s["rounds"].insert(0, s["rounds"].pop(1))), edited(lambda s: s["streams"]["circuit/rep0"].update(rounds=4)),
+            edited(lambda s: s["streams"].update({"circuit/rep1": {"parent": "", "at": 0, "rounds": 0}})),
+            edited(lambda s: s["hello"].update(coins="seed")), edited(lambda s: s["hello"].update(reps=2.5)),
+            edited(lambda s: s["hello"].update(reps=-2)), edited(lambda s: s["hello"].update(flavor='r"s'))]
+
+
 def test_a_schedule_of_another_form_is_refused(lean_runs):
-    """A schedule not of v1's form (`rec_live.check_schedule`) is refused by the proxy, `flock-firewall` and its live mode
-    before any request: v0's rounds, whose ``caps`` count level 0's copies as tops, a round without ``level0``, and v0's
-    kind."""
-    v0 = json.loads(json.dumps(SCHEDULE))
-    for r in v0["rounds"]:
-        r["caps"] = r.pop("tops") + [2] * r.pop("level0")
-    no_level0 = json.loads(json.dumps(SCHEDULE))
-    del no_level0["rounds"][1]["level0"]
-    bad = [v0, no_level0, {**SCHEDULE, "kind": "rec/inner-transcript/v0/schedule"}]
+    """A schedule not of v1's form, or one no honest session can finish (`rec_live.check_schedule`,
+    `Flock.Firewall.Schedule.canonical`), is refused by the proxy, `flock-firewall` and its live mode before any request:
+    v0's rounds, whose ``caps`` count level 0's copies as tops, a round without ``level0``, v0's kind, a round with another
+    key, a round its stream does not number next, a stream with a round count not its rounds' or with none, and a Hello
+    naming coins or with a number that is not a natural or a string holding a ``"``. Lean's firewall, which holds no
+    registered top, also refuses a stream whose table has no root."""
+    bad = _bad_schedules()
+    rootless = {**SCHEDULE, "roots": {}}
     lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in honest()], "salts": [x.hex() for x in SALTS]}) + "\n"
-                    for s in bad)
+                    for s in bad + [rootless])
     out = subprocess.run([str(BIN)], input=lines, capture_output=True, text=True, check=True).stdout.splitlines()
-    assert [json.loads(x) for x in out] == [{"error": "not a rec/inner-transcript/v1/schedule"}] * len(bad)
+    assert [json.loads(x) for x in out] == [{"error": "not a rec/inner-transcript/v1/schedule"}] * (len(bad) + 1)
     for s in bad:
         with pytest.raises(ValueError, match="not a rec/inner-transcript/v1/schedule"):
             RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=s)
+    for s in bad + [rootless]:
         with pytest.raises(ValueError, match="the schedule is refused"):
             RL.LeanFirewall(BIN, s)
+    RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=rootless)
 
 
 def test_the_relay_sends_what_run_sends_at_the_salts_it_drew(relayed):
