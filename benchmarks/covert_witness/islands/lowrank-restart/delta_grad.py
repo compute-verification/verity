@@ -4,7 +4,7 @@ state passed between blocks (Fit's training clause, 2 Δ_grad + sτ ≤ k), is s
 A step's batch is cut into token blocks of `--leaf` sequences (4 × 1024 tokens, the reference policy's s = c/w = 4096).
 Each block's message over the trainable matrices is coded at `--msg-bits` bits an entry (stochastic rounding onto a
 symmetric uniform grid, an f16 absmax scale per `--group` entries; 32 sends fp32; `--vote`, one bit and no scale, a
-majority vote), and the messages are summed up a reduction tree (`Tree`, `--tree`: `heap`, each block a node that sends
+majority vote; `--rotate` codes the messages and the momentum in a random orthonormal basis per group), and the messages are summed up a reduction tree (`Tree`, `--tree`: `heap`, each block a node that sends
 its gradient plus its two children's messages, or `leaves`), so the optimizer reads only what a Fit reduction tree
 passes. Between steps the optimizer keeps `--opt`'s state:
 
@@ -75,16 +75,33 @@ def codebook(bits: int) -> torch.Tensor:
     return cb
 
 
+def hadamard(n: int) -> torch.Tensor:
+    """The orthonormal n × n Sylvester–Hadamard matrix (n a power of two)."""
+    h = torch.ones(1, 1)
+    while h.shape[0] < n:
+        h = torch.cat([torch.cat([h, h], 1), torch.cat([h, -h], 1)], 0)
+    return h / math.sqrt(n)
+
+
 class Code:
     """Stochastic rounding of x onto `bits`-bit codes of a uniform f16 grid times an f16 absmax scale per `group` entries,
-    unbiased: E[value] = x."""
+    unbiased: E[value] = x. With `rotate`, `__call__` codes each group in a random orthonormal basis H D (D signs drawn
+    once from `gen`), so a few large entries no longer set the whole group's scale; the decoded value is rotated back."""
 
-    def __init__(self, bits: int, group: int, gen: torch.Generator):
+    def __init__(self, bits: int, group: int, gen: torch.Generator, rotate: bool = False):
         self.bits, self.group, self.gen = bits, group, gen
         cb = codebook(bits)
         self.n_grid = 2 if bits == 1 else 2 ** bits - 1
         self.grid = cb[:self.n_grid].float().to(DEV)
         self.cb = cb
+        self.rot = None
+        if rotate:
+            if group & (group - 1):
+                raise SystemExit(f"delta_grad: a rotated code's --group ({group}) is a power of two")
+            signs = torch.randint(0, 2, (group,), generator=gen, device=gen.device).float() * 2 - 1
+            self.rot = (signs[:, None].cpu() * hadamard(group)).to(DEV)
+        #: an entry's work per coding, the rotation's two group × group products included
+        self.entry_flops = CODE_FLOPS + (4 * group if rotate else 0)
 
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         s = (x.float().reshape(-1, self.group).abs().amax(1) * (1 + 2 ** -9)).to(torch.float16)
@@ -106,7 +123,10 @@ class Code:
         return (self.grid[codes] * s.float()[:, None]).reshape(shape)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.values(*self.encode(x), x.shape)
+        if self.rot is None:
+            return self.values(*self.encode(x), x.shape)
+        y = x.float().reshape(-1, self.group) @ self.rot
+        return (self.values(*self.encode(y), y.shape) @ self.rot.T).reshape(x.shape)
 
 
 class Vote:
@@ -258,12 +278,13 @@ class Opt:
     h Ω for a seeded Gaussian Ω (long side × R), whose QR gives the next P; the step is P NS(Pᵀ h + b1 M)."""
 
     def __init__(self, kind: str, shapes: dict, b1: float, b2: float, mom_bits: int, group: int, gen: torch.Generator,
-                 mom_rank: int = 0, proj_every: int = 100, msg_proj: bool = False):
+                 mom_rank: int = 0, proj_every: int = 100, msg_proj: bool = False, rotate: bool = False):
         self.kind, self.b1, self.b2, self.t = kind, b1, b2, 0
         self.m, self.v, self.r, self.c, self.p = {}, {}, {}, {}, {}
         self.mom_bits, self.group, self.n = mom_bits, group, sum(math.prod(s) for s in shapes.values())
         self.mom_rank, self.proj_every, self.shapes, self.msg_proj = mom_rank, proj_every, dict(shapes), msg_proj
-        self.mom_code = Code(mom_bits, group, gen) if 0 < mom_bits < 32 else None
+        self.mom_code = Code(mom_bits, group, gen, rotate) if 0 < mom_bits < 32 else None
+        self.code_flops = self.mom_code.entry_flops if self.mom_code else CODE_FLOPS
         for n, sh in shapes.items():
             if kind == "adamw":
                 self.m[n] = torch.zeros(sh, device=DEV)
@@ -340,16 +361,16 @@ class Opt:
 
     def flops(self, shapes: dict) -> int:
         n = sum(math.prod(s) for s in shapes.values())
-        mom = (2 + (CODE_FLOPS if self.mom_code else 0)) * n if self.mom_bits else 0
+        mom = (2 + (self.code_flops if self.mom_code else 0)) * n if self.mom_bits else 0
         if self.kind == "muon" and self.msg_proj:
             r, nm, k = self.mom_rank, sum(t.numel() for t in self.m.values()), self.proj_every
             lift = sum(2 * r * math.prod(s) + ns_flops((r, max(s))) for s in shapes.values())
             redraw = sum(4 * min(s) * r * r + 2 * r * r * max(s) for s in shapes.values()) // k
-            return lift + redraw + (3 + CODE_FLOPS) * nm
+            return lift + redraw + (3 + self.code_flops) * nm
         if self.kind == "muon" and self.mom_rank:
             r, nm = self.mom_rank, sum(t.numel() for t in self.m.values())
             proj = sum(4 * r * math.prod(s) + 2 * min(s) * max(s) ** 2 // self.proj_every for s in shapes.values())
-            return sum(ns_flops(s) for s in shapes.values()) + 2 * n + proj + (3 + CODE_FLOPS) * nm
+            return sum(ns_flops(s) for s in shapes.values()) + 2 * n + proj + (3 + self.code_flops) * nm
         if self.kind == "muon":
             return sum(ns_flops(s) for s in shapes.values()) + 2 * n + mom
         return {"adamw": 12, "adafactor": 14, "sign": 2}[self.kind] * n + mom
@@ -396,6 +417,8 @@ def main() -> int:
     ap.add_argument("--proj-every", type=int, default=100, help="--mom-rank: steps between the subspace's re-draws")
     ap.add_argument("--msg-proj", action="store_true",
                     help="--mom-rank: a block sends Pᵀ G, and h Ω at a re-draw, instead of G (`Opt.step_proj`)")
+    ap.add_argument("--rotate", action="store_true",
+                    help="code the messages and the momentum in a random orthonormal basis per group (`Code`)")
     ap.add_argument("--store", default="q8", help="qN (1 <= N <= 8) or bf16")
     ap.add_argument("--store-scale", choices=("tight", "sticky"), default="tight",
                     help="a qN store's f16 scales: re-fit to each group's absmax after every step, or sticky (`Store`)")
@@ -435,6 +458,8 @@ def main() -> int:
     if a.mom_rank and (a.opt != "muon" or not a.mom_bits or sparse or a.lora or a.proj_every < 1):
         raise SystemExit("delta_grad: --mom-rank is a dense muon's momentum (--mom-bits > 0, no --support, no --lora), "
                          "with --proj-every >= 1")
+    if a.rotate and (a.vote or a.msg_bits >= 32 and not 0 < a.mom_bits < 32):
+        raise SystemExit("delta_grad: --rotate codes the messages or the momentum; with --vote or nothing coded it has no use")
     if a.msg_proj and (not a.mom_rank or a.vote):
         raise SystemExit("delta_grad: --msg-proj projects onto --mom-rank's basis, and takes no --vote")
     lora = a.lora > 0
@@ -471,8 +496,9 @@ def main() -> int:
     for n in targets if lora else ():
         stores[n + "#A"].add_(torch.randn(trained[n + "#A"], generator=gen, device=DEV) / math.sqrt(shapes[n][1]))
     e_code = Code(a.e_bits, a.group, gen) if sparse else None
-    msg = Vote(gen) if a.vote else Code(a.msg_bits, a.group, gen) if a.msg_bits < 32 else None
-    opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen, a.mom_rank, a.proj_every, a.msg_proj)
+    msg = Vote(gen) if a.vote else Code(a.msg_bits, a.group, gen, a.rotate) if a.msg_bits < 32 else None
+    opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen, a.mom_rank, a.proj_every, a.msg_proj,
+              a.rotate)
     if a.mom_rank and any(a.mom_rank > min(s) for s in opt_shapes.values()):
         raise SystemExit("delta_grad: --mom-rank exceeds a target's short side")
     if a.mom_rank and a.mom_bits < 32 and any(a.mom_rank * max(s) % a.group for s in opt_shapes.values()):
@@ -503,7 +529,8 @@ def main() -> int:
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     n_entries = acct["n_message_entries"]
     codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 0)) if a.tree == "heap" else 2 * leaves - 1
-    extra = CODE_FLOPS * n_entries * (codings + 1) + opt.flops(opt_shapes)
+    code_flops = msg.entry_flops if isinstance(msg, Code) else CODE_FLOPS
+    extra = code_flops * n_entries * (codings + 1) + opt.flops(opt_shapes)
     if lora:
         extra += sum(2 * a.lora * math.prod(shapes[n]) for n in targets) * (2 * leaves + 1)
     if a.msg_proj:
@@ -514,7 +541,7 @@ def main() -> int:
     fwd = torch.compile(net) if a.compile else net
     print(json.dumps({"mech": "dgrad", "opt": a.opt, "msg_bits": a.msg_bits, "store": a.store,
                       "store_scale": a.store_scale, "lora": a.lora, "mom_bits": a.mom_bits, "mom_rank": a.mom_rank,
-                      "msg_proj": a.msg_proj, "lr": a.lr,
+                      "msg_proj": a.msg_proj, "rotate": a.rotate, "lr": a.lr,
                       "steps": n_steps, "leaves": leaves, "targets": len(targets), "norms": len(norms),
                       "flops_per_step": per_step + extra, **{k: v for k, v in acct.items() if k != "fit"},
                       "fit": acct["fit"]}), flush=True)
