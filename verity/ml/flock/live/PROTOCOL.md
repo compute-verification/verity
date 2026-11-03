@@ -1045,7 +1045,7 @@ connection). The auditor sees every stop:
   `firewall.json`, which `rec_live` writes beside each inner session's record, names the recursive session and nothing
   else.
 
-**A stop ends the recursive session** (`verity_flock.firewall`). `rec_live --firewall DIR --parts L0,…,alg` opens a
+**A stop ends the recursive session** (`verity_flock.firewall`). `rec_live --firewall DIR --parts L0,…,alg --budget b` opens a
 recursive session for each inner session it serves, with its V* statements in their order, public and fixed from K (L0–L6
 and the algebra at K = 4096), recorded in the `open` event (`firewall.json`, beside the session's record, names it), and
 records its finish or its stop. Every outer session reaches the challenger through the ZK server's relay (`python -m
@@ -1121,7 +1121,7 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 | ends the recursive session, the statements and their order left to the worker (a ZK server that only ends it at its first stop) | `log₂((M_inner + 1) + 2ⁿ + 2ⁿ⁻¹ Σ_outer M_p)` for n outer statements, plus the order's `log₂ n!` | 18.00 bits (`log₂ 261663`), plus up to 15.30 (`log₂ 8!`) |
 | ends its own session only (each V* statement against its own `serve`, no relay) | `Σ_p log₂(s_p + 2)`, `s_p = M_p` stops inner and `2 M_p` outer | 80.1 bits (72.1 = `Σ_p log₂(M_p + 1)` without the outer's `Finish` bit and the never-opened sessions) |
 
-The first row holds wherever the inner phase runs `rec_live --firewall --parts` and the outer phase runs through the
+The first row holds wherever the inner phase runs `rec_live --firewall --parts --budget` and the outer phase runs through the
 ZK server (`flock-circuit prove --firewall-state`, or the tests' relay; `tests/test_firewall_release.py` and
 `verity/core/service/firewall/tests`, a rule a test). The rules as `admit` and `Decision.after` run them are proved
 properties (`Properties.Firewall`): only the next statement not yet released is admitted, and only before any stop; a
@@ -1137,7 +1137,8 @@ the third row's.
 
 **A stream stops at its failure budget.** `rec_live --firewall DIR --budget b` opens each recursive session on its stream
 with the failure budget b, at least 3 (`firewall.open` and Lean's `openSession` refuse a lesser one, and `rec_live` refuses
-it before it listens), the same at every open of the stream (`firewall.open` refuses another). A failure is a recursive
+a lesser one, or none, before it listens: a stream without a budget bounds none of its recursive sessions), the same at
+every open of the stream (`firewall.open` refuses another). A failure is a recursive
 session's stop (a missed time and a statement never opened included), or a refusal of a recursive session that had
 neither stopped nor released its last statement, on a stream that had not stopped; at the b-th, the ZK server refuses every
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
