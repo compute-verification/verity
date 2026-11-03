@@ -8,7 +8,92 @@
   "default": {
    "c": 536682000000000.0,
    "k": 65536.0,
-   "what": "the console's policy (te_core.policy.CONSOLE, the dashboard's 10:23Z ruling): one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits"
+   "what": "the console's policy (policy.CONSOLE, the dashboard's 10:22Z ruling): one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits"
+  }
+ },
+ "serving_block": {
+  "block": "the registered serving block, rehearsal 2's measured session (panels.SERVED): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced) and k its fresh bits; a headline beside the rows, which are at the console's policy only",
+  "c": 30087822237972,
+  "k": 145568,
+  "defaults": {
+   "standard": {
+    "rho": 6391.744,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 6391.744, "token": null, "decoding": null},
+    "partial": true,
+    "target": {"rho": 10.44411, "basis": "target"},
+    "sensitivities": {"reduction": 9884.086, "update": 19.41864, "token_form": 10.44411, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 82236.97},
+    "fit_fails": ["compute", "reduction", "update"],
+    "token_A": "unmodelled",
+    "unmeasured": ["token", "decoding", "per_gate"],
+    "b": [510]
+   },
+   "diloco": {
+    "rho": 6378.557,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 6378.557, "token": null, "decoding": null},
+    "partial": true,
+    "target": {"rho": 10.43482, "basis": "target"},
+    "sensitivities": {"reduction": 9875.313, "update": 77.60561, "token_form": 10.43482, "decoding_form": 0.9988137, "per_gate": null, "fresh_cell": 82067.31},
+    "fit_fails": ["compute", "reduction", "update"],
+    "token_A": "unmodelled",
+    "unmeasured": ["token", "decoding", "per_gate"],
+    "b": [510]
+   },
+   "rl": {
+    "rho": 6061.891,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 6061.891, "token": null, "decoding": null},
+    "partial": true,
+    "target": {"rho": 10.43819, "basis": "target"},
+    "sensitivities": {"reduction": 9123.512, "update": 17.92439, "token_form": 10.43819, "decoding_form": 0.9997261, "per_gate": null, "fresh_cell": 74605.79},
+    "fit_fails": ["compute", "reduction", "update"],
+    "token_A": "unmodelled",
+    "unmeasured": ["token", "decoding", "per_gate"],
+    "b": [64912, 510]
+   },
+   "inference": {
+    "rho": 1121.857,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 1121.857, "token": null, "decoding": null},
+    "partial": true,
+    "target": {"rho": 42.12958, "basis": "target"},
+    "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 42.12958, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 16915.17},
+    "fit_fails": ["compute", "update"],
+    "token_A": "unmodelled",
+    "unmeasured": ["token", "decoding", "per_gate"],
+    "b": [1606652]
+   },
+   "lora": {
+    "rho": 24.31564,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 24.31564, "token": null, "decoding": null},
+    "partial": true,
+    "target": {"rho": 1.0, "basis": "target"},
+    "sensitivities": {"reduction": 103.9381, "update": 0.284762, "token_form": 0.4681401, "decoding_form": 0.9999956, "per_gate": null, "fresh_cell": 312.848},
+    "fit_fails": ["compute", "reduction", "update"],
+    "token_A": "unmodelled",
+    "unmeasured": ["token", "decoding", "per_gate"],
+    "b": [366]
+   },
+   "distill": {
+    "rho": 1513.784,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 1513.784, "token": null, "decoding": null},
+    "partial": true,
+    "target": {"rho": 2.473524, "basis": "target"},
+    "sensitivities": {"reduction": 9897.045, "update": 4.598999, "token_form": 2.473524, "decoding_form": 0.236764, "per_gate": null, "fresh_cell": 19476.53},
+    "fit_fails": ["compute", "reduction", "update"],
+    "token_A": "unmodelled",
+    "unmeasured": ["token", "decoding", "per_gate"],
+    "b": [2153]
+   }
   }
  },
  "valid": ["fresh_products", "token", "decoding"],
@@ -18,7 +103,7 @@
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
   "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
   "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
-  "fresh_cell": "sensitivity, premise P-cell beside the term's P-width and P-chain (te_core.io_bound): every block holds whole GEMM gadgets, a premise on the partition, which the attacker chooses (coordinator 12:09Z); te_core.formalism.fresh_products' term in 4.8"
+  "fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)"
  },
  "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
@@ -27,7 +112,7 @@
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
   "none": "no kind exceeds 1: Fit fails and every valid kind is measured, none with a term above 1, so rho is 1 (coordinator 12:20Z)",
-  "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh products are unmeasured only in a summation order other than the chain (none today), the token and decoding kinds without a trace"
+  "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh products are unmeasured only for a circuit that declares a tree (none does), the token and decoding kinds without a trace"
  },
  "reading_a": {
   "unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), from a trace's entries and op log, which a model hasn't",
@@ -173,7 +258,6 @@
        "rho": 265541.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 265541.2,
        "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -266,7 +350,6 @@
        "rho": 202999.7,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 202999.7,
        "terms": {"fresh_products": 202999.7, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -359,7 +442,6 @@
        "rho": 301929.3,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 301929.3,
        "terms": {"fresh_products": 301929.3, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -936,7 +1018,6 @@
        "rho": 265102.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 265102.2,
        "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -1041,7 +1122,6 @@
        "rho": 265102.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 265102.2,
        "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -1146,7 +1226,6 @@
        "rho": 1.287338,
        "basis": "fit",
        "binding_kind": null,
-       "bound": null,
        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
@@ -1566,7 +1645,6 @@
        "rho": 255744.8,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 255744.8,
        "terms": {"fresh_products": 255744.8, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -1695,7 +1773,6 @@
        "rho": 3643.056,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 3643.056,
        "terms": {"fresh_products": 3643.056, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -1815,7 +1892,6 @@
        "rho": null,
        "basis": "unmeasured",
        "binding_kind": null,
-       "bound": null,
        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
@@ -2417,7 +2493,6 @@
        "rho": 50026.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 50026.6,
        "terms": {"fresh_products": 50026.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -2505,7 +2580,6 @@
        "rho": 137563.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 137563.2,
        "terms": {"fresh_products": 137563.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -2593,7 +2667,6 @@
        "rho": 179917.3,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 179917.3,
        "terms": {"fresh_products": 179917.3, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -2946,7 +3019,6 @@
        "rho": 1150.109,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 1150.109,
        "terms": {"fresh_products": 1150.109, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -3049,7 +3121,6 @@
        "rho": 87.31198,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 87.31198,
        "terms": {"fresh_products": 87.31198, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -3150,7 +3221,6 @@
        "rho": 49.75989,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 49.75989,
        "terms": {"fresh_products": 49.75989, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -3246,7 +3316,6 @@
        "rho": null,
        "basis": "unmeasured",
        "binding_kind": null,
-       "bound": null,
        "terms": {"fresh_products": 0.9845879, "token": null, "decoding": null},
        "partial": false,
        "why": {
@@ -3342,7 +3411,6 @@
        "rho": null,
        "basis": "unmeasured",
        "binding_kind": null,
-       "bound": null,
        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
@@ -4037,7 +4105,6 @@
        "rho": 62889.26,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 62889.26,
        "terms": {"fresh_products": 62889.26, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -4133,7 +4200,6 @@
        "rho": 265541.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 265541.2,
        "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
@@ -4229,7 +4295,6 @@
        "rho": 8362.963,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 8362.963,
        "terms": {"fresh_products": 8362.963, "token": null, "decoding": null},
        "partial": true,
        "why": {
