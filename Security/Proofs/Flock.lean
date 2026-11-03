@@ -19,6 +19,7 @@ public import Proofs.Flock.ZeroKnowledgeHidden
 public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.Recursive
+public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
 public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.Claims.Complete.ZkTables
