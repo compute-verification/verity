@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Split
 public import Proofs.Flock.SamplingGeneric.Count
+public import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -11,7 +12,8 @@ public import Proofs.Flock.SamplingGeneric.Count
 (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E`'s, `Flock.κ`'s and `Flock.γ`'s), and its
 rounds are its shape's (`arg_ofFlock_wf`). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
 it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`). `CompilerKSCount`
-follows from it (`SamplingGeneric/Count.lean`).
+and `CompilerBits` follow from it (`SamplingGeneric/Count.lean`, `SamplingGeneric/Bits.lean`, the latter through the
+extractor's expected reruns and own calls, `ExpOwnOf`).
 -/
 
 @[expose] public section
