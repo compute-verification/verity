@@ -122,10 +122,15 @@ enum CoinMode {
     /// `os`: every round's coins flipped from the OS, so soundness rests on SHA-512 collision resistance alone
     Os,
     /// `tree`: the challenger's keyed coin tree (`coin_tree::SCHEME`, M2's commitment without M1's masks): every coin committed
-    /// at Hello, the Hello answered with the root and session key, each round's coins opened against it. The ZK server checks
-    /// each opening (the recursion's inner phase, `verity_flock.rec_live`) and hands on the coins alone, so the prover does not
-    /// wrap [`flock_live::coin_tree::Checked`]
+    /// at Hello, the Hello answered with the root and session key, each round's coins opened against it. The prover checks
+    /// each opening ([`flock_live::coin_tree::Checked`]) unless a ZK server does ([`zk_server_checks_coins`])
     Tree,
+}
+
+/// The recursion's inner phase (`verity_flock.rec_live`): its ZK server adds its own streams to the session's tree
+/// (`FC_COIN_STREAMS`, [`plain_coin_spec`]), checks each opening and hands on the coins alone.
+fn zk_server_checks_coins() -> bool {
+    std::env::var("FC_COIN_STREAMS").is_ok_and(|x| !x.is_empty())
 }
 
 /// The Hello and the identity carry the mode, so a prover and a server that disagree refuse the session. A selftest build
@@ -3452,9 +3457,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         return Err((json!({"accepted": false, "why": why, "prover_stopped": why}), Vec::new()));
     }
     // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it; under the
-    // ZK server the Lean session loop checks them (`flock-firewall session`), and only the coins come back; a plain session on
-    // the challenger's coin tree is the recursion's ZK server's, which checks them ([`CoinMode::Tree`])
-    let t: SharedTransport = if is_zk(st) && !plan.lean_session {
+    // ZK server the Lean session loop checks them (`flock-firewall session`), and only the coins come back, as they do from
+    // the recursion's ZK server to a plain session on the challenger's coin tree ([`zk_server_checks_coins`])
+    let t: SharedTransport = if (is_zk(st) || (plain_tree(st) && !zk_server_checks_coins())) && !plan.lean_session {
         shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names)))
     } else {
         t
