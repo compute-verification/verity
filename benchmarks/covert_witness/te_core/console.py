@@ -2,7 +2,8 @@
 
     python -m te_core.console DIR    # DIR: te_core.plots' panels; writes DIR/console/
 
-A body is at most `BODY_MAX` bytes (compact JSON, no NaN) and a note at most `NOTE_MAX` characters. Each panel keeps
+A body is at most `BODY_MAX` bytes (compact JSON, no NaN), a note at most `NOTE_MAX` characters and the columns at most
+`COLUMNS_MAX` distinct names (`refused` has the rest of what the route refuses). Each panel keeps
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
 it. The console's training panels are `training/frontier-branches` and `training/algorithm-policy` (te_core.panels
@@ -24,6 +25,7 @@ PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
 BODY_MAX = 65536
 NOTE_MAX = 500
 CELL_MAX = 200
+COLUMNS_MAX, NAME_MAX = 24, 60
 REF_TARGET = -1.0
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LOSSES = ("loss", "loss_lo", "loss_hi", "l0")
@@ -49,12 +51,16 @@ def body(p: dict) -> bytes:
 
 
 def refused(p: dict) -> list[str]:
-    """What the route refuses in `p`'s rows: a row has one cell per column, each a number, a string of at most
-    `CELL_MAX` characters, or null (a boolean is none of them)."""
+    """What the route refuses in `p`: its columns are 1 to `COLUMNS_MAX` distinct names of at most `NAME_MAX`
+    characters, and a row has one cell per column, each a number, a string of at most `CELL_MAX` characters, or null
+    (a boolean is none of them)."""
     def ok(v):
         return v is None or isinstance(v, (int, float)) and not isinstance(v, bool) or \
             isinstance(v, str) and len(v) <= CELL_MAX
     cols, out = p["columns"], []
+    if not 1 <= len(cols) <= COLUMNS_MAX or len(set(cols)) < len(cols) or any(len(c) > NAME_MAX for c in cols):
+        out.append(f"its {len(cols)} columns aren't 1 to {COLUMNS_MAX} distinct names of at most {NAME_MAX} "
+                   "characters")
     for i, r in enumerate(p["rows"]):
         if len(r) != len(cols):
             out.append(f"row {i} has {len(r)} cells, not {len(cols)}")
