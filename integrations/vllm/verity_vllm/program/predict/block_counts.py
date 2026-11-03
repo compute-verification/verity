@@ -60,7 +60,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
-    blocks, _ = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
@@ -101,7 +101,7 @@ def primitives(fns: Iterable[Any]) -> dict[str, Any]:
 
 def gate_table(prims: Mapping[str, Any]) -> tuple[dict[str, int], list[str]]:
     """Each primitive's two-input Boolean gates (module docstring), and the keys of those it can't price."""
-    work, table, unpriced = CE._Work(), {}, []
+    work, table, unpriced = CE.BooleanWork(), {}, []
     for key, p in sorted(prims.items()):
         try:
             got = work.of(p if BL.is_boolean(p) else boolean_version(p))
