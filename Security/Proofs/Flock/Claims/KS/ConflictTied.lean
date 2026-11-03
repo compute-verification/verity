@@ -166,7 +166,7 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
 
 /-- **What the verifier's decoder reads of each table's `root_B`**, whatever the hashes and `keep` (S5's parse). -/
 theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ j l, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧
       List.Forall₂ (Claims.Bridge.Custody.RootField l) spec.tables.toList sess.rootB.toList := by
   unfold Record.decodeWithK Record.decodeJWithK at h
@@ -193,7 +193,7 @@ theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
 
 /-- **The element-level decoder's `root_B` is `liveOf`'s**, whatever the hashes and `keep`. -/
 theorem decodeWithK_rootB_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
+    {sess : RunRecord} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
     (hl : liveOf spec text = .ok lv) : sess.rootB = lv.rootB := by
   obtain ⟨j, l, hp, hl1, hroot⟩ := decodeWithK_rootB keep hs hd
   obtain ⟨j', l', recs', hp', hl1', -, hroot', -, -⟩ := Claims.Bridge.Custody.liveOf_ok hl
@@ -213,7 +213,7 @@ theorem plainQueryRound_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
       st.fold.kLog = st.kLog)
     (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWithK keep hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWithK keep hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
