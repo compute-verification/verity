@@ -230,7 +230,7 @@ def test_a_v_star_sessions_registration_past_the_call_bound_is_refused_by_both(s
         assert p.returncode == 1 and v["why"] == "setup: " + why, v
 
 
-def test_a_v_star_list_past_the_soundness_bounds_parts_is_refused_by_both(staged, tmp_path):  # noqa: F811
+def test_a_v_star_list_past_the_soundness_bounds_parts_is_refused_by_both(staged, tmp_path):
     """The verifier's list at (35, 24, 10), four regions, holds 17 statements: `statement` and `verify` under that inner
     shape refuse `rec_outer`'s staged level at setup with `RecBudget.count`'s message, which `rec_budget.count` returns
     for 17. At (35, 24, 8), three regions, the list holds 16 (the cap, 85-rec-reprice's K = 4096 shape): both pass it,
