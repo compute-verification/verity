@@ -84,7 +84,7 @@ The logical layer is the cryptography: PoUW, PoUS and the bandwidth audits prove
 
 - **Compute.** PoUW credits the noised products' size S, at least (1 − ε)·S of its AND gates right (Glossary, "Credit"). Traffic alone attributes nothing: a zone is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed.
 - **Memory.** The bandwidth audits prove bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
-- **Network.** Certifiers prove ports carried only values in the committed trace, timing aside; gaps cost line rate.
+- **Network.** Network certifiers sign what crosses a zone's boundary links, and the network verdict of record bounds two things: each link's timing, N2 holding every execution phase's per-bucket counts, and the certified requests' tie to the advice, the ingress tie. That each egress cell carries what the committed trace computed, the egress content tie, is not in the verdict yet. A rejected, late or missing execution phase rejects its link, and the datacenter model charges a refused link at its line rate.
 
 The joint ledger charges each device's time once. Without attribution, it subtracts only from the whole fleet's capacity, if no unregistered hardware helped.
 
