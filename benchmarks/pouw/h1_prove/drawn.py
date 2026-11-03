@@ -8,7 +8,9 @@ with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`), its Lean r
                           [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
     python drawn.py statements --work W --out FILE
     python drawn.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY [--jobs J]
+                          [--headroom-gb GB]
     python drawn.py fill SERVE_DIR WINDOW --circuits DIR --statements FILE --answers DIR [--lean FLOCK_VERIFY] [--jobs J]
+                         [--headroom-gb GB]
 """
 from __future__ import annotations
 
@@ -54,16 +56,17 @@ def checkpoint_weights(checkpoint: Path, linears: Sequence[tuple[str, int, int]]
     return out
 
 
-def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path, jobs: int | None = None
-             ) -> tuple[list | None, tuple | None]:
+def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path, jobs: int | None = None,
+             headroom: float | None = None) -> tuple[list | None, tuple | None]:
     """Credit's verification of a window's drawn statements (`credit._verified` under the window's draw, then
     `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`: every run `_verified` makes answered first,
-    `jobs` at a time (`answers.fill`, J by `answers.jobs` when None), then `_verified` judging each answer in its order."""
+    `jobs` at a time (`answers.fill`, J by `answers.jobs` of `headroom` when None), then `_verified` judging each answer
+    in its order."""
     PF.executable = lambda: lean
     answers = A.Answers(by="the fill")
     runs, _refused = A.window_runs(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
                                    win["steps"], win["salt"], win["draw"])
-    A.fill(answers, runs, jobs)
+    A.fill(answers, runs, jobs, headroom=headroom)
     proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
                                win["steps"], answers, win["salt"], win["draw"])
     return proofs, why if why is not None else CR._proved(units, proofs)
@@ -104,11 +107,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--lean")
     f.add_argument("--k", type=int)
     for p in (c, f):
-        p.add_argument("--jobs", type=int, help=f"Lean runs at once (default {A.JOBS_ENV}, else floor((available memory "
-                                                f"- {A.HEADROOM_ENV} or {A.HEADROOM_GB:g} GiB) / {A.RUN_GB:g} GiB))")
+        p.add_argument("--jobs", type=int, help="Lean runs at once (default floor((available memory - the headroom) / "
+                                                f"{A.RUN_GB:g} GiB))")
+        p.add_argument("--headroom-gb", type=float, help="the available memory left beside the Lean runs when --jobs is "
+                                                         f"not given (default {A.HEADROOM_GB:g} GiB)")
     a = ap.parse_args(argv)
     a.checkpoint_weights = checkpoint_weights
-    a.verified = lambda *x: verified(*x, jobs=getattr(a, "jobs", None))
+    a.verified = lambda *x: verified(*x, jobs=getattr(a, "jobs", None), headroom=getattr(a, "headroom_gb", None))
+    if a.cmd == "fill" and a.lean:
+        PF.executable = lambda: Path(a.lean)
     return D.run(a.cmd, a)
 
 

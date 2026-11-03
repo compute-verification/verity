@@ -18,7 +18,8 @@
 # is kept under the SHA-512 of all its inputs in the verifier's own scratch (a 0700 directory under VERIFIER_TMP, never
 # the serve dir, removed on exit), so each statement is verified once, step 4 takes step 3's answers by key (its line:
 # "it took the piece's Lean answers by key"), and each step judges every answer itself. J is floor((available memory - 16 GiB) / 47.5 GiB), a K 2048 lane statement's
-# verifier at its peak (3 on a 196 GB H200 node), unless H1_LEAN_JOBS sets it (H1_LEAN_HEADROOM_GB the 16).
+# verifier at its peak (3 on a 196 GB H200 node), unless H1_LEAN_JOBS sets it (fill's --jobs; H1_LEAN_HEADROOM_GB the 16,
+# its --headroom-gb).
 # H1_POUW_REUSE=1 skips steps 1 and 2 when their statements and live evidence are already there (a rerun of 3 and 4 on
 # the kept proofs).
 # env: served_verdicts.sh's (H1_GATE, H1_KEY_SHA512, MAIN_FILE, PY), drawn.sh's and live.sh's (H1_CIRCUITS, H1_MODEL,
@@ -67,7 +68,8 @@ t=$(date +%s)
 if [ -s "$ST" ] && [ -n "${H1_CIRCUITS:-}" ]; then
   # no --lean: steps 3 and 4 run proofs.executable()'s flock-verify, whose SHA-512 is in each answer's key
   "$TPY" benchmarks/pouw/h1_prove/drawn.py fill "$SD" "$WIN" --circuits "$H1_CIRCUITS" --statements "$ST" --answers "$LA" \
-    ${H1_DRAW_K:+--k "$H1_DRAW_K"} 2>&1 | tee "$Q/fill.log" | grep --line-buffered '^LEAN ' \
+    ${H1_DRAW_K:+--k "$H1_DRAW_K"} ${H1_LEAN_JOBS:+--jobs "$H1_LEAN_JOBS"} \
+    ${H1_LEAN_HEADROOM_GB:+--headroom-gb "$H1_LEAN_HEADROOM_GB"} 2>&1 | tee "$Q/fill.log" | grep --line-buffered '^LEAN ' \
     | sed -u -E 's/^LEAN (.{0,300}).*/POUW lean: \1/'
   frc=${PIPESTATUS[0]}
   say "lean: drawn.py fill exit $frc after $(took "$t"), its answers in the verifier's scratch"

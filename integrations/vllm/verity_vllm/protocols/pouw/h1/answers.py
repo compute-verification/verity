@@ -33,14 +33,15 @@ from typing import Any, Callable, Mapping, Sequence
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.ml.circuits.codec import canonical_json
+
+__all__ = ["Answers", "HEADROOM_GB", "RUN_GB", "fill", "jobs", "key", "memory_gb", "verdict", "window_runs"]
 
 #: the peak resident memory of one lane statement's ``flock-verify verify --zk`` at K = 2048, which `jobs` sizes J by (GiB)
 RUN_GB = 47.5
 #: the available memory `jobs` leaves beside the runs: the Python verifier holding the window's statements and asks (a
 #: few GiB in the lanes form) and slack for the kernel (GiB)
 HEADROOM_GB = 16.0
-#: the settings that override J and the headroom
-JOBS_ENV, HEADROOM_ENV = "H1_LEAN_JOBS", "H1_LEAN_HEADROOM_GB"
 #: the errors credit reads as a verifier that can't run (`credit._verified`'s), kept in the memo as they were raised
 ERRORS: dict[str, type[Exception]] = {"LeanError": PF.LeanError, "OSError": OSError, "ValueError": ValueError,
                                       "KeyError": KeyError, "TypeError": TypeError}
@@ -73,20 +74,15 @@ def memory_gb() -> float:
 
 def jobs(setting: int | str | None = None, memory: float | None = None, headroom: float | None = None
          ) -> tuple[int, str]:
-    """J, the runs `fill` keeps going at once, and how it was sized: `setting` (else ``H1_LEAN_JOBS``) when given, else
+    """J, the runs `fill` keeps going at once, and how it was sized: `setting` when given, else
     floor((memory − headroom) / `RUN_GB`), at least 1, with `memory` `memory_gb`'s (what is available as the fill starts)
-    and `headroom` ``H1_LEAN_HEADROOM_GB`` or `HEADROOM_GB`."""
-    setting = setting if setting is not None else os.environ.get(JOBS_ENV) or None
+    and `headroom` `HEADROOM_GB` unless given."""
     if setting is not None:
-        return max(1, int(setting)), f"set (--jobs or {JOBS_ENV})"
+        return max(1, int(setting)), "set (--jobs)"
     memory = memory_gb() if memory is None else memory
-    headroom = float(os.environ.get(HEADROOM_ENV) or HEADROOM_GB) if headroom is None else headroom
+    headroom = HEADROOM_GB if headroom is None else headroom
     return (max(1, math.floor((memory - headroom) / RUN_GB)),
             f"floor(({memory:.1f} GiB available - {headroom:g} GiB headroom) / {RUN_GB:g} GiB a run)")
-
-
-def canonical(x: Any) -> bytes:
-    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
 #: the size from which `file_digest` hashes a file once per process (a circuit file); a smaller one it hashes each time
@@ -123,7 +119,7 @@ def key(proof: PF.Proof, *, exe: Path, circuit_sha512: str, program: bytes, part
         if not files:
             raise FileNotFoundError(f"session directory {s} holds no file")
         sessions.append([[str(p.relative_to(s)), file_digest(p)] for p in files])
-    return hashlib.sha512(canonical({
+    return hashlib.sha512(canonical_json({
         "exe": file_digest(exe), "circuit": file_digest(proof.circuit), "public": file_digest(proof.public),
         "sessions": sessions, "paths": [str(proof.circuit), str(proof.public), [str(s) for s in proof.sessions]],
         "circuit_sha512": circuit_sha512, "program": hashlib.sha512(program).hexdigest(), "partition": partition,
@@ -267,13 +263,13 @@ def window_runs(statements: Any, files: Any, raw: bytes, layout: dict, entries: 
 
 
 def fill(answers: Answers, runs: Sequence[tuple[str, PF.Proof, dict[str, Any]]], j: int | None = None,
-         say: Callable[[str], Any] = SAY) -> dict[str, int]:
-    """Each of `runs` (`window_runs`') answered into `answers`' memo, J at a time (`jobs` of the setting `j`), a run the
-    memo holds not run again: one ``LEAN`` line a verdict as each ends (how many have ended, the run's place among
-    `runs`, its label, the verdict and its seconds). The counts of runs ``ran``, ``held`` (already in the memo) and
-    ``unkeyed`` (a file missing: credit's own run meets it)."""
+         say: Callable[[str], Any] = SAY, headroom: float | None = None) -> dict[str, int]:
+    """Each of `runs` (`window_runs`') answered into `answers`' memo, J at a time (`jobs` of the setting `j` and the
+    `headroom`), a run the memo holds not run again: one ``LEAN`` line a verdict as each ends (how many have ended, the
+    run's place among `runs`, its label, the verdict and its seconds). The counts of runs ``ran``, ``held`` (already in
+    the memo) and ``unkeyed`` (a file missing: credit's own run meets it)."""
     answers.exe()
-    j, sized = jobs(j)
+    j, sized = jobs(j, headroom=headroom)
     todo, held, unkeyed = [], 0, 0
     for i, (label, proof, kw) in enumerate(runs):
         try:

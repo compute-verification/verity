@@ -7,8 +7,9 @@ is its CLI, which reads ``--checkpoint`` with the live challenger's model regist
     drawn stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
     drawn statements --work W --out FILE
-    drawn check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY [--jobs J]
+    drawn check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY [--jobs J] [--headroom-gb GB]
     drawn fill SERVE_DIR WINDOW --circuits DIR --statements FILE --answers DIR [--lean FLOCK_VERIFY] [--jobs J]
+               [--headroom-gb GB]
 
 SERVE_DIR is serve-openai's ``--out`` (`served_verdicts.sh`'s D): the window's record ``h1/w<WINDOW>/pouw-h1-calls.json``,
 the declared Program ``h1/window-program.json.gz`` and the period ``period.json`` (its ``draw_k``, else ``--k``); the
@@ -697,17 +698,15 @@ def check(a: Any) -> int:
 
 def fill(a: Any) -> int:
     """``fill``: every verifier run ``check`` makes (`answers.window_runs`) answered into the memo directory --answers,
-    --jobs at a time (`answers.fill`; J by `answers.jobs` without it), with the ``flock-verify`` at --lean, else
-    `proofs.executable`'s: one ``LEAN`` line a verdict, then the counts."""
-    if a.lean:
-        PF.executable = lambda: Path(a.lean)
+    --jobs at a time (`answers.fill`; J by `answers.jobs` of --headroom-gb without it), with `proofs.executable`'s
+    ``flock-verify`` (the CLI's is --lean's when given): one ``LEAN`` line a verdict, then the counts."""
     win, units, files, sts = _checked(a)
     runs, refused = A.window_runs(sts, files, win["raw"], win["layout"], win["entries"], win["root"], units,
                                   win["steps"], win["salt"], win["draw"])
     if refused is not None:
         print(f"LEAN the runs stop where a check before the verifier refuses: {refused[0]}: {refused[1]}"[:600],
               flush=True)
-    got = A.fill(A.Answers(Path(a.answers), by="the fill"), runs, a.jobs)
+    got = A.fill(A.Answers(Path(a.answers), by="the fill"), runs, a.jobs, headroom=getattr(a, "headroom_gb", None))
     print(f"LEAN filled: {got['ran']} ran, {got['held']} already answered, {got['unkeyed']} unkeyed", flush=True)
     return 0
 

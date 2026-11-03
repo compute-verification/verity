@@ -240,7 +240,7 @@ def test_the_order_the_fills_runs_end_in_changes_no_answer_and_no_verdict(seed, 
         place.update({str(proof.public): j for j, (_l, proof, _kw) in enumerate(todo)})
         answers = A.Answers(memo, by="the fill", verify=verify, say=None, clock=lambda: 0.0)
         assert A.fill(answers, todo, n, say=say) == {"ran": n, "held": 0, "unkeyed": 0}
-        assert said[0] == f"LEAN {n} runs: {n} to run, {n} at a time, J set (--jobs or H1_LEAN_JOBS) (0 already answered, 0 unkeyed)"
+        assert said[0] == f"LEAN {n} runs: {n} to run, {n} at a time, J set (--jobs) (0 already answered, 0 unkeyed)"
         assert [int(re.match(r"LEAN \d+/\d+ run (\d+) of ", x)[1]) - 1 for x in said[1:]] == order
         assert all(x.endswith(": accepted 1 of 1 sessions in 0.0 s") for x in said[1:])
         kept.append({p.name: p.read_text() for p in sorted(memo.iterdir())})
@@ -251,7 +251,7 @@ def test_the_order_the_fills_runs_end_in_changes_no_answer_and_no_verdict(seed, 
     said = []
     assert A.fill(A.Answers(tmp_path / "memo0", by="the fill", say=None), todo, 2, say=said.append) == {
         "ran": 0, "held": n, "unkeyed": 0}
-    assert said == [f"LEAN {n} runs: 0 to run, 2 at a time, J set (--jobs or H1_LEAN_JOBS) ({n} already answered, "
+    assert said == [f"LEAN {n} runs: 0 to run, 2 at a time, J set (--jobs) ({n} already answered, "
                     "0 unkeyed)"]
 
 
@@ -266,9 +266,9 @@ def test_drawn_fill_answers_a_windows_runs_for_its_window_check_to_take_by_key(r
            "root": w["window"]["root"], "steps": len(w["rounds"]), "salt": w["salt"], "draw": w["draw"]}
     monkeypatch.setattr(DRAWN, "_checked", lambda a: (win, kit()._units(w, k), files, w["statements"]))
     memo = tmp_path / "scratch"
-    assert DRAWN.run("fill", SimpleNamespace(lean=str(exe), answers=memo, jobs=2)) == 0
+    assert DRAWN.run("fill", SimpleNamespace(answers=memo, jobs=2, headroom_gb=None)) == 0
     out, n = capsys.readouterr().out.splitlines(), len(w["statements"])
-    assert out[0] == (f"LEAN {n} runs: {n} to run, 2 at a time, J set (--jobs or H1_LEAN_JOBS) (0 already answered, "
+    assert out[0] == (f"LEAN {n} runs: {n} to run, 2 at a time, J set (--jobs) (0 already answered, "
                       "0 unkeyed)")
     assert len(out) == n + 2 and all(": accepted 1 of 1 sessions in " in x for x in out[1:-1])
     assert out[-1] == f"LEAN filled: {n} ran, 0 already answered, 0 unkeyed"
@@ -332,14 +332,11 @@ def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, ex
         assert said[-1].split(": ", 1)[1].startswith(verdicts[failure]) and " by key from the challenger check: " in said[-1]
 
 
-def test_j_is_the_available_memory_less_the_headroom_over_one_runs_peak_unless_set(monkeypatch):
-    monkeypatch.delenv(A.JOBS_ENV, raising=False)
-    monkeypatch.delenv(A.HEADROOM_ENV, raising=False)
+def test_j_is_the_available_memory_less_the_headroom_over_one_runs_peak_unless_set(tmp_path):
     assert A.jobs(memory=190.6) == (3, "floor((190.6 GiB available - 16 GiB headroom) / 47.5 GiB a run)")
     assert [A.jobs(memory=m)[0] for m in (663.0, 63.5, 40.0)] == [13, 1, 1]
-    assert A.jobs(memory=190.6, headroom=60)[0] == 2
-    monkeypatch.setenv(A.HEADROOM_ENV, "60")
-    assert A.jobs(memory=190.6)[0] == 2
-    assert A.jobs("7", memory=190.6) == (7, "set (--jobs or H1_LEAN_JOBS)") and A.jobs(0)[0] == 1
-    monkeypatch.setenv(A.JOBS_ENV, "5")
-    assert A.jobs(memory=190.6) == (5, "set (--jobs or H1_LEAN_JOBS)")
+    assert A.jobs(memory=190.6, headroom=60) == (2, "floor((190.6 GiB available - 60 GiB headroom) / 47.5 GiB a run)")
+    assert A.jobs("7", memory=190.6, headroom=60) == (7, "set (--jobs)") and A.jobs(0)[0] == 1
+    said = []
+    A.fill(A.Answers(by="the fill", exe=lambda: tmp_path, say=None), [], headroom=60, say=said.append)
+    assert " GiB available - 60 GiB headroom) / 47.5 GiB a run) (0 already answered, 0 unkeyed)" in said[0]

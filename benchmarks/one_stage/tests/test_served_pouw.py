@@ -3,8 +3,9 @@ pouw_piece.py and lake: the live rounds from the window's --h1-prover dump and t
 scratch and logs under the serve dir's private pouw/ (drawn.sh's kept, its check left to credit), then drawn.py fill
 answers the drawn statements into a memo in the verifier's own scratch (0700, outside the serve dir, removed on exit),
 one line a verdict, and the piece and the period's case get their statements, live evidence and that memo, each line
-saying what it took by key; its lines name no window and quote neither tool; and H1_POUW_REUSE=1 reruns the fill, the
-piece and the case on the kept proofs alone."""
+saying what it took by key; its lines name no window and quote neither tool; H1_POUW_REUSE=1 reruns the fill, the
+piece and the case on the kept proofs alone; and H1_LEAN_JOBS and H1_LEAN_HEADROOM_GB reach the fill as its --jobs and
+--headroom-gb."""
 
 from __future__ import annotations
 
@@ -99,10 +100,11 @@ def test_the_pouw_command_proves_then_writes_the_piece_and_the_period_case(tmp_p
     assert not any("secret" in x or " 3" in x for x in said)
     assert oct(q.stat().st_mode & 0o777) == "0o700"
 
-    said = run(H1_POUW_REUSE="1")
+    said = run(H1_POUW_REUSE="1", H1_LEAN_JOBS="5", H1_LEAN_HEADROOM_GB="60")
     assert said[0] == "POUW proofs: the kept statements and live evidence (H1_POUW_REUSE=1)"
-    assert [c["tool"] for c in map(json.loads, calls.read_text().splitlines())] == [
-        "drawn.py", "served_verdicts.py", "pouw_piece.py"]
+    got = [json.loads(x) for x in calls.read_text().splitlines()]
+    assert [c["tool"] for c in got] == ["drawn.py", "served_verdicts.py", "pouw_piece.py"]
+    assert got[0]["argv"][-4:] == ["--jobs", "5", "--headroom-gb", "60"]
 
     said = run(H1_POUW_REUSE="1", H1_CIRCUITS="")
     assert said[1] == "POUW lean: no fill (no H1_CIRCUITS), so the piece and the period run each verifier themselves"
