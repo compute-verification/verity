@@ -2,8 +2,8 @@
 verdict and charge in a record labelled simulated. Nothing here is served: the endpoint is the stand-in
 `demo_stub.py`, and the zones, their network certifiers and the fabric are network namespaces of one host.
 
-Each zone runs the onsite demo's own code, unforked (`benchmarks/network_traces/certifier_piece.py`, on the warden
-path):
+Each zone runs the onsite demo's own code, unforked (`benchmarks/network_traces/certifier_piece.py`, on the
+active-warden path):
 - **the endpoint**: `demo_stub.py serve` in the zone's namespace, on its uplink's address at `PORT`, keeping its
   records (the serve dir) in KEEP/<zone>/serve;
 - **the tunnel**: `certifier_piece.relay` in the zone's certifier namespace, from that namespace's loopback `PORT` to
@@ -359,7 +359,7 @@ def notes() -> list[str]:
         "F*log2(N + 1) + b*F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
         f"the jitter is charged at d_jit = {LB.JITTER_BOUND}, k_i = T steps a window: {LB.JITTER}; the brief's 0 "
         "holds only under J at d_jit = 1",
-        "no sync term on the warden path",
+        "no sync term on the active-warden path",
         "delta_net is the scans' delta summed over the period's windows, m*delta_scan, beside the scans' knowledge and "
         "collision errors; where it reaches 1 the row is vacuous, a bound that holds with no probability",
         "each zone's figures scale one link-window's run to the period; nothing over a week, a month or a year was run",

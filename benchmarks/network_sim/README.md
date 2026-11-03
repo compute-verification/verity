@@ -177,8 +177,8 @@ signs nothing: a stand-in LMS key (`lab_run.n2_verdicts`) signs N2's heads after
 
 ## The onsite path
 
-`onsite.py` runs the onsite demo's network certifier path (`benchmarks/network_traces/certifier_piece.py`, the warden
-path) at every zone's boundary, the same code unforked, and records each zone's verdict and charge, labelled simulated
+`onsite.py` runs the onsite demo's network certifier path (`benchmarks/network_traces/certifier_piece.py`, the
+active-warden path) at every zone's boundary, the same code unforked, and records each zone's verdict and charge, labelled simulated
 and never served (`onsite.SIMULATED` lists what the lab leaves unmet). In each zone, the stand-in endpoint
 (`demo_stub.py serve`) runs in the zone's namespace on its uplink's address; a relay in the certifier's namespace
 (`certifier_piece.relay`, the `tunnel` role) stands in for the gate's ssh tunnel to the node's port; and the front
