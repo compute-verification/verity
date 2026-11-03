@@ -279,6 +279,7 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
   unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · unfold SampledProofs.OneStageZk.checkBlobsAt at h
+    dsimp only at h
     split at h
     · cases h
     · split at h <;> (try split at h) <;>
