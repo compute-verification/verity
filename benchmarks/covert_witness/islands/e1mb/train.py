@@ -30,11 +30,13 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
   so the repeated codes cost xz almost nothing;
 - coded gradient messages (`--msg vote|q1|q2|q4|q8`, the coordinator's 04:41Z ruling): a step's batch is cut into token
   blocks of `--leaf` sequences (1: 1,024 tokens, under s = c/w for any of these runs), and each block's partial gradient
-  of the factors (or of VeRA's d and b), taken in the one batched backward by tensor hooks, is its message: `vote` its
-  sign (a zero drawn ±1), qN stochastically rounded onto 2^(N-1) - 1 levels a side times a bf16 absmax scale per 128
-  entries. A message passes at its width in the trace (bools, or N-bit levels packed into uint8s, and bf16 scales). The
-  messages are summed up a tree of fan-in `--fan` (default 2) whose every sum is recoded, so every message an inner node
-  sends is as wide as a leaf's, and the optimizer reads the root's. With `vote` a node sends its children's majority,
+  of the factors (or of VeRA's d and b), taken in the one batched backward by tensor hooks, is its message (the backward
+  runs to each adapter's `anchors`, the tensor its trained values first make, so autograd never sums the factors'
+  gradients over the batch): `vote` its sign (a zero drawn ±1), qN
+  stochastically rounded onto 2^(N-1) - 1 levels a side times a bf16 absmax scale per 128 entries. A message passes at
+  its width in the trace (bools, or N-bit levels packed into uint8s, and bf16 scales). The messages are summed up a
+  tree of fan-in `--fan` (default 2) whose every sum is recoded, so every message an inner node sends is as wide as a
+  leaf's, and the optimizer reads the root's. With `vote` a node sends its children's majority,
   which only an odd fan-in amplifies: at 2, sign(s1 + s2) with the tie drawn is one child's sign at random (P(+1) =
   p² + p(1 - p) = p), so the root's sign is distributed as one block's; at 3 each level multiplies a small bias by 1.5
   (81 = 3^4 blocks: about 5x, against a full vote's 7.2x). `delta_grad.grad_bits` is that width (1 bit an entry for
@@ -250,10 +252,11 @@ def reduce_tree(leaves: torch.Tensor, code: Message) -> torch.Tensor:
 
 
 def reduce_all(ads: list, code: Message) -> None:
-    """The tree's root over this step's block gradients of every trained tensor, as their gradients (autograd's sums
-    discarded). A block's message is its whole gradient, the tensors laid end to end, so the eager step runs one tree's
-    ops rather than a tree a tensor: the harness's counter sees every op, at a cost each. No qN group straddles two
-    tensors while each holds a multiple of MSG_GROUP entries; otherwise each tensor takes its own tree."""
+    """The tree's root over this step's block gradients of every trained tensor, as their gradients (autograd takes
+    none: `backward_to_anchors`). A block's message is its whole gradient, the tensors laid end to end, so the eager
+    step runs one tree's ops rather than a tree a tensor: the harness's counter sees every op, at a cost each. No qN
+    group straddles two tensors while each holds a multiple of MSG_GROUP entries; otherwise each tensor takes its own
+    tree."""
     pend = [(p, gs[0] if len(gs) == 1 else torch.cat(gs)) for ad in ads for p, gs in ad.pending()]
     if any(p.numel() % MSG_GROUP for p, _ in pend):
         for p, g in pend:
@@ -264,10 +267,21 @@ def reduce_all(ads: list, code: Message) -> None:
         p.grad = r.view(p.shape)
 
 
+def backward_to_anchors(loss: torch.Tensor, ads: list) -> None:
+    """A coded step's backward: autograd runs from the loss to every adapter's anchors only, so each block hook gets its
+    output's gradient and every input gradient below it runs, while no trained tensor's batch-summed gradient is formed
+    (reduce_all sets those from the tree's root)."""
+    anchors = [t for ad in ads for t in ad.anchors]
+    for ad in ads:
+        ad.anchors = []
+    torch.autograd.grad(loss, anchors)
+
+
 class LowRank:
     """One target's factors (fp32 latents A, B), its scale and precision, the straight-through offsets to the values E
     stores (`refresh`), and with DoRA the magnitudes (init: W's row norms). With `leaf` (sequences a token block), the
-    forward hook also takes each block's partial gradient of A and B from its output's gradient (`gA`, `gB`)."""
+    forward hook also takes each block's partial gradient of A and B from its output's gradient (`gA`, `gB`), and keeps
+    h = A x as the step's anchor."""
 
     def __init__(self, w: torch.nn.Parameter, a0: torch.Tensor, s: float, bits: tuple[int, int], fmt: str, dora: bool,
                  leaf: int = 0):
@@ -280,7 +294,7 @@ class LowRank:
         self.wn2 = w.detach().float().pow(2).sum(1) if dora else None
         self.m = torch.nn.Parameter(self.wn2.sqrt().clone()) if dora else None
         self.dm = torch.zeros_like(self.m) if dora else None
-        self.gA, self.gB = [], []
+        self.gA, self.gB, self.anchors = [], [], []
 
     def trained(self) -> list[torch.nn.Parameter]:
         return [self.A, self.B]
@@ -322,6 +336,7 @@ class LowRank:
         z = F.linear(h, fb)
         if self.leaf and z.requires_grad:
             z.register_hook(functools.partial(self.leaf_grads, x.detach(), h.detach(), fb.detach()))
+            self.anchors.append(h)
         y = out + self.s * z
         if self.m is None:
             return y
@@ -346,7 +361,7 @@ class VeRA:
         self.d = torch.nn.Parameter(torch.full((va.shape[0],), float(d0), device=va.device))
         self.b = torch.nn.Parameter(torch.zeros(vb.shape[0], device=vb.device))
         self.dd, self.db = torch.zeros_like(self.d), torch.zeros_like(self.b)
-        self.gd, self.gb = [], []
+        self.gd, self.gb, self.anchors = [], [], []
 
     def trained(self) -> list[torch.nn.Parameter]:
         return [self.d, self.b]
@@ -376,10 +391,12 @@ class VeRA:
     def hook(self, mod, inp, out):
         dv, bv = self.d + self.dd, self.b + self.db
         u = F.linear(inp[0], self.va)
-        z = F.linear(u * dv, self.vb)
+        ud = u * dv
+        z = F.linear(ud, self.vb)
         y = z * bv
         if self.leaf and y.requires_grad:
             y.register_hook(functools.partial(self.leaf_grads, u.detach(), z.detach(), bv.detach()))
+            self.anchors.append(ud)
         return out + y.to(out.dtype)
 
     def entry(self) -> dict:
@@ -858,7 +875,10 @@ def main() -> int:
             with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
                 logits = fwd(x[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
-            loss.backward()
+            if coded:
+                backward_to_anchors(loss, list(ads.values()))
+            else:
+                loss.backward()
             total += float(loss.detach())
         steps.append({"op": "train", "tokens": tokens})
         if coded:
