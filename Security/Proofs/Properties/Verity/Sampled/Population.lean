@@ -21,9 +21,10 @@ holds with no hypothesis on the population (`coupled_draw_held`, `coupled_draw_c
   the committed files, and the public file (`namedFile`) is the first committed file with the parameters' digest, so
   the first with its SHA-512 is itself. No SHA-512 collision enters.
 * **Its header's `instances` is the population** (`publicHeld_ok`, `matchesPublic_population`, `headerOf_ok`,
-  `headerLine_of_findByte`, `loadPublic_instances`): v2 reads the header line as `HmRow.loadPublic` does (`Flock.norm`
-  of `Json.parse` of the bytes before the first newline), holds its `instances` equal to the record's `population`
-  (`jeq`), and `loadPublic`'s `n` is that `instances`, so it is the record's population (`nat_of_jeq`).
+  `headerLine_of_findByte`, `loadPublic_instances`): v2 reads the header line `HmRow.loadPublic` reads (the bytes
+  before the first newline) as `Flock.norm` of its parse, holds its `instances` equal to the record's `population`
+  (`jeq`), and `loadPublic`'s `n` is that `instances`, so it is the record's population (`nat_of_jeq`). v2 parses
+  with `Lean.Json.parse` and `loadPublic` with `Flock.JsonParse.parse`, so the two parses agree only under `hjp`.
 -/
 
 open private headerLine headerOf from SampledProofs.OneStageZk
@@ -253,7 +254,7 @@ newline. -/
 theorem loadPublic_instances {tags : Flock.Tags} {c : Flock.Circuit} {f : ByteArray} {pop : Flock.Public}
     (h : Flock.HmRow.loadPublic tags c f = .ok pop) :
     ∃ nl text J, Flock.findByte f 10 = some nl ∧ String.fromUTF8? (f.extract 0 nl) = some text ∧
-      Json.parse text = .ok J ∧ Flock.J.nat (Flock.norm J) "instances" "public file" = .ok pop.n := by
+      Flock.JsonParse.parse text = .ok J ∧ Flock.J.nat (Flock.norm J) "instances" "public file" = .ok pop.n := by
   unfold Flock.HmRow.loadPublic at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -315,9 +316,12 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The session's population is the draw's**: at the session `A` v2 sets up on the parameters `θ` and the committed
 files `F`, whose public file is the one v2's parameters name by its SHA-512, a draw v2 made in a play on `θ` and `F`
-whose sampled verdict accepts runs over `A.n` units. -/
+whose sampled verdict accepts runs over `A.n` units. `hjp` is `Flock.JsonParse`'s own statement, that it reads what
+`Lean.Json.parse` reads: v2 parses the header with `Lean.Json.parse` and `loadPublic` with `Flock.JsonParse.parse`, and
+`Lean.Json.parse` is a `partial def`, so nothing proves it; v2 parsing with `Flock.JsonParse.parse` drops it. -/
 theorem population_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     (hpub : ∃ p, ParamsAt θ p ∧ Flock.hexOf (Flock.Sha512.hash A.I.publicFile) = p.own.pub)
+    (hjp : ∀ s J, Json.parse s = .ok J → Flock.JsonParse.parse s = .ok J)
     {k : Verity.Registration.Composite} {o : Verity.Exchange} (hθ : o.params = θ) (hF : o.files = F)
     (hv : V.Verdict k .sampled o) {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
     (hd : Drew k o.sent dr L n ξ units) : A.n = n := by
@@ -356,7 +360,7 @@ theorem population_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
   obtain ⟨nl, text, J', hnl, htext, hJ', hnat⟩ := loadPublic_instances hc'
   rw [headerLine_of_findByte hnl, htext] at hline
   cases hline
-  rw [hJ] at hJ'
+  rw [hjp _ _ hJ] at hJ'
   cases hJ'
   rw [getD_of_nat hnat] at hjeq
   obtain ⟨-, -, -, -, hpop, -⟩ := hL
@@ -386,17 +390,19 @@ theorem run_exchange (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c 
 /-- `population_eq` on the tapes of the period's game. -/
 theorem population_eq_run {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     (hpub : ∃ p, ParamsAt θ p ∧ Flock.hexOf (Flock.Sha512.hash A.I.publicFile) = p.own.pub)
+    (hjp : ∀ s J, Json.parse s = .ok J → Flock.JsonParse.parse s = .ok J)
     {k : Verity.Registration.Composite} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     (x : CoinTape (V.game θ F c) σ) (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x)) {dr : Draws}
     {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
     (hd : Drew k (CoinTape.run (V.game θ F c) σ x).sent dr L n ξ units) : A.n = n :=
-  population_eq hA hpub (run_exchange V θ F c σ x).1 (run_exchange V θ F c σ x).2 hv hd
+  population_eq hA hpub hjp (run_exchange V θ F c σ x).1 (run_exchange V θ F c σ x).2 hv hd
 
 /-- **The draw's piece of `CouplingTarget` at the session v2 sets up**, with its population: `coupled_draw_setsUp`
 with `A.n = n` from `population_eq`. -/
 theorem coupled_draw_held {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hpub : ∃ p, ParamsAt θ p ∧ Flock.hexOf (Flock.Sha512.hash A.I.publicFile) = p.own.pub)
+    (hjp : ∀ s J, Json.parse s = .ok J → Flock.JsonParse.parse s = .ok J)
     (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
     (hθ : o.params = θ) (hF : o.files = F) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧ A.n = n ∧
@@ -405,13 +411,14 @@ theorem coupled_draw_held {V : Vocab d α} {k : Verity.Registration.Composite} (
           bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_setsUp K A θ F c σ hA hR hθ hv hl
-  have hn := population_eq hA hpub hθ hF hv hd
+  have hn := population_eq hA hpub hjp hθ hF hv hd
   exact ⟨dr, L, n, ξ, units, hd, hn, fun ω hp => h ω hn hp⟩
 
 /-- `coupled_draw_coins_setsUp` with `A.n = n` from `population_eq`. -/
 theorem coupled_draw_coins_held {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hpub : ∃ p, ParamsAt θ p ∧ Flock.hexOf (Flock.Sha512.hash A.I.publicFile) = p.own.pub)
+    (hjp : ∀ s J, Json.parse s = .ok J → Flock.JsonParse.parse s = .ok J)
     (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
     (hθ : o.params = θ) (hF : o.files = F) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
     (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
@@ -422,7 +429,7 @@ theorem coupled_draw_coins_held {V : Vocab d α} {k : Verity.Registration.Compos
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins_setsUp K A θ F c σ hA hR hθ hv hl κ hsrc
-  have hn := population_eq hA hpub hθ hF hv hd
+  have hn := population_eq hA hpub hjp hθ hF hv hd
   exact ⟨dr, L, n, ξ, units, hd, hn, fun ω hp => h ω hn hp⟩
 
 end Verity.Sampled
