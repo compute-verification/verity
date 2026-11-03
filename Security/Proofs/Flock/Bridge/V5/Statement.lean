@@ -175,8 +175,8 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
 open Classical in
 /-- **`SampledKSLiveV2` at the verifier's public inputs, with or without shared rows**: flock-verify
 `--zk --public-inputs` at `own` accepts and the committed trace fixed at registration, read as the sampling witness
-of the session's statement at the constants `constsOfP` (the constant, the zero and every proof block's public input bits), is
-outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at the deployed commitment at the public file's leaf map, with
+of the session's statement at the constants `constsOfP` (the constant, the zero and every proof block's public input bits)
+and the design `subset kd`, its partition at the registration's strata (`Bridge.nsOf desc qr`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at the deployed commitment at the public file's leaf map, with
 probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`). -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -234,8 +234,8 @@ def SampledKSLiveV5 : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZKP I own o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
