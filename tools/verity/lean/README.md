@@ -222,9 +222,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   and the landing DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
-  statement is about (an executable, Mathlib) stays outside. A guarantee's record also follows it through the prefixes of
-  `trees`' `except` (`record_scope`), as if they were listed here: the rules that read a statement's shape, premises and
-  witness scope go by `meaning` alone (witness scope by what that walk reaches, `Facts.lean`'s `meaning_reads`).
+  statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
   adds the `digest` of the module's file. Any later edit of the file fails the audit until someone has reviewed its
   compile-time code and `--update` records the new digest, and `--update` prints the module in its review.
@@ -294,12 +292,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
   (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
   (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
-  statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
+  statement reads a definition in the proofs tree (move it into the definitions tree, or take the statement
   off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
-  ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
-  excepts nothing fails. `Security`'s `except` is the cleanup's to-do. An exception covers the rule, not the record: a
-  statement defined in an excepted module (`def G : Prop` there, as C-Flock's session loop's is) is followed through its
-  definitions there, so `reads` holds them and a premise added to or dropped from `G` changes the record.
+  ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that
+  excepts nothing fails. Excepted modules are still recorded. `Security`'s `except` is the cleanup's to-do.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
