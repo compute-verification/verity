@@ -18,6 +18,8 @@ Modes:
 - in either, `--grad-code sign` passes each micro-batch's gradient of the trained matrices as a bool plane of signs and
   one bf16 scale a row (its mean |g|), and `--grad-code rtn{b}` as b-bit codes packed 8/b a byte at one bf16 scale a row
   (its absmax), decoded and summed before Muon, with no error feedback, so Δ_g is about 1 or b bits a weight;
+  `--state-dtype bf16` stores qat's latents and Muon's buffer in bf16 (the buffer rounded to nearest, each latent update
+  stochastically), so Δ_t and Muon's state are 16 bits an entry;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
 `--arms` (qat, qlora) packs settings into one candidate: each arm trains from θ on the same data order with an equal
@@ -98,7 +100,7 @@ class Schedule:
 #: what an arm may set (`--arms`); the rest is the run's
 ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
             "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate",
-            "vote_margin", "vote_carry", "decay_frac", "decay_shape", "grad_code"}
+            "vote_margin", "vote_carry", "decay_frac", "decay_shape", "grad_code", "state_dtype"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -147,9 +149,20 @@ def ns_flops(shape: tuple[int, int], steps: int = 5) -> int:
     return steps * (4 * m * m * n + 2 * m ** 3)
 
 
+def sr_bf16(x: torch.Tensor, gen: torch.Generator) -> torch.Tensor:
+    """fp32 `x` stochastically rounded to bf16: 16 random low bits added to the magnitude, then cut, so the rounding is
+    unbiased and a move under half a bf16 ulp still lands in expectation."""
+    noise = torch.randint(0, 1 << 16, x.shape, device=x.device, generator=gen, dtype=torch.int32)
+    return ((x.contiguous().view(torch.int32) + noise) & -65536).view(torch.float32).to(torch.bfloat16)
+
+
 class Muon(torch.optim.Optimizer):
-    def __init__(self, params, lr: float, momentum: float = 0.95):
+    """Muon; with `sr` (a generator) the parameters and buffer are bf16, the buffer rounded to nearest and each
+    parameter's update stochastically rounded (`sr_bf16`)."""
+
+    def __init__(self, params, lr: float, momentum: float = 0.95, sr: torch.Generator | None = None):
         super().__init__(params, {"lr": lr, "momentum": momentum})
+        self.sr = sr
 
     @torch.no_grad()
     def step(self):
@@ -160,7 +173,11 @@ class Muon(torch.optim.Optimizer):
                 st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
                 buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
                 u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
-                p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
+                alpha = -g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5
+                if self.sr is None:
+                    p.add_(u, alpha=alpha)
+                else:
+                    p.copy_(sr_bf16(p.float().add_(u.float(), alpha=alpha), self.sr))
 
 
 # ---- variants ----------------------------------------------------------------------------------------------------------
@@ -242,18 +259,19 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
 
 
 def delta_grad(adam: int, muon: int, latent: int, stateless: int = 0, coded: int | None = None,
-               partials: int = 1, code: str = "fp32") -> dict:
+               partials: int = 1, code: str = "fp32", state_bits: int = 32) -> dict:
     """Δ_grad in islands/lowrank's keys: the fp32 gradient of each of the `adam` + `muon` + `stateless` trained values and
     its optimizer's fp32 state (AdamW's m and v, Muon's one buffer, none for `--opt sign`); `bits`/`bytes` are their sum.
     `latent_bits`, beside it and not in `bits`, are the fp32 latents a straight-through run reads and writes (the update
     application's Δ_t). With a `--grad-code` the Muon matrices' gradient passes as `coded` bits a partial (`partials` a
-    step) in place of 32 an entry."""
+    step) in place of 32 an entry. `state_bits` (`--state-dtype`) is Muon's buffer's and the latents' width an entry."""
     n = adam + muon + stateless
     grad = 32 * n if coded is None else 32 * (adam + stateless) + coded
-    bits = grad + 64 * adam + 32 * muon
-    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * adam, "muon_bits": 32 * muon,
-            "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8} | (
-        {} if coded is None else {"grad_code": code, "partials": partials})
+    bits = grad + 64 * adam + state_bits * muon
+    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * adam, "muon_bits": state_bits * muon,
+            "latent_bits": state_bits * latent, "bits": bits, "bytes": bits // 8} | (
+        {} if coded is None else {"grad_code": code, "partials": partials}) | (
+        {} if state_bits == 32 else {"state_dtype": "bf16"})
 
 
 GRAD_CODES = ("fp32", "sign", "rtn2", "rtn4", "rtn8")
@@ -963,6 +981,9 @@ def main() -> int:
                     help="the Muon matrices' gradient as each micro-batch's partial passes it, decoded and summed "
                          "before Muon, with no error feedback: fp32, sign (a bool plane and one bf16 scale a row), or "
                          "rtn{b} (b-bit round to nearest at one bf16 scale a row, packed 8/b a byte)")
+    ap.add_argument("--state-dtype", choices=("fp32", "bf16"), default="fp32",
+                    help="qat on matrices: the latents' and Muon's buffer's dtype as stored; bf16 rounds the buffer to "
+                         "nearest and each latent update stochastically (Δ_t and Muon's state at 16 bits an entry)")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--decay-frac", type=float, default=1.0,
                     help="the rate is flat after the warmup and decays to 0 (--decay-shape) over this last share of an "
@@ -1061,6 +1082,10 @@ def main() -> int:
             raise SystemExit("quant: --grad-code codes the Muon matrices' gradient (not --opt vote's)")
         if x.grad_code.startswith("rtn") and any(params[n].shape[1] % (8 // int(x.grad_code[3:])) for n in mats):
             raise SystemExit(f"quant: --grad-code {x.grad_code} packs a row's codes a byte at a time")
+        bf16 = x.state_dtype == "bf16"
+        if bf16 and (not coded or vote or set(quantized) != set(mats)):
+            raise SystemExit("quant: --state-dtype bf16 stores qat's Muon matrices' latents (no --opt vote, no "
+                             "--qat-norm-bits, no trained embedding)")
         vbits = x.qat_norm_bits if not mats else qat_bits(x.qat) if coded else 0
         # matrices vote per sequence from one backward (SampleVotes), with their weights out of autograd
         sample = vote and bool(mats)
@@ -1076,16 +1101,19 @@ def main() -> int:
             sampler = SampleVotes({n: net.inner.get_submodule(n.removesuffix(".weight")) for n in mats},
                                   lambda n, xin, go, voter=voter, blk=blk: voter.add_votes(
                                       params[n], support_grads(go, xin, blk[n])))
-        latent = {} if vote else {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
+        sdt = torch.bfloat16 if bf16 else torch.float32
+        latent = {} if vote else {n: torch.zeros_like(params[n], dtype=sdt, device=dev) for n in quantized}
         n_rest, n_mats, n_q = (sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized))
-        gcode = {"coded": sum(code_bits(tuple(params[n].shape), x.grad_code) for n in mats),
-                 "partials": -(-a.batch // a.micro), "code": x.grad_code} if x.grad_code != "fp32" else {}
+        gcode = ({"coded": sum(code_bits(tuple(params[n].shape), x.grad_code) for n in mats),
+                  "partials": -(-a.batch // a.micro), "code": x.grad_code} if x.grad_code != "fp32" else {}) | (
+            {"state_bits": 16} if bf16 else {})
         dgrad = (vote_delta_grad(sum(voter.state[params[n]]["code"].numel() for n in quantized), 8,
                                  a.batch if sample else -(-a.batch // a.micro)) if vote else
                  delta_grad(0, n_mats, n_q, n_rest, **gcode) if x.opt == "sign" else
                  delta_grad(n_rest, n_mats, n_q, **gcode))
         opt_of = {n: latent.get(n, params[n]) for n in names}
-        muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr) if mats and not vote else None
+        muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr,
+                    sr=torch.Generator(device=dev).manual_seed(x.seed) if bf16 else None) if mats and not vote else None
         adam = (SignSGD([opt_of[n] for n in rest], x.adam_lr) if x.opt == "sign" else
                 torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
                                   fused=dev.startswith("cuda"))) if rest and not vote else None
@@ -1108,7 +1136,7 @@ def main() -> int:
                     p.data.view(-1)[::s] = (th.float() + voter.state[p]["code"].float() * vstep).to(th.dtype)
                     continue
                 q = (qf.rtn(latent[n], x.qat_norm_bits, 0) if latent[n].ndim == 1 else
-                     qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep, x.qat_block))
+                     qat_quant(latent[n].float(), x.qat, x.qat_group, x.qat_mult, x.qat_keep, x.qat_block))
                 qarrays[n] = q
                 params[n].data.copy_((theta_dev[n].float() + q.value()).to(theta_dev[n].dtype))
 
@@ -1146,7 +1174,7 @@ def main() -> int:
             for n, c in passed.items():
                 params[n].grad = c
             for n in latent:
-                latent[n].grad, params[n].grad = params[n].grad, None
+                latent[n].grad, params[n].grad = params[n].grad.to(latent[n].dtype), None
             if not vote:
                 torch.nn.utils.clip_grad_norm_([opt_of[n] for n in names], 1.0)
             for o, _ in opts:
@@ -1251,7 +1279,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         cap, keep = a.max_e_bytes or (prepare.CLASSES[a.klass]["max_e_bytes"] if a.klass else None), r["x"].qat_keep
         while r is best and a.emit == "quan" and cap and r["latent"] and len(qblob) > cap and keep > 1e-5:
             keep *= min(0.97, cap / len(qblob))
-            qarrays = {n: qat_quant(v.to(dev), "sparse", r["x"].qat_group, r["x"].qat_mult, keep, r["x"].qat_block)
+            qarrays = {n: qat_quant(v.to(dev).float(), "sparse", r["x"].qat_group, r["x"].qat_mult, keep, r["x"].qat_block)
                        if v.ndim == 2 else qarrays[n] for n, v in r["latent"].items()}
             qblob, xz1_bytes = code_blob(a, qarrays, r["rest"], theta)
         rebuilt = qf.decode(theta, qblob, dev)
