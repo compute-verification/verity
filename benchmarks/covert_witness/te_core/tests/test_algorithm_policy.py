@@ -212,7 +212,8 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
     """rho_default and basis_default are the dial's formula on the published columns at the console's default, and at
     the registered serving block rho_served is, so u_in is exact at both k; te_core.panels' dial on them gives
     formalism.at's ρ and basis at every cell; Fit's update application reads delta_t (qat's latents fail it where
-    mezo, the same but for them, fits)."""
+    mezo, the same but for them, fits). Every row carries the policy modes' inputs, its gain, gain target and start's
+    effective compute and its step shapes, on which `page_sensitivities` is formalism's at both blocks."""
     _, got = run(tmp_path, monkeypatch)
     by = {r["id"]: r for r in ledger_rows()}
     ds = plots.frame(got["console"])
@@ -227,6 +228,12 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
         m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
         w = page["w_fwd_gates"]
         assert panels.mismatches(d | {"run": d["record"]}, panels.dial(m, w), w) == []
+        assert {k: page[k] for k in AP.STEP_SHAPES} == AP.step_shapes(m) and page["step_tokens"]
+        assert all(d[k] is not None for k in ("gain", "gain_target", "start_effective_gates"))
+        for c, k in (AP.CONSOLE, panels.SERVED):
+            want = formalism.bound(m, c, k)["sensitivities"]
+            assert AP.page_sensitivities(page | {"C_gates": d["C_gates"]}, c, k) == {
+                x: want[x] and pytest.approx(want[x], rel=1e-5) for x in ("reduction", "update")}
     at = {d["record"]: d for d in ds if d["gain_target"] == 1.1}
     assert (at["mezo@2"]["basis_default"], at["mezo@2"]["rho_default"], at["qat@1"]["basis_default"]) == ("fit", 1,
                                                                                                          "target")
@@ -252,6 +259,36 @@ def test_te_core_at_is_the_dial_formula(u1, dgrad, delta_t, tail, decoder):
             assert basis == ("fit" if v["fit"] else "target"), (c, k)
             assert rho == pytest.approx(v["rho"], rel=1e-4), (c, k)
             assert AP.page_rho(d, c, k) == (pytest.approx(rho, rel=1e-4), basis)
+
+
+def test_rho_inputs_carry_each_step_shapes_tokens_and_gradient_cuts_which_give_formalisms_reduction_and_update():
+    """The policy modes' inputs (coordinator 19:18Z): the parts with token blocks by step shape, their tokens in a
+    step, steps, and one block's partial and the step's gradient cut at the width the step passes them, null where the
+    trace measures none; `page_sensitivities` on the row's inputs is formalism's reduction and update sensitivities
+    at every (c, k): 0 where no shape splits, null where only an unmeasured one does, else the measured ones' sum."""
+    w = 3e6
+
+    def part(tokens, steps, partial, grad):
+        return {"gates": w * tokens / 0.8, "tokens": tokens, "token_gates": w * tokens, "affected_gates": w * tokens / 2,
+                "steps": steps, "delta_grad_bits": None if grad is None else 2 * grad, "partial_bits": partial,
+                "grad_bits": grad}
+
+    setup = {"gates": 1e12, "tokens": 0.0, "token_gates": 0.0, "affected_gates": 0.0}
+    m = formalism.from_json(block(1e15, 1e6, 3e6) | {"parts": [setup, part(3 * 4096, 3, 2e6, 3e6),
+                                                                part(2 * 4096, 2, 2e6, 3e6), part(8192, 1, None, None)]})
+    shapes = {"step_tokens": [4096.0, 8192.0], "steps": [5, 1], "partial_bits": [2e6, None], "grad_bits": [3e6, None]}
+    assert AP.step_shapes(m) == shapes and tuple(shapes) == AP.STEP_SHAPES
+    d = json.loads(AP.rho_inputs(m, policy.w_fwd(SHAPE)))
+    assert {k: d[k] for k in AP.STEP_SHAPES} == shapes and d["w_gates"] == w
+    seen = set()
+    for blocks in (0.45, 0.82, 1.64, 4.3, 37.9):
+        c = 4096 * w / blocks
+        for k in (8e4, 1e6, 3e7):
+            want = formalism.bound(m, c, k)["sensitivities"]
+            got = AP.page_sensitivities(d | {"C_gates": m.gates}, c, k)
+            assert got == {x: pytest.approx(want[x], rel=1e-12) if want[x] else want[x] for x in got}, (c, k)
+            seen.add(tuple(v if v is None else v > 0 for v in got.values()))
+    assert seen == {(False, False), (None, None), (True, True)}
 
 
 def test_a_profile_capped_at_delta_loses_its_redundant_points_and_nothing_else():

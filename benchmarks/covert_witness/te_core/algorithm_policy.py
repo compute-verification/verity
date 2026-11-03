@@ -34,7 +34,11 @@ and basis `void` where that ρ reads a void fresh-products term, the 0 te_core 4
 is void, which is no result (coordinator 13:32Z), the kinds cell marking it. `rho_inputs`, one JSON cell, carries
 every input the console's dial needs to recompute the token form at any (c, k), a row's ρ under reading B and a
 sensitivity under A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`, the
-console's among them), where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose
+console's among them), where x0 is exact; `page_rho` is the dial's formula on them. With them it carries the policy
+modes' (`STEP_SHAPES`, coordinator 19:18Z; the gain, its target and the start's effective compute are columns): per
+step shape, the tokens in a step, its steps and the gradient at the width the step passes it, one block's partial and
+the step's cut, from which `page_sensitivities` gives formalism's reduction and update sensitivities at any (c, k).
+`build` refuses a row whose
 rounded columns don't give formalism.at's token form and basis at every cell of te_core.panels' dial and at `CONSOLE`
 (`panels.mismatches`).
 `estimated` names the inputs that are stubs, bounds, assumptions or estimates, and gain:provisional where its data's
@@ -106,6 +110,10 @@ INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "
 #: the inputs of ρ te_core.panels' candidate layout gives columns of their own, which `rho_inputs` holds here, the one
 #: JSON cell the dashboard's dial reads (coordinator 07:57Z: 4,096-character cells)
 SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
+#: the policy modes' inputs `rho_inputs` holds beside the dial's (coordinator 19:18Z), a list each over the row's step
+#: shapes (`step_shapes`): the tokens in a step, how many such steps, and the gradient at the width the step passes it,
+#: one block's partial and the step's cut, which formalism's reduction and update sensitivities read
+STEP_SHAPES = ("step_tokens", "steps", "partial_bits", "grad_bits")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
            "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds",
@@ -284,6 +292,36 @@ def page_rho(d: dict, c: float, k: float) -> tuple[float, str]:
     return max(1.0, lead / s_star if s_star > 0 else math.inf if lead else 0.0), "target"
 
 
+def step_shapes(m: formalism.Measured) -> dict[str, list]:
+    """`STEP_SHAPES` for a checkpoint's quantities: its parts with token blocks, grouped by their tokens a step (N,
+    formalism's tokens over steps, to `INPUT_DIGITS`), one block's partial gradient (`Part.partial_bits`) and the
+    step's gradient cut (`Part.grad_bits`), each value at the width the step passes it (None where the trace measures
+    none), with their steps summed, in order of N."""
+    shapes: dict[tuple, int] = {}
+    for p in m.parts:
+        if p.tokens:
+            key = (float(num(p.tokens / p.steps)), p.partial_bits, p.grad_bits)
+            shapes[key] = shapes.get(key, 0) + p.steps
+    order = sorted(shapes, key=lambda x: (x[0], *((b is None, b or 0.0) for b in x[1:])))
+    return {"step_tokens": [x[0] for x in order], "steps": [shapes[x] for x in order],
+            "partial_bits": [x[1] for x in order], "grad_bits": [x[2] for x in order]}
+
+
+def page_sensitivities(d: dict, c: float, k: float) -> dict[str, float | None]:
+    """formalism's reduction and update sensitivities at (c, k) from a row's inputs alone (`page_inputs` and its
+    C_gates): a step shape of N tokens fills b = ⌈N·w/c⌉ blocks, and where b ≥ 2 its steps pass b − 1 partials and the
+    update reads the gradient's cut, c·Σ steps·(b − 1)·partial/(k·C) and c·Σ steps·grad/(k·C) over the shapes that
+    measure them; 0 where no shape splits, None where every one that splits measures none. Exact where the row's parts
+    share w, as formalism's b reads each part's own."""
+    split = [i for i, n in enumerate(d["step_tokens"]) if math.ceil(n * d["w_gates"] / c) >= 2]
+    out = {}
+    for name, cut in (("reduction", "partial_bits"), ("update", "grad_bits")):
+        got = [d["steps"][i] * (math.ceil(d["step_tokens"][i] * d["w_gates"] / c) - 1 if name == "reduction" else 1)
+               * d[cut][i] for i in split if d[cut][i] is not None]
+        out[name] = c * sum(got) / (k * d["C_gates"]) if got or not split else None
+    return out
+
+
 def rounded(row: list) -> list:
     def val(c, v):
         if not isinstance(v, float):
@@ -295,13 +333,15 @@ def rounded(row: list) -> list:
 
 
 def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
-    """The dial's inputs as one JSON cell: te_core.panels' `rho_columns` (`panels.PACKED`) with SPLIT's, numbers to
-    INPUT_DIGITS significant digits."""
+    """The dial's inputs as one JSON cell: te_core.panels' `rho_columns` (`panels.PACKED`) with SPLIT's, and the
+    policy modes' (`step_shapes`), numbers to INPUT_DIGITS significant digits."""
     cols = panels.rho_columns(m, w_fwd)
     nums = ",".join(f'"{k}":' + ("null" if v is None else num(v)) for k, v in (("delta_bits", m.delta_bits),
                                                                              ("w_fwd_gates", w_fwd)))
+    shapes = ",".join(f'"{k}":[' + ",".join("null" if v is None else num(v) for v in vs) + "]"
+                      for k, vs in step_shapes(m).items())
     return (cols["rho_inputs"][:-1] + f",{nums},\"u_points\":{json.dumps(cols['u_points'])},"
-            f"\"u_in_points\":{json.dumps(cols['u_in_points'])}}}")
+            f"\"u_in_points\":{json.dumps(cols['u_in_points'])},{shapes}}}")
 
 
 def kinds(one: dict, void: bool = False, at_served: dict | None = None) -> str:
