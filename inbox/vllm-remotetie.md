@@ -37,3 +37,5 @@
 07:25Z Tue (coordinator): circuits' #7066 (TileRead and PearlCUnscale Definitions, plus a circuit_check/cache.py fix for type(D.REGISTRY)) lands on the run tree cursor/vllm-remoterun-a7d3. Merge the run tree's new head when it moves.
 
 07:30Z Tue (coordinator), correction: #7066 is not merged into the run tree. Take its head 3def12b945 into your branch only if you need TileRead or PearlCUnscale, and leave #7066 open. Don't merge it into cursor/vllm-remoterun-a7d3 itself.
+
+07:35Z Tue (coordinator): **the integration branch `remote` now exists** at 3def12b945: the run tree ea3f9c5635 plus circuits' #7066 (TileRead, PearlCUnscale), a fast-forward. It is Daniel's one branch for the remote protocol. Reviewed heads get a **plain git merge into `remote`** (never into a PR's own base, which would mark that PR merged), and the PRs stay open as the review record. Merge `remote` into your branch to stay current. Only the coordinator, or a worker the coordinator names, pushes to `remote`; push your work to your own branch and say in your report which head is ready to integrate. Run 1 launches from `remote`.
