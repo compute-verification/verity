@@ -62,6 +62,16 @@ def test_frozen_layers_above_the_update_are_its_tail(starts):
     assert f["tail_share"] == pytest.approx((2 * HEAD + FC) / work, abs=0.01)
 
 
+def test_an_index_computed_from_the_targets_is_no_token(starts):
+    """A sampled head reads its rows at unique(y), an index computed from the targets: the consumed tokens are the
+    token input's positions alone, so the token count and τ are per token as with the full head. a is the hidden state
+    and the gathered rows over the tokens (θ' met by token data, as the embedding's lookup is), all T of them under fake
+    tensors."""
+    f = recorded(starts, "inplace", "--sampled-head").formalism
+    assert f["tokens"] == T and f["token_factor"] == 1 and f["tau_ids"] == 9 / 8
+    assert f["a_bits"] == 2 * 32 * H
+
+
 def test_a_mezo_step(starts):
     """Both perturbed passes are the token's work, reading the update's perturbed copies (u(1) = 32 |θ'|) with nothing
     free of it; a is both passes' hidden states; Δ_grad is the one fp32 difference of the losses."""
@@ -73,7 +83,7 @@ def test_a_mezo_step(starts):
 
 @pytest.mark.parametrize("source", ["theta", "trained"])
 def test_a_cache_rewritten_each_step(starts, source):
-    """The side GEMM reads θ's table scaled by the buffer: outside Dep when the buffer comes from θ, and a second path a
+    """The side GEMM reads θ's table scaled by the buffer: outside A when the buffer comes from θ, and a second path a
     token's state is handed on when it comes from the trained embedding."""
     plain = recorded(starts, "inplace").formalism
     f = recorded(starts, "inplace", "--cache", source).formalism

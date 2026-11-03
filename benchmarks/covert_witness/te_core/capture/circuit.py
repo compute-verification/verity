@@ -16,8 +16,10 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - σ = the token ops' share of the step's gates (forward and backward; the optimizer reads no token-indexed value);
   `affected_share` = |A ∩ ∪T| / |C_R|, the token ops that depend on θ'; `affected_all_share` = every affected op's
   (A, the optimizer's included).
-- tokens: the step's consumed tokens, as te_core.flops counts them (the union of the positions each token-index op
-  reads, per storage); `token_factor` = tokens over the record's count for the step.
+- tokens: the step's consumed tokens, the union of the positions the token-index ops read in each token input. An
+  index computed from token data (a sampled head's unique(y), a QAT code) is no token, though te_core.flops counts its
+  reads too; a step whose token-index ops read no token input (a program-made source) counts every token-index read.
+  `token_factor` = tokens over the record's count for the step.
 - τ: the token inputs' positions the step reads (its targets included), per consumed token (`tau_ids`, ids, priced at
   ⌈log2 V⌉ by the caller), and `tau_other_bits`: any other input a token op reads, and 64 bits (a seed) per random op
   one reads, over the consumed tokens.
@@ -273,6 +275,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
 
     # tokens and τ
     index = [i for i in range(len(c.tr_op)) if c.tr_index[i]]
+    index = [i for i in index if c.token_key[c.tr_key[i]]] or index
     consumed = _union_size(c, index)
     data = [i for i in range(len(c.tr_op)) if c.token_key[c.tr_key[i]]]
     ids = _union_size(c, data)

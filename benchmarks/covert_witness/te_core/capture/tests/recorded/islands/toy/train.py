@@ -4,7 +4,8 @@ tokens (``--cache``: from θ's ``frozen`` table or the trained embedding) that a
 `TrainData.next`'s, or (``--windows``) its own reads of the stream through numpy in `hooks.step()`'s steps, cut at the
 stream's ctx or (``--own-ctx``) at prepare.EVAL_CTX. ``--warm-tokens N``: the first N / (batch x EVAL_CTX) steps are a
 warmup that ends by halving ``fc``, a plan read off EVAL_CTX. ``--freeze NAME`` (repeated) leaves a matrix at θ;
-``--micro N`` accumulates AdamW's gradient over N slices of the batch."""
+``--micro N`` accumulates AdamW's gradient over N slices of the batch; ``--sampled-head`` scores only the head's rows
+of the batch's distinct targets (a sampled softmax over ``unique(y)``)."""
 from __future__ import annotations
 
 import argparse
@@ -31,6 +32,7 @@ def main() -> int:
     ap.add_argument("--warm-tokens", type=int, default=0)
     ap.add_argument("--freeze", action="append", default=[])
     ap.add_argument("--micro", type=int, default=1)
+    ap.add_argument("--sampled-head", action="store_true")
     a = ap.parse_args()
     warm = a.warm_tokens // (a.batch * prepare.EVAL_CTX)
     net, _, _ = prepare.load_start("toy")
@@ -44,7 +46,12 @@ def main() -> int:
 
     def loss_of(P, x, y):
         P = {**fixed, **P}
-        logits = F.linear(torch.tanh(F.linear(F.embedding(x, P["emb"]), P["fc"])), P["head"])
+        h = torch.tanh(F.linear(F.embedding(x, P["emb"]), P["fc"]))
+        if a.sampled_head:
+            ids = torch.unique(y)
+            logits = F.linear(h, F.embedding(ids, P["head"]))
+            return F.cross_entropy(logits.flatten(0, 1), torch.searchsorted(ids, y).flatten())
+        logits = F.linear(h, P["head"])
         if a.cache != "none":
             with torch.no_grad():
                 cache.copy_(F.embedding(x, frozen if a.cache == "theta" else P["emb"]).mean((0, 1)))
