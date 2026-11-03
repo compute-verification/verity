@@ -182,7 +182,7 @@ theorem ligeritoWith_std (ms : MerkleScheme) (h : ms.Named) (sch : Schedule) (T 
     queryLevelWith_std ms h]
   rfl
 
-theorem verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (sess : RunRecord)
     (i r : Nat) (bytes : ByteArray) : verifyRepWith std spec st sch sess i r bytes = verifyRep spec st sch sess i r bytes := by
   unfold verifyRepWith verifyRep
   simp only [monadLift_self, bindAndZerocheckWith_std, lincheckWith_std, ringSwitchWith_std, ligeritoWith_std _ h]

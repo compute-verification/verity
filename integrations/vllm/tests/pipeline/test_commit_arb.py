@@ -10,6 +10,8 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_arb as CA
 from verity_vllm.pipeline import serve_seal as SS
 
+from tests.pipeline import predicted
+
 
 def encode(text):
     return [0] + [ord(c) for c in text]
@@ -124,18 +126,23 @@ def test_summary_passes_only_when_every_request_and_window_did():
 
 
 def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows_manifest(tmp_path):
-    """commit-arb's Commit is serve-openai's rows-sha512 one (`serve_seal.committer`), never SHA-256: without the bench row's
-    manifest, or ninja for its kernels, it is refused before the model loads, and the committer refuses it too."""
+    """commit-arb's Commit is serve-openai's rows-sha512 one (`serve_seal.committer`), never SHA-256: without the manifest of the
+    row's Build of record predict wrote, or ninja for its kernels, it is refused before the model loads, and the committer
+    refuses it too."""
     def parse(*more: str) -> CA.Options:
         return cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
-    with pytest.raises(UsageError, match="under rows-sha512 .*--required-manifest ROW_DIR/manifest.json"):
+    with pytest.raises(UsageError, match="under rows-sha512 .*--required-manifest DIR/manifest.json"):
         CA.preflight(parse(), which=lambda _: "/v/bin/ninja")
     with pytest.raises(UsageError, match="rows-sha512 .*commits with the Commit of record's parts"):
         SS.committer(CA.committer_opts(parse()), llm=None, label="commit-arb")
     with pytest.raises(UsageError, match="no such file"):
         CA.preflight(parse("--required-manifest", str(tmp_path / "none.json")), which=lambda _: "/v/bin/ninja")
-    (man := tmp_path / "manifest.json").write_text("{}")
+    (traced := tmp_path / "traced").mkdir()
+    (traced / "manifest.json").write_text("{}")
+    with pytest.raises(UsageError, match="no record of predict's beside it"):
+        CA.preflight(parse("--required-manifest", str(traced / "manifest.json")), which=lambda _: "/v/bin/ninja")
+    man = predicted.row(tmp_path)
     with pytest.raises(UsageError, match="ninja"):
         CA.preflight(parse("--required-manifest", str(man)), which=lambda _: None)
     CA.preflight(parse("--required-manifest", str(man)), which=lambda _: "/v/bin/ninja")

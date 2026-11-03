@@ -3,7 +3,7 @@ import Definitions.Nci.Assumptions.Formalism
 /-!
 # The training formalism v2: its theorems
 
-The theorems of Daniel's training formalism v2 (`Definitions.Nci.Formalism`), §5, proved in
+The theorems of the training formalism v2 (`Definitions.Nci.Formalism`), §5, proved in
 `Nci.Formalism.SecurityProofs`. Its two lemmas, reconstruction (§1) and the three kinds of a block's inputs (§2), are
 `Nci.Formalism.reconstruction` and `Nci.Formalism.reads_split` in `Security/Proofs/Nci/Formalism/Reconstruction.lean`.
 
