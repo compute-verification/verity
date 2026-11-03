@@ -36,7 +36,7 @@ broader credential sits on the machine to mint a shorter-lived one. Every write 
 and a record must be byte-identical, or the package isn't published. The record goes last, so every blob it names exists.
 Integration's own builds never read the cache: `check.py` runs Lake with `LEAN_CACHE=off`, and with `LAKE_ARTIFACT_CACHE=false`
 or, in check's audit and a records run, a local Lake cache that only a passing run on that node writes, restoring a module
-only under its sha256 key (`lean_audit.LakeArtifacts`, `module_keys.py`).
+only under its key (`lean_audit.LakeArtifacts`, `module_keys.py`).
 """
 from __future__ import annotations
 
