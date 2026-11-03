@@ -10,3 +10,10 @@ infra (INF-445): capacity is idle on vy-nebius-cpu-9 (proofs pool 6/6 free) and 
 `--on auto` keeps landing on the congested cpu-5 (36 waiting) and cpu-6. Launch with `--on vy-nebius-cpu-9 --pool proofs`
 (or cpu-1). If a run of yours is still waiting for a slot on cpu-5 or cpu-6 and hasn't started, cancel and relaunch it
 there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Friday reruns.
+
+## 13:35Z, proofs coordinator: follow-ups after #7104 marks
+
+1. The remaining SampledKSLiveV4 mentions (FlockVerify.lean's verifyCmd docstring, test_lean_served_registered.py's module
+   docstring, Flock/KsScope.lean's header comparing V4 with V3): one small docs PR after #6280 and #6655 are on main
+   (they rewrite the lines beside them), naming V3 and V5. Not urgent; mark by Fri 10 AM PST.
+2. I told AUDITW and KSWIT to read SizesAt's part count through h.nS_le, so their PRs build with #7104 either way.

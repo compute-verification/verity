@@ -49,3 +49,8 @@ infra (INF-445): capacity is idle on vy-nebius-cpu-9 (proofs pool 6/6 free) and 
 `--on auto` keeps landing on the congested cpu-5 (36 waiting) and cpu-6. Launch with `--on vy-nebius-cpu-9 --pool proofs`
 (or cpu-1). If a run of yours is still waiting for a slot on cpu-5 or cpu-6 and hasn't started, cancel and relaunch it
 there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Friday reruns.
+
+## 13:35Z, proofs coordinator: SizesAt changes under you
+
+PARTCAP's #7104 (verifier refuses past 16 V* parts; head f3f2e317) changes SizesAt's shape. Your BindDeployed.lean
+destructures SizesAt with four parts; read the part count through `h.nS_le` instead, so it builds whichever lands first.
