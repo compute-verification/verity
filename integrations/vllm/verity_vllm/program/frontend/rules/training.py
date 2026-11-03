@@ -33,7 +33,7 @@ from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule, RuleSet
 from verity_vllm.program.frontend.rules.training_views import (_PARTS, BoxPermute, StaticFloat, StaticFloats, _info, _view_expand,
                                                                _view_permute)
-from verity_vllm.program.frontend.strided_views import _EXPLICIT_LIMIT, _tensor_type
+from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
@@ -679,9 +679,11 @@ class EmbeddingDenseBackward(_TrainRule):
         ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
 
 
-def training_rules(min_view_leaves: int = _EXPLICIT_LIMIT) -> RuleSet:
+def training_rules(min_view_leaves: int = 0) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
-    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after."""
+    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
+    `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
+    leaves, which the root's replay then substitutes as one reference part per leaf."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
     first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul()]

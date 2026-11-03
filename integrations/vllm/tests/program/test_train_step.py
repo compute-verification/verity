@@ -37,7 +37,7 @@ aten = torch.ops.aten
 def _program(f, *xs, theta=()):
     gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(*xs)
     names = [f"x{i}" for i in range(len(xs))]
-    rep = derive_graph(gm, xs, mode="reference", rules=training_rules(min_view_leaves=0), name="T", input_names=names, theta=theta)
+    rep = derive_graph(gm, xs, mode="reference", rules=training_rules(), name="T", input_names=names, theta=theta)
     assert rep.program is not None, rep.unsupported
     return rep.program
 
