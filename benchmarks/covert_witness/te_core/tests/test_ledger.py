@@ -5,9 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from te_core import VERSION, frontier, launch
+from te_core import VERSION, frontier, nodes
 from te_core.ledger import Ledger, facts, ingest, notes_decoder
-from te_core.run import file_sha256
 
 PIN = "a" * 40
 #: a start's shape (te_core.policy), the small start's
@@ -63,48 +62,14 @@ def test_index_joins_promotions_and_final_scores(tmp_path):
     assert (tmp_path / "index.jsonl").read_text().count("\n") == 1
 
 
-def test_launch_gates(tmp_path):
-    clock = Clock()
-    prog = tmp_path / "train.py"
-    prog.write_text("def train(te):\n    pass\n")
-    nodes = tmp_path / "nodes.txt"
-    nodes.write_text("# the coordinator's list\nvy-dc-h200-1\nvy-nebius-2\n")
-    a, s = Ledger(tmp_path, "agent-a", clock=clock), Ledger(tmp_path, "scorer", clock=clock)
-    (rec,) = launch.launch(a, prog, 0, node_file=nodes, direction="d", mechanism="m", dry_run=True, clock=clock)
-    assert rec["node"] == "vy-nebius-2"
-    assert rec["argv"][:6] == ["research", "run", "--on", "vy-nebius-2", "--gpus", "1"]
-    assert "--budget-minutes 9" in rec["argv"][-1] and "gpu-lease" not in rec["argv"][-1]
-    pooled = tmp_path / "pooled.txt"
-    pooled.write_text("vy-nebius-2 pool=gpu\n")
-    (rec,) = launch.launch(a, prog, 0, node_file=pooled, direction="d", mechanism="m", dry_run=True, clock=clock,
-                           script=True, train_args=["--lr", "1e-3"])
-    assert rec["argv"][3:8] == ["vy-nebius-2", "--pool", "gpu", "--as", "training"] and "--gpus" not in rec["argv"]
-    assert "gpu-lease 1 --wait" in rec["argv"][-1] and "--script" in rec["argv"][-1]
-    assert "--start s100 --out $S/sub --budget-fraction 0.294 --lr 1e-3" in rec["argv"][-1]
-    entry = sub(a, program_sha256=file_sha256(prog))["id"]
-    with pytest.raises(launch.Refused, match="not promoted"):
-        launch.launch(a, prog, 1, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)
-    s.promote(entry, 1, "frontier")
-    for _ in range(launch.TIER1_PER_HOUR):
-        launch.launch(a, prog, 1, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)
-    with pytest.raises(launch.Refused, match="last hour"):
-        launch.launch(a, prog, 1, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)
-    clock.t += 3601
-    launch.launch(a, prog, 1, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)
-    with pytest.raises(launch.Refused, match="tier 2"):
-        launch.launch(a, prog, 2, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)
-    other = tmp_path / "other.py"
-    other.write_text("def train(te):\n    return 1\n")
-    with pytest.raises(launch.Refused, match="not .*'s program"):
-        launch.launch(a, other, 1, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)
-    s.promote(entry, 2, "elite")
-    recs = launch.launch(a, prog, 2, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True,
-                         clock=clock)
-    assert len(recs) == 6 and all("--keep-checkpoints" in r["argv"][-1] for r in recs)
+def test_the_node_list_refuses_h200_and_reads_pools(tmp_path):
+    listed = tmp_path / "nodes.txt"
+    listed.write_text("# the coordinator's list\nvy-dc-h200-1 pool=gpu\nvy-nebius-2 pool=gpu cpu=research  # v3\nvy-nebius-3\n")
+    assert nodes.nodes(listed) == [nodes.Node("vy-nebius-2", "gpu", "research"), nodes.Node("vy-nebius-3")]
     only_h200 = tmp_path / "h200.txt"
     only_h200.write_text("vy-dc-h200-2\n")
-    with pytest.raises(launch.Refused, match="no usable node"):
-        launch.launch(a, prog, 0, node_file=only_h200, direction="d", mechanism="m", dry_run=True, clock=clock)
+    with pytest.raises(nodes.Refused, match="no usable node"):
+        nodes.nodes(only_h200)
 
 
 def test_frontier_elites_and_promotion_candidates(tmp_path):

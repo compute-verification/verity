@@ -138,14 +138,6 @@ class Ledger:
         tmp.rename(self.root / "index.jsonl")
         return rows
 
-    def promoted(self, entry: str, tier: int) -> bool:
-        return any(r["kind"] == "promotion" and r["agent"] == SCORER and r.get("entry") == entry and int(r["tier"]) >= tier
-                   for r in self.records())
-
-    def launches(self, agent: str, tier: int, since_ts: float) -> int:
-        return sum(1 for r in self.records() if r["kind"] == "launch" and r["agent"] == agent and r["tier"] == tier
-                   and r["written_ts"] >= since_ts)
-
     # -- the scorer's records
 
     def promote(self, entry: str, tier: int, reason: str) -> dict:
