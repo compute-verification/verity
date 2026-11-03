@@ -16,9 +16,9 @@ OUT = Path("/tmp/portchk/out")
 RES = Path("/tmp/portchk/results")
 #: later runs win for a PR: E (moved or new heads) over A2/B2/C/D, and those over the cancelled A
 RUN_ORDER = ["r20261103-222317-f7eb", "r20261103-222541-89f3", "r20261103-222532-6526", "r20261103-223644-ff12",
-             "r20261103-223617-52f6", "r20261103-224317-c190"]
+             "r20261103-223617-52f6", "r20261103-224800-304d"]
 RUN_NAME = {"r20261103-222317-f7eb": "A0", "r20261103-222541-89f3": "D", "r20261103-222532-6526": "C",
-            "r20261103-223644-ff12": "B", "r20261103-223617-52f6": "A", "r20261103-224317-c190": "E"}
+            "r20261103-223644-ff12": "B", "r20261103-223617-52f6": "A", "r20261103-224800-304d": "E"}
 EXTRA_RUNS: dict[str, str] = {}
 
 ISSUE_GOAL = {

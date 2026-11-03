@@ -19,7 +19,7 @@ RUNS = {
     "r20261103-223644-ff12": "vy-nebius-cpu-12",  # B2
     "r20261103-222532-6526": "vy-nebius-cpu-11",  # C
     "r20261103-222541-89f3": "vy-nebius-cpu-11",  # D
-    "r20261103-224317-c190": "vy-nebius-cpu-12",  # E
+    "r20261103-224800-304d": "vy-nebius-cpu-3",  # E
     "r20261103-222317-f7eb": "vy-nebius-cpu-12",  # A (cancelled; non-Security packages only)
 }
 RES = Path("/tmp/portchk/results")
