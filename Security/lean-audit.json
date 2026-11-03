@@ -914,10 +914,6 @@
    "owner": "@proofs",
    "digest": "5a7d5592f9380c093278345fa04d22f36b3df8fcd73f96f321b5b923cfc0ce59"
   },
-  "Flock.Bridge.LawOn": {
-   "owner": "@proofs",
-   "digest": "ad38e9ab065be8ae4f61cb5124e00636bd5da3f615a9d5b285c6555e61bfdf5f"
-  },
   "Flock.Bridge.RootFixesDomainL": {
    "owner": "@proofs",
    "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d"
@@ -2205,6 +2201,14 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Flock.Bridge.DrawsUnder": {
+   "owner": "@proofs",
+   "digest": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f"
+  },
+  "Flock.Bridge.NotBernoulli": {
+   "owner": "@proofs",
+   "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d"
   }
  },
  "meaning": [
@@ -37784,7 +37788,7 @@
    ]
   },
   "Flock.Draw": {
-   "digest": "409e6a12164c995f96619cfb128ac7f23c1888d36d39754f06b1ae1820bd2dc2",
+   "digest": "83c8e36c8817193f03939dc6d10c77093379510915127fcc92619068d3c71718",
    "definitions": {
     "Flock.Draw.Law": "89d70aef494b09e73d1a96bde31b4b235372685ef6f2c157ffafdcc9607b9106",
     "Flock.Draw.Law.bernoulli": "74f514d660c8772abf134bce094e4bc4c8b12f30a7c18bcfcb3de380468388db",
@@ -37793,7 +37797,7 @@
     "Flock.Draw.Law.rec": "592e31a4f3a6c085277930a5de0e63075a44b1931bb9e14dfbf13d62ecebe038",
     "Flock.Draw.Law.stratified": "275c795ca541c8ad7fa3284476d7e123da83140a05d2e227bf8278c490500a5e",
     "Flock.Draw.Law.subset": "40af69ce9dcca331f9cf7feaea741ca2ecec159f344d7ec2cafefe84e884c780",
-    "Flock.Draw.Law.toJson.match_1": "154c6600d4cddb8a9dabd4f91551c409d688c432fa03f4a8f4f3147ed3a7d7b4",
+    "Flock.Draw.Law.toJson": "e4ae629bcbcf8013d61e6e12a37a8ac95f5478e77fe0e3e359b394ac717fd883",
     "Flock.Draw.Law.work": "792f185fa5876c574d2ca717c47205953ed0d94d8ca01815cf8a84b1a8b55297",
     "Flock.Draw.Stratum": "72f0cb58c11908ab57f86963945181438a6d108803b11acbee8be5115eb92331",
     "Flock.Draw.Stratum.casesOn": "eb2602ab608d9c028a319400e9682c9ddd51adbf2740acd3d9279bbcb3fca88d",
@@ -48003,11 +48007,19 @@
    ]
   },
   "Proofs.Flock.Bridge.Draw": {
-   "digest": "26a67368718c752d94532f2a9dc0d358041236719287050ebbff3f2d225ec07f",
+   "digest": "196b69f33de75988d5867db0ada2f74d37aa354e50b9ffc8d22410ba90f3127d",
    "definitions": {
-    "Flock.Bridge.LawOn": "ad38e9ab065be8ae4f61cb5124e00636bd5da3f615a9d5b285c6555e61bfdf5f",
-    "Flock.Bridge.StrataOn": "9e321e9e08db693606ee76a41d9c53de59f3b86d75d13e40de5bd27350e5fa72",
+    "Flock.Bridge.NotBernoulli": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
     "Flock.Bridge.execSel": "f86bcb7e33b38503680c6340770c9a3e26510e2054f4d5570d9e769224b89194"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
+  },
+  "Proofs.Flock.Bridge.DrawnLaw": {
+   "digest": "97939cb25341aa3a641931f63fa840e0eb1e16ea7e84b2c8fba9d627204cf1b3",
+   "definitions": {
+    "Flock.Bridge.DrawsUnder": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
+    "Flock.Bridge.drawnLaw": "d3d5d8aebbdd734c0b832c56f88c1218c761f8ca6f936cbdc586a2aafd695d3c",
+    "Flock.Bridge.lawK": "4f756291c816d28e1b04483ae2b944ede55d7503bc88c73ec63d26c500b166ec"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
@@ -48113,10 +48125,10 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "0bb02854894afaab0b87cf4f708d7ff185ac8dff358ec000d72e14554dbfb99b",
+   "digest": "c649b6b45e9155a1fd94f63bbe3d1d63d3b56a7846ac6b83349140080d6c919b",
    "definitions": {
     "Flock.Bridge.constsOfP": "e29422384f4deb1a8ab2f9e0eb98bc0c4ce04cda9533f8419e7c74349231e1c9",
-    "Flock.Guarantees.SampledKSLiveV5": "19e57dd5c0448d14df324e2d7e39296ca4468bfbbcc7f519e827cc810dd9c52e"
+    "Flock.Guarantees.SampledKSLiveV5": "ec4bc1e228b86f33ef27ab945438ba027c7e9d59bc9817cd94401e30d379dbc5"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
@@ -51804,6 +51816,13 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5"
    ]
+  },
+  "Proofs.Flock.Claims.Sampling.Select.Steps": {
+   "digest": "cabc7866b4daa207b5f3e6e37d2c7042a89693e20c85677df2e1a71976987252",
+   "definitions": {
+    "Properties.SampledProofs.SecurityProofs.lawObj": "e37ff0ea95a4fbcfb351782803b11d1a551fbf26eaae398f574028819cccb1e6"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "Proofs.Flock.Claims.Sampling.Universal": {
    "digest": "42315f512de440a6ae734b33dd20f9580ddeca80d3d2cec74658efc713748533",
@@ -64389,21 +64408,37 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "SampledProofs.Draw": {
-   "digest": "232dafbf1f3cb007f772cba18b5612d2452ba77283f6943c9f1b0464c966c084",
+   "digest": "36654c66de6f1c5ed06698dd0b630c0793517eee8bc14a90bb699f24f42e206a",
    "definitions": {
+    "SampledProofs.Draw.deriveLaw": "db8def04c0db34e9488742c04f1ee5f8f0e3a026867174017b64a3f2506417cf",
+    "SampledProofs.Draw.deriveLaw._sparseCasesOn_1": "06444dffbdc6b43e19a7fbb5921879f7a9ceba2d8bd11de93051c74c0ea5061e",
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_4": "5cff8062fb2ab6a52973a1e0b63a9173449c25c334ca081ca9de17162382bd2b",
     "SampledProofs.Draw.drawUnits": "2a0f8ec96176f4c4c7c75ed0a260d70073d795471b52a1a94d24f0abf4b18340",
-    "SampledProofs.Draw.take": "9f01709bd3f64f0e7f246239d4551ac8b8ca96ff10465785bc11ff2346cee5db"
+    "SampledProofs.Draw.flockLaw": "fa1e8d695af9a161b92d7b528cefc8fce42d22044ade92e25fedaaf3018bcd13",
+    "SampledProofs.Draw.probability?": "7eb20c0ec772123a9dbfa4e52b8cb5e64ae305eb475f95138f5e66ef599781f8",
+    "SampledProofs.Draw.probability?._sparseCasesOn_1": "242fddfc0716e35c82faffb899aa061612f1859b6d73e3c3caeb38ec6c648186",
+    "SampledProofs.Draw.probability?._sparseCasesOn_2": "3d0e3a3d16f68d9002abe1759ab7b398f319451405265fa7133d35c33e05ff20",
+    "SampledProofs.Draw.ranges?": "d22fd7703add0667592ca7422d279d17ff35736e848e6832e9d8ca883a6743c6",
+    "SampledProofs.Draw.ranges?._sparseCasesOn_1": "74f5e132fa2fa3f13d78446b56c0cfb01df4f2147ef4eda947370f8bbcaabd4b",
+    "SampledProofs.Draw.strataProblem": "b8863d91749ab89a996d9fdd9955d14c3509fee79540a1b0c3ed790362a00696",
+    "SampledProofs.Draw.take": "9f01709bd3f64f0e7f246239d4551ac8b8ca96ff10465785bc11ff2346cee5db",
+    "_private.SampledProofs.Draw.0.SampledProofs.Draw.STRATUM_KEYS": "8f9dd0b5010bacbc457c30a88c1429d2832daccd0454ae39b55ce68993814552",
+    "_private.SampledProofs.Draw.0.SampledProofs.Draw.WORK_STRATUM_KEYS": "6d2eb8112262422c06b53e939500580f2ba4b184dd43618890429a2ed402accc",
+    "_private.SampledProofs.Draw.0.SampledProofs.Draw.digits": "f3cca00a3dba986bbcd5da3f17d43a67b10b91f93fc6e93bfb952a854f859071",
+    "_private.SampledProofs.Draw.0.SampledProofs.Draw.natRanges": "341fe832c57b2652d985e8d45942207411b808e2c53bd335708d60f427ee4461",
+    "_private.SampledProofs.Draw.0.SampledProofs.Draw.stratum?": "c1ac450f12c2efc1bdf0793b0862916c86b71163ea866e022570413df2d8daac"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "SampledProofs.Json": {
-   "digest": "29cd91dd3840abd7081c7c0c4a42591b850e90f4f144ead6545467e82fdeb106",
+   "digest": "33e1dde468ba3f9592d77b8d4900dabf7f6b24b8339fc99d11487dadd4f10a29",
    "definitions": {
     "SampledProofs.field?": "34de9a547d7ceba63ea306bc8723c89ed04eea9d8f28a323d4785f1e3c0f6e6d",
     "SampledProofs.getD": "0fdac810868183ad3f74efdf4816d4563ec0f3f8f581a69be6e44f29cca2c656",
     "SampledProofs.int?": "c789bbbf23ba5ce3b67fa9aa7846c320c0be2a7f91d8fb8813e5b8fd5be28291",
     "SampledProofs.int?._sparseCasesOn_1": "ec5154f8440d872245c978f0eb03243e9905e2368082db70c226d74a142c6b9c",
+    "SampledProofs.jeq": "caa6fe2fc0d7aa47cb120ab9a5ce40fcf8bf2e88ae32e0ed7a96d42205120ff8",
+    "SampledProofs.jeq._sparseCasesOn_1": "85bce44fa0f2416ffd0c4db80592f6c889b3dc84062d4fbfa638eea12deaffa0",
     "SampledProofs.keys?": "37a2652f9459bf97591b2a36a044d6e2207e92884bab9efd2d2599a0c97a7299",
     "SampledProofs.keys?._sparseCasesOn_1": "ef41f3087eb4a309d964c51e1129b1eaee1c4b9a40c4d188e57d34354728a018",
     "SampledProofs.nat?": "9ec60004020227f25f1827bd5002d740f81ded9156d6f123ae99d13eef8d50fc",
