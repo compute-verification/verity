@@ -491,25 +491,52 @@ def entries_size(theta: dict, plan: dict[str, torch.Tensor], dtype: str) -> int:
     return len(prepare.encode_sparse(theta, {n: (i, torch.zeros(len(i))) for n, i in plan.items()}, dtype))
 
 
+def gaps_bound(count: int, size: int) -> int:
+    """The most bytes CWSPAR1's index of `count` distinct entries of a `size`-entry tensor takes (prepare.encode_sparse:
+    varint gaps or a bitmap, the smaller), over every choice of the entries: each gap starts at one byte, and the gaps'
+    total, size - count, buys the cheapest extra bytes first (a gap's second byte costs 128 more of it, its (j + 1)-th
+    2^(7 j) - 2^(7 (j - 1)) more)."""
+    if not count:
+        return 0
+    left, n, total = size - count, count, count
+    for j in range(1, 10):
+        price = (1 << (7 * j)) - (1 << (7 * (j - 1))) if j > 1 else 128
+        n = min(n, left // price)
+        if not n:
+            break
+        total += n
+        left -= n * price
+    return min(total, (size + 7) // 8)
+
+
+def entries_bound(theta: dict, counts: dict[str, int], dtype: str) -> int:
+    """At least CWSPAR1's length for `counts` entries a tensor, wherever they are: read from no value."""
+    header = {"dtype": dtype, "tensors": [[n, "bitmap", c, gaps_bound(c, theta[n].numel())]
+                                          for n, c in sorted(counts.items()) if c]}
+    body = sum(t[3] + t[2] * prepare.DTYPES[dtype].itemsize for t in header["tensors"])
+    return len(prepare._pack(b"CWSPAR1\n", header, b"")) + 16 + body
+
+
 def plan_entries(pool: list[str], energy: dict, theta: dict, cap: int, max_values: int,
                  dtype: str) -> dict[str, torch.Tensor]:
-    """{tensor: sorted flat indices}: the entries of `pool` with the most energy, as many as CWSPAR1 holds in `cap` bytes
-    and at most `max_values` (0: no count cap)."""
-    flat = torch.cat([energy[n].reshape(-1) for n in pool])
-    ends = torch.tensor([theta[n].numel() for n in pool]).cumsum(0)
-    most = min(flat.numel(), cap // 3, max_values or flat.numel())
-    top = torch.topk(flat, most).indices
+    """{tensor: sorted flat indices}: k entries of `pool`, each tensor's share in proportion to its size (the largest
+    remainders first), and within a tensor the ones with the most energy (torch.topk, read back by nothing). k is set
+    before any value is read: the most that CWSPAR1 holds in `cap` bytes wherever the entries fall (`entries_bound`), and
+    at most `max_values` (0: no count cap)."""
+    sizes = [theta[n].numel() for n in pool]
+    total = sum(sizes)
 
-    def take(k: int) -> dict[str, torch.Tensor]:
-        sel = top[:k]
-        which = torch.bucketize(sel, ends, right=True)
-        return {pool[j]: torch.sort(sel[which == j] - (ends[j - 1] if j else 0)).values for j in which.unique().tolist()}
+    def counts(k: int) -> dict[str, int]:
+        c = [k * s // total for s in sizes]
+        for j in sorted(range(len(pool)), key=lambda j: (-(k * sizes[j] % total), j))[:k - sum(c)]:
+            c[j] += 1
+        return dict(zip(pool, c))
 
-    lo, hi = 0, most
+    lo, hi = 0, min(total, cap // 3, max_values or total)
     while lo < hi:
         mid = (lo + hi + 1) // 2
-        lo, hi = (mid, hi) if entries_size(theta, take(mid), dtype) <= cap else (lo, mid - 1)
-    return take(lo)
+        lo, hi = (mid, hi) if entries_bound(theta, counts(mid), dtype) <= cap else (lo, mid - 1)
+    return {n: torch.sort(torch.topk(energy[n].reshape(-1), c).indices).values for n, c in counts(lo).items() if c}
 
 
 class Sign(torch.optim.Optimizer):

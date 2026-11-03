@@ -19,7 +19,7 @@ too, `--klass reference|e1mb|e100kb`, with `--cap` a bin below its cap.
 | `lora` | each candidate matrix's rank, greedily by the probe gradient's σ² per byte; with `--regrow F`, F of the bytes at θ and the rest after `--regrow-at` of the steps from a fresh probe, past each matrix's held rank (a learned mask) | LoRA factors, bf16 (a grown matrix's pieces as one pair at scale 1) |
 | `qlora` | `lora`'s ranks at (d_in + d_out) · `--bits` / 8 bytes a rank | CWQUAN1 lora entries: `--bits`-bit midrise codes, A one f16 scale per row, B one per 64 rows |
 | `signrows` | whole rows of block matrices by `--select` energy per byte (d_in · `--bits` / 8 + 2 bytes a row) | a CWQUAN1 delta over each touched matrix: the rows' codes (1 bit: a sign times the row's scale, mean \|V\|), every other row scale 0, which xz all but drops |
-| `entries` | single entries of the candidate matrices and of the gains `--norms` names, by `--select` energy times the tensor's learning rate squared, as many as fit `--cap` bytes and at most `--values` | CWSPAR1: varint index gaps and `--entry-dtype` (f16 or bf16) values, sized exactly |
+| `entries` | single entries of the candidate matrices and of the gains `--norms` names: k of them, each tensor's share in proportion to its size, and within a tensor the ones with the most `--select` energy times its learning rate squared (`torch.topk` on the device, read back by nothing); k, set before any value is read, is the most that fit `--cap` bytes wherever they fall (`entries_bound`) and at most `--values` | CWSPAR1: varint index gaps or a bitmap and `--entry-dtype` (f16 or bf16) values |
 | `bitfit` | a new bias vector on every block's `--bias` matrices (`all`, `out`, `mlp`, `attn` or leaf names), zero at θ, with the gains `--norms` names; `--layers all` only, since every bias differs from θ's absent one | CWMODL1: the `lf` config with its `bias` key, the biases in `--entry-dtype` and the trained gains in θ's fp32 |
 
 `qlora` and `signrows` train fp32 latents straight-through (the forward reads their codes, exactly what CWQUAN1 decodes),
@@ -45,13 +45,16 @@ rides in each sequence's forward (`entry_forward`, and `vote_gains` for gain ent
 sign leaves as a bool, the step sums the bools as int16 votes, and each value moves by its lr times the votes' mean sign
 (`--vote mean`) or the majority's. Values live and update in `--entry-dtype` with stochastic rounding, so there are no
 latents and no optimizer state. A CPU check on tiny0 gives the patched logits equal to θ with the values merged, and P's
-rows equal to each sequence's gradient (relative difference 1e-7). te_core 4.1's capture of a vote step shows the
-partials as bools (its narrowest cut, 1 bit a value a sequence) and prices Δ_grad at its 32-bit floor, state 0. The
-notes give `grad_bits` at the vote sum's width, ceil(log2(B + 1)) bits a value, with `partial_bits` and `floor_bits`
-beside it. The counter sees no weight gradient, so a matrix with entries is declared as a rank-1 adapter.
+rows equal to each sequence's gradient (relative difference 1e-7). te_core 4.12.1's capture prices each sequence's sum
+over its tokens at 32 bits, so a vote's Δ_grad is at least B · N · 32: s-t20's gains-only vote (1,666 entries, with
+`vote_gains` forming every gain's per-sequence gradient) measures 13.6 Mbit = 64 · 6,656 · 32, and a vote never meets
+Fit's reduction bound. The notes give `grad_bits` at the vote sum's width, ceil(log2(B + 1)) bits a value, with
+`partial_bits` and `floor_bits` beside it. The counter sees no weight gradient, so a matrix with entries is declared as a
+rank-1 adapter.
 
 `--opt` is `adamw` (the default), `sign` (sign descent) or `sgd` (no momentum); the last two keep no state, so only the
-gradient passes between token blocks and Fit's reduction bound, 2Δ_grad ≤ k, holds up to k/64 trained values. Every
+gradient passes between token blocks and Fit's reduction bound, 2Δ_grad ≤ k, holds up to k/64 trained values (s-t20's
+final norm under `--mech norms --norms final --opt sign`: Δ_grad and u(1) 16,384 bits at te_core 4.12.1, state 0). Every
 record's `notes.delta_grad` gives N, the values trained, and what passes between token blocks: the fp32 gradient of every
 trained tensor (a masked gain's whole tensor), plus AdamW's m and v under AdamW (12 bytes a value in all). A code shrinks
 E and not Δ_grad, since its latents train in fp32 (`latent_bits`, apart).
