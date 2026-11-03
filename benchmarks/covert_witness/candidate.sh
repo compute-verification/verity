@@ -72,7 +72,10 @@ print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
   ro=(--ro /usr --ro /etc)
   for p in $pyro; do ro+=(--ro "$p"); done
   ro+=(--ro "$here" --tmpfs "$here/islands" --ro "$S/island:$here/islands/$island" --ro "$STARTS" --ro "$LF/train.bin")
-  [ -d "$R/train" ] && ro+=(--ro "$R/train")
+  # the training streams, never data v3's ladder validation stream (train/v3/val.bin, held-out text)
+  for p in "$R/train/pythia.bin" "$R/train/v3/parts" "$R/train/v3/tokenizer.json" "$R/train/v3/manifest.json"; do
+    [ -e "$p" ] && ro+=(--ro "$p")
+  done
   [ "${CW_FINAL:-}" = 1 ] && [ -d "$SEALED/starts" ] && ro+=(--ro "$SEALED/starts")
   env=(--env PATH=/usr/local/bin:/usr/bin:/bin --env HOME=/tmp/home --env LANG=C.UTF-8 --env PYTHONDONTWRITEBYTECODE=1
        --env HF_HUB_OFFLINE=1 --env CUDA_CACHE_PATH=/tmp/cuda --env "CW_ROOT=$R" --env "CW_LF_CORPUS=$LF"

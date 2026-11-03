@@ -391,11 +391,22 @@ def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_pa
     (tmp_path / "parts").mkdir()
     for i, n in enumerate(lengths):
         (1000 * i + np.arange(n, dtype=np.uint16)).tofile(tmp_path / "parts" / f"{i:03d}.bin")
-    (tmp_path / "manifest.json").write_text(json.dumps({"parts": [{"index": i} for i in range(len(lengths))]}))
     monkeypatch.setattr(prepare.data_v3, "TRAIN", tmp_path)
-    c = 4
-    data = prepare.TrainData(prepare.data_v3.TOKENIZER, ctx=c)
-    want = sorted(tuple(range(1000 * i + j * c, 1000 * i + j * c + c + 1)) for i, n in enumerate(lengths)
-                  for j in range((n - 1) // c))
-    rows = data.next(len(want), device="cpu")
-    assert sorted(map(tuple, rows.tolist())) == want
+    c, tok = 4, prepare.data_v3.TOKENIZER
+
+    def windows(n_parts: int) -> list[tuple[int, ...]]:
+        return sorted(tuple(range(1000 * i + j * c, 1000 * i + j * c + c + 1)) for i, n in enumerate(lengths[:n_parts])
+                      for j in range((n - 1) // c))
+
+    def rows(data) -> list[tuple[int, ...]]:
+        return sorted(map(tuple, data.next(len(data.order), device="cpu").tolist()))
+
+    # while it is installed: the parts whose records are in place from 000 on (002's isn't yet)
+    for i in (0, 1, 3):
+        (tmp_path / "parts" / f"{i:03d}.json").write_text("{}")
+    assert rows(prepare.TrainData(tok, ctx=c)) == windows(2)
+    assert rows(prepare.TrainData(tok, ctx=c, parts=1)) == windows(1)
+    with pytest.raises(SystemExit, match="2 training parts here, not 3"):
+        prepare.TrainData(tok, ctx=c, parts=3)
+    (tmp_path / "manifest.json").write_text(json.dumps({"parts": [{"index": i} for i in range(len(lengths))]}))
+    assert rows(prepare.TrainData(tok, ctx=c)) == windows(4)

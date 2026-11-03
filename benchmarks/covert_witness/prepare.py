@@ -52,24 +52,28 @@ from starts_store import STARTS
 VERSION = "3.0"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
-#: the held-out sets (`data.py`, data version `sealed.DATA`): a search evaluation scores a fresh slice of the pool; the
+#: the held-out sets (`data_v3.py`, data version `sealed.DATA`): a search evaluation scores a fresh slice of the pool; the
 #: promotion and final sets are sealed (`sealed.py`)
 SEARCH_POOL, PROMOTION, FINAL = "search-pool", "promotion", "final"
 HELD_OUT = ROOT / "heldout"
 SET_DIRS = {SEARCH_POOL: HELD_OUT / DATA / SEARCH_POOL, PROMOTION: SEALED / "heldout" / DATA / PROMOTION,
             FINAL: SEALED / "heldout" / DATA / FINAL}
 DATA_JSON = HELD_OUT / DATA / "data.json"
-#: each held-out set's tokens (sha256 of `<set>/<tokenizer>.bin`) as data.py built them: a set on a node that isn't
+#: each held-out set's tokens (sha256 of `<set>/<tokenizer>.bin`) as data_v3.py built them: a set on a node that isn't
 #: these is refused, so every score of this version is on the same text
 SET_SHA256: dict[str, dict[str, str]] = {
-    SEARCH_POOL: {"gpt2": "c5b0ca00421394d48b8b99dfa345d984d978b1b0b0d46124c490e8faeb356c68"},
-    PROMOTION: {"gpt2": "85b63c4150d009927253b9c02fb7c627d10d2cdf17421e9f7deee5bef9a1610d"},
-    FINAL: {"gpt2": "3bda7a07f3ad8947f1657251f8295edcc30a92cb4e4d9520d48c760ad4a2c31f",
-            "pythia": "5d55000c17aff1bb0a0cf02327720e811e1e691076c7922c35b88351a6460b87"},
+    SEARCH_POOL: {"bpe32k": "1424e777b2d6f319f9662fbe0c22bdbc962074849f10779708ca76941154c5f3",
+                  "gpt2": "16714461f0fdb7e352782040d097e4885a9fb195fa17e40d8264f8a1791e5295"},
+    PROMOTION: {"bpe32k": "030ef6fdcccf193b5a46ec58af136cc0359fabfca6ab239c21991b43df69c969",
+                "gpt2": "7bd18c31b799112d96b93abb7c440a7806bdffbba1dc4e8562b80ab33c3ed055"},
+    FINAL: {"bpe32k": "b753d476cfeebd6bf7b71ede9604158d10e0de834798d9646150b8fd4a8d38e4",
+            "gpt2": "c1af95122572788a397c408976501fb5180df04c859e91000831c03d946c6570",
+            "pythia": "ffc8b77142d72143dd5f0225ce0d497b4e52aed2fca6143bd8410f1f669c8464"},
 }
-#: each start's θ digest (`digest`): the search's starts as `starts_store.json` names them, and the sealed start
-START_DIGESTS = {name: s["digest"] for name, s in json.loads(
-    (Path(__file__).resolve().parent / "starts_store.json").read_text())["starts"].items()} | {
+#: the search's starts as `starts_store.json` records them (digest, files, shape)
+STORE = json.loads((Path(__file__).resolve().parent / "starts_store.json").read_text())["starts"]
+#: each start's θ digest (`digest`): the search's starts', and the sealed start's
+START_DIGESTS = {name: s["digest"] for name, s in STORE.items()} | {
     "pythia160m": "e2b4a7f33b5c9578631b91ca13f59fb7a3648be4aa35e1f892b26939e8ab1681"}
 #: a search slice's GPT-2 tokens, whole windows of the pool's stream (`draw_slice`), and the promotion set's that a sealed
 #: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
@@ -246,13 +250,26 @@ class TrainData:
 
     gpt2: learning_frontier's shards 000-002 (the lf starts read the first 8 tokens per parameter of its seed-0 order);
     pythia: shard 000's documents (`data.py`); bpe32k: data v3's stream (`data_v3.py`), its parts' windows (each inside
-    one part) as one sequence, the parts installed when it is built."""
+    one part) as one sequence: the first `parts` parts, else all of manifest.json's, else (while it is being installed)
+    those whose records are in place from part 000 on. The order depends on how many, so a run that must reproduce
+    another's names `parts`."""
 
-    def __init__(self, tokenizer: str, seed: int = 1, ctx: int = EVAL_CTX):
+    def __init__(self, tokenizer: str, seed: int = 1, ctx: int = EVAL_CTX, parts: int | None = None):
         if tokenizer == data_v3.TOKENIZER:
-            man = json.loads((data_v3.TRAIN / "manifest.json").read_text())
-            self.parts = [np.memmap(data_v3.TRAIN / "parts" / f"{p['index']:03d}.bin", dtype=np.uint16, mode="r")
-                          for p in man["parts"]]
+            d = data_v3.TRAIN
+            if (d / "manifest.json").is_file():
+                index = [p["index"] for p in json.loads((d / "manifest.json").read_text())["parts"]]
+            else:
+                index = []
+                while (d / "parts" / f"{len(index):03d}.json").is_file():
+                    index.append(len(index))
+            if parts is not None:
+                if parts > len(index):
+                    raise SystemExit(f"prepare: data v3 has {len(index)} training parts here, not {parts}")
+                index = index[:parts]
+            if not index:
+                raise SystemExit(f"prepare: no data v3 training parts in {d / 'parts'}")
+            self.parts = [np.memmap(d / "parts" / f"{i:03d}.bin", dtype=np.uint16, mode="r") for i in index]
         else:
             path = LF_CORPUS / "train.bin" if tokenizer == "gpt2" else ROOT / "train" / f"{tokenizer}.bin"
             self.parts = [np.memmap(path, dtype=np.uint16, mode="r")]
