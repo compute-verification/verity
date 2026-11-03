@@ -646,9 +646,11 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert "fresh operands" in F.RESTS_ON["fresh_products"] and "P-chain" in F.RESTS_ON["fresh_products"]
     assert all(x in F.RESTS_ON["fresh_products"] for x in ("P-match", "P-width extended"))
     assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in ("P-match", "P-width (extended)", "P-chain"))
-    for products, why in (({"k": k, "order": "chain", "products": [SQUARE]}, F.FRESH_NO_SYSTEM),
-                          (chain.products | {"system": None}, F.FRESH_RETRACE)):
-        assert F.bound(replace(chain, products=products), c, k)["unmeasured"]["fresh_products"] == why
+    assert F.bound(replace(chain, products=chain.products | {"system": None}), c, k)["unmeasured"][
+        "fresh_products"] == F.FRESH_RETRACE
+    hand = F.bound(replace(chain, products={"k": k, "order": "chain", "products": [SQUARE]}), c, k)
+    assert hand["terms"]["fresh_products"] == io_bound.bound([SQUARE], c, k, 1e12)["proved"]["rho_no_cell"]
+    assert hand["inputs"]["fresh_products"]["whole_making"] == F.ONE_CLASS
 
 
 def test_published_reading_a_where_fit_holds_is_fits_c_over_c_minus_d():
@@ -750,9 +752,10 @@ def test_products_of_ops_takes_a_logs_products_and_counts_none(name):
 def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     """The 45M start's dense step (te_core.io_bound.capture, Muon on the block matrices, batch 2 at ctx 256) through
     te_core.capture.products and `products_of_trace` is the products io_bound.rows_of counts on it, its identical rows
-    merged, so io_bound's bound is the same: at the console's policy about 65,763 fresh MACs a block, 0.552 of |C| and
-    ρ 3.04e6 with P-cell. The trace's order is unknown and the reference circuit's chain stands, so the term is
-    measured: the figure without P-cell, 1.65e5, with 3.04e6 beside it as fresh_cell. The rows are the fixture the
+    merged, and their whole-making system is io_bound.chain_classes', so io_bound's bound is the same: at the console's
+    policy about 69,676 fresh MACs a block, 0.552 of |C| and ρ 2.87e6 with P-cell. The trace's order is unknown
+    and the reference circuit's chain stands, so the term is measured: the figure without P-cell, 1.637e5, with 2.87e6
+    beside it as fresh_cell. The rows are the fixture the
     vectors read (`dense_45m.products.json`). The one check of the strong bound's figure on a model's own shape (about
     6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
     import collections
@@ -773,13 +776,15 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     assert len(got["products"]) < sum(r.kind == "fresh" for r in rows)
     C = block["gates"]
     assert C == io_bound.step_gates(g, "bfloat16")
-    want = io_bound.bound([r.product() for r in rows if r.kind == "fresh"], c, k, C)
-    b = io_bound.bound(got["products"], c, k, C)
+    wc = F.whole_chain(got["system"], k)["whole_chain"]
+    assert wc == pytest.approx(io_bound.whole_chain_of(io_bound.chain_classes(g, k), k)["whole_chain"], rel=1e-12)
+    want = io_bound.bound([r.product() for r in rows if r.kind == "fresh"], c, k, C, wc)
+    b = io_bound.bound(got["products"], c, k, C, wc)
     assert b["proved"]["rho"] == pytest.approx(want["proved"]["rho"], rel=1e-12) and b["G"] == pytest.approx(want["G"])
     macs = sum(p["macs"] for p in got["products"])
-    assert macs / b["proved"]["blocks"] == pytest.approx(65_763, rel=1e-4)
-    assert b["share"] == pytest.approx(0.552, abs=5e-4) and b["proved"]["rho"] == pytest.approx(3.04e6, rel=1e-3)
-    assert b["proved"]["rho_no_cell"] == pytest.approx(1.650e5, rel=1e-3)
+    assert macs / b["proved"]["blocks"] == pytest.approx(69_676, rel=1e-4)
+    assert b["share"] == pytest.approx(0.552, abs=5e-4) and b["proved"]["rho"] == pytest.approx(2.870e6, rel=1e-3)
+    assert b["proved"]["rho_no_cell"] == pytest.approx(1.637e5, rel=1e-3)
     assert (got["order"], got["trace_order"]) == (F.ORDER, "unknown")
     m = replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
     one = F.bound(m, c, k)

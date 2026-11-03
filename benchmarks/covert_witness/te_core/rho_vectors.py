@@ -120,24 +120,11 @@ def case_measured(case: dict) -> formalism.Measured:
     return formalism.complete(block, {"output": {"e_bytes": delta / 8}}, TINY)
 
 
-def one_class(products: list[dict]) -> dict:
-    """A hand-written product set's whole-making system (`formalism.system_of`): io_bound's one-class rule, the one
-    class at the least k_whole among the products feeding itself and every counted operand (none where no chain makes
-    an operand whole)."""
-    ks = [p["k_whole"] for p in products if p.get("k_whole")]
-    b = min((min(p["b_a"], p["b_b"]) for p in products), default=16)
-    if not ks:
-        return {"classes": [], "counted": [], "b": b}
-    return {"classes": [{"k": min(ks), "c": io_bound.C_PAIR, "P": 1.0, "feeds": [[min(ks), 1.0]]}],
-            "counted": [[min(ks), 1.0]], "b": b}
-
-
 def fresh(base: formalism.Measured) -> dict:
     """The fresh-products term's vectors: each product set as `Measured.products` on `base` with one part of |C| gates
     (the term reads only the products and |C|), through `formalism.fresh_products` at its (c, k)."""
     sets = [(v["name"], v["inputs"]["c"], v["inputs"]["k"], v["inputs"]["C_gates"],
-             {"k": v["inputs"]["k"], "order": "chain", "products": v["inputs"]["products"],
-              "system": one_class(v["inputs"]["products"])})
+             {"k": v["inputs"]["k"], "order": "chain", "products": v["inputs"]["products"]})
             for v in io_bound.vectors()["vectors"]]
     rows = json.loads((FIXTURES / DENSE_45M).read_text())
     sets.append(("the 45M start's dense step, its trace's order unknown", *policy.CONSOLE, rows["gates"],

@@ -88,7 +88,8 @@ most that. The kinds:
   products; the figures are the best subset's (io_bound's `bound`), the dropped products still in |C|, and `inputs`
   names how many it dropped and their share of the counted MACs (`subset`). Where the system has no fixed point the
   term is unmeasured (`FRESH_VOID`), never 0, and so it is where an op breaks P-match, on a trace whose product rows
-  predate the system (`FRESH_RETRACE`) and on products that come without one (`FRESH_NO_SYSTEM`, a model's). It is unmeasured, with io_bound's chain figure in `inputs`,
+  predate the system (`FRESH_RETRACE`). Products that come without one (a model's, a hand-written set) take io_bound's
+  one-class rule, named in `inputs` (`ONE_CLASS`). It is unmeasured, with io_bound's chain figure in `inputs`,
   also for a circuit that declares a tree (none does), and on a record with no product rows. A record with an op log
   and no product
   rows (a ledger row traced before 4.8) has its log's
@@ -654,10 +655,9 @@ SYSTEM_FROM = "4.12"
 FRESH_RETRACE = (f"unmeasured: the trace's product rows predate te_core {SYSTEM_FROM}, so they don't say which chains "
                  "make each operand whole (te_core.capture.products' fed), and the one-class rule they'd fall back on "
                  f"misses attention's chains; retrace the run with te_core {SYSTEM_FROM} or later")
-#: why the fresh-products kind is unmeasured on products that come with no whole-making system (a model's)
-FRESH_NO_SYSTEM = ("unmeasured: the products come without the step's whole-making system (te_core.io_bound."
-                   "chain_classes, from a captured step or a traced step's product rows), and the one-class rule at "
-                   "their least k_whole misses the shorter chains nested below their operands (attention's)")
+#: what Λ's whole-making factor is on products that come with no whole-making system (a model's, a hand-written set):
+#: io_bound's one-class rule at each subset's least k_whole, which misses any shorter chain nested below their operands
+ONE_CLASS = "one-class rule at the least k_whole (no whole-making system given)"
 #: an op log's class (te_core.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
 #: product: its non-token operand is θ (the product is never fresh), or it is attention's, which io_bound doesn't count
 LOG_KIND = {"theta": "theta", "registered": "theta"}
@@ -816,19 +816,23 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
         return None, (f"unmeasured: the products were classified at k = {p['k']:g} (te_core.io_bound.rows_of), not at "
                       f"this k; take them again at it (formalism.products_of, or a trace's by "
                       f"te_core.capture.products.rows)"), got
-    if p.get("system") is None or p.get("p_match"):
+    if "system" not in p:
+        got["whole_making"] = ONE_CLASS
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates)
+    elif p["system"] is None:
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
-    if p.get("system") is None:
-        return None, FRESH_RETRACE if "system" in p else FRESH_NO_SYSTEM, got
-    if p.get("p_match"):
+        return None, FRESH_RETRACE, got
+    elif p.get("p_match"):
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
         got["p_match"] = p["p_match"]
         ops = ", ".join(f"{x['op']} (fan-out {x['fan_out']:.3g}, {x['count']}×)" for x in p["p_match"])
         return None, (f"unmeasured: the traced step breaks P-match, the premise that elementwise steps map operand "
                       f"entries one to one: {ops} hand one entry to several on the way into a product's operand "
                       f"(te_core.capture.products)"), got
-    w = whole_chain(p["system"], k)
-    got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None}
-    got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"])
+    else:
+        w = whole_chain(p["system"], k)
+        got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None}
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"])
     if order == "chain":
         proved = got["io_bound"]["proved"]
         got["fresh_cell"] = proved["rho"]

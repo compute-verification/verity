@@ -33,7 +33,7 @@
   "rests_on": "theorem for this circuit (Loomis-Whitney) under P-width (extended), P-match and P-chain, without P-cell",
   "vectors": [
    {
-    "fresh_cell": 4138401.0933692567,
+    "fresh_cell": 4138401.093369211,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -53,40 +53,18 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "one product, square, console",
     "order": "chain",
     "share": 0.7400625,
     "subset": null,
-    "term": 219441.14652435484,
+    "term": 219441.14652435452,
     "why": null
    },
    {
-    "fresh_cell": 1436346.2975317447,
+    "fresh_cell": 1436346.2975317435,
     "inputs": {
      "C_gates": 1e+18,
      "c": 254500000000000.0,
@@ -106,36 +84,14 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "one product, square, panel",
     "order": "chain",
     "share": 0.7400625,
     "subset": null,
-    "term": 83822.25466981718,
+    "term": 83822.25466981716,
     "why": null
    },
    {
@@ -159,12 +115,7 @@
         "macs": 50000000000000.0,
         "outputs": 3125000000000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [],
-       "counted": []
-      }
+      ]
      }
     },
     "name": "short chains, K = 16, none whole by itself",
@@ -175,7 +126,7 @@
     "why": null
    },
    {
-    "fresh_cell": 4138401.0933692567,
+    "fresh_cell": 4138401.093369211,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -206,40 +157,18 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "short and long chains: the linear form keeps the long",
     "order": "chain",
     "share": 0.81406875,
     "subset": null,
-    "term": 219441.14652435484,
+    "term": 219441.14652435452,
     "why": null
    },
    {
-    "fresh_cell": 3555338.0305360053,
+    "fresh_cell": 3555338.03053515,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -259,36 +188,14 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           128,
-           1.0
-          ]
-         ],
-         "k": 128
-        }
-       ],
-       "counted": [
-        [
-         128,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "operands made whole from K = 128 chains",
     "order": "chain",
     "share": 0.7400625,
     "subset": null,
-    "term": 214429.80796201396,
+    "term": 214429.8079620056,
     "why": null
    },
    {
@@ -312,29 +219,7 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           64,
-           1.0
-          ]
-         ],
-         "k": 64
-        }
-       ],
-       "counted": [
-        [
-         64,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "operands made whole from K = 64 chains: no subset has a proved bound",
@@ -345,7 +230,7 @@
     "why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
    },
    {
-    "fresh_cell": null,
+    "fresh_cell": 4138401.093369211,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -376,40 +261,23 @@
         "macs": 500000000000.0,
         "outputs": 500000000000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           1,
-           1.0
-          ]
-         ],
-         "k": 1
-        }
-       ],
-       "counted": [
-        [
-         1,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "a rank-1 adapter's product beside a square one: the best subset drops it",
     "order": "chain",
     "share": 0.7408025625,
-    "subset": null,
-    "term": null,
-    "why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+    "subset": {
+     "dropped": 1,
+     "dropped_macs_share": 0.0009990009990009652,
+     "k_whole_min": 512,
+     "of": 2
+    },
+    "term": 219441.14652435452,
+    "why": null
    },
    {
-    "fresh_cell": 3613969.8081844687,
+    "fresh_cell": 3613969.8081843527,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -440,36 +308,14 @@
         "macs": 200000000000000.0,
         "outputs": 142045454545.45456
        }
-      ],
-      "system": {
-       "b": 8,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "mixed widths",
     "order": "chain",
     "share": 0.6491,
     "subset": null,
-    "term": 193089.97127249104,
+    "term": 193089.97127249016,
     "why": null
    },
    {
@@ -493,29 +339,7 @@
         "macs": 50000000000000.0,
         "outputs": 97656250000.0
        }
-      ],
-      "system": {
-       "b": 32,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "f32 operands",
@@ -534,12 +358,7 @@
      "products": {
       "k": 65536.0,
       "order": "chain",
-      "products": [],
-      "system": {
-       "b": 16,
-       "classes": [],
-       "counted": []
-      }
+      "products": []
      }
     },
     "name": "nothing counted",
@@ -884,7 +703,7 @@
     "why": null
    },
    {
-    "fresh_cell": 4138401.0933692567,
+    "fresh_cell": 4138401.093369211,
     "inputs": {
      "C_gates": 1e+18,
      "c": 536681984163840.0,
@@ -904,36 +723,14 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "one product, square, console, no order declared",
     "order": "chain",
     "share": 0.7400625,
     "subset": null,
-    "term": 219441.14652435484,
+    "term": 219441.14652435452,
     "why": null
    },
    {
@@ -957,29 +754,7 @@
         "macs": 500000000000000.0,
         "outputs": 976562500000.0
        }
-      ],
-      "system": {
-       "b": 16,
-       "classes": [
-        {
-         "P": 1.0,
-         "c": 0.3333333333333333,
-         "feeds": [
-          [
-           512,
-           1.0
-          ]
-         ],
-         "k": 512
-        }
-       ],
-       "counted": [
-        [
-         512,
-         1.0
-        ]
-       ]
-      }
+      ]
      }
     },
     "name": "one product, square, console, a circuit that declares a tree",
