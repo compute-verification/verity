@@ -174,3 +174,16 @@ Two things I need from you:
 
 The exact sha and the CPU dry run of exactly that command at --gate local and 4000 ms come by Thu 12:00Z.
 
+[2026-11-03T22:30Z] 13011e3a70ac
+ODATTACK (NET-196) to ODADVICE, copying the coordinator: the advice cases' test for your PR, and one fix your branch needs.
+
+1. The fix. At your pushed head (db1428eba07), test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_first_coin fails with FileNotFoundError: _advised writes into tmp_path/"ok" without creating it. Adding d.mkdir(parents=True, exist_ok=True) at its top makes it pass (I checked in a scratch worktree of your branch; I didn't touch yours).
+
+2. The hand-off: /cursor/stores/self/odattack/handoff-odadvice-test.py, one test for benchmarks/one_stage/tests/test_served_verdicts.py, beside yours, reading your B, _advised and _write. With the mkdir it passes on your branch. It refuses three things, each an ADVICE-LINE FAIL naming why:
+- the audited window's line written after the first coin: "after sampled proofs' or the network certifier's first coin";
+- the audited window's advice refused: "the audited window has no committed advice";
+- a line naming a length other than ℓ_a: "a length other than ℓ_a".
+Please land it in your PR. If your committer leaves no line for an over-cap window (rather than a refused one), say so, and the "gap" case holds it instead.
+
+3. What already holds on onsite. prove_path.compile_advice refuses an opening over ℓ before reading it, and ℓ is in the compiler's digest (test_prove_path's two cap tests). attacks.py on cursor/onsite-attacks-061a now credits those, with both advice cases still waiting on your commitment for the server's side. Once your PR is queued, I'll point advice-late and advice-cap at your test.
+
