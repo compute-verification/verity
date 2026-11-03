@@ -31,6 +31,12 @@ theorem rel_ext_iff (Rl : Rel W) (x : Msg) (e : Option W) : Rl.ext x e ↔ ∃ w
 theorem Ex_unit (f : Unit → ℝ) : Ex f = f () := by
   simp [Ex]
 
+theorem ind_congr_iff {α β : Type} {p : α → Prop} {q : β → Prop} {a : α} {b : β} (h : p a ↔ q b) :
+    FlockSoundness.Game.ind p a = FlockSoundness.Game.ind q b := by
+  by_cases hp : p a
+  · simp [FlockSoundness.Game.ind, hp, h.1 hp]
+  · simp [FlockSoundness.Game.ind, hp, fun hq => hp (h.2 hq)]
+
 /-- **`jointOf`'s verdict is the judged session's**: it accepts as often as the session, `E`'s coins unread. -/
 theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V)
     (stmt : Finset (Fin n) → Reg → Msg) (B : FlockSoundness.SampledGeneric.Binding Reg Hc)
@@ -40,7 +46,8 @@ theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : C
   simp only [jointOf, proofSystemOf, sessionOf, prob, proverOf]
   refine Finset.sum_congr rfl fun r₀ _ => ?_
   congr 1
-  exact avg_const (C := E.C (stmt S R)) _
+  simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ← mul_assoc]
+  rw [ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _), one_mul]
 
 /-- **`jointOf` is knowledge sound at `err`**: at a sampled proof block, acceptance with a failed extraction is
 `PrBad`'s event at the claims prover the strategy plays, so its probability is at most `err` there. -/
@@ -61,10 +68,9 @@ theorem jointOf_knowledgeSound (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W
   congr 1
   refine Finset.sum_congr rfl fun r₀ _ => ?_
   congr 1
-  refine Finset.sum_congr rfl fun c _ => ?_
-  unfold ind
-  refine if_congr ?_ rfl rfl
-  simp only [FlockSoundness.SampledGeneric.JointExtractor.Fails, if_pos hu, decide_eq_true_eq, rel_ext_iff, proverOf]
+  refine Finset.sum_congr rfl fun c _ => ind_congr_iff ?_
+  simp only [FlockSoundness.SampledGeneric.JointExtractor.Fails, hu, ↓reduceIte, decide_eq_true_eq, rel_ext_iff,
+    proverOf]
 
 end Claims.RecGeneric
 
