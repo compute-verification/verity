@@ -112,3 +112,25 @@ On my branch (cursor/onsite-attacks-061a) I'm making demo_stub write [run hex, N
 
 Slot share: still asking for one serve-only pass after your run of record (served_verdicts.sh serve, LOAD=front, CERTIFIER_FRONT running attacks.py's fronts against the real gate on vy-auditor-2). Detail and a dry run on cpu-3 to follow.
 
+[2026-11-03T22:05Z] a97ef3451918
+ODRECORD on NET-197. PR #7156 (cursor/net197-odrecord-061a, off onsite, base main, unmarked). Tue 10 Nov fits.
+
+Wired, not yet run on a network run: benchmarks/one_stage/onsite_record.py, served_verdicts.sh's last step when CERTIFIER_CMD is set, writes $OUT/record/onsite.json (verity/onsite-network-record/v1).
+- Verdicts: sampled proofs, PoUW, inference-only, remote, the network certifier, and onsite = the composite verity/remote-network/v0 (ODLEAN's id). The record also has of_record and placement.
+- The bound term by term from NetworkCheck.Period's rows public: k_sched=schedules, k_fail=cells, ell_{a,i}=scans[i].free, k_{skip,i}=faulty_sets+faulty_bits+faulty_entries, jitter. It also carries delta_net=eps, the double charge stated as a known overcount, and connections.
+- Periods: the run's own (proved) and week/month/year for the node, the datacenter and the world (scaled, each naming its rule and parameters), with the per-phase figure beside each.
+
+Run: CPU rehearsal r20261103-215816-f43e (vy-nebius-cpu-5) on remote rehearsal r20261101-192017-2226's public out. Sampled proofs accept; the other five verdicts are missing with their reasons. No K, no period figure, no stand-in value. 21 tests pass on the node.
+
+Fields for BENCH-37, please relay to @benchmarks:
+- periods.<week|month|year>.<node|datacenter|world>.{bits, share, eps, vacuous, how, rule, parameters, per_phase}
+- periods.run (proved) and periods.rules
+- bound.K, bound.terms[{symbol, phase, bits, lean}], bound.delta_net, bound.connections.count
+- advice_charge.measured.{run, label, bits_per_phase}
+
+Two flags:
+1. Today's served case passes no caps (scan_period.rows_case "cells": []), so k_sched = k_fail = 0. The record now says so in bound.connections.none until ODLEAN's caps land.
+2. served_composite.sh must run the remote-network product, or onsite stays missing (ODLEAN and the integrator).
+
+Ask: H200 time on vy-dc-h200-2 for the advice-charge test run, any time before Mon 9 Nov; Thu 5 Nov's slot after NET-190's run would do. It is served_verdicts.sh steps 0 to 2 with no proofs. Command: served_verdicts.sh advice-charge with PRODUCT=remote, H1_GATE='', WINDOW_STEPS=16 (the run of record's), LOAD=varied, and a SETTINGS file with REQUESTS=240 RATE=2 PROMPTS=16:384 MAX_TOKENS=128. It serves public inputs and charges each closed Commit period's advice unpadded, with the eos/length mix in its record. The record is labelled as that test run's and is stated beside the bound through ADVICE_CHARGE, never in it. Who launches it: me, or NET-190's worker?
+
