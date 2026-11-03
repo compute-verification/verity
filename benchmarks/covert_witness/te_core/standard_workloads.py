@@ -54,7 +54,7 @@ KEYS = ("C_gates", *algorithm_policy.INPUTS, "w_fit_gates", "alpha_ratio")
 #: the console's default session: 4,096 input and 1,024 output tokens of the 45M reference model, c their forward at
 #: 2 x 740 gates a MAC, k the inputs' ids at 16 bits
 CONSOLE = (5_120 * 45e6 * 2 * 740, 65_536.0)
-#: the panels route's longest cell for this panel
+#: the panels route's longest cell
 CELL_MAX = 4_096
 ROWS = Path(__file__).resolve().parents[1] / "islands" / NAME / "rows.json"
 FP4 = "float4_e2m1fn_x2"
@@ -293,17 +293,22 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
     p = {"id": PANEL, "title": "Standard training under the policy: covert workloads measured on real runs",
          "kind": "table", "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
          "source": f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}, reading {spec['reading']}; "
-                   f"islands/{NAME})", "note": note(spec["reading"]), "columns": COLUMNS, "rows": rows}
+                   f"islands/{NAME})", "note": note(spec["reading"], generation(spec)), "columns": COLUMNS,
+         "rows": rows}
     return p, details
 
 
-def note(reading: str, art: str | None = None) -> str:
+def generation(spec: dict) -> bool:
+    return any(r.get("rounds") for r in spec["rows"])
+
+
+def note(reading: str, rounds: bool, art: str | None = None) -> str:
     return (f"Covert workloads, each a small real run from a registered start, measured by te_core {VERSION} "
-            f"(reading {reading}). rho: te_core.formalism.at; rho_default at c = {policy.SESSION_TOKENS} w_fwd, "
-            f"k = {policy.REFERENCE_K_BITS:,} bits; rho_console at the console's default session, "
-            f"c = {CONSOLE[0]:.5g} gates, k = {CONSOLE[1]:,.0f} bits. rho_inputs: the dial's inputs (page_rho); "
-            "input_status: measured, or assumed and why. rl and inference rows: the generation rounds alone, "
-            "untraced, FP4 GEMMs priced as NVFP4." + (f" Tables {art}." if art else ""))
+            f"(reading {reading}). rho: te_core.formalism.at at the dial's default (c = {policy.SESSION_TOKENS} "
+            f"w_fwd, k = {policy.REFERENCE_K_BITS:,} bits) and the console's (c = {algorithm_policy.num(CONSOLE[0], 5)}"
+            f" gates, k = {CONSOLE[1]:,.0f} bits); rho_inputs gives it at any (c, k) (page_rho). input_status: "
+            "measured, or assumed and why." + (" rl, inference: the generation rounds alone, untraced, FP4 GEMMs "
+                                               "priced as NVFP4." if rounds else "") + (f" Tables {art}." if art else ""))
 
 
 def refused(p: dict) -> list[str]:
@@ -333,6 +338,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     spec = json.loads(a.rows.read_text())
     p, details = build(spec)
+    if bad := refused(p | {"note": note(spec["reading"], generation(spec), "art:" + "0" * 64)}):
+        raise SystemExit(f"{PANEL}: the panels route refuses it: {'; '.join(bad[:5])}")
     tables, cons = a.out / "tables", a.out / "console"
     tables.mkdir(parents=True, exist_ok=True)
     cons.mkdir(parents=True, exist_ok=True)
@@ -340,9 +347,7 @@ def main(argv=None) -> int:
     art = algorithm_policy.store(tables, {"what": f"{PANEL} uncut, each row's labels, parts and rho's terms "
                                                   f"(te_core.standard_workloads)", "rows": len(p["rows"]),
                                           "source": p["source"]}) if a.publish else None
-    q = p | {"note": note(spec["reading"], art)}
-    if bad := refused(q):
-        raise SystemExit(f"{PANEL}: the panels route refuses it: {'; '.join(bad[:5])}")
+    q = p | {"note": note(spec["reading"], generation(spec), art)}
     (cons / f"{NAME}.json").write_bytes(console.body(q))
     ix = {c: i for i, c in enumerate(COLUMNS)}
     for r in q["rows"]:
