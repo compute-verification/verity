@@ -34,7 +34,7 @@ opening that fails (`strat_eval_cons`).
   where `Rf` says, every frame round's message past the link without its leading domain frame (`dropDom`: the Lean frame
   keeps a rep's domain for its stream and never releases it), and its `abort` the stop. It keeps `S`'s tables,
   witnesses, dummy and tape, so `Tables`, `Complete`, `DummyReg` and `TapeOK` carry over as they are, and `Causal` and
-  `SwCausal` where `Rf` reads the coins before its round only (`StopsCausal`). A live run's coins were all taken
+  `SwCausalOn` where `Rf` reads the coins before its round only (`StopsCausal`). A live run's coins were all taken
   (`refusesCoins_of_live`), so the deferred server asks for the stops below its last round only. Where its stops are the
   frame's refusals (`StopsAt`: on every history of at most the protocol's coins whose openings pass, `Rf` at the coins
   they open is `refusesCoins`), `StopRefine` holds at its switched prover (`LeanRelease.stopRefine_withStops`).
@@ -137,14 +137,6 @@ theorem withStops_causal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → 
     (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
   rw [hRf x c c' i h]
   exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x wt ω p c c' i h)
-
-theorem withStops_swCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
-    (vs : S.SwVals) (hRf : S.StopsCausal Rf) (hc : S.SwCausal vs) : (S.withStops Rf stop).SwCausal vs := by
-  intro x w ν ω s p c c' i h
-  show (if Rf x c i = true then stop else if i = 0 then S.enc x c i _ else dropDom (S.enc x c i _)) =
-    (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
-  rw [hRf x c c' i h]
-  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω s p c c' i h)
 
 theorem withStops_swCausalOn (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (hRf : S.StopsCausal Rf)
