@@ -88,8 +88,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  by two
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
-                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
-                 no axiom, and only this catches it (the `kernel` control); or the axioms found by walking the replayed
+                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use), one of a module under the module system
+                 that it stops on (its recursion) again on its imports' public parts, as `lean` checked it: a
+                 declaration that skipped the kernel shows no axiom, and only this catches it (the `kernel` control);
+                 or the axioms found by walking the replayed
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
                  kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
