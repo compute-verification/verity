@@ -208,17 +208,9 @@ Protocols and claims:
   definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
 - The training formalism (`GLOSSARY.md`, "Training") states the slowdown from ℓ_0, ℓ* and (c, k, n), the red team
-  choosing the rest. Slowdown counts the affected gates no inference block reaches from a token's inputs, a frozen
-  tail's included, on A1's and A1′'s upper bounds (best-known values are the attack side). H(ℓ*) is the least compute of
-  any method, so W*/H(ℓ*) ≥ 1; a reported W* is the best attack known, an upper bound.
-- A1 is read by entry point: a block reads at least the update bits its work reads, counted once, plus, for each token
-  whose work it does without computing the token from its inputs, that token's computed state where the work begins,
-  with the earlier tokens' keys and values it reads and doesn't compute. Its values are the least reads any checked
-  witness block achieves: a set of the run's own gates whose gates and reads a checker counts. Every published ρ names
-  its te_core version and reading.
-- Gradient reductions are counted, apart from A1: each partial gradient is read at its passed width to be summed, so
-  ρ ≥ 1 + (1 − 1/b)·Δ_g/k, with b the compute blocks a step. A message counts at the width the circuit passes, when the
-  encoding, decoding and summing run in the circuit.
+  choosing the rest. A1 is read by entry point: a token's state where a block's work begins, with the earlier tokens'
+  keys and values it reads, at the least reads any checked witness block achieves. Gradient reductions add Δ_g/k.
+  H(ℓ*) is the least compute of any method, so W*/H(ℓ*) ≥ 1, and every ρ names its te_core version.
 
 ## Before you finish
 
