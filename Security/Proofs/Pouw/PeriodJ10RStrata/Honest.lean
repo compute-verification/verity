@@ -16,7 +16,7 @@ draw (`evOf`). Given three facts of those inputs, the witness meets every premis
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`);
 * the proof blocks `Credit.descriptorDrawn` draws are the union over `S` of the strata's coordinates of the block's draw
-  (`hdraw`), `StrataDrawIsCoin`'s body on every window.
+  (`hdraw`), `StrataSampleIsCoin`'s body on every window.
 
 At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's draw as `Ξ`:
 `N_s` one-word proof blocks, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
@@ -73,7 +73,7 @@ theorem strata_meets_period (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
-    RegisteredBeforeDraw (windows σ regOf evOf n) ∧ StrataDrawIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
+    RegisteredBeforeSample (windows σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
     Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf (windows σ regOf evOf n)) enc ∧
     ∀ x, (windows σ regOf evOf n).prefixLen x = n := by
   classical
@@ -103,7 +103,7 @@ theorem stratumLive_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (
 /-- **An honest J10-R period meets every per-stratum premise at each stratum `s`**, in the statement's order, at
 `HonestJ10R`'s instance at `N_s = |stratum σ s|` on stratum `s`'s view (`layerAt`, `runAt`, `creditAt`): `Scope` at
 any `δ_s > 0`, the live share at `ρ = 1`, the stage share, H1's lucks, the play's game, `DeadConeDead`, `PrefixOf`,
-binding at `δ_bind = 0`, `TileServiceSound` at `δ_ks = 0`, `SharedNoiseLucks` and `UnitFixed` at `N_s` fixed and folded
+binding at `δ_bind = 0`, `TileServiceSound` at `δ_ks = 0`, `SharedNoiseLucks` and `BlockFixed` at `N_s` fixed and folded
 words a window. -/
 theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     Scope Honest.scheme (HonestJ10R.circuit (tileCount σ s)) δs ∧
@@ -128,7 +128,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
     TileServiceSound σ s unitOf (creditAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n)) (pullAt (rounds1 (tileCount σ s)) σ s HonestJ10R.opened)
       (relAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n) HonestJ10R.place HonestJ10R.tile) 0 ∧
     SharedNoiseLucks Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
-    UnitFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
+    BlockFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
       (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
         HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
       (periodMode (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n)
@@ -229,7 +229,7 @@ end By
 
 open Classical in
 /-- **Stratum `s`'s live words at verdict `acc`**: `stratumLive` with `acc` for `Credit.window`'s verdict. -/
-noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
+noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
     (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (acc : Paths (StrataCoin C m σ) n → Fin n → Prop) (x : Paths (StrataCoin C m σ) n) : ℝ :=
@@ -240,7 +240,7 @@ noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared �
 period's fixed words, summed over `S`, are at least the sum over `S` of each stratum's credit of `acc`'s accepted
 prefix. -/
 def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
+    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → RegisteredCircuit ι) (hM : ∀ s, (Cd s).rounds = 1)
     (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U)
     (acc : Paths (StrataCoin C 1 σ) n → Fin n → Prop) (ρ δs : Fin mB → ℝ) (δ : ℝ) : Prop :=
@@ -252,7 +252,7 @@ def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB
 /-- **At `Credit.window`'s verdict it is the statement's conclusion**, so `strata_nontrivial`, `StrataBoundBy` at the
 verdict that credits every window, is the conclusion with that verdict in place of `Credit.window`'s. -/
 theorem strataBound_window {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
-    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
+    (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → RegisteredCircuit ι) (hM : ∀ s, (Cd s).rounds = 1)
     (ws : CreditWindows (StrataCoin C 1 σ) n)
     (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U) (ρ δs : Fin mB → ℝ) (δ : ℝ) :

@@ -113,7 +113,7 @@ theorem commitCoin_outY {F : Form} (hF : F ≠ .perCall) (r : ℕ) : commitCoin 
   cases F <;> first | rfl | exact (hF rfl).elim
 
 /-- A tied circuit's gate is in a round of the window. -/
-theorem round_lt {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls} (T : Tie L F Cd cls) (i : ℕ)
+theorem round_lt {ι : Type} {L : Shape} {F : Form} {Cd : RegisteredCircuit ι} {cls : ℕ → Cls} (T : Tie L F Cd cls) (i : ℕ)
     (hi : i < Cd.dag.length) : Cd.round (Cd.call i) < Cd.rounds := by
   have hc := T.inRange i hi
   have hc' : Cd.call i < L.steps * L.calls := by rw [← T.calls]; exact hc
@@ -121,10 +121,10 @@ theorem round_lt {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : �
   exact roundOf_lt F hc'
 
 /-- A value's first reader: none (the draw), or a gate that reads it. -/
-theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
+theorem firstRead_cases {ι : Type} (Cd : RegisteredCircuit ι) (i : ℕ) :
     Cd.firstRead i = Cd.rounds ∨
       ∃ j, j < Cd.dag.length ∧ Cd.Reads j i ∧ Cd.firstRead i = Cd.round (Cd.call j) := by
-  unfold Declared.firstRead
+  unfold RegisteredCircuit.firstRead
   cases h : List.find? (fun j => (Cd.dag[j]?).any fun g => g.args.contains i) (List.range Cd.dag.length) with
   | none => exact Or.inl rfl
   | some j =>
@@ -132,9 +132,9 @@ theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
     exact Or.inr ⟨j, List.mem_range.1 (List.mem_of_find?_eq_some h), hp, rfl⟩
 
 /-- A value some gate reads has a first reader, a gate that reads it. -/
-theorem firstRead_of_reads {ι : Type} (Cd : Declared ι) {i j : ℕ} (hj : j < Cd.dag.length) (hR : Cd.Reads j i) :
+theorem firstRead_of_reads {ι : Type} (Cd : RegisteredCircuit ι) {i j : ℕ} (hj : j < Cd.dag.length) (hR : Cd.Reads j i) :
     ∃ j', j' < Cd.dag.length ∧ Cd.Reads j' i ∧ Cd.firstRead i = Cd.round (Cd.call j') := by
-  unfold Declared.firstRead
+  unfold RegisteredCircuit.firstRead
   cases h : List.find? (fun j => (Cd.dag[j]?).any fun g => g.args.contains i) (List.range Cd.dag.length) with
   | none => exact absurd hR (List.find?_eq_none.1 h j (List.mem_range.2 hj))
   | some j' =>
@@ -142,11 +142,11 @@ theorem firstRead_of_reads {ι : Type} (Cd : Declared ι) {i j : ℕ} (hj : j < 
     exact ⟨j', List.mem_range.1 (List.mem_of_find?_eq_some h), hp, rfl⟩
 
 /-- A run input only its own call reads is cut no earlier than its call's round. -/
-theorem round_le_cut_of_run {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls}
+theorem round_le_cut_of_run {ι : Type} {L : Shape} {F : Form} {Cd : RegisteredCircuit ι} {cls : ℕ → Cls}
     (T : Tie L F Cd cls) {ℓ : ℕ} (hlt : ℓ < Cd.dag.length) (hb : Cd.binding ℓ = some .run)
     (hr : ∀ j, j < Cd.dag.length → Cd.Reads j ℓ → Cd.call j = Cd.call ℓ) :
     Cd.round (Cd.call ℓ) ≤ Cd.cutOf ℓ := by
-  simp only [Declared.cutOf, hb]
+  simp only [RegisteredCircuit.cutOf, hb]
   rcases firstRead_cases Cd ℓ with h | ⟨j, hj, hR, h⟩
   · rw [h]
     exact (round_lt T ℓ hlt).le
@@ -154,16 +154,16 @@ theorem round_le_cut_of_run {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι
     exact le_of_eq (congrArg Cd.round (hr j hj hR)).symm
 
 /-- A gate that is no input is cut no earlier than its call's round. -/
-theorem round_le_cut_of_none {ι : Type} {Cd : Declared ι} {ℓ : ℕ} (hb : Cd.binding ℓ = none) :
+theorem round_le_cut_of_none {ι : Type} {Cd : RegisteredCircuit ι} {ℓ : ℕ} (hb : Cd.binding ℓ = none) :
     Cd.round (Cd.call ℓ) ≤ Cd.cutOf ℓ := by
-  simp only [Declared.cutOf, hb]
+  simp only [RegisteredCircuit.cutOf, hb]
   exact le_max_left _ _
 
 /-- A gate that reads a value is a gate of the circuit. -/
-theorem reads_lt {ι : Type} {Cd : Declared ι} {i j : ℕ} (h : Cd.Reads j i) : j < Cd.dag.length := by
+theorem reads_lt {ι : Type} {Cd : RegisteredCircuit ι} {i j : ℕ} (h : Cd.Reads j i) : j < Cd.dag.length := by
   by_contra hge
   have hnone : Cd.dag[j]? = none := List.getElem?_eq_none (by omega)
-  unfold Declared.Reads at h
+  unfold RegisteredCircuit.Reads at h
   rw [hnone] at h
   simp at h
 
@@ -186,7 +186,7 @@ theorem tieCommits : TieCommits := by
   | pub =>
     left
     obtain ⟨hb, -, hle, hr⟩ := T.pub ℓ hlt hk
-    simp only [Declared.cutOf, hb]
+    simp only [RegisteredCircuit.cutOf, hb]
     rcases firstRead_cases Cd ℓ with h | ⟨j, hj, hR, h⟩
     · rw [h]
       exact hle
@@ -205,7 +205,7 @@ theorem tieCommits : TieCommits := by
       · subst hF
         have hn := T.noised ℓ hlt (Or.inr ⟨Or.inl hk, rfl⟩)
         show Cd.round (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
-        simp only [Declared.cutOf, hb]
+        simp only [RegisteredCircuit.cutOf, hb]
         exact le_max_of_le_right hn
       · rw [commitCoin_outZ hF]
         exact round_le_cut_of_none hb
@@ -220,7 +220,7 @@ theorem tieCommits : TieCommits := by
       · subst hF
         have hn := T.noised ℓ hlt (Or.inr ⟨Or.inr hk, rfl⟩)
         show Cd.round (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
-        simp only [Declared.cutOf, hb]
+        simp only [RegisteredCircuit.cutOf, hb]
         exact le_max_of_le_right hn
       · rw [commitCoin_outY hF]
         exact round_le_cut_of_none hb
@@ -240,7 +240,7 @@ theorem tieLive : TieLive := by
   obtain ⟨hiw, hiu⟩ := List.mem_filter.1 hi
   obtain ⟨hir, _⟩ := List.mem_filter.1 hiw
   have hmem : i ∈ unitGates Cd u := List.mem_filter.2 ⟨hir, hiu⟩
-  unfold Declared.roundOf
+  unfold RegisteredCircuit.roundOf
   cases hl : unitGates Cd u with
   | nil =>
     rw [hl] at hmem
@@ -257,7 +257,7 @@ theorem tieScope : TieScope := by
   exact ⟨hWf, tieLive ι K Sc L F Cd cls T, hδ, hL, tieCommits ι L F Cd cls T⟩
 
 /-- Each window of a tied epoch is in Compose's scope. -/
-theorem epochScope {ι Q R S K : Type} {L : Shape} {F : Form} {W : ℕ} {Cd : ℕ → Declared ι} {cls : ℕ → ℕ → Cls}
+theorem epochScope {ι Q R S K : Type} {L : Shape} {F : Form} {W : ℕ} {Cd : ℕ → RegisteredCircuit ι} {cls : ℕ → ℕ → Cls}
     {release : ℝ} {run : ℕ → Pouw.TimedRun Q R S} (E : EpochTie L F W Cd cls release run) (Sc : Scheme K) (δs : ℝ)
     {w : ℕ} (hw : w < W) (hWf : (Cd w).Wf) (hδ : 0 < δs) (hL : Sc.LuckProved) : Scope Sc (Cd w) δs :=
   tieScope ι K Sc L F (Cd w) (cls w) δs (E.tie w hw) hWf hδ hL
@@ -281,10 +281,10 @@ theorem seededScheduleNotLive : SeededScheduleNotLive := by
   have hlt : ℓ < Cd.dag.length := by
     by_contra hge
     have hnone : Cd.dag[ℓ]? = none := List.getElem?_eq_none (by omega)
-    simp [Declared.binding, hnone] at hb
+    simp [RegisteredCircuit.binding, hnone] at hb
   have hW : Cd.Writes ℓ := ⟨hlt, by rw [hb]; simp⟩
   have h1 : Cd.commitRound ℓ = Cd.rounds := by simpa [hb] using hd ℓ hW
-  have h3 : Cd.cutOf ℓ = Cd.firstRead ℓ := by simp [Declared.cutOf, hb]
+  have h3 : Cd.cutOf ℓ = Cd.firstRead ℓ := by simp [RegisteredCircuit.cutOf, hb]
   obtain ⟨j', hj', _, h⟩ := firstRead_of_reads Cd hj hR
   have hr := hW2 _ (hW1 j' hj').1
   rcases hLC ℓ hW with h2 | ⟨hn, -⟩
@@ -294,7 +294,7 @@ theorem seededScheduleNotLive : SeededScheduleNotLive := by
 
 /-- `Tie.commit` from its cases: `decide` finds no `Decidable` instance for its five premises within the default
 `synthInstance.maxSize`, and finds one for three premises and a disjunction. -/
-theorem tie_commit {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls}
+theorem tie_commit {ι : Type} {L : Shape} {F : Form} {Cd : RegisteredCircuit ι} {cls : ℕ → Cls}
     (h : ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin → cls i ≠ .receipt →
       cls i = .check ∨ cls i = .pub ∨ Cd.commitRound i = commitCoin F (cls i) (F.roundOf L (Cd.call i))) :
     ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin → cls i ≠ .receipt → cls i ≠ .check → cls i ≠ .pub →
@@ -317,7 +317,7 @@ def witGate (op : Accounting.Gates.IntOp Unit) (args : List ℕ) (commit : Bool)
 
 /-- `witShape`'s one call in one live round: its coin, an A row (a run input), and a committed receipt word reading
 both, committed before the draw, the round after its own. -/
-def witCircuit : Declared Unit where
+def witCircuit : RegisteredCircuit Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true]
   calls := 1
@@ -352,9 +352,9 @@ theorem witTie : Tie witShape .beside witCircuit witCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < 3 → (witCls i = .act ∨ witCls i = .served) →
         witCircuit.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -374,7 +374,7 @@ theorem wit_layerCommitted : LayerCommitted witCircuit :=
 
 /-- `witShape`'s one call in `perCall`: its coin, an A row, its served `y` word off the noised sets (reading the coin
 and the A row), committed the round after its own, and a receipt reading `y`. -/
-def witCircuitCall : Declared Unit where
+def witCircuitCall : RegisteredCircuit Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true, witGate (.affine 0 [1]) [2] true]
   calls := 1
@@ -410,9 +410,9 @@ theorem witTieCall : Tie witShape .perCall witCircuitCall witClsCall where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < 4 → (witClsCall i = .act ∨ witClsCall i = .served) →
         witCircuitCall.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -432,7 +432,7 @@ theorem witCall_layerCommitted : LayerCommitted witCircuitCall :=
   tieCommits Unit witShape .perCall witCircuitCall witClsCall witTieCall
 
 /-- The `perCall` witness with its `y` the unit's own dot of the A row, reading no coin (`h1tile`'s `z`). -/
-def witCircuitUnnoised : Declared Unit :=
+def witCircuitUnnoised : RegisteredCircuit Unit :=
   { witCircuitCall with
     dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
       witGate (.affine 0 [1]) [1] true, witGate (.affine 0 [1]) [2] true] }
@@ -688,7 +688,7 @@ def witZRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-def witZ : Declared ℕ where
+def witZ : RegisteredCircuit ℕ where
   dag := witPre ++ witZRest
   calls := 1
   call := fun _ => 0
@@ -726,9 +726,9 @@ theorem witTieZ : Tie witShape .zTree witZ witZCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witZ.dag.length → (witZCls i = .act ∨ witZCls i = .served) →
         witZ.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -791,25 +791,25 @@ theorem witZ_dequantOf : DequantOf witDq witZ witZCls 69 68 65 66 := by
   rw [val_of_getElem? witZ.dag x 69 (g := witYGate) rfl (by decide +kernel)]
   rfl
 
-theorem feeds_read {ι : Type} {Cd : Declared ι} {i j : ℕ} (h : Cd.Reads j i) : Feeds Cd i j :=
+theorem feeds_read {ι : Type} {Cd : RegisteredCircuit ι} {i j : ℕ} (h : Cd.Reads j i) : Feeds Cd i j :=
   Relation.ReflTransGen.single h
 
-theorem feeds_tail {ι : Type} {Cd : Declared ι} {i j k : ℕ} (h : Feeds Cd i j) (hr : Cd.Reads k j) :
+theorem feeds_tail {ι : Type} {Cd : RegisteredCircuit ι} {i j k : ℕ} (h : Feeds Cd i j) (hr : Cd.Reads k j) :
     Feeds Cd i k :=
   Relation.ReflTransGen.tail h hr
 
 /-- A circuit with no `check` word holds every unit's checks on every input. -/
-theorem held_of_none {ι : Type} {Cd : Declared ι} {cls : ℕ → Cls}
+theorem held_of_none {ι : Type} {Cd : RegisteredCircuit ι} {cls : ℕ → Cls}
     (h : ∀ k, k < Cd.dag.length → cls k ≠ .check) (u : ℕ) (x : ι → ℤ) : Held Cd cls u x :=
   fun k hk hc _ => absurd hc (h k hk)
 
 /-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
 theorem witZ_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witZ t 103 := by
-  have h3 : witZ.Reads 103 102 := by unfold Declared.Reads; decide +kernel
+  have h3 : witZ.Reads 103 102 := by unfold RegisteredCircuit.Reads; decide +kernel
   have hA : ∀ t ∈ List.range' 1 32, witZ.Reads (69 + t) t ∧ witZ.Reads 102 (69 + t) := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   have hB : ∀ t ∈ List.range' 33 32, witZ.Reads 102 t := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   intro t ht
   rcases List.mem_append.1 ht with ht | ht
   · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
@@ -869,7 +869,7 @@ def witPRest : Accounting.Gates.IntDag ℕ :=
     [witMGate, witSGate, witCGate, witPZGate, witPYGate,
       witGateR (.affine 0 [1]) [100] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-def witP : Declared ℕ where
+def witP : RegisteredCircuit ℕ where
   dag := witPre ++ witPRest
   calls := 1
   call := fun _ => 0
@@ -907,9 +907,9 @@ theorem witTieP : Tie witShape .perCall witP witPCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witP.dag.length → (witPCls i = .act ∨ witPCls i = .served) →
         witP.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1017,11 +1017,11 @@ theorem witP_dequantOf : DequantOf witDq witP witPCls 104 103 65 66 := by
 
 /-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
 theorem witP_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witP t 105 := by
-  have h3 : witP.Reads 105 100 := by unfold Declared.Reads; decide +kernel
+  have h3 : witP.Reads 105 100 := by unfold RegisteredCircuit.Reads; decide +kernel
   have hA : ∀ t ∈ List.range' 1 32, witP.Reads (67 + t) t ∧ witP.Reads 100 (67 + t) := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   have hB : ∀ t ∈ List.range' 33 32, witP.Reads 100 t := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   intro t ht
   rcases List.mem_append.1 ht with ht | ht
   · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
@@ -1056,7 +1056,7 @@ theorem witCallCredit : CreditTie witShape .perCall witDq witP witPCls :=
 product served as `y` -/
 
 /-- A circuit whose every input gate admits the word `x s` at its slot `s` is typed at `x`. -/
-theorem typed_of_all {Cd : Declared ℕ} (x : ℕ → ℤ)
+theorem typed_of_all {Cd : RegisteredCircuit ℕ} (x : ℕ → ℤ)
     (h : Cd.dag.all (fun g => match g.op with
       | .input _ s => decide (g.lo ≤ x s ∧ x s ≤ g.hi)
       | _ => true) = true) : Accounting.Gates.Typed Cd.dag x := by
@@ -1080,7 +1080,7 @@ def witTwiceRest : Accounting.Gates.IntDag ℕ :=
 
 /-- The window of one product for two units (`witTwice`, `ServedTwice.lean`): two units of one call, unit 1's served
 product a copy of unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
-def witTwice : Declared ℕ where
+def witTwice : RegisteredCircuit ℕ where
   dag := witPre ++ witTwiceRest
   calls := 1
   call := fun _ => 0
@@ -1120,9 +1120,9 @@ theorem witTieTwice2 : Tie witShape2 .zTree witTwice witTwiceCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witTwice.dag.length → (witTwiceCls i = .act ∨ witTwiceCls i = .served) →
         witTwice.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1134,7 +1134,7 @@ theorem witTieTwice2 : Tie witShape2 .zTree witTwice witTwiceCls where
   commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
-  readers := by unfold Declared.Reads; decide +kernel
+  readers := by unfold RegisteredCircuit.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- The call has two units, the window's population is two, and the circuit declares exactly those two, each receipt's
@@ -1173,7 +1173,7 @@ def witWSRest : Accounting.Gates.IntDag ℕ :=
 
 /-- The window of an A and a B word as the scales (`witWS`, `ServedTwice.lean`): `witZ` with its served `y`'s scales
 the A row's first word and the B column's first word. -/
-def witWS : Declared ℕ := { witZ with dag := witPre ++ witWSRest }
+def witWS : RegisteredCircuit ℕ := { witZ with dag := witPre ++ witWSRest }
 
 theorem witTieWS : Tie witShape .zTree witWS witZCls where
   calls := by decide +kernel
@@ -1190,9 +1190,9 @@ theorem witTieWS : Tie witShape .zTree witWS witZCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witWS.dag.length → (witZCls i = .act ∨ witZCls i = .served) →
         witWS.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1232,7 +1232,7 @@ theorem witWS_notCreditTie : ¬ CreditTie witShape .zTree witDq witWS witZCls :=
 
 /-- The window of a raw product served as `y`: `witZ` with a second served word, `w = 0 + 1·z` (104), a raw product
 never dequantized, committed beside `z` and `y` under the round's root. -/
-def witRaw : Declared ℕ :=
+def witRaw : RegisteredCircuit ℕ :=
   { witZ with
     dag := witPre ++ (witZRest ++
       [witGateR (.affine 0 [1]) [68] Accounting.Gates.s32Min Accounting.Gates.s32Max true])
@@ -1256,9 +1256,9 @@ theorem witTieRaw : Tie witShape .zTree witRaw witRawCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witRaw.dag.length → (witRawCls i = .act ∨ witRawCls i = .served) →
         witRaw.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1347,7 +1347,7 @@ def witCRest (f : List ℤ → ℤ) : Accounting.Gates.IntDag ℕ :=
       witGateR (.affine 0 [1, 1]) [106, 68] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
 /-- The checked-record window whose check word is `f`. -/
-def witC (f : List ℤ → ℤ) : Declared ℕ where
+def witC (f : List ℤ → ℤ) : RegisteredCircuit ℕ where
   dag := witPre ++ witCRest f
   calls := 1
   call := fun _ => 0
@@ -1389,9 +1389,9 @@ theorem witTieC : Tie witShape .zTree (witC witOk) witCCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < (witC witOk).dag.length → (witCCls i = .act ∨ witCCls i = .served) →
         (witC witOk).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1540,11 +1540,11 @@ theorem witC_dequantOf : DequantOf witDq (witC witOk) witCCls 70 69 65 66 := by
 
 /-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
 theorem witC_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds (witC witOk) t 107 := by
-  have h3 : (witC witOk).Reads 107 106 := by unfold Declared.Reads; decide +kernel
+  have h3 : (witC witOk).Reads 107 106 := by unfold RegisteredCircuit.Reads; decide +kernel
   have hA : ∀ t ∈ List.range' 1 32, (witC witOk).Reads (73 + t) t ∧ (witC witOk).Reads 106 (73 + t) := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   have hB : ∀ t ∈ List.range' 33 32, (witC witOk).Reads 106 t := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   intro t ht
   rcases List.mem_append.1 ht with ht | ht
   · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
@@ -1720,9 +1720,9 @@ theorem witTieCConst : Tie witShape .zTree (witC witOkConst) witCCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < (witC witOkConst).dag.length → (witCCls i = .act ∨ witCCls i = .served) →
         (witC witOkConst).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1757,9 +1757,9 @@ theorem witTieCHatch : Tie witShape .zTree (witC witOkHatch) witCCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < (witC witOkHatch).dag.length → (witCCls i = .act ∨ witCCls i = .served) →
         (witC witOkHatch).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1802,11 +1802,11 @@ def witCReader : Accounting.Gates.IntDag ℕ :=
   (witC witOk).dag ++ [witGateR (.affine 0 [1]) [69] Accounting.Gates.s32Min Accounting.Gates.s32Max false]
 
 /-- The record's reader in another unit. -/
-def witCrossUnit : Declared ℕ :=
+def witCrossUnit : RegisteredCircuit ℕ :=
   { witC witOk with dag := witCReader, units := 2, unit := fun i => if i = 108 then 1 else 0 }
 
 /-- The record's reader in another call. -/
-def witCrossCall : Declared ℕ :=
+def witCrossCall : RegisteredCircuit ℕ :=
   { witC witOk with dag := witCReader, calls := 2, call := fun i => if i = 108 then 1 else 0 }
 
 /-- **A record another unit reads isn't tied**, however its gates are classed: a run input classed `outZ` or `outY` is
@@ -1815,17 +1815,17 @@ theorem witCrossUnit_notTie (L : Shape) (F : Form) (cls : ℕ → Cls) (h : cls 
     ¬ Tie L F witCrossUnit cls := fun T => by
   rcases T.outWords 69 (by decide +kernel) h with hb | ⟨-, -, hr⟩
   · exact absurd hb (by decide +kernel)
-  · exact absurd (hr 108 (by decide +kernel) (by unfold Declared.Reads; decide +kernel)).2 (by decide +kernel)
+  · exact absurd (hr 108 (by decide +kernel) (by unfold RegisteredCircuit.Reads; decide +kernel)).2 (by decide +kernel)
 
 /-- **A record another call reads isn't tied**, however its gates are classed. -/
 theorem witCrossCall_notTie (L : Shape) (F : Form) (cls : ℕ → Cls) (h : cls 69 = .outZ ∨ cls 69 = .outY) :
     ¬ Tie L F witCrossCall cls := fun T => by
   rcases T.outWords 69 (by decide +kernel) h with hb | ⟨-, -, hr⟩
   · exact absurd hb (by decide +kernel)
-  · exact absurd (hr 108 (by decide +kernel) (by unfold Declared.Reads; decide +kernel)).1 (by decide +kernel)
+  · exact absurd (hr 108 (by decide +kernel) (by unfold RegisteredCircuit.Reads; decide +kernel)).1 (by decide +kernel)
 
 /-- `witCircuit` with its run input committed at coin `1`, after the coin of the round whose receipt reads it. -/
-def witPubLate : Declared Unit := { witCircuit with commitRound := fun i => if i = 0 then 0 else 1 }
+def witPubLate : RegisteredCircuit Unit := { witCircuit with commitRound := fun i => if i = 0 then 0 else 1 }
 
 /-- `witPubLate`'s classes: the coin, a public input, the receipt. -/
 def witPubCls : ℕ → Cls
@@ -1836,7 +1836,7 @@ def witPubCls : ℕ → Cls
 /-- **A public input committed after a reader's coin isn't tied** (`Tie.pub`): a `pub` word has no commit coin of its
 class, and must precede the coin of every round that reads it. -/
 theorem witPubLate_notTie (L : Shape) (F : Form) : ¬ Tie L F witPubLate witPubCls := fun T =>
-  absurd ((T.pub 1 (by decide +kernel) rfl).2.2.2 2 (by decide +kernel) (by unfold Declared.Reads; decide +kernel))
+  absurd ((T.pub 1 (by decide +kernel) rfl).2.2.2 2 (by decide +kernel) (by unfold RegisteredCircuit.Reads; decide +kernel))
     (by decide +kernel)
 
 /-- **Nor does it meet `LayerCommitted`**: an input has no second case. -/
@@ -1859,7 +1859,7 @@ def witRingStep (s : ℕ) : Accounting.Gates.IntDag Unit :=
 /-- `witShape8` in `zTree` in a ring of depth `D = 6`: step `s` is call `s`, round `s` and unit `s`; its A row and
 `z` are committed under round `s`'s root, before its coin, and its receipt under round `s + 5`'s, steps `3`–`7`'s in
 the manifest before the draw (coin `8`). -/
-def witRing : Declared Unit where
+def witRing : RegisteredCircuit Unit where
   dag := (List.range 8).flatMap witRingStep
   calls := 8
   call := fun i => i / 4
@@ -1890,10 +1890,10 @@ theorem witTieRing : Tie witShape8 .zTree witRing witRingCls where
   live := fun _ _ => rfl
   coin := by decide +kernel
   registered := by decide +kernel
-  act := by unfold Declared.Reads; decide +kernel
-  pub := by unfold Declared.Reads; decide +kernel
+  act := by unfold RegisteredCircuit.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -1902,7 +1902,7 @@ theorem witTieRing : Tie witShape8 .zTree witRing witRingCls where
   commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
-  readers := by unfold Declared.Reads; decide +kernel
+  readers := by unfold RegisteredCircuit.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- Step `0`'s receipt reads coin `0`, so it is cut at coin `1`, the next round's, and committed at coin `5`, under
@@ -1916,7 +1916,7 @@ theorem witRing_layerCommitted : LayerCommitted witRing :=
 theorem witRing_wf : witRing.Wf := by
   have hcoin : ∀ i, i < witRing.dag.length → ∀ j, j < witRing.dag.length → witRing.binding i = some .coin →
       witRing.Reads j i → witRing.round (witRing.call i) = witRing.round (witRing.call j) := by
-    unfold Declared.Reads; decide +kernel
+    unfold RegisteredCircuit.Reads; decide +kernel
   exact ⟨by decide +kernel, by decide +kernel, fun _ _ _ _ h => h, fun i j hi hj hb hR => hcoin i hi j hj hb hR,
     by decide +kernel⟩
 
@@ -1944,7 +1944,7 @@ def witShape2s : Shape := { witShape with steps := 2 }
 /-- Two steps in `beside`, step `s` call, round and unit `s`: step `0`'s coin, A row and receipt (gates 0–2), and step
 `1`'s (3–5), whose receipt reads step `0`'s receipt too. Step `0`'s receipt is committed at the draw, coin `2`, after
 its reader's coin `1`. -/
-def witCross : Declared Unit where
+def witCross : RegisteredCircuit Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true, witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1, 1]) [3, 4, 2] true]
@@ -1966,14 +1966,14 @@ def witCrossCls (i : ℕ) : Cls :=
 `1`) and committed after that reader's coin, fails `Tie.readers`. -/
 theorem witCross_notTie : ¬ Tie witShape2s .beside witCross witCrossCls := fun T =>
   absurd (T.readers 2 (by decide +kernel) (by decide +kernel) 5 (by decide +kernel)
-    (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
+    (by unfold RegisteredCircuit.Reads; decide +kernel)) (by decide +kernel)
 
 /-- **Nor does it meet `LayerCommitted`**: its cut is coin `1`, the next round's, before its commit coin `2`, and a
 gate of another unit reads it. -/
 theorem witCross_notLayerCommitted : ¬ LayerCommitted witCross := fun h => by
   rcases h 2 ⟨by decide +kernel, by decide +kernel⟩ with h1 | ⟨-, -, h2⟩
   · exact absurd h1 (by decide +kernel)
-  · exact absurd (h2 5 (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
+  · exact absurd (h2 5 (by unfold RegisteredCircuit.Reads; decide +kernel)) (by decide +kernel)
 
 /-! ## A unit's check, `outZ` and `outY` words read no other unit's computed word -/
 
@@ -2014,7 +2014,7 @@ theorem witOkCross_eq {z s y d a b : ℤ} (h : witOkCross [z, s, y, d, a, b] = 1
 
 /-- A circuit whose every read of a computed gate by a computed gate is within a unit keeps each computed cone in its
 unit. -/
-theorem computedFeeds_unit {ι : Type} {Cd : Declared ι}
+theorem computedFeeds_unit {ι : Type} {Cd : RegisteredCircuit ι}
     (h : ∀ b, b < Cd.dag.length → Cd.binding b = none → ∀ a, a < Cd.dag.length → Cd.Reads b a →
       Cd.binding a = none → Cd.unit a = Cd.unit b) {g w : ℕ} (hf : ComputedFeeds Cd g w) : Cd.unit g = Cd.unit w := by
   induction hf with
@@ -2032,7 +2032,7 @@ def witConeCheckRest : Accounting.Gates.IntDag ℕ :=
     witGateR (.budgeted .compareSelect witOkCross) [68, 70, 69, 71, 73, 74] 0 1 true, witDqOf 73 true, witRcpt 70,
     witRcpt 73]
 
-def witConeCheck : Declared ℕ where
+def witConeCheck : RegisteredCircuit ℕ where
   dag := witPre ++ witConeCheckRest
   calls := 1
   call := fun _ => 0
@@ -2072,9 +2072,9 @@ theorem witTieConeCheck : Tie witShape2 .zTree witConeCheck witConeCheckCls wher
     ⟨(by decide +kernel : ∀ i, i < witConeCheck.dag.length →
         (witConeCheckCls i = .act ∨ witConeCheckCls i = .served) → witConeCheck.binding i = some .run) i hi h,
       fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -2086,7 +2086,7 @@ theorem witTieConeCheck : Tie witShape2 .zTree witConeCheck witConeCheckCls wher
   commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
-  readers := by unfold Declared.Reads; decide +kernel
+  readers := by unfold RegisteredCircuit.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- Unit 0's recomputation `Σ₁′` is unit 1's `z₁` on every input, the same dot after a constant `0`, so `ok₀`'s escape
@@ -2127,7 +2127,7 @@ theorem witConeCheck_notValueChecked (L : Shape) (dq : List ℤ → ℤ) :
     ¬ ValueChecked L dq witConeCheck witConeCheckCls := by
   rintro ⟨_, _, -, -, -, -, -, hc⟩
   exact absurd (hc 75 (by decide +kernel) (.inl (by decide +kernel)) 73
-    (Relation.ReflTransGen.single ⟨by unfold Declared.Reads; decide +kernel, by decide +kernel, by decide +kernel,
+    (Relation.ReflTransGen.single ⟨by unfold RegisteredCircuit.Reads; decide +kernel, by decide +kernel, by decide +kernel,
       by decide +kernel⟩)) (by decide +kernel)
 
 theorem witConeCheck_notCreditTie (dq : List ℤ → ℤ) :
@@ -2144,7 +2144,7 @@ def witConeZRest : Accounting.Gates.IntDag ℕ :=
     witGateR (.affine 0 [1, 1, -1]) [68, 70, 71] Accounting.Gates.s32Min Accounting.Gates.s32Max true,
     witDqOf 72 true, witDqOf 70 true, witRcpt 68, witRcpt 70]
 
-def witConeZ : Declared ℕ where
+def witConeZ : RegisteredCircuit ℕ where
   dag := witPre ++ witConeZRest
   calls := 1
   call := fun _ => 0
@@ -2182,9 +2182,9 @@ theorem witTieConeZ : Tie witShape2 .zTree witConeZ witConeZCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witConeZ.dag.length → (witConeZCls i = .act ∨ witConeZCls i = .served) →
         witConeZ.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -2196,7 +2196,7 @@ theorem witTieConeZ : Tie witShape2 .zTree witConeZ witConeZCls where
   commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
-  readers := by unfold Declared.Reads; decide +kernel
+  readers := by unfold RegisteredCircuit.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- Unit 0's served `z₀` is its own dot `Σ₀` on every input: `z₁ = Σ₁′` there, the same dot after a constant `0`. -/
@@ -2235,7 +2235,7 @@ whatever unit 1's prover committed, so with unit 1 undrawn `z₀` is any value. 
 theorem witConeZ_notValueChecked (L : Shape) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witConeZ witConeZCls := by
   rintro ⟨_, _, -, -, -, -, -, hc⟩
   exact absurd (hc 72 (by decide +kernel) (.inr (.inl (by decide +kernel))) 70
-    (Relation.ReflTransGen.single ⟨by unfold Declared.Reads; decide +kernel, by decide +kernel, by decide +kernel,
+    (Relation.ReflTransGen.single ⟨by unfold RegisteredCircuit.Reads; decide +kernel, by decide +kernel, by decide +kernel,
       by decide +kernel⟩)) (by decide +kernel)
 
 theorem witConeZ_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witShape2 .zTree dq witConeZ witConeZCls := fun h =>
@@ -2244,9 +2244,9 @@ theorem witConeZ_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witShape2 .
 /-! ## The old refusals on checked records -/
 
 /-- A gate bound at `b` is an input gate bound at `b`. -/
-theorem binding_input {ι : Type} {Cd : Declared ι} {i : ℕ} {b : Accounting.Gates.Binding}
+theorem binding_input {ι : Type} {Cd : RegisteredCircuit ι} {i : ℕ} {b : Accounting.Gates.Binding}
     (hb : Cd.binding i = some b) : ∃ g s, Cd.dag[i]? = some g ∧ g.op = .input b s := by
-  unfold Declared.binding at hb
+  unfold RegisteredCircuit.binding at hb
   obtain ⟨g, hg, hb⟩ := Option.bind_eq_some_iff.1 hb
   refine ⟨g, ?_⟩
   revert hb
@@ -2259,7 +2259,7 @@ typed input has a typed input on which every unit's checks hold and which gives 
 coin gate the same word. It is `ValueChecked`'s fifth clause read through `Tie`, which makes each such gate an input and
 no record, so a refutation of `ProductOf`, `DequantOf` or the distinctness clause at chosen operands, scales, public
 inputs and coins survives the checks: some records meet them there. -/
-theorem held_complete {ι : Type} {L : Shape} {F : Form} {dq : List ℤ → ℤ} {Cd : Declared ι} {cls : ℕ → Cls}
+theorem held_complete {ι : Type} {L : Shape} {F : Form} {dq : List ℤ → ℤ} {Cd : RegisteredCircuit ι} {cls : ℕ → Cls}
     (h : CreditTie L F dq Cd cls) (x : ι → ℤ) (hx : Accounting.Gates.Typed Cd.dag x) :
     ∃ x', Accounting.Gates.Typed Cd.dag x' ∧ (∀ u, Held Cd cls u x') ∧
       ∀ i, i < Cd.dag.length → (cls i = .act ∨ cls i = .registered ∨ cls i = .pub ∨ cls i = .coin) →
@@ -2290,7 +2290,7 @@ def witKTwiceRest : Accounting.Gates.IntDag ℕ :=
     witRecZ 74, witRecY 75, witDotOf 73 (List.range' 33 32) false, witDqOf 76 false,
     witGateR (.budgeted .compareSelect witOk) [74, 76, 75, 77, 1] 0 1 true, witRcpt 70, witRcpt 76]
 
-def witKTwice : Declared ℕ where
+def witKTwice : RegisteredCircuit ℕ where
   dag := witPre ++ witKTwiceRest
   calls := 1
   call := fun _ => 0
@@ -2329,9 +2329,9 @@ theorem witTieKTwice : Tie witShape2 .zTree witKTwice witKTwiceCls where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < witKTwice.dag.length → (witKTwiceCls i = .act ∨ witKTwiceCls i = .served) →
         witKTwice.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -2343,14 +2343,14 @@ theorem witTieKTwice : Tie witShape2 .zTree witKTwice witKTwiceCls where
   commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
-  readers := by unfold Declared.Reads; decide +kernel
+  readers := by unfold RegisteredCircuit.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- Each unit's computed cone is its own: the cone clause holds of `witKTwice`, and only distinctness refuses it. -/
 theorem witKTwice_cone : ∀ w, w < witKTwice.dag.length →
     (witKTwiceCls w = .check ∨ witKTwiceCls w = .outZ ∨ witKTwiceCls w = .outY) →
       ∀ g, ComputedFeeds witKTwice g w → witKTwice.unit g = witKTwice.unit w :=
-  fun _ _ _ _ hf => computedFeeds_unit (by unfold Declared.Reads; decide +kernel) hf
+  fun _ _ _ _ hf => computedFeeds_unit (by unfold RegisteredCircuit.Reads; decide +kernel) hf
 
 /-- Where both units' checks hold, their records' `z` are one value: each is its unit's dot, and the two dots are of
 the same operands. -/
@@ -2402,7 +2402,7 @@ def witKRest (mid : Accounting.Gates.IntDag ℕ) : Accounting.Gates.IntDag ℕ :
         Accounting.Gates.s32Min Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1, 1]) [105 + mid.length, 68] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-def witK (mid : Accounting.Gates.IntDag ℕ) : Declared ℕ where
+def witK (mid : Accounting.Gates.IntDag ℕ) : RegisteredCircuit ℕ where
   dag := witPre ++ witKRest mid
   calls := 1
   call := fun _ => 0
@@ -2477,9 +2477,9 @@ theorem witTieKWS : Tie witShape .zTree (witK witMidWS) (witKCls 1) where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < (witK witMidWS).dag.length → (witKCls 1 i = .act ∨ witKCls 1 i = .served) →
         (witK witMidWS).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -2516,9 +2516,9 @@ theorem witTieKRaw : Tie witShape .zTree (witK []) (witKCls 0) where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < (witK []).dag.length → (witKCls 0 i = .act ∨ witKCls 0 i = .served) →
         (witK []).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel
@@ -2554,9 +2554,9 @@ theorem witTieKMix : Tie witShape .zTree (witK witMidMix) (witKCls 3) where
   act := fun i hi h =>
     ⟨(by decide +kernel : ∀ i, i < (witK witMidMix).dag.length → (witKCls 3 i = .act ∨ witKCls 3 i = .served) →
         (witK witMidMix).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
-  pub := by unfold Declared.Reads; decide +kernel
+  pub := by unfold RegisteredCircuit.Reads; decide +kernel
   computed := by decide +kernel
-  outWords := by unfold Declared.Reads; decide +kernel
+  outWords := by unfold RegisteredCircuit.Reads; decide +kernel
   committed := by decide +kernel
   noised := by decide +kernel
   forms := by decide +kernel

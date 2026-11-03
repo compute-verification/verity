@@ -2,12 +2,12 @@ import Proofs.Accounting.TS.Drawn
 import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-!
-# `UnitFixed` from a fixed word, and the additive lemma
+# `BlockFixed` from a fixed word, and the additive lemma
 
-`Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords` and
+`Accounting.SecurityProofs.TS.BlockFixedOfWords : Accounting.Guarantees.TS.BlockFixedOfWords` and
 `Accounting.SecurityProofs.TS.AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed`.
 
-`UnitFixedOfWords` compares the two sums unit by unit. A good unit of positive weight has fixed words
+`BlockFixedOfWords` compares the two sums unit by unit. A good unit of positive weight has fixed words
 (`fixedWords_of_good`): it is fixed (the hypothesis), computed (`ModesRun` at itself, its late cone's first member), and
 every unit steering it is in its late cone (`steers_late`: a multiplicative operand written after the coin is a `Late`
 edge), so paid and computed. A unit not skipped whole folds its words (`ModesRun`). `CountsFixed` bounds both sums.
@@ -89,8 +89,8 @@ theorem fixedWords_of_good {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J
   ⟨hF, (hM x u).1 (hG u Relation.ReflTransGen.refl), fun t ht => (hM x t).1 (hG t (steers_late pf ht))⟩
 
 open Classical in
-/-- **`UnitFixed` from option A's fixed word.** -/
-theorem UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords := by
+/-- **`BlockFixed` from option A's fixed word.** -/
+theorem BlockFixedOfWords : Accounting.Guarantees.TS.BlockFixedOfWords := by
   intro K T L U _ _ _ _ C B _ _ S m s J Q Pos V N W _ _ _ P pf mode wt folded hwt hfix hM hC _ x hx
   obtain ⟨h1, h2⟩ := hC x hx
   refine ⟨le_trans (div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg S)) h1,

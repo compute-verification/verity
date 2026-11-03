@@ -6,12 +6,12 @@ import Proofs.Accounting.TS.Drawn
 
 `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
 layer cones against the game's deficiency, `Σ_{t unpaid} tileCone t`. A layer late edge into tile `v` at slot `k`
-(`DrawnLayer.Late`) has its position written by `u` (`Declared.Writes`, `u` its unit) and in `v`'s slots: either one
-of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`). Under
+(`DrawnLayer.Late`) has its position written by `u` (`RegisteredCircuit.Writes`, `u` its unit) and in `v`'s slots: either one
+of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`RegisteredCircuit.Wf`). Under
 `LayerCommitted` the position is committed by its IR cut, so the layer's cut is the IR's and `j`'s round is before it,
-`Declared.Late` and a `Declared.UnitLate` edge; or it is a computed value that only gates of its own unit read, so `j`'s
+`RegisteredCircuit.Late` and a `RegisteredCircuit.UnitLate` edge; or it is a computed value that only gates of its own unit read, so `j`'s
 unit `v` is `u`, and the edge adds nothing to the cone. Along `ReflTransGen` the layer's cone lies in
-`Declared.Reaches`, and a tile's cone weight is at most `N_w` times
+`RegisteredCircuit.Reaches`, and a tile's cone weight is at most `N_w` times
 its `tileCone` (`0` when `N_w = 0`: a tile's words are among the circuit's).
 -/
 
@@ -20,22 +20,22 @@ namespace Accounting.SecurityProofs.Compose.CoversProof
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
 /-- A tile's words are among the circuit's. -/
-theorem tileWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) :
+theorem tileWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (t : Fin Np) :
     tileWords Sc Cd Np t ≤ wordsOf Sc Cd := by
   unfold tileWords wordsOf unitWords creditedWords
   apply List.Sublist.length_le
   apply List.Sublist.filter
   apply List.filter_sublist
 
-theorem mem_unitGates_iff {ι : Type} (Cd : Declared ι) (u j : ℕ) :
+theorem mem_unitGates_iff {ι : Type} (Cd : RegisteredCircuit ι) (u j : ℕ) :
     j ∈ unitGates Cd u ↔ j < Cd.dag.length ∧ Cd.unit j = u := by
   simp [unitGates]
 
-/-- Under `Declared.Wf` a gate's unit's round is the gate's, and one of the circuit's. -/
-theorem roundOf_unit {ι : Type} (Cd : Declared ι) (hw : Cd.Wf) {j : ℕ} (hj : j < Cd.dag.length) :
+/-- Under `RegisteredCircuit.Wf` a gate's unit's round is the gate's, and one of the circuit's. -/
+theorem roundOf_unit {ι : Type} (Cd : RegisteredCircuit ι) (hw : Cd.Wf) {j : ℕ} (hj : j < Cd.dag.length) :
     Cd.roundOf (Cd.unit j) = Cd.round (Cd.call j) ∧ Cd.round (Cd.call j) < Cd.rounds := by
   refine ⟨?_, hw.2.1 _ (hw.1 j hj).1⟩
-  unfold Declared.roundOf
+  unfold RegisteredCircuit.roundOf
   rcases hl : unitGates Cd (Cd.unit j) with _ | ⟨i, l⟩
   · have hm : j ∈ unitGates Cd (Cd.unit j) := (mem_unitGates_iff Cd _ j).mpr ⟨hj, rfl⟩
     rw [hl] at hm
@@ -46,7 +46,7 @@ theorem roundOf_unit {ι : Type} (Cd : Declared ι) (hw : Cd.Wf) {j : ℕ} (hj :
 
 section Layer
 
-variable {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+variable {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
   (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
 
 theorem src_eq (ℓ : ℕ) : (Cd.layer hr hK pr).src ℓ =
@@ -87,7 +87,7 @@ theorem reaches_of_slot (hw : Cd.Wf) (hc : LayerCommitted Cd) (u v : Fin 1 × Fi
       · obtain ⟨j, hj, hlj⟩ := List.mem_flatMap.mp ha
         obtain ⟨hjl, hju⟩ := (mem_unitGates_iff Cd _ _).mp hj
         have hread : Cd.Reads j ℓ := by
-          unfold Declared.Reads
+          unfold RegisteredCircuit.Reads
           rcases hd : Cd.dag[j]? with _ | g
           · rw [hd] at hlj
             simp at hlj
@@ -103,7 +103,7 @@ theorem reaches_of_slot (hw : Cd.Wf) (hc : LayerCommitted Cd) (u v : Fin 1 × Fi
     · exact absurd hs.1 (by rw [hl]; exact lt_irrefl _)
   · cases hsrc
 
-/-- **A layer late edge is in the IR's late cone**: under `Declared.Wf` and `LayerCommitted`. -/
+/-- **A layer late edge is in the IR's late cone**: under `RegisteredCircuit.Wf` and `LayerCommitted`. -/
 theorem reaches_of_late (hw : Cd.Wf) (hc : LayerCommitted Cd) (u v : Fin 1 × Fin Np)
     (h : (Cd.layer hr hK pr).Late u v) : Cd.Reaches u.2.val v.2.val := by
   obtain ⟨k, hsrc, hcut⟩ := h

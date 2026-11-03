@@ -61,7 +61,7 @@ def OkColl (s : RowsSession) (ok : String) (ks : Array (Array ℕ × ByteArray))
 reads of one assignment the circuit's evaluation agrees with on every wire of every drawn unit of `o`, at which every
 drawn unit `u`'s checks hold in the declared circuit `Cd` (`Accounting.Served.Held` at `unitOf u` and `dec vals`); or
 the `ok` tie collides (`OkColl`) at the `ok` port's known rows in `known`. -/
-def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : Accounting.Compose.Declared ι)
+def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : Accounting.Compose.RegisteredCircuit ι)
     (cls : ℕ → Accounting.Served.Cls) (unitOf : Fin s.n → ℕ) (dec : (Fin s.Circ.N → Bool) → ι → ℤ)
     (known : Array (String × Array (Array ℕ × ByteArray))) (v : ℕ → ℕ → Option Bool) : Prop :=
   CheckedRel s o ok v ∧
@@ -77,7 +77,7 @@ reads (`openedReg`), and its relation is `HeldRel` at round `w`'s declared circu
 noncomputable def heldLayer {ι Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)
     (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray)))
-    (Cd : Fin S → Accounting.Compose.Declared ι) (cls : Fin S → ℕ → Accounting.Served.Cls)
+    (Cd : Fin S → Accounting.Compose.RegisteredCircuit ι) (cls : Fin S → ℕ → Accounting.Served.Cls)
     (unitOf : ∀ x w i, Fin (sess x w i).n → ℕ) (dec : ∀ x w i, (Fin (sess x w i).Circ.N → Bool) → ι → ℤ)
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) :
     ProofLayer Ω S nπ (ℕ → ℕ → Option Bool) where

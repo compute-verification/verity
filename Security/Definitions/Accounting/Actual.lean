@@ -95,7 +95,7 @@ def Forward (X : Finset L) : Prop :=
 /-- **Faithfulness**: each computed gate's value is its operation on the values `val` holds. A run's field
 (`Actual.Run.faithful`), named so a property over runs takes it as what it is, the physical fact that a gate computes
 its operation. -/
-def Faithful (val : A.Transcript) : Prop :=
+def Faithful (val : A.Trace) : Prop :=
   ∀ g, A.isInput g = false → val g = A.op g val
 
 /-- **Holding**: `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own

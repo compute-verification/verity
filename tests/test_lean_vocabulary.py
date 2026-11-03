@@ -454,9 +454,9 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
     "Security/Definitions/Accounting/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "Security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Coins":
+    "Security/Definitions/Accounting/Remote/Sample.lean::Accounting.Remote.Sample.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "Security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Session":
+    "Security/Definitions/Accounting/Remote/Sample.lean::Accounting.Remote.Sample.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/Remote/Held.lean::Accounting.Remote.Held.Trace":
         "homonym, a remote audit session's record of the registered blocks in node memory: rename (memory-accounting)",
@@ -502,9 +502,9 @@ KNOWN: dict[str, str] = {
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
-    "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Transcript":
+    "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Trace":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
-    "Security/Definitions/Core/Interaction.lean::Claims.Trace":
+    "Security/Definitions/Core/Interaction.lean::Claims.Transcript":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
