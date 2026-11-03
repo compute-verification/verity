@@ -991,6 +991,50 @@ def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_s
     assert (rc, lines) == (2, ["INFERENCE-ONLY POLICY failed (exit 2): inference_only.py: no torch"])
 
 
+@pytest.mark.parametrize("n, said", [
+    (40, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: accept, against c "),
+    (1, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: refuse: the blocks' exact count "
+        "is more than n = 1, against c "),
+    (None, "BLOCK-COUNTS: none, since the run declares no c, k and n"),
+])
+def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_count_private(tmp_path, n, said):
+    """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
+    `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
+    count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
+    from verity.ml.definitions.registry.catalog import load
+    from verity.ml.windows import interface as IF
+
+    load()
+    gemm = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
+    entries = (IF.InferenceEntry(gemm, 0, (2, 2), ("slot", "-"), 0),)
+    record = IF.descriptor_record(IF.Circuit("test/blocks", ((IF.resolve(gemm), 4),),
+                                             blocks=IF.Blocks(slots=2, steps=3, inference=entries)), 1)
+    tree, venv, d, out = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve", tmp_path / "out"
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    for p in (tree, d / "advice" / "w0", out):
+        p.mkdir(parents=True)
+    (d / "window-circuit-w0-4-32-4.json").write_text(json.dumps(record))
+    (d / "advice" / "w0" / "registration.json").write_text("{}")
+    (d / "serve.json").write_text(json.dumps({"clocks": {"time": 1_762_000_000}}))
+    if n is not None:
+        (out / "inference-only-policy.json").write_text(json.dumps({"c": 10 ** 12, "k": 10 ** 12, "n": n}))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(out),
+           "CLASSES": "4,32,4", "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "block-counts", "0"], cwd=tree, env=env,
+                        check=False).returncode
+    (line,) = (out / "verdicts.txt").read_text().splitlines()
+    assert rc == 0 and line.startswith(said), line
+    public, private = out / "block-counts-4-32-4.json", d / "private" / "block-counts-4-32-4.json"
+    if n is None:
+        assert not public.exists() and not private.exists()
+        return
+    doc, held = json.loads(public.read_text()), json.loads(private.read_text())
+    assert (doc["verdict"], doc["n"]) == ("accept" if n == 40 else "refuse", n)
+    assert not {"blocks", "total", "windows"} & set(doc) and not any("blocks" in c for c in doc["classes"])
+    assert (held["total"], held["windows"], private.stat().st_mode & 0o777) == (2, 1, 0o600)
+    assert " 2 blocks" not in line and "count 2" not in line
+
+
 W63K4 = "8,32,4,4,16"
 FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
