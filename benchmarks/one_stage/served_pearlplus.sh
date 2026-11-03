@@ -16,7 +16,8 @@
 #      sets them under POUW=pearlplus; `served_passes.py serve`'s, `bench_arm.live_coins`), else an in-process
 #      challenger's; before it, unless PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass
 #      retained (`serve --no-retain`, unretained/), whose wall is the option's without writing the passes, its coins an
-#      in-process challenger's, since no verdict reads them;
+#      in-process challenger's, since no verdict reads them; every serve with sm_90's BF16 rows off unless
+#      PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE), as each serve line says;
 #   3. after the serve's lease and before the verifier's coin, `served_passes.py volunteer` gives up, in the passes'
 #      records, the rows over a debit cap (V-EX), which the serve's screen can't see, from every tile's words' counts
 #      over the whole run, not a sample's. With PEARLPLUS_VOLUNTEER=1 (the default) the counts are the card's, under a
@@ -61,6 +62,10 @@ export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-${VENV:-/workspace/cp/venv312}}
 . benchmarks/harness/env.sh
 # Pearl+ served as vLLM serves it, not under the window serve's batch invariance
 unset VLLM_BATCH_INVARIANT
+# sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise: a whole capture forking each call's A tree and A
+# scales races on it (e2e.BF16_RACE); the protocol arm served here captures no forward whole, the one path that reads it
+export PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
+BF16="sm_90's BF16 rows $([ "$PEARLC_BF16_ROWS" = 0 ] && echo off || echo on) (PEARLC_BF16_ROWS=$PEARLC_BF16_ROWS)"
 
 t=$(date +%s)
 ( export RESEARCH_RUN_DIR=$Q
@@ -96,12 +101,12 @@ if [ -n "${PEARLC_CUBIN:-}" ]; then
     ( unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER
       serve serve-unretained.log --no-retain --passes "$Q/unretained" --out "$Q/served-unretained.json" )
     rc=$?
-    say "serve, no pass retained: served_passes.py serve --no-retain exit $rc after $(took "$t"): $(grep -m1 '^served ' "$Q/serve-unretained.log" | cut -c1-300)"
+    say "serve, no pass retained: served_passes.py serve --no-retain exit $rc after $(took "$t"), $BF16: $(grep -m1 '^served ' "$Q/serve-unretained.log" | cut -c1-300)"
   fi
   t=$(date +%s)
   serve serve.log --passes "$Q/passes" --out "$Q/served.json"
   rc=$?
-  say "serve: served_passes.py serve exit $rc after $(took "$t"): $(grep -m1 '^served ' "$Q/serve.log" | cut -c1-300)"
+  say "serve: served_passes.py serve exit $rc after $(took "$t"), $BF16: $(grep -m1 '^served ' "$Q/serve.log" | cut -c1-300)"
 fi
 
 VOLUNTEER=${PEARLPLUS_VOLUNTEER-1} VMIN=${PEARLPLUS_VOLUNTEER_MIN:-60} JOBS=${PEARLPLUS_JOBS:-$(nproc)}
