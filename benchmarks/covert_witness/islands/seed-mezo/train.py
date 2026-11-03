@@ -10,8 +10,9 @@ Methods:
   training also applies). E is the header plus one `--coeff` value a step (16 bits for bf16), so `--max-bits` caps the
   steps, and the decoder replays every step over S: T·|S| fp32 FMAs (`prepare.rebuild_macs`), Fit's d.
 - `--subspace K`: K fixed directions z_0 … z_{K−1} (seeds `seed + j`), visited in turn: step i measures ĝ along
-  z_{i mod K} and adds lr · ĝ to that direction's coefficient, rounded stochastically to `--coeff` (a generator seeded
-  from `--seed`), so the update rule reads only the K coefficients E holds (Δ_t = Δ). E is the K coefficients, so Δ and
+  z_{i mod K} and adds lr · ĝ to that direction's coefficient, rounded stochastically to `--coeff` (bf16 or f32; a
+  generator seeded from `--seed`), so the update rule reads only the K coefficients E holds (Δ_t = Δ). E is the K
+  coefficients, so Δ and
   d (K·|S|) stay fixed while the steps go on.
 - `--batch 2` is the block-local online update: each step reads one token block's ~2k tokens (two sequences at ctx
   1024), updates, and hands only the log on; with `--subspace K` its Δ stays K coefficients however many blocks run.
@@ -39,7 +40,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import random
 import re
 import time
 from pathlib import Path
@@ -62,19 +62,12 @@ F32_FMA_GATES = 4485 + 7863 + 289
 WIDTH = {"bf16": 2, "f16": 2, "f32": 4}
 
 
-def round_stochastic(v: float, coeff: str, u: float) -> float:
-    """v rounded to one of its two `coeff` neighbours, the far one with probability its share of the gap (unbiased)."""
-    dt = prepare.DTYPES[coeff]
-    q = torch.tensor([v], dtype=torch.float32).to(dt)
-    qv = float(q.float())
-    if qv == v or dt == torch.float32:
-        return qv
-    if qv == 0.0:
-        other = float(torch.tensor([1 if v > 0 else -32767], dtype=torch.int16).view(dt).float())
-    else:
-        bits = q.view(torch.int16)
-        other = float((bits + 1 if abs(v) > abs(qv) else bits - 1).view(dt).float())
-    return other if u < (v - qv) / (other - qv) else qv
+def round_stochastic(v: torch.Tensor, coeff: str, u: torch.Tensor) -> torch.Tensor:
+    """fp32 `v` rounded to one of its two bf16 neighbours, the far one with probability its share of the gap (unbiased):
+    `u`, uniform on [0, 2^16), is added to v's magnitude below bf16's last bit, and the 16 bits below it are cut."""
+    if coeff == "f32":
+        return v
+    return ((v.view(torch.int32) + u) & -65536).view(torch.float32)
 
 
 def select(params: dict, rec: dict, spec: str) -> list[str]:
@@ -102,6 +95,96 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
     if spec.startswith("re:"):
         return [n for n in names if re.search(spec[3:], n)]
     raise SystemExit(f"train: unknown --names {spec}")
+
+
+def survey(a, net, rec, theta, params: dict, names: list[str]) -> int:
+    """`--survey N`: what MeZO's step would buy on each tensor of S, measured at θ by backprop rather than by training.
+    Over N batches of `--batch` sequences, tensor i's G_i is the product of the two halves' gradients (an unbiased
+    |∇_i L|²) and E_i = |∇_i L_batch|² (MeZO's E[ĝ²] at that batch); tr H_i is the three-point curvature along
+    `--curv-dirs` Gaussian directions over tensor i alone. Over any union S of tensors MeZO's G, E[ĝ²] and tr H_S are
+    the sums, so a step at that batch buys G²/(2 E tr H_S) nats, and at an unbounded batch G/(2 tr H_S). E is the empty
+    log (θ)."""
+    dev, vocab = prepare.DEVICE, rec["config"]["vocab"]
+    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed + 7000, ctx=a.ctx)
+    for n in names:
+        params[n].requires_grad_(True)
+    hb = a.batch // 2
+    dot = {n: 0.0 for n in names}
+    sq = {n: 0.0 for n in names}
+    t0 = time.perf_counter()
+    for _ in range(a.survey):
+        x = data.next(a.batch)
+        halves = []
+        for xh in (x[:hb], x[hb:]):
+            for n in names:
+                params[n].grad = None
+            for xm in xh.split(a.micro):
+                with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16, enabled=a.precision == "bf16"):
+                    logits = net(xm[:, :-1])
+                loss = F.cross_entropy(logits.float().view(-1, vocab), xm[:, 1:].reshape(-1)) * (xm.shape[0] / hb)
+                loss.backward()
+            halves.append({n: params[n].grad.detach().float().clone() for n in names})
+        for n in names:
+            ga, gb = halves[0][n], halves[1][n]
+            dot[n] += float((ga * gb).sum()) / a.survey
+            sq[n] += float((ga * ga).sum() + (gb * gb).sum()) / (2 * a.survey)
+    for n in names:
+        params[n].requires_grad_(False)
+        params[n].grad = None
+    t_grad = time.perf_counter() - t0
+
+    xc = prepare.TrainData(rec["tokenizer"], seed=a.data_seed + 3000, ctx=a.ctx).next(a.curv_batch)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    gen = torch.Generator(device=dev)
+
+    @torch.no_grad()
+    def loss32() -> float:
+        tot = 0.0
+        for xm in xc.split(a.micro):
+            logits = net(xm[:, :-1])
+            tot += float(F.cross_entropy(logits.float().view(-1, vocab), xm[:, 1:].reshape(-1))) * xm.shape[0]
+        return tot / xc.shape[0]
+
+    l0 = loss32()
+    rows = []
+    for n in names:
+        w = params[n]
+        m = w.detach().float().clone()
+        rms = float(m.pow(2).mean().sqrt())
+        eps = prepare.quantize_coefficient(a.curv_rel * rms, a.coeff)
+        curv = []
+        for j in range(a.curv_dirs):
+            ls = []
+            for sign in (1.0, -1.0):
+                with torch.no_grad():
+                    w.copy_(m)
+                    prepare.seedlog_step([w], 10**13 + j, -sign * eps, gen)
+                ls.append(loss32())
+            curv.append((ls[0] + ls[1] - 2 * l0) / eps**2)
+        with torch.no_grad():
+            w.copy_(m)
+        e_b = (sq[n] + dot[n]) / 2
+        trh = sum(curv) / len(curv)
+        rows.append({"name": n, "numel": w.numel(), "rms": rms, "G": dot[n], "E_at_batch": e_b, "trH": trh,
+                     "curvature": curv,
+                     "gain_step_inf": dot[n] / (2 * trh) if trh > 0 else None,
+                     "gain_step_batch": dot[n] ** 2 / (2 * e_b * trh) if trh > 0 and e_b > 0 else None})
+        print(json.dumps(rows[-1]), flush=True)
+    t_curv = time.perf_counter() - t0 - t_grad
+    torch.backends.cuda.matmul.allow_tf32 = True
+
+    blob = prepare.encode_seedlog(names, a.seed, [], a.coeff)
+    steps = [{"op": "train", "tokens": a.survey * a.batch * a.ctx, "ctx": a.ctx},
+             {"op": "forward", "tokens": (1 + 2 * a.curv_dirs * len(names)) * a.curv_batch * a.ctx, "ctx": a.ctx}]
+    notes = {"method": "mezo-survey", "args": vars(a), "batch": a.batch, "l0_cal": l0, "survey": rows,
+             "seconds": {"gradients": t_grad, "curvature": t_curv},
+             "mechanism": {"label": a.label, "description": a.description},
+             "delta_bits": 8 * len(blob), "delta_t_bits": 8 * len(blob),
+             "delta_grad": {"bits": 0, "what": "a measurement at θ; E is the empty log"}}
+    prepare.submit(Path(a.out), a.start, blob, dict(theta), {"full": names}, steps, changed=[], notes=notes)
+    print(json.dumps({"submitted": len(blob), "tensors": len(names), "s": round(time.perf_counter() - T_MAIN, 1)}),
+          flush=True)
+    return 0
 
 
 def main() -> int:
@@ -140,12 +223,21 @@ def main() -> int:
     ap.add_argument("--time-budget", type=float, default=None, help="seconds from start to the loop's end")
     ap.add_argument("--label", default="")
     ap.add_argument("--description", default="")
+    ap.add_argument("--survey", type=int, default=0, help="measure N batches' per-tensor G, E[ĝ²] and tr H at θ, no run")
     a = ap.parse_args()
+    if a.survey:
+        net, rec, theta = prepare.load_start(a.start)
+        params = net.params()
+        for p in params.values():
+            p.requires_grad_(False)
+        return survey(a, net, rec, theta, params, select(params, rec, a.names))
     if (a.lr is None) == (a.lr_auto is None):
         raise SystemExit("train: give one of --lr and --lr-auto")
     a.warm_batch = a.warm_batch or a.batch
     if min(a.batch, a.warm_batch) < 2:
         raise SystemExit("train: a step splits its batch in halves; --batch and --warm-batch 2 at least")
+    if a.subspace and a.coeff == "f16":
+        raise SystemExit("train: --subspace rounds stochastically to bf16 or keeps f32; give --coeff bf16 or f32")
     if len(a.description) > 200:
         raise SystemExit("train: --description is at most 200 characters")
     dev = prepare.DEVICE
@@ -225,13 +317,19 @@ def main() -> int:
     gen = torch.Generator(device=dev)
     fwd_tokens = 0
 
+    # No Python branch below reads a value read back from a tensor: te_core.capture gives such a value a stand-in, so a
+    # branch on it (min, max, if, a comparison) would trace the path the stand-in takes, not the step's. The clip, the
+    # lr cap and the rounding are tensor ops.
+    @torch.no_grad()
+    def restore() -> None:
+        for w, m in zip(live, masters):
+            w.copy_(m)
+
     @torch.no_grad()
     def perturb(seed: int, scale: float) -> None:
         """live = masters + scale · z_seed, by the decoder's op (the suffix log [−scale] applied to the masters)."""
-        for w, m in zip(live, masters):
-            w.copy_(m)
-        if scale:
-            prepare.seedlog_step(live, seed, -scale, gen)
+        restore()
+        prepare.seedlog_step(live, seed, -scale, gen)
 
     cal = prepare.TrainData(rec["tokenizer"], seed=a.data_seed + 3000, ctx=a.ctx)
     xc = cal.next(a.curv_batch)
@@ -239,16 +337,16 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = False
 
     @torch.no_grad()
-    def loss32(x: torch.Tensor) -> float:
-        tot = 0.0
+    def loss32(x: torch.Tensor) -> torch.Tensor:
+        tot = torch.zeros((), dtype=torch.float32, device=dev)
         for xm in x.split(a.micro):
             logits = net(xm[:, :-1])
-            tot += float(F.cross_entropy(logits.float().view(-1, vocab), xm[:, 1:].reshape(-1))) * xm.shape[0]
+            tot += F.cross_entropy(logits.float().view(-1, vocab), xm[:, 1:].reshape(-1)).float() * xm.shape[0]
         return tot / x.shape[0]
 
     t0 = time.perf_counter()
     eps_c = prepare.quantize_coefficient(a.curv_rel * rms, a.coeff)
-    perturb(0, 0.0)
+    restore()
     l0 = loss32(xc)
     curv = []
     for j in range(a.curv_dirs):
@@ -257,14 +355,14 @@ def main() -> int:
             perturb(10**13 + j, sign * eps_c)
             ls.append(loss32(xc))
         curv.append((ls[0] + ls[1] - 2 * l0) / eps_c**2)
-    perturb(0, 0.0)
+    restore()
     torch.backends.cuda.matmul.allow_tf32 = tf32
     fwd_tokens += (1 + 2 * a.curv_dirs) * a.curv_batch * a.ctx
-    trh = sum(curv) / len(curv)
-    print(json.dumps({"curvature": curv, "trH": trh, "l0": l0, "eps": eps_c, "s": round(time.perf_counter() - t0, 1)}),
-          flush=True)
-    if a.lr_auto is not None and trh <= 0:
-        raise SystemExit(f"train: S's measured curvature {trh} is not positive; --lr-auto needs tr H > 0")
+    # a curvature that isn't positive makes the lr rule's step the --max-move clip (the log's "clipped" shows it)
+    trh_t = torch.stack(curv).mean().clamp(min=1e-30)
+    trh = float(trh_t)
+    print(json.dumps({"curvature": torch.stack(curv).tolist(), "trH": trh, "l0": float(l0), "eps": eps_c,
+                      "s": round(time.perf_counter() - t0, 1)}), flush=True)
 
     if a.eps_rel is not None:
         a.eps = a.eps_rel * rms
@@ -313,29 +411,32 @@ def main() -> int:
     def ema_values() -> tuple[float, float]:
         return float(emas[1] / emas[0]), float(emas[2] / emas[0])
 
-    def lr_rule() -> float:
-        return float(a.lr_auto * (emas[1] / emas[0]).clamp(min=0.0) / ((emas[2] / emas[0]).clamp(min=1e-30) * trh))
+    def lr_rule() -> torch.Tensor:
+        return a.lr_auto * (emas[1] / emas[0]).clamp(min=0.0) / ((emas[2] / emas[0]).clamp(min=1e-30) * trh_t)
 
     ema_loss = None
     for i in range(warm):
         x = data.next(a.warm_batch)
         g, ga, gb, lmean = observe(estimate(a.seed + 10**12 + i, x))
         ema_loss = lmean if ema_loss is None else 0.99 * ema_loss + 0.01 * lmean
-    lr_warm = lr_rule() if a.lr_auto is not None else a.lr
     fixed_lr = a.lr_auto is None or a.warm_batch != a.batch
-    if a.lr_auto is not None:
-        g_w, e_w = ema_values()
-        e_run = g_w + (e_w - g_w) * a.warm_batch / a.batch
-        if a.warm_batch != a.batch:
-            lr_warm = a.lr_auto * max(g_w, 0.0) / (max(e_run, 1e-30) * trh)
-        print(json.dumps({"warm": warm, "warm_batch": a.warm_batch, "G": g_w, "E": e_w, "E_at_batch": e_run,
-                          "lr": lr_warm, "lr_fixed": fixed_lr, "loss": ema_loss}), flush=True)
-        if not lr_warm > 0:
-            raise SystemExit(f"train: the warm steps measure G {g_w:.3g} <= 0 along S; no lr")
+    if a.lr_auto is None:
+        lr_warm_t = torch.tensor(a.lr, dtype=torch.float32, device=dev)
+    else:
+        g_w, e_w = emas[1] / emas[0], emas[2] / emas[0]
+        e_run = g_w + (e_w - g_w) * (a.warm_batch / a.batch)
+        lr_warm_t = lr_rule() if a.warm_batch == a.batch else (
+            a.lr_auto * g_w.clamp(min=0.0) / (e_run.clamp(min=1e-30) * trh_t))
+        # a G that isn't positive gives lr 0: the run then moves nothing, as its log shows
+        print(json.dumps({"warm": warm, "warm_batch": a.warm_batch, "G": float(g_w), "E": float(e_w),
+                          "E_at_batch": float(e_run), "lr": float(lr_warm_t), "lr_fixed": fixed_lr, "loss": ema_loss}),
+              flush=True)
+    lr_warm = float(lr_warm_t)
 
     coeffs: list[float] = []
     alpha_q = torch.zeros(a.subspace or 0, dtype=prepare.DTYPES[a.coeff], device=dev)
-    rounding = random.Random(a.seed)
+    rounding = torch.Generator(device=dev)
+    rounding.manual_seed(a.seed + 5 * 10**12)
     cps: list[dict] = []
     buckets: set[int] = set()
     j0 = None
@@ -352,19 +453,21 @@ def main() -> int:
         cps.append({"step": i, "harness_step": j, "e_bytes": len(blob), "delta_bits": 8 * len(blob),
                     "decoder": decoder(n), "loss_ema": ema_loss})
 
-    def report(i: int, lr: float, extra: dict | None = None) -> None:
+    def report(i: int, lr: torch.Tensor, extra: dict | None = None) -> None:
         n = max(stats["n"], 1)
         g_e, e_e = ema_values()
-        row = {"step": i, "lr": lr, "loss_ema": ema_loss, "G_ema": g_e, "E_ema": e_e,
+        row = {"step": i, "lr": float(lr), "loss_ema": ema_loss, "G_ema": g_e, "E_ema": e_e,
                "gAgB_mean": stats["gab"] / n, "g2_mean": stats["g2"] / n,
-               "pred_gain_nats": stats["pred"], "clipped": clipped, "s": round(time.perf_counter() - T_MAIN, 1)}
+               "pred_gain_nats": stats["pred"], "clipped": int(clipped), "s": round(time.perf_counter() - T_MAIN, 1)}
         print(json.dumps(row | (extra or {})), flush=True)
 
     t_loop = time.perf_counter()
-    lr = lr_warm
+    lr_cap_t = a.lr_cap * lr_warm_t
+    lr = lr_warm_t
+    lr_i = lr
     n_done = 0
     max_c = a.max_move * rms
-    clipped = 0
+    clipped = torch.zeros((), dtype=torch.int64, device=dev)
     for i in range(n_steps):
         if time.perf_counter() > deadline:
             break
@@ -389,30 +492,30 @@ def main() -> int:
             checkpoint(i, None)
         p = i / n_steps
         if not fixed_lr and stats["n"] > warm:
-            lr = min(a.lr_cap * lr_warm, lr_rule())
+            lr = torch.minimum(lr_cap_t, lr_rule())
         lr_i = lr * (1 - p) if a.schedule == "linear" else lr
         k = i % a.subspace if a.subspace else i
-        g, ga, gb, lmean = observe(estimate(a.seed + k, x))
+        est = estimate(a.seed + k, x)
+        g, ga, gb, lmean = observe(est)
         ema_loss = lmean if ema_loss is None else 0.995 * ema_loss + 0.005 * lmean
-        # a scale rather than min/max, so the move stays a function of ĝ when it is clipped
-        shrink = min(1.0, max_c / max(abs(lr_i * g), 1e-30))
-        move = lr_i * g * shrink
-        clipped += shrink < 1.0
+        raw = lr_i * est[0]
+        move = raw.clamp(-max_c, max_c)
+        clipped += raw.abs() > max_c
         if a.subspace:
-            old = float(alpha_q[k])
-            new = round_stochastic(old + move, a.coeff, rounding.random())
-            c = new - old
+            old = alpha_q[k].float()
+            u = torch.randint(0, 1 << 16, (), generator=rounding, device=dev, dtype=torch.int32)
+            new = round_stochastic(old + move, a.coeff, u).to(alpha_q.dtype)
+            c = float(new.float() - old)
             alpha_q[k] = new
         else:
-            c = prepare.quantize_coefficient(move, a.coeff)
+            c = float(move.to(prepare.DTYPES[a.coeff]).float())
             coeffs.append(c)
-        if c:
-            prepare.seedlog_step(masters, a.seed + k, c, gen)
-        stats["pred"] += lr_i * ga * gb - c * c * trh / 2
+        prepare.seedlog_step(masters, a.seed + k, c, gen)
+        stats["pred"] += float(lr_i) * ga * gb - c * c * trh / 2
         n_done = i + 1
         if n_done % 1000 == 0:
             report(n_done, lr_i)
-    perturb(0, 0.0)
+    restore()
     report(n_done, lr, {"done": True, "loop_seconds": round(time.perf_counter() - t_loop, 1)})
 
     blob = encoded()
@@ -422,9 +525,10 @@ def main() -> int:
     ema_bits = 3 * 32
     notes = {
         "method": "mezo-subspace" if a.subspace else "mezo", "args": vars(a), "steps": n_done, "warm": warm,
-        "entries": n_entries, "names": names, "d": d, "lr_warm": lr_warm, "lr_end": lr, "lr_fixed": fixed_lr,
+        "entries": n_entries, "names": names, "d": d, "lr_warm": lr_warm, "lr_end": float(lr), "lr_fixed": fixed_lr,
         "eps": eps, "trH": trh,
-        "curvature": curv, "l0_cal": l0, "pred_gain_nats": stats["pred"], "clipped_steps": clipped,
+        "curvature": torch.stack(curv).tolist(), "l0_cal": float(l0), "pred_gain_nats": stats["pred"],
+        "clipped_steps": int(clipped),
         "signal_fraction_half": stats["gab"] / stats["g2"] if stats["g2"] else None,
         "mechanism": {"label": a.label, "description": a.description},
         "delta_bits": 8 * len(blob), "delta_t_bits": 8 * len(blob),
