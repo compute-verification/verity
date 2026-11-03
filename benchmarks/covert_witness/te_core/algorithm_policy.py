@@ -6,16 +6,16 @@ inefficiency p = C/H against the policy's slowdown ρ.
 
 It reads what te_core.frontier_fit reads, and that fit: the valid records of the pin and of the pilot (pin.py's
 `pilot`) unless `--pin` names the commits, scored on their measured quantities unless `--quantities` says otherwise,
-where the scoring cap admits them (te_core.policy's `eligible`), each checkpoint on its data (`panels.data_of`: `v3`,
-harness v3's OLMo 2 mix, or `v2.3-pilot`). A checkpoint's gain is effective compute over its start's own: C_eff(l)/C0,
-l its held-out loss and C_eff the compute at which its data's fit (te_core.frontier_fit, `training/frontier-fit`)
-reaches l; a row carries C0 (`start_compute_gates`) and the start's own effective compute C_eff(l0)
-(`start_effective_gates`, over C0 the start's own gain). At a gain target g (`GAINS`: 1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is the fit's
-at g·C0, and H is the least |C| of any scored checkpoint from the start on the same data reaching it, every checkpoint
-of every run pooled (null when none does). Every run from the start has a row at every target: `reached` "yes" at its
-first checkpoint reaching it, C that checkpoint's |C| and p = C/H >= 1; else "no" at its last checkpoint, C its total
-|C| and p = C/H a lower bound on its p (null without H). A target the start's own loss already meets has no rows, and
-a data with no fit none.
+where the scoring cap admits them (te_core.policy's `eligible`), each checkpoint on its start's data
+(te_core.frontier_fit's `data_of_shape`: `v3`, harness v3's OLMo 2 mix, else `v2.3-pilot`). A checkpoint's gain is
+effective compute over its start's own: C_eff(l)/C0, l its held-out loss and C_eff the compute at which its data's fit
+(te_core.frontier_fit, `training/frontier-fit`) reaches l; a row carries C0 (`start_compute_gates`) and the start's
+own effective compute C_eff(l0) (`start_effective_gates`, over C0 the start's own gain). At a gain target g (`GAINS`:
+1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is the fit's at g·C0, and H is the least |C| of any
+scored checkpoint from the start on the same data reaching it, every checkpoint of every run pooled (null when none
+does). Every run from the start has a row at every target: `reached` "yes" at its first checkpoint reaching it, C that
+checkpoint's |C| and p = C/H >= 1; else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its
+p (null without H). A target the start's own loss already meets has no rows, and a data with no fit none.
 
 Each row's ρ is te_core.formalism.at's at its checkpoint at the dial's default (te_core.panels' `DEFAULT`: c = 4,096
 tokens of the start's forward, k = 80,000 bits): c/(c − d) where Fit holds for the training (basis `fit`), else
