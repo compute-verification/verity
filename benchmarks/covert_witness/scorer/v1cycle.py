@@ -156,9 +156,12 @@ def measured_ledger(out: Path, launch: bool = True) -> dict:
     settle()
     pack = out / "trace40-pack.tar"
     skip = ",".join(r for runs in pending.values() for r in runs)
-    p = subprocess.run([*cw, "pack", "--out", str(pack), "--skip", skip], capture_output=True, text=True, check=True) \
+    p = subprocess.run([*cw, "pack", "--out", str(pack), "--skip", skip], capture_output=True, text=True, check=False) \
         if launch else None
-    packed = json.loads(p.stdout.strip().splitlines()[-1]) if p else {"runs": 0}
+    if p and p.returncode:
+        # nothing new traced this time; the refresh scores the runs traced so far
+        log["pack_failed"] = (p.stderr.strip().splitlines() or [f"rc {p.returncode}"])[-3:]
+    packed = json.loads(p.stdout.strip().splitlines()[-1]) if p and not p.returncode else {"runs": 0}
     if packed["runs"]:
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
