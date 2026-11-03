@@ -69,10 +69,13 @@ theorem frameUnrefused_ofLoop (T : ZKMal.CoinLayer.TableData)
   · exact outer_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl.le hlive hr hj hr2
       (hl ▸ (slots_lt hx hj hr2).1) he h1
   · rcases hth with ⟨-, -, -, -, hbad⟩ | ⟨-, hd⟩ | ⟨-, hz⟩
-    · exact rank_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl hlive hr hj hr2 hbad
-    · rw [rho_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl hlive hr hj hr2] at hd
+    · exact rank_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl.le hlive hr hj hr2
+        (hl ▸ (slots_lt hx hj hr2).2) hbad
+    · rw [rho_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl.le hlive hr hj hr2
+        (hl ▸ (slots_lt hx hj hr2).2)] at hd
       exact Bool.noConfusion hd
-    · rw [beta_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl hlive hr hj hr2 (slots_lt hx hj hr2).2] at hz
+    · rw [beta_unrefused T L₀ real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops hl.le hlive hr hj hr2
+        (hl ▸ (slots_lt hx hj hr2).2)] at hz
       exact Bool.noConfusion hz
 
 end LeanRelease
