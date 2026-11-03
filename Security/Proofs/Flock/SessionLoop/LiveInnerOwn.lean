@@ -247,7 +247,7 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
     (hC : Loop.FinalCFixed vs x w) (hL0 : Loop.L0Fixed vs x w) (hrows : Loop.RowsOK vs x w) :
     LiveInnerOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w := by
-  have hSch := liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hV
+  have hSch := liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hL0 hV
   intro ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hown hv hI
   have hR' : ∀ (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
@@ -268,11 +268,6 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       hr hown hv hI j r hrep hslot, key] at hv2
     · exact Loop.inner2_inj (hvs.symm.trans hv2)
     · exact Loop.vsTau_size _ _ _ _ _ _ _ _
-
-/-- Hole for `Loop.l0Fixed_honestVals` (`L0FixedHonest`), its statement: the honest values' level-0 words are the clear
-Ligerito's. -/
-theorem l0Fixed_honestVals_hole (x : Msg) (w : Flock.Wit) (_hx : Masked.Live x) (_hw : Masked.RZk x w) :
-    Loop.L0Fixed (CoinLayer.session Loop.loopNr Masked.dataE).honestVals x w := sorry
 
 /-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesValsOwn`
 (`Loop.takesValsOwn_honestVals`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix
@@ -300,7 +295,7 @@ theorem liveInnerOwn_honestVals
         (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)) x w :=
   liveInnerOwn_withInner _ L₁ src real hreal x w hTab hTape hR hSv hsc hSrc (RefSession.swCausal_vals _ hc) _
     (Loop.takesValsOwn_honestVals _ src real x w) (Loop.finalCFixed_honestVals x w)
-    (l0Fixed_honestVals_hole x w (Masked.live_of hsc hR) hR) (Loop.rowsOK_honestVals hR)
+    (Loop.l0Fixed_honestVals x w (Masked.live_of hsc hR) hR) (Loop.rowsOK_honestVals hR)
 
 end LeanRelease
 
