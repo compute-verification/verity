@@ -17,7 +17,7 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   verifier at a dense statement (`verdict_run`);
 * at each draw `ξ` such a play has, the draw misses `U`, or the run accepts while the extractor returns no witness in
   the recursive relation (`PrBad`, at most `Dep.ksAt`: `t' · 2^{-λ}` by `RecursiveKSAt` through
-  `bitsLin2On_of_ksLin2On`, and at a statement at the deployment's tables also `2^{-167.7} + t' · 2^{-166.95}` through
+  `bitsLin2On_of_ksLin2On`, and at a statement at the deployment's tables also `2^{-167.7} + t' · 2^{-174.95}` through
   `bitsLin2KOn_of_ksLin2On` and `Dep.kappa_eps_oneTable`), or the
   extractor's witness, correct and opened on every drawn unit (`hread`), differs from `X` at some bit of a wire of a drawn
   unit of `U` (`unbound_drawn`), the bit `X`'s plurality didn't pick (`offEvent`, `pr_verdict_le`);
@@ -241,14 +241,14 @@ def Dep.RunAccepts (q : Dep) (x : Msg) : Prop :=
   ∃ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (q.D.V.k x) → Coin),
     (Claims.run FlockDeploy.sha512 P q.D.V x ω r).out = .acc
 
-/-- **`κ ≤ 2^{-167.7}` and `ε ≤ 2^{-166.95}` at a statement at the deployment's tables**, at an inner setup of at most
-`2^43` calls and call bounds `n ≤ 2^43` and `v ≤ nS x · 17716871168` (`setupCalls_deployedB_le_cap`'s, at most
-`16 · 17716871168` at the verifier's 16-part cap): `RecDeploy.kappa_eps_oneTable_cap` at the deployed recursive
+/-- **`κ ≤ 2^{-167.7}` and `ε ≤ 2^{-174.95}` at a statement at the deployment's tables**, at an inner setup of at most
+`2^32` calls and call bounds `n ≤ 2^32` and `v ≤ nS x · 138543104` (`setupCalls_deployedB_le_cap`'s, at most
+`16 · 138543104 ≤ 2^32` at the verifier's 16-part cap): `RecDeploy.kappa_eps_oneTable_cap` at the deployed recursive
 record. -/
-theorem Dep.kappa_eps_oneTable (q : Dep) {x : Msg} (h : q.OneTable x) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43)
-    {n v : ℕ} (hn : n ≤ 2 ^ 43) (hv : v ≤ nS x * 17716871168) :
+theorem Dep.kappa_eps_oneTable (q : Dep) {x : Msg} (h : q.OneTable x) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 32)
+    {n v : ℕ} (hn : n ≤ 2 ^ 32) (hv : v ≤ nS x * 138543104) :
     Claims.Recursion.κ q.D q.I x ≤ 2 ^ (-(167.7 : ℝ)) ∧
-      Claims.Recursion.epsLin2 q.D q.I FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(166.95 : ℝ)) :=
+      Claims.Recursion.epsLin2 q.D q.I FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(174.95 : ℝ)) :=
   kappa_eps_oneTable_cap _root_.Flock.Readable.relation { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }
     (DeployedR.layR OpenRows.elemR) (FlockDeploy.nextR DeployedR.rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols q.wE FlockDeploy.joinR
@@ -533,7 +533,7 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
     (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ nS x * 17716871168)
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI x ≤ 2 ^ 32 ∧ vS x ≤ nS x * 138543104)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -647,7 +647,7 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
     (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ nS x * 17716871168)
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI x ≤ 2 ^ 32 ∧ vS x ≤ nS x * 138543104)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -686,14 +686,14 @@ probability that the recursive component accepts while sampled proofs' claim fai
 (`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
 the finders built from `σ`, `δs + E_ξ[ksAt] + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
 and `⊤` elsewhere, where `ksAt` is `t'(σ) · 2^{-λ}`, and at a draw whose statement is at the deployment's tables the
-least of it and `2^{-167.7} + t'(σ) · 2^{-166.95}` (`Dep.ksAt`), with `t'(σ)` the strategy's SHA-512 calls in one run
+least of it and `2^{-167.7} + t'(σ) · 2^{-174.95}` (`Dep.ksAt`), with `t'(σ)` the strategy's SHA-512 calls in one run
 (`Vocab.cost`) and every finder's budget defined from it. There is no hypothesis on the strategy but `live-verifier`.
 
 It takes these hypotheses:
 * `RecursiveKSAt` at the deployed brings (`hKS`);
 * the decoders meet the list-decoding spec (`hdecI`, `hdecO`);
 * the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), and at the deployment's tables
-  the inner setup's calls and `nI` at most `2^43` and `vS` at most `nS · 17716871168`, `setupCalls_deployedB_le_cap`'s
+  the inner setup's calls and `nI` at most `2^32` and `vS` at most `nS · 138543104`, `setupCalls_deployedB_le_cap`'s
   bound (`hcap`), at the statements some run of the deployed recursive verifier accepts (`Dep.RunAccepts`);
 * `K₀` covers the claim's `ε` share (`hK₀`), and the session's draw misses any `K₀` units with probability at most `δs`
   (`hdraw`);
@@ -718,7 +718,7 @@ theorem sampledProofsRecursive (q : Dep)
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
     (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ nS x * 17716871168)
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI x ≤ 2 ^ 32 ∧ vS x ≤ nS x * 138543104)
     (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)

@@ -47,7 +47,7 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
     finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session
     prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus the
-    knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-166.95}, t' · 2^{-λ})` at a statement at the
+    knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-174.95}, t' · 2^{-λ})` at a statement at the
     deployment's tables, `t' · 2^{-λ}` elsewhere) plus the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a
     defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
@@ -730,10 +730,10 @@ def FinderCR (S : SessionIn V q k θ F c σ)
 open Classical in
 /-- **The knowledge-soundness term at a draw's statement `x`**, from `t'`: `BitsLin2On`'s `t' · 2^{-λ}`, and where `x`
 is at the deployment's tables (`OneTable`) the least of it and route 2C's split bound `κ + t' · ε` (`BitsLin2KOn`), with
-`κ = 2^{-167.7}` once a session and `ε = 2^{-166.95}` once per SHA-512 call (`RecDeploy.kappa_eps_oneTable_cap`, at the
+`κ = 2^{-167.7}` once a session and `ε = 2^{-174.95}` once per SHA-512 call (`RecDeploy.kappa_eps_oneTable_cap`, at the
 call caps every accepted statement meets). -/
 noncomputable def ksAt (S : SessionIn V q k θ F c σ) (lam : ℝ) (x : Msg) : ℝ :=
-  if q.OneTable x then min (2 ^ (-(167.7 : ℝ)) + q.tCost V S * 2 ^ (-(166.95 : ℝ))) (q.tCost V S * 2 ^ (-lam))
+  if q.OneTable x then min (2 ^ (-(167.7 : ℝ)) + q.tCost V S * 2 ^ (-(174.95 : ℝ))) (q.tCost V S * 2 ^ (-lam))
   else q.tCost V S * 2 ^ (-lam)
 
 /-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus the
