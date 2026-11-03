@@ -70,6 +70,7 @@ def test_bf16_autocast_reads_through_the_casts():
     assert g.macs == 3 * T * Hd * V + L * (12 * T * Hd * Hd + 6 * T * Hd * I + 6 * T * S * Hd)
     using = [m for m in g.matmuls if m.role == "using" and m.phase == "forward"]
     assert len(using) == 6 * L + 1 and all(m.dtypes == ("bfloat16", "bfloat16") for m in using)
-    # the GEMMs at bf16; the norms, which autocast runs in fp32, read their updated gains at 32 bits
-    assert len(g.using_elementwise) == 2 * L + 1
+    # the GEMMs at bf16; the norms, which autocast runs in fp32, read their updated gains at 32 bits, and so does the
+    # updated table's lookup
+    assert [m.node for m in g.using_elementwise[:1]] == ["embedding"] and len(g.using_elementwise) == 2 * L + 2
     assert sorted({r[4] for r in g.structure()["updated"]}) == [16, 32]

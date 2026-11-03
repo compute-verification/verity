@@ -1,7 +1,6 @@
-"""Island `quant` (direction, not a class): how far an update compresses without losing the loss it bought. It runs in any
-class (`--klass`, on a v2.x pin; islands/<class>/train.py on this branch is a link here; v3 has no classes, and
-`--max-e-bytes` caps a sparse code instead) and trains an update, then encodes it in low-bit
-CWQUAN1 (`qformat.py`: k-bit codes, f16 codebooks and per-group scales, entropy coded).
+"""Island `quant`: how far an update compresses without losing the loss it bought. It trains an update, then encodes it
+in low-bit CWQUAN1 (`qformat.py`: k-bit codes, f16 codebooks and per-group scales, entropy coded). On v3 (no classes)
+`--max-e-bytes` caps a sparse code; on a v2.x pin `--klass` names the class, whose cap applies.
 
 Modes:
 
@@ -36,9 +35,9 @@ Variant names: `fp` (no quantization), `rtn{b}g{G}` (b-bit round to nearest, G-e
 `tern{tau}[g{G}]` (ternary, kept when |Δ| > tau · the group's mean |Δ|), `svd{r}[q{b}]` (each matrix's update at its best
 rank r, a CWQUAN1 lora entry whose factors are b-bit, 8 by default, in groups of 128).
 
-    python benchmarks/covert_witness/launch.py reference s100 --note "ptq: ..." -- --klass reference --mode ptq \
+    python benchmarks/covert_witness/launch.py s100 --island quant --note "ptq: ..." -- --mode ptq \
         --variants fp,rtn2g128,sign
-    python benchmarks/covert_witness/launch.py reference s100 --note "qat: ..." -- --klass reference --mode qat \
+    python benchmarks/covert_witness/launch.py s100 --island quant --note "qat: ..." -- --mode qat \
         --arms "qat=fp/qat=tern/qat=sign"
 """
 from __future__ import annotations
