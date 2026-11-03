@@ -95,8 +95,8 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
-import Proofs.Pous.Obligation
 import Proofs.Accounting.Additive
+import Proofs.Pous.Obligation
 import Proofs.Accounting.Coverage
 import Proofs.Accounting.ServingBlocks
 import Proofs.Accounting.ServingBlocks.Witnesses

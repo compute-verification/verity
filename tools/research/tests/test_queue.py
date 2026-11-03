@@ -2957,7 +2957,7 @@ def test_a_records_run_vouches_for_exactly_the_packages_it_passed(world, capsys)
     world.with_store_remote()
     h = world.change({**BOTH, "lib/lean-audit.json": _lock(C="2")})
     rid = _published(world, h, files={"lean-audit/audit.json": _audit(),
-                                      "lean-audit/audit-Proofs/report.json": json.dumps(
+                                      "lean-audit/audit-pkg_Proofs/report.json": json.dumps(
                                           {"package": "/w/lean-records/build-0/pkg/Proofs", "failures": []})})
     capsys.readouterr()
     assert _mark(world, 1, h) == 1
@@ -4109,6 +4109,20 @@ def test_a_lock_merge_onto_next_names_each_premise_and_frozen_key_it_drops_that_
     head = world.change({"a.txt": "a2\n"} if edit is None else {"pkg/lean-audit.json": _lock_text(edit)})
     _git(world.dev, "fetch", "-q", "origin")
     assert lock_drops(world.dev, _git(world.dev, "rev-parse", "origin/next"), head) == drops
+
+
+def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a_removed_key_as_dropped():
+    """`check.py` reads a frozen entry's key and its reason's category, not its wording: a head that rewords the reason under
+    the same key drops nothing, and one that removes the key still drops it."""
+    from research.queue import dropped_entries
+
+    def lock(edit: Callable[[dict], object]) -> dict:
+        return json.loads(_lock_text(edit))
+
+    base = lock(lambda d: None)
+    (f, why), = base["shape"]["frozen"].items()
+    assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].update({f: why + " (reworded)"}))) == []
+    assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].pop(f))) == [f"shape.frozen[{f}]"]
 
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():
