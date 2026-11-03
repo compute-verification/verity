@@ -47,11 +47,13 @@ from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -344,6 +346,10 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     assert {w: v["root"] for w, v in man["weights"].items()} == {str(w): r.hex() for w, r in roots.items()}
     assert (tmp_path / man["matmuls"][0]["rows"]["path"]).stat().st_size == 2 * 32 * 1024
     assert (tmp_path / man["weights"]["0"]["rows"]["path"]).stat().st_size == 2 * 256 * 1024
+    for u in man["matmuls"]:
+        y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
+        root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
+        assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
@@ -723,7 +729,8 @@ HD = load("pearl_c_hash_decode_test", Path(__file__).with_name("test_pearl_c_has
 
 class TwinDev(RecordingDev):
     """`RecordingDev` that also runs each hash kernel `simt_twin` builds, thread for thread, and hash_decode.cuh's (`pd`, its
-    host build, with the header tables hash_fast.cuh's s512_heads writes there too), at the addresses the pipeline passes: the
+    host build, with the header tables hash_fast.cuh's s512_heads writes there too, and in hash_prefill.cuh's build chain
+    "pl"'s), at the addresses the pipeline passes: the
     run's buffers are CPU tensors, so the trees are really computed.  The GEMMs, forming and seed_line_a don't run."""
 
     def __init__(self, pd):
@@ -739,7 +746,7 @@ class TwinDev(RecordingDev):
             for j, v in enumerate(i):
                 a.i[j] = v
             getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
-        if name.startswith("pd_") or name == "s512_heads":
+        if name.startswith(("pd_", "pl_")) or name == "s512_heads":
             a = R.Args()
             for j, v in enumerate(p):
                 a.p[j] = v
@@ -843,6 +850,20 @@ def bf16_file(rows: list[bytes]) -> bytes:
     return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows)
 
 
+def reference_y(s, ctx: Context, a_rows: list[bytes], b_rows: list[bytes]) -> bytes:
+    """The call's served y as the kernels store it, row-major BF16: each tile's checked U unscaled (`pearl_c_u.y`)."""
+    y = np.zeros((ctx.matmul.shape.m, ctx.matmul.shape.n), "<u2")
+    for tile in s.tiles(ctx.matmul.shape):
+        ops = s.encode(ctx, s.noise(ctx), [a_rows[i] for i in tile.rows], [b_rows[j] for j in tile.cols], tile)
+        if ops is None:
+            continue
+        ch = s.checked(ctx, ops)
+        for x, i in enumerate(tile.rows):
+            for z, j in enumerate(tile.cols):
+                y[i, j] = PCU.y(ch.u[x][z], ops.a.alpha[x], ops.b.alpha[z])
+    return y.tobytes()
+
+
 #: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
 PROMOTED = sorted(s for s in PPD.SCHEMES if "unpromoted" not in s)
 
@@ -896,11 +917,14 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1)):
     for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
         x = rows(acts[u.index])
         d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
+        y = reference_y(s, Context(epoch.salt, u, root, epoch.weight_roots[u.weight]), x, rows(wrows[u.weight]))
+        y = y[:2 * rec.real_rows * u.shape.n]
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPD._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
                         "tree": PPD._write(tmp_path / "calls" / f"{u.index}.tree",
-                                           laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
+                                           laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)])),
+                        "y": SY.retain_y(tmp_path, u.index, y, u.shape.n, epoch.salt, prover.salt_key)})
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
@@ -959,27 +983,63 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     assert not r["accepted"] and "records are not the ones" in r["line"]
 
 
+def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
+    """``served_passes.py verify`` on serve dir `d` at 3 draws: its exit, its document and its core answer."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", *more])
+    answer = json.loads((out.parent / "answer.json").read_text())
+    from verity.core.protocols.pouw import core_check as CC
+    CC.answer_of(answer)
+    return rc, json.loads(out.read_text()), answer
+
+
 @pytest.mark.slow
 def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
-    """``served_passes.py verify`` replays each pass with calls that the serve's served.json names, skipping the empty one
-    the run left open: it accepts an honest pass, and the same pass with a weight row flipped fails the whole run."""
+    """``served_passes.py verify`` draws over the passes with calls that the serve's served.json names, skipping the empty
+    one the run left open: it accepts an honest pass and credits its MACs at Pearl's assumption in a core answer, and the
+    same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run."""
     path, *_ = honest_pass
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
                                      {"pass": 1, "units": 0, "tiles": 0}]}
     (path.parent / "served.json").write_text(json.dumps(served))
-    out = tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 0
-    doc = json.loads(out.read_text())
-    assert (doc["verified"], doc["accepted"], doc["ok"]) == (1, 1, True) and doc["verdicts"][0]["line"].startswith("ACCEPT")
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
+    assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT verity/pouw/pearl-plus/v1"), doc["line"]
+    work = answer["public"]["work"]
+    assert 0 < work["credited"] < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
+    assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())
+    assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]
+    assert "y committed and checked on 2 of 2 calls" in doc["line"]
     rows = path.parent / man["weights"]["0"]["rows"]["path"]
     bad = bytearray(rows.read_bytes())
     bad[1] ^= 0x01
     rows.write_bytes(bytes(bad))
-    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 1
-    doc = json.loads(out.read_text())
-    assert (doc["accepted"], doc["ok"]) == (0, False) and doc["verdicts"][0]["line"].startswith("REJECT")
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
+    assert rc == 1 and answer["verdict"] == "reject" and "weight opening" in answer["reason"] and doc["line"].startswith("REJECT")
+
+
+@pytest.mark.slow
+def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
+    """A pass whose y is not what its U unscales to fails the run, whichever tile is drawn: committed as it is (a new root,
+    so the run's commitment changes too) each drawn tile names a word that isn't its U's unscale, and left under the root
+    the pass published, the rows don't open."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    good = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4)
+    assert good["answer"]["verdict"] == "accept", good["line"]
+    for u in man["matmuls"]:
+        y = bytearray((path.parent / u["y"]["rows"]["path"]).read_bytes())
+        y[0::2] = bytes(b ^ 0x01 for b in y[0::2])
+        u["y"] = SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]))
+    path.write_text(json.dumps(man))
+    lied = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4)
+    assert lied["answer"]["verdict"] == "reject" and "is not the unscale of the tile's U" in lied["answer"]["reason"], lied["line"]
+    assert lied["commitment"] != good["commitment"]
+    for u, old in zip(man["matmuls"], good["answer"]["public"]["passes"][0]["y"]):
+        u["y"]["root"] = old
+    path.write_text(json.dumps(man))
+    moved = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4)
+    assert moved["answer"]["verdict"] == "reject" and "y opening" in moved["answer"]["reason"], moved["line"]
 
 
 def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
@@ -995,26 +1055,36 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
     """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
     both, so the run is refused (``repeated-call``) before any pass is replayed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
-    d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
-    doc = json.loads(out.read_text())
-    assert (doc["ok"], doc["verified"], doc["verdicts"]) == (False, 0, []) and doc["refused"][0] == "repeated-call"
+    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
+    assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
     assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
 
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
+    both, each pass's exclusion tile opened, accepted and credited over both."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
-    d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
-    doc = json.loads(out.read_text())
-    assert (doc["ok"], doc["verified"], doc["accepted"]) == (True, 2, 2) and "refused" not in doc
+    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
+    assert rc == 0 and answer["verdict"] == "accept" and "refused" not in doc
+    assert answer["profile"]["exclusion_tiles"] == 2 and len(answer["public"]["passes"]) == 2
+    one = VR.credit_at_assumption([VR.load(a, published(a))], 3, Fraction(1, 100))
+    assert answer["public"]["work"]["macs"] == 2 * one["macs"]
+
+
+def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tmp_path):
+    """`verify_run.epsilon` is the least ε (on its 10^-9 grid) with (1 − ε)^t ≤ δ, and a run's credit is at most
+    (1 − ρ)(1 − ε) of its credited cells' MACs (each at |K|), the excluded row's and the filler rows' cells credited
+    nothing."""
+    eps = VR.epsilon(459, Fraction(1, 100))
+    assert (1 - eps) ** 459 <= Fraction(1, 100) < (1 - eps + Fraction(2, 10 ** 9)) ** 459 and abs(eps - Fraction(1, 100)) < Fraction(1, 10 ** 4)
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    p = VR.load(path, published(path))
+    got = VR.credit_at_assumption([p], 459, Fraction(1, 100))
+    assert got["macs"] == ((20 - 1) * 16 + 16 * 32) * 128 and got["epsilon"] == str(eps)
+    assert 0 < got["credited"] <= (1 - p.scheme.cap) * (1 - eps) * got["macs"]
 
 
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
@@ -2308,9 +2378,12 @@ def test_each_device_records_kernels_refuse_their_own_grain():
 
 # ---- the schedule as data ---------------------------------------------------------------------------------------------
 
-#: pearl_c_sm90's pipeline (pearl-c-h100-v1-h3's), whose decode calls split A's commitment (`run.Pipeline.FUSED`'s tree_seed_a)
+#: pearl_c_sm90's pipeline (pearl-c-h100-v1-h3's), whose calls split A's commitment (`run.Pipeline.FUSED`'s tree_seed_a,
+#: past pd's rows `FUSED_GENERIC`'s)
 R90 = load("pearl_c_sm90_run", KERNEL.parent / "pearl_c_sm90" / "run.py")
 F90 = load("pearl_c_sm90_fixture", KERNEL.parent / "pearl_c_sm90" / "fixture.py")
+#: hash_prefill.cuh's host build (`build`), with chain "pl"'s kernels beside hash_decode.cuh's
+P90 = load("pearl_c_sm90_prefill_test", Path(__file__).with_name("test_pearl_c_sm90_prefill.py"))
 H100_SCHEME = "pearl-c-h100-v1-h3"
 
 
@@ -2569,6 +2642,32 @@ def test_deferred_a_runs_as_tree_aside_only_where_the_call_keeps_its_step(sm90_r
     assert seen == [(0, (0, 0), False), (1, (1, 1), True), (2, (1, 1), True)]
 
 
+def test_deferred_a_at_a_prefills_rows_runs_as_tree_aside_over_chain_pl(sm90_run):
+    """Past pd's rows (m₁₆ = 304, a prefill's), sm_90a's pipeline splits A's commitment over chain "pl"'s launches
+    (`run.Pipeline.FUSED_GENERIC`), as sm_120's over its generic kernels: the main lane runs ``rows_a`` (A's pads, the row
+    digests, the row seeds and the real rows' E_A lines, keyed per row and reading no line_a) and never A's level 0, and
+    from a full tile of rows the side lane after the call's runs A's level 0, its levels and seed_A."""
+    make, kernel, weights, _ = sm90_run
+    run = make()
+    sh = run._shape(304, 256, 1024)
+    pipe, _, _ = run._pipe(0, sh)
+    assert pipe.pd is None and pipe.pl and pipe.split_a and not pipe.fillers and "a_tree" in run._side_groups(sh)
+    assert pipe.FUSED == {**R90.Pipeline.FUSED, **R90.Pipeline.FUSED_GENERIC}
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(300, 1024).to(torch.bfloat16), weights[0], None)
+    log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
+    sides = [lane.raw for lane in run.sides]
+    main = [n for n, st, _, _ in log if st not in sides]
+    v = R90.PL_VARIANT
+    assert main[:5] == ["s512_pads", "s512_row_segs", "s512_folds", f"pl_seeds_{v}", "lines"] and main.count("lines") == 1
+    assert not {f"pl_leaves_{v}", f"pl_levels_{v}", f"pl_seed_a_{v}"} & set(main) and "gemm_pearlc_d" in main
+    levels = -(-(R90.pow2(304).bit_length() - 1) // R90.PL_LEVELS)
+    tree = [f"pl_leaves_{v}"] + [f"pl_levels_{v}"] * levels + [f"pl_seed_a_{v}"]
+    assert [n for n, st, _, _ in log if st == sides[1]][:len(tree)] == tree
+    (lines,) = [(p, i) for n, _, p, i in log if n == "lines"]
+    assert lines[0][0] == 0 and lines[1] == (0, 0, 304, R90.NORM_256, 304)
+
+
 class H100TwinDev(TwinDev):
     """`TwinDev` with an H100's 132 SMs and opt-in shared memory, for pearl_c_sm90's pipeline."""
 
@@ -2622,22 +2721,26 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path):
-    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`), two calls
-    of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree under its own set's keys, and
-    the pass commits what the serial one commits (`TwinDev`: the trees computed on the host): the records root, the
-    commitment and each call's A root, beside a pd call."""
-    pd = HD.build(tmp_path)
+@pytest.mark.parametrize("arch", ["sm90", "sm120"])
+def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path, arch):
+    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`, on sm_90a
+    over chain "pl"'s), two calls of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree
+    under its own set's keys, and the pass commits what the serial one commits (`H100TwinDev` over hash_prefill.cuh's host
+    build, or `TwinDev`: the trees computed on the host): the records root, the commitment and each call's A root, beside
+    a pd call."""
+    pd = P90.build(tmp_path) if arch == "sm90" else HD.build(tmp_path)
     rng = np.random.default_rng(29)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290))]
-    kernel = PPD.Kernel(R, F, TwinDev(pd), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    scheme = H100_SCHEME if arch == "sm90" else SCHEME
+    kernel = (PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
+              PPD.Kernel(R, F, TwinDev(pd), "0" * 64))
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *salt_coin(roots),
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         for w, x in xs:

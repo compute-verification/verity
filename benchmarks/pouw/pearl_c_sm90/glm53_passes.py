@@ -1,7 +1,7 @@
-"""Pearl-C's served device path on one H100 or H200 at GLM-5.3's in-domain linears (`glm53.linears`, one TP8 rank): the gate and
-three retained passes, then the reference replay of each.
+"""Pearl-C's served device path on one H100 or H200 at a model's in-domain linears (``--model``'s ``in_domain``: ``glm53``'s,
+the default, one TP8 rank, or ``llama32_1b``'s, one card): the gate and three retained passes, then the reference replay of each.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--cubin C] [--schedule S] [--graphs]  # on the card
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--model glm53|llama32_1b] [--cubin C] [--schedule S] [--graphs]  # on the card
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast]  # on CPUs, after
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
 
@@ -33,6 +33,7 @@ then BF16 nearest-even, as `pearl_c.PearlC.useful` states it and fixture.py's y 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -61,7 +62,8 @@ def capture(a) -> int:
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
-    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(glm53.in_domain(a.scheme))
+    shapes = ([tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes
+              else sorted(importlib.import_module(a.model).in_domain(a.scheme)))
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(HERE), a.cubin)
@@ -74,7 +76,7 @@ def capture(a) -> int:
                               salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights
-    log = {"scheme": a.scheme, "schedule": a.schedule, "graphs": run.graphs, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,
+    log = {"model": a.model, "scheme": a.scheme, "schedule": a.schedule, "graphs": run.graphs, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,
            "device": torch.cuda.get_device_name(dev), "shapes": shapes, "prefill": PREFILL, "decode": DECODE,
            "gate": arm.gate(None), "passes": {}}
     print(f"gate: {'PASS' if log['gate']['passed'] else 'FAIL'}", flush=True)
@@ -274,7 +276,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
-    p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear)")
+    p.add_argument("--model", choices=("glm53", "llama32_1b"), default="glm53", help="capture: whose in-domain linears")
+    p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear of --model)")
     p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
