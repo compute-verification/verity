@@ -106,7 +106,8 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     kinds = json.loads(cells["kinds"])
     assert cells["kinds"] == SW.kinds(one["console"], b) and list(kinds["sensitivity"]) == list(SW.SENSITIVITIES)
     for name in SW.SENSITIVITIES:
-        assert kinds["sensitivity"][name] == pytest.approx(b["sensitivities"][name], rel=1e-3)
+        want = b["sensitivities"][name]
+        assert kinds["sensitivity"][name] == (None if want is None else pytest.approx(want, rel=1e-3))
     assert details[0]["at"] == SW.finite(got) and details[0]["published"] == SW.finite(one)
     assert details[0]["bound"]["console"]["terms"] == b["terms"]
     assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, "art:" + "0" * 64)})
@@ -309,7 +310,8 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     assert SW.products(bounds(products_rows(PRODUCT, elementwise=[outer]))) == f"assumed: {written}"
     gather = {"op": "aten.embedding.default", "fan_out": 4.0, "count": 1}
     broken = unmeasured(products_rows(PRODUCT, p_match=[gather]))
-    assert broken.startswith("unmeasured: the traced step breaks P-match") and "aten.embedding.default" in broken
+    assert broken.startswith(f"unmeasured: the traced step breaks the premise that {formalism.P_MATCH}") and \
+        "aten.embedding.default" in broken
     assert SW.products(bounds(products_rows(PRODUCT, p_match=[gather]))) == f"assumed: {broken}"
     short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
     for void in (products_rows(short), products_rows(PRODUCT, short)):
