@@ -902,12 +902,38 @@ noncomputable def drawMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.g
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP :=
   openMap e (CoinTape (V.game θ F c) σ) (drawStart V θ F c rd σ label after κ)
 
+/-- The draw at a widened sample is the draw at its sample. By `dsimp`, not `rfl`: elaborating the two draws as
+definitionally equal reduces their `match` and evaluates `drawUnits`. -/
+theorem draw_extend (A : Live) (S : Widening) (ω : (A.extend S).L.Ω) : (A.extend S).L.draw ω = A.L.draw ω.1 := by
+  dsimp only [Live.L, Live.extend]
+
+/-- The projection's first stop is the walk from the start's tape to the first stop. -/
+theorem firstStop_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (ω : (A.extend M.widening).L.Ω) :
+    firstStop V θ F c A rd σ M ω = Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) (M.start ω) id :=
+  rfl
+
+/-- The draw-coupled start is the fill of the widening's tape with the sample's coins. -/
+theorem drawMap_start_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+    (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
+    (ω : (A.extend (drawMap e V θ F c A rd σ label after κ).widening).L.Ω) :
+    (drawMap e V θ F c A rd σ label after κ).start ω =
+      fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2 :=
+  rfl
+
 /-- **The draw-coupled start leaves the tape from the first stop fresh**: it writes nothing from the first stop on, and
 the draw reads only the draw's sample. -/
 theorem drawMap_fresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) :
-    FirstStopFresh V θ F c A rd σ (drawMap e V θ F c A rd σ label after κ) := fun G =>
-  (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).trans (Eq.trans
+    FirstStopFresh V θ F c A rd σ (drawMap e V θ F c A rd σ label after κ) := by
+  intro G
+  have hs : ∀ ω : (A.extend (drawMap e V θ F c A rd σ label after κ).widening).L.Ω,
+      firstStop V θ F c A rd σ (drawMap e V θ F c A rd σ label after κ) ω =
+        Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd)
+          (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2) id := fun ω => by
+    rw [firstStop_eq, drawMap_start_eq]
+  simp only [draw_extend, hs]
+  exact (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).trans (Eq.trans
     (congrArg avg (funext fun ω₁ => avg_walk_fill (freshSel label after) (G (A.L.draw ω₁)) (V.game θ F c) σ
       (roundCuts V θ F c rd) m (κ ω₁) id))
     (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).symm)
