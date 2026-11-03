@@ -430,18 +430,19 @@ def level_major(built, once) -> Path:
     return once("rec-coins-level-major", make, _KEY) / f"L{LEVEL}"
 
 
-def _rec_rows(dst: Path, parts: list[Path]) -> Path:
-    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts (`rec_vstage.shared_rows`), with the
-    recorded level 3's registration of its tops `rec-top-L3`."""
-    dst.write_text(json.dumps(S.shared_rows(parts, (), [SET / "L3"])))
+def _rec_rows(dst: Path, parts: list[Path], level: Path) -> Path:
+    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts (`rec_vstage.shared_rows`), with the staged
+    level 3 ``level``'s registration of its tops `rec-top-L3` (the recorded level's is under the registered domain it was
+    recorded at)."""
+    dst.write_text(json.dumps(S.shared_rows(parts, (), [level])))
     return dst
 
 
 @pytest.fixture(scope="module")
-def rows(algebra, tmp_path_factory) -> Path:
+def rows(algebra, restaged, tmp_path_factory) -> Path:
     """The verifier's shared rows of the honest algebra: its message rounds `m<k>` and the running sums' `acc0`, `acc1`, with
-    level 3's tops `rec-top-L3`."""
-    return _rec_rows(tmp_path_factory.mktemp("rec-rows") / "rows.json", sorted(algebra.iterdir()))
+    the restaged level 3's tops `rec-top-L3`."""
+    return _rec_rows(tmp_path_factory.mktemp("rec-rows") / "rows.json", sorted(algebra.iterdir()), restaged)
 
 
 def test_a_v_registered_one_element_off_is_refused_at_its_part(comb, algebra, shape, undrawn, rows):
@@ -668,7 +669,7 @@ def test_a_part_staged_under_another_salt_is_refused_at_the_verifiers_shared_row
     and is refused at the verifier's, by `acc0`'s root. Its two verifies run at once, as the previous test's do."""
     a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
     unit, b = _unit(a), salted / "alg" / a.name
-    own = _rec_rows(tmp_path / "own.json", sorted((salted / "alg").iterdir()))
+    own = _rec_rows(tmp_path / "own.json", sorted((salted / "alg").iterdir()), salted / f"L{LEVEL}")
     with cf.ThreadPoolExecutor(max_workers=2) as ex:
         salted_own, other = _part(ex, b, shape, undrawn, own), _part(ex, b, shape, undrawn, rows)
     assert salted_own.result()["why"] == S2_R7, salted_own.result()["why"]
