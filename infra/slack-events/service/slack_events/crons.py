@@ -205,7 +205,8 @@ def doorbells(deps: Deps, reg: dict, routes, oldest: float) -> set[tuple[str | N
 
 def should_ring(deps: Deps, p: dict, thread: list[dict], reg: dict, chat: bool, routes) -> bool:
     """Whether the consumer leaves a record of `p`: a routing line (an unaddressed post) or a doorbell for a lane it names
-    that has an inbox.  A quiet post naming no one, or one naming only people, leaves none."""
+    that has an inbox (or whose route couldn't be read, so may have one).  A quiet post naming no one, or one naming only
+    people, leaves none."""
     rs = deps.rs
     others = [m for m in thread if m is not p]
     if chat:
@@ -216,7 +217,8 @@ def should_ring(deps: Deps, p: dict, thread: list[dict], reg: dict, chat: bool, 
         if not targets:
             return not rs.is_quiet(p.get("text") or "")
     humans, author = rs.people_names(reg), rs.poster(p, reg)
-    return any(n not in humans and n != author and not rs.unreachable(n, *routes.resolve(n)) for n in targets)
+    return any(n not in humans and n != author and (not rs.unreachable(n, *routes.resolve(n)) or routes.unread(n))
+               for n in targets)
 
 
 def reconcile(deps: Deps) -> dict:

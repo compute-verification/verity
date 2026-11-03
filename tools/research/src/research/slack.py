@@ -1322,14 +1322,19 @@ class Routes:
             if _route_ok(r, p.stem):
                 self.local[p.stem] = r
         self._fetched: dict[str, dict | None] = {}
-        self._unread: set[str] = set()                           # names whose published copy couldn't be read
+        self._unread: dict[str, str] = {}                        # name -> why its published copy couldn't be read
 
     def _fetch(self, name: str) -> dict | None:
-        raw = self.get(f"{self.base}{name}.json")
+        try:
+            raw = self.get(f"{self.base}{name}.json")
+        except SlackError as e:
+            self._unread[name] = str(e)
+            raise
         try:
             r = json.loads(raw) if raw else None
+            self._unread.pop(name, None)
         except ValueError:
-            r = None
+            r, self._unread[name] = None, "its published copy is not JSON"
         self._fetched[name] = r if _route_ok(r, name) else None
         return self._fetched[name]
 
@@ -1348,7 +1353,7 @@ class Routes:
             try:
                 self._fetch(name)
             except SlackError:
-                self._unread.add(name)
+                pass                                             # `_fetch` recorded it in `_unread`
         if len(names) == 1:
             one(names[0])
         elif names:
@@ -1358,7 +1363,7 @@ class Routes:
 
     def current(self, name: str) -> dict | None:
         """`name`'s route as the published table has it, read once per table (`deliver` reads every name it starts from so):
-        a copy that can't be read leaves the clone's, so a name the clone lacks then has none."""
+        a copy that can't be read leaves the clone's, so a name the clone lacks then has none (`unread` tells it apart)."""
         if not NAME_RE.match(name):
             return None
         if name not in self._fetched and name not in self._unread:
@@ -1375,12 +1380,21 @@ class Routes:
         """Follow a closed route's `forward_to` (at most FORWARD_HOPS hops), each name as published (`current`): the name that
         gets the doorbell, and its route.  No route at the end, or one still closed (`unreachable`), is a dead end, a loop or
         a chain too long: nobody reads its inbox."""
-        r = self.current(name)
+        return self._resolve(name)[:2]
+
+    def unread(self, name: str) -> str | None:
+        """Why `resolve(name)` may not be what the published table says: the error reading the published copy of a name on
+        its way, or None.  A name that has no published copy (a 404) was read: it has no route."""
+        return self._resolve(name)[2]
+
+    def _resolve(self, name: str) -> tuple[str, dict | None, str | None]:
+        r, why = self.current(name), self._unread.get(name)
         for _ in range(FORWARD_HOPS):
             if not r or not r.get("closed") or not r.get("forward_to"):
                 break
             name, r = r["forward_to"], self.current(r["forward_to"])
-        return name, r
+            why = why or self._unread.get(name)
+        return name, r, why
 
 
 FORWARD_HOPS = 3
@@ -1497,7 +1511,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     A `reminder` (its watchdog's) rings again a name this post already rang, once per reason: only a doorbell for this post
     carrying the same reminder keeps it from ringing.  `sender` tells the agent that posted `msg` (`_post` passes
     `self_agent_id`), asked only for a post that would ring its author's own inbox, which it does when another agent
-    holds it (`rings_own_inbox`)."""
+    holds it (`rings_own_inbox`).  A name whose route couldn't be read (`Routes.unread`) is NOT RUNG, as when its doorbell's
+    post fails, so the caller tries again; only a name read as having no open route is reported as having no inbox."""
     log = log or sys.stderr
     front = channel_id_for(reg, FRONT_DOOR) or ch
     where = None if ch == front else (key_of(reg, ch) or ch)
@@ -1543,6 +1558,10 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
             continue                                                 # people read Slack itself
         to, r = routes.resolve(name)
         if why := unreachable(name, to, r):
+            if failed := routes.unread(name):                        # not known to have no inbox: a later try may ring it
+                lines.append(f"@{name}: NOT RUNG (its route couldn't be read: {failed})")
+                missed.append(name)
+                continue
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
             if h and h.get("linear"):
                 lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")

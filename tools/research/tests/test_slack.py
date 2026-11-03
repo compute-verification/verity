@@ -2200,6 +2200,40 @@ def test_a_doorbell_that_fails_leaves_the_others_ringing_and_deliver_rings_it_la
     assert (len(bells(fake, first)), len(bells(fake, second))) == (1, 1)
 
 
+def test_a_route_that_cannot_be_read_is_not_rung_and_a_handle_with_no_route_has_no_inbox(fake, registry, routes_dirs, monkeypatch):
+    """With no clone (the Slack events service has none), a name's route is its published copy.  One that can't be read,
+    or reads as no JSON, is a failure to try again, NOT RUNG like a failed post, not a name with no inbox.  A name with no
+    published copy (a 404) was read, and has no inbox.  Read again, it rings, once."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    top = inbox(fake, routes_dirs, "top", where="remote")
+    down = {"top"}
+
+    def get(url: str) -> bytes | None:
+        if any(url.endswith(f"/{n}.json") for n in down):
+            raise slack.SlackError(f"{url}: HTTP 503")
+        return slack.http_get(url)
+
+    reg, api = slack.load_registry(registry), slack.Slack(TOKEN)
+    post = {"ts": "1700000050.000001", "text": "what is the TP8 status?", "user": "UDANIEL"}
+    out = io.StringIO()
+    lines = slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top", "soundness"], log=out)
+    assert lines == [f"@top: NOT RUNG (its route couldn't be read: {slack.Routes().base}top.json: HTTP 503)",
+                     "@soundness: no inbox; its holder opens one with `research msg names open --as soundness`",
+                     "1 doorbell(s) didn't ring (@top): `research msg deliver --channel ask-the-team --ts "
+                     "1700000050.000001 (or --event, where the bot can't read it)` rings only the ones still missing"]
+    assert bells(fake, top) == [] and "route @top: NOT RUNG" in out.getvalue()
+    good = (routes_dirs[1] / "top.json").read_text()
+    down.clear()
+    (routes_dirs[1] / "top.json").write_text(good[:20])                                # cut short: not JSON
+    assert slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top"], log=out)[0] == \
+        "@top: NOT RUNG (its route couldn't be read: its published copy is not JSON)"
+    (routes_dirs[1] / "top.json").write_text(good)
+    routes = slack.Routes(get=get)
+    for _ in range(2):
+        slack.deliver(api, reg, routes, ASK_TEAM, post, names=["top"], log=out)
+    assert routes.unread("top") is None and len(bells(fake, top)) == 1
+
+
 def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
@@ -2907,10 +2941,11 @@ def test_a_clone_holding_an_open_route_follows_the_published_close_and_its_forwa
     assert (len(bells(fake, old)), len(bells(fake, new))) == (0, 1)
 
 
-def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_unreachable(fake, registry, routes_dirs, capsys):
+def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_not_rung(fake, registry, routes_dirs, capsys):
     """`resolve` reads each forward target's published copy as `deliver` reads the names it starts from: a target this
     clone holds open, published closed into another name, rings that name; a target the clone lacks whose published copy
-    can't be read is unreachable, and the post's other names still ring."""
+    can't be read resolves to no route, but `unread` says why, so `deliver` counts it NOT RUNG (to try again) rather than
+    unreachable, and the post's other names still ring."""
     local, remote = routes_dirs
     stale, box = inbox(fake, routes_dirs, "old-b"), inbox(fake, routes_dirs, "circuits")
     add_route(local, "old-a", "1.0", closed="2026-10-18T16:00Z", forward_to="old-b")
@@ -2929,7 +2964,10 @@ def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_un
     assert slack.unreachable("old-c", to, r) == "it forwards to @gone, which has no inbox: see `research msg names list`"
     lines = slack.deliver(slack.client(argparse_ns()), slack.load_registry(registry), slack.Routes(get=get), COORD,
                           {"text": "@old-c @circuits a question", "ts": "1700000000.900000", "username": "ci", "bot_id": BOT})
-    assert lines == ["@old-c: it forwards to @gone, which has no inbox: see `research msg names list`", "@circuits: rang"]
+    gone = f"{slack.Routes().base}gone.json: HTTP 503"
+    assert lines == [f"@old-c: NOT RUNG (its route couldn't be read: {gone})", "@circuits: rang",
+                     "1 doorbell(s) didn't ring (@old-c): `research msg deliver --ts 1700000000.900000` rings only the ones "
+                     "still missing"]
 
 
 def test_of_a_routes_two_copies_the_newer_counts():

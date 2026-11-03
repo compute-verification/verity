@@ -1,6 +1,8 @@
 """The watchdog and reconciliation, against Slack as they find it."""
 from __future__ import annotations
 
+import shutil
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -121,6 +123,29 @@ def test_reconciliation_takes_a_routing_line_or_a_doorbell_as_the_record_and_ski
     assert crons.reconcile(world.deps)["queued"] == 0
     assert world.deps.cache.get(OLDEST) == {"ts": None, "at": world.clock()}
     assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
+
+
+def test_reconciliation_enqueues_a_post_whose_lanes_route_could_not_be_read(world, monkeypatch):
+    """A lane whose route couldn't be read may have an inbox: its post is one to ring, not one that rings no one."""
+    rs = world.deps.rs
+    published = Path(urllib.parse.unquote(rs.Routes().base[len("file://"):]))
+    shutil.move(rs.notes_root() / rs.ROUTES_DIR / "circuits.json", published / "circuits.json")
+    world.slack.add(CHAT, text="@circuits is the TP8 sweep done?", user=LUKE)
+    world.clock.t += SETTLE_S + 1
+    real = rs.Routes
+
+    def get(url: str) -> bytes | None:
+        if url.endswith("/circuits.json"):
+            raise rs.SlackError(f"{url}: HTTP 503")
+        return rs.http_get(url)
+    monkeypatch.setattr(rs, "Routes", lambda *a, **kw: real(*a, get=get, **kw))
+    assert crons.reconcile(world.deps)["queued"] == 1
+    monkeypatch.setattr(rs, "Routes", real)
+    shutil.move(published / "circuits.json", rs.notes_root() / rs.ROUTES_DIR / "circuits.json")
+    rs.deliver(world.deps.slack, crons.chats(world.deps)[0], rs.Routes(), CHAT, world.slack.messages[CHAT][-1],
+               now=world.clock())
+    world.deps.queue.sent.clear()
+    assert crons.reconcile(world.deps)["queued"] == 0                     # rung now: its doorbell is the record
 
 
 def test_a_router_line_without_its_metadata_is_not_a_record(world):

@@ -3,6 +3,9 @@ redelivery), no-model mode's @top, the dead letter and the newcomers' `team_join
 from __future__ import annotations
 
 import json
+import shutil
+import urllib.parse
+from pathlib import Path
 
 import pytest
 
@@ -174,6 +177,40 @@ def test_a_doorbell_that_does_not_ring_is_a_failure_and_the_retry_rings_only_wha
     world.slack.fail_threads = set()
     assert consume(world.deps, payload, 2) == "unaddressed: @top"
     assert world.rung("top") == [private(post["ts"])] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
+
+
+def test_a_route_that_cannot_be_read_is_a_failure_the_retry_rings_and_a_lane_with_no_route_is_not(world, monkeypatch):
+    """With no clone, as on Vercel, a lane's route is its published copy.  One that can't be read (the raw host answering
+    503) leaves its doorbell NOT RUNG, so the delivery fails and the queue retries it, and the retry rings it once.  A lane
+    read as having no route has no inbox: nothing to retry."""
+    rs = world.deps.rs
+    shutil.move(rs.notes_root() / rs.ROUTES_DIR / "top.json", published(world) / "top.json")
+    down, real = [True], rs.Routes
+
+    def get(url: str) -> bytes | None:
+        if down[0] and url.endswith("/top.json"):
+            raise rs.SlackError(f"{url}: HTTP 503")
+        return rs.http_get(url)
+    monkeypatch.setattr(rs, "Routes", lambda *a, **kw: real(*a, get=get, **kw))
+    post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    payload = world.event(CHAT, post, "EvU")
+    with pytest.raises(Retry):
+        consume(world.deps, payload, 1)
+    assert world.rung("top") == [] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
+    assert any(line.get("line", "").startswith("route @top: NOT RUNG (its route couldn't be read: ") for line in world.logs())
+    down[0] = False
+    assert consume(world.deps, payload, 2) == "unaddressed: @top"
+    assert world.rung("top") == [private(post["ts"])] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
+
+    nobody = world.slack.add(CHAT, text="@soundness is the bound tight?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, nobody, "EvV"), 1) == "rule"
+    assert {"event": "deliver", "event_id": "EvV", "line": "route @soundness: no inbox; its holder opens one with "
+            "`research msg names open --as soundness`"} in world.logs()
+
+
+def published(world) -> Path:
+    """The published notes' routes.d, which the service reads with no clone."""
+    return Path(urllib.parse.unquote(world.deps.rs.Routes().base[len("file://"):]))
 
 
 def test_dead_lettering_when_slack_itself_is_down_still_parks_the_message(world):
