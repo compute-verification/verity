@@ -234,12 +234,12 @@ installs it first, so a machine without elan works), must pass clean and fail on
   modules the package imports.
 - `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
-  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, and a
-  `digest` of those hashes, not who reads them: the hashes fix that. Without `--update` the audit fails on any
-  difference, so a statement, or a definition it depends on, cannot change without a visible diff of this file. A record
-  holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms
-  replaces it. A record written before guarantees were called that holds them under `pins`: the audit reads it so,
-  `--update` rewrites it under today's names, and one holding both is refused.
+  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each (not who
+  reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
+  a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
+  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record written
+  before guarantees were called that holds them under `pins`: the audit reads it so, `--update` rewrites it under
+  today's names, and one holding both is refused.
 - `owner`, in each guarantee's entry: the handle of the lane that answers for it (a handle of the registry), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
@@ -306,9 +306,9 @@ installs it first, so a machine without elan works), must pass clean and fail on
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
   therefore the same statement, and a different term is a different one. A definition's text holds the matchers and
-  proofs Lean shares between a module's declarations in place, not by name, so a file split, which renames them, changes
-  no hash. Records written with `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its
-  review saying "rehashed" where the 32-bit hash still matches, which the landing DM leaves out.
+  proofs Lean shares across a module in place, not by name, so a file split changes no hash. Records written with
+  `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its review saying "rehashed" where
+  the 32-bit hash still matches, which the landing DM leaves out.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
 the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
