@@ -509,10 +509,11 @@ cell = [json.loads(r[kc]) if r[kc] else {} for r in p["rows"]]
 null = sum(r[j] is None for r in p["rows"])
 partial = sum(bool(x.get("partial")) for x in cell)
 fresh = len({r[rc] for r, x in zip(p["rows"], cell) if x.get("bound", {}).get("fresh_products") is not None})
+fits = {r[d]: True for r in p["rows"]}
 p["rows"] = [r[:i] + [math.inf if r[j] == "inf" else r[j]] + r[i + 1:] for r, x in zip(p["rows"], cell)
              if r[j] is not None and not x.get("partial")]
 cov = a.coverage(p)
-line = a.board_line(cov, {r[d]: True for r in p["rows"]}, sys.argv[2], sys.argv[3] or None)
+line = a.board_line(cov, fits, sys.argv[2], sys.argv[3] or None)
 print(json.dumps({"line": line.replace("decade of rho_default", "decade of rho_console"), "unmeasured": null,
                   "partial": partial, "fresh_records": fresh, "empty": sum(x["state"] == "empty" for x in cov),
                   "cells": len(cov)}))
@@ -838,7 +839,7 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
     nx_refused = len(nx.get("launch_refused") or []) if nx else 0
     layered = [f"te_core {v}'s capture's traces of its {h['traced_runs']} traced runs"
                for v, h in (meta.get("held") or {}).items()]
-    layered += [f"the new capture's of its {nx['traced_runs']}"] if nx else []
+    layered += [f"the new capture's traces of its {nx['traced_runs']} traced runs"] if nx else []
     nx_said = (f" (te_core {nx['te_core']} prices a row from its own capture ({nx['commit'][:11]}), which is tracing "
                f"every run over the CPU pool, v3's runs that reached a gain first, then each family's best run that "
                f"didn't, the rest of v3's, the pilot's last: {nx['covered']} of v3's {nx['of']} done so far, "
