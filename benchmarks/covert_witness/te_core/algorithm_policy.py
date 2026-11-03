@@ -445,7 +445,7 @@ def figure(p: dict, out: Path) -> Path:
             ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
             ax.set_title(f"gain {g:g}: {len(reached)} reached, {len(mine) - len(reached)} not"
                          + (f" ({unplotted} more, infinite rho or no p)" if unplotted else "")
-                         + f"; least S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})",
+                         + f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})",
                          fontsize=8)
         elif at:
             top = max(at, key=lambda d: d["gain"])
