@@ -689,18 +689,21 @@ NEXT = {u: [(u + 1) % 6] for u in range(6)}
 def test_a_closure_map_is_refused_before_any_coin_is_read():
     """A closure map widens a work sample to a set whose size varies with the sample, which the sampled audit's soundness
     statement doesn't cover: `select` refuses any, empty or not, under any sampling design (`closure`), before any coin
-    is read. Without one the same registration's work sample is drawn and accepted."""
+    is read, so the sample drawn after the refusals is the one a fresh stream on the same challenger draws, and it is
+    accepted."""
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
-    reads: list[int] = []
-    stream = _stream(_spec(S.Law("work:2"), public=(*RECORD_ITEMS, STRATUM)), coins=lambda n: reads.append(n) or b"\x07" * n)
+    work = _spec(S.Law("work:2"), public=(*RECORD_ITEMS, STRATUM))
+    stream = _stream(work)
     reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
     for bad in (NEXT, {}, {u: [6] for u in range(6)}, {6: [0]}, [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
-    assert reads == []
     draw = stream.select(reg)
-    assert "closure" not in draw.draw and reads and draw.proved == draw.units
+    fresh = _stream(work)
+    assert draw.draw == fresh.select(fresh.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
+                                                    work_table=WORK)).draw
+    assert "closure" not in draw.draw and draw.proved == draw.units
     stream.deliver(draw, [SESSION])
     assert stream.outcome(draw, _lean(), {}).accepted
 

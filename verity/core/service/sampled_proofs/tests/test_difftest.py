@@ -4007,7 +4007,7 @@ def test_the_run_refuses_a_closure_map(pieces):
         n = case["record"]["population"]
         for closure in ([], [[0, [1]]], [[u, [(u + 1) % n]] for u in range(n)]):
             assert _ran(pieces, {**case, "closure": closure}) == {"codes": ["closure"], "step": "select"}, closure
-        assert _ran(pieces, case)["symbol"] == "accept"
+        assert _ran(pieces, _from_challenger(case, random.Random(n))[1])["symbol"] == "accept"
 
 
 def _covered_case(kind: str) -> tuple[dict, dict, dict]:
@@ -4048,9 +4048,12 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
         circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
+        d = Drawn(random.Random(kind))
         v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
               "evidence": _hex(base | {"proofs": {"public": _sha(public), "sessions": []}}),
-              "params": params | {"proofs": {"circuit": _sha(circuit), "registered": None}}}
+              "params": params | {"challenger": {"key": d.s.key.to_json(), "label": "draw"},
+                                  "proofs": {"circuit": _sha(circuit), "registered": None},
+                                  "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
         assert "soundness statement doesn't cover" in out["reason"], (kind, out)
