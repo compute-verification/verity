@@ -6,9 +6,9 @@ refusing a changed one and a changed cell; the certified I/O read off the cells 
 N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through active.Proxy)
 is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
-network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
-and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
-run's."""
+network certifier's run. The report on the network certifier path requires the certificates, N2 and the scan, names
+its stubs, leaves d1's K open with no advice term (it opens no endpoint records or advice, and refuses an endpoint
+report), and refuses a step whose input is a certifier rehearsal's or another network certifier run's."""
 
 from __future__ import annotations
 
@@ -150,8 +150,8 @@ def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_s
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The network certifier path's step outputs on `run`: its real certificates, and the endpoint, N2 and the scan as
-    their drivers write them."""
+    """The network certifier path's step outputs on `run`: its real certificates, and N2 and the scan as their drivers
+    write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
         return str(tmp_path / name)
@@ -161,8 +161,7 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
     return SimpleNamespace(
         custody=put("custody.json", {"verdict": "accepted"}),
         certs=put("certs.json", WC.certificates(run)),
-        endpoint=put("endpoint.json", {"warden_run": rid, "io": {"accepted": True, "requests": 5}, "chain": {
-            "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]}}}),
+        endpoint=None,
         n2=put("n2.json", {"ok": True, "warden_run": rid, "members": {
             "honest": {"windows": [window, window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}, window], "network": {"accepted": False},
@@ -177,17 +176,19 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.WARDEN_STUBBED)
-    assert got["negatives_refused"] == {"n2/tampered": True, "scan/forged": True} and "tie" not in got["steps"]
+    assert got["negatives_refused"] == {"n2/tampered": True, "scan/forged": True}
+    assert set(got["steps"]) == {"custody", "certificates", "n2", "scan", "lean"}
     assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
+    assert got["d1"]["K"]["open"] == cr.WARDEN_K and got["d1"]["K"]["network"]["advice"] is None
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
-    assert "on the warden path" in md and "| scan | accepted |" in md and "| tie |" not in md and "certified I/O" in md
-    ep = json.loads(Path(steps.endpoint).read_text())
-    Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
-    served = cr.report(steps)
-    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.WARDEN_SERVED_STUBBED)
-    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
-    Path(steps.endpoint).write_text(json.dumps(ep))
+    assert "on the warden path" in md and "| scan | accepted |" in md and "| endpoint |" not in md
+    assert all(f"- {x}" in md for x in cr.WARDEN_STUBBED)
+    steps.endpoint = str(tmp_path / "endpoint.json")
+    Path(steps.endpoint).write_text(json.dumps({"warden_run": "00" * 32, "io": {"accepted": True}}))
+    with pytest.raises(SystemExit, match="the network certifier path opens no endpoint records or advice"):
+        cr.report(steps)
+    steps.endpoint = None
 
     def refused(name: str, edit, why: str) -> None:
         doc = json.loads(Path(getattr(steps, name)).read_text())
@@ -202,11 +203,5 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
             f"N2's summary names no warden run: {proxy}")
     refused("scan", lambda d: d | {"warden_run": "11" * 32}, "the scan's summary is on warden run " + "11" * 32)
     refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no warden run")
-    refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
-    refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the endpoint's report names no warden run: {proxy}")
     certifier_certs = cr.certs(certifier_run, certifier_run)
     refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
-    steps.endpoint = None
-    r = cr.report(steps)
-    assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"

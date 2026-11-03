@@ -4,7 +4,6 @@
     python benchmarks/network_traces/chain_record.py custody --gates DIR --out FILE
     python benchmarks/network_traces/chain_record.py certs --run DIR [--client DIR] [--deployed] --out FILE
     python benchmarks/network_traces/chain_record.py certs --warden-run DIR [--deployed] --out FILE
-    python benchmarks/network_traces/chain_record.py endpoint --warden-run DIR --endpoint DIR --eos IDS --out FILE
     python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
       [--n2 SUMMARY ...] [--scan SUMMARY] [--job FILE] [--audit WINDOW ...]
       [--period-answer FILE [--period-case FILE] --server NODE] --out DIR
@@ -28,9 +27,9 @@
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
-  records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
-  (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
+  records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile; the
+  network certifier path has no endpoint step. N2's summary is `n2_zk.py prove`'s (Selection All: every
+  link-window's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
   the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
   reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
@@ -50,14 +49,12 @@
   run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
   whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
   offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
-  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
-  endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
-  endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
-  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the scan is
-  `scan_zk.py prove --warden-run`'s, whose ingress units read each request's prompt off the network certifier's
-  ingress cells. Each is held to the network certifier run the certificates step read (`on_warden`), every one is
-  required, and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
-  endpoint report).
+  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). N2 is `n2_zk.py prove
+  --warden-run`'s, on the network certifier link; the scan is `scan_zk.py prove --warden-run`'s, whose ingress units
+  read each request's prompt off the network certifier's ingress cells. Each is held to the network certifier run the
+  certificates step read (`on_warden`), every one is required, and the report names what the path stands on
+  (`WARDEN_STUBBED`). No step opens the endpoint's records or its advice: the window's compute audit is V3c's class
+  window, whose proofs read the advice under its hiding root, so d1's K has no advice term here (`WARDEN_K`).
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`), computed
   by `leak_bounds`: one machine is one link, and 1,000 machines are the sum over as many links.
@@ -101,12 +98,6 @@ CLEAR = {
                            "(warden_serve.check: each record's certificate and its rows' registration under the "
                            "warden's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
-    "warden_endpoint": "at the auditor, on the endpoint's records and the warden's certified I/O (warden_chain.io, off "
-                       "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
-                       "from the certified I/O",
-    "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
-                              "each Commit window's advice opened to its registered root and rebuilt from the warden's "
-                              "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
 }
 #: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
 CERTIFIER_ONLY = "certifier-only"
@@ -125,16 +116,12 @@ STUBBED = (
 WARDEN = "warden"
 #: what a report on the network certifier path stands on that isn't the chain's own
 WARDEN_STUBBED = (
-    "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear at the auditor, "
-    "and the output tie to the Commit's port isn't proved",
+    "the output tie to the Commit's port isn't proved",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
-#: an endpoint report's ``at`` when its step ran on the served node (`served_session.py endpoint`)
-SERVED_NODE = "the served node"
-#: `WARDEN_STUBBED` when the endpoint's report is the served node's
-WARDEN_SERVED_STUBBED = (
-    "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear on the served node, "
-    "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
-    "Commit's port isn't proved", WARDEN_STUBBED[1])
+#: d1's K on the network certifier path, which opens no advice: what the period's K is instead
+WARDEN_K = ("the network certifier path opens no advice, so this report has no advice term: the period's K is "
+            "network-period check's (NetworkCheck.Period's rows form, which charges each request's schedule at its "
+            "lane's cap; --period-answer), and per monitoring period leak's")
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
@@ -333,67 +320,6 @@ def advice_bits(b: dict) -> dict:
     derived = [w.get("derived_bits") for w in runs]
     return {"v0_total": b.get("v0_total"), "T": b.get("T"),
             "derived": sum(derived) if runs and None not in derived and b.get("rebuilt") else None}
-
-
-#: `verity-vllm advice`, as network-e2e runs it
-ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
-
-
-def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its
-    cells (`warden_chain.io`)."""
-    import warden_chain as WC
-
-    return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
-
-
-def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for the network certifier run of ``dep`` (its ``deployment.json``), as network-e2e's
-    `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
-    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network certifier's bucket unless an index is there,
-    then ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the network certifier's
-    execution phases, with the model's EOS ids ``eos`` (a network certifier run records none)."""
-    import subprocess
-
-    sys.path.insert(0, str(HERE.parent / "network_e2e"))
-    import chain
-
-    T = dep["params"]["window"]
-    window = {"origin_unix": dep["origin_unix"], "windows": dep["windows"],
-              "window_s": T * dep["params"]["bucket_ms"] / 1000}
-    out = {"warden_run": dep["run_id"], "endpoint": str(ep), "io": {k: v for k, v in io.items() if k != "records"}}
-    adv = ep / "advice"
-    if not (adv / "windows.json").exists():
-        p = subprocess.run([*ADVICE_CLI, str(ep), "--out", str(adv), "--tau", repr(window["window_s"] / T)],
-                           capture_output=True, text=True, check=False)
-        (ep / "advice.log").write_text(p.stdout + p.stderr)
-        if not (adv / "windows.json").exists():
-            return out | {"chain": {"bits": {"bound": False, "bound_why": f"verity-vllm advice made no index (exit "
-                                             f"{p.returncode}: {(p.stdout + p.stderr)[-300:].strip()})"}}}
-    try:
-        info, bits = chain.served_advice(ep, adv, window, io["records"], T, eos)
-    except (OSError, KeyError, ValueError) as err:
-        return out | {"chain": {"bits": {"bound": False, "bound_why": f"the endpoint's advice: {err!r}"}}}
-    return out | {"advice": info, "chain": {"bits": bits}}
-
-
-def warden_endpoint_step(e: dict | None) -> dict:
-    """`warden_endpoint`'s report: accepted when the network certifier's certified I/O reads whole off its cells and the
-    endpoint's own advice is bound to it and rebuilt from it, in the clear."""
-    if e is None:
-        return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
-                "in_the_clear": CLEAR["warden_endpoint"]}
-    b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
-    windows = b.get("commit_windows") or []
-    advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
-              "commit_windows": len(windows), "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt"))
-                                                                   for c in windows)}
-    why = (f"the warden's certified I/O doesn't read whole off its cells: {io.get('violations')}"
-           if not io.get("accepted") else None if advice["bound"] and advice["rebuilt"]
-           else advice["why"] or "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
-    return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
-            "advice": advice, "advice_bits": advice_bits(b), "at": e.get("at"),
-            "in_the_clear": CLEAR["warden_endpoint_served" if e.get("at") == SERVED_NODE else "warden_endpoint"]}
 
 
 def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
@@ -604,25 +530,29 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
             "conditional": POOLED_CONDITION, "jitter_term": LB.JITTER}
 
 
-def network_terms(cert: dict, endpoint: dict) -> dict:
+def network_terms(cert: dict, endpoint: dict | None) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`LinkWindows.charge`),
-    and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
-    bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
+    when it wasn't rebuilt from the certified I/O; None on the network certifier path, ``endpoint`` None, which opens
+    no advice), each window's declared sync, log2 #Σ_sync (`LinkWindows.charge`), and no cell: no connection passes the
+    certifier but the link, whose counts the advice fixes."""
+    bits, syncs = (endpoint or {}).get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
     return {"advice": advice, "syncs": None if syncs is None else math.ceil(len(cert.get("rows") or []) * syncs),
             "cells": 0}
 
 
-def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
+def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None,
              audits: list[dict] | None = None) -> dict:
+    """D1's terms; ``endpoint`` is the endpoint step's report, None on the network certifier path (`WARDEN_K`)."""
     import leak_bounds as LB
     rows = cert.get("rows") or []
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
-    network = network_terms(cert, endpoint or {})
+    network = network_terms(cert, endpoint)
     steps = len(rows) * (cert.get("window_buckets") or 0)
-    if None in network.values():
+    if endpoint is None:
+        k = {"open": WARDEN_K, "network": network}
+    elif None in network.values():
         k = {"open": f"the network's terms aren't all computed: {network}"}
     elif not audits:
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
@@ -643,7 +573,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
-                "the I/O tie (IoTieWindow) is checked in the clear, outside the proofs",
+                "the I/O tie (IoTieWindow) isn't proved: the certifier-only path's endpoint step checks it in the "
+                "clear, and the network certifier path doesn't check it",
                 "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
                 "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
                 "are run conditions, not yet named assumptions",
@@ -786,12 +717,12 @@ def merged_n2(paths: list[str] | None) -> dict | None:
             "runs": len(docs)}
 
 
-def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
+def stubbed(job: dict, custody_doc: dict) -> list[str]:
     """What a certifier-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
     what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
-    `WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
+    `WARDEN_STUBBED`."""
     if job.get("path") == WARDEN:
-        return list(WARDEN_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else WARDEN_STUBBED)
+        return list(WARDEN_STUBBED)
     if job.get("path") != CERTIFIER_ONLY:
         return []
     out = list(STUBBED)
@@ -912,7 +843,10 @@ def report(a) -> dict:
     certifier_only = job.get("path") == CERTIFIER_ONLY
     warden = job.get("path") == WARDEN
     scan_only = a.n2 is None and not certifier_only and not warden
-    endpoint = (warden_endpoint_step if warden else endpoint_step)(_json(a.endpoint))
+    if warden and getattr(a, "endpoint", None):
+        raise SystemExit(f"--endpoint {a.endpoint}: the network certifier path opens no endpoint records or advice "
+                         "(WARDEN_K): give none")
+    endpoint = None if warden else endpoint_step(_json(a.endpoint))
     merged = None if scan_only else merged_n2(a.n2)
     n2 = ({"verdict": "not given", "why": SCAN_ONLY, "in_the_clear": CLEAR["n2"]} if scan_only
           else n2_step(merged, cert, job))
@@ -922,28 +856,27 @@ def report(a) -> dict:
     if warden:
         run_id = cert.get("warden_run")
         certificates = on_warden(certificates, _json(a.certs), run_id, "the certificates step's input")
-        endpoint = on_warden(endpoint, _json(a.endpoint), run_id, "the endpoint's report")
         n2 = on_warden(n2, merged, run_id, "N2's summary") | {
             "clocks": {"source": "none", "by": "the warden link declares no sync and signs no clock (n2_zk "
                                                "--warden-run)"}}
         scan = on_warden(scan, _json(a.scan), run_id, "the scan's summary")
     proved = ((scan_only or n2.get("verdict") == "accepted")
               and (certifier_only or scan.get("verdict") == "accepted"))
-    steps = {"custody": cust, "certificates": certificates, "endpoint": endpoint,
+    steps = {"custody": cust, "certificates": certificates, **({"endpoint": endpoint} if endpoint else {}),
              "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if proved else (scan if scan_only else n2).get(
                                         "verdict"),
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
                                     "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
-    required = (("custody", "certificates", "endpoint", "n2", "scan") if warden else
+    required = (("custody", "certificates", "n2", "scan") if warden else
                 ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()),
                  *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",))))
     accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
                  for s, v in (g.get("strategies") or {}).items() if s not in REHEARSAL_ACCEPTS}
-    negatives = {**rehearsal, **{f"tie/{k}": v for k, v in endpoint.get("negatives", {}).items()},
+    negatives = {**rehearsal, **{f"tie/{k}": v for k, v in (endpoint or {}).get("negatives", {}).items()},
                  **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audit_dirs = [Path(d) for d in getattr(a, "audit", None) or []]
@@ -955,7 +888,7 @@ def report(a) -> dict:
             for k in required if steps[k].get("verdict") != "accepted"}
            | {k: f"stand-in: {steps[k]['stand_in']}" for k in ("n2", "scan") if steps[k].get("stand_in")})
     return {"schema": SCHEMA, "job": job, "verdict": verdict, "path": job.get("path"),
-            "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust, endpoint),
+            "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust),
             "negatives_refused": negatives, "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits),
             "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs), "why": why or None}
@@ -977,10 +910,9 @@ def markdown(r: dict) -> str:
         lines.append(f"| {k} | {s[k].get('verdict')} | {eps} | {s[k].get('in_the_clear', '')} |")
     notes = [f"- {k}: {s[k][f]}" for k in ("endpoint", "n2", "scan") if k in s for f in ("why", "stand_in")
              if s[k].get(f)]
-    ep = s["endpoint"]
+    ep = s.get("endpoint") or {}
     if ep.get("advice"):
-        notes.append(f"- endpoint: advice {ep['advice']}; " + (f"I/O tie on honest {ep['tie']}" if "tie" in ep else
-                                                                f"certified I/O {ep.get('io')}"))
+        notes.append(f"- endpoint: advice {ep['advice']}; I/O tie on honest {ep.get('tie')}")
     lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
@@ -1019,16 +951,11 @@ def main(argv=None) -> int:
     v.add_argument("--client", type=Path, help="the client's kept files (default --run)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
-    e = sub.add_parser("endpoint",
-                       help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
-    e.add_argument("--warden-run", required=True, type=Path)
-    e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
-    e.add_argument("--eos", required=True,
-                   help="the model's EOS token ids, comma-separated (a network certifier run records none)")
-    e.add_argument("--out", required=True, type=Path)
     r = sub.add_parser("report", help="one report over the steps' outputs")
-    for f in ("custody", "certs", "endpoint", "scan", "job"):
+    for f in ("custody", "certs", "scan", "job"):
         r.add_argument(f"--{f}")
+    r.add_argument("--endpoint", help="network-e2e's --no-prove report (the certifier-only path's endpoint step); the "
+                                      "network certifier path reads none")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
     r.add_argument("--warden-run")
@@ -1052,10 +979,6 @@ def main(argv=None) -> int:
         doc = WC.certificates(a.warden_run, a.deployed) | {"in_the_clear": CLEAR["warden_certificates"]}
     elif a.command == "certs":
         doc = certs(a.run, a.client or a.run, a.deployed)
-    elif a.command == "endpoint":
-        doc = warden_endpoint(a.warden_run, a.endpoint, [int(x) for x in a.eos.split(",")])
-        doc["verdict"] = warden_endpoint_step(doc)["verdict"]
-        a.out.parent.mkdir(parents=True, exist_ok=True)
     elif a.command == "leak":
         doc = leak(a.warden_run, _json(a.scan))
         a.out.write_text(json.dumps(doc, indent=1, sort_keys=True))
