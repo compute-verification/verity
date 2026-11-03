@@ -10,7 +10,8 @@
 # Everything kept goes to $OUT (served JSON, profiles, logs); the passes go in a mktemp directory under PASSES_ROOT (default
 # SCRATCH_ROOT, default /workspace/tmp; /dev/shm serves into tmpfs), removed at exit.  env: SPEC, LOADS, LEASE_MIN,
 # VERITY_BENCH_VENV; PROBE=0 skips the probe and UNRETAINED=0 the unretained serves; PLAIN=1 adds each load's retained
-# `served_passes.py serve`, without the profile's timers, and PROFILE_UNRETAINED=1 a profiled serve of each load with no pass
+# `served_passes.py serve`, without the profile's timers (PYSPY=1: under `py-spy record --gil`, the stacks holding the GIL
+# to $OUT/NAME-plain-gil.txt), and PROFILE_UNRETAINED=1 a profiled serve of each load with no pass
 # retained; WAIT_ENDS=1 serves with
 # `retain_profile.py serve --wait-ends`; SEED=S serves seeded (`--seed S`) and writes each load's file digests; with it,
 # OLD_SRC=DIR (another commit's source tree on the node) serves each load again with DIR's verity_vllm and compares the
@@ -62,7 +63,8 @@ for load in $LOADS; do
     rm -rf "${R:?}/$name-unretained"
   fi
   if [ "${PLAIN:-0}" != 0 ]; then
-    lease $P/served_passes.py serve "${args[@]}" --passes "$R/$name-plain" \
+    spy=(); [ "${PYSPY:-0}" != 0 ] && spy=(py-spy record --gil --threads -r 200 -f raw -o "$OUT/$name-plain-gil.txt" --)
+    lease "${spy[@]}" $P/served_passes.py serve "${args[@]}" --passes "$R/$name-plain" \
       --out "$OUT/$name-plain.json" > "$OUT/$name-plain.log" 2>&1
     echo "$name plain exit $?: $(grep -m1 '^served ' "$OUT/$name-plain.log" | cut -c1-400)"
     echo "$name plain bytes: $(du -sb "$R/$name-plain" | cut -f1)"
