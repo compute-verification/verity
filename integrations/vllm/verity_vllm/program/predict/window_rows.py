@@ -13,8 +13,11 @@ attention isn't the class Program's one-row decode's, though at as few keys as o
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
 cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum; a quantizer that is
-`Int8RowQuant_v5` holds the value's words whole as its H1 leaf row too (`_Program.packed`). Every other unit holds
-its Definition's function of the window's values:
+`Int8RowQuant_v5` holds the value's words whole as its H1 leaf row too (`_Program.packed`). A circuit cut at its linears
+(Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v1` units hold it as
+their output rows and as their input rows, which the window commits by reference from the y value that `Rows.value` makes
+of them, and a served y is taken under any statics of its Definition, which the circuit never computes (`Slot`'s ``cut``).
+Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
   prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
@@ -22,6 +25,7 @@ its Definition's function of the window's values:
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
+- each cut linear's `LinearARow_v1` its x widened to FP32 exactly, its A row;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
   core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
@@ -38,7 +42,7 @@ by its hiding leaf under `index_salt`.
 from __future__ import annotations
 
 import bisect
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -150,11 +154,13 @@ class Slot:
     """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its lane's row of the scan
     state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
     fields and ``served`` its request's served values,
-    None for an empty slot. Each node's value (its return fields) and source, each position's token and, below the class's
-    prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
+    None for an empty slot; ``cut`` the nodes a circuit cut at its linears takes as registered (`Lowered.cut`), whose
+    served value is taken under any statics of its Definition. Each node's value (its return fields) and source, each
+    position's token and, below the class's prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
-    def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None) -> None:
-        self.fn, self.cls, self.weights = fn, cls, weights
+    def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None,
+                 cut: Collection[int] = frozenset()) -> None:
+        self.fn, self.cls, self.weights, self.cut = fn, cls, weights, frozenset(cut)
         self.row = [int(x) & 0xFFFFFFFF for x in row]
         if len(self.row) != cls.prompt + 2:
             raise ValueError(f"a slot's row is (occupancy, prompt length, {cls.prompt} ids), not {len(self.row)} words")
@@ -181,7 +187,7 @@ class Slot:
         if fam == "Embedding":
             self._token(self.position[j], node.args[0])
         pin = _pinned(fam)
-        if served is not None and served[0] != descriptor_id(node.fn):
+        if served is not None and served[0] != descriptor_id(node.fn) and j not in self.cut:
             pin = f"its Definition's value on its operands (served as {served[0]})"
         got = None if served is None else served[1]
         want = self._evaluate(node, fields, what) if got is None or pin else None
@@ -420,6 +426,8 @@ class Rows:
         ports = {(o.reader, p) for o in (c.registered.openings if c.registered else ()) for p in o.ports}
         self.inputs = {t: {p: np.zeros((n[t], w), dtype=np.uint16) for p, w in lay.rows if (t, p) in ports}
                        for t, lay in self.lays.items()}
+        #: input rows a node's value gives, which the window commits by reference (a cut linear's y), by template and port
+        self.given: dict[str, dict[str, np.ndarray]] = {}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
@@ -442,10 +450,20 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
+                if j in P.arows:
+                    (port, words), = self.lays[r.tid].rows
+                    given = self.given.setdefault(r.tid, {}).setdefault(port, np.zeros((self.n[r.tid], words), np.uint16))
+                    given[r.unit:r.unit + (hi - lo) // r.words] = w[lo:hi].reshape(-1, words)
             if (r := P.packed.get(j)) is not None:
                 if len(w) != r.words:
                     raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not its leaf row {r}'s {r.words}")
                 self._put(r.tid, r.unit, r.out, w.reshape(1, r.words), S.source[j])
+        for j, r in P.arows.items():
+            x = S.operand(nodes[j].args[0])
+            if x.dtype.itemsize != 2 or 2 * len(x) != r.words:
+                raise ValueError(f"{P.name}: node {j}'s x is {len(x)} {x.dtype} elements, not the {r.words // 2} bf16 its A row "
+                                 "widens")
+            self._put(r.tid, r.unit, r.out, np.stack([np.zeros_like(x), x], axis=1).reshape(1, r.words), EVALUATED)
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
@@ -541,18 +559,24 @@ class Rows:
 
     def value(self, param: str, rows: int, empty: Sequence[int]) -> np.ndarray:
         """Registered value ``param``'s ``rows`` rows as u16 words as the circuit's proof blocks make them: each row a read of
-        an output row ties (`interface.Read`), its unit's output row, and every other row ``empty`` (a row's words). Refused
-        where a read of ``param`` fills an input or reads past its rows, or two units make one row two ways."""
+        an output row ties (`interface.Read`), its unit's output row, or a read of an input row a node's value gives (a cut
+        linear's y, which the window commits by reference from this value), and every other row ``empty`` (a row's words).
+        Refused where a read of ``param`` fills another input or reads past its rows, or two units make one row two ways."""
         empty = np.asarray(empty, dtype=np.uint16)
         out, made = np.tile(empty, (rows, 1)), np.zeros(rows, dtype=bool)
         for r in self.circuit.registered.reads if self.circuit.registered else ():
             if r.param != param:
                 continue
             outs = [p for p, _ in self.lays[r.reader].outs]
-            if r.port not in outs or self.lays[r.reader].outs[outs.index(r.port)][1] != len(empty):
-                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(empty)} words")
+            if r.port in outs and self.lays[r.reader].outs[outs.index(r.port)][1] == len(empty):
+                have = self.outs[r.reader][outs.index(r.port)]
+            elif r.port in (given := self.given.get(r.reader, {})) and given[r.port].shape[1] == len(empty):
+                have = given[r.port]
+            else:
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(empty)} words or "
+                                 "an input row a node's value gives")
             leaf = r.source(np.arange(r.units))
-            at, got = leaf // len(empty), self.outs[r.reader][outs.index(r.port)][r.at:r.at + r.units]
+            at, got = leaf // len(empty), have[r.at:r.at + r.units]
             if (leaf % len(empty)).any() or (at >= rows).any():
                 raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(empty)} words")
             fresh = ~made[at]

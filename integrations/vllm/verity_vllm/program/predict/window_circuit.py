@@ -199,9 +199,11 @@ class Linears:
 
 
 def linears(fn: Any, words: int) -> Linears:
-    """The class Program ``fn``'s `Linears`, refused where a position's linears of each K aren't the first position's, an N
-    isn't rows of Pearl+'s y of ``words`` words, or there is none to cut."""
+    """The class Program ``fn``'s `Linears`, refused where it has an int8 linear, a position's linears of each K aren't the
+    first position's, an N isn't rows of Pearl+'s y of ``words`` words, or there is none to cut."""
     nodes = fn.body.nodes
+    if (q := next((n for n in nodes if n.fn.name == "Int8RowQuant"), None)) is not None:
+        raise Unexpressible(f"{q.fn.id}: an int8 linear, and Pearl+'s tables cut BF16 linears (`Gemm_v2`) alone")
     heads = frozenset(idx for n in nodes if n.fn.name == "TokenSelect"
                       for space, idx, _lo, _hi in runs(n.args[0].refs) if space == "n")
     by: list[dict[int, list[int]]] = []
@@ -211,7 +213,7 @@ def linears(fn: Any, words: int) -> Linears:
         elif n.fn.name == "Gemm" and j not in heads and by:
             by[-1].setdefault(n.fn.bindings["K"], []).append(n.fn.bindings["N"])
     if not by or not by[0]:
-        raise Unexpressible(f"{fn.id}: no linear but its LM heads, so nothing for Pearl+'s tables to cut")
+        raise Unexpressible(f"{fn.id}: no BF16 linear (`Gemm_v2`) but its LM heads, so nothing for Pearl+'s tables to cut")
     if (p := next((p for p, d in enumerate(by) if d != by[0]), None)) is not None:
         raise Unexpressible(f"{fn.id}: position {p}'s linears' N by K {by[p]}, not position 0's {by[0]}: a cut reads every "
                             "position's at the same rows of its round's tables")
@@ -455,9 +457,7 @@ class _Program:
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
         t = self.tables
-        if isinstance(t, PearlTables):
-            raise Unexpressible(f"{node.fn.id}: an int8 linear, and Pearl+'s tables cut BF16 linears (`Gemm_v2`) alone")
-        if t is None or K != t.k:
+        if not isinstance(t, Tables) or K != t.k:
             self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
             return
         s, i = t.at(self.cls, self.slot_index, self.position - 1)
@@ -772,6 +772,11 @@ class Lowered:
     fn: Any
     programs: tuple[_Program, ...]
     spans: dict[str, list[tuple[int, int, int, int]]]
+
+    @property
+    def cut(self) -> frozenset[int]:
+        """The class Program's nodes the circuit takes as registered, cut at its linears (`PearlTables`); none uncut."""
+        return frozenset(self.programs[0].arows) if self.programs else frozenset()
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
