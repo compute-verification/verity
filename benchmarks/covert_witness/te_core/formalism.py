@@ -1,6 +1,5 @@
-"""A record's slowdown ρ at a policy (c, k), by the training formalism v2 (Daniel, 2 Nov 2026, 2:09 and 2:12 PM PST;
-note:training-20261102T2215Z-report-training-formalism-v2): its theorems Fit and Slowdown per record, the attack side
-beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
+"""A record's slowdown ρ at a policy (c, k), by the training formalism v2: its
+theorems Fit and Slowdown per record, the attack side beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
 (te_core.gates), every other quantity bits.
 
 Measured per record (`Measured`), each with its source in `labels` ("measured: ...", "counted: ...", "stub: ...",

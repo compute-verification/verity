@@ -1,13 +1,13 @@
 # covert_witness: the least compute that lowers a start's loss to a target, at every policy (c, k)
 
-The training formalism v2 (Daniel, 2 Nov; note:training-20261102T2215Z-report-training-formalism-v2) prices a training
+The training formalism v2 prices a training
 computation C at a policy (c, k) by its slowdown ρ, so that |C|ρ is what the computation costs under that policy. This
 speedrun measures, per start (θ, ℓ0) and target ℓ*, the least |C|ρ of a valid candidate's checkpoint that reaches ℓ*
 (W*), against the least |C| of any valid candidate's checkpoint that reaches it (honest H), and S = W*/H ≥ 1. The inputs are
 the start, the target and the policy, with c (gates per block) and k (bits a block reads beyond θ) as two independent
 axes and n the per-period cap; the red team chooses everything else: no class caps the update, its size, its format or
 its depth. Every candidate carries witnesses, which the evaluator checks, and every record carries the formalism's
-quantities, which te_core measures (the experiments are note:training-20261102T1715Z-draft-training-efficiency-experiments).
+quantities, which te_core measures.
 
 It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate.sh`, `sandbox.py`, `launch.py`,
 `pin.py` and the harness `te_core/`, with `data.py`, `starts.py`, `starts_store.py` and `model.py` behind them) and
@@ -20,7 +20,7 @@ v2.3 harness's, labelled `v2.3-pilot` where its records are scored). It measures
 sandboxed training job; a separate evaluation job rebuilds and scores the model on a fresh slice of the search pool;
 promotions are decided on a sealed set and the final set is sealed until the scorer's final scoring; one pinned commit,
 `pinned.json`, measures every candidate, taking only its island from the candidate's commit). It drops the classes and
-scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
+scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its `pilot`.
 
 ## Policy and score
 
@@ -175,7 +175,9 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
   record of any other commit than it and the earlier commits of its version (`same_version`) (`other-version`), and
-  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`).
+  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`). `pilot` names
+  an earlier version's commits, whose records only the console's training panels (`te_core.panels`,
+  `te_core.algorithm_policy`) show beside the pin's, each labelled by its data.
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets (checked against `prepare.SET_SHA256`, left
   read-only) and registered the sealed start; on a prepared node it only checks. vy-nebius-1, -2 and -3 are listed.
@@ -194,14 +196,13 @@ FILE (default `train.py`), and nothing else of the checkout is used.
 node from one; `prep.sh` prepares a node (`data_v3.py verify --keep`, `prepare.register_pythia()`, the starts from the
 store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
-`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2
-(note:training-20261102T2215Z-report-training-formalism-v2), analytically: gates, token blocks' gates, σ, the affected
+`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2, analytically: gates, token blocks' gates, σ, the affected
 gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
 lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
 `/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`
-(`CW_ROOT`, kept under @training): `heldout/<data version>/` (the search pool), `train/`, `ckpt/`, and `candidates/`
+(`CW_ROOT`, a retention the training lane owns): `heldout/<data version>/` (the search pool), `train/`, `ckpt/`, and `candidates/`
 (each candidate's island, training job output and sandbox root, removed when it ends).
 A candidate's run `out/` holds `run/run.json` (the harness's record as the evaluation job scored it, schema
 `te-core/run/v1`, with `evaluation`), `witness.json` (schema `covert-witness/witness/v5`), `tree.json` (the process
