@@ -1,4 +1,5 @@
 import Proofs.Properties.Verity.Recursive
+import Proofs.Flock.Claims.Recursion.Wald
 
 /-!
 # The recursive configuration's binding finders
@@ -50,6 +51,12 @@ namespace Dep
 
 variable (q : Dep) (V : Vocab d α) {k : Verity.Registration.Composite} {θ c : ByteArray} {F : Array ByteArray}
   {σ : Game.Strategy (V.game θ F c)}
+
+/-- **Some run of the deployed recursive verifier accepts at `x`**, at some prover, tape and coins: the statements the
+call bounds and the level are read at. -/
+def RunAccepts (x : Msg) : Prop :=
+  ∃ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (q.D.V.k x) → Coin),
+    (Claims.run FlockDeploy.sha512 P q.D.V x ω r).out = .acc
 
 /-- The deployment's outer extractor `E_O`, which serves `E*`'s inner reruns. -/
 noncomputable abbrev EO : Claims.Extractor Coin (List Claims.Flock.Wit) q.D.V :=
