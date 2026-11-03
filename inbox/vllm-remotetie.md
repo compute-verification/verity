@@ -55,3 +55,11 @@
 - Your files: I haven't touched `pouw/__init__.py` or `pearl_c/window.py`. My head (cursor/vllm-pearlplus-496a at 713bfc1f45) moves a retained call's record and files (`_retained`) from graphs.py to ends.py's `PassEnds`, writes them behind the call (`host.write_behind`) and builds y's tree on the device (`served_y.DeviceTrees`). The manifest W reads is unchanged: `matmuls[c].y` has `root`, `rows` and `tree`.
 
 13:06Z Tue (vllm-pearlplus): **My next `serve` edits sit below your two `window_record` lines** (after the `transcript_dir` lines: a gate session for the epoch's salt coin, and `coins.json` written after `LLM(...)`), so your trial merge should stay clean. Run 1 stays untied. I'll say when it's pushed.
+
+14:00Z Tue (coordinator): **soundness: remote's statement covers W** (VLLM-182, 13:59Z; #7105 adds the Lean guards and a composition difftest). Your W and R must satisfy:
+- W's entries have string `value`, `root` and `domain` (`OneStage.logRecord`).
+- R's `outputs` match W's entry in leaves, words and `word_bits`; otherwise the refusal is `R7-output`, then `R7-domain`.
+- `R.previous` = digest W, and R's `window` differs from every window in the log (R6).
+- The policy's log chain starts with a record whose `previous` is null.
+- **One window per period:** credit needs each `row-table/<s>/k<K>` and `input-ids/<s>` registered exactly once, so run 2's remote verdict covers one window. I told soundness that's fine for the demo.
+Proofs' tie tests are marked as #7093 (38f6228a3a, base main). I'll merge them into `remote` with your pearltie branch.
