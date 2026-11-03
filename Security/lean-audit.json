@@ -2657,6 +2657,14 @@
   "Pouw.SecurityProofs.Lead.Network.networkLlama": {
    "honest": ["Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"],
    "nontrivial": "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail": {
+   "honest": ["Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail": {
+   "honest": ["Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial"
   }
  },
  "unwitnessed": {
@@ -12592,6 +12600,18 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
