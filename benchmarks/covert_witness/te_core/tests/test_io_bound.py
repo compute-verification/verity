@@ -7,6 +7,7 @@ import json
 import math
 import random
 from collections import Counter, defaultdict
+from pathlib import Path
 
 import pytest
 import torch
@@ -485,3 +486,48 @@ def test_a_widening_cast_keeps_its_products_count_and_a_narrowing_one_pays_its_n
     last = [r for r in narrow if r.kind == "fresh" and r.phase == "forward" and r.dims["m"] * r.dims["n"] == 6 * 16]
     assert [(r.widths, r.rates) for r in last] == [((16, 16), (16.0, 16.0))]
     assert [r.product()["b_a"] for r in narrow if r.kind == "fresh"] == [16] * sum(r.kind == "fresh" for r in narrow)
+
+
+FIXTURE_45M = Path(__file__).resolve().parents[1] / "capture" / "tests" / "fixtures" / "dense_45m.products.json"
+
+
+def _corrected(name: str, batch: int, ctx: int, micro_steps: int, products=None, C=None) -> tuple[dict, dict]:
+    c, k = policy.CONSOLE
+    g = iob.capture(name, "s", 32000, batch, ctx, micro_steps)
+    if products is None:
+        products = [r.product() for r in iob.rows_of(g, "bfloat16", k) if r.kind == "fresh"]
+        C = iob.step_gates(g, "bfloat16")
+    w = iob.whole_chain_of(iob.chain_classes(g, k), k)
+    return w, iob.bound(products, c, k, C, w["whole_chain"])["proved"]
+
+
+def test_the_45m_steps_whole_making_system():
+    """The 45M dense step (the fixture's products, batch 2 at ctx 256): attention's 64-long chains sit below every
+    counted operand, so its system's least fixed point gives whole_chain 1.0887 (the one-class rule at its least k_whole,
+    256, gave 1.033) and 163,708 without P-cell, 2,870,251 with it. Its LoRA r16 step has no fixed point: void. P-match
+    fails only at the embedding's gather, whose rows the system prices at their width."""
+    from te_core import formalism
+
+    rows = json.loads(FIXTURE_45M.read_text())
+    w, p = _corrected("dense", 2, 256, 1, formalism.products_of_trace(rows)["products"], rows["gates"])
+    assert w["e"] == pytest.approx(0.058322155, rel=1e-6) and w["whole_chain"] == pytest.approx(1.08874665, rel=1e-6)
+    assert w["r"][64] == pytest.approx(1 / 3) and w["mu"][64] == pytest.approx(0.3451, abs=1e-4)
+    assert round(p["rho_no_cell"]) == 163_708 and round(p["rho"]) == 2_870_251
+    w, p = _corrected("lora", 2, 256, 1, [{"macs": 1, "outputs": 1, "k_dim": 16, "k_whole": None, "b_a": 16, "b_b": 16,
+                                            "b_c": 32, "gates_per_mac": 1.0, "cell_gates": 1.0}], 1.0)
+    assert w["mu"] is None and math.isinf(w["whole_chain"]) and p["rho"] is None and p["rho_no_cell"] is None
+    c, k = policy.CONSOLE
+    assert iob.p_match(iob.capture("dense", "s", 32000, 2, 256, 1), k) == ["embedding"]
+    assert iob.p_match(iob.capture("lora", "s", 32000, 2, 256, 1), k) == []
+
+
+@pytest.mark.slow
+def test_the_s_t20_steps_whole_making_system():
+    """The s-t20 steps at full size (256 sequences of 1,024 tokens in four micro-batches) at the console: dense 257,670
+    without P-cell and 4.75e6 with it (4.10's one-class rule gave 258,250 and 4.87e6), LoRA r16 void. Only the full
+    capture has the weight gradients' 65,536-long chains and the products the figures sum; the tiny steps can't."""
+    w, p = _corrected("dense", 256, 1024, 4)
+    assert w["whole_chain"] == pytest.approx(1.0314051, rel=1e-6)
+    assert round(p["rho_no_cell"]) == 257_670 and p["rho"] == pytest.approx(4.7545e6, rel=1e-4)
+    w, p = _corrected("lora", 256, 1024, 4)
+    assert math.isinf(w["whole_chain"]) and p["rho"] is None and p["rho_no_cell"] is None
