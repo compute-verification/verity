@@ -287,16 +287,11 @@ A program's weights, constants and tables are values: committed once, at registr
 only inside a proof (`one_stage.registered`).
 
 - A registered value is a root parameter of the program, as rows of `words` leaves in the parameter's leaf order, each
-  leaf `word_bits` bits: its leaf width rounded up to whole u16 words, 16 or 32 (`width`). Row `r` is committed as the
-  circuit statement commits that port's row: `hm96-sha512/row/v1` over `sha512/row/v1` of its u16 words (`row_words`:
-  each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 chunks, as a C-Flock port row and
-  its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
-  used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
-  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
-  {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
-  and salts. A value a bit-row port reads is committed in that port's format (`Registered.commit`'s `schema`):
-  `hm96-sha512/row/v2` over `sha512/row/v2`, or `hm96-sha512/row-seg/v1` over `sha512/row-seg/v1`, of its leaves' bit
-  row (`row_words` unpadded), each leaf framed under that schema, under the same domain.
+  leaf `word_bits` bits (16 or 32, `width`). Each row is committed as the circuit statement commits that port's row
+  (`hm96-sha512/row/v1`, or for a bit-row port its format, `Registered.commit`'s `schema`), with a 192-byte salt drawn
+  once from the operating system, and its root is the frame-v3-sha512 root over the rows under the value's `domain`.
+  The prover keeps the rows and salts. The row layout and the domain's binding are in `one_stage.registered`'s module
+  docstring.
 - `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus
   `"word_bits"` when it is not 16), digest `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly
   when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
