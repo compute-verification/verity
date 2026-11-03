@@ -34,7 +34,7 @@ Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. 
 M0 and upstream Flock.
 
 ~~~text
-bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level-0 tree, 68 lanes wide)
+bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level-0 tree, 68 lanes)
 zerocheck           label flock-zerocheck-v0
   M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
@@ -265,8 +265,7 @@ What is changed:
    | 28–31 | 2^17–2^18 | 219 | 438 | ≥ 100 | 219 |
    | ≥ 32 | ≥ 2^19 | 218 | 436 | ≥ 100 | 218 |
 
-   At `m = 25..27` the counts are the ones the soundness lane and the red team agreed (computed with 64 more padding
-   symbols); elsewhere the least count. `--zk` refuses `m ≤ 24`, where no count reaches 100 bits at rate 1/2, and any
+   At `m = 25..27` the counts are computed with 64 more padding symbols; elsewhere they are the least count. `--zk` refuses `m ≤ 24`, where no count reaches 100 bits at rate 1/2, and any
    count below 100 bits (`zk_queries0`).
 
 **Zero knowledge for the session.** Fix every coin of the session (both reps' streams and the link points). The view is:
@@ -393,8 +392,8 @@ serialized), never from a proof.
 
 ## 9. M2: the verifier's coin commitment and the single-rewind simulator
 
-The design for malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md
-§2 and §6, DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round
+The design for malicious-verifier zero knowledge for one batched session, in the model of ASSUMPTIONS.md §2 and §6 and
+DESIGN.md §11.1: the verifier commits to every coin before the prover's first message, then opens them round
 by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. The prover refuses the
 degenerate coins as they open (the Claim above).
 
@@ -516,7 +515,8 @@ message kind, by which the ZK server removes every free choice.
 
 Where the boundary runs:
 - **Inner phase** (`rec/inner-transcript/v1`, ZK off): the whole M0 prover is the worker, and `verity_flock.rec_live`'s
-  proxy is the ZK server. The coin server receives only the public schedule and salted hashes (§10.3).
+  proxy is the ZK server, its send check Lean's `flock-firewall live` (`rec_live --lean`). The coin server receives only the
+  public schedule and salted hashes (§10.3).
 - **Outer phase** (`flock-circuit prove --zk --gpu`): the device (`flock_cuda_prove_circuit`) is the worker; the host side
   of `flock-circuit` (the masking challenger, the live stream, the send check, and the session's Lean finish it relays) is the ZK server. The
   device reaches the ZK server through three channels: each round's frames (`rounds(content, n)`, at its squeeze), the
@@ -663,7 +663,8 @@ commits another codeword, and the session stops at its `Finish` (`zk_worker_leve
 |---|---|---|
 | `Hello` | constant | the ZK server compares the prover's, Σ aside, with the pinned schedule's as canonical JSON (`rec_live.canonical`: sorted keys, no spaces, so `2` and `2.0` differ) and forwards the schedule's own, never the prover's text or object |
 | `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
-| a round's caps (its `BYTES` frames that commit a tree) | salted, or counted | a fresh top as the roots, one fresh salt per node; a copy of a level-0 top committed at `Commit` (the rep's binding round's cap, which must be `root_B`, and Ligerito's first absorb) is counted (`level0`), never committed again |
+| `Commit`'s tables and their order | constant | the pinned schedule's `roots`, each with its node count, in the schedule's order (their names, sorted: `Flock.Firewall.Schedule.tables`); the ZK server refuses any other order, so the order carries nothing of the prover's |
+| a round's caps (its `BYTES` frames that commit a tree) | salted, or counted | a fresh top as the roots, one fresh salt per node; a copy of a level-0 top committed at `Commit` (the rep's binding round's cap, which must be `root_B`, and Ligerito's first absorb) is counted (`level0`), never committed again. Copies are by position, never by value: the round's first `level0` caps, as the schedule names them, must each be its table's top committed at `Commit`, and every other cap is a fresh top, whatever its value (`Flock.Firewall.copiesOf`) |
 | a round's free message | salted | `c_k`, its one row committed under a fresh salt (as before) |
 | `Register` | constant | the ZK server answers it itself with the verifier's sample, every unit of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified law at `K = N`, so each stratum's `k` is its size), and the record holds that sample as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same sample and refuses any other |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
@@ -677,7 +678,12 @@ The schedule is `rec_live --schedule FILE`, and the proxy refuses to serve witho
 derives it before any session from `flock-circuit statement`'s record of the public file alone (`schedule_for`: `dense_m`,
 `k_log`, `nbl` and `regions`, the four numbers the schedule reveals anyway), and `serve` writes it to `schedule.json` before
 the first session. No session pins it: a schedule taken from a session the prover ran would be the prover's choice
-(`--schedule-of PUBLIC_JSON` prints a record's schedule, to compare with the one it was held to). The record says how its tops
+(`--schedule-of PUBLIC_JSON` prints a record's schedule, to compare with the one it was held to). The proxy and
+`flock-firewall` refuse a schedule no honest session can finish before any request (`check_schedule`,
+`Flock.Firewall.Schedule.canonical`): its `Hello` must print back as it parses (naturals, and strings without `"`, `\` or
+a control character) and name no `coins`, each round must be its six fields and nothing more, and each stream's rounds,
+at least one, must come in the schedule's order numbered 0, 1, … as many as its `rounds`. `flock-firewall`, which holds
+no registered top, also refuses a stream, or a copy of level 0's top, whose table has no root. The record says how its tops
 are salted (`"tops": "hm96-sha512/v1/node-row"`, `rec_live.TOPS`). A refusal (`FIREWALL-REFUSED: …`) stops the session: every later
 request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the coin server had
 received, `end: "stop"`) is written.
@@ -699,6 +705,29 @@ ZK server's salts, so nothing a worker sends reaches the coin server any other w
 drop, duplicate, swap, forgery and seeded byte flip of one. One difference is deliberate: Lean's JSON keeps no number's
 spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
 JSON. The two agree whenever the schedule's `Hello` holds only integers, as `schedule_for`'s does.
+
+On live coins the send check is that program itself. `rec_live --lean BIN` (required unless `--coin-tree`) starts one
+`flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and each request goes to it
+before the proxy handles it. It answers with the messages the coin server gets for the request and the salts it drew for
+them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those a request doesn't
+draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order,
+and handles the request too, for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
+is not Lean's, or one of Lean's it leaves unused, stops the session. The same test holds the relay to `run` at the salts the
+live session drew, on every case and every whole placement of the `Open`s. Lean's firewall refuses a coin tree's `Hello` and
+a binding round of a registered top, so a `--coin-tree` session and `rec_session.serve`'s, with its stacked table's
+registered top, keep the Python check that the test holds to `run`.
+
+In the Lean analysis (`Security/Proofs/Flock/Recursive/`), `FirewallTemplate.run_blank` proves that a session `run` finishes
+sent the pinned schedule's transcript (`tmpl`) but for its commitment strings, and `sends_of_one` that if `run` finishes at
+one salt list with each commitment string the commitment of a given 64-byte digest under its salt, then at every salt list
+of that length it finishes and sends the transcript with each string the same digest's commitment under the new salt.
+`FirewallAccepts` states the honest worker's half: at the zero salts, `run` finishes on the honest requests, with the tables
+named and each commitment string that of the honest message's digest. `firewallSends_of_accepts` derives `FirewallSends`
+(the hypothesis of the recursive ZK statement, `RecursiveFirewallPrivate`) from it at the transcript `firewallT`.
+`FirewallLive.run_live` proves that a live session that doesn't stop (`liveRun`, `liveWith`'s loop over `liveStep`) sends
+what `run` sends on its requests at the salts it read, in order, and `run_append` that a finished run is the same at more
+salts after its own; so `liveSends` (and `liveSends_of_accepts`, from `FirewallAccepts`): on the honest requests, a live
+session that doesn't stop sends the transcript at the commitment strings of the first salts it read, and finishes.
 
 ### 10.4 The prototype (`FC_FIREWALL=1`)
 

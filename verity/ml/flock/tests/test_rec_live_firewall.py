@@ -148,7 +148,7 @@ def _stopped_record(reqs, then_stop=b"not a request"):
 
 def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
     """An Open is accepted any time before its stream's first round, so a stream enters the record only at that round;
-    otherwise two sessions stopped at the same point differ in whether the Open came (the review's probe, r2)."""
+    otherwise two sessions stopped at the same point differ in whether the Open came."""
     reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
     commit = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], [])
     link = RL.encode_req(RL.REQ_LINK, bytes(32))
@@ -174,8 +174,8 @@ def _coin_calls(reqs, schedule):
 
 
 def test_the_coin_server_never_sees_where_an_open_was_sent():
-    """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open
-    (ZK server-contract's gap 3): every placement of the two Opens before their first rounds, finished or cut anywhere,
+    """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open:
+    every placement of the two Opens before their first rounds, finished or cut anywhere,
     gives the coin server the honest session's calls or a prefix of them."""
     two = ("circuit/rep0", "circuit/rep1")
     sched = _schedule(two)
@@ -211,8 +211,7 @@ def test_the_coin_server_never_sees_where_an_open_was_sent():
 def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop():
     """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
     round are refused by the ZK server itself, before any call on the coin server, so wherever one comes the coin server's
-    calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it
-    (review-zk-gateway's r4)."""
+    calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it."""
     two = ("circuit/rep0", "circuit/rep1")
     sched = _schedule(two)
     reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
@@ -232,14 +231,15 @@ def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop()
             assert calls == honest[:len(calls)], (stray[:1], p)
 
 
-def _serve(tmp_path, sessions, schedule):
-    """`rec_live.serve` on a thread; its result (or what ended it) in ``got``, the address it bound in ``got["addr"]``."""
+def _serve(tmp_path, sessions, schedule, **kw):
+    """`rec_live.serve` on a thread (``kw`` its other arguments); its result (or what ended it) in ``got``, the address it
+    bound in ``got["addr"]``."""
     bound, got = threading.Event(), {}
 
     def run():
         try:
             got["res"] = RL.serve("127.0.0.1:0", tmp_path, T._counter_rand(), sessions=sessions, schedule=schedule,
-                                  ready=lambda a: (got.update(addr=a), bound.set()))
+                                  ready=lambda a: (got.update(addr=a), bound.set()), **kw)
         except Exception as e:  # noqa: BLE001 - the test reports what ended serve
             got["crash"] = f"{type(e).__name__}: {e}"
         finally:
