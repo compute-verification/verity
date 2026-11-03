@@ -37,7 +37,9 @@ keys the other directions use; grad_bits is one partial message at the width a b
 04:41Z ruling prices when the coding runs in the circuit and the trace shows it: messages wait between blocks, and a
 coded momentum between steps, as torch.bool bit planes and f16 scales), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
 update application Δ_t + Δ_grad ≤ k) at k = 8 KiB (the console's default), 10 kB, 1 MB and 10 MB, with sτ = a block's
-tokens × ⌈log₂ V⌉ bits. Fit's blocks are about 1,250 training tokens at the console's default: `--leaf 1` (1,024).
+tokens × ⌈log₂ V⌉ bits. Fit's blocks are about 1,250 training tokens at the console's default (`--leaf 1`, 1,024) and
+4,096 at te_core's default dial (`--leaf 4`). The harness meters every aten op in Python, so a block costs about the
+same wall time whatever its tokens: `--leaf 4` trains about four times as many tokens a second as `--leaf 1`.
 
     python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --note "dgrad ..." \\
         -- --blocks 5-5 --opt adafactor --msg-bits 8 --store q8 --lr 3e-3 --budget-fraction 0.15
