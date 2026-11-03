@@ -1,4 +1,4 @@
-# s8_linear: the exact W8A8 linear at the large model's shapes, on the H200 (sm_90a) and sm_120
+# s8_linear: the exact W8A8 linear at the H200 example's shapes, on the H200 (sm_90a) and sm_120
 
 The linear `ScaledMmS8Coordinate_v1{K, DOT}` defines, DOT the card's s8 step (`GEMM_SM90_S8` on the H100 and H200,
 `GEMM_SM120_S8` on the RTX PRO 6000): the s32 sum of s8 x s8 over K (exact below 2^17), then
