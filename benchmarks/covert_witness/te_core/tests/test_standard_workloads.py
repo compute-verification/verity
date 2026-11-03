@@ -1,10 +1,9 @@
 """te_core.standard_workloads builds `training/standard-workloads`: a row per workload and measured dial setting, whose
-ρ is te_core's one bound under the row's reading (A where the trace has entries, else B) at the dial's default and the
-console's, with each kind's term under both readings, whose rho_inputs give the token form there
+ρ is priced as te_core.algorithm_policy prices a run (formalism.at under its `READING` over its `IN_RHO` kinds, its
+`binding` and `rho_terms`) at the dial's default and the console's, whose rho_inputs give that ρ there
 (algorithm_policy.page_rho) and whose input_status says which inputs te_core measured; a generation run's row is its
 rounds alone, each GEMM on the served codes priced as NVFP4; and the panel keeps to the panels route's limits, a cell
 up to 4,096 characters."""
-import dataclasses
 import json
 import math
 from pathlib import Path
@@ -49,53 +48,36 @@ def record(round_tokens: int = 6, round_log=ROUND_LOG) -> dict:
 def build(m: formalism.Measured, fx: dict, monkeypatch) -> tuple[dict, list, dict]:
     monkeypatch.setattr(SW, "traces", lambda arts: {})
     monkeypatch.setattr(SW, "measured", lambda row, traced: (m, fx["shape"], fx["read"]))
-    p, details = SW.build({"reading": "A", "rows": [fx["row"]]}, stamp="2026-11-03T00:00:00Z")
+    p, details = SW.build({"rows": [fx["row"]]}, stamp="2026-11-03T00:00:00Z")
     (row,) = p["rows"]
     return p, details, dict(zip(SW.COLUMNS, row))
 
 
-def test_the_pinned_row_is_its_runs_quantities_priced_by_te_cores_one_bound_at_both_dial_points(monkeypatch):
+def at(m: formalism.Measured, w_fwd: float) -> dict[str, dict]:
+    return {name: formalism.at(m, c, k, algorithm_policy.READING, algorithm_policy.IN_RHO)
+            for name, (c, k) in SW.points(w_fwd).items()}
+
+
+def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices_a_run_at_both_dial_points(monkeypatch):
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     p, details, cells = build(m, fx, monkeypatch)
-    assert m.entries is not None and list(cells.values())[:-1] == fx["cells"][:-1] and cells["te_core"] == VERSION
-    assert cells["reading"] == "A" and p["source"].endswith("reading A; islands/standard-workloads)")
+    assert list(cells.values())[:-1] == fx["cells"][:-1] and cells["te_core"] == VERSION
+    assert cells["reading"] == algorithm_policy.READING
+    assert p["source"].endswith(f"reading {algorithm_policy.READING}; islands/standard-workloads)")
     inputs = json.loads(cells["rho_inputs"])
     assert list(inputs) == list(SW.KEYS) == list(json.loads(cells["input_status"]))
     assert set(json.loads(cells["input_status"]).values()) == {"measured"}
-    terms = json.loads(cells["rho_terms"])
-    at = SW.points(policy.w_fwd(fx["shape"]))
-    for name, (c, k) in at.items():
-        assert math.isclose(algorithm_policy.page_rho(inputs, c, k)[0], formalism.at(m, c, k)["rho"], rel_tol=1e-4)
-        for reading in SW.READINGS:
-            want = formalism.at(m, c, k, reading)
-            assert terms[reading][name] == {kind: SW.rho_cell(want["bound"]["terms"][kind]) for kind in formalism.KINDS} \
-                | {"rho": SW.rho_cell(want["rho"]), "binding": SW.binding(want)}
-        assert cells[f"rho_{name}"] == terms["A"][name]["rho"] == SW.rho_cell(formalism.at(m, c, k, "A")["rho"])
-    assert cells["binding_kind"] == SW.binding_cell({n: formalism.at(m, c, k, "A") for n, (c, k) in at.items()})
-    assert details[0]["reading"] == "A" and details[0]["at"]["A"]["console"]["rho"] == \
-        SW.finite(formalism.at(m, *SW.CONSOLE, "A")["rho"])
-    assert not SW.refused(p)
-
-
-def test_a_row_without_entries_is_read_under_b_and_shows_why_te_core_refuses_a(monkeypatch):
-    fx = json.loads(PINNED.read_text())
-    m = dataclasses.replace(formalism.from_json(fx["measured"]), entries=None)
-    p, details, cells = build(m, fx, monkeypatch)
-    terms = json.loads(cells["rho_terms"])
-    assert cells["reading"] == "B" and p["source"].endswith("reading B; islands/standard-workloads)")
-    assert terms["A"].startswith("refused: reading A: no entries")
-    assert cells["rho_default"] == terms["B"]["default"]["rho"]
-    assert cells["rho_console"] == SW.rho_cell(formalism.at(m, *SW.CONSOLE, "B")["rho"])
-
-
-def test_the_kinds_a_step_has_no_input_for_are_named_with_their_steps():
-    parts = (formalism.Part(3e12, 100, 2.4e12, 1e12, 3, 4e6, 2e6, 3e6), formalism.Part(1e12, 50, 0.8e12, 0, 2),
-             formalism.Part(1e9, 0, 0, 0, 1))
-    m = formalism.Measured(parts, 15, 8192, formalism.even(1e6), formalism.even(1e6), 1e6)
-    assert SW.unmeasured(m) == {kind: f"2 of 5 steps with token work have no traced {field}, counted 0"
-                                for kind, field in (("reduction", "partial_bits"), ("update", "grad_bits"))}
-    assert SW.unmeasured(dataclasses.replace(m, parts=parts[:1])) == {}
+    pts, got = SW.points(policy.w_fwd(fx["shape"])), at(m, policy.w_fwd(fx["shape"]))
+    assert pts["console"] == algorithm_policy.CONSOLE
+    for name, (c, k) in pts.items():
+        assert math.isclose(algorithm_policy.page_rho(inputs, c, k)[0], got[name]["rho"], rel_tol=1e-4)
+        assert cells[f"rho_{name}"] == SW.rho_cell(got[name]["rho"])
+    assert cells["binding_kind"] == algorithm_policy.binding(got["default"])
+    assert cells["rho_terms"] == algorithm_policy.rho_terms(m, {n: (*pts[n], v) for n, v in got.items()})
+    assert json.loads(cells["rho_terms"])["max_over"] == list(algorithm_policy.IN_RHO)
+    assert details[0]["reading"] == algorithm_policy.READING and details[0]["at"] == SW.finite(got)
+    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note("art:" + "0" * 64)})
 
 
 def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
@@ -104,10 +86,10 @@ def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
     w_fwd = policy.w_fwd(fx["shape"])
     monkeypatch.setattr(algorithm_policy, "page_rho", lambda d, c, k: (1.01 * formalism.at(m, c, k)["rho"], "target"))
     with pytest.raises(ValueError, match="at default"):
-        SW.priced(m, w_fwd)
+        SW.priced(m, w_fwd, at(m, w_fwd))
     with pytest.raises(ValueError, match="w_gates, w_fit_gates not finite"):
         SW.priced(formalism.Measured((formalism.Part(1e9, 0, 0, 0),), 16, 8192, formalism.even(1e6),
-                                     formalism.even(1e6), 1e6), w_fwd)
+                                     formalism.even(1e6), 1e6), w_fwd, {})
 
 
 def test_an_input_is_measured_where_te_core_counted_traced_or_read_it_and_assumed_where_it_stubbed_it():
@@ -174,9 +156,13 @@ def test_a_rounds_delta_is_the_served_update_and_its_tau_the_prompts_ids_over_th
     assert lora["labels"] == SW.ROUND_LABELS
 
 
-def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_or_a_long_note():
-    p = {"note": "n", "columns": ["a", "b"], "rows": [["x" * SW.CELL_MAX, 1.5]]}
+def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_a_long_note_or_a_long_body():
+    p = {"note": "n", "columns": ["a", "b"], "rows": [["x" * console.CELL_MAX, 1.5]]}
     assert not SW.refused(p)
-    assert SW.refused(p | {"rows": [["x" * (SW.CELL_MAX + 1), 1.5]]}) == ["row 0's a (4097)"]
-    assert SW.refused(p | {"rows": [["x", True]]}) == ["row 0's b (bool)"]
-    assert SW.refused(p | {"note": "n" * (console.NOTE_MAX + 1)}) == [f"its note is {console.NOTE_MAX + 1} characters"]
+    long = "x" * (console.CELL_MAX + 1)
+    assert SW.refused(p | {"rows": [[long, 1.5]]}) == [f"row 0's a is {long!r:.40}"]
+    assert SW.refused(p | {"rows": [["x", True]]}) == ["row 0's b is True"]
+    assert SW.refused(p | {"note": "n" * (console.NOTE_MAX + 1)}) == \
+        [f"its note is {console.NOTE_MAX + 1} characters, over {console.NOTE_MAX}"]
+    big = p | {"rows": p["rows"] * (console.BODY_MAX // console.CELL_MAX)}
+    assert SW.refused(big) == [f"its body is {len(console.body(big))} bytes, over {console.BODY_MAX}"]
