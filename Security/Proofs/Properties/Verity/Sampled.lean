@@ -26,7 +26,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
   at it (`Live.hsz`), each round's digest SHA-512 (`Live.dg`), and the writer one that writes, at a draw's live
   outcome, a transcript `verify --zk` accepts recording it (`Live.wr`, `wrZP`), so what it writes at the outcome an
   accepted transcript's files decode to is accepted, and V5's `RecordCustodyZKJPLaw` holds at it under the law with no
-  premise (`Live.hCust`).
+  premise (`Live.hCust`). At the device's bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no
+  premise (`Live.deployed`).
 * **The draw** (`Live.L`): the law the parameters' selection rule derives over the population (`law`), drawn as
   `SampledProofs.Select.select` draws it, by `SampledProofs.Draw.drawUnits` on the device's one byte stream (`src`); a
   draw that fails draws every unit. It is V5's draw at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
@@ -72,6 +73,10 @@ files and at the strategy a strategy of the period's game projects to. This modu
   deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
   and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
   the sampled verdict never accepts.
+* **The deployed digests and reading** (`programDigestOf`, `publicDigestOf`, `readOf`): the digests v2's parameters
+  name (`paramsOf`), and the files they name, the lookup tables the committed files hold and `verify --zk`'s tags.
+  They give `DigestsAt` at every parameters (`digestsAt_of`), and at a session whose inputs are v2's the reading is the
+  session's (`readOf_eq`).
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
@@ -242,6 +247,18 @@ printed draw under a law V5 admits (`recordCustodyZKJPLaw_deployed`). -/
 theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
     A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr A.law :=
   recordCustodyZKJPLaw_deployed A.I A.own A.hlaw _
+
+/-- **The session at the device's bytes as deployed**: the draw reads the device's one-stage rounds
+(`DeployedCoins`), their bytes in order (`deployedSrc`), where A3 holds with no premise
+(`uniformRandomBytes_deployed`). -/
+noncomputable def deployed : Live where
+  __ := A
+  Ω := DeployedCoins
+  fΩ := inferInstance
+  nΩ := inferInstance
+  Lb := deployedLb
+  src := deployedSrc
+  hA3 := uniformRandomBytes_deployed
 
 /-- **The session with the draw's sample widened by the coins `S`**: the draw reads only the session's bytes, so the
 draw's law is the session's and A3 holds at the widened sample (`uniform_fst`). -/
@@ -602,6 +619,78 @@ structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
   tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
+
+/-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
+def paramsOf (θ : ByteArray) : Option _root_.SampledProofs.OneStageZk.Params :=
+  match _root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams with
+  | .error _ => none
+  | .ok ps =>
+    match ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
+    | none => none
+    | some x =>
+      match _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson with
+      | .ok (.inl p) => some p
+      | _ => none
+
+theorem paramsOf_eq {θ : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params} (h : ParamsAt θ p) :
+    paramsOf θ = some p := by
+  obtain ⟨ps, hps, x, hx, hp⟩ := h
+  simp only [paramsOf, hps, hx, hp]
+
+/-- **The digest a hex digest names**: its bytes, where `Flock.unhex` decodes it, as `DigestsAt` reads them. -/
+def digestOf (s : String) : Option Hash.Digest :=
+  match Flock.unhex s with
+  | .ok dg => some fun i => dg.data.getD i.val 0
+  | .error _ => none
+
+/-- **The circuit file's digest the parameters `θ` hold, as deployed**: the one v2's parameters name. -/
+def programDigestOf (θ : ByteArray) : Option Hash.Digest := (paramsOf θ).bind fun p => digestOf p.own.circuit
+
+/-- **The public file's digest the parameters `θ` hold, as deployed**: the one v2's parameters name. -/
+def publicDigestOf (θ : ByteArray) : Option Hash.Digest := (paramsOf θ).bind fun p => digestOf p.own.pub
+
+/-- **`verify --zk`'s tags at the inputs v2 hands it** (`zkTags`): the statement's tags `tags`, one table and the
+circuit file `circuitFile`. -/
+def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
+  Flock.Zk.tags (tags.withCoins (.tree (Flock.Zk.coinSpec (tags.tableNames 1)))) (Flock.Zk.maskLogOf circuitFile) 1
+
+/-- **v2's reading of the committed files `F` at the parameters `θ`, as deployed**: the files the digests v2's
+parameters name (`programDigestOf`, `publicDigestOf`), the pinned MUFU tables the committed files hold
+(`SampledProofs.OneStageZk.tablesOf`), and `verify --zk`'s tags at the statement's tags and the circuit file
+(`zkTagsOf`). Where the statement has no tags v2 refuses, and the tags read are a default. -/
+noncomputable def readOf (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
+  ⟨zkTagsOf ((Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT).getD default)
+      (Verity.namedFile (programDigestOf θ) F),
+    Verity.namedFile (programDigestOf θ) F, _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F),
+    Verity.namedFile (publicDigestOf θ) F⟩
+
+/-- **The deployed digests and reading give `DigestsAt`**: at every parameters, a vocabulary whose digests are the
+ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose reading of the committed files is v2's
+(`readOf`) reads the files at those digests and the lookup tables off the committed files. -/
+theorem digestsAt_of (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = readOf θ F) (θ : ByteArray) :
+    DigestsAt V θ where
+  circuit p hθ dg hdg := by
+    rw [hc, programDigestOf, paramsOf_eq hθ]
+    simp only [Option.bind, digestOf, hdg]
+  publicFile p hθ dg hdg := by
+    rw [hp, publicDigestOf, paramsOf_eq hθ]
+    simp only [Option.bind, digestOf, hdg]
+  tables F := by rw [hr]; rfl
+
+/-- **The deployed reading is the session's** (`SetsUp.read`) at a session whose inputs are the ones v2 hands
+`flock-verify` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
+tables the committed files hold. -/
+theorem readOf_eq (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}
+    (htags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
+    (hcirc : A.I.circuitFile = V.circuitFile θ F) (hpub : A.I.publicFile = V.publicFile θ F)
+    (htab : A.I.tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)) :
+    readOf θ F = A.fileRead := by
+  have hc' : V.circuitFile θ F = Verity.namedFile (programDigestOf θ) F := by rw [Vocab.circuitFile, hc]
+  have hp' : V.publicFile θ F = Verity.namedFile (publicDigestOf θ) F := by rw [Vocab.publicFile, hp]
+  simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags,
+    FlockSoundness.Discharge.ZkExec.zkCoins, htags, Option.getD_some, hcount, hcirc, hpub, htab, hc', hp']
 
 /-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
 registration and the evidence of the case the composition's evidence names under the sampled component's id, each read
