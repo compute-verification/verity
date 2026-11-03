@@ -42,7 +42,8 @@ def Sized (x : Msg) : Prop :=
 theorem k_mem {x : Msg} (h : q.Sized x) :
     (1507 ≤ q.I.k (Claims.Recursion.xI q.D x) ∧ q.I.k (Claims.Recursion.xI q.D x) ≤ 12343986) ∧
       ∀ j : Fin (q.D.nS x), 1507 ≤ (q.D.nums x j).k ∧ (q.D.nums x j).k ≤ 12343986 := by
-  obtain ⟨⟨s, spec, sts, hin, h1⟩, hO, -, -⟩ := h
+  obtain ⟨s, spec, sts, hin, h1⟩ := h.1
+  have hO := h.2.1
   refine ⟨?_, fun j => ?_⟩
   · obtain ⟨hlo, hhi⟩ := FlockDeploy.N₀_le hin.setup hin.size_pos fun st hst =>
       have := hin.tab st hst
@@ -58,11 +59,17 @@ theorem k_mem {x : Msg} (h : q.Sized x) :
     have hk₁ := k_le_one hhi
     exact ⟨hk₀, hk₁⟩
 
+/-- **At most `16` parts at the deployment's sizes** (`RecDeploy.SizesAt.nS_le`, the verifier's cap). -/
+theorem nS_le_of_sized {x : Msg} (h : q.Sized x) : q.D.nS x ≤ 16 := by
+  first
+  | exact RecDeploy.SizesAt.nS_le h
+  | exact h.2.2.1
+
 /-- **The extractor's expected reruns at the deployment's sizes, from above**: `N_I = 1 + 210·k_I ≤ 2592237061` and
 `1 + Σ_s 210·k_s ≤ 41475792961` over at most `16` parts. -/
 theorem runs_le {x : Msg} (h : q.Sized x) : q.runs x ≤ 2592237061 * 41475792961 := by
   obtain ⟨⟨-, hI⟩, hP⟩ := q.k_mem h
-  obtain ⟨-, -, hn, -⟩ := h
+  have hn := q.nS_le_of_sized h
   have hNI : Claims.Recursion.NI q.D q.I x ≤ 2592237061 := by
     show 1 + 210 * q.I.k (Claims.Recursion.xI q.D x) ≤ 2592237061
     omega
