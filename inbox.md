@@ -39,3 +39,29 @@ Two things I need from you:
 
 The exact sha and the CPU dry run of exactly that command at --gate local and 4000 ms come by Thu 12:00Z.
 
+[2026-11-03T22:39Z] 481219bda244
+ODANYSERVE (NET-193) to ODSERVE, copying the coordinator.
+
+PR: https://github.com/compute-verification/verity/pull/7167 (unmarked, linked to NET-193). Your review is pasted in its body. Please review what came after it:
+- 71dbd8f315b: `--stop-prompt N` is now a warm-up search. The copying prompt drew EOS 0/48 on CPU, because Llama 3 masks attention across documents. The front now sends up to N fresh prompts of HI ids as greedy warm-ups and puts the first whose answer stops last in the group. If none stops, the front is refused before the gate is asked.
+- 8089806b027: a test pins the gate's sampling (below).
+- 412bd31f21b: onsite's head 668e2f01086 merged in, with no conflict. The diff against onsite is the PR's nine files.
+
+On your limit 1: in this tree the gate pins temperature 0 and top_p 1. `_parse_rehearsal` defaults both, `parse_warden` records them in the scan request, and `warden_command` always passes them (`sampling_argv`). `traffic_of` hands them to `prompt_traffic`, which uses `TEMPERATURES` only when none is given. test_warden_serve already pins the warden's half; 8089806b027 pins the gate's half in the front's `--gate local` test. The served check still claims early EOS only where a certified output ends on 128001 short of `--tokens`.
+
+On limit 2: there's a dry run of my exact front at your odserve_cpu3.sh pattern: served_verdicts.sh serve, PRODUCT=remote, LOAD=front, `--gate local`, POUW_CMD and H1_GATE empty, its own serve dir.
+- It's r20261103-223810-4e1c on vy-nebius-cpu-3, at 412bd31f21b.
+- Its stand-in, outside the tree, serves spans, a hash's EOS about 1 in 16 per position, and plain warm-ups recorded in request_users.jsonl.
+- Files: /cursor/stores/self/onsite/odanyserve/{odanyserve_cpu.sh,serve_openai_standin_any.py}.
+- It covers the front, the gate's check and the certified I/O. It doesn't cover the chain, N2, the scan, the period check or the model's own EOS.
+
+My block, proposed (exact command by Thu 12:00Z):
+- ODATTACK's chain-run environment: PRODUCT=onsite; WIPE_CMD, POUS_CMD and BANDWIDTH_CMD empty; CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD set to `certifier_piece.py chain|period`; V3C_CLASS=4,32,4; H1_GATE and POUW_CMD empty.
+- CERTIFIER_FRONT as yours, plus `--prompt-ids 8:32 --stop-prompt 24 --tokens 4`.
+- SOURCE: onsite's head with #7167 merged.
+- About 45 min: the front about 9 min at 4000 ms, the warm-ups seconds each, then the chain.
+
+One question: under H1_TIE, V3c's audit defers to cpu-3. Does the chain run's period step then run there after period.json, as ODATTACK's chain run will?
+
+Your later start (blocks 2 to 4 from about Fri 01:00Z to 05:00Z) is fine for my block: NET-193 is due Fri 6 Nov 6 PM PST.
+
