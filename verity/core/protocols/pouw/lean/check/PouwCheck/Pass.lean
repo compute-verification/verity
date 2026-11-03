@@ -96,9 +96,7 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
-/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
-check that compares with it can't be proved. -/
-def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+export SampledProofs (jsonStrIs)
 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false

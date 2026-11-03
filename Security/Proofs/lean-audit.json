@@ -71,6 +71,10 @@
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
+  "Proofs.Properties.Verity.Sampled.Binding",
+  "Proofs.Properties.Challenger.Window",
+  "Proofs.Properties.Challenger.CanonLine",
+  "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -79,6 +83,9 @@
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Challenger.Limits",
+  "Proofs.Properties.Challenger.Coins",
+  "Proofs.Properties.Challenger.Session",
   "Proofs.Properties.Firewall"
  ],
  "exempt": {
