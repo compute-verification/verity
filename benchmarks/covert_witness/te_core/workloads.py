@@ -6,10 +6,11 @@
 A workload (`WORKLOADS`) is a function from its dials (`Dial`: name, unit, default, range, why) to a `Model`: the inputs
 of te_core.formalism's one bound as a `Measured` (|C|, w, σ, τ, a, the profiles u and u_in, Δ, d, Δ_grad and Δ_t, and
 each part's partial gradient and gradient cut, each labelled with where it comes from), its products of two fresh
-operands (`Fresh`), w_fwd, and the most update bits one of its ops reads (`op_update_bits`, reading A's test). `rho`
-gives every kind's term at a policy (c, k), their max and the binding kind; `columns` gives the token kind's inputs as
-the console's columns (te_core.algorithm_policy's `INPUTS`, with `w_fit_gates`, `alpha_ratio` and `C_gates`), on which
-`algorithm_policy.page_rho` gives the token form's ρ, and `menu` the other kinds' inputs. `reference` evaluates each
+operands (`Fresh`), w_fwd, and the most update bits one of its ops reads (`op_update_bits`). `rho` gives every kind's
+term at a policy (c, k), their max, the binding kind and the sensitivities and target beside them; `columns` gives the
+target's inputs as the console's columns (te_core.algorithm_policy's `INPUTS`, with `w_fit_gates`, `alpha_ratio` and
+`C_gates`), on which `algorithm_policy.page_rho` gives reading B's token form, and `menu` the other inputs, the fresh
+products' among them. `reference` evaluates each
 workload's reference points (`Workload.points`) at the three `POLICIES`, and its `Check`s, measured records beside the
 model (the 45M pilot's, and the standard-workloads island's rows in `RECORDS`), each made a model of its own
 (`recorded`) so that every kind's term is on both; `input_status` gives each input's source, "measured: " and the
@@ -18,39 +19,41 @@ output, which the console's tests pin. The spec, each mapping with its reasons, 
 
 **The one bound** (the coordinator's 06:51Z ruling; Lean's `Counting` and `Slowdown`): ρ ≥ the max over a fixed menu
 of kinds K of `kindBound`, (|B_K|/|C|)·c/cap_K(k), cap_K(k) the most of K's work one block does reading at most k bits
-beyond θ. Only kinds whose terms are lower bounds on their own go into the max (the coordinator's 08:26Z ruling,
-te_core.formalism's `VALID`): where Fit holds its construction gives c/(c − d), else ρ is max(1, the valid kinds'
-measured terms), and `basis` names the binding kind, whose `RESTS_ON` entry says what it rests on. The kinds (`VALID`,
-`SENSITIVITIES` and `TARGET`, each with what it rests on):
+beyond θ. Only kinds whose terms are lower bounds on their own go into the max (the coordinator's 08:26Z and 10:21Z
+rulings; te_core 4.5's `formalism.KINDS`): where Fit holds its construction gives c/(c − d); else ρ is the largest
+measured term where it exceeds 1, and null where none does while a kind is unmeasured, never 1 (09:46Z: max(1,
+nothing) reads as no slowdown). `basis` names fit, the binding kind or none, and `RESTS_ON[basis]` what it rests on.
+The kinds (`VALID`):
 
-- **fresh products** (`Fresh`, valid): products whose two operands both depend on θ', priced by te_core.io_bound's
-  `bound` (the Loomis-Whitney cap per block, (k/3)^1.5/sqrt(b_A b_B b_C) on chains entering as partial sums plus
+- **fresh products** (`Fresh`): products whose two operands both depend on θ', priced by te_core.io_bound's `bound`
+  (the Loomis-Whitney cap per block, (k/3)^1.5/sqrt(b_A b_B b_C) on chains entering as partial sums plus
   (k/2)/sqrt(b_A b_B) per sqrt of the chains a block starts, times Λ for blocks doing several products at once) on the
   model's products as io_bound reads a captured step's fresh rows (`products`): each GEMM by the standard algorithm at
   its widths as passed (`WIDTHS`), its Definition's gates a MAC and a gadget, attention's products uncounted (io_bound
-  counts none). Its term is io_bound's proved Λ with P-cell (a block holds whole GEMM gadgets; `fresh` beside it has
-  the term without P-cell, no premise on the partition). It rests on no A1. A product with an operand in θ (a frozen
-  weight, a registered teacher's) isn't fresh, nor is the lowest layer's attention input projection's (its input is
-  gathered embedding rows, which io_bound's P-width prices below their width), nor Newton-Schulz's products of an
-  array with itself; and a block computes a product's operands itself where it can read the update up to the
-  product's layer and the input ids up to its token (a forward) or of its whole sequence (a backward, whose gradient
-  reads every later token): those products escape (`Fresh.counted`), since io_bound's P-width needs every operand
-  paid at its width.
-- **token** (valid under reading A only): reading A, te_core 4.4's default packer over a trace's `entries`, holds whole
-  traced ops in a block, so its term is infinite wherever one affected op reads k or more update bits (`reading_a`):
-  every full-weight workload's weight GEMMs at every policy here, the full-token-state overclaim the 08:26Z ruling
-  withdrew. Until te_core 4.5's packer proposes matrix-product and weight-gradient tiles the token term is unmeasured,
-  never ∞ (te_core.formalism's `READING_A`), and a model has no trace: each point gives reading A's verdict.
-- **decoding** (valid, an assumption): share·c/max(c − d, min(c, α_max(x0·s + s*))) at reading B, a block reading the
-  update code running the whole decoder (assumption (D); a model has no trace for reading A's packer).
-- **reduction** and **update** (sensitivities, never the bound: they hold only for partitions split by tokens):
-  (c/|C|)·Σ steps·(b − 1)·partial/k and (c/|C|)·Σ steps·γ/k over each part whose step's token work fills
-  b = ⌈N·w/c⌉ ≥ 2 blocks (assumptions (R) and (U)). The fresh-products kind covers the weight-gradient product
-  dW = δ^T X, whose partial sums across token blocks are the reduction.
-- **target**: reading B's token form (A1, a token's work lumped under its profiles), te_core.formalism.published's ρ
-  until `READING_A`: a target, not a bound, beside ρ.
+  counts none). Its term is io_bound's proved figure without P-cell (`FRESH_FIGURE`), which needs no premise on how a
+  partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1); the figure under P-cell, every block
+  holding whole GEMM gadgets, is a sensitivity beside it (`fresh_cell`: 14 times the term on the dense default, 3
+  times on the LoRA's). It
+  rests on no A1. A product with an operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
+  lowest layer's attention input projection's (its input is gathered embedding rows, which io_bound's P-width prices
+  below their width), nor Newton-Schulz's products of an array with itself; and a block computes a product's operands
+  itself where it can read the update up to the product's layer and the input ids up to its token (a forward) or of
+  its whole sequence (a backward, whose gradient reads every later token): those products escape (`Fresh.counted`),
+  since io_bound's P-width needs every operand paid at its width.
+- **token** (A1 at reading A): te_core 4.5's packer over a trace's `entries` and its op log's matrix-product and
+  weight-gradient tiles (te_core.tiles), finite at every k. A model has neither, so the term is unmeasured, never ∞
+  or 1 (`reading_a`, its verdict beside each point).
+- **decoding** (assumption (D), with A1 at reading A): the same packer with a block reading the update code running
+  the whole decoder; unmeasured here for the same reason.
 
-A DiLoCo sync has no tokens, so these kinds price its workers' pseudo-gradients nowhere (`diloco`).
+Beside ρ, never in its max (`SENSITIVITIES`, each with what it rests on, and `TARGET`): reduction and update,
+(c/|C|)·Σ steps·(b − 1)·partial/k and (c/|C|)·Σ steps·γ/k over each part whose step's token work fills b = ⌈N·w/c⌉ ≥ 2
+blocks (assumptions (R) and (U), which hold only for partitions split by tokens; the fresh-products kind covers the
+weight-gradient product dW = δ^T X, whose partial sums across token blocks are the reduction); reading B's token form
+and decoding; reading A's per-gate figure, which needs a trace; io_bound's figure under P-cell; and the target,
+te_core.formalism.published at reading B, Fit's c/(c − d) or Slowdown's token form, which a row without a trace
+publishes: a target, not a bound. A DiLoCo sync has no tokens, so no term prices its workers' pseudo-gradients
+(`diloco`).
 
 The conventions every workload shares:
 
@@ -66,14 +69,16 @@ The conventions every workload shares:
   elementwise MACs per MAC. Attention's QK^T and dO·V^T sum over a head's `HEAD_DIM` values, its other products over
   the span. a is the bf16 residual stream, 16·d, or a LoRA's rank outputs at its lowest adapted layer where narrower
   (`Adapter.a_bits`). A partial gradient and the gradient cut are 32 bits a trained value (`GRAD_BITS`), every
-  worker's in a DiLoCo step.
+  worker's in a DiLoCo step. A served sequence of p prompt and g generated tokens runs its forward at p + g − 1
+  positions and its head at the g it samples (`served`), as the island's generation rows count their MACs.
 - **Full-weight training** is calibrated on the records: u(1) is every weight as a step's ops read it, the matrices
   at the GEMMs' width and the embedding and norms in fp32 (`Shape.weight_bits`), and Δ = Δ_t is θ' in fp32, 32 N,
   each the records' exactly (Δ less its code's 5 KB header), as Δ_grad is.
 - **The decoder** d, by te_core 4.2's rule: 0 where E stores θ' itself (every full-weight workload), the harness's
   decoder for an E holding a LoRA (`Adapter.decoder_gates`), and compressed DiLoCo's replay of a phase.
-- **A1's reading** (the dial `t`, the token kind's only): u is 0 up to the free share t and x·u(1) beyond it, u_in
-  x·u(1) (`profile`: `formalism.with_tail` of `formalism.even`). Dense training's default t is `T_DENSE`, te_core's
+- **A1's reading** (the dial `t`, which only the target and reading B's decoding read; reading A's token kind reads a
+  trace): u is 0 up to the free share t and x·u(1) beyond it, u_in x·u(1) (`profile`: `formalism.with_tail` of
+  `formalism.even`). Dense training's default t is `T_DENSE`, te_core's
   literal t measured on the 45M pilot's trace; elsewhere t is the modelled share of a token's affected work that reads
   no update value (`Token.t`). t = 0, the evenly spread reading, overcharges a block (the coordinator, 07:05Z).
 """
@@ -146,37 +151,40 @@ FIRST_ADAPTED = {name: sum(x in ("q", "k", "v") for x in ms) or sum(x in ("gate"
                  for name, ms in TARGET_MATRICES.items()}
 #: the widest dimension of each LoRA target set's matrices, in d_models (a factor is it by the rank)
 TARGET_WIDEST = {name: max(max(MATRICES[x]) for x in ms) for name, ms in TARGET_MATRICES.items()}
-#: the reading the token form (`TARGET`) and the decoding kind are priced at: a model has no trace for reading A
-READING = "B"
 #: te_core.io_bound's commit, whose `bound` prices the fresh products (its branch, merged here until it lands)
 IO_BOUND = "cursor/te-io-bound-4207 at af7c437e60"
-#: io_bound's figure the fresh-products kind takes into the max (`rho`), and the one beside it
-FRESH_FIGURE, FRESH_NO_CELL = "rho", "rho_no_cell"
-#: the kinds ρ's max takes, each a lower bound on its own (coordinator 08:26Z), with what its term rests on
+#: io_bound's proved figures: the fresh-products kind's term, with no premise on the partition, and the one under
+#: P-cell beside it (`P_CELL`)
+FRESH_FIGURE, FRESH_CELL = "rho_no_cell", "rho"
+#: why reading A's kinds are unmeasured here
+NO_TRACE = ("unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), "
+            "which a model hasn't and the records here don't carry")
+#: the one bound's kinds (te_core.formalism.KINDS), each a lower bound on its own (coordinator 08:26Z and 10:21Z), with
+#: what its term rests on
 VALID = {
-    "fresh_products": f"no A1: te_core.io_bound's term ({IO_BOUND}; proved Lambda) for products by the standard "
-                      "algorithm at their widths as passed, on io_bound's premises P-chain, P-width, P-share and "
-                      "P-cell (a block holds whole GEMM gadgets; the term without P-cell, no premise on the partition, "
-                      "is `fresh.rho_no_cell`), attention's products uncounted",
-    "token": "assumption (A1, reading A): unmeasured, never inf, until te_core 4.5's packer proposes matrix-product and "
-             "weight-gradient tiles (te_core.formalism.READING_A, coordinator 09:02Z); a model has no trace",
-    "decoding": formalism.BOUND_LABELS[("decoding", READING)] + " (reading B: a model has no trace for reading A)",
+    "fresh_products": f"{formalism.RESTS_ON['fresh_products']}: te_core.io_bound's proved term without P-cell "
+                      f"({IO_BOUND}), on the model's products, which needs no premise on the partition (a block may "
+                      "split a multiplier's gates; coordinator 06:57Z, obligation 1), on io_bound's P-chain, P-width "
+                      "and P-share; attention's products uncounted",
+    "token": f"{formalism.RESTS_ON['token']}; {NO_TRACE}",
+    "decoding": f"{formalism.RESTS_ON['decoding']}; {NO_TRACE}",
 }
-#: the kinds that hold only for partitions split by tokens, beside ρ as labelled sensitivities, never the bound
-SENSITIVITIES = {kind: formalism.BOUND_LABELS[(kind, None)] for kind in formalism.SENSITIVITIES}
-#: reading B's token form beside ρ: te_core.formalism.published's ρ until `READING_A`, a target and not a bound
-TARGET = (formalism.BOUND_LABELS[("token", "B")] + "; te_core.formalism.published's rho at READING_A False: a target "
-          "(A1 at reading B), not a bound")
+#: io_bound's term under P-cell beside ρ, a sensitivity: it holds where every block holds whole GEMM gadgets
+P_CELL = ("sensitivity, premise P-cell (te_core.io_bound): every block holds whole GEMM gadgets, the cap for word-level "
+          "MACs, which a partition splitting a multiplier's gates escapes (coordinator 06:57Z, obligation 1)")
+#: what the bound publishes beside ρ, never in its max (te_core.formalism.SENSITIVITIES), and io_bound's under P-cell
+SENSITIVITIES = dict(formalism.SENSITIVITIES) | {"fresh_cell": P_CELL}
+#: reading B's token form beside ρ: te_core.formalism.published's ρ for a row without a trace, a target, not a bound
+TARGET = (f"{formalism.RESTS_ON_CELL['target']}: te_core.formalism.published at reading B, Fit's c/(c - d) where it "
+          f"holds, else Slowdown's token form ({formalism.SENSITIVITIES['token_form']})")
 FIT = "Fit's construction (te_core.formalism): every block reads Δ and its tokens' ids, and runs the decoder"
 #: what a point's ρ rests on, by its basis (`rho`): a valid kind's `VALID` entry, Fit's construction, or nothing
-RESTS_ON = VALID | {"fit": FIT, "none": "nothing: no valid kind's term exceeds 1 and Fit fails (the row's fit_fails), "
-                                        "so rho >= 1 is all the menu gives"}
-#: reading A's verdicts on the token kind (`reading_a`); its term is unmeasured under each
-VERDICTS_A = {"overclaim": "one op reads at least k update bits (op_update_bits), so te_core 4.4's default packer, "
-                           "holding whole ops, would put inf: the full-token-state overclaim (06:45Z, 08:26Z)",
-              "unmodelled": "every op reads under k: the default packer's term is finite, from a te_core 4.4 trace's "
-                            "entries, which a model hasn't",
-              "refused": "a record traced before te_core 4.4: no entries"}
+RESTS_ON = VALID | {"fit": FIT, "none": "unmeasured: Fit fails and no measured kind's term exceeds 1, so rho is null, "
+                                        "never 1 (coordinator 09:46Z): the token and decoding kinds need a trace"}
+#: reading A's verdicts on the token and decoding kinds (`reading_a`); their terms are unmeasured under each
+VERDICTS_A = {"unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), "
+                            "from a trace's entries and op log, which a model hasn't",
+              "refused": "a record whose trace's entries and op log aren't here"}
 
 
 # ---- shapes and work ---------------------------------------------------------------------------------------------------
@@ -999,64 +1007,61 @@ def products(m: Model, c: float, k: float) -> list[dict]:
     return out
 
 
-def fresh(m: Model, c: float, k: float) -> dict:
-    """The fresh-products kind at (c, k): te_core.io_bound's `bound` on `products`, its proved figures (`FRESH_FIGURE`,
-    ρ with P-cell, the kind's term; without its √s term; `FRESH_NO_CELL`, without P-cell, no premise on the partition),
-    Λ (None: void, past whole_chain's r = 1/4, the term 0), the counted share of |C|, attention's share (uncounted) and
-    the numerical Λ's ρ."""
+def fresh(m: Model, c: float, k: float) -> tuple[float, float, dict]:
+    """The fresh-products kind at (c, k): te_core.io_bound's `bound` on `products`, its two proved figures
+    (`FRESH_FIGURE`, without P-cell, the kind's term; `FRESH_CELL`, with it, the sensitivity `fresh_cell`), and Λ
+    (None: void, past whole_chain's r = 1/4, both figures 0), the counted share of |C|, attention's share (uncounted)
+    and the term at the numerical Λ."""
     me = m.measured
     b = io_bound.bound(products(m, c, k), c, k, me.gates)
     p = b["proved"]
-    return {"rho": p[FRESH_FIGURE], "rho_main": p["rho_main"], FRESH_NO_CELL: p[FRESH_NO_CELL], "lam": p["lam"],
-            "share": b["share"], "numerical": b["numerical"]["rho"],
-            "attention_share": sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / me.gates}
+    return p[FRESH_FIGURE], p[FRESH_CELL], {
+        "lam": p["lam"], "share": b["share"], "numerical": b["numerical"][FRESH_FIGURE],
+        "attention_share": sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / me.gates}
 
 
-def reading_a(m: Model, k: float) -> dict:
-    """Reading A's verdict on the token kind (module docstring; `VERDICTS_A`), whose term is unmeasured under each:
-    te_core 4.4's default packer's blocks are runs of a trace's whole ops, each reading the run's update cut once, so
-    it would put ∞ where one affected op reads k or more update bits (`Model.op_update_bits`); otherwise its finite
-    term needs a 4.4 trace's `entries`, which a model hasn't. A record's ops are unknown here (te_core refuses reading
-    A on a row traced before 4.4)."""
-    op = m.op_update_bits
-    if op is None:
-        return {"verdict": "refused"}
-    return {"verdict": "overclaim" if op >= k else "unmodelled", "op_update_bits": op}
+def reading_a(m: Model) -> str:
+    """Reading A's verdict on the token and decoding kinds (module docstring; `VERDICTS_A`), whose terms are unmeasured
+    under each: te_core 4.5's packer splits an op into matrix-product tiles that read only the coordinates they use,
+    so its term is finite however many update bits one op reads (`Model.op_update_bits`, the menu's), from a trace's
+    entries and op log, which a model hasn't. A record's ops aren't here."""
+    return "refused" if m.op_update_bits is None else "unmodelled"
 
 
 def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -> dict:
-    """ρ at (c, k), the published bound (coordinator 08:26Z): Fit's c/(c − d) where Fit holds and no valid kind's term
-    exceeds it, else max(1, the `VALID` kinds' measured terms): the fresh products' (`fresh`), the token kind's
-    (unmeasured, `reading_a`'s verdict beside it) and decoding's (te_core.formalism.bound at `READING`); `basis` names
-    the binding kind or fit or none, and `RESTS_ON[basis]` what it rests on. Beside it: the `TARGET` (reading B's
-    token form, te_core.formalism.published's ρ, or for a record `target`, page_rho's on its columns, which then also
-    gives Fit), the `SENSITIVITIES` (a part whose input is unmeasured counts 0 and `unmeasured` names the kind, as the
-    island's panel publishes them), the kinds unmeasured (an infinite term among them: never ∞), Fit's clauses that
-    fail and its thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ, and the most Δ_grad its reduction
-    block admits, k/2), and each part's token blocks b."""
+    """ρ at (c, k), the published bound (coordinator 08:26Z and 10:21Z): Fit's c/(c − d) where Fit holds and no valid
+    kind's term exceeds it, else the largest of the `VALID` kinds' measured terms where it exceeds 1 (the fresh
+    products' by io_bound without P-cell, `fresh`; the token and decoding kinds' by te_core.formalism.bound, None
+    without a trace's entries and op log, `reading_a`'s verdict beside them), else None, never 1 (coordinator 09:46Z),
+    with `bound` max(1, those terms) beside it; `basis` names fit, the binding kind or none, and `RESTS_ON[basis]` what
+    it rests on. Beside it, never in the max: the `TARGET` (te_core.formalism.published at reading B, or for a record
+    `target`, page_rho's on its columns, which then also gives Fit) and the `SENSITIVITIES` (bound's, None where
+    unmeasured, and io_bound's figure under P-cell); the kinds and sensitivities unmeasured (an infinite term among
+    them: never ∞); Fit's clauses that fail and its thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ,
+    and the most Δ_grad its reduction block admits, k/2); and each part's token blocks b."""
     me = m.measured
-    v = formalism.at(me, c, k, READING)
-    one = v["bound"]
+    v, one = formalism.at(me, c, k), formalism.bound(me, c, k)
     fit = v["fit"] if target is None else target[1] == "fit"
-    fr = fresh(m, c, k)
-    terms = {"fresh_products": fr["rho"], "token": None, "decoding": _finite(one["terms"]["decoding"])}
+    term, cell, fr = fresh(m, c, k)
+    terms = {kind: _finite(term if kind == "fresh_products" else one["terms"][kind]) for kind in formalism.KINDS}
     priced = {kind: x for kind, x in terms.items() if x is not None}
-    top = max(priced, key=priced.get)
-    bound = max(1.0, priced[top])
-    binding = top if priced[top] > 1 else None
+    top = max(priced, key=priced.get) if priced else None
+    bound = max([1.0, *priced.values()])
+    binding = top if bound > 1 else None
     conflict = fit and bound > v["rho_fit"] * (1 + 1e-9)
     by_fit = fit and not conflict
-    basis = "fit" if by_fit else binding or "none"
+    known = binding is not None or len(priced) == len(terms)
     if target is None:
-        pub = formalism.published(me, c, k)
+        pub = formalism.published(me, c, k, "B")
         target = (pub["rho"], pub["binding_kind"])
+    sens = {name: _finite(one["sensitivities"][name]) for name in formalism.SENSITIVITIES}
+    sens["fresh_cell"] = cell
     fails = sorted({clause for p in v["parts"] for clause, ok in p["fit"].items() if not ok})
-    out = {"rho": _finite(v["rho_fit"] if by_fit else bound), "basis": basis, "binding_kind": binding,
-           "bound": bound, "terms": terms, "fresh": fr,
-           "target": {"rho": _finite(target[0]), "basis": target[1]},
-           "sensitivities": {kind: one["terms"][kind] for kind in formalism.SENSITIVITIES},
-           "token_A": reading_a(m, k),
-           "unmeasured": ["token", *one["unmeasured"], *(["decoding"] if terms["decoding"] is None else [])],
+    out = {"rho": _finite(v["rho_fit"]) if by_fit else bound if known else None,
+           "basis": "fit" if by_fit else binding or "none", "binding_kind": binding, "bound": bound, "terms": terms,
+           "fresh": fr, "target": {"rho": _finite(target[0]), "basis": target[1]}, "sensitivities": sens,
+           "token_A": reading_a(m),
+           "unmeasured": [name for name in (*terms, *sens) if (terms | sens)[name] is None],
            "fit": fit, "fit_fails": fails, "rho_fit": _finite(v["rho_fit"]), "s": v["s"], "x0": v["x0"],
            "s_star": v["s_star"], "b": one["inputs"]["reduction"]["blocks"],
            "fit_delta_bits": k - c / me.w_fit * me.tau_bits, "fit_delta_grad_bits": k / 2}
@@ -1507,16 +1512,16 @@ def recorded(ck: Check, m: Model) -> Model:
 
 
 def _check(ck: Check, workload: str) -> dict:
-    """A measured record beside its model (`Check`): at each policy `rho` on the record (`recorded`, its token kind
-    by page_rho on its columns) and on the model at the check's dials, each kind's term, ρ and te_core's ρ
-    (`CHECKED`); each input's source on the record (its `status`) and on the model (`input_status` beside the
-    record)."""
+    """A measured record beside its model (`Check`): at each policy `rho` on the record (`recorded`, its target by
+    page_rho on its columns) and on the model at the check's dials, each kind's term, ρ, the target and the
+    sensitivities (`CHECKED`); each record input's source (its `status`; the model's are its point's
+    `input_status`)."""
     m = model(workload, **ck.dials)
     rec = recorded(ck, m)
     out = {"record": ck.record, "source": ck.source, "dials": m.dials, "differs": ck.differs,
            "record_inputs": ck.columns | ck.menu,
            "record_status": {key: ck.status.get(key, "measured") for key in (*ck.columns, *ck.menu)},
-           "model_inputs": columns(m), "model_status": input_status(m, (ck,)), "rho": {}}
+           "model_inputs": columns(m), "rho": {}}
     for name, (c, k) in POLICIES.items():
         sides = (("record", rho(rec, c, k, algorithm_policy.page_rho(ck.columns, c, k))), ("model", rho(m, c, k)))
         out["rho"][name] = {side: {key: x[key] for key in CHECKED} for side, x in sides}
@@ -1524,13 +1529,13 @@ def _check(ck: Check, workload: str) -> dict:
 
 
 #: what a check keeps of `rho` on its record and on the model
-CHECKED = ("rho", "basis", "binding_kind", "terms", "fresh", "target", "sensitivities", "fit_fails", "token_A",
-           "unmeasured", "b")
+CHECKED = ("rho", "basis", "binding_kind", "terms", "target", "sensitivities", "fit_fails", "token_A", "unmeasured",
+           "b")
 
 
 def reference() -> dict:
     """Every workload's reference points and checks at `POLICIES` (module docstring): `workloads.json`."""
-    out = {"id": "te_core.workloads", "te_core": VERSION, "reading": READING, "spec": NOTE, "io_bound": IO_BOUND,
+    out = {"id": "te_core.workloads", "te_core": VERSION, "reading": "A", "spec": NOTE, "io_bound": IO_BOUND,
            "policies": {name: {"c": c, "k": k, "what": POLICY_NOTES[name]} for name, (c, k) in POLICIES.items()},
            "valid": list(VALID), "sensitivities": SENSITIVITIES, "target": TARGET, "rests_on": RESTS_ON,
            "reading_a": VERDICTS_A, "menu_status": MENU_STATUS, "fresh_fields": FRESH_FIELDS,
@@ -1563,7 +1568,7 @@ def _rounded(x):
     return x
 
 
-def dumps(x, depth: int = 0, width: int = 120) -> str:
+def dumps(x, depth: int = 0, width: int = 160) -> str:
     """`x` as JSON, each float to `DIGITS` significant digits, indented by one space a level, each container that fits
     `width` on one line (`REFERENCE` stays under the repository's 256 KiB blob limit)."""
     if depth == 0:
@@ -1582,13 +1587,13 @@ def _fmt(v) -> str:
     return "unmeasured" if v is None else f"{v:.3g}"
 
 
-#: how the table writes reading A's verdict on the token kind, whose term is unmeasured under each
-VERDICTS = {"overclaim": "unmeasured (packer inf)", "unmodelled": "unmeasured", "refused": "refused"}
+#: how the table writes reading A's verdict on the token and decoding kinds, whose terms are unmeasured under each
+VERDICTS = {"unmodelled": "unmeasured", "refused": "refused"}
 #: the table's columns of a point's `rho` at a policy: (heading, how to read it)
-COLUMNS = (("fresh (P-cell)", lambda r: r["terms"]["fresh_products"]),
-           ("fresh (no cell)", lambda r: r["fresh"][FRESH_NO_CELL]),
-           ("decoding", lambda r: r["terms"]["decoding"]),
+COLUMNS = (("fresh products", lambda r: r["terms"]["fresh_products"]),
+           ("fresh, P-cell (sens.)", lambda r: r["sensitivities"]["fresh_cell"]),
            ("target (B)", lambda r: r["target"]["rho"]),
+           ("decoding, B (sens.)", lambda r: r["sensitivities"]["decoding_form"]),
            ("reduction (sens.)", lambda r: r["sensitivities"]["reduction"]),
            ("update (sens.)", lambda r: r["sensitivities"]["update"]),
            ("fresh share", lambda r: r["fresh"]["share"]))
@@ -1599,7 +1604,7 @@ def table(ref: dict) -> str:
     the sensitivities), the token kind's reading-A verdict, the Fit clauses that fail, ρ and its basis; then the
     checks', each on the record and on the model; then what each basis rests on and what each verdict means."""
     lines = []
-    heads = [h for h, _ in COLUMNS] + ["token (A)"]
+    heads = [h for h, _ in COLUMNS] + ["token, decoding (A)"]
     for q in POLICIES:
         lines += [f"{q}: {ref['policies'][q]['what']}", "",
                   "| workload | point | " + " | ".join(heads) + " | Fit fails | rho | basis |",
@@ -1607,26 +1612,26 @@ def table(ref: dict) -> str:
         for name, w in ref["workloads"].items():
             for pname, p in w["points"].items():
                 r = p["rho"][q]
-                cells = [_fmt(get(r)) for _, get in COLUMNS] + [VERDICTS[r["token_A"]["verdict"]]]
+                cells = [_fmt(get(r)) for _, get in COLUMNS] + [VERDICTS[r["token_A"]]]
                 fails = ", ".join(r["fit_fails"]) or "none"
                 lines.append(f"| {name} | {pname} | " + " | ".join(cells)
                              + f" | {fails} | {_fmt(r['rho'])} | {r['basis']} |")
         lines.append("")
     for q in POLICIES:
         lines += [f"{q}, the checks: each term on the record / on the model at its dials", "",
-                  "| workload | check | " + " | ".join(heads[:-1]) + " | rho | basis |",
-                  "|---|---|" + "---|" * (len(heads) + 1)]
+                  "| workload | check | " + " | ".join(heads[:-2]) + " | rho | basis |",
+                  "|---|---|" + "---|" * len(heads)]
         for name, w in ref["workloads"].items():
             for cname, ck in w["checks"].items():
                 rm = [ck["rho"][q][side] for side in ("record", "model")]
-                cells = [" / ".join(_fmt(get(r)) for r in rm) for _, get in COLUMNS]
+                cells = [" / ".join(_fmt(get(r)) for r in rm) for _, get in COLUMNS[:-1]]
                 lines.append(f"| {name} | {cname} | " + " | ".join(cells) + f" | {' / '.join(_fmt(r['rho']) for r in rm)}"
                              f" | {' / '.join(r['basis'] for r in rm)} |")
         lines.append("")
     lines += [f"- {basis}: {why}" for basis, why in ref["rests_on"].items()]
     lines += [f"- target (B): {ref['target']}"]
     lines += [f"- {kind} (sens.): {why}" for kind, why in ref["sensitivities"].items()]
-    lines += [f"- token (A) {VERDICTS[v]}: {why}" for v, why in ref["reading_a"].items()]
+    lines += [f"- token, decoding (A) {VERDICTS[v]}: {why}" for v, why in ref["reading_a"].items()]
     return "\n".join(lines)
 
 

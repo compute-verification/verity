@@ -11,8 +11,8 @@ testpaths = ["tests"]
 # ANDs of verity's gather circuit, which `flops.gather_selects` prices; test_gates compiles verity's Definitions, which
 # read verity.errors and verity.ml.kernels' tc; test_pilot_start runs launch.py's pilot-start refusal, which imports
 # pin.py; test_rescore reads the scorer's state through the analysis rescore loads; test_rho_vectors measures the
-# capture's fixture circuits with te_core.capture.circuit, which reads the capture's trace, structure and run modules;
-# test_io_bound captures steps of model.py with te_core.capture.
+# capture's fixture circuits with te_core.capture.circuit, which reads the capture's trace, structure and run modules,
+# and reads each circuit's op log beside it; test_io_bound captures steps of model.py with te_core.capture.
 inputs = ["benchmarks/covert_witness/prepare.py", "benchmarks/covert_witness/sealed.py",
           "benchmarks/covert_witness/data_v3.py", "benchmarks/covert_witness/model.py",
           "benchmarks/covert_witness/starts_store.py", "benchmarks/covert_witness/starts_store.json",
