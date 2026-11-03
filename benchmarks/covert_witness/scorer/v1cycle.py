@@ -157,14 +157,17 @@ def capture_version(te: Path) -> str:
 
 
 def next_capture(newest: str) -> Path | None:
-    """NEXT_WT at the integrator's newest te_core when its capture isn't TE40_WT's (its VERSION differs, and not both
-    are in TRACE_SAME), else None. Tracing reads only its git objects, so it has no files."""
+    """NEXT_WT when the integrator's newest te_core's capture isn't TE40_WT's (its VERSION differs, and not both are in
+    TRACE_SAME), else None: kept at the first commit seen with that VERSION, since a later commit of one VERSION
+    captures as it does and its cache (per te_core tree) would trace every run again. Tracing reads only its git
+    objects, so it has no files."""
     have, want = capture_version(trace40.TE40_WT), te_version(newest)
     if want == have or {want, have} <= set(TRACE_SAME):
         return None
     if not NEXT_WT.exists():
         git("worktree", "add", "-q", "--no-checkout", "--detach", str(NEXT_WT), newest, cwd=trace40.REPO)
-    git("reset", "-q", "--soft", newest, cwd=NEXT_WT)
+    if capture_version(NEXT_WT) != want:
+        git("reset", "-q", "--soft", newest, cwd=NEXT_WT)
     return NEXT_WT
 
 
@@ -414,10 +417,11 @@ def main() -> int:
         # every row traced before a new capture is refused under its te_core, so the refresh scores on the last
         # capture until the new one's traces cover it
         retrace = measured_ledger(out / "next-capture", not args.no_trace, nxt, build=False)
-        retrace |= dict(zip(("of", "covered", "traced"), covered(nxt)), te_core=te_version(newest), commit=newest)
+        retrace |= dict(zip(("of", "covered", "traced"), covered(nxt)), te_core=te_version(newest),
+                        commit=git("rev-parse", "HEAD", cwd=nxt))
         if (retrace["covered"] >= retrace["of"] and retrace["traced"] >= COVER_TRACED * retrace["of"]) \
                 or not LAST.exists():
-            git("checkout", "-q", "--detach", newest, cwd=trace40.TE40_WT)
+            git("checkout", "-q", "--detach", retrace["commit"], cwd=trace40.TE40_WT)
             nxt, retrace = None, None
         else:
             commit = json.loads(LAST.read_text())["commit"]
