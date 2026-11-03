@@ -389,13 +389,16 @@ def served_rows(rng: random.Random, t: int, calls: int, steps: int, name: str = 
 
 
 def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = None, sid: str = "s-1",
-                  leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
+                  leaf: int = rc.RECORD_LEAF, draw_leaf: int = rc.DRAW_LEAF, ks: list[int] | None = None,
+                  program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
                   served: list | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
     (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose sampling coin opened after its sample root
-    (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
+    (none for ``no-draw``) in its own sampling session (`window.DRAW_FAMILIES`, ``draw``'s ``session``, the window
+    session's `rc.Session.drawn`), which the ledger opens withheld on the sample root and which signs its record at
+    `draw_leaf`, its window session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
     the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
     None), `other`, `prefix`, `weights`, `off` and the A slot `m`, and its Commit record `commit_record`'s over their
     true tables, bound under its sample root, over `rounds` rounds (one to three dividing the calls
@@ -444,11 +447,15 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
         d["draw"]["root"] = _draw_root(d)
         return bytes.fromhex(d["draw"]["root"])
 
-    s = rc.Session(rng, ch, received, salt=None, sid=sid, leaf=leaf, draw=None if name == "no-draw" else draw_after)
-    if name == "no-draw":
-        d["draw"]["coin"] = ch.open(Wd.DRAW, 0, draw_after(s.rounds)).to_json()
-    else:
-        d["draw"]["coin"] = s.draw[0].to_json()
+    s = rc.Session(rng, ch, received, salt=None, sid=sid, leaf=leaf)
+    root = draw_after(s.rounds)
+    dch = Wd.draw_challenger(ch.commitment.epoch, rng.randbytes)
+    ds = rc.Session(rng, dch, [], salt=None, sid=rc.session_id(rng), leaf=draw_leaf,
+                    draw=None if name == "no-draw" else (lambda _: rng.randbytes(64)) if name == "draw-after-other"
+                    else lambda _: root)
+    d["draw"]["coin"] = (dch.open(Wd.DRAW, 0, root) if name == "no-draw" else ds.draw[0]).to_json()
+    d["draw"]["session"] = ds.files()
+    s.drawn, ds.on = ds, root.hex()
     return {"key": s.key(), "pins": list(rc.PINS), "main": list(rc.MAIN), "window": window, "session": s.files(), **d}, s
 
 
@@ -489,7 +496,7 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             _flip_bit(d, rng)
             d["draw"]["root"] = _draw_root(d)
         case "withdrawn":
-            _flip_bit(d, rng, to=False)
+            _flip_bit(d, rng, to=not any(r[Cr.CREDIT] for r in calls))
             d["draw"]["root"] = _draw_root(d)
         case "row-changed":
             calls[j]["tables"]["a"] = _hex(rng)
@@ -537,7 +544,7 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             pass
         case "draw-coin":
             coin = d["draw"]["coin"]
-            other = Wd.live_challenger(s.ch.commitment.epoch, len(d["rounds"]), rng.randbytes)
+            other = Wd.draw_challenger(s.ch.commitment.epoch, rng.randbytes)
             d["draw"]["coin"] = rng.choice([{**coin, "salt": rc._flip(coin["salt"])}, None, {**coin, "index": 1},
                                             {**coin, "after": rc._flip(coin["after"])},
                                             other.open(Wd.DRAW, 0, bytes.fromhex(d["draw"]["root"])).to_json()])
@@ -545,15 +552,24 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             d["key"] = rng.choice([None, {**d["key"], "public": "00"}, {**d["key"], "H": 0}])
         case "forged-ledger":
             d["ledger"] = rc.ledger_lines(rc.ledger_events(rng, d["window"], s), rc._key(1))
+        case "unwithheld":
+            s.drawn.withheld = False
+        case "draw-elsewhere":
+            s.drawn.on = _hex(rng)
+        case "draw-session":
+            files = d["draw"]["session"]
+            d["draw"]["session"] = rng.choice([None, d["session"], {**files, "log": files["log"][:-1]}])
+        case "draw-after-other":
+            pass
         case _:
             raise ValueError(name)
 
 
 CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "bit-form", "no-z", "index", "row-form",
                 "calls-form", "salt-form", "served-form", "commit-form", "rounds-form", "draw-form", "no-draw",
-                "draw-coin", "key-form", "forged-ledger", "unpinned", "branch-pin"]
-CREDIT_KEYS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",
-               "draw")
+                "draw-coin", "key-form", "forged-ledger", "unpinned", "branch-pin", "unwithheld", "draw-elsewhere",
+                "draw-session", "draw-after-other"]
+CREDIT_KEYS = ("key", "ledger", "pins", "main", "salt", "calls", "served", "commit", "rounds", "draw")
 
 
 def credit_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -1502,7 +1518,7 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
 
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
-                  lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
+                  draw_leaf: int = rc.DRAW_LEAF, lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, t: int | None = None, length: list[int] | None = None,
                   j10r: bool = False) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
@@ -1534,7 +1550,8 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     if length is None:
         length = fixed_length(rng, t, steps, aim)
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
-                         sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
+                         sid=sid, leaf=leaf, draw_leaf=draw_leaf, ks=sorted(set(k_of.values())), program=program,
+                         other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
                          off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
                          m=lay["m"], rounds=steps, t=t,
@@ -1759,6 +1776,13 @@ def _evidence(d: dict) -> dict:
     return {k: d[k] for k in Cr.PROVED_KEYS}
 
 
+def _drawn(s: rc.Session, o: dict) -> list[tuple[str, str | None, dict]]:
+    """Window session `s`'s draw session opened withheld on its draw root, pinned as the window's open `o` is, then
+    ended closed."""
+    ds = s.drawn
+    return [("open", ds.sid, {**o, "window": {"root": ds.on}, "withheld": True}), ("end", ds.sid, rc._end(ds))]
+
+
 def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None, *,
                     period_pin: str | None = None, pin_floor: int | None = None,
                     stale_window: int | None = None) -> dict:
@@ -1792,12 +1816,12 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         odd_weights = [registered_b(program, v, other) if e["value"] == v else e for e in weights]
     length = fixed_length(rng, t, min(round_choices(lay)))
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
-                          leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc,
+                          leaf=8 * i + 2, draw_leaf=8 * i + 6, lay=lay, desc=odd if i == bad else desc,
                           prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t,
                           length=length)
             for i in range(n)]
-    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, prefix=prefix, weights=weights, t=t,
-                            length=length)
+    foreign = honest_window(rng, sid="o-1", leaf=8 * n + 3, draw_leaf=8 * n + 7, lay=lay, desc=desc, prefix=prefix,
+                            weights=weights, t=t, length=length)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
     least = units_of(lay)
@@ -1807,7 +1831,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
-    committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights),
+    committed = {"cap": 8, "circuit": program, Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights),
                  Cr.LENGTH_FIELD: {"max_tokens": length, "stop": Wd.STOP_FIXED}, **(committed_too or {})}
     match name:
         case "no-circuit":
@@ -1863,14 +1887,17 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             o.update(pinned=rc.BRANCH, pins=Ch.pins_seal(pins))
         if i == stale:
             o.update(pinned=rc.MAIN[4], pins=Ch.pins_seal(pins))
-        events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end))]
-    outcomes = [{"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)}
-                for (d, s), end in zip(wins, ends)]
+        events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end)), *_drawn(s, o)]
+    outcomes = [x for (d, s), end in zip(wins, ends)
+                for x in ({"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)},
+                          {"root": s.drawn.on, "session": s.drawn.sid, "complete": True})]
     events.append(("period-close", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, "windows": outcomes,
                                           "complete": all(w["complete"] for w in outcomes)}))
     fd, fs = foreign
-    events += [("open", fs.sid, rc._open(rng, fd["window"], pub)), ("end", fs.sid, rc._end(fs))]
-    leaves = [0] + [x for i in range(n) for x in (4 * i + 1, 4 * i + 4)] + [4 * n + 1, 4 * n + 2, 4 * n + 5]
+    fo = rc._open(rng, fd["window"], pub)
+    events += [("open", fs.sid, fo), ("end", fs.sid, rc._end(fs)), *_drawn(fs, fo)]
+    leaves = ([0] + [x for i in range(n) for x in (8 * i + 1, 8 * i + 4, 8 * i + 5, 8 * i + 8)]
+              + [8 * n + 1, 8 * n + 2, 8 * n + 5, 8 * n + 6, 8 * n + 9])
     key = rc._key(1) if name == "forged-ledger" else rc._key(0)
     ledger = rc.ledger_lines(events if name != "no-close" else [e for e in events if e[0] != "period-close"], key,
                              leaves if name != "no-close" else [q for q, e in zip(leaves, events) if e[0] != "period-close"])
