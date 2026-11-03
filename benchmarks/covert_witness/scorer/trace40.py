@@ -438,7 +438,13 @@ def node(pack_tar: Path, out: Path, workers: int) -> int:
 
 def take(run: str, te: Path) -> dict:
     """A node run's out/ (fetched to ~/.research/runs/RUN) into this te_core's cache: records and traced.json."""
-    subprocess.run(["research", "fetch", run, "--all"], check=True, capture_output=True)
+    # a fetch the store fails for a moment (exit 4, 19:19Z) would send the shard's runs to be traced again
+    for wait in (0, 15, 60):
+        time.sleep(wait)
+        r = subprocess.run(["research", "fetch", run, "--all"], capture_output=True)
+        if not r.returncode:
+            break
+    r.check_returncode()
     src = HOME / ".research" / "runs" / run / "out"
     man = json.loads((src / "manifest.json").read_text())
     c = cache(te)
