@@ -48,6 +48,13 @@ theorem padCoin_extract {C : Array (Array F128)} {N k : ℕ} (hk : k < N) (hkC :
   funext i
   simp only [getElem!_pos C k hkC]
 
+theorem getElem!_map_range {f : ℕ → F128} {n i : ℕ} (hi : i < n) : ((Array.range n).map f)[i]! = f i := by
+  rw [getElem!_pos _ i (by simpa using hi)]
+  simp
+
+theorem getD_map_range {f : ℕ → F128} {n : ℕ} (hn : 0 < n) : ((Array.range n).map f).getD 0 0 = f 0 := by
+  simp [Array.getD_eq_getD_getElem?, hn]
+
 /-- **From the transcript `t` at round `k` to `t'` at round `k'`, each round taken is recorded**: `t'`'s rounds are `t`'s
 followed by rounds `rs`, `k' = k + |rs|`, and the appended round `i` has at least one coin, its coins round `k + i`'s. -/
 def RecStep (C : Array (Array F128)) (t : Transcript) (k : ℕ) (t' : Transcript) (k' : ℕ) : Prop :=

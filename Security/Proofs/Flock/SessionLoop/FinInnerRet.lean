@@ -36,7 +36,7 @@ the request's rounds, `consWhy` passes, and its inner proof, answered by the req
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-open _root_.Flock (V F128 TMW Transcript liftTM)
+open _root_.Flock (V F128 TMW Transcript liftTM Stmt SessionSpec)
 open _root_.Flock.Firewall.Finish (Tab RepIn)
 
 set_option synthInstance.maxSize 100000
@@ -90,7 +90,7 @@ theorem squeezeP_pad_ok (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : 
     change ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n t).run k) = _
     unfold _root_.Flock.Firewall.Finish.squeezeP
     dsimp only
-    rw [if_neg hn, StateT.run_bind,
+    rw [ite_eq_right hn, StateT.run_bind,
       asksPad_round_ok C _ fun cs hcs => (hC cs hcs).trans (Count.framed_count t kind hn64).symm]
     rfl⟩
 
@@ -243,7 +243,7 @@ theorem all_append {a b : Array ℕ} {B : ℕ} (ha : ∀ c ∈ a, c ≤ B) (hb :
   fun c hc => (Array.mem_append.1 hc).elim (ha c) (hb c)
 
 theorem all_replicate {n v B : ℕ} (h : v ≤ B) : ∀ c ∈ Array.replicate n v, c ≤ B :=
-  fun c hc => (Array.mem_replicate.1 hc).2 ▸ h
+  fun _ hc => (Array.mem_replicate.1 hc).2 ▸ h
 
 theorem all_lit {l : List ℕ} {B : ℕ} (h : ∀ c ∈ l, c ≤ B) : ∀ c ∈ l.toArray, c ≤ B :=
   fun c hc => h c (by simpa using hc)
@@ -340,16 +340,9 @@ theorem prefix_of_sizes {C : Array (Array F128)} {cc I : List ℕ} {P : Array �
     cc <+: C.toList.map Array.size := by
   refine List.prefix_iff_eq_take.2 (List.ext_getElem (by simp; omega) fun i h1 h2 => ?_)
   have hi : i < C.size := by omega
-  rw [List.getElem_take, List.getElem_map, Array.getElem_toList, ← getElem!_pos C i hi, hs i h1,
+  rw [List.getElem_take, List.getElem_map, Array.getElem_toList (xs := C), ← getElem!_pos C i hi, hs i h1,
     Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hP, List.getElem?_append_left h1,
     List.getElem?_eq_getElem h1, Option.getD_some]
-
-theorem getElem!_map_range {f : ℕ → F128} {n i : ℕ} (hi : i < n) : ((Array.range n).map f)[i]! = f i := by
-  rw [getElem!_pos _ i (by simpa using hi)]
-  simp
-
-theorem getD_map_range {f : ℕ → F128} {n : ℕ} (hn : 0 < n) : ((Array.range n).map f).getD 0 0 = f 0 := by
-  simp [Array.getD_eq_getD_getElem?, hn]
 
 /-! ## `finInner` returns -/
 
@@ -395,7 +388,7 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
   rw [hn] at hrun
   have hle : n ≤ q.coins.size := by
     have := hC.length_le
-    rw [List.length_map, Array.length_toList, hn] at this
+    rw [List.length_map, Array.length_toList (xs := q.coins), hn] at this
     exact this
   have hrep := repCons_asksPad q.coins q.coins (fun _ _ => rfl) t.st hmk t.sch t.tPad rep dom t.g t.cm0 _ _ ic
     q.vals t.extra t.lanePad _ _ hrun hle
@@ -409,7 +402,7 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
   refine finInner_ok_of hic hrep ?_ (innerP_pad_ok q.coins _ _ ic _ cons (by rw [h7]; norm_num) tr h0
     (fun cs hc => (h1 cs hc).trans (by rw [h7]; rfl)) h2 h3 hβ)
   have hzc := FlockSoundness.Discharge.Composed.ZerocheckMasked.replay_zerocheck t.st _ p ic.root (by omega) hrp
-  obtain ⟨-, -, hlc, -, -⟩ := FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck t.st _ p ic.root (by omega) hrp
+  obtain ⟨_, -, hlc, -, -⟩ := FlockSoundness.Discharge.Composed.Lincheck.replay_lincheck t.st _ p ic.root (by omega) hrp
   refine consWhy_none_of fun qq hq hname => ?_
   rw [hcons, hl2] at hq
   rcases Array.mem_append.1 hq with hq | hq
