@@ -11,7 +11,9 @@ node's words whole), read as row c·m + i of its round's A table, c its index am
 and i its position's row; each position's token row (its lane's of the slot's `ScanSlots_v2`, its `TokenFeed_v1`'s or the
 previous select's) is read as row i of its round's input-ids table. A position's round and row are a fixed load's (`Tables.at`):
 every request of the class's prompt length and outputs, all admitted at round 0 in slot order, so the circuit is still the
-class's alone, and a window that isn't that load is refused (`takes`).
+class's alone, and a window that isn't that load is refused (`takes`). The circuit's program takes the tables as its values
+(`interface.Registered.values`), round by round the A table then the input-ids table, so the window's registration registers
+them as its program's, the outputs of the Commit record's registration of them.
 """
 from __future__ import annotations
 
