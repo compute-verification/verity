@@ -1,24 +1,25 @@
-import Proofs.Properties.Verity.Recursive
+import Proofs.Properties.Verity.Recursive.Finders
 import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 
 /-!
 # The binding term at the deployment's sizes
 
 `Dep.delta`'s third term is the binding term `√(min(W, 2n)·E[bindBudget]/2^256)`, with
-`bindBudget = (2 + r₁ + r₂)·t' + r₁ + r₂ + dColl` and `r = Dep.runs x = N_I·(1 + Σ_s waits_s·k_s)` the extractor's
-expected reruns at a draw's statement. This module evaluates `r`, and with it the term, at the deployment's sizes
+`bindBudget = (2 + r₁ + r₂)·t' + r₁ + r₂ + N_{I,1}·nI₁ + N_{I,2}·nI₂ + dColl` (`Dep.playBudget` at each draw),
+`r = Dep.runs x = N_I·(1 + Σ_s waits_s·k_s)` the extractor's expected reruns at a draw's statement and `nI` the inner
+verifier's calls. This module evaluates `r` and `N_I`, and with them the term, at the deployment's sizes
 (`Dep.Sized`: `RecDeploy.SizesAt` at the brings the recursive record stages from). There the inner session and every
 part wait `210` times, each wait reruns `k = ⌈4·N₀/e⌉` times with `2^10 ≤ N₀ ≤ 2^23` (one table), so
 `1507 ≤ k ≤ 12343986` (`Dep.k_mem`), and at most `16` parts are staged:
 
 * `316471 ≤ r ≤ R = 2592237061 · 41475792961` (`Dep.runs_le`, `Dep.runs_ge`), and `316471² ≤ r` where a part is
-  staged: `N_I = 1 + 210·k_I` and `1 + Σ_s 210·k_s` are each between `316471` and their caps `2592237061` and
-  `41475792961`. So `2 + 2r` is between `2^{37.54}` and `2^{67.54}`.
-* At a session each of whose draws names a statement at those sizes that stages a part, `E[bindBudget]` is between
-  `(2 + 2·316471²)·t' + 2·316471² + dColl` and `(2 + 2R)·t' + 2R + dColl` (`Dep.ex_bindBudget_mem`), and `Dep.delta` is
-  between the error with each in place of `E[bindBudget]` (`Dep.delta_deployed`). The term still reads the registered
-  circuit's wire bits `W` and units `n` and the strategy's calls `t'`, which are the deployment's and the strategy's,
-  not fixed here.
+  staged: `N_I = 1 + 210·k_I` and `1 + Σ_s 210·k_s` are each between `316471` and their caps `2592237061`
+  (`Dep.NI_le`) and `41475792961`. So `2 + 2r` is between `2^{37.54}` and `2^{67.54}`.
+* At a session each of whose draws names a statement at those sizes that stages a part, with the inner verifier's
+  calls at most `n₁` there, `E[bindBudget]` is between `(2 + 2·316471²)·t' + 2·316471² + dColl` and
+  `(2 + 2R)·t' + 2R + 2·2592237061·n₁ + dColl` (`Dep.ex_bindBudget_mem`), and `Dep.delta` is between the error with
+  each in place of `E[bindBudget]` (`Dep.delta_deployed`). The term still reads the registered circuit's wire bits `W`
+  and units `n` and the strategy's calls `t'`, which are the deployment's and the strategy's, not fixed here.
 -/
 
 namespace Verity.Recursive
@@ -65,14 +66,18 @@ theorem nS_le_of_sized {x : Msg} (h : q.Sized x) : q.D.nS x ≤ 16 := by
   | exact RecDeploy.SizesAt.nS_le h
   | exact h.2.2.1
 
-/-- **The extractor's expected reruns at the deployment's sizes, from above**: `N_I = 1 + 210·k_I ≤ 2592237061` and
+/-- **The inner reruns at the deployment's sizes, from above**: `N_I = 1 + 210·k_I ≤ 2592237061`. -/
+theorem NI_le {x : Msg} (h : q.Sized x) : Claims.Recursion.NI q.D q.I x ≤ 2592237061 := by
+  obtain ⟨⟨-, hI⟩, -⟩ := q.k_mem h
+  show 1 + 210 * q.I.k (Claims.Recursion.xI q.D x) ≤ 2592237061
+  omega
+
+/-- **The extractor's expected reruns at the deployment's sizes, from above**: `N_I ≤ 2592237061` (`NI_le`) and
 `1 + Σ_s 210·k_s ≤ 41475792961` over at most `16` parts. -/
 theorem runs_le {x : Msg} (h : q.Sized x) : q.runs x ≤ 2592237061 * 41475792961 := by
-  obtain ⟨⟨-, hI⟩, hP⟩ := q.k_mem h
+  obtain ⟨-, hP⟩ := q.k_mem h
   have hn := q.nS_le_of_sized h
-  have hNI : Claims.Recursion.NI q.D q.I x ≤ 2592237061 := by
-    show 1 + 210 * q.I.k (Claims.Recursion.xI q.D x) ≤ 2592237061
-    omega
+  have hNI := q.NI_le h
   have hsum : ∑ j : Fin (q.D.nS x), (q.D.nums x j).waits * (q.D.nums x j).k ≤ q.D.nS x * (210 * 12343986) :=
     sum_fin_le_nat _ fun j => by
       show 210 * (q.D.nums x j).k ≤ 210 * 12343986
@@ -110,49 +115,57 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {
   {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
 
 /-- **The binding budget's average between two rerun counts**: where every draw's statement has between `r₀` and `r₁`
-expected reruns, `E[bindBudget]` is between `(2 + 2r₀)·t' + 2r₀ + dColl` and `(2 + 2r₁)·t' + 2r₁ + dColl`. -/
-theorem ex_bindBudget_mem (S : SessionIn V q k θ F c σ) (dColl r₀ r₁ : ℕ)
-    (h : ∀ ξ, r₀ ≤ q.runs (S.x ξ) ∧ q.runs (S.x ξ) ≤ r₁) :
+expected reruns and its inner views at most `m₁` expected calls (`N_I · nI ≤ m₁`), `E[bindBudget]` is between
+`(2 + 2r₀)·t' + 2r₀ + dColl` and `(2 + 2r₁)·t' + 2r₁ + 2m₁ + dColl`. -/
+theorem ex_bindBudget_mem (S : SessionIn V q k θ F c σ) (nI : Msg → ℕ) (dColl r₀ r₁ m₁ : ℕ)
+    (h : ∀ ξ, r₀ ≤ q.runs (S.x ξ) ∧ q.runs (S.x ξ) ≤ r₁)
+    (hm : ∀ ξ, Claims.Recursion.NI q.D q.I (S.x ξ) * nI (S.x ξ) ≤ m₁) :
     (((2 + 2 * r₀) * q.tCost V S + 2 * r₀ + dColl : ℕ) : ℝ) ≤
-        Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) ∧
-      Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) ≤
-        (((2 + 2 * r₁) * q.tCost V S + 2 * r₁ + dColl : ℕ) : ℝ) := by
+        Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S nI dColl p.1 p.2 : ℝ)) ∧
+      Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S nI dColl p.1 p.2 : ℝ)) ≤
+        (((2 + 2 * r₁) * q.tCost V S + 2 * r₁ + 2 * m₁ + dColl : ℕ) : ℝ) := by
+  have hid : ∀ r : ℕ, (2 + 2 * r) * q.tCost V S = (1 + r) * q.tCost V S + (1 + r) * q.tCost V S := fun r => by ring
   constructor
   · rw [← Claims.Ex_const (α := S.Ξ × S.Ξ) (((2 + 2 * r₀) * q.tCost V S + 2 * r₀ + dColl : ℕ) : ℝ)]
     refine Claims.Ex_mono fun p => Nat.cast_le.2 ?_
     obtain ⟨h₁, -⟩ := h p.1
     obtain ⟨h₂, -⟩ := h p.2
-    have hm : (2 + 2 * r₀) * q.tCost V S ≤ (2 + q.runs (S.x p.1) + q.runs (S.x p.2)) * q.tCost V S :=
-      Nat.mul_le_mul_right _ (by omega)
-    unfold bindBudget
+    have hm₁ : (1 + r₀) * q.tCost V S ≤ (1 + q.runs (S.x p.1)) * q.tCost V S := Nat.mul_le_mul_right _ (by omega)
+    have hm₂ : (1 + r₀) * q.tCost V S ≤ (1 + q.runs (S.x p.2)) * q.tCost V S := Nat.mul_le_mul_right _ (by omega)
+    have h2 := hid r₀
+    unfold bindBudget playBudget
     omega
-  · rw [← Claims.Ex_const (α := S.Ξ × S.Ξ) (((2 + 2 * r₁) * q.tCost V S + 2 * r₁ + dColl : ℕ) : ℝ)]
+  · rw [← Claims.Ex_const (α := S.Ξ × S.Ξ) (((2 + 2 * r₁) * q.tCost V S + 2 * r₁ + 2 * m₁ + dColl : ℕ) : ℝ)]
     refine Claims.Ex_mono fun p => Nat.cast_le.2 ?_
     obtain ⟨-, h₁⟩ := h p.1
     obtain ⟨-, h₂⟩ := h p.2
-    have hm : (2 + q.runs (S.x p.1) + q.runs (S.x p.2)) * q.tCost V S ≤ (2 + 2 * r₁) * q.tCost V S :=
-      Nat.mul_le_mul_right _ (by omega)
-    unfold bindBudget
+    have hm₁ : (1 + q.runs (S.x p.1)) * q.tCost V S ≤ (1 + r₁) * q.tCost V S := Nat.mul_le_mul_right _ (by omega)
+    have hm₂ : (1 + q.runs (S.x p.2)) * q.tCost V S ≤ (1 + r₁) * q.tCost V S := Nat.mul_le_mul_right _ (by omega)
+    have hn₁ := hm p.1
+    have hn₂ := hm p.2
+    have h2 := hid r₁
+    unfold bindBudget playBudget
     omega
 
 /-- **`Dep.delta` at the deployment's sizes**: at a session each of whose draws names a statement at the deployment's
-sizes that stages a part, the error's number is between `δs + t'·2^{-λ} + √(min(W, 2n)·B₀/2^256)` and
-`δs + t'·2^{-λ} + √(min(W, 2n)·B₁/2^256)`, with `B₀ = (2 + 2·316471²)·t' + 2·316471² + dColl` and
-`B₁ = (2 + 2R)·t' + 2R + dColl` at `R = 2592237061 · 41475792961`: `2 + 2·316471²` is about `2^{37.54}` and `2 + 2R`
-about `2^{67.54}`. -/
-theorem delta_deployed (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) (hS : ∀ ξ, q.Sized (S.x ξ))
-    (hparts : ∀ ξ, 0 < q.D.nS (S.x ξ)) :
+sizes that stages a part, with the inner verifier's calls at most `n₁` there, the error's number is between
+`δs + t'·2^{-λ} + √(min(W, 2n)·B₀/2^256)` and `δs + t'·2^{-λ} + √(min(W, 2n)·B₁/2^256)`, with
+`B₀ = (2 + 2·316471²)·t' + 2·316471² + dColl` and `B₁ = (2 + 2R)·t' + 2R + 2·2592237061·n₁ + dColl` at
+`R = 2592237061 · 41475792961`: `2 + 2·316471²` is about `2^{37.54}` and `2 + 2R` about `2^{67.54}`. -/
+theorem delta_deployed (S : SessionIn V q k θ F c σ) (nI : Msg → ℕ) (n₁ dColl : ℕ) (δs lam : ℝ)
+    (hS : ∀ ξ, q.Sized (S.x ξ)) (hparts : ∀ ξ, 0 < q.D.nS (S.x ξ)) (hnI : ∀ ξ, nI (S.x ξ) ≤ n₁) :
     ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
         Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
           ((((2 + 2 * 316471 ^ 2) * q.tCost V S + 2 * 316471 ^ 2 + dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ)))) ≤
-        q.delta V S dColl δs lam ∧
-      q.delta V S dColl δs lam ≤
+        q.delta V S nI dColl δs lam ∧
+      q.delta V S nI dColl δs lam ≤
         ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
           Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
             ((((2 + 2 * (2592237061 * 41475792961)) * q.tCost V S + 2 * (2592237061 * 41475792961) +
-              dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ)))) := by
-  obtain ⟨h₀, h₁⟩ := q.ex_bindBudget_mem V S dColl (316471 ^ 2) (2592237061 * 41475792961)
-    fun ξ => ⟨(q.runs_ge (hS ξ)).2 (hparts ξ), q.runs_le (hS ξ)⟩
+              2 * (2592237061 * n₁) + dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ)))) := by
+  obtain ⟨h₀, h₁⟩ := q.ex_bindBudget_mem V S nI dColl (316471 ^ 2) (2592237061 * 41475792961) (2592237061 * n₁)
+    (fun ξ => ⟨(q.runs_ge (hS ξ)).2 (hparts ξ), q.runs_le (hS ξ)⟩)
+    fun ξ => Nat.mul_le_mul (q.NI_le (hS ξ)) (hnI ξ)
   have h2 : (0 : ℝ) ≤ 2 ^ (256 : ℝ) := by positivity
   have hm : (0 : ℝ) ≤ min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) :=
     le_min (Nat.cast_nonneg _) (by positivity)
