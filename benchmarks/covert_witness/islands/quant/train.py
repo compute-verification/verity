@@ -1,5 +1,6 @@
 """Island `quant` (direction, not a class): how far an update compresses without losing the loss it bought. It runs in any
-class (`--klass`; islands/<class>/train.py on this branch is a link here) and trains an update, then encodes it in low-bit
+class (`--klass`, on a v2.x pin; islands/<class>/train.py on this branch is a link here; v3 has no classes, and
+`--max-e-bytes` caps a sparse code instead) and trains an update, then encodes it in low-bit
 CWQUAN1 (`qformat.py`: k-bit codes, f16 codebooks and per-group scales, entropy coded).
 
 Modes:
@@ -10,7 +11,8 @@ Modes:
   by the mean |V| of a tensor, row or group) of a latent delta V that only the optimizer touches, through a
   straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code. `--qat sparse`
   is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero; a
-  sparse submission over its class's E cap is re-cut from its latent at a smaller share until it fits (`cut_to_keep`).
+  sparse submission over its E cap (`--max-e-bytes`, else its class's) is re-cut from its latent at a smaller share
+  until it fits (`cut_to_keep`).
   `--qat fp` trains the weights unquantized, as ptq does;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
@@ -232,6 +234,11 @@ def delta_grad(adam: int, muon: int, latent: int) -> dict:
     bits = 32 * (adam + muon) + 64 * adam + 32 * muon
     return {"trainable": adam + muon, "grad_bits": 32 * (adam + muon), "adam_bits": 64 * adam, "muon_bits": 32 * muon,
             "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8}
+
+
+def submit(a, *args, **kw) -> None:
+    """prepare.submit, with the class on a pin that has classes (v2.x) and without it on v3."""
+    prepare.submit(Path(a.out), a.start, *([a.klass] if getattr(prepare, "CLASSES", None) else []), *args, **kw)
 
 
 QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)")
@@ -485,14 +492,17 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
              "process_seconds": round(time.perf_counter() - t_start, 1),
              "E_format_note": "q_bytes is the arm's CWQUAN1 size (islands/quant/qformat.py; the bf16 lora size for qbits "
                               "0), checked to rebuild the submitted model bit for bit; bits_per_param is per trained entry"}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, best["trainable"], steps,
-                   changed=best["targets"] + best["norms"], notes=notes)
+    submit(a, blob, model, best["trainable"], steps, changed=best["targets"] + best["norms"], notes=notes)
     return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--klass", required=True, choices=sorted(prepare.CLASSES))
+    classes = getattr(prepare, "CLASSES", None)
+    ap.add_argument("--klass", required=bool(classes), choices=sorted(classes) if classes else None,
+                    help="the class, on a pin that has them (v2.x); v3 has none")
+    ap.add_argument("--max-e-bytes", type=int, default=None,
+                    help="qat sparse: the submitted E's cap (default: the class's, if any)")
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mode", choices=("ptq", "qat", "qlora"), default="ptq")
@@ -674,7 +684,7 @@ def main() -> int:
                               "each 5% checkpoint scores the fp model (source output) and, on the same weights, the "
                               "bucket's variant (source encode; `buckets`). qat: one note per arm, the submission the "
                               "arm with the least final training loss"}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=names, notes=notes)
+    submit(a, blob, model, trainable, steps, changed=names, notes=notes)
     return 0
 
 
@@ -717,7 +727,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         qblob, xz1_bytes = code_blob(a, qarrays, r["rest"], theta)
         # a sparse submission over its class's cap is cut from its latent, its kept share scaled by cap / |E| (at least 3%
         # smaller) at a time
-        cap, keep = prepare.CLASSES[a.klass]["max_e_bytes"], r["x"].qat_keep
+        cap, keep = a.max_e_bytes or (prepare.CLASSES[a.klass]["max_e_bytes"] if a.klass else None), r["x"].qat_keep
         while r is best and a.emit == "quan" and cap and r["latent"] and len(qblob) > cap and keep > 1e-5:
             keep *= min(0.97, cap / len(qblob))
             qarrays = {n: qat_quant(v.to(dev), "sparse", r["x"].qat_group, r["x"].qat_mult, keep)
