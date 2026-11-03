@@ -1,7 +1,7 @@
 """The night's v2.3 records scored by the training formalism v2, for the scorer, in one command.
 
     python -m te_core.rescore --out DIR [--root LEDGER] [--pin COMMIT ...] [--facts FACTS.json]
-                              [--quantities measured|analysis|stubs] [--tail literal|frozen]
+                              [--quantities measured|analysis|stubs] [--tail literal|frozen] [--charge-context]
                               [--analysis analysis/rescore_v1.py --scorer ~/.research/te-scorer]
                               [--policy reference] [--drop 0.01] [--g G --from-scratch F.json] [--source TEXT]
 
@@ -27,6 +27,9 @@ step (te_core.capture.circuit through `annotate.with_structures`: σ, the affect
 u_in, u, t, Δ_grad; Δ stays 8 |E|); a valid row with none is left out, listed in `frontier.json` as `not_measured`.
 `--tail frozen` reads t as the trace's contiguous frozen tail above the forward's last update read
 (`frozen_tail_share`) instead of every op that reads no update value, the comparison with the analysis's t.
+`--charge-context` scores with te_core.formalism's context charge, a sensitivity for A1: every earlier token's
+affected keys and values a block reads, at each layer it works on for a token it doesn't compute from its inputs
+(`with_context`, from each run's changed tensors in `--facts`, which it requires; off by default).
 
 `--quantities analysis` attaches the per-record quantities of covert_witness's `analysis/rescore_v1.py` instead
 (`--analysis`; it reads the scorer's directory, `--scorer`, and the same ledger), joined to a ledger row by the
@@ -82,6 +85,8 @@ TAIL = {"u": f"assumption (A1): frozen layers above the run's highest update, th
 FROZEN = {"tail_share": "measured (trace): the contiguous frozen tail, the token's affected work between the forward's "
                         "last update read and the backward's first (--tail frozen)",
           "u": "assumption (A1), from the trace: 0 up to the contiguous frozen tail's share, then u_in (--tail frozen)"}
+UNCHARGED = ("uncharged (--charge-context): the run's changed tensors are not in --facts, so v2's s* (the choice "
+             "favourable to the block)")
 COMPARED = ("sigma", "affected_share", "w", "tokens", "gates", "tau_bits", "a_bits", "tail_share", "u1_bits",
             "delta_bits", "delta_grad_bits")
 TRACE_FIELDS = ("sigma", "affected_share", "affected_all_share", "token_factor", "frozen_tail_share", "a_x",
@@ -140,6 +145,21 @@ def frozen_tail(rows: list[dict]) -> list[dict]:
             u = formalism.with_tail(tuple(map(tuple, f["u_in"])), t)
             r = r | {"formalism": f | {"tail_share": t, "u": [list(p) for p in u],
                                        "labels": f.get("labels", {}) | FROZEN}}
+        out.append(r)
+    return out
+
+
+def with_context(rows: list[dict], shapes: dict) -> list[dict]:
+    """The rows with the context charge's quantities in their formalism block (`--charge-context`,
+    te_core.formalism.context), from each row's changed tensors (`--facts`) and its start's shape. A row whose run has
+    no changed tensors in the facts stays uncharged, labelled (`UNCHARGED`): the choice favourable to the block."""
+    out = []
+    for r in rows:
+        shape, f = shapes.get(r["start"]), r.get("formalism") or {}
+        if shape is not None and r.get("changed") is not None:
+            r = r | {"formalism": f | {"context": formalism.context(r["changed"], shape)}}
+        elif shape is not None:
+            r = r | {"formalism": f | {"labels": f.get("labels", {}) | {"context": UNCHARGED}}}
         out.append(r)
     return out
 
@@ -267,6 +287,9 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
     ap.add_argument("--quantities", choices=(MEASURED, ANALYSED, STUBS), default=MEASURED)
     ap.add_argument("--tail", choices=("literal", "frozen"), default="literal",
                     help="measured t: every op reading no update value, or the contiguous frozen tail")
+    ap.add_argument("--charge-context", action="store_true",
+                    help="charge earlier tokens' affected keys and values (te_core.formalism's context charge; "
+                         "reads each run's changed tensors from --facts)")
     ap.add_argument("--analysis", type=Path, default=ANALYSIS, help="the per-record quantities (rescore_v1.py)")
     ap.add_argument("--scorer", type=Path, default=SCORER, help="the scorer's directory, which the analysis reads")
     ap.add_argument("--stubs", action="store_true", help="--quantities stubs")
@@ -301,8 +324,13 @@ def load(a) -> dict:
         how = str(a.analysis) if mode == ANALYSED else \
             "stubs: " + ("--stubs" if a.stubs or a.quantities == STUBS else f"no {a.analysis} in this checkout")
         word = "rescore_v1" if mode == ANALYSED else "stubs"
+    shapes = policy.starts(a.manifest)
+    if a.charge_context:
+        if not a.facts:
+            raise SystemExit("--charge-context reads each run's changed tensors from --facts")
+        rows, how, word = with_context(rows, shapes), f"{how}; context charged", f"{word}, context charged"
     return {"rows": rows, "blocks": blocks, "mode": mode, "pin": tuple(a.pin) if a.pin else frontier.pinned(),
-            "shapes": policy.starts(a.manifest), "source": source, "keep": keep, "use": mode != STUBS, "how": how,
+            "shapes": shapes, "source": source, "keep": keep, "use": mode != STUBS, "how": how,
             "quantities": word, "left": {MEASURED: "not_measured", ANALYSED: "not_analysed"}.get(mode)}
 
 
@@ -333,6 +361,7 @@ def main(argv=None) -> int:
                                 "family": r.get("family"), "formalism": r.get("formalism")}, default=str) + "\n")
     if mode == MEASURED and blocks:
         arows, asource = attach(rows, blocks)
+        arows = with_context(arows, shapes) if a.charge_context else arows
         rep_a = frontier.formalism_report(arows, pin, shapes, lambda r: asource[r["id"]] == ANALYSED)
         c = compare(kept, [r for r in arows if asource[r["id"]] == ANALYSED], shapes, rep, rep_a, a.policy)
         (a.out / "compare.json").write_text(json.dumps(c, indent=1, default=str) + "\n")

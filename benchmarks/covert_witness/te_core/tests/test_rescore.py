@@ -140,6 +140,28 @@ def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
     assert not (out / "analysis-gates.json").exists()
 
 
+def test_charge_context_charges_each_run_its_facts_place(tmp_path, monkeypatch):
+    """--charge-context: r0's run changes the embedding, so its K/V are affected from layer 0 and, with a = d_model·16
+    at the reference policy's k, ρ is infinite there; r1's run has no changed tensors in the facts, so it keeps v2's ρ,
+    labelled. The default scores the same rows uncharged; the option without --facts is refused."""
+    facts = tmp_path / "facts.json"
+    facts.write_text(json.dumps({"run0": {"changed": ["embed"]}}))
+    base, _ = run(tmp_path, monkeypatch, "--facts", str(facts))
+    plain = [json.loads(line) for line in (base / "formalism.jsonl").read_text().splitlines()]
+    assert all("context" not in k["formalism"] for k in plain)
+    out, _ = run(tmp_path, monkeypatch, "--facts", str(facts), "--charge-context")
+    assert json.loads((out / "frontier.json").read_text())["quantities"] == "measured (trace; t literal); context charged"
+    k0, k1 = (json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines())
+    assert k0["formalism"]["context"] == formalism.context(["embed"], SHAPE)
+    assert "context" not in k1["formalism"] and k1["formalism"]["labels"]["context"] == rescore.UNCHARGED
+    c, k = policy.cells(SHAPE)["reference"]
+    m0, m1 = formalism.measure(k0, SHAPE), formalism.measure(k1, SHAPE)
+    assert m0.labels["context"] == formalism.CONTEXT and formalism.at(m0, c, k)["rho"] == float("inf")
+    assert formalism.at(m1, c, k)["rho"] == formalism.at(formalism.measure(plain[1], SHAPE), c, k)["rho"]
+    with pytest.raises(SystemExit, match="--facts"):
+        run(tmp_path, monkeypatch, "--charge-context")
+
+
 @pytest.mark.parametrize("tail", ["literal", "frozen"])
 def test_measured_rows_are_scored_beside_the_analysis(tmp_path, monkeypatch, tail):
     """The default scores r0 and r1, the rows measured on a traced step, and leaves out r2 and r3; τ is the traced
