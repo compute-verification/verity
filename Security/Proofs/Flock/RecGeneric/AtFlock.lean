@@ -163,7 +163,7 @@ variable {Col' T' : Type} [DecidableEq Col']
 messages the witnesses give (`RecAt.msgs`), the calls a finder searches at a rerun (`Deploy.callsAt`) and the compiled
 verifier's own at a run's staged V\* statements (`setupCalls`, as `Claims.Recursion.drawCalls` reads them), and the errors
 `κ_O = Σ_s κ_s`, `γ_O = (Σ_s √(γ_s·k(x)))²`. -/
-noncomputable def Comp.ofRec (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Inner Coin W)
+noncomputable def Comp.ofRec (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Claims.Recursion.Inner Coin W)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') : Comp Coin where
   V := (D.record IV).V
   xI := Claims.Recursion.xI (D.record IV)
@@ -181,8 +181,8 @@ noncomputable def Comp.ofRec (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I
 /-- **`E_O` is knowledge sound at every statement from each session's**: `Claims.Recursion.OuterKS` (each session's
 `E^rep` fails with probability at most `κ_s + √(γ_s·k(x)·Pr[B])`) gives `Comp.OuterKSAt` at `Comp.ofRec`, by
 `PrBad_EO_le` and `Σ_s √(γ_s·k·p) = √((Σ_s √(γ_s·k))²·p)`. -/
-def OuterKSOfSessions [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Inner Coin W)
-    (DO : Claims.Flock.Deploy Coin Col' T') : Prop :=
+def OuterKSOfSessions [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type}
+    (I : Claims.Recursion.Inner Coin W) (DO : Claims.Flock.Deploy Coin Col' T') : Prop :=
   OuterKS H (D.record IV) I DO → ∀ decO, decOK DO decO → ∀ x, (Comp.ofRec D IV I DO decO).OuterKSAt H x
 
 /-- **The instance at the bound record**: `Comp.ofRec` at `IVStar`, with `E_O` skipping the bound record's inner
