@@ -142,13 +142,16 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         one = formalism.published(m, v["c"], v["k"], "A")
         assert formalism.published(m, v["c"], v["k"])["reading"] == ("A" if formalism.READING_A else "B")
         assert one["reading"] == "A" and not v["fit"]
-        assert not differences(rho_vectors.finite([one["rho"], one["terms"], one["sensitivities"]]),
-                               [v["rho"], v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
-        assert one["binding_kind"] == v["binding"] and one["binding_kind"] in formalism.KINDS
-        assert one["rests_on"] == formalism.RESTS_ON_CELL[one["binding_kind"]]
-        assert case == "adapter-live" or one["binding_kind"] == "token"
+        assert not differences(rho_vectors.finite([one["terms"], one["sensitivities"]]),
+                               [v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
+        assert one["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if one["rho"] is None else one["binding_kind"]]
+        if case != "adapter-live":
+            assert (one["rho"], one["binding_kind"]) == (num(v["rho"]), "token") == (num(v["rho"]), v["binding"])
+            assert one["partial"] and one["why"] is None
     live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
-    assert live["rho"] == 1.0 and num(live["terms"][live["binding_kind"]]) <= 1
+    assert (live["rho"], live["binding_kind"], live["partial"]) == (None, "unmeasured", False)
+    assert live["why"] == "the measured kinds give at most 1; fresh products unmeasured"
+    assert max(num(t) for t in live["terms"].values() if t is not None) <= 1
     assert live["sensitivities"]["reduction"] > 9
     for gone in ("entries", "ops"):
         m = formalism.from_json(built["measured"]["dense"] | {gone: None})
@@ -157,7 +160,8 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         assert b["terms"] == {"token_form": at["slowdown"]} and list(b["sensitivities"]) == ["reduction", "update"]
         assert b["rests_on"] == formalism.RESTS_ON_CELL["target"]
         a = formalism.published(m, v["c"], v["k"], "A")
-        assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "none", "unmeasured")
+        assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "unmeasured", "unmeasured")
+        assert a["why"] == "no kind is measured"
         assert set(a["terms"]) == set(formalism.KINDS) and all(t is None for t in a["terms"].values())
     m = formalism.from_json(built["measured"]["dense"])
     assert formalism.published(m) == formalism.published(m, *policy.CONSOLE)
