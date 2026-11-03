@@ -131,7 +131,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#6383 rewrites its docstrings and the rows "
                                                                            "form's refusals",
-    "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/Definitions/Nci/Capability/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
