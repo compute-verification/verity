@@ -50,6 +50,10 @@ test depends on another test module only by importing or naming it, never throug
 nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts. `suites.py --explain
 SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same for a Lean package.
 
+A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add
+an allowance to `tools/verity/check/policy.toml` (`suite NAME::TEST`, the owner's handle, a UTC expiry and a reason) in a
+reviewed change: drive and the quick tier take that failure as not red until it expires, then ring its owner.
+
 ## Where a test goes
 
 - **In the tests/ of the package it tests**, mirroring its modules (`verity/ml/circuits/tests/` tests

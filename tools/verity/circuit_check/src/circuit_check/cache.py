@@ -64,7 +64,7 @@ the checker's own: those, like the checker code that ran, are held by the checke
 own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
 comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
 peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
-`cli.heavy`), the known failures (`KNOWN`, which decide only the run's summary) and `SHARD` (which targets a shard checks and how
+`cli.heavy`) and `SHARD` (which targets a shard checks and how
 shards' records are joined).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment; the task list's, whose build finds the sidecars
@@ -125,6 +125,10 @@ builds no Definition.
 
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
+
+A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
+the tree whose bytes, listing or kind `lookup` takes of them, and, for reads of what the registries registered, every module
+the registries import (`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -158,9 +162,6 @@ TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
 #: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
 #: which, and a target whose process the OOM killer took is never stored
 HEAVY = _HERE / "heavy.json"
-#: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
-#: (`checks.summarize`, over every target's stored report, recomputed each run) and no check imports them
-KNOWN = (_HERE / "known.py", _HERE / "known")
 #: which targets a ``--shard`` checks and how ``--combine`` joins the shards' records (`circuit_check.shard`): no input of any
 #: target, since no check imports it
 SHARD = _HERE / "shard.py"
@@ -1044,6 +1045,9 @@ def _parsed_bytes(data: bytes) -> tuple[str, list, bool, bool]:
 
 
 _ROOTS: dict[tuple, list[str]] = {}
+#: while `declared` collects: (each path whose kind `_resolve` and `_sidecar` asked, each file `_resolve` resolved to), relative
+#: to the root
+_PROBED: list[tuple[set[str], set[str]]] = []
 
 
 def _roots(root: Path) -> list[str]:
@@ -1082,6 +1086,10 @@ def _resolve(root: Path, name: str) -> Path | None:
     v = visible(root)
     isfile = (lambda r: r in v[0] and (root / r).is_file()) if v is not None else (lambda r: (root / r).is_file())
     isdir = (lambda r: r in v[1] and (root / r).is_dir()) if v is not None else (lambda r: (root / r).is_dir())
+    if _PROBED:
+        asked, isfile0, isdir0 = _PROBED[-1][0], isfile, isdir
+        isfile = lambda r: asked.add(r) or isfile0(r)  # noqa: E731
+        isdir = lambda r: asked.add(r) or isdir0(r)  # noqa: E731
     paths, found, top = _roots(root), None, True
     for part in name.split("."):
         if not part.isidentifier():
@@ -1104,7 +1112,11 @@ def _resolve(root: Path, name: str) -> Path | None:
                 return None
             nxt = portions
         paths, top = nxt, False
-    return root / found if found is not None and (root / found).is_file() else None
+    if found is None or not (root / found).is_file():
+        return None
+    if _PROBED:
+        _PROBED[-1][1].add(found)
+    return root / found
 
 
 def _relative(pkg: str, level: int, module: str) -> str | None:
@@ -1492,6 +1504,8 @@ def _sidecar(root: Path, module: str, ext: str) -> str | None:
     if f.name != "__init__.py":
         return os.path.relpath(f.with_name(f"{f.stem}{SUFFIX}{ext}"), root)
     inside, beside = f.parent / f"__init__{SUFFIX}{ext}", f.parent.with_name(f"{f.parent.name}{SUFFIX}{ext}")
+    if _PROBED:
+        _PROBED[-1][0].update(os.path.relpath(p, root) for p in (inside, beside))
     return os.path.relpath(beside if beside.is_file() and not inside.is_file() else inside, root)
 
 
@@ -1987,13 +2001,13 @@ def _code(p: Path) -> bytes:
 
 def version() -> str:
     """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
-    ``pins/`` (each target holds its own parts of them), `HEAVY`, `KNOWN` and `SHARD` (no target's input)."""
+    ``pins/`` (each target holds its own parts of them), `HEAVY` and `SHARD` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
-            if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0], SHARD)
-                    and PINS not in p.parents and KNOWN[1] not in p.parents):
+            if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, SHARD)
+                    and PINS not in p.parents):
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
     finally:
         _INTERNAL.pop()
@@ -2354,21 +2368,8 @@ def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, 
     found only where its modules moved (`_moved`) is stored again with its reads renamed to where they are, digested now (what
     a run would record), so that a later edit of a moved module is told from a move; not with ``moved`` false, which `_moved`
     needs for the modules this process imported (`_loaded`)."""
-    d = _dir(cache, k)
-    if not d.is_dir():
-        return None
-    for p in sorted(d.glob("*.json")):
-        _INTERNAL.append(True)
-        try:
-            e = json.loads(p.read_text())
-        except (OSError, ValueError):
-            continue
-        finally:
-            _INTERNAL.pop()
-        if e.get("key") != k:
-            continue
+    for e, p, now in _entries(cache, k, root):
         rec = e["reads"]
-        now = _digests(root, {k: list(v) for k, v in rec.items()})
         if now == rec:
             return e["report"], p.stem
         if not moved:
@@ -2389,6 +2390,33 @@ def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, 
     return None
 
 
+def _entries(cache: Path, k: dict, root: Path) -> Iterator[tuple[dict, Path, dict]]:
+    """Each entry stored under key ``k``, with its file and its recorded reads as they are now."""
+    d = _dir(cache, k)
+    _INTERNAL.append(True)
+    try:
+        found = sorted(d.glob("*.json")) if d.is_dir() else []
+    finally:
+        _INTERNAL.pop()
+    for p in found:
+        _INTERNAL.append(True)
+        try:
+            e = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        finally:
+            _INTERNAL.pop()
+        if e.get("key") == k:
+            yield e, p, _digests(root, {k: list(v) for k, v in e["reads"].items()})
+
+
+def recorded(cache: Path, k: dict, root: Path) -> dict[str, list[str]] | None:
+    """What the entry with key ``k`` that `lookup` finds where its modules are (no move) recorded reading, by kind; None when
+    there is none."""
+    return next(({kind: list(v) for kind, v in e["reads"].items()} for e, _p, now in _entries(cache, k, root)
+                 if now == e["reads"]), None)
+
+
 def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | None]]:
     """The reads as the process that just ran a check sees them: digested now, not remembered from earlier in the run."""
     return _digests(root, got, fresh=True)
@@ -2402,6 +2430,137 @@ def seen_all(root: Path, gots: list[dict[str, list[str]]]) -> list[dict[str, dic
     every = {k: sorted({r for g in gots for r in g.get(k, ())}) for k in {"files", "dirs", *(k for g in gots for k in g)}}
     now = seen(root, every)
     return [{k: {r: v[r] for r in g.get(k, ())} for k, v in now.items()} for g in gots]
+
+
+# --- reads as a task's declared inputs ----------------------------------------------------------------------------------------
+
+#: what a declared read set (`declared`) holds of a path, by kind: its bytes, its listing (each name git has in it), its kind (a
+#: file, a directory or absent)
+DECLARED = ("files", "listed", "probes")
+#: the reads that take what the registries registered (`_kernels_now`, `_registration`)
+_REGISTRY = ("kernels", "registered", "registrars")
+_DECLARED: dict[tuple[str, str, str], tuple[frozenset[str], frozenset[str], frozenset[str]]] = {}
+
+
+def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
+    """Recorded reads ``reads`` (entries', `attributed`) as a task keyed on its declared inputs declares them: each path of the
+    tree whose bytes (``files``), listing (``listed``) or kind (``probes``) a read's digest here takes (`_digests_of`), and
+    ``registry``, whether they read what the registries registered, which the modules the registries import decide
+    (`registry_inputs`).  What `lookup` takes of them, through a move too (`_moved`): a module held, its file's bytes, and each
+    path the search for it and for its import sites' modules asked about (`_resolve`), those modules by where they resolve
+    (each held by its content only where a read holds it itself); a module whose source `inspect` looked for (``present``),
+    where it resolves, and a sidecar's, whether it is where its module is now (`_sidecar`), not its bytes (torch's import asks
+    for the source of every module loaded, each binding file among them); a sidecar's unit or pin, or one imported by name, its
+    file where its module is now; an enumerated package, its listing and which of its directories are packages.  The installed
+    distributions are the environment's; a library git does not have (``untracked``) no task declares."""
+    files: set[str] = set()
+    listed: set[str] = set()
+    probes: set[str] = set()
+    for kind, rs in reads.items():
+        for r in rs:
+            if (got := _DECLARED.get((str(root), kind, r))) is None:
+                got = _DECLARED[str(root), kind, r] = _declared_read(root, kind, r)
+            files |= got[0]
+            listed |= got[1]
+            probes |= got[2]
+    # a code object's pseudo-file (``<frozen abc>``, ``<string>``) is no path of the tree
+    out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed),
+                           "probes": sorted(p for p in probes - files if p not in ("", ".") and not p.startswith("<")),
+                           "registry": any(reads.get(k) for k in _REGISTRY)}
+    if libs := reads.get("libs"):
+        out["untracked"] = sorted(libs)
+    return out
+
+
+def _declared_read(root: Path, kind: str, r: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """`declared`'s (files, listed, probes) of read ``r`` of ``kind``."""
+    files: set[str] = set()
+    listed: set[str] = set()
+    probes: set[str] = set()
+    seen = _seen(root)
+
+    def path(p: str | None) -> None:
+        if p is not None:
+            (files if seen(p) and (root / p).is_file() else probes).add(p)
+
+    def where(fn, *a):
+        """``fn(*a)``, each file it resolves to taken by where it is alone: an import site's module, or a sidecar's, is held by
+        its content only where a read holds it itself (`_moved`)."""
+        _PROBED.append((probes, probes))
+        try:
+            return fn(*a)
+        finally:
+            _PROBED.pop()
+
+    _INTERNAL.append(True)
+    _PROBED.append((probes, files))
+    try:
+        if kind == "files":
+            path(r)
+        elif kind == "dirs" and r != DISTRIBUTIONS:
+            (listed if seen(r) else probes).add(r)
+        elif kind == "probes":
+            probes.add(r)
+        elif kind in ("units", "pins"):
+            m = _side(r)
+            path(r.partition("#")[0] if m is None else where(_sidecar, root, m, ".py" if kind == "units" else ".json"))
+            where(_unit if kind == "units" else _pin, root, r, seen)
+        elif kind == "modules":
+            if (f := _resolve(root, r)) is not None:
+                where(_sites, root, r if f.name == "__init__.py" else r.rpartition(".")[0], _parsed(f)[1])
+        elif kind in ("named", "missing", "present"):
+            if (m := _side(r)) is not None:
+                p = where(_sidecar, root, m, ".py")
+                if kind != "present":
+                    path(p)
+                elif p is not None:
+                    probes.add(p)
+            elif kind == "present":
+                where(_resolve, root, r)
+            else:
+                _resolve(root, r)
+        elif kind == "enums" and (f := where(_resolve, root, r)) is not None and f.name == "__init__.py":
+            d = os.path.relpath(f.parent, root)
+            listed.add(d)
+            probes.update(os.path.join(d, n, "__init__.py") for n in os.listdir(f.parent) if n.isidentifier())
+    finally:
+        _PROBED.pop()
+        _INTERNAL.pop()
+    return frozenset(files), frozenset(listed), frozenset(probes)
+
+
+def registry_inputs(root: Path) -> dict[str, list[str]]:
+    """What the registries registered depends on (`declared`'s ``registry``), declared as `declared` declares a module: each
+    module of the tree this process has imported, as `targets.load_registries` leaves it (each module with a sidecar, the vLLM
+    registry's, the kernels' and what they import), but the checker's own (its version) and the binding files (each binding's
+    own, by its units); and the path of every sidecar, binding or pins, whose set is the modules the registries import
+    (`registries`)."""
+    _INTERNAL.append(True)
+    try:
+        by_file: dict[str, str] = {}
+        for name, m in list(sys.modules.items()):
+            if isinstance(f := getattr(m, "__file__", None), str):
+                by_file.setdefault(os.path.abspath(f), name)
+        here, units = os.path.join(str(_HERE), ""), _unit_files()
+        mods = sorted(name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(here) and f not in units
+                      and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f))
+        sidecars = {r for f in (*units, *_PIN_FILES) if f.endswith((f"{SUFFIX}.py", f"{SUFFIX}.json")) and (r := _rel(f)) is not None}
+    finally:
+        _INTERNAL.pop()
+    got = declared(root, {"modules": mods})
+    return {"files": got["files"], "listed": got["listed"], "probes": sorted((set(got["probes"]) | sidecars) - set(got["files"]))}
+
+
+def undeclared(now: dict[str, Any], was: dict[str, Any] | None) -> dict[str, Any]:
+    """What read set ``now`` (`declared`) holds beyond the declared ``was``: each kind's paths ``was`` lacks (a probe's, where
+    ``was`` holds the path as no file or listing either, whose bytes or listing hold its kind), ``registry`` when ``now`` reads
+    the registries and ``was`` doesn't, and every library git doesn't have (``untracked``)."""
+    was = was or {}
+    out: dict[str, Any] = {k: sorted(set(now.get(k, ())) - set(was.get(k, ()))) for k in DECLARED}
+    out["probes"] = sorted(set(out["probes"]) - set(was.get("files", ())) - set(was.get("listed", ())))
+    out["untracked"] = list(now.get("untracked", ()))
+    out["registry"] = bool(now.get("registry")) and not was.get("registry")
+    return {k: v for k, v in out.items() if v}
 
 
 def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:

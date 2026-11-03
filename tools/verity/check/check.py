@@ -1,6 +1,7 @@
-"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs ci.toml takes off
-the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after landing, in drive's after-landing run on
-`checked`'s tip.
+"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
+takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which run after landing, in drive's
+after-landing run on `checked`'s tip.  It reports each step's real verdict; what gates and what may stay red is drive's
+(`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -23,7 +24,7 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            ci.toml's `gate = false`: circuit-check, ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
                                                             upstream build and inputs when the commit changes verity/ml/flock/
@@ -103,8 +104,7 @@ after judging its shards again the same way and finding its steps theirs, so a m
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
 (`circuit_join`: each shard's `CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless
-that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked, and a known failure
-that no longer fails, are judged only there.
+that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked is judged only there.
 An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
 `lean-suites:SUITE`) is a part of its own, packed by measured cost, and one measured past `shards.SPLIT_S` (`--split-s`) is
 M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
@@ -1842,7 +1842,7 @@ def shard_parts() -> list[str]:
     return DECLARATION.all_parts(JOBS, _parts_of())
 
 
-#: the jobs off the merge gate (ci.toml's `gate = false`), which a recorded check leaves to drive's after-landing run
+#: the jobs off the merge gate (drive's policy, policy.toml's `off_gate`), which a recorded check leaves to drive's after-landing run
 OFF_GATE = tuple(j.name for j in JOBS if not j.gate)
 
 
@@ -1949,7 +1949,7 @@ def suite_join(store, steps: list[dict], into: Path) -> str | None:
     split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
     joined = {r["name"]: r for r in SUITES.combine_parts(rows)}
     bad = [f"{n}: {'; '.join(joined[n]['why'])}" if n in joined else f"{n}: no shard reported its parts" for n in sorted(split)
-           if n not in joined or joined[n]["status"] not in ("passed", "known-red")]
+           if n not in joined or joined[n]["status"] != "passed"]
     return f"suites split by file don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
 
 
