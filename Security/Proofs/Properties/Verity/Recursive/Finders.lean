@@ -42,7 +42,7 @@ def collRun (collOf : CollOf) : Option (Msg × Claims.Flock.Wit × Msg × Claims
   | none => (none, 0)
 
 /-- **The file's wire bits by unit**, in the order `Dep.chaseAt` reads them: by unit, then wire, then bit. -/
-def unitBits (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) :
+noncomputable def unitBits (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) :
     List (Fin (V.units θ F) × Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g)) :=
   (List.finRange (V.units θ F)).flatMap fun u => (List.finRange (V.circuitOf θ F).N).flatMap fun g =>
     (List.finRange ((V.circuitOf θ F).w g)).map fun i => (u, ⟨g, i⟩)
