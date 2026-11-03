@@ -1568,12 +1568,10 @@ def main(argv: Sequence[str] | None = None) -> int:
               flush=True)
         return 1
     if a.steps is not None:
-        try:
-            steps = [int(x) for x in a.steps.split(",")]
-        except ValueError:
-            steps = []
-        if len(steps) != 2:
+        given = re.fullmatch(r"(\d+),(\d+)", a.steps)
+        if given is None:
             ap.error(f"--steps {a.steps!r}: LO,HI, two integers")
+        steps = [int(x) for x in given.groups()]
     else:
         steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
