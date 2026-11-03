@@ -83,6 +83,8 @@ COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiL
 
 COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
+COUNT += 1  # `boolean_transcendental`'s F32LogRn_v2, a line of its own so it merges with any other change to the count
+
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
 COUNT += 3  # `torch_train`'s RmsNormTorch_v1 with its In and Out parts
