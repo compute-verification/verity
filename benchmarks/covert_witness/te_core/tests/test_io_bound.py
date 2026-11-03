@@ -570,6 +570,37 @@ def test_the_whole_making_system_is_exact_in_feeding_order_and_void_only_where_a
         assert w["e"] is None and math.isinf(w["whole_chain"])
 
 
+def test_a_cycle_whose_classes_are_fed_more_than_they_read_keeps_its_fixed_point():
+    """A settled cycle is raised to a post-fixed point along (I − J)⁻¹·1, since a uniform raise isn't one where a class
+    is fed more than it reads and would void a step that has a fixed point. A system shaped like a width-8,192 step's
+    (128-wide heads, a 4,096-token context, every read term and feed 1) at k = 1.6e6: the 128-long class's μ ≈ 2.04
+    feeds the 4,096-long class twice its read term, and the least fixed point gives e ≈ 0.0202; it is void from about
+    9.14e6, where J's spectral radius reaches 1. The 45M dense step's system has one up to 249,364 bits."""
+    from te_core import formalism
+
+    third = 1 / 3
+    wide = {"classes": {8192: {"c": 1.0, "P": 1.0, "feeds": {4096: 1.0, 8192: 1.0, 22528: 1.0, 32000: 1.0}},
+                        128: {"c": third, "P": 1.0, "feeds": {8192: 1.0}},
+                        4096: {"c": third, "P": 1.0, "feeds": {128: 1.0, 8192: 1.0}},
+                        22528: {"c": 1.0, "P": 1.0, "feeds": {8192: 1.0}},
+                        32000: {"c": third, "P": 1.0, "feeds": {8192: 1.0}}},
+            "counted": {4096: 1.0, 8192: 1.0, 22528: 1.0, 32000: 1.0}, "b": 16}
+    w = iob.whole_chain_of(wide, 1.6e6)
+    assert w["diverged"] == [] and w["cycles"] == [[128, 4096, 8192, 22528, 32000]]
+    assert w["e"] == pytest.approx(0.0201712, rel=1e-5) and w["mu"][128] == pytest.approx(2.04082, rel=1e-5)
+    for K, e in wide["classes"].items():
+        rhs = w["r"][K] * (e["P"] + sum(v * w["mu"][i] for i, v in e["feeds"].items())) ** 2
+        assert rhs <= w["mu"][K] and rhs == pytest.approx(w["mu"][K], rel=1e-6)
+    up = {K: m * (1 + 1e-6) for K, m in w["mu"].items()}
+    assert w["mu"][128] + w["mu"][8192] > 2 * wide["classes"][4096]["P"]
+    assert w["r"][4096] * (1 + up[128] + up[8192]) ** 2 > up[4096]
+    assert iob.whole_chain_of(wide, 9.13e6)["e"] is not None and iob.whole_chain_of(wide, 9.15e6)["e"] is None
+
+    system = formalism.products_of_trace(json.loads(FIXTURE_45M.read_text()))["system"]
+    assert formalism.whole_chain(system, 200_000)["e"] == pytest.approx(0.45490, rel=1e-4)
+    assert formalism.whole_chain(system, 249_000)["e"] is not None and formalism.whole_chain(system, 250_000)["e"] is None
+
+
 def test_each_subset_takes_the_whole_making_factor_of_the_classes_that_feed_it():
     """With the system's made-whole shares (`made_whole`) and each product's `fed`, a subset's Λ reads only the classes
     that feed its products: where an adapter's class makes e large (μ 10³) or has no fixed point (∞), the best subset
