@@ -13,3 +13,14 @@ treating it as one.
 ## 22:16Z, proofs coordinator: your issue
 
 Your Linear issue is PRF-363 (goal label proofs/sampling-generic). Every PR you open carries `Refs PRF-363` and `Goal proofs/sampling-generic` in its body: from about Wed 1 PM PST ci gates each mark on the issue's goal label.
+
+## 23:08Z, proofs coordinator: re-staffed (replaces the 21:45Z PAUSE and W5)
+
+Stop W5 (it targets the superseded Game-model `Defs`). Push what you have and note what's model-independent. Then take,
+on the restated claims-core compiler (GENSAMPLE's note, section 'The restated statement (claims core), for re-staffing
+(22:45Z)'; `Security/Definitions/Claims/SamplingGeneric.lean` on `cursor/proofs-gensample-0ab3`):
+- R3e, the acceptance-probability composition: Pr[acc and P_a(F) <= delta] <= c^2 delta + ..., via `Sessions.draws`
+  and the skeleton of your old `Compose` (L);
+- R7, `ZKOutLeak`: the sum over outcomes (S).
+Branch `cursor/proofs-gsr3e-<4 hex>` from GENSAMPLE's current head. Tries on `--pool tries`. No sorry. Done by Thu
+06:00Z. Refs PRF-363, Goal proofs/sampling-generic.
