@@ -12,7 +12,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    the records scored (PINS: the pin, same_version and the pilot, trace40.pins). TE40_WT's capture traces while the
    integrator's te_core VERSION captures alike (CAPTURES). A new capture (`next_capture`) traces into its own cache,
    and until it has traced as many runs in scope as TE40_WT's and as many of v3's (`replaces`), the refresh scores
-   on LAST's re-score commit and TE40_WT's traces; then TE40_WT moves to it.
+   TE40_WT's traces with the new capture's over them, on that checkout where TE40_WT's capture is READS_SINCE's or
+   later, else on LAST's re-score commit; then TE40_WT moves to it.
 2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too under CAPTURE_FINAL's capture or with
    TE_TRACE_PILOT=1) traced, measured and ingested again in shards of TRACE_SHARD runs over the CPU pool (`research
    run --on auto`), at most TRACE_MAX_SHARDS a refresh, the runs traced at earlier refreshes kept.
@@ -84,11 +85,14 @@ TRACE_CUSTODY_TTL = "8h"
 #: how long a refresh waits for its node runs; one still tracing is taken at the next refresh
 TRACE_WAIT_S = 1080
 #: the integrator's te_core whose capture TE40_WT's isn't (`next_capture`), checked out with no files: its runs traced
-#: into its own cache while the refresh scores on LAST's re-score commit and TE40_WT's traces, until they replace those
+#: into its own cache while the refresh scores TE40_WT's traces with them over those, until they replace those
 #: (`replaces`)
 NEXT_WT = Path(os.environ.get("TE_NEXT_WT", "/tmp/scorer/te-next"))
 #: the re-score commit of the last refresh scored with TE40_WT's capture
 LAST = trace40.STATE / "trace40" / "rescored.json"
+#: the first capture whose traces a later te_core doesn't refuse for their capture (formalism.refusal: read-backs
+#: unchecked before 4.2): over one, the refresh scores on the integrator's newest te_core, not LAST's
+READS_SINCE = "4.2"
 #: what 4.0's rescore also writes, to the evidence store only (coordinator 01:22Z): t as the frozen tail, and the analysis
 VARIANTS = {"frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analysis"]}
 #: the measurement commits scored: the re-score commit's pin, same_version and pilot (trace40.pins), set by `main`
@@ -169,9 +173,13 @@ def capture_version(te: Path) -> str:
     return next((x.split('"')[1] for x in init.splitlines() if x.startswith("VERSION = ")), "0")
 
 
+def version(v: str) -> tuple[int, ...]:
+    return tuple(map(int, v.split(".")))
+
+
 def same_capture(a: str, b: str) -> bool:
     def final(v):
-        return tuple(map(int, v.split("."))) >= tuple(map(int, CAPTURE_FINAL.split(".")))
+        return version(v) >= version(CAPTURE_FINAL)
     return a == b or any({a, b} <= set(g) for g in CAPTURES) or (final(a) and final(b))
 
 
@@ -507,22 +515,22 @@ def main() -> int:
     PINS[:] = trace40.pins(commit)
     nxt, retrace = (None, None) if final else (next_capture(newest), None)
     if nxt:
-        # every row traced before a new capture is refused under its te_core, so the refresh scores on the last
-        # capture until the new one's traces replace it
+        # a row traced under a capture before READS_SINCE's is refused under a later te_core, so over such a capture
+        # the refresh scores on the last re-score until the new capture's traces replace it
         retrace = measured_ledger(out / "next-capture", not args.no_trace, nxt, build=False)
         retrace |= dict(zip(("of", "covered", "traced"), covered(nxt)), te_core=te_version(newest),
                         commit=git("rev-parse", "HEAD", cwd=nxt))
         if replaces(nxt) or not LAST.exists():
             git("checkout", "-q", "--detach", retrace["commit"], cwd=trace40.TE40_WT)
             nxt, retrace = None, None
-        else:
+        elif version(capture_version(trace40.TE40_WT)) < version(READS_SINCE):
             commit = json.loads(LAST.read_text())["commit"]
             git("checkout", "-q", "--detach", commit)
             chosen = (f"the last re-score on te_core {capture_version(trace40.TE40_WT)}'s capture, until te_core "
                       f"{te_version(newest)}'s traces replace it")
             os.environ["TE_PIN_REV"] = commit
             PINS[:] = trace40.pins(commit)
-    if not nxt and not final:
+    if not final:
         LAST.write_text(json.dumps({"commit": commit, "te_core": te_version(commit), "stamp": stamp}) + "\n")
     trace_version = capture_version(trace40.TE40_WT)
     # the runs the new capture has traced are scored on its traces already, where the re-score's te_core reads them
