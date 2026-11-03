@@ -64,8 +64,8 @@ def whyC (n : Nat) : Option String :=
 #guard (statements (some { inner with claims := 9 })).toOption == some ()
 
 def innerSt (n : Nat) (counts : Option (Array Nat)) : Stmt :=
-  { (default : Stmt) with n := n, pub := { (default : Public) with n := n,
-    tables := counts.map fun c => { counts := c, starts := #[], refs := #[] } } }
+  let tables : Option Tables := counts.map fun c => { counts := c, starts := #[], refs := #[] }
+  { (default : Stmt) with n := n, pub := { (default : Public) with n := n, tables := tables } }
 
 def whyI (st : Stmt) : Option String :=
   match innerRows st with
