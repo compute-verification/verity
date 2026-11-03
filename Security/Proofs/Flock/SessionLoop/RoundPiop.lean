@@ -1,9 +1,4 @@
-import Proofs.Flock.SessionLoop.CutPiopLive
-import Proofs.Flock.SessionLoop.PiopState
-import Proofs.Flock.SessionLoop.TakenVals
-import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.SessionLoop.FinCommits
-import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.SchedAt
 
 /-!
 # A rep's PIOP round past its first, in frames
@@ -314,22 +309,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **The session's round `n ≥ 1` at the deployed tables where the coins show no refusal by it**: `sessionCut`'s body
-`n` on the cut, tagged `0`, where the cut session reached it (`enc_finS`). -/
-theorem enc_finS_of {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n ≠ 0)
-    (cut : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Cut) {s : FlockDeploy.Ins} {spec : SessionSpec}
-    (hsx : FlockDeploy.setupOf true x = some (s, spec, Masked.stsOf x)) (hR : ¬ Masked.Refused x c n)
-    (hlt : n < (Masked.runCut x c n spec (Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x c) cut)).2.size) :
-    finS.enc x c n cut =
-      0 :: (Masked.runCut x c n spec (Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x c) cut)).2[n]! := by
-  rw [enc_finS_eq]
-  unfold Masked.encStop
-  rw [ite_eq_right hR]
-  unfold Masked.encExe
-  rw [ite_eq_right hn, hsx]
-  dsimp only
-  rw [ite_eq_left hlt]
-
 /-- **The switched session's PIOP round `jj ≥ 1` of rep stream `2j + r`**: where the coins show no refusal by it or by
 the rep's first round, the session sends the PIOP's frames at the switched source's masked values, at some binding, and
 its squeeze (`Masked.runCut_piopBody`: the views' level-0 commitments and the pads commitment return quietly). -/
@@ -413,12 +392,7 @@ theorem swMsgAt_piop (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
         ((Masked.swSrcE x (finS.pad (K := refK x) cs) w (vs x w ν (finS.pad (K := refK x) cs)) t j.val).rep
           r.val).masked jj) ++
         (Frame.sq (piopK jj) (piopN (Masked.stAt x j).m jj)).enc) := by
-  have hmsg : finS.swMsgAt x (finS.wt x w) (vs x w ν) t cs =
-      finS.enc x (finS.pad (K := refK x) cs) cs.length
-        (finS.swCutOf x (finS.pad (K := refK x) cs) (finS.wt x w) (vs x w ν (finS.pad (K := refK x) cs)) t) := by
-    unfold Claims.ZKMal.RefSession.swMsgAt
-    exact ite_eq_left hlt
-  rw [hmsg, hn]
+  rw [swMsgAt_enc vs w ν t cs hlt, hn]
   exact enc_piop vs w hx hsx ν t (finS.pad (K := refK x) cs) j r h0 hjj hN hN0
 
 end Loop
@@ -502,13 +476,10 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     kindAt_masked_of _ (by simp only [List.length_cons]; omega) (by rw [hlast, List.length_cons]; omega)
   obtain ⟨m, out, s', hA, hck⟩ :=
     check_of_live (ofLoop Masked.dataE L₁ real) wk x w (ν, t) κ ((m₀, ρ₀) :: ops) v hl hk hv
-  have ho : (ofLoop Masked.dataE L₁ real).opens x (ν, t) ((m₀, ρ₀) :: ops) = true := by
-    cases ho : (ofLoop Masked.dataE L₁ real).opens x (ν, t) ((m₀, ρ₀) :: ops)
-    · rw [answered_of_not_opens _ _ _ _ ho] at hA
-      cases hA
-    · rfl
+  obtain ⟨ho, ht, -⟩ := answered_ok hA
   have hA' := hA
-  rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1 ho] at hA'
+  rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1 ho ht] at hA'
+  replace hA' := (bind_rankStop_ok hA').1
   -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
@@ -584,7 +555,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     dsimp only
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left (by rw [hsz']; exact hjjR),
       hpi' (a + 1) (by omega) hjjR]
-    simp only [Option.getD_some, Array.toList_toArray]
+    simp only [Option.getD_some, List.toList_toArray]
   -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
@@ -617,7 +588,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     hKN.2.1 hKN.2.2 _ (check_none_passes hck)
   have hv' : v = encs G ++ (Frame.sq (piopK (a + 1)) (piopN (Masked.stAt x j).m (a + 1))).enc := by
     have e := congrArg (fun b : ByteArray => b.data.toList) hvG
-    simp only [Array.toList_toArray] at e
+    simp only at e
     rw [e, htrm]
   refine ⟨m, G, hA, hon, hin, ?_, ?_, hmidG, plainFrames_of_alike hAG (fun f hf => (hF0 f hf).2), hv', ?_, ?_, lay,
     mask, by rw [hjh] at hds; exact hds⟩
@@ -724,9 +695,11 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
     (Masked.UE.tapeZk t)] at hH
   have hhab : (Masked.layE x j).hab = (Masked.layE x j).fa + 3 + 2 * (Masked.layE x j).nLc + 64 +
       (Masked.layE x j).nOod0 + 4 * (Masked.layE x j).k0 + 4 := rfl
+  -- `Masked.swSrcE` at `finS.pad (ops.map …)` itself exhausts `whnf`; at a variable list it elaborates
+  generalize hcs : (ops.map fun p => Loop.finS.decOf p.2) = cs
   have hvals : ∀ k (hkG : k < (fvals G).length),
-      ((Masked.swSrcE x (Loop.finS.pad (K := refK x) (ops.map fun p => Loop.finS.decOf p.2)) w
-          (vs x w ν (Loop.finS.pad (K := refK x) (ops.map fun p => Loop.finS.decOf p.2))) t j.val).rep r.val).masked
+      ((Masked.swSrcE x (Loop.finS.pad (K := refK x) cs) w (vs x w ν (Loop.finS.pad (K := refK x) cs)) t
+          j.val).rep r.val).masked
           (if m.pos + k < (Masked.layE x j).fa + 2 then m.pos + k else m.pos + k + 1) =
         maskVal ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)) false (m.pos + k) ((fvals G)[k]'hkG) := by
     intro k hkG
@@ -743,10 +716,10 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
       rw [Masked.nE_eq_hab, hhab]
       split_ifs <;> omega
     have hw := hTV v m out _ fr j r hpos hlt hl hok hv hA' hrf' hrep'' k hks
-    rw [hidx, getElem!_pos fr k hks, hvG] at hw
+    rw [hidx, getElem!_pos fr k hks, hvG, hcs] at hw
     have e : (fvals G)[k]'hkG = wd (encs G ++ (Frame.sq (piopK jj) (piopN (Masked.stAt x j).m jj)).enc) (fr[k]'hks) := by
       rw [List.getElem_of_eq hfr.symm hkG, List.getElem_map, Array.getElem_toList]
-    rw [Loop.swSrcE_masked_vsWord vs x w ν _ t j r hE, maskVal_false]
+    rw [Loop.swSrcE_masked_vsWord vs x w ν (Loop.finS.pad (K := refK x) cs) t j r hE, maskVal_false]
     unfold padAt
     rw [hH, hidx, e]
     exact congrArg (· + _) hw.symm
@@ -764,13 +737,14 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   have hN0 := unrefused_prefix Masked.dataE (withFiles (withLink L₀ src) src) real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops
     hlt.le hl href (N := Masked.repBase x (2 * j.val + r.val)) (by omega) (q := 2 * j.val + r.val) (by omega) le_rfl
     (by rw [hRk]; omega)
-  obtain ⟨dg, cp, rt, hmsg⟩ := Loop.swMsgAt_piop vs w hx hsx ν t (ops.map fun p => Loop.finS.decOf p.2)
-    (by rw [List.length_map]; exact hlt) j r (by rw [List.length_map]; exact hn) h0 hjj
+  rw [hcs] at hN hN0
+  obtain ⟨dg, cp, rt, hmsg⟩ := Loop.swMsgAt_piop vs w hx hsx ν t cs
+    (by rw [← hcs, List.length_map]; exact hlt) j r (by rw [← hcs, List.length_map]; exact hn) h0 hjj
     (by rw [← hn]; exact hN) hN0
   have hfr0 := piopFr_eq_maskFrames (m := (Masked.stAt x j).m) (kLog := (Masked.stAt x j).c.kLog) (digest := dg)
     (cap := cp) (root := rt) (lay := Masked.layE x j)
-    (mk := ((Masked.swSrcE x (Loop.finS.pad (K := refK x) (ops.map fun p => Loop.finS.decOf p.2)) w
-      (vs x w ν (Loop.finS.pad (K := refK x) (ops.map fun p => Loop.finS.decOf p.2))) t j.val).rep r.val).masked)
+    (mk := ((Masked.swSrcE x (Loop.finS.pad (K := refK x) cs) w
+      (vs x w ν (Loop.finS.pad (K := refK x) cs)) t j.val).rep r.val).masked)
     (by omega) hk6 rfl rfl h0 hjj (P := m.pos) (by rw [hposm]; exact piopV_length_congr _ _ _ _ _)
     (maskVal ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)) false)
     (Sched.forall₂_alike_trans (piopFr_alike _ _ _ _ h0) hAG) hvals
