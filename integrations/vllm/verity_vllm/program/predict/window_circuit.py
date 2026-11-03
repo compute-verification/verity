@@ -84,8 +84,11 @@ committer's registration (`window_weights`).
 
 Given H1's tables of the window (`Tables`, `window_class`), the circuit reads each where the model makes it, a read of an
 output row (`interface.Read`) that holds the proof block's output row to the registered row: each quantizer at the
-tables' K is `Int8RowQuant_v5{K, R}`, its ``o2`` a row of its round's A table, and each position's token row a row of
-its round's input-ids table, at a fixed load's rows (`Tables.at`).
+tables' K is `Int8RowQuant_v5{K, R, ROUND}`, its ``o2`` a row of its round's A table, and each position's token row a row of
+its round's input-ids table, at a fixed load's rows (`Tables.at`). Each reader reads one table, and each table's readers are
+templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
+units' and a later round's the select before it, `io_shell.SelectCollect_v2{..., ROUND}`. So a sample stratified by
+template (one stratum a template) has a reader of every table.
 
 A reader port that reads m writer rows is cut m ways (`interface.Layout.cut`, `window_builder._Builder.settle`), a row of
 it a writer row, so no unit copies rows together: a template's port is read at one row count, its rows its outer elements
@@ -398,8 +401,8 @@ class _Program:
     def _Int8RowQuant(self, j: int, node: Any) -> None:
         """`Int8RowQuant_v1{K}` as one unit `Int8RowQuant_v3{K, R}`, its ``x`` the R rows its writers hold it in (one after a
         norm, a head's at o_proj), so each template's ``x`` is read at one row count; refused where R doesn't divide K. At
-        the K of ``tables``, `Int8RowQuant_v5{K, R}`, whose ``o2`` is held to row c·m + i of its round's A table: c its
-        index among its position's int8 linears of that K, i its position's row (`Tables.at`)."""
+        the K of ``tables``, `Int8RowQuant_v5{K, R, ROUND}` at its position's round, whose ``o2`` is held to row c·m + i of
+        its round's A table: c its index among its position's int8 linears of that K, i its position's row (`Tables.at`)."""
         R, K = len(self.rows(node.args[0].refs)), node.fn.bindings["K"]
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
@@ -407,10 +410,10 @@ class _Program:
         if t is None or K != t.k:
             self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
             return
-        fn = bind(IX.Int8RowQuantV5, K=K, R=R)
+        s, i = t.at(self.cls, self.slot_index, self.position - 1)
+        fn = bind(IX.Int8RowQuantV5, K=K, R=R, ROUND=s)
         tid, u = self._one(j, node, fn)
         self.packed[j] = Row(tid, u, "o2", dict(IF.layout(fn).outs)["o2"])
-        s, i = t.at(self.cls, self.slot_index, self.position - 1)
         self.b.value(tid, "o2", u, t.a(s), self.quants[-1] * t.m + i, t.calls * t.m)
         self.quants[-1] += 1
 
@@ -643,13 +646,19 @@ class _Program:
     def _collect(self, V: int) -> tuple[str, int]:
         """The position's combine unit, the slot's outputs collected on with its select (`io_shell.SelectCollect_v1`, its
         state the next position's ``state``: the first's reads its lane's head), and at the last position the slot's entry
-        too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry."""
+        too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
+        ``tables``, a select that is a later round's token (`_token`) is collected at that round (`io_shell.SelectCollect_v2`)."""
         p, KO = self.position - 1, self.cls.outputs
         at = {"V": V, "C": GROUP, "KO": KO, "FIRST": p == 0}
         e = self.entry.bindings
         last = p == self.cls.positions - 1
-        ctid, cu = self.b.unit(bind(IO.SelectEntry, **at, IDB=e["IDB"], NP=e["NP"], STOP=e["STOP"]) if last
-                               else bind(IO.SelectCollect, **at))
+        if last:
+            fn = bind(IO.SelectEntry, **at, IDB=e["IDB"], NP=e["NP"], STOP=e["STOP"])
+        elif self.tables is not None and p + 1 >= self.cls.prompt:
+            fn = bind(IO.SelectCollectV2, **at, ROUND=self.tables.at(self.cls, self.slot_index, p + 1)[0])
+        else:
+            fn = bind(IO.SelectCollect, **at)
+        ctid, cu = self.b.unit(fn)
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))
         if last:
             self.b.feed(ctid, "occ", cu, 1, (self.occ,))
