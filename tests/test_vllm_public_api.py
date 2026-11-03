@@ -64,9 +64,10 @@ PUBLIC = {
                                       "its record R and their log (W_FILE, R_FILE, LOG)",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
-    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained passes (record, write) "
-                                                 "and the names it registers each call's A rows and y under (a_value, "
-                                                 "y_value), which verify_run.tie and the one-stage audit read",
+    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained passes (record, write), "
+                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
+                                                 "which verify_run.tie and the one-stage audit read, and the audited "
+                                                 "window's values rebuilt as W's (reuse)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "

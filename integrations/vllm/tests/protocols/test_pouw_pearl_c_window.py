@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import HM96, activation_binding, rows_domain
+from verity.core.protocols.pouw.audit import HM96, activation_binding, commit_rows, rows_domain
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity_vllm import protocols as PO
@@ -80,6 +80,48 @@ def test_w_is_refused_for_passes_it_cant_register(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match=f"commits sha256 rows, and W registers {HM96} rows"):
         PWR.write(out, [{"units": 1, "manifest": good}])
     assert not out.exists()
+
+
+def committed(key: bytes, calls: list[tuple[int, int, int, int, int]]) -> tuple[dict, dict[str, np.ndarray]]:
+    """A pass's manifest whose calls (``(index, m16, real rows, K, N)``) commit random BF16 x and y as Pearl+ does (A: x
+    widened to FP32 then zero rows up to m₁₆, `audit.commit_rows` salted at the index; y: `served_y.commit_y`), with the
+    prover's key, and each value's rows as the circuit's proof blocks make them (u16 words, an FP32 word's low first)."""
+    rng, mm, rows = np.random.default_rng(1), [], {}
+    for c, (i, m, real, k, n) in enumerate(calls):
+        x, y = (rng.integers(0, 1 << 16, (real, w), dtype=np.uint16) for w in (k, n))
+        a = np.zeros((m, k), "<u4")
+        a[:real] = x.astype("<u4") << 16
+        root_a = commit_rows(activation_binding(SALT, i), i, [r.tobytes() for r in a], HM96, key, i).commitment.root
+        mm.append({"index": i, "m": m, "k": k, "n": n, "real_rows": real, "root_a": root_a.hex(),
+                   "y": {"root": SY.commit_y(y.tobytes(), n, SALT, i, key)[0].hex()}})
+        rows[PWR.a_value(0, c)] = a.view("<u2")
+        rows[PWR.y_value(0, c)] = (y.astype("<u4") << 16).view("<u2")
+    return {"entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex(), "hm96_salt_key": key.hex(), "matmuls": mm}, rows
+
+
+def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make():
+    """`reuse` commits each value W registers from the rows the audited circuit's proof blocks make of it, as Pearl+
+    committed the call's A rows and y, so each value's entry is W's and its tree opens each row at W's root. W holds no
+    salt key. Rows the proof blocks make otherwise (one bit of one A row), another key, or a W other than the passes'
+    record is refused, naming the value."""
+    key = bytes(range(100, 132))
+    man, rows = committed(key, [(7, 16, 5, 64, 128), (8, 32, 17, 128, 64)])
+    w = PWR.record([man])
+    assert key.hex() not in json.dumps(w)
+    got = PWR.reuse(w, [man], lambda name, n, empty: rows[name])
+    theirs = {e["value"]: e for e in w["registered"]}
+    assert {v: x.entry() for v, x in got.items()} == theirs
+    for v, x in got.items():
+        root = bytes.fromhex(theirs[v]["root"])
+        assert all(G.verify_read(x.domain, root, p, x.bcs[p], x.path(p), G.SCHEMA_SEG) for p in range(x.leaves))
+    flipped = {**rows, "pearl-a/0/1": rows["pearl-a/0/1"].copy()}
+    flipped["pearl-a/0/1"][3, 0] ^= 1
+    for bad, mans, of, why in ((w, [man], flipped, "pearl-a/0/1: the rows the audited circuit's proof blocks make of it are not"),
+                               (w, [{**man, "hm96_salt_key": bytes(32).hex()}], rows, "pearl-a/0/0: the rows"),
+                               ({**w, "registered": w["registered"][:-1]}, [man], rows,
+                                "W is not the window record of these passes")):
+        with pytest.raises(ValueError, match=why):
+            PWR.reuse(bad, mans, lambda name, n, empty, of=of: of[name])
 
 
 def test_the_setting_is_off_by_default_and_is_pearl_cs_over_a_transcript_dir():
