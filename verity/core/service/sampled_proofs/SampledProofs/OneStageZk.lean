@@ -15,8 +15,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
-  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`); then v1's
-  `check` on those verdicts, one of
+  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`), and a
+  session's verdict holds only where the registration's population is the circuit file's units in order
+  (`FilePart.check`: its strata over the verifier's program and query, read stratum by stratum, are its units in order,
+  and the public file holds exactly those, so slot `u` is the file's unit `u`, as `Flock.Bridge.partOf` reads it); then
+  v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is.
@@ -25,6 +28,7 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file
 -/
 import CoreProtocol.Blobs
 import SampledProofs.OneStage
+import SampledProofs.FilePart
 import Flock
 
 namespace SampledProofs.OneStageZk
@@ -194,7 +198,8 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   return units.qsort (· < ·)
 
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it: each
-session's verdict (`flock-verify/<name>`, of record), with the units an accepted one proved. A refusal for what
+session's verdict (`flock-verify/<name>`, of record), with the units an accepted one proved; a session accepts only
+where the registration's population is the public file's units in order (`FilePart.check`, last). A refusal for what
 `proofs.verify` refuses: registered values read without the verifier's registered file, a file no blob holds, an
 accepted session naming another program than the partition object's, or proved units other than the evidence's. -/
 def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat))
@@ -246,6 +251,7 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     | .error e => Except.error s!"setup: {e}"
   let programSha := programDigest p.program
   let ksFiles := Flock.PortRoots.checkOf parsed tags pubB
+  let population := FilePart.check p.program (getD p.partition "query") pubB
   let want := getD p.partition "program"
   let mut coinKeys : Array String := #[]
   let mut out : Array (String × Json) := #[]
@@ -283,6 +289,7 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
       Flock.RecordText.check record
       ksFiles
       Flock.KsScope.checkOf parsed tags pubB count draw
+      population
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

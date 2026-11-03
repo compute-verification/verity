@@ -56,8 +56,8 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
+                                                            partition as P, produced as PD, proofs as PF,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
 from verity.ml.circuits import codec, partition_object as PO
@@ -907,6 +907,28 @@ def slots(j):
     proved = set(DR.proved(out["draw"]))
     blocks = [b for c in classes for s in c for b in s]
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+
+
+def file_population(j):
+    """`FilePart.why` (`proofs.population_why`): the registration's strata over the program and query
+    (`partition.strata`), against a public file's units (`units.indices`)."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc = _obj(j.get("program"), "program")
+    indices = j.get("indices")
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("indices is not a list of natural numbers")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        strata = P.strata(PROGRAMS[sha], _obj(j.get("query"), "query"))
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    return {"why": PF.population_why(indices, strata)}
 
 
 def bound(j):
@@ -2354,6 +2376,29 @@ def changed_selections(draw, most: int = 2) -> dict:
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
+
+@st.composite
+def file_populations(draw) -> dict:
+    """The file_population piece's input on a random partition: the public file's units mostly its population in order,
+    else with one dropped, added or moved, or all shifted by one."""
+    desc, query, n = draw(partitions())
+    indices = list(range(n))
+    kind = draw(st.integers(0, 7))
+    if kind == 4 and n:
+        del indices[draw(st.integers(0, n - 1))]
+    elif kind == 5:
+        indices.insert(draw(st.integers(0, n)), draw(st.integers(0, n + 1)))
+    elif kind == 6 and n > 1:
+        i = draw(st.integers(0, n - 2))
+        indices[i], indices[i + 1] = indices[i + 1], indices[i]
+    elif kind == 7:
+        indices = [u + 1 for u in indices]
+    return {"indices": indices, "program": desc, "query": query}
+
+
+FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
+                                                                                  JSON), package=PACKAGE)
+
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3011,7 +3056,8 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
+              (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]

@@ -19,6 +19,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
   (`Slots.select`);
+* `file_population`: why the registration's population over a program and query is not a public file's units in order
+  (`FilePart.why`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -61,6 +63,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
+import SampledProofs.FilePart
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.Stream
@@ -566,6 +569,7 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("file_population", FilePart.piece),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),

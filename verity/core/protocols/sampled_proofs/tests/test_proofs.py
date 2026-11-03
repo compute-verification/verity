@@ -11,7 +11,8 @@ run, and proves the proof blocks its draw drew; a circuit file other than the co
 is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
-names them or not.
+names them or not. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
+accepted session under another population is rejected (`population_why`).
 
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
@@ -41,6 +42,8 @@ CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
            "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
 DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
+#: the registration's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
+STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -72,6 +75,26 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_files(t
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
                          circuit_sha512="ab" * 64, program=program, partition={}, registered=registered)
     assert got is None and why[0] == "proof", why
+
+
+@pytest.mark.parametrize("indices, strata, ok", [
+    ([0, 1, 2], [("a", [[0, 2]]), ("b", [[2, 3]])], True),
+    ([], [], True),
+    ([0, 1], [("a", [[0, 3]])], False),
+    ([0, 1, 2], [("a", [[0, 2]])], False),
+    ([1, 0], [("a", [[0, 2]])], False),
+    ([1, 2], [("a", [[0, 2]])], False),
+    ([0, 1, 2], [("a", [[0, 1], [2, 3]]), ("b", [[1, 2]])], False),
+    ([0, 1], [("a", [[1, 2], [0, 1]])], False),
+], ids=["two strata in order", "empty", "a unit short", "a unit over", "two swapped", "shifted",
+        "strata interleaved", "ranges out of order"])
+def test_the_population_is_the_public_files_units_in_order(indices, strata, ok):
+    """`population_why` (`FilePart.why`) passes only where the strata, read stratum by stratum, are the units 0, 1, …
+    in order and the public file's units are exactly those."""
+    why = PF.population_why(indices, strata)
+    assert (why is None) == ok, why
+    if not ok:
+        assert why.startswith("partition: "), why
 
 
 def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:
@@ -124,12 +147,13 @@ def fx(tmp_path_factory) -> Path:
     return root
 
 
-def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+            strata=STRATA):
     st = fx / "stage"
     return PF.verify(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                      program=(st / "program.json").read_bytes(),
                      partition=json.loads((st / "partition.json").read_text()),
-                     registered=json.loads((st / "registered.json").read_text()) if own else None)
+                     registered=json.loads((st / "registered.json").read_text()) if own else None, strata=strata)
 
 
 @lean
@@ -259,6 +283,16 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         if own and session == fx / "session":
             (f,) = mine
             assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
+
+
+@lean
+@pytest.mark.slow
+def test_an_accepted_session_of_another_population_is_rejected(fx):
+    """Under a registration of 31 units, the honest session that the verifier accepts on its public file of 32 is
+    rejected with `population_why`'s reason: its file's unit 31 is no slot of the registration's."""
+    (f,), why = _verify(fx, fx / "session", strata=(("RoPEHead_v1{D=64}", ((0, 31),)),))
+    assert why is None, why
+    assert (f.accepted, f.units) == (False, ()) and f.why == PF.population_why(range(32), [("t", [[0, 31]])]), f
 
 
 @lean
