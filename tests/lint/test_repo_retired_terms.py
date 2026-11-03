@@ -54,6 +54,7 @@ SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
+    "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
 #: test fixtures: a path with one of these directories is data
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")

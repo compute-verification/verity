@@ -3490,7 +3490,6 @@
     {"file": "tests/test_no_wall_clock.py", "count": 1},
     {"file": "tests/test_protocol_specs.py", "count": 2},
     {"file": "tests/test_provider_names.py", "count": 4},
-    {"file": "tests/test_retired_terms.py", "count": 176},
     {"file": "tests/test_seed_ports.py", "count": 2},
     {"file": "tests/test_verifier_cost.py", "count": 15},
     {"file": "tests/test_vllm_public_api.py", "count": 9},
