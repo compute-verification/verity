@@ -1,6 +1,6 @@
 import Proofs.Flock.SessionLoop.RoundPiop
 import Proofs.Flock.SessionLoop.FinRepPads
-import Proofs.Flock.SessionLoop.L0Fixed
+import Proofs.Flock.SessionLoop.RoundOffL0
 import Proofs.Flock.SessionLoop.RoundOffOpenBind
 import Proofs.Flock.SessionLoop.RoundLig
 
@@ -24,7 +24,7 @@ round's place in the rep given by the coins before it:
   (`LeanRelease.release_sched_openBind_pf`).
 * **`LeanRelease.release_sched_l0`**: level 0's rounds `1` to `k0 + 3` (`LeanRelease.L0Sent.release`, and at `k0 + 3`
   `ρ_1`'s squeeze alone, `LeanRelease.release_on` at no frames), at `Masked.repSlot` `i`, where `vs`'s level-0 values
-  are the firewall's (`Loop.L0Fixed`).
+  are the firewall's (`Loop.L0Fixed`; `LeanRelease.release_sched_l0_pf`).
 * **`LeanRelease.release_sched_close`**: level 0's closing round, at `Masked.repSlot` `k0 + 4`: `release_sched_lig`
   there, the cut opening's body from that round on being the frame's scheduled round, its closing label ending level
   0's phase.
@@ -631,8 +631,8 @@ theorem release_sched_l0 (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
     (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i) (h1 : 1 ≤ i)
     (hi : i ≤ (Masked.zkTab x j).sch.k0 + 3) :
     (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
-      dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) := by
-  sorry
+      dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) :=
+  release_sched_l0_pf vs L₀ src real hreal wk hR hSv hSc hS hL0 ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn h1 hi
 
 /-- **Level 0's closing round**: at rep stream `2j + r`'s round `k0 + 4` past its PIOP (`Masked.repSlot`), the release of
 the worker's round is the switched session's message without its leading domain frame (`release_sched_lig` there). -/
