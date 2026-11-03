@@ -104,16 +104,14 @@ theorem asksPad_round (C : Array (Array F128)) (c : ByteArray) {k : ℕ} {coin :
   unfold padCoin
   rcases hk : C[k]? with _ | cs
   · rw [hk] at h
-    first
-      | (cases h; exact ⟨rfl, rfl⟩)
-      | (simp only [StateT.run_bind, StateT.run_set, pure_bind, StateT.run_pure] at h; cases h; exact ⟨rfl, rfl⟩)
+    cases h
+    exact ⟨rfl, rfl⟩
   · rw [hk] at h
     dsimp only at h
     split at h
-    · first | cases h | (rw [StateT.run_bind] at h; cases h)
-    · first
-        | (cases h; exact ⟨rfl, rfl⟩)
-        | (rw [StateT.run_bind, StateT.run_set, pure_bind, StateT.run_pure] at h; cases h; exact ⟨rfl, rfl⟩)
+    · cases h
+    · cases h
+      exact ⟨rfl, rfl⟩
 
 theorem squeezeP_recP (C : Array (Array F128)) (kind : UInt8) (n : ℕ) :
     (recP C).R (_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n)
@@ -422,22 +420,27 @@ theorem repCons_parts {C : Array (Array F128)} {st : _root_.Flock.Setup} {sch : 
         pads.h[(_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0).fc]! := by
   unfold _root_.Flock.Firewall.Finish.repCons at h
   try dsimp only at h
-  obtain ⟨⟨zp, lp, claims⟩, t₁, k₁, h1, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  obtain ⟨⟨zp, lp, claims⟩, t₁, k₁, h1, hA⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  clear h
   have hz := repPiop_rets (asksPad C) st _ _ _ extras _ _ _ _ _ _ h1
-  try dsimp only at h
-  obtain ⟨⟨ss, lg, zl', rec⟩, t₂, k₂, h2, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  try dsimp only at hA
+  obtain ⟨⟨ss, lg, zl', rec⟩, t₂, k₂, h2, hB⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok hA
+  clear hA
   have hR := (repPiop_recP C st _ _ _ extras _ _ _ _ _ _ h1).trans
     (repOpening_recP C st sch _ tPad rep g cm0 claims pads.h extra lanePad salt _ _ _ _ _ h2)
-  try dsimp only at h
-  obtain ⟨tr', t₃, k₃, h3, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  try dsimp only at hB
+  obtain ⟨tr', t₃, k₃, h3, hC⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok hB
+  clear hB
   cases h3
-  try dsimp only at h
-  obtain ⟨⟨rp, tq⟩, t₄, k₄, h4, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  try dsimp only at hC
+  obtain ⟨⟨rp, tq⟩, t₄, k₄, h4, hD⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok hC
+  clear hC
   obtain ⟨hrp, rfl, rfl⟩ := liftV_ok h4
-  try dsimp only at h
-  obtain ⟨lgc, t₅, k₅, h5, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  try dsimp only at hD
+  obtain ⟨lgc, t₅, k₅, h5, hE⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok hD
+  clear hD
   obtain ⟨-, rfl, rfl⟩ := liftV_ok h5
-  cases h
+  cases hE
   obtain ⟨rs, e1, ek1, hr1⟩ := hR
   refine ⟨rs, rp, tq, _, e1.trans (List.nil_append rs), ek1.trans (Nat.zero_add _), fun i hi => ?_, hrp,
     Array.append_assoc, hz.1, hz.2⟩
