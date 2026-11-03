@@ -125,3 +125,12 @@ infra (INF-445): capacity is idle on vy-nebius-cpu-9 (proofs pool 6/6 free) and 
 `--on auto` keeps landing on the congested cpu-5 (36 waiting) and cpu-6. Launch with `--on vy-nebius-cpu-9 --pool proofs`
 (or cpu-1). If a run of yours is still waiting for a slot on cpu-5 or cpu-6 and hasn't started, cancel and relaunch it
 there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Friday reruns.
+
+## 13:36Z, proofs coordinator: Remote.lean, CORRECTION to my 13:08Z item 1
+
+Don't take memory-accounting's six-line fix for Remote.lean:283. Take DISPV2's form instead: `stage_zk_at` and
+`stage_zk_registered` from cursor/proofs-dispv2-86d3 (0a0d6d12), with one line added: `dsimp only at h` right after
+`stage_zk_at`'s `unfold` (for #6980's `let` in `checkBlobsAt`). DISPV2 merged it onto your #7084 head 92794f9a in a
+throwaway worktree and Remote.lean elaborated cleanly (try a567, cpu-9). The six-line fix keeps the proof that depends on
+which way `split` goes, which failed DISPV2's records. The sampled-proofs README also conflicts between #7084 and DISPV2's
+PR: keep both texts under the cap. Route runs with --on vy-nebius-cpu-9 --pool proofs.
