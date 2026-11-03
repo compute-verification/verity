@@ -38,7 +38,7 @@ theorem sized_bind {α β : Type} {g : α → Step β} (hg : ∀ a, Sized (g a))
     ∀ s : Step α, Sized s → Sized (s.bind g)
   | .done a, _ => hg a
   | .fail _, _ => trivial
-  | .ask c n k, ⟨hn, hf, hk⟩ => ⟨hn, fun z hz => (hf z hz).elim fun e he =>
+  | .ask _ _ k, ⟨hn, hf, hk⟩ => ⟨hn, fun z hz => (hf z hz).elim fun e he =>
       ⟨e, (congrArg (fun s => Step.bind s g) he).trans rfl⟩, fun z => sized_bind hg (k z) (hk z)⟩
 
 /-- **The opening's programs check their coins' counts**, from every state. -/
@@ -79,8 +79,8 @@ theorem sized_round (coins : Got) (live : Bool) (c : ByteArray) (got : Got) :
       · simp only [hz, bne_self_eq_false, Bool.false_eq_true, ite_false, set, StateT.set, MonadStateOf.set,
           StateT.pure, StateT.bind, pure, bind, Step.bind]
         exact trivial
-      · simp only [hz, bne_iff_ne, ne_eq, not_false_eq_true, ite_true, throw, throwThe, MonadExceptOf.throw,
-          Function.comp_apply, StateT.lift, StateT.bind, bind, Step.bind]
+      · simp only [StateT.pure, hz, bne_iff_ne, ne_eq, not_false_eq_true, ite_true, throw, throwThe,
+          MonadExceptOf.throw, Function.comp_apply, StateT.lift, StateT.bind, bind, Step.bind]
         exact trivial
 
 theorem asksRel_sized (coins : Got) (live : Bool) :
