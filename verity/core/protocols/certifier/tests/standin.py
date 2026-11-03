@@ -138,11 +138,11 @@ def _bc_words(words: Sequence[int], salt: bytes) -> bytes:
 
 
 def prove_scan(tie: SC.EgressTie, cells: SC.Heads, state: G.Registered, progs: Sequence[G.Registered],
-               view: G.Registered, next_: G.Registered, member: SC.Member, out: Path, *, accepted: bool = True,
+               view: G.Registered, last: G.Registered, member: SC.Member, out: Path, *, accepted: bool = True,
                program: str | None = None) -> PF.Proof:
-    """The delivered proof of `member` of a link-window's egress tie (`scan_service.EgressTie`): each unit's input rows
-    the registered rows it reads, `cells` the network certifier's openings of both links' rows (`warden_rows.Cells`, as
-    `Heads`), `state` and `progs` the committed trace's trees and `view` and `next_` the prover's; its outputs by the
+    """The delivered proof of `member` of an execution phase's egress tie (`scan_service.EgressTie`): each block's input
+    rows the registered rows it reads, `cells` the network certifier's openings of both links' rows (`warden_rows.Cells`, as
+    `Heads`), `state` and `progs` the committed trace's trees and `view` and `last` the prover's; its outputs by the
     templates' references (`ingress_scan.reference`, `egress.outputs` on the view row read back), each committed under
     the salt of the registered row the verifier's read of it opens (an output the reference gives none of, where ok is 0,
     zero bytes, which open no leaf), and every ``o0`` under the known tree's public salts. The public file is a
@@ -152,7 +152,7 @@ def prove_scan(tie: SC.EgressTie, cells: SC.Heads, state: G.Registered, progs: S
     heads = SC.Heads(cells.ingress.head, cells.egress.head)
     known = tie.known_tree(heads)
     DOMAINS.update({d.domain_id.hex(): d for d in (cells.ingress.domain, cells.egress.domain, state.domain, view.domain,
-                                                    next_.domain, known.domain, *(p.domain for p in progs))})
+                                                    last.domain, known.domain, *(p.domain for p in progs))})
     identity = list(range(len(bs)))
     ports: dict[str, tuple[list[bytes], dict[str, Any], list[int]]] = {}
 
@@ -181,13 +181,12 @@ def prove_scan(tie: SC.EgressTie, cells: SC.Heads, state: G.Registered, progs: S
         for j, p in enumerate(progs):
             read(f"prog{j}", p, [b // every for b in bs])
         oks = [ok for ok, _, _ in got]
-        if ingress:
-            made("o1", next_, [b - 1 for b in bs], [s for _, s, _ in got])
+        if member.name == "last":
+            made("o1", last, [0], [s for _, s, _ in got])
         else:
             made("o1", state, [b + 1 for b in bs], [s for _, s, _ in got])
         made("o2", view, bs, [v for _, _, v in got])
         order = ["row", *(["sin"] if ingress else []), *(f"prog{j}" for j in range(len(progs))), "o0", "o1", "o2"]
-    assert order == _ports(tie, member.template)
     ports["o0"] = ([_bc_words([ok], known.salts[u]) for u, ok in zip(member.units, oks)],
                    known.statement(member.units)[2], identity)
     out.mkdir(parents=True, exist_ok=True)
@@ -205,17 +204,8 @@ def prove_scan(tie: SC.EgressTie, cells: SC.Heads, state: G.Registered, progs: S
     return PF.Proof(circuit, public, (session,))
 
 
-def _ports(tie: SC.EgressTie, template: str) -> list[str]:
-    """The template's ports in the order the stand-in's public file lays out their tables."""
-    if template == "egress":
-        return ["state", "o0", "o1"]
-    return ["row", *(["sin"] if template == "ingress" else []), *(f"prog{j}" for j in tie.lanes), "o0", "o1", "o2"]
-
-
 def _circuit_text(tie: SC.EgressTie, template: str) -> str:
-    """The stand-in's circuit file: its META names only the ports, in its tables' order (`scan_service.commitments`)."""
-    meta = json.dumps({"ports": [[p] for p in _ports(tie, template)]}, sort_keys=True, separators=(",", ":"))
-    return f"stand-in circuit of {P.template_id(tie.templates[template])}\nMETA {meta}\n"
+    return f"stand-in circuit of {P.template_id(tie.templates[template])}\n"
 
 
 def scan_circuits(tie: SC.EgressTie) -> dict[str, str]:

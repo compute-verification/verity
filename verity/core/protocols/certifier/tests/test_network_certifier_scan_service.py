@@ -1,28 +1,27 @@
-"""The egress tie through the proof system (`scan_service`): a link-window's step-indexed scan as one registration of the
-proof service, its first unit, T − 1 ingress units (one statement) and T egress units every one drawn, each member a
-stand-in proof (`standin.prove_scan`: its outputs by the templates' references, every port a registered read the
-verifier names, as C-Flock's Lean verifier requires) decided by the verifier of record on its own registered reads and
-the ingress statement's commitment chain, and `EgressTieVerdict` built from the stream's outcomes of record alone. Three
-id requests on two lanes, the third queued until a lane frees, are served through the network certifier, and the
-committed trace is the scan's state and the slot entries of the compute's outputs. An honest window is tied. The
-network certifier's egress with one token other than the compute's is refused at the egress member, and so is a trace
-whose one output differs from what the network certifier saw; a view that renders the network certifier's changed
-egress is refused at the ingress unit that computes the view; a trace whose state doesn't follow from the bucket before
-is refused by the chain; a registration whose network certifier or trace roots aren't the window's is refused, as is a
-member's proof naming another
-Program, a missing member and a draw of other units. The network verdict of record on a network certifier link
-(`LinkWindows.network_verdict(egress=…)`) counts a window only where its egress tie accepted it: it accepts the honest
-run, and refuses the run whose egress differs from the committed trace by one token, whose N2 counts accept, and refuses
-a link with no egress tie by name. Nothing in `verity` but the scan service builds the verdict.
+"""The egress tie through the proof system (`scan_service`): an execution phase's step-indexed scan as one registration of
+the proof system, its 2T proof blocks in four statements (the first block, T − 2 ingress blocks, the last ingress block
+and T egress blocks) every one sampled, each member a stand-in proof (`standin.prove_scan`: its outputs by the
+templates' references, every port a registered read the verifier names, as C-Flock's Lean verifier requires) decided
+by the verifier on its own registered reads, and `EgressTieVerdict` built from the stream's outcomes alone. Three id
+requests on two lanes, the third queued until a lane frees, are served through the network certifier, and the committed
+trace is the scan's state and the slot entries of the compute's outputs. An honest phase is tied. The network
+certifier's egress with one token other than the compute's is refused at the egress member, and so is a trace whose one
+output differs from what the network certifier saw; a view that renders the network certifier's changed egress is
+refused at the ingress block that computes the view; a trace whose state doesn't follow from the bucket before is
+refused at the block whose S_t the next state leaf isn't; a registration whose network certifier or trace roots aren't
+the phase's is refused, as is a member's proof naming another Program, a missing member and a sample of other proof
+blocks. The network verdict on a network certifier link (`LinkWindows.network_verdict(egress=…)`) counts an execution
+phase only where its egress tie accepted it: it accepts the honest run, and refuses the run whose egress differs from
+the committed trace by one token, whose N2 counts accept, and refuses a link with no egress tie by name. Nothing in
+`verity` but the scan service builds the verdict.
 
-A window's registration, draw and outcome are decided by the stream's own Lean verifier on the window's generator-form
-population program (`service.Stream(program=…)`), about half a minute a window, which no cheaper test runs on this
-Spec: the honest and one-token-off windows go through the stream once each (module fixtures), and every other refusal is
-the verifier of record's on a draw of its own or the honest one."""
+A phase's registration, sample and outcome are decided by the stream's own Lean verifier on the phase's generator-form
+population program (`service.Stream(program=…)`), about half a minute a phase, which no cheaper test runs on this Spec:
+the honest and one-token-off phases go through the stream once each (module fixtures), and every other refusal is the
+verifier's on a sample of its own or the honest one."""
 
 import ast
 import hashlib
-import json
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
@@ -79,10 +78,10 @@ SERVED, SERVED_ONE_OFF = _serve(), _serve(ONE_OFF)
 
 
 class Run:
-    """A link-window's egress tie: the network certifier's cells of both links (`warden_rows.Cells`, under fixed salts)
+    """An execution phase's egress tie: the network certifier's cells of both links (`warden_rows.Cells`, under fixed salts)
     of `served`, the committed trace of the compute's `outputs` (its `SCAN_STATE` and slot entries, the compute audit's
-    trees), the prover's views, the challenger's stream on injected coins and clock, and the window decided by the
-    verifier of record on stand-in proofs."""
+    trees), the prover's views, the challenger's stream on injected coins and clock, and the phase decided by the
+    verifier on stand-in proofs."""
 
     def __init__(self, tmp_path: Path, served: ST.Served = SERVED, outputs=RESPONSES, states=None) -> None:
         self.tmp, self.now, self.previous, self.served, self.tie = tmp_path, [0.0], None, served, TIE
@@ -102,29 +101,27 @@ class Run:
                                            for b in range(nb)], _salts(f"prog{j}", nb), G.WORD_BITS, SC.SCHEMA)
                       for j in self.tie.lanes]
         self.trace = SC.Trace(SC.Tree.of(self.state), tuple(SC.Tree.of(p) for p in self.progs))
-        self.views, self.nexts = list(self.chain.views), list(self.chain.states[2:T + 1])
+        self.views = list(self.chain.views)
 
     @property
     def heads(self) -> SC.Heads:
         return SC.Heads(self.cells.ingress.head, self.cells.egress.head)
 
     def computed(self) -> list[tuple[int, list[int], list[int]]]:
-        """Each bucket's (ok, S_t, view) by `ingress_scan.reference` on the committed rows, as the units compute them."""
+        """Each bucket's (ok, S_t, view) by `ingress_scan.reference` on the committed rows, as the blocks compute them."""
         bits, progs = standin._bits, self.progs
         return [IS.reference(CLS, self.cells.ingress.rows[t], bits(self.state.rows[t]) if t else None,
                              [x for p in progs for x in bits(p.rows[t // CLS.EVERY])]) for t in range(self.tie.T)]
 
     def trees(self) -> tuple[G.Registered, G.Registered]:
-        """The prover's ``scan/view`` and ``scan/next`` trees, of `views` and `nexts` (S_1 … S_(T−1)), row t − 1 of
-        ``scan/next`` under the trace's state leaf t + 1's salt and the last under one of its own."""
-        salts = list(self.state.salts[2:]) + _salts("next", 1)
+        """The prover's ``scan/view`` and ``scan/last`` trees, of `views` and S_(T−1)."""
         return (self.tie.view_tree(self.heads, self.views, _salts("view", self.tie.T)),
-                self.tie.next_tree(self.heads, self.nexts, salts))
+                self.tie.last_tree(self.heads, self.chain.states[self.tie.T], _salts("last", 1)))
 
     def draw(self) -> S.Draw:
-        """The window registered on the stream, the prover's trees under it, and drawn."""
-        self.view, self.next = self.trees()
-        record = self.tie.registration(self.heads, self.trace, self.view.root, self.next.root, self.previous)
+        """The execution phase registered on the stream, the prover's trees under it, and sampled."""
+        self.view, self.last = self.trees()
+        record = self.tie.registration(self.heads, self.trace, self.view.root, self.last.root, self.previous)
         reg = self.tie.register(self.stream, record, self.heads, self.trace)
         self.previous = reg.digest
         self.drawn = self.stream.select(reg)
@@ -132,16 +129,16 @@ class Run:
 
     def prove(self, name: str, members=None, **kw) -> SC.Delivered:
         return SC.Delivered({m.name: standin.prove_scan(self.tie, self.cells, self.state, self.progs, self.view,
-                                                        self.next, m, self.tmp / name / m.name, **kw)
+                                                        self.last, m, self.tmp / name / m.name, **kw)
                              for m in members or self.tie.members})
 
     def verify(self, delivered: SC.Delivered, draw: S.Draw | None = None, trace: SC.Trace | None = None) -> dict:
-        """The verifier of record's verdict on `delivered` against the drawn window (by default this run's draw)."""
+        """The verifier's verdict on `delivered` against the sampled phase (by default this run's sample)."""
         return self.tie.verify(draw or self.drawn, delivered, circuits=standin.scan_circuits(self.tie),
                                heads=self.heads, trace=trace or self.trace)
 
     def round(self) -> tuple[S.Outcome, dict]:
-        """The window registered, drawn, proved by every member, delivered and decided on the stream."""
+        """The execution phase registered, sampled, proved by every member, delivered and decided on the stream."""
         draw = self.draw()
         self.delivered = self.prove("round")
         assert self.stream.deliver(draw, self.delivered.sessions(self.tie.members)) is None
@@ -166,12 +163,13 @@ def one_off(tmp_path_factory) -> tuple[Run, S.Outcome, dict]:
 
 
 @pytest.mark.slow
-def test_an_honest_window_is_tied_with_every_bucket_proved(honest):
+def test_an_honest_execution_phase_is_tied_with_every_bucket_proved(honest):
     run, outcome, verdict = honest
     tie = run.tie
     assert (tie.T, tie.N, tie.nb) == (16, 32, 8)
     assert [(m.name, m.template, m.units[0], len(m.units)) for m in tie.members] == [
-        ("first", "first", 0, 1), ("ingress", "ingress", 1, 15), ("egress", "egress", 16, 16)]
+        ("first", "first", 0, 1), ("ingress", "ingress", 1, 14), ("last", "ingress", 15, 1),
+        ("egress", "egress", 16, 16)]
     assert outcome.accepted and verdict["refused"] == {} and outcome.public == {"verdict": 1}
     assert run.stream.records[-1]["audit"]["draw"]["units"] == list(range(tie.N))
     regs = tuple(R.digest(r) for r in run.stream.log)
@@ -182,27 +180,23 @@ def test_an_honest_window_is_tied_with_every_bucket_proved(honest):
 
 
 @pytest.mark.slow
-def test_the_registered_reads_name_every_port_and_chain_the_units(honest):
+def test_the_registered_reads_name_every_port_and_chain_the_blocks(honest):
     """Each member's `--registered` file names every port of its template (`Registered.checkComplete`): an ingress
-    unit's ``row`` reads the network certifier's ingress row t, ``sin`` state leaf t, ``prog<j>`` lane j's boundary
-    leaf, ``o1`` ``scan/next`` leaf t − 1 and ``o2`` view leaf t; the first unit's ``o1`` state leaf 1; an egress
-    unit's ``state`` view leaf t and ``o1`` the network certifier's egress row t; every ``o0`` the known words 1. The
-    ingress statement's S_t chain: each unit's ``o1`` commitment is the next unit's ``sin`` commitment."""
+    block's ``row`` reads the network certifier's ingress row t, ``sin`` state leaf t, ``prog<j>`` lane j's boundary
+    leaf, ``o1`` state leaf t + 1 (the last block's the ``scan/last`` leaf) and ``o2`` view leaf t; an egress block's
+    ``state`` view leaf t and ``o1`` the network certifier's egress row t; every ``o0`` the known words 1."""
     run = honest[0]
-    view, next_ = run.view, run.next
+    view, last = run.view, run.last
     m = {x.name: x for x in run.tie.members}
-    reads = {k: run.tie.registered(m[k], run.heads, run.trace, view.root, next_.root)["ports"] for k in m}
+    reads = {k: run.tie.registered(m[k], run.heads, run.trace, view.root, last.root)["ports"] for k in m}
     assert set(reads["first"]) == {"row", "prog0", "prog1", "o0", "o1", "o2"}
-    assert set(reads["ingress"]) == {"row", "sin", "prog0", "prog1", "o0", "o1", "o2"}
+    assert set(reads["ingress"]) == set(reads["last"]) == {"row", "sin", "prog0", "prog1", "o0", "o1", "o2"}
     assert set(reads["egress"]) == {"state", "o0", "o1"}
-    assert reads["first"]["o1"]["root"] == run.state.root.hex() and reads["first"]["o1"]["reads"] == [1]
     ing = reads["ingress"]
-    assert ing["row"]["root"] == run.cells.ingress.root.hex() and ing["row"]["reads"] == list(range(1, 16))
-    assert ing["sin"]["reads"] == list(range(1, 16)) and ing["prog1"]["reads"] == [b // 2 for b in range(1, 16)]
-    assert ing["o1"]["root"] == next_.root.hex() and ing["o1"]["reads"] == list(range(15))
-    assert ing["prog1"][G.READS_FROM] == 1 and ing["o1"][G.READS_FROM] == 1
-    got = SC.commitments(run.delivered.proofs["ingress"].circuit, run.delivered.proofs["ingress"].public)
-    assert got["o1"][:-1] == got["sin"][1:] and SC.chained(run.delivered.proofs["ingress"]) is None
+    assert ing["row"]["root"] == run.cells.ingress.root.hex() and ing["row"]["reads"] == list(range(1, 15))
+    assert ing["sin"]["reads"] == list(range(1, 15)) and ing["o1"]["reads"] == list(range(2, 16))
+    assert ing["prog1"]["reads"] == [b // 2 for b in range(1, 15)] and ing["prog1"][G.READS_FROM] == 1
+    assert reads["last"]["o1"]["root"] == last.root.hex() and reads["last"]["o1"]["reads"] == [0]
     eg = reads["egress"]
     assert eg["state"]["root"] == view.root.hex() and eg["o1"]["root"] == run.cells.egress.root.hex()
     assert eg["o0"][SC.KNOWN_KEY]["rows"] == [[1]] * run.tie.N and eg["o0"]["reads"] == list(range(16, 32))
@@ -232,7 +226,7 @@ def test_a_trace_whose_one_output_isnt_the_network_certifiers_is_refused(tmp_pat
 @pytest.mark.slow
 def test_a_view_that_renders_the_network_certifiers_changed_egress_is_refused_where_it_is_computed(tmp_path):
     """Against the one-off egress, the prover registers views of the one-off outputs, which render it, beside the
-    compute's honest trace: the egress member opens the network certifier's rows, and the ingress unit that computes
+    compute's honest trace: the egress member opens the network certifier's rows, and the ingress block that computes
     the changed view from the trace fails its ``o2`` read."""
     run = Run(tmp_path, served=SERVED_ONE_OFF)
     off = ST.chain(CLS, *SERVED_ONE_OFF.rows(), {q: xs for q, xs in enumerate(ONE_OFF, 1)})
@@ -248,50 +242,32 @@ def test_a_view_that_renders_the_network_certifiers_changed_egress_is_refused_wh
 
 
 @pytest.mark.slow
-def test_a_trace_whose_state_doesnt_follow_from_the_bucket_before_is_refused_at_the_chain(tmp_path):
-    """The trace's state leaf k isn't the S_(k−1) that unit k − 1 computes, and the prover's ``scan/next`` and views
-    are what its units compute on that trace, so every registered read opens: the ingress statement is refused only
-    by its commitment chain, at the instance whose ``o1`` the next one's ``sin`` doesn't commit to."""
+def test_a_trace_whose_state_doesnt_follow_from_the_bucket_before_is_refused_where_it_is_computed(tmp_path):
+    """The trace's state leaf k isn't the S_(k−1) that block k − 1 computes, and the prover's views are what the blocks
+    compute on that trace, so every view read opens: the member holding block k − 1 is refused at its ``o1`` read of
+    state leaf k, and the first block's member, whose S_0 leaf 1 holds, is proved."""
     T, chain = TIE.T, Run(tmp_path / "honest").chain
     k = next(t for t in range(2, T) if chain.states[t - 1] != chain.states[t])
     run = Run(tmp_path, states=[*chain.states[:k], chain.states[k - 1], *chain.states[k + 1:T]])
     got = run.computed()
     assert all(ok for ok, _, _ in got)
-    run.views, run.nexts = [v for _, _, v in got], [s for _, s, _ in got[1:]]
+    run.views = [v for _, _, v in got]
     run.draw()
-    verdict = run.verify(run.prove("chain"))
+    verdict = run.verify(run.prove("state"))
+    at = next(m for m in run.tie.members if m.template != "egress" and k - 1 in m.buckets)
     assert not verdict["accepted"] and "first" not in verdict["refused"]
-    assert verdict["refused"]["ingress"] == (f"chain: instance {k - 2}'s o1 commitment isn't instance {k - 1}'s sin "
-                                             "commitment")
-
-
-@pytest.mark.slow
-def test_the_chain_reads_each_instances_commitments_through_its_refs(honest):
-    """`chained` on the honest ingress statement's public file, read through the circuit's META ports: one ``sin``
-    table row changed breaks the chain at the instance before it, and a circuit file without META ports is refused."""
-    run, tmp = honest[0], honest[0].tmp / "chain-read"
-    proof = run.delivered.proofs["ingress"]
-    tmp.mkdir()
-    head, body = proof.public.read_bytes().split(b"\n", 1)
-    rows = json.loads(head)["shared_rows"]
-    at = (rows["row"] + 3) * SC.BC_BYTES
-    public = tmp / "public.bin"
-    public.write_bytes(head + b"\n" + body[:at] + bytes(SC.BC_BYTES) + body[at + SC.BC_BYTES:])
-    assert SC.chained(replace(proof, public=public)) == \
-        "chain: instance 2's o1 commitment isn't instance 3's sin commitment"
-    bare = tmp / "circuit.txt"
-    bare.write_text("stand-in circuit\n")
-    assert SC.chained(replace(proof, circuit=bare)).startswith("chain: the statement's commitments can't be read")
+    assert verdict["refused"][at.name] == (f"registered reads: port o1: table row {at.buckets.index(k - 1)} does not "
+                                           f"open the registered root at position {k}")
 
 
 @pytest.mark.slow
 def test_a_registration_off_the_heads_or_the_trace_is_refused(honest):
-    """The challenger refuses a registration whose trace roots aren't the trace's, or whose window isn't its order in
-    the stream; and the verifier of record refuses a drawn window against another trace than the one registered."""
+    """The challenger refuses a registration whose trace roots aren't the trace's, or whose `window` provenance isn't
+    its order in the stream; and the verifier refuses a sampled phase against another trace than the one registered."""
     run = honest[0]
     other = SC.Trace(replace(run.trace.state, root=bytes(64)), run.trace.progs)
     stream = run.tie.stream(budget=8, delta=2.0 ** -40, challenger="c", coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
-    record = run.tie.registration(run.heads, run.trace, run.view.root, run.next.root)
+    record = run.tie.registration(run.heads, run.trace, run.view.root, run.last.root)
     with pytest.raises(S.Refused) as refused:
         run.tie.register(stream, record, run.heads, other)
     assert refused.value.verdict.codes == ("roots",)
@@ -313,7 +289,7 @@ def test_a_missing_member_or_one_naming_another_program_is_refused(honest):
 
 class Link:
     """The network certifier link's N2 side on the same served run: its two records certified under the schedule's
-    digest, committed and decided by N2's verifier of record on a stand-in proof."""
+    digest, committed and decided by N2's verifier on a stand-in proof."""
 
     def __init__(self, tmp_path: Path, served: ST.Served) -> None:
         tmp_path.mkdir(parents=True)
@@ -334,9 +310,9 @@ class Link:
 @pytest.mark.slow
 def test_the_network_verdict_of_record_refuses_a_run_whose_egress_is_one_token_off_the_trace(tmp_path, honest,
                                                                                             one_off):
-    """On a network certifier link the network verdict counts a window only where its egress tie accepted it: the
-    honest run is accepted; the run whose server sent one token other than the compute's has N2 counts that accept and
-    is refused, by its window; a link with no egress tie is refused by name; and an egress tie of another link, session
+    """On a network certifier link the network verdict counts an execution phase only where its egress tie accepted
+    it: the honest run is accepted; the run whose server sent one token other than the compute's has N2 counts that
+    accept and is refused, by its phase; a link with no egress tie is refused by name; and an egress tie of another link, session
     or schedule is no source of this link's."""
     scan, link = honest[0], Link(tmp_path / "honest", SERVED)
     assert link.outcome.accepted
@@ -366,8 +342,8 @@ def test_the_network_verdict_of_record_refuses_a_run_whose_egress_is_one_token_o
 
 
 def test_only_the_scan_service_builds_an_egress_tie_verdict():
-    """Nothing in `verity` but the scan service, which builds `EgressTieVerdict` from the stream's outcomes of record,
-    constructs one."""
+    """Nothing in `verity` but the scan service, which builds `EgressTieVerdict` from the stream's outcomes, constructs
+    one."""
     root = Path(SC.__file__).resolve().parents[3]
     builders = set()
     for path in root.rglob("*.py"):
