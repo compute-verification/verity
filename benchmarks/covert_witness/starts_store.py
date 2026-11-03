@@ -9,7 +9,7 @@
 data fetch`; a node holds no store key, so there it unpacks `pack`'s tar, sent with the run), checks every file's sha256
 and each start.json's digest against the manifest, and moves each start into place whole, through a directory beside
 it. It leaves a start whose files already match and refuses one that differs (remove it with `research retention rm`).
-`--keep` records the directory's retention (`research keep`, owner @training, the artifact as its copy). `export` checks
+`--keep` records the directory's retention (`research keep`, owned by the training lane, the artifact as its copy). `export` checks
 each θ's digest (`prepare.digest`, so it needs torch) and records each start's shape (`shape`, what te_core.policy's
 reference shapes read); `pack` and `install` are stdlib only, with research from this tree.
 """

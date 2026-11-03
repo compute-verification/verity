@@ -1,5 +1,5 @@
 """The policy plane: the (c, k) values the formalism scores every record at, and a start's reference shapes
-(note:training-20261102T1817Z-report-training-formalism-v1, section 2; c in Boolean gates, k in bits).
+(c in Boolean gates, k in bits).
 
     python -m te_core.policy [START ...]    # each start's reference shapes and grid
 
@@ -9,7 +9,7 @@ on, its forward MACs per token as the harness counts them) gives the two referen
 - **inference block** (one token): c = one token's forward at full context, w_fwd = forward MACs per token at the
   bf16 GEMM price (te_core.gates); k = what that block reads beyond θ: its token id, ⌈log2 V⌉ bits, and its context's
   keys and values, (ctx − 1)·2·n_layer·d_model bf16 values;
-- **reference** policy (the experiments draft's E0, note:training-20261102T1715Z-draft-training-efficiency-experiments):
+- **reference** policy (the experiments' E0):
   c = 4096·w_fwd, one 4,096-token session per block, and k = 10 kB, 80,000 bits, where honest serving still passes Fit
   (Δ = 0 and s·τ = 4096·⌈log2 V⌉ ≤ k);
 - **server block**: the start's whole training in one block, c = C0 (its training's gates: `c0_gates` when its shape

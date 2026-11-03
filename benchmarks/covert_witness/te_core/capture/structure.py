@@ -13,7 +13,7 @@ te_core.flops, at one MAC per element of its largest operand or result (only its
 a using `Matmul` of part ``elementwise`` (`using_elementwise`), with k its MACs per token, which counts toward the
 upstream MACs of the GEMMs it reaches but not toward their `upstream` counts.
 
-Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology):
+Terms are the training ontology's:
 
 - A GEMM's result is **token-indexed** when one of its batch, m or n dims is indexed by a token axis, else
   **parameter-indexed** (a weight-shaped sum over tokens, as dW).

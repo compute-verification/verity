@@ -1,13 +1,13 @@
 # covert_witness: the least compute that lowers a start's loss to a target, at every policy (c, k)
 
-The training formalism v2 (Daniel, 2 Nov; note:training-20261102T2215Z-report-training-formalism-v2) prices a training
+The training formalism v2 prices a training
 computation C at a policy (c, k) by its slowdown ρ, so that |C|ρ is what the computation costs under that policy. This
 speedrun measures, per start (θ, ℓ0) and target ℓ*, the least |C|ρ of a valid candidate's checkpoint that reaches ℓ*
 (W*), against the least |C| of any valid candidate's checkpoint that reaches it (honest H), and S = W*/H ≥ 1. The inputs are
 the start, the target and the policy, with c (gates per block) and k (bits a block reads beyond θ) as two independent
 axes and n the per-period cap; the red team chooses everything else: no class caps the update, its size, its format or
 its depth. Every candidate carries witnesses, which the evaluator checks, and every record carries the formalism's
-quantities, which te_core measures (the experiments are note:training-20261102T1715Z-draft-training-efficiency-experiments).
+quantities, which te_core measures.
 
 It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate.sh`, `sandbox.py`, `launch.py`,
 `pin.py` and the harness `te_core/`, with `data.py`, `starts.py`, `starts_store.py` and `model.py` behind them) and
@@ -192,14 +192,13 @@ FILE (default `train.py`), and nothing else of the checkout is used.
 node from one; `prep.sh` prepares a node (`data_v3.py verify --keep`, `prepare.register_pythia()`, the starts from the
 store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
-`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2
-(note:training-20261102T2215Z-report-training-formalism-v2), analytically: gates, token blocks' gates, σ, the affected
+`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2, analytically: gates, token blocks' gates, σ, the affected
 gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
 lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
 `/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`
-(`CW_ROOT`, kept under @training): `heldout/<data version>/` (the search pool), `train/`, `ckpt/`, and `candidates/`
+(`CW_ROOT`, a retention the training lane owns): `heldout/<data version>/` (the search pool), `train/`, `ckpt/`, and `candidates/`
 (each candidate's island, training job output and sandbox root, removed when it ends).
 A candidate's run `out/` holds `run/run.json` (the harness's record as the evaluation job scored it, schema
 `te-core/run/v1`, with `evaluation`), `witness.json` (schema `covert-witness/witness/v5`), `tree.json` (the process

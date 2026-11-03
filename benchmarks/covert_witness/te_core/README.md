@@ -95,7 +95,7 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 
 ## The formalism's score (covert_witness v3)
 
-covert_witness v3 scores by the training formalism v2 (note:training-20261102T2215Z-report-training-formalism-v2),
+covert_witness v3 scores by the training formalism v2,
 beside the theorem's ρ above, which every record still carries. |C|, c, w and d are Boolean gates: `gates` prices each
 counted op by the circuits' own Definitions (a bf16 GEMM MAC is `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 =
 1,480.1). Ingest writes each submission's quantities (`formalism.of_record`: per step structure its gates, token blocks,
