@@ -1,0 +1,1632 @@
+{
+ "methods": {
+  "hybrid/cutcode": {
+   "learned": [
+    "A frozen-head run with only the tail's cut coded at 4 bits reaches s100 -5% at a quarter of the stub's a x C (1.84e20 against 5.59e20); every boundary at 5 bits gives 2.4x less than the stub."
+   ]
+  },
+  "hybrid/fullrank": {
+   "label": "Every block in full, large batch",
+   "description": "Every block matrix trained in full with Muon and the embedding frozen, at batch 128, to test whether a larger batch takes m100 to -2%."
+  },
+  "hybrid/lateqat": {
+   "label": "Every block, coded late",
+   "description": "The 3-bit code over every block matrix, trained uncoded for the first 50% or 80% of the steps and through the code after.",
+   "learned": [
+    "Coding late doesn't close the 3-bit code's gap: -4.49% and -4.48% against -4.37% coded from the first step and -5.75% never coded."
+   ]
+  },
+  "hybrid/mixed": {
+   "label": "Coded blocks plus a coded embedding adapter",
+   "description": "3-bit codes on every block matrix plus a low-rank change to the tied embedding with 4- or 8-bit factors, aimed at s100 -5%.",
+   "learned": [
+    "With 8-bit factors at rate 3e-4 the embedding adapter buys less per byte than block bits; at the embedding's own rate with 4-bit factors it buys gain at the same price per byte as block bits."
+   ]
+  },
+  "hybrid/qat": {
+   "label": "Every block, 3- or 4-bit code, trained in",
+   "description": "Every block matrix trains as the start plus a 3- or 4-bit integer code times one scale per row, rounded from a full-precision copy; the embedding stays frozen.",
+   "learned": [
+    "A 3-bit code keeps 76% of full precision's gain on s100 and misses -5% (-4.37% at 9.74e16 FLOPs); a 4-bit code at half the step reaches -5.27% with |E| 8.33 MB, a ninth of full precision's update.",
+    "The least Delta at -5% is 7.73 MB, 3.21 bits a weight. bf16 momentum and one scale per tensor cost nothing measurable; the MLP takes a coarse step better than attention."
+   ],
+   "open": [
+    "The full-precision copies behind the code are what the update block reads (Delta_t), and te_core does not price Delta_t yet, so Fit's update clause is optimistic for this method. On s100 those copies are about 77 MB; whether coded copies train is untested."
+   ]
+  },
+  "hybrid/staged": {
+   "label": "1-bit blocks, two at a time",
+   "description": "Sign codes of every block matrix, trained two blocks at a time (blocks 0-1, 2-3, 4-5, the list twice), aimed at s100 -2% at the least training state."
+  },
+  "hybrid/stagelora": {
+   "learned": [
+    "A stage plus adapters inside the top two blocks halves the FLOPs to s50 -1% against the stage alone, and passes -0.5%, -1% and -2% (-2.02% at 4.89e16, |E| 3.08 MB)."
+   ]
+  },
+  "lowrank-restart/dgrad": {
+   "learned": [
+    "Within 10 MB, s100 reaches -1.17% at Delta_grad 33.79 Mbit; m100 -0.5% at 2.85e16 FLOPs, 2.05x the full-precision frontier.",
+    "A momentum rotated per group of 128 and coded at 8 bits trains like an fp32 one to -0.5% (5.71e15 FLOPs)."
+   ],
+   "open": [
+    "The same within 1 MB, where fitting the state flattened near -0.37%."
+   ]
+  },
+  "lowrank-restart/galore-alloc": {
+   "learned": [
+    "Projected low-rank training saturates near -0.30% within 1 MB, as stacked pieces do."
+   ]
+  },
+  "lowrank/dora4": {
+   "label": "Adapters plus one magnitude per output row",
+   "description": "DoRA: every matrix of blocks 3-5 as a low-rank change with 4-bit factors plus one learned magnitude per output row, with those blocks' gains, in 1 MB."
+  },
+  "lowrank/dora4-b16": {
+   "label": "Adapters plus row magnitudes, batch 16",
+   "description": "The DoRA adapters on a complete schedule aimed at -0.5% at batch 16, against the same adapters without magnitudes.",
+   "learned": [
+    "Row magnitudes don't beat plain 4-bit adapters on the same schedule."
+   ]
+  },
+  "lowrank/lora-4bit": {
+   "learned": [
+    "Inside its long schedule the checkpoints reach s100 -0.5% only at 1.64e16 FLOPs; the same adapters on a complete short schedule at batch 16 reach it at 8.55e15."
+   ]
+  },
+  "lowrank/lora-4bit-b16": {
+   "label": "Adapters, 4-bit, batch 16",
+   "description": "Rank-66 adapters with 4-bit factors on every matrix of blocks 3-5 plus their gains, in 1 MB, on complete schedules at batch 16 (4x the steps at equal compute).",
+   "learned": [
+    "Reaches s100 -0.5% at |E| 988,678 B and 8.55e15 FLOPs on a complete schedule over 0.10 of the budget, and -1% at 4.40e16 over 0.45."
+   ],
+   "open": [
+    "Its full-precision factors (7.8 MB) and AdamW state (23.5 MB) are what the update block reads."
+   ]
+  },
+  "lowrank/lora-4bit-b16-lr2e-3": {
+   "label": "Adapters, 4-bit, batch 16, rate 2e-3",
+   "description": "The batch-16 4-bit adapters at learning rate 2e-3, on a complete schedule aimed at -0.5%."
+  },
+  "lowrank/lora-4bit-b16-lr5e-4": {
+   "label": "Adapters, 4-bit, batch 16, rate 5e-4",
+   "description": "The batch-16 4-bit adapters at learning rate 5e-4, on a complete schedule aimed at -0.5%."
+  },
+  "lowrank/lora-4bit-b32": {
+   "label": "Adapters, 4-bit, batch 32",
+   "description": "The 4-bit adapters at batch 32, on a complete schedule aimed at -0.5%."
+  },
+  "lowrank/lora-4bit-lr2": {
+   "label": "Adapters, 4-bit, rate 2e-3",
+   "description": "The 4-bit adapters at learning rate 2e-3, on a complete schedule aimed at -0.5%."
+  },
+  "lowrank/lora-4bit-muon": {
+   "label": "Adapters, 4-bit, Muon",
+   "description": "The batch-16 4-bit adapters with Muon on the factors instead of AdamW, on a complete schedule aimed at -0.5%.",
+   "learned": [
+    "Muon on the factors doesn't beat AdamW."
+   ]
+  },
+  "lowrank/lora-alloc2": {
+   "label": "Adapters, 2-bit, rank by gradient",
+   "description": "2-bit factors on blocks 3-5, each matrix's rank set by its gradient per byte until 1 MB fills (a matrix may get none), plus the gains at 6 bits."
+  },
+  "lowrank/lora-q2": {
+   "label": "Adapters, 2-bit, uniform rank",
+   "description": "Every matrix of blocks 3-5 at the largest uniform rank (about 133) whose 2-bit factors fit 1 MB, plus the gains at 6 bits.",
+   "learned": [
+    "Twice the rank at half the bits wins within 1 MB: -1.33% at 9.33e16 FLOPs."
+   ],
+   "open": [
+    "Its training state is 47.2 MB of gradient and AdamW state plus 15.7 MB of full-precision factors, far above Delta."
+   ]
+  },
+  "lowrank/lora-q2-b16": {
+   "label": "Adapters, 2-bit, batch 16",
+   "description": "The rank-133 2-bit adapters on blocks 3-5 at batch 16x1024, on a complete schedule over 0.42 aimed at -1% within 1 MB.",
+   "learned": [
+    "Reaches -1% at 3.98e16 FLOPs (its 95% checkpoint), the least compute to -1% within 1 MB; its 4-bit twin at rank 66 ends 0.0004 points short at 4.01e16."
+   ],
+   "open": [
+    "Twice the rank costs twice Delta_grad at the same Delta: 47.2 MB against the 4-bit twin's 23.5 MB."
+   ]
+  },
+  "lowrank/tophalf": {
+   "learned": [
+    "Within 1 MB, about -0.1% per 4x |E|; nothing reached m100 -0.5% on night 1."
+   ]
+  },
+  "placement/embed-lora": {
+   "label": "Embedding adapter",
+   "description": "A rank-4 adapter on the tied embedding (lookup and head) plus the final norm."
+  },
+  "placement/eot-prefix": {
+   "label": "End-of-text soft prefix",
+   "description": "Trains the end-of-text token's embedding row, the prefix every document starts with, as a rank-1 adapter.",
+   "learned": [
+    "Buys nothing: s100 ends at the start's 1.2070 at 3.74e16 FLOPs."
+   ]
+  },
+  "placement/norms-all": {
+   "learned": [
+    "The gains alone move about -0.1%."
+   ]
+  },
+  "placement/one-stage-mid": {
+   "learned": [
+    "Adapters on a middle block's MLP input reach -0.38% on s100 and -0.28% on m100 with phi 0, 1.8x the gain of block 0's attention at the same |E|."
+   ]
+  },
+  "quant/qat": {
+   "learned": [
+    "The 1-bit sign of one block's change reaches m100 -0.52% at |E| 893,960 B and 9.29e16 FLOPs."
+   ]
+  },
+  "quant/sign-qat": {
+   "label": "Every block, 1-bit code, trained in",
+   "description": "Every block matrix's change as its sign times one scale per matrix, trained through the code from a full-precision copy, with the gains in full; aimed at s100 -2%.",
+   "learned": [
+    "Reaches s100 -2% at |E| 2.44 MB; its training state is 231 MB, the gradient and Muon momentum (154 MB) plus a 77 MB full-precision latent."
+   ],
+   "open": [
+    "The full-precision copies behind the code are what the update block reads (Delta_t), and te_core does not price Delta_t yet, so Fit's update clause is optimistic for this method."
+   ]
+  },
+  "quant/sparse-ternary-qat": {
+   "label": "A share of entries, ternary code",
+   "description": "Every block matrix's change as a sparse ternary code: the entries with the largest latent move by sign times one scale, the rest stay; trained through the code.",
+   "learned": [
+    "s100 -1% within 1 MB (9% of entries, 900 kB, -1.11% at 4.39e16 FLOPs); m100 -0.5% at 931 kB and -1% at 6.8 MB.",
+    "Muon 0.0025 is the best rate for m100's codes; Muon 0.01 is worse."
+   ],
+   "open": [
+    "The training state fails Fit below 100 MB: 102.8 MB of gradient and momentum for s100's top-four code, 679.7 MB for m100's all-block codes counting their full-precision latents. Coded latents and momentum are untested.",
+    "The full-precision copies behind the code are what the update block reads (Delta_t), and te_core does not price Delta_t yet, so Fit's update clause is optimistic for this method."
+   ]
+  },
+  "ref-data/blockdecay-fe": {
+   "label": "Full training, rate decayed by depth",
+   "description": "Every block matrix with Muon, block i at 0.8^(7-i) of the rate, the embedding frozen; a complete schedule aimed at m100 -1%."
+  },
+  "ref-data/fullmuon": {
+   "label": "Full training, Muon, embedding trained",
+   "description": "Every block matrix with Muon and the tied embedding with AdamW, no weight average, on a complete schedule aimed at s100 -5%."
+  },
+  "ref-data/fullmuon-ema": {
+   "learned": [
+    "The tied embedding's AdamW rate is the lever on s100 -5%: 4.69e16 FLOPs with the embedding at 1e-3 and a weight average of 0.1, then 4.36e16 at 4e-3.",
+    "Training the embedding hurts m100 (-1.43% against -1.67% frozen).",
+    "At full budget s100 saturates: -7.78% at an embedding rate of 8e-3, -7.80% at 1.6e-2."
+   ],
+   "open": [
+    "m100 -2% and -5%."
+   ]
+  },
+  "ref-data/fullmuon-fe": {
+   "learned": [
+    "s100 -2% at 1.63e16 FLOPs on a complete schedule, from 1.95e16 at a mid-schedule checkpoint."
+   ]
+  },
+  "ref-data/top2muon": {
+   "learned": [
+    "s100 -0.5% at 4.33e15 FLOPs on a complete schedule; with the gains at AdamW 3e-3, m100 -0.5% at 1.14e16."
+   ]
+  },
+  "ref-data/top3muon": {
+   "label": "Top three blocks, Muon",
+   "description": "Retrains only the top three blocks with Muon on a complete schedule aimed at one target; the embedding and the blocks below stay frozen.",
+   "learned": [
+    "With the gains at AdamW 3e-3, s100 -0.25% at 9.08e14 FLOPs."
+   ]
+  },
+  "ref-data/top4muon": {
+   "learned": [
+    "m100 -0.5% at 1.39e16 FLOPs; with the gains at AdamW 3e-3, s100 -0.5% at 2.64e15."
+   ]
+  },
+  "ref-data/top4muon-ema": {
+   "label": "Top four blocks, Muon, weight average",
+   "description": "The top four blocks with Muon and a weight average, on a complete schedule aimed at m100 -0.5%."
+  },
+  "ref-data/top5muon": {
+   "learned": [
+    "m100 -1% at 4.25e16 FLOPs; with the gains at AdamW 3e-3, s100 -1% at 7.03e15."
+   ]
+  },
+  "ref-data/top5muon-ema": {
+   "label": "Top five blocks, Muon, weight average",
+   "description": "The top five blocks with Muon and a weight average, on a complete schedule aimed at s100 -1%."
+  },
+  "ref-data/top6muon": {
+   "learned": [
+    "m100 -1% at 4.36e16 FLOPs, from 5.40e16."
+   ]
+  },
+  "ref-optim/cooldown-forks": {
+   "learned": [
+    "Short cooldowns forked off one long run set honest points at the m50 and s50 targets."
+   ]
+  },
+  "ref-optim/freeze-embed": {
+   "learned": [
+    "Freezing the tied embedding saves 17.8% (s) and 12.7% (m) of the FLOPs per token; it wins on m100 (-1.67%) and loses on m50, s100 and s50."
+   ]
+  },
+  "ref-optim/muon-lr": {
+   "learned": [
+    "Low Muon rates win the early checkpoints and high rates the end; a high rate on an annealed start first bumps the loss up (the rewarm bump).",
+    "Best at full budget: s50 -12.20%, m50 -5.87%, s100 -6.46%, m100 -1.67%."
+   ]
+  },
+  "seed-mezo/mezo": {
+   "learned": [
+    "Gains are tiny per FLOP: about -0.09% on all blocks, roughly 1000x short of honest per FLOP.",
+    "A one-matrix subset runs out of gradient in about 3k steps."
+   ]
+  },
+  "seed-subspace/subspace-exact": {
+   "learned": [
+    "-0.28% on s50 and -0.144% on m50; the gain grows slower than K/|S|."
+   ]
+  },
+  "seed-subspace/topsub": {
+   "learned": [
+    "About 10x cheaper than the all-block subspace: -0.39% at 9.0e15 FLOPs."
+   ]
+  },
+  "shallow/top2": {
+   "learned": [
+    "Night 1 read it as below honest by comparing with checkpoints inside a long schedule; against complete schedules, and with the frozen tail charged, it is above honest."
+   ]
+  },
+  "shallow/topk": {
+   "learned": [
+    "Top-k Muon in short complete schedules within 10 MB: s100 -0.5% at 2.87e15, -1% at 7.49e15, -2% at 1.67e16 FLOPs.",
+    "AdamW needs 37% more compute than Muon for the same point.",
+    "The training state is the cost: bf16 momentum and gradients are free, and folding the gradient into the momentum takes Delta_grad from 102.8 MB to 25.7 MB at the same compute."
+   ],
+   "open": [
+    "How te_core should price a gradient folded into the momentum."
+   ]
+  },
+  "sparse/lora-alloc": {
+   "learned": [
+    "Night 1's leading soft spot: -2.03% on s50 at 2.25e16 FLOPs within 1 MB.",
+    "On the finished starts, LoRA barely moves with rate or bytes: within 1 MB it reaches s100 -0.5% only near 2.5e16 and m100 -0.5% not at all."
+   ]
+  },
+  "sparse/lora-embed": {
+   "learned": [
+    "Crosses -1% at 1.3e15 and -2% at 1.2e16 FLOPs.",
+    "Its rank-2 adapter is the narrowest cut measured (32-64 bits), so the traced step gives rho 1."
+   ],
+   "open": [
+    "Under te_core 4.1's context charge its S stays 1 to 5.83 while the dense routes' S becomes infinite; whether A1 charges earlier tokens' keys and values decides which reading stands."
+   ]
+  },
+  "sparse/qlora": {
+   "label": "Adapters, 1- to 4-bit, in 10 kB",
+   "description": "Adapters on the block matrices with 1-, 2- or 4-bit factors, ranks placed by gradient per byte, within 10 kB (one run in the smaller Fit bin), mostly with the final norm at 4 bits.",
+   "learned": [
+    "Within 10 kB adapters reach -0.15% to -0.18%; within the Fit bin (about 1.8 kB), 1-bit factors at 1,704 B reach -0.08%."
+   ]
+  },
+  "sparse/qlora-fit": {
+   "label": "Adapters, 1-bit, in 1.75 kB",
+   "description": "1-bit adapter factors with ranks placed by gradient per byte, plus the final norm at 4 bits, within 1.75 kB, where Fit holds at the reference policy's 10 kB."
+  },
+  "sparse/qloraembed": {
+   "label": "Embedding adapter plus 1-bit adapters, in 10 kB",
+   "description": "A rank-1 adapter on the tied embedding, the final norm at 4 bits, and 1-bit adapters on the block matrices with the bytes left, within 10 kB."
+  },
+  "sparse/qloragains": {
+   "label": "Gains plus 2-bit adapters",
+   "description": "Every gain at 4 bits plus 2-bit adapters on the block matrices, ranks placed by gradient per byte, within 10 kB, 100 kB or 1 MB.",
+   "learned": [
+    "Within 1 MB: -1% at 4.5e16 FLOPs, best -1.29%; within 100 kB it saturates at -0.42%."
+   ]
+  },
+  "sparse/qloragainsembed": {
+   "label": "Gains, embedding and 2-bit adapters",
+   "description": "Every gain at 4 bits plus 2-bit adapters on the block matrices and the tied embedding, ranks placed by gradient per byte."
+  },
+  "sparse/signrows": {
+   "label": "1-bit rows",
+   "description": "1-bit sign codes on whole rows of the block matrices, rows chosen by gradient per byte, plus the final norm at 4 bits, within 10 kB."
+  },
+  "sparse/signrowsgains": {
+   "label": "1-bit rows plus gains",
+   "description": "Every gain at 4 bits plus 1-bit sign codes on whole rows of the block matrices chosen by gradient per byte, within 10 kB, 100 kB or 1 MB.",
+   "learned": [
+    "Within 1 MB: s100 -0.5% at 7.1e15 FLOPs and m100 -0.5% at 4.5e16."
+   ]
+  },
+  "wildcard/cutcode": {
+   "learned": [
+    "An 8-bit code at the cuts keeps all of the gain (a = 4112 bits); coding only the update's effect gives a = 1040 and keeps 83%.",
+    "-2% at a = 2576, then 2072 forward and 2064 back entropy-coded; -5% at 2578 forward and 2064 back.",
+    "A 4-bit gradient code costs almost nothing; below 4 bits the targets slip."
+   ]
+  },
+  "wildcard/deltacode": {
+   "label": "One layer through a seeded basis",
+   "description": "The top block's down projection alone, as a rank-64 change whose one factor is fixed by a seed and the other trained; the head above it is a frozen tail."
+  },
+  "wildcard/topmlp": {
+   "learned": [
+    "In a complete short schedule the top MLP reaches s50 -1% at 1.84e15 FLOPs, about 2x cheaper than the same mechanism's checkpoint inside a long schedule."
+   ]
+  }
+ },
+ "directions": {
+  "audit": {
+   "what": "Attacks on the harness and the scorer, each reported as a loophole with its smallest fix; it trains no method.",
+   "ideas": [
+    {
+     "idea": "Uncounted work",
+     "verdict": "loophole",
+     "outcome": "Work hidden in the encoders, behind a paused counter, in threads or in forked children escaped the count; te_core 2.7 and 2.9 count it, and v2.2 fails a run whose process tree did work the harness didn't count.",
+     "evidence": [
+      "20261102T0944Z-audit-d4d6f2",
+      "20261102T1024Z-audit-8e1453",
+      "20261102T1026Z-audit-50071a",
+      "20261102T1030Z-toolsmith-e96e3c",
+      "20261102T1142Z-toolsmith-1b9749",
+      "20261102T1246Z-integrator-8016c5"
+     ]
+    },
+    {
+     "idea": "Missed tokens and routes",
+     "verdict": "loophole",
+     "outcome": "Whole routes were uncounted (division, fused and in-place matmuls, embedding bags).",
+     "evidence": [
+      "20261102T0944Z-audit-b527f9",
+      "20261102T0944Z-audit-798311",
+      "20261102T1030Z-toolsmith-e723f6",
+      "20261102T1142Z-toolsmith-1b9749"
+     ]
+    },
+    {
+     "idea": "The held-out set within reach",
+     "verdict": "loophole",
+     "outcome": "torch.from_file read the guarded search set; the held-out sets, starts and training stream were writable; LF_CORPUS/val.bin was the search set; 21 held-out documents duplicated training ones. v2.2 seals the sets outside the sandbox and drops duplicates.",
+     "evidence": [
+      "20261102T1024Z-audit-d913c2",
+      "20261102T1024Z-audit-142dd6",
+      "20261102T1024Z-audit-ec1b70",
+      "20261102T1024Z-audit-bfacfb",
+      "20261102T1246Z-integrator-865d49",
+      "20261102T1246Z-integrator-9e3fcc"
+     ]
+    },
+    {
+     "idea": "The candidate's own fixed side",
+     "verdict": "loophole",
+     "outcome": "The fixed side ran from each candidate's branch and its scorer from the candidate's imported copy; v2.2 ships one pinned measurement commit and takes only the island.",
+     "evidence": [
+      "20261102T1024Z-audit-6e3373",
+      "20261102T1024Z-audit-f345f7",
+      "20261102T1024Z-audit-565d62",
+      "20261102T1246Z-integrator-6e8e9e"
+     ]
+    },
+    {
+     "idea": "Declared, not measured",
+     "verdict": "loophole",
+     "outcome": "phi, train FLOPs and E's origin were declared: phi from the declared set, FLOPs from the candidate's log, and an earlier run's E replayed at one forward's cost.",
+     "evidence": [
+      "20261102T1024Z-audit-cdf9a9",
+      "20261102T0944Z-audit-7bad49",
+      "20261102T1024Z-audit-70c188"
+     ]
+    },
+    {
+     "idea": "Honest declarations and evaluation cost",
+     "verdict": "no-gain",
+     "outcome": "Declaring every step honestly leaves rho unchanged, and evaluation costs nothing the scorer charges.",
+     "evidence": [
+      "20261102T1024Z-audit-123a5f",
+      "20261102T0944Z-audit-b842d6"
+     ]
+    }
+   ],
+   "learned": [
+    "The harness must hold everything that measures; a candidate supplies only its island."
+   ],
+   "open": [],
+   "evidence": [
+    "20261102T1035Z-coordinator-f4ecb0"
+   ]
+  },
+  "hybrid": {
+   "what": "Combinations of the other directions' mechanisms (a full-rank stage plus adapters, coded blocks, coded cuts), in any class, aimed at the targets single mechanisms didn't reach.",
+   "ideas": [
+    {
+     "idea": "One full-rank stage with a sampled head",
+     "verdict": "loophole",
+     "outcome": "The top block's gate and up projections in full plus the final gain, with a sampled softmax head, reached s50 -1% at 3.3e15 FLOPs priced at rho 1 in every cell, because nothing below them changed. With the frozen tail charged (formalism v2), the same records are far from rho 1 at small k.",
+     "evidence": [
+      "20261102T1246Z-hybrid-f579cc",
+      "20261102T1008Z-hybrid-f093bb",
+      "20261102T2200Z-coordinator-8c69e9",
+      "20261102T2216Z-coordinator-f28a03"
+     ]
+    },
+    {
+     "idea": "A stage plus adapters",
+     "verdict": "gain",
+     "outcome": "A full-rank stage plus rank-8 adapters inside the top two blocks halves the FLOPs to s50 -1% against the stage alone, and passes -0.5%, -1% and -2% (-0.95% at 8.4e14, -1.29% at 3.85e15, -2.02% at 4.89e16; |E| 3.08 MB).",
+     "evidence": [
+      "20261102T1312Z-hybrid-271540",
+      "20261102T1427Z-hybrid-6cfa6e",
+      "20261102T1427Z-hybrid-713e0b",
+      "r20261102-133933-d6b1"
+     ]
+    },
+    {
+     "idea": "Low rank plus low bits within 1 MB",
+     "verdict": "gain",
+     "outcome": "Block 0's gate and up trained in full and stored at 4 bits, plus 8-bit rank-2 adapters, fit 774,900 B and give hybrid's best s50 entries: -0.98% at 7.7e14, -1.45% at 3.45e15, -2.02% at 3.61e16 FLOPs.",
+     "evidence": [
+      "20261102T1443Z-hybrid-82a160",
+      "20261102T1443Z-hybrid-fb48a7",
+      "r20261102-133520-217f"
+     ]
+    },
+    {
+     "idea": "Every block coded, toward s100 -5%",
+     "verdict": "gain",
+     "outcome": "A 3-bit code over every block keeps 76% of full precision's gain; a 4-bit code at half the step reaches -5.27% at 9.74e16 FLOPs with |E| 8.33 MB, a ninth of full precision's update; the least Delta at -5% is 7.73 MB at 3.21 bits a weight. bf16 momentum and one scale per tensor cost nothing measurable, and the MLP takes a coarse step better than attention.",
+     "evidence": [
+      "20261102T2100Z-hybrid-92a467",
+      "20261102T2130Z-hybrid-ef2c4c",
+      "20261103T0007Z-hybrid-b33fbf",
+      "20261102T2306Z-hybrid-340fe4",
+      "20261102T2336Z-hybrid-74b612",
+      "20261103T0107Z-hybrid-702fe1",
+      "20261103T0047Z-hybrid-db15a1",
+      "r20261102-205559-2570"
+     ]
+    },
+    {
+     "idea": "Coding late, or a smaller step",
+     "verdict": "no-gain",
+     "outcome": "Coding only after 50% or 80% of the steps ends -4.49% against -4.37% coded throughout; a smaller update at the same absolute step isn't cheaper.",
+     "evidence": [
+      "20261102T2224Z-hybrid-56b74f",
+      "20261102T2356Z-hybrid-20a052"
+     ]
+    },
+    {
+     "idea": "A coded embedding adapter beside coded blocks",
+     "verdict": "mixed",
+     "outcome": "With 8-bit factors at rate 3e-4 it buys less per byte than block bits; at the embedding's own rate with 4-bit factors it buys gain at the same price per byte as block bits.",
+     "evidence": [
+      "20261102T2249Z-hybrid-69e785",
+      "20261102T2323Z-hybrid-dab12d"
+     ]
+    },
+    {
+     "idea": "A frozen tail fed coded cuts",
+     "verdict": "gain",
+     "outcome": "With only the tail's cut coded at 4 bits, s100 -5% costs a x C = 1.84e20, a quarter of the stub's 5.59e20; with every boundary at 5 bits, 2.4x less than the stub.",
+     "evidence": [
+      "20261103T0123Z-hybrid-1ed54a",
+      "20261103T0145Z-hybrid-204db4"
+     ]
+    },
+    {
+     "idea": "Cached epochs on one stage",
+     "verdict": "no-gain",
+     "outcome": "Four passes over a cache of the top MLP's input end -0.22% against -0.31% for fresh windows at the same rate; reused windows teach less and overfit at higher rates.",
+     "evidence": [
+      "20261102T1226Z-hybrid-59a560"
+     ]
+    }
+   ],
+   "learned": [
+    "With a frozen tail, rho is 1 at every k >= Delta and, below it, rho = sigma s a / (t k), which doesn't depend on Delta: Delta is cheap at -5%, and the cut cost a is the lever below Delta's k.",
+    "A run's class label must decide nothing: a capped direction that launched class reference would have counted as honest."
+   ],
+   "open": [
+    "Delta_t: the full-precision copies behind the codes (about 77 MB on s100) are what the update block reads, and te_core does not price them yet.",
+    "Whether coded copies train."
+   ],
+   "evidence": [
+    "20261103T0048Z-hybrid-4884c1",
+    "20261102T1253Z-hybrid-9ccb0f",
+    "20261103T0047Z-coordinator-d46f18",
+    "20261102T2224Z-hybrid-bc236a"
+   ]
+  },
+  "integrator": {
+   "what": "The harness's smoke runs: checks that each pin measures, counts and records correctly. Not a method.",
+   "ideas": [],
+   "learned": [],
+   "open": [],
+   "evidence": [
+    "20261102T1332Z-coordinator-a44315"
+   ]
+  },
+  "lowrank": {
+   "what": "Low-rank adapters on block matrices, trading the factors' bits against rank within a byte budget.",
+   "ideas": [
+    {
+     "idea": "Rank against bytes within 1 MB",
+     "verdict": "mixed",
+     "outcome": "About -0.1% per 4x |E|; nothing reached m100 -0.5% on night 1.",
+     "evidence": [
+      "20261102T1430Z-lowrank-ac769e",
+      "r20261102-133644-5cc4"
+     ]
+    },
+    {
+     "idea": "4-bit factors",
+     "verdict": "gain",
+     "outcome": "Rank-66 4-bit factors on blocks 3-5 reach s100 -0.5% at |E| 988,678 B and 8.55e15 FLOPs, and -1% at 4.40e16.",
+     "evidence": [
+      "20261102T2355Z-lowrank-9805aa",
+      "20261103T0120Z-lowrank-ebf4dd"
+     ]
+    },
+    {
+     "idea": "2-bit factors at twice the rank",
+     "verdict": "gain",
+     "outcome": "-1.33% at 9.33e16 FLOPs; on a complete batch-16 schedule, -1% at 3.98e16.",
+     "evidence": [
+      "20261103T0205Z-lowrank-bbbc76",
+      "20261102T2355Z-lowrank-9805aa",
+      "r20261102-202452-b2ad",
+      "r20261103-011521-e71c"
+     ]
+    },
+    {
+     "idea": "Gradient-SVD initialisation",
+     "verdict": "no-gain",
+     "outcome": "Initialising the factors from the gradient's top singular vectors gives no gain over the plain recipe.",
+     "evidence": [
+      "20261102T1320Z-lowrank-c20f2d"
+     ]
+    },
+    {
+     "idea": "DoRA magnitudes, and Muon on the factors",
+     "verdict": "no-gain",
+     "outcome": "Neither beats plain 4-bit adapters on the same schedule.",
+     "evidence": [
+      "20261102T2333Z-lowrank-d089cd",
+      "20261102T2333Z-lowrank-e3e4fb"
+     ]
+    },
+    {
+     "idea": "100 kB and below",
+     "verdict": "no-gain",
+     "outcome": "Best -0.43% at 85,236 B; 18 kB plateaus near -0.17%.",
+     "evidence": [
+      "20261102T2233Z-lowrank-16f104",
+      "20261103T0117Z-lowrank-68bb33"
+     ]
+    }
+   ],
+   "learned": [
+    "Rank binds within 1 MB, so lower bits at higher rank win.",
+    "The training state far exceeds Delta: Delta_grad 23.5 to 47.2 MB and Delta_t 7.8 to 15.7 MB of full-precision factors against under 1 MB of update."
+   ],
+   "open": [
+    "Coded factor latents, so that Delta_t falls with Delta."
+   ],
+   "evidence": [
+    "20261102T2355Z-lowrank-9805aa",
+    "20261103T0120Z-lowrank-ebf4dd",
+    "20261103T0007Z-lowrank-2aa097",
+    "20261103T0047Z-coordinator-d46f18"
+   ]
+  },
+  "lowrank-restart": {
+   "what": "Low-rank training that restarts or projects (ReLoRA-style merged pieces, GaLore's projected gradients) on night 1; on night 2, one block retrained with Muon while the training state that passes between steps is compressed.",
+   "ideas": [
+    {
+     "idea": "Stacked pieces and projected training within 1 MB",
+     "verdict": "no-gain",
+     "outcome": "Both saturate near -0.30% within 1 MB; the best single piece reaches -0.44%.",
+     "evidence": [
+      "20261102T1430Z-lowrank-restart-9caedb",
+      "r20261102-140701-6710"
+     ]
+    },
+    {
+     "idea": "Merged pieces credited every step",
+     "verdict": "loophole",
+     "outcome": "Merged pieces make every later forward use an updated weight, while the analytic price took an adapter's base product as the start's; and one cheap declared step bounded the price of every covered step. te_core's count by value and the retirement of declared steps closed both.",
+     "evidence": [
+      "20261102T1052Z-lowrank-restart-02cbc7",
+      "20261102T0922Z-lowrank-restart-5a8eec",
+      "20261102T1057Z-lowrank-restart-282ef7"
+     ]
+    },
+    {
+     "idea": "Fitting the state within 1 MB",
+     "verdict": "no-gain",
+     "outcome": "Fitting the training state into 1 MB flattens near -0.37%.",
+     "evidence": [
+      "20261102T2048Z-lowrank-restart-496f84"
+     ]
+    },
+    {
+     "idea": "A compressed state within 10 MB",
+     "verdict": "gain",
+     "outcome": "With gradient messages and momentum coded, s100 reaches -1.17% at Delta_grad 33.79 Mbit; a momentum rotated per group of 128 and coded at 8 bits trains like an fp32 one to -0.5% (5.71e15 FLOPs); m100 reaches -0.5% at 2.85e16, 2.05x the full-precision frontier.",
+     "evidence": [
+      "20261103T0117Z-lowrank-restart-ff42e3",
+      "20261103T0100Z-lowrank-restart-24e626",
+      "20261103T0201Z-lowrank-restart-0b12a1",
+      "r20261102-201954-9ed1"
+     ]
+    },
+    {
+     "idea": "A fitted momentum",
+     "verdict": "mixed",
+     "outcome": "A momentum fitted to the state budget ends -0.69% against -0.82% unfitted.",
+     "evidence": [
+      "20261102T2341Z-lowrank-restart-623bda"
+     ]
+    }
+   ],
+   "learned": [
+    "Fit's reduction clause (2 Delta_grad <= k) can hold at 10 MB with a compressed state.",
+    "A random rotation per group of 128 before coding cuts the code's error 3-5x, so a group's few large entries no longer set its scale."
+   ],
+   "open": [
+    "The same compressed state within 1 MB.",
+    "How te_core should price a gradient folded into the momentum."
+   ],
+   "evidence": [
+    "20261103T0117Z-lowrank-restart-ff42e3",
+    "20261102T1430Z-lowrank-restart-104c3f",
+    "20261103T0137Z-shallow-7e2b93"
+   ]
+  },
+  "placement": {
+   "what": "Where a small update goes: the gains only, one stage (a block's input projections) at the top, middle or bottom, the bottom block, the embedding, or a soft prefix.",
+   "ideas": [
+    {
+     "idea": "The gains only",
+     "verdict": "no-gain",
+     "outcome": "Training only the normalization gains moves about -0.1%.",
+     "evidence": [
+      "20261102T1124Z-placement-f58850",
+      "20261102T1146Z-placement-c255d9"
+     ]
+    },
+    {
+     "idea": "A middle stage's MLP input",
+     "verdict": "gain",
+     "outcome": "Adapters on a middle block's MLP input reach -0.38% on s100 and -0.28% on m100 with phi 0, 1.8x the gain of block 0's attention at the same |E|.",
+     "evidence": [
+      "20261102T1406Z-placement-336d6f",
+      "20261102T1444Z-placement-55f1f5",
+      "20261102T1430Z-placement-ce8a2b",
+      "r20261102-140557-2330"
+     ]
+    },
+    {
+     "idea": "The bottom block",
+     "verdict": "mixed",
+     "outcome": "Adapters on the bottom block reach -0.33%; at full budget the harness counts LoRA's matmuls 12.5% above the plan, which made one run invalid on the compute budget.",
+     "evidence": [
+      "20261102T1347Z-placement-8345cf",
+      "20261102T1444Z-placement-0c2fa3"
+     ]
+    },
+    {
+     "idea": "An end-of-text soft prefix",
+     "verdict": "no-gain",
+     "outcome": "s100 ends at the start's 1.2070 at 3.74e16 FLOPs.",
+     "evidence": [
+      "20261102T1400Z-placement-51e8c3"
+     ]
+    }
+   ],
+   "learned": [
+    "Where the update goes matters more than its form.",
+    "A trainer must plan its steps from the harness's count, not from prepare.train_flops.",
+    "A CPU probe of placement is noise-bound."
+   ],
+   "open": [],
+   "evidence": [
+    "20261102T1430Z-placement-ce8a2b",
+    "20261102T1444Z-placement-0c2fa3"
+   ]
+  },
+  "quant": {
+   "what": "Updates trained through a low-bit code of the change: the sign of one block or of every block, and sparse ternary codes that move only a share of entries.",
+   "ideas": [
+    {
+     "idea": "The 1-bit sign of one block",
+     "verdict": "gain",
+     "outcome": "m100 -0.52% at |E| 893,960 B and 9.29e16 FLOPs.",
+     "evidence": [
+      "20261102T1428Z-quant-2eab89",
+      "r20261102-133027-d7d3"
+     ]
+    },
+    {
+     "idea": "The sign of every block",
+     "verdict": "gain",
+     "outcome": "s100 -2% at 2.44 MB, with a 231 MB training state: 154 MB of gradient and momentum plus a 77 MB full-precision latent.",
+     "evidence": [
+      "20261102T1956Z-quant-e56654",
+      "20261102T2224Z-hybrid-bc236a",
+      "r20261102-192149-3ade"
+     ]
+    },
+    {
+     "idea": "Sparse ternary codes",
+     "verdict": "gain",
+     "outcome": "s100 -1% within 1 MB (9% of entries, 900 kB, -1.11% at 4.39e16 FLOPs); m100 -0.5% at 931 kB and -1% at 6.8 MB.",
+     "evidence": [
+      "20261103T0050Z-quant-05de89",
+      "20261102T2220Z-quant-250b70",
+      "20261102T2324Z-quant-c56f61",
+      "20261103T0107Z-quant-061435"
+     ]
+    },
+    {
+     "idea": "Rate and batch",
+     "verdict": "mixed",
+     "outcome": "Muon 0.01 is worse than 0.0025 (-0.16% against -0.42%); half the batch cuts the compute 16%.",
+     "evidence": [
+      "20261102T2124Z-quant-e923cb",
+      "20261103T0130Z-quant-1e1523"
+     ]
+    },
+    {
+     "idea": "Declared steps of a large code",
+     "verdict": "loophole",
+     "outcome": "Under declared-step pricing one cheap step bounded all; declaring each step's whole code made a step take 0.49 s, so the step-time cap, not rho, bounded the family.",
+     "evidence": [
+      "20261102T1113Z-quant-8f0965",
+      "20261102T1420Z-quant-54abfb"
+     ]
+    }
+   ],
+   "learned": [
+    "The codes reach the targets within 1 MB.",
+    "The training state fails Fit below 100 MB: 102.8 MB of gradient and momentum for s100's top-four code, 679.7 MB for m100's all-block codes counting their full-precision latents.",
+    "Muon 0.0025 is the best rate for m100's sparse codes."
+   ],
+   "open": [
+    "Coded latents and coded momentum.",
+    "Delta_t, the full-precision latents, which te_core does not price yet."
+   ],
+   "evidence": [
+    "20261103T0107Z-quant-061435",
+    "20261103T0050Z-quant-05de89",
+    "20261102T2224Z-hybrid-bc236a"
+   ]
+  },
+  "ref-data": {
+   "what": "The reference side's data and schedule levers: deduplication, short context first, data selected by the start's loss; then complete Muon schedules of the top k blocks or every block, aimed at each target, which set the honest curve.",
+   "ideas": [
+    {
+     "idea": "Data levers",
+     "verdict": "no-gain",
+     "outcome": "Dropping every repeat would free under 0.7% of the budget; a short-context first half is behind at every point; selecting windows by the start's loss is behind at all ten points.",
+     "evidence": [
+      "20261102T1102Z-ref-data-8b65b9",
+      "20261102T1150Z-ref-data-2fdc6a",
+      "20261102T1406Z-ref-data-075157"
+     ]
+    },
+    {
+     "idea": "Top-k Muon in short complete schedules",
+     "verdict": "gain",
+     "outcome": "s100 -0.5% at 4.33e15 FLOPs (top 2), then 2.64e15 (top 4); m100 -0.5% at 1.39e16 (top 4), then 1.14e16 (top 2); m100 -1% at 4.36e16 (top 6), then 4.25e16 (top 5), from 5.40e16. The later ones train the gains at AdamW 3e-3.",
+     "evidence": [
+      "20261102T1958Z-ref-data-1d1024",
+      "20261103T0118Z-ref-data-ee0878",
+      "20261102T2032Z-ref-data-481e23",
+      "20261103T0002Z-ref-data-2d8fc8",
+      "20261102T2138Z-ref-data-ce9a96",
+      "20261102T2315Z-ref-data-f33e77"
+     ]
+    },
+    {
+     "idea": "Full Muon in complete schedules",
+     "verdict": "gain",
+     "outcome": "With the embedding frozen, s100 -2% at 1.63e16 FLOPs, from 1.95e16 at a mid-schedule checkpoint.",
+     "evidence": [
+      "20261102T2101Z-ref-data-7efe1b"
+     ]
+    },
+    {
+     "idea": "The embedding's and the gains' rates",
+     "verdict": "gain",
+     "outcome": "The tied embedding's AdamW rate is the lever on s100 -5%: 4.69e16 FLOPs at 1e-3 with a weight average of 0.1, then 4.36e16 at 4e-3. Training the embedding hurts m100 (-1.43% against -1.67% frozen). At full budget s100 saturates near -7.8% (-7.78% at 8e-3, -7.80% at 1.6e-2). The gains at 3e-3 instead of 3e-4 move three of the four low cells.",
+     "evidence": [
+      "20261102T2138Z-ref-data-ce9a96",
+      "20261102T2315Z-ref-data-f33e77",
+      "20261102T2202Z-ref-data-e7f5dd",
+      "20261103T0217Z-ref-data-aab227",
+      "20261103T0002Z-ref-data-2d8fc8"
+     ]
+    },
+    {
+     "idea": "Softening the rewarm bump",
+     "verdict": "no-gain",
+     "outcome": "No variant removed the bump at equal compute.",
+     "evidence": [
+      "20261102T2042Z-ref-data-805ae4"
+     ]
+    },
+    {
+     "idea": "Measurement loopholes",
+     "verdict": "loophole",
+     "outcome": "The held-out sets are probably one public crawl dump each; the token count missed chunks at a reused address, so a step that scored 24.4M tokens recorded 49,152.",
+     "evidence": [
+      "20261102T0958Z-ref-data-1fba30",
+      "20261102T1406Z-ref-data-cb5b4d"
+     ]
+    }
+   ],
+   "learned": [
+    "Honest H comes from complete schedules aimed at each target.",
+    "The levers that set it are optimisation ones (rates, which blocks train, weight averaging), not data selection."
+   ],
+   "open": [
+    "m100 -2% and -5%."
+   ],
+   "evidence": [
+    "20261103T0118Z-ref-data-ee0878",
+    "20261102T2323Z-ref-data-f01ae3"
+   ]
+  },
+  "ref-optim": {
+   "what": "The reference side's optimiser levers on full training: Muon's rate, freezing the tied embedding, warmup-stable-decay ladders, batch size, and short cooldowns forked off one long run.",
+   "ideas": [
+    {
+     "idea": "Muon's rate",
+     "verdict": "mixed",
+     "outcome": "Low rates win the early checkpoints and high rates the end; a high rate on an annealed start first bumps the loss up.",
+     "evidence": [
+      "20261102T1108Z-ref-optim-c8ff60",
+      "20261102T1346Z-ref-optim-842d5e"
+     ]
+    },
+    {
+     "idea": "Freezing the embedding",
+     "verdict": "mixed",
+     "outcome": "17.8% (s) and 12.7% (m) fewer FLOPs per token; it wins on m100 (-1.67%) and loses on m50, s100 and s50.",
+     "evidence": [
+      "20261102T1005Z-ref-optim-c372bd",
+      "20261102T1419Z-ref-optim-bbcecf",
+      "20261102T1453Z-ref-optim-91bbce"
+     ]
+    },
+    {
+     "idea": "Cooldown forks",
+     "verdict": "gain",
+     "outcome": "Short cooldowns forked off one long run set honest points at the m50 and s50 targets.",
+     "evidence": [
+      "20261102T1428Z-ref-optim-bd97ef"
+     ]
+    },
+    {
+     "idea": "A warmup-stable-decay ladder, and batch 32",
+     "verdict": "no-gain",
+     "outcome": "Neither beats a complete linear-to-zero schedule at equal compute.",
+     "evidence": [
+      "20261102T1346Z-ref-optim-842d5e",
+      "20261102T1453Z-ref-optim-91bbce"
+     ]
+    }
+   ],
+   "learned": [
+    "Best at full budget: s50 -12.20%, m50 -5.87%, s100 -6.46%, m100 -1.67%.",
+    "Small batches favour AdamW on m."
+   ],
+   "open": [],
+   "evidence": [
+    "20261102T1428Z-ref-optim-bd97ef",
+    "20261102T1205Z-coordinator-6f5e4c"
+   ]
+  },
+  "seed-mezo": {
+   "what": "Zeroth-order training (MeZO): each step estimates the gradient along a seeded random direction from two forward passes, so the update is a list of seeds and scalars.",
+   "ideas": [
+    {
+     "idea": "A rate from gradient statistics",
+     "verdict": "mixed",
+     "outcome": "MeZO learns once the rate is near G/(E[g^2] T), and a one-matrix subset runs out of gradient in about 3k steps.",
+     "evidence": [
+      "20261102T1322Z-seed-mezo-20e81b",
+      "20261102T1344Z-seed-mezo-e0b58c",
+      "20261102T1400Z-seed-mezo-007931"
+     ]
+    },
+    {
+     "idea": "All blocks",
+     "verdict": "no-gain",
+     "outcome": "About -0.09%, roughly 1000x short of honest per FLOP.",
+     "evidence": [
+      "20261102T1431Z-seed-mezo-728f13",
+      "20261102T1431Z-seed-mezo-7779d8"
+     ]
+    },
+    {
+     "idea": "Crediting every step under the rebuild cap",
+     "verdict": "mixed",
+     "outcome": "The checker rebuilds each step from its seed, so steps x |S| <= c bounds what counts: 10,236 directions on s and 7,343 on m.",
+     "evidence": [
+      "20261102T1040Z-seed-mezo-1da750"
+     ]
+    }
+   ],
+   "learned": [
+    "Gains are tiny per FLOP; it fills the 1-100 kB cells at rho 1."
+   ],
+   "open": [],
+   "evidence": [
+    "20261102T1400Z-seed-mezo-007931",
+    "r20261102-135826-3797"
+   ]
+  },
+  "seed-subspace": {
+   "what": "Training coefficients over a seeded random subspace, so the update is a short list of numbers; gradients are exact, projected onto the subspace.",
+   "ideas": [
+    {
+     "idea": "Every block's subspace",
+     "verdict": "mixed",
+     "outcome": "-0.28% on s50, -0.144% on m50.",
+     "evidence": [
+      "20261102T1259Z-seed-subspace-c40f92",
+      "20261102T1443Z-seed-subspace-19a09d"
+     ]
+    },
+    {
+     "idea": "The top block's subspace",
+     "verdict": "gain",
+     "outcome": "About 10x cheaper: -0.39% at 9.0e15 FLOPs.",
+     "evidence": [
+      "20261102T1400Z-seed-subspace-5df533"
+     ]
+    },
+    {
+     "idea": "The gains' subspace",
+     "verdict": "no-gain",
+     "outcome": "-0.30% on s50, -0.09% on m100.",
+     "evidence": [
+      "20261102T1259Z-seed-subspace-12f787"
+     ]
+    },
+    {
+     "idea": "Directions cached in bf16",
+     "verdict": "loophole",
+     "outcome": "Steps that read bf16-cached directions are rebuilt from the seed log only to about 0.3% of Delta, not bit for bit, so they earn no seed-log credit.",
+     "evidence": [
+      "20261102T1016Z-seed-subspace-75e2d5"
+     ]
+    }
+   ],
+   "learned": [
+    "The gain grows slower than K/|S|."
+   ],
+   "open": [],
+   "evidence": [
+    "20261102T1429Z-seed-subspace-b527fb",
+    "20261102T1444Z-seed-subspace-a77a5d"
+   ]
+  },
+  "shallow": {
+   "what": "Retraining only the top k blocks and the final norm with everything below frozen; on night 2, also the update's code and the training state's bits.",
+   "ideas": [
+    {
+     "idea": "The top two blocks on night 1",
+     "verdict": "mixed",
+     "outcome": "Read as below honest by comparing with checkpoints inside a long schedule; against complete schedules, and with the frozen tail charged, it is above honest.",
+     "evidence": [
+      "20261102T1404Z-shallow-7bec05",
+      "20261102T1438Z-shallow-670649",
+      "20261102T1138Z-shallow-dec43c",
+      "20261102T1003Z-shallow-ea55c9",
+      "20261102T1205Z-coordinator-6f5e4c",
+      "r20261102-133000-c748",
+      "r20261102-142819-f403"
+     ]
+    },
+    {
+     "idea": "Top-k Muon within 10 MB",
+     "verdict": "gain",
+     "outcome": "s100 -0.5% at 2.87e15, -1% at 7.49e15, -2% at 1.67e16 FLOPs.",
+     "evidence": [
+      "20261103T0117Z-shallow-f13c99"
+     ]
+    },
+    {
+     "idea": "The update's code",
+     "verdict": "mixed",
+     "outcome": "Under AdamW 2e-3 a 4-bit code is free and 2 bits lose the update; under Muon at a high peak the 4-bit code costs 0.12 points.",
+     "evidence": [
+      "20261102T2014Z-shallow-99be7b",
+      "20261102T2037Z-shallow-952e86",
+      "20261103T0021Z-shallow-80c805"
+     ]
+    },
+    {
+     "idea": "Muon against AdamW",
+     "verdict": "gain",
+     "outcome": "AdamW needs 37% more compute for the same point.",
+     "evidence": [
+      "20261102T2249Z-shallow-746b67"
+     ]
+    },
+    {
+     "idea": "The training state's bits",
+     "verdict": "gain",
+     "outcome": "bf16 momentum and gradients are free; folding the gradient into the momentum takes Delta_grad from 102.8 MB to 25.7 MB at the same compute.",
+     "evidence": [
+      "20261103T0137Z-shallow-24f74f",
+      "20261103T0137Z-shallow-85b067"
+     ]
+    }
+   ],
+   "learned": [
+    "At most about 2x honest's tokens per FLOP.",
+    "shallow and ref-data converged on top-k Muon."
+   ],
+   "open": [
+    "How te_core should price a gradient folded into the momentum."
+   ],
+   "evidence": [
+    "20261103T0117Z-shallow-f13c99",
+    "20261102T1430Z-shallow-59f9d3",
+    "20261103T0137Z-shallow-7e2b93"
+   ]
+  },
+  "sparse": {
+   "what": "Updates inside small byte bins (1.75 kB to 1 MB): adapters placed by gradient, 1- and 2-bit adapters, 1-bit rows, gains at 4 bits, and an adapter on the embedding.",
+   "ideas": [
+    {
+     "idea": "Adapters placed by gradient",
+     "verdict": "mixed",
+     "outcome": "Ranks placed by gradient per byte beat uniform ranks, but on the finished starts LoRA barely moves with rate or bytes.",
+     "evidence": [
+      "20261102T1111Z-sparse-f20d48",
+      "20261102T1218Z-sparse-4adbb8",
+      "20261102T1218Z-sparse-1d3806",
+      "20261102T1255Z-sparse-21d6e6"
+     ]
+    },
+    {
+     "idea": "Adapters plus the embedding",
+     "verdict": "gain",
+     "outcome": "Crosses -1% at 1.3e15 and -2% at 1.2e16 FLOPs; the traced cut is 32-64 bits, so rho is 1.",
+     "evidence": [
+      "20261102T1255Z-sparse-4d7cff",
+      "20261102T1430Z-sparse-c773e6",
+      "20261103T0122Z-coordinator-a07d9e"
+     ]
+    },
+    {
+     "idea": "The Fit bin and 10 kB",
+     "verdict": "no-gain",
+     "outcome": "-0.15% to -0.18% within 10 kB; -0.08% within the Fit bin (1-bit factors at 1,704 B, under about 1.8 kB); the final norm alone -0.02%; at |E| 1,100 B, -0.07%.",
+     "evidence": [
+      "20261102T1944Z-sparse-deb19a",
+      "20261102T2037Z-sparse-5a1d01",
+      "20261103T0006Z-sparse-f01045",
+      "20261103T0203Z-sparse-4adad4"
+     ]
+    },
+    {
+     "idea": "100 kB",
+     "verdict": "no-gain",
+     "outcome": "Saturates at -0.42%.",
+     "evidence": [
+      "20261103T0006Z-sparse-f01045"
+     ]
+    },
+    {
+     "idea": "1-bit rows plus gains within 1 MB",
+     "verdict": "gain",
+     "outcome": "s100 -0.5% at 7.1e15 FLOPs; m100 -0.5% at 4.5e16.",
+     "evidence": [
+      "20261102T2151Z-sparse-0fe984",
+      "20261102T2331Z-sparse-fe51ed"
+     ]
+    },
+    {
+     "idea": "2-bit adapters plus gains within 1 MB",
+     "verdict": "gain",
+     "outcome": "-1% at 4.5e16 FLOPs; best -1.29%.",
+     "evidence": [
+      "20261103T0041Z-sparse-10e010",
+      "20261103T0203Z-sparse-4adad4"
+     ]
+    }
+   ],
+   "learned": [
+    "When 8|E| <= k, rho is 1; the reach is about -0.08%, -0.18%, -0.42% and -1.3% at 1.8 kB, 10 kB, 100 kB and 1 MB.",
+    "LoRA on the finished starts barely moves with rate or bytes."
+   ],
+   "open": [
+    "Adapters plus the embedding under te_core 4.1's context charge: its S stays 1 to 5.83."
+   ],
+   "evidence": [
+    "20261103T0125Z-sparse-134a3c",
+    "20261102T1430Z-sparse-c773e6",
+    "20261103T0200Z-toolsmith-44f657"
+   ]
+  },
+  "wildcard": {
+   "what": "Anything outside the other directions: one stage or layer retrained in complete short schedules, closed-form K-FAC steps, and codes at a cut that shrink what passes between blocks (the cut cost a).",
+   "ideas": [
+    {
+     "idea": "One stage, D = 0",
+     "verdict": "loophole",
+     "outcome": "One stage with nothing below it changed priced at rho 1 everywhere; with the frozen tail charged it no longer does.",
+     "evidence": [
+      "20261102T0916Z-wildcard-45c807",
+      "20261102T2200Z-coordinator-8c69e9"
+     ]
+    },
+    {
+     "idea": "The top MLP or down projection in complete short schedules",
+     "verdict": "gain",
+     "outcome": "s50 -0.5% at 3.69e14 and -1% at 1.84e15 FLOPs, about 2x cheaper than a checkpoint inside a long schedule.",
+     "evidence": [
+      "20261102T1406Z-wildcard-9ae4ac",
+      "20261102T1338Z-wildcard-df16bf",
+      "20261102T1225Z-wildcard-9f7a4c",
+      "20261102T1257Z-wildcard-0dd227"
+     ]
+    },
+    {
+     "idea": "A closed-form K-FAC step",
+     "verdict": "mixed",
+     "outcome": "-0.34% at 4.6e14 FLOPs.",
+     "evidence": [
+      "20261102T1250Z-wildcard-436840"
+     ]
+    },
+    {
+     "idea": "Codes at the cut",
+     "verdict": "gain",
+     "outcome": "An 8-bit code keeps all of the gain (a = 4112); coding only the update's effect gives a = 1040 and keeps 83%; -2% at a = 2576, then 2072 forward and 2064 back entropy-coded; -5% at 2578 forward and 2064 back.",
+     "evidence": [
+      "20261102T2045Z-wildcard-edc43c",
+      "20261102T2101Z-wildcard-6abd6d",
+      "20261102T2237Z-wildcard-1ba700",
+      "20261103T0018Z-wildcard-651c13",
+      "20261103T0109Z-wildcard-586136",
+      "20261103T0130Z-wildcard-89bee5"
+     ]
+    },
+    {
+     "idea": "The gradient's share of a",
+     "verdict": "gain",
+     "outcome": "A 4-bit gradient code costs almost nothing; an unbiased entropy-coded 2-bit gradient recovers most of what 2-bit absmax lost and gives s100 -0.5% a witness at 1040 forward and 1046 back.",
+     "evidence": [
+      "20261102T2250Z-wildcard-9a1c14",
+      "20261103T0116Z-wildcard-43f80e"
+     ]
+    },
+    {
+     "idea": "Self-reported logs and the source screen",
+     "verdict": "loophole",
+     "outcome": "Train FLOPs came from the candidate's own step log, and the screen read only the named script, so a shim ran source it never read.",
+     "evidence": [
+      "20261102T0948Z-wildcard-f94481",
+      "20261102T0916Z-wildcard-189493",
+      "20261102T1208Z-wildcard-4fa357"
+     ]
+    }
+   ],
+   "learned": [
+    "A1's cut cost a is per circuit: a run that trains through a coded cut exhibits its circuit's narrower cut, and its rho reads its own a.",
+    "The least a that reached each s100 target: 1040 bits at -0.5%, 2072 at -2%, 2578 at -5%."
+   ],
+   "open": [],
+   "evidence": [
+    "20261102T2207Z-wildcard-02538a",
+    "20261103T0110Z-wildcard-33a187",
+    "20261102T2233Z-coordinator-25e0df",
+    "20261103T0116Z-wildcard-43f80e",
+    "20261103T0130Z-wildcard-89bee5",
+    "20261103T0109Z-wildcard-586136"
+   ]
+  }
+ },
+ "lessons": [
+  {
+   "id": "measure-inside-the-pinned-harness",
+   "kind": "loophole",
+   "lesson": "A number is only as good as the code that measured it, so the harness, not the candidate, must hold everything that measures. Night 1's audit found the fixed side shipping from each candidate's own branch (13 of 16 direction branches still on v2.0), the held-out guard bypassed by torch.from_file, the compute counter paused through getattr, the update's depth share declared rather than measured, and train FLOPs read from the candidate's own step log.",
+   "fix": "v2.2: launch.py ships one pinned measurement commit and takes only the direction's island; training runs in a sandbox with no held-out set, network or other run; evaluation runs outside it; the count is the harness's, and a run whose process tree did uncounted work fails.",
+   "status": "fixed",
+   "rank": 1,
+   "evidence": [
+    "20261102T1024Z-audit-6e3373",
+    "20261102T0944Z-audit-7bad49",
+    "20261102T1024Z-audit-d913c2",
+    "20261102T1024Z-audit-8e1453",
+    "20261102T1024Z-audit-cdf9a9",
+    "20261102T0948Z-wildcard-f94481",
+    "20261102T1035Z-coordinator-f4ecb0",
+    "20261102T1246Z-integrator-6e8e9e",
+    "20261102T1246Z-integrator-865d49",
+    "20261102T1246Z-integrator-8016c5"
+   ]
+  },
+  {
+   "id": "compare-with-the-best-method-of-any-kind",
+   "kind": "measurement",
+   "lesson": "The slowdown theorem compares a method with the best method of any kind, so honest H(l*) is the least training compute over every valid record of any class or direction that reaches l*, and W* the least |C| x rho over the same records; S = W*/H is then at least 1 by construction. Night 1's ratios below 1 meant only that the reference baseline was weak (a rewarm bump on annealed starts), and a run's class label decided whether it counted as honest, which a covert-shaped run could have used.",
+   "fix": "Every valid record enters H at 2|C| and W* at |C| x rho whatever its label; on night 2 both were ruled to read every checkpoint of every valid record, the sealed finals guarding against picking noise.",
+   "status": "rule",
+   "rank": 2,
+   "evidence": [
+    "20261102T1457Z-coordinator-f78b8c",
+    "20261102T1457Z-coordinator-95cc13",
+    "20261102T1253Z-hybrid-9ccb0f",
+    "20261102T1024Z-audit-5a1d2d",
+    "20261102T1950Z-coordinator-ff5358"
+   ]
+  },
+  {
+   "id": "price-the-circuit-as-it-ran",
+   "kind": "measurement",
+   "lesson": "Price the computation that ran, not a declaration or an analysis of it: the harness's count stands (an unmerged adapter's matmuls are its own), the frozen tail's work is always charged, the claim rests on A1's upper bounds with the best-known values as the attack side, and the cut cost a is per circuit. Night 1's rho-1 soft spots (one stage, the top two blocks, one middle stage) keep rho 1 under v2 at k = 10 kB only for blocks of 1 or 10 tokens: Slowdown's target puts them at 5.7 to 9.5 for 100-token blocks and 232 to 391 for 4,096-token blocks.",
+   "fix": "Formalism v2 is the spec (te_core.formalism); analysis/rescore_v1.py re-scored night 1 under it, te_core 4.0 measures its quantities on each record's traced step, and 4.1 adds the context charge as a sensitivity.",
+   "status": "rule",
+   "rank": 3,
+   "evidence": [
+    "20261102T1342Z-coordinator-1670a6",
+    "20261102T2200Z-coordinator-8c69e9",
+    "20261102T2216Z-coordinator-f28a03",
+    "20261102T2233Z-coordinator-25e0df",
+    "20261102T1950Z-coordinator-ff5358",
+    "r20261102-140557-2330",
+    "r20261102-133000-c748",
+    "r20261102-133933-d6b1",
+    "20261103T0112Z-toolsmith-503877",
+    "20261103T0200Z-toolsmith-44f657"
+   ]
+  },
+  {
+   "id": "delta-is-cheap-the-state-is-not",
+   "kind": "method",
+   "lesson": "The update itself is cheap at every target reached: AdamW's update code is free down to 4 bits (Muon at a high peak pays 0.12 points at 4 bits), every block at 4 bits reaches s100 -5% at |E| 8.33 MB, and with a frozen tail rho is 1 at every k >= Delta. What fails Fit is the training state the update block reads: the gradient and optimizer state (Delta_grad: 25.7 MB for top-k Muon with the gradient folded into the momentum, 154 MB for every block of s100, about 463 MB for full training with the embedding) and the full-precision latents behind a code (Delta_t: 77 MB for every block of s100). bf16 momentum and gradients, folding the gradient into the momentum, and rotating before coding shrink it; below Delta's k the cut cost a is the lever.",
+   "fix": null,
+   "status": "standing",
+   "rank": 4,
+   "evidence": [
+    "20261102T2014Z-shallow-99be7b",
+    "20261103T0021Z-shallow-80c805",
+    "20261103T0048Z-hybrid-4884c1",
+    "20261102T2130Z-hybrid-ef2c4c",
+    "20261103T0137Z-shallow-85b067",
+    "20261103T0137Z-shallow-24f74f",
+    "20261103T0100Z-lowrank-restart-24e626",
+    "20261103T0130Z-wildcard-89bee5",
+    "20261102T2306Z-hybrid-340fe4",
+    "20261102T2224Z-hybrid-bc236a",
+    "20261102T2138Z-ref-data-ce9a96",
+    "20261103T0047Z-coordinator-d46f18"
+   ]
+  },
+  {
+   "id": "one-pin-short-complete-schedules-one-seed",
+   "kind": "process",
+   "lesson": "Run the night at one pin, aim each run at one target with a short complete schedule, and spend GPUs on new configurations rather than repeats. One pin froze what every number means; a complete short schedule reaches a target about 2x cheaper than a checkpoint inside a long one; and the search slice ranks checkpoints as the sealed final shard does (in this dataset, over the 560 checkpoints of 41 night-1 runs with a sealed final: Spearman 0.990 to 0.9998 per start between the two losses; with all three seeds a checkpoint's final loss spreads by a median 0.011% of the start's and at most 0.056%, against a median drop of 0.7%).",
+   "fix": "v2.3 was the night's last pin; the reference directions ran complete schedules aimed at each target; launches keep at most two runs in flight per direction across the nodes; v2.3's second sealed finals were cancelled because the first had shown the agreement.",
+   "status": "rule",
+   "rank": 5,
+   "evidence": [
+    "20261102T1332Z-coordinator-a44315",
+    "20261102T1035Z-coordinator-981351",
+    "20261102T1205Z-coordinator-6f5e4c",
+    "20261102T1338Z-wildcard-df16bf",
+    "20261103T0047Z-coordinator-b10935"
+   ]
+  },
+  {
+   "id": "uncounted-work",
+   "kind": "loophole",
+   "lesson": "Work the program hid in the encoders, behind a paused counter, in threads or in forked children escaped the compute count.",
+   "fix": "te_core 2.7 counts the encoders and submit on the program's objects; 2.9 counts the missed routes, threads and forks; v2.2's tree check fails a run whose processes did work the harness didn't count.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T0944Z-audit-d4d6f2",
+    "20261102T1024Z-audit-8e1453",
+    "20261102T1026Z-audit-50071a",
+    "20261102T1030Z-toolsmith-e96e3c",
+    "20261102T1142Z-toolsmith-1b9749",
+    "20261102T1246Z-integrator-8016c5"
+   ]
+  },
+  {
+   "id": "untagged-tokens",
+   "kind": "loophole",
+   "lesson": "te_core counted a step's tokens once per index buffer, so a step that built a fresh index tensor per chunk recorded only the chunks at new addresses (49,152 tokens for 24.4M scored).",
+   "fix": "te_core 3.11 changes the token count; it went to the next pin, not v2.3.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T1406Z-ref-data-cb5b4d",
+    "20261102T1425Z-toolsmith-1ffadd"
+   ]
+  },
+  {
+   "id": "held-out-in-reach",
+   "kind": "loophole",
+   "lesson": "The held-out sets were within the candidate's reach: torch.from_file read the guarded search set, the sets, starts and training stream were writable, LF_CORPUS/val.bin was the search set, and 21 search documents duplicated training ones.",
+   "fix": "v2.2 runs training in a sandbox with no held-out set, pins each set's tokens and drops every held-out document whose text is a training document's.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T1024Z-audit-d913c2",
+    "20261102T1024Z-audit-142dd6",
+    "20261102T1024Z-audit-ec1b70",
+    "20261102T1024Z-audit-bfacfb",
+    "20261102T1246Z-integrator-865d49",
+    "20261102T1246Z-integrator-9e3fcc"
+   ]
+  },
+  {
+   "id": "candidate-fixed-side",
+   "kind": "loophole",
+   "lesson": "The fixed side (prepare, evaluate, te_core) ran from each candidate's own branch, and the harness's scorer called the candidate's imported copy of prepare, so a candidate could rebind what measured it.",
+   "fix": "v2.2 ships one pinned measurement commit and takes only the direction's island from the candidate.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T1024Z-audit-6e3373",
+    "20261102T1024Z-audit-f345f7",
+    "20261102T1024Z-audit-565d62",
+    "20261102T1246Z-integrator-6e8e9e"
+   ]
+  },
+  {
+   "id": "declared-not-measured",
+   "kind": "loophole",
+   "lesson": "phi came from the declared changed set, train FLOPs from the candidate's own step log, and an earlier run's E could be replayed as a new run's at one forward's cost.",
+   "fix": "The witness reads the harness's counted figures and the structure as measured; outputs come only from the run's own sandbox.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T1024Z-audit-cdf9a9",
+    "20261102T0944Z-audit-7bad49",
+    "20261102T1024Z-audit-70c188"
+   ]
+  },
+  {
+   "id": "screen-reads-one-file",
+   "kind": "loophole",
+   "lesson": "The program screen read only the file named by --script, so a shim that ran another file (runpy, exec of a string) put source outside it.",
+   "fix": "te_core 3.4 screens the program and every module it imports outside the fixed side, and refuses runpy and exec.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T0958Z-lowrank-restart-9140ce",
+    "20261102T1208Z-wildcard-4fa357",
+    "20261102T1305Z-toolsmith-5c577e"
+   ]
+  },
+  {
+   "id": "adapter-pricing",
+   "kind": "loophole",
+   "lesson": "Analytic pricing got adapters wrong: an adapter on the tied embedding was priced from the head alone, and merged ReLoRA pieces were priced as if the base product were the start's.",
+   "fix": "te_core 2.4 places an adapter's lowest trained node as deep_share does; te_core's count by value prices merged pieces; 4.0 counts by update dependence on the traced step.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T0922Z-lowrank-27a0e1",
+    "20261102T0922Z-lowrank-restart-5a8eec",
+    "20261102T0953Z-toolsmith-d77b01",
+    "20261102T2150Z-toolsmith-37d44e"
+   ]
+  },
+  {
+   "id": "class-label-decides",
+   "kind": "loophole",
+   "lesson": "A run's class label decided whether it counted as honest: a record with direction ref-anything or class reference entered H, even from a capped direction.",
+   "fix": "Every valid record enters H and W* whatever its label.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T1253Z-hybrid-9ccb0f",
+    "20261102T1457Z-coordinator-95cc13",
+    "20261102T1024Z-audit-5a1d2d"
+   ]
+  },
+  {
+   "id": "one-cheap-declared-step",
+   "kind": "loophole",
+   "lesson": "Declared-step pricing gave every covered step the least price over covered steps, so one cheap declared step bounded the whole run's rho.",
+   "fix": "Declared steps no longer lower a run's price; formalism v2 prices the circuit as it ran.",
+   "status": "fixed",
+   "rank": null,
+   "evidence": [
+    "20261102T1113Z-quant-8f0965",
+    "20261102T1057Z-lowrank-restart-282ef7"
+   ]
+  },
+  {
+   "id": "public-dump",
+   "kind": "loophole",
+   "lesson": "The held-out sets are probably each one public crawl dump, while training mixes almost all dumps, so a candidate could target the dump.",
+   "fix": null,
+   "status": "open",
+   "rank": null,
+   "evidence": [
+    "20261102T0958Z-ref-data-1fba30"
+   ]
+  },
+  {
+   "id": "trace-over-analysis",
+   "kind": "measurement",
+   "lesson": "Measured on the traced step, full-training routes' rho falls from about 3e7 (the analysis's even spread) to 180-300, because 68-80% of a token's affected work reads no update value; the narrowest cut (sparse's embedding adapter, 32-64 bits) gets rho 1. That rests on A1 not charging a block's reads of earlier tokens' keys and values; te_core 4.1's context charge makes the dense routes' S infinite and leaves the adapter's at 1 to 5.83.",
+   "fix": null,
+   "status": "open",
+   "rank": null,
+   "evidence": [
+    "20261103T0122Z-coordinator-a07d9e",
+    "20261103T0112Z-toolsmith-503877",
+    "20261103T0200Z-toolsmith-44f657"
+   ]
+  },
+  {
+   "id": "fit-clauses-read-what-blocks-read",
+   "kind": "measurement",
+   "lesson": "Each Fit clause counts what its block actually reads: compute Delta + s tau <= k with Delta the codes used; reduction 2 Delta_grad <= k; update application Delta_t + Delta_grad <= k, with Delta_t the weights in the form the update rule reads and writes (the full-precision latents of straight-through runs).",
+   "fix": "te_core prices the update clause with Delta, not Delta_t, so for straight-through runs Fit is optimistic until Delta_t is priced.",
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261103T0047Z-coordinator-d46f18"
+   ]
+  },
+  {
+   "id": "a-is-per-circuit",
+   "kind": "measurement",
+   "lesson": "A1's cut cost a is per circuit and never larger than a block of that circuit is shown to need: a run that trains through a coded cut exhibits its circuit's narrower cut, so its rho reads its own a, and the d_model x 16 stub stays only for circuits with no code.",
+   "fix": null,
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261102T2233Z-coordinator-25e0df",
+    "20261102T2207Z-wildcard-02538a"
+   ]
+  },
+  {
+   "id": "plan-from-the-harness-count",
+   "kind": "measurement",
+   "lesson": "The harness counts 12-13% more than prepare.train_flops for adapters, so a trainer that planned its steps from the analytic figure overran the compute budget and was invalid.",
+   "fix": "Trainers refit their step count to the harness's count early in the run.",
+   "status": "standing",
+   "rank": null,
+   "evidence": [
+    "20261102T1255Z-sparse-21d6e6",
+    "20261102T1444Z-placement-0c2fa3"
+   ]
+  },
+  {
+   "id": "one-seed-suffices",
+   "kind": "measurement",
+   "lesson": "One seed per configuration suffices for ranking: the sealed finals rerun under three seeds and agree with the search slice (in this dataset, over the 560 checkpoints of 41 night-1 runs with a sealed final: Spearman 0.990 to 0.9998 per start between the two losses; with all three seeds a checkpoint's final loss spreads by a median 0.011% of the start's and at most 0.056%, against a median drop of 0.7%).",
+   "fix": null,
+   "status": "standing",
+   "rank": null,
+   "evidence": [
+    "20261103T0047Z-coordinator-b10935"
+   ]
+  },
+  {
+   "id": "step-time-cap",
+   "kind": "measurement",
+   "lesson": "A declared family of a large code is bounded by the step-time cap, not by rho: declaring each step's whole code took a step from about 0.15 s to 0.49 s.",
+   "fix": null,
+   "status": "standing",
+   "rank": null,
+   "evidence": [
+    "20261102T1420Z-quant-54abfb"
+   ]
+  },
+  {
+   "id": "complete-short-schedules",
+   "kind": "method",
+   "lesson": "A complete short schedule aimed at a target reaches it about 2x cheaper than a checkpoint inside a long schedule, because low rates win early checkpoints and high rates the end.",
+   "fix": null,
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261102T1205Z-coordinator-6f5e4c",
+    "20261102T1338Z-wildcard-df16bf",
+    "20261102T1108Z-ref-optim-c8ff60"
+   ]
+  },
+  {
+   "id": "embedding-and-gains-rates",
+   "kind": "method",
+   "lesson": "The tied embedding's and the gains' AdamW rates are the honest curve's levers: the embedding's moves s100's high targets and hurts m100 when trained; the gains' moves both curves' low end.",
+   "fix": null,
+   "status": "standing",
+   "rank": null,
+   "evidence": [
+    "20261102T2315Z-ref-data-f33e77",
+    "20261103T0002Z-ref-data-2d8fc8",
+    "20261102T2202Z-ref-data-e7f5dd",
+    "20261103T0217Z-ref-data-aab227"
+   ]
+  },
+  {
+   "id": "rotate-before-coding",
+   "kind": "method",
+   "lesson": "Rotating a group of 128 values by a seeded orthonormal transform before coding cuts the code's error 3-5x, so an 8-bit rotated momentum trains like fp32.",
+   "fix": null,
+   "status": "standing",
+   "rank": null,
+   "evidence": [
+    "20261103T0100Z-lowrank-restart-24e626",
+    "20261103T0130Z-wildcard-89bee5"
+   ]
+  },
+  {
+   "id": "one-pin-per-night",
+   "kind": "process",
+   "lesson": "A night runs at one measurement pin; a counter change goes to the next pin, never into the night's.",
+   "fix": null,
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261102T1332Z-coordinator-a44315",
+    "20261102T1425Z-toolsmith-1ffadd"
+   ]
+  },
+  {
+   "id": "two-in-flight-multi-node",
+   "kind": "process",
+   "lesson": "Capacity was the bottleneck while one node served every launch: each direction keeps at most two runs in flight, packs sweeps into one run's arms, and launches on every node.",
+   "fix": null,
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261102T1035Z-coordinator-981351",
+    "20261102T1116Z-integrator-969218"
+   ]
+  },
+  {
+   "id": "negatives-are-data",
+   "kind": "process",
+   "lesson": "A run that gains nothing is logged as a negative result: it is part of the dataset.",
+   "fix": null,
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261103T0047Z-coordinator-b10935"
+   ]
+  },
+  {
+   "id": "method-key",
+   "kind": "process",
+   "lesson": "Every row carries a method key, direction/mechanism with no start suffix, and every new mechanism gets a plain-words label and a description of at most 200 characters, so the methods table covers it.",
+   "fix": null,
+   "status": "rule",
+   "rank": null,
+   "evidence": [
+    "20261103T0119Z-coordinator-4adfb4"
+   ]
+  },
+  {
+   "id": "launch-disk-floor",
+   "kind": "process",
+   "lesson": "On a shared agent VM the launcher's closing fetch refuses under its 1.5 GB disk floor and exits 1 with the run done; collect the record afterwards with --collect, nothing rerun.",
+   "fix": null,
+   "status": "standing",
+   "rank": null,
+   "evidence": [
+    "20261103T0201Z-lowrank-restart-5a9fde"
+   ]
+  }
+ ]
+}
