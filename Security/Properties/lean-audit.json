@@ -8890,7 +8890,7 @@
    ]
   },
   "Firewall.Record": {
-   "digest": "11b49e9c156005ad79029a1e31464e933e6632366ffdcfb1b46745ecb90273f0",
+   "digest": "371c07cf71656765b3b20ab3517097ba72ab6b6a4a9edb87229af17be39b63ed",
    "definitions": {
     "Core.Firewall.Admitted": "1104c0260be780c10fa41f3671663755a6b0a2b0353d4361b3565017a585eeba",
     "Core.Firewall.Admitted.index": "89308749aab0514f57f1d68410ba8e371a9ae1d88c52e4e5d911dec04fb69f5a",
@@ -8924,9 +8924,10 @@
     "Core.Firewall.Tally.step": "59182e293c15a8c89b3d1668efe5ddb90159561ceaf6bfef689c9bc369eb17ed",
     "Core.Firewall.Tally.step._sparseCasesOn_3": "7e38850a241bc434333d28afa03c5ef5e8d7473a3c4acec94302958b8c78355e",
     "Core.Firewall.Tally.stopped": "0e7c20b37b07db0d22ed7950f5de88c28de8b1f1be5cc0a9dd786afdf2546772",
-    "Core.Firewall.admit": "ee76346cc0ab5ec67e0c821094fb31024cdc09201b782ba49b39358043fef900",
+    "Core.Firewall.admit": "7e5376cd8682f8ee4415deedbd9d3a6e3617253728201edbc53c4f3848a61d6c",
     "Core.Firewall.admit.refuse": "58e85ab8e499eea1b6923b2b93d38a9a1128852f48940ff1f3fdbca928dddce9",
     "Core.Firewall.admit.served": "3426b68caccfb957a0269c5f4854e3c1933dd00a7dbe03fafb12c4bd7be60182",
+    "Core.Firewall.budgetArg.match_1": "9997d5ddbd88a14b267f40134e7a74bd5b30287ac70b0154c3b4cc61cf984321",
     "Core.Firewall.budgetOf": "f3ffade311aa8a8696ee7bc0ca822900060903bd6e1952ca9159f75dfab5fd12",
     "Core.Firewall.failures": "d145c9e7e8bd0851eaaa06c4158e9a7c7796d612386f986e159caf5178e750d0",
     "Core.Firewall.finished": "2dd4c422ca5285cd5da057681459811828485cb254bac8e727e04bbe55720bcb",
@@ -8936,10 +8937,9 @@
     "Core.Firewall.openOf": "cd328ab8f7c31538435287521a74f2c7e1e61a283ba66bca8c9db3d4fc37524e",
     "Core.Firewall.openOf._sparseCasesOn_1": "a094a06de3c87e52ffa2ae73e3a7e9788170786c0156b5f5776935f85cac9493",
     "Core.Firewall.releaseMs": "276e441f89640543374c8bdcd910ff25c07b657eb50d2b6f96ee39aef8c874ab",
-    "Core.Firewall.stop": "a3cbb98ace234db3fa243363f2512c5647e60345cd23db48cdbf2fb802e0563f",
+    "Core.Firewall.stop": "0eafccdddccd7f04867c6f2716243a53862d83bad93c5737ad5235d3aa8d55ef",
     "Core.Firewall.stopOf": "edae55f1f92a211cbd23fa2b07c77af546929e9e6ce89c87effce61008950a9f",
-    "Core.Firewall.stopOf._sparseCasesOn_1": "63e7d1c4c0c13cc2e24edd645aeac0a9c7f6d2e6a26c77bcf31cb14b8d4f15a3",
-    "_private.Firewall.Record.0.Core.Firewall.showBudget.match_1": "28c307f2322b86d19b7e8ba32443c5ef628c6d0f4ed5aab816dbc2142eefaad5"
+    "Core.Firewall.stopOf._sparseCasesOn_1": "63e7d1c4c0c13cc2e24edd645aeac0a9c7f6d2e6a26c77bcf31cb14b8d4f15a3"
    },
    "guarantees": [
     "Properties.Firewall.admitNext",
