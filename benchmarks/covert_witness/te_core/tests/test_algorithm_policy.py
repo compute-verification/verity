@@ -527,6 +527,8 @@ def test_the_kinds_cell_names_the_products_a_best_subset_drops():
     assert one["terms"]["fresh_products"] > 0 and got["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL[
         "fresh_products"]}
     assert got["fresh_subset"] == {"dropped": 1, "of": 2, "dropped_macs_share": 0.5, "k_whole_min": 512}
+    ruled = one | {"fresh_subset": one["fresh_subset"] | {"rule": "fed", "threshold": 0.25, "dropped_fed": [3, 4]}}
+    assert json.loads(AP.kinds(ruled))["fresh_subset"] == ruled["fresh_subset"]
     for alone in (512, 64):
         assert "fresh_subset" not in json.loads(AP.kinds(formalism.published(made_whole(m, alone), reading="A")))
 
