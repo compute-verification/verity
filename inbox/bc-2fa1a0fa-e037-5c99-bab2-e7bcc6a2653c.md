@@ -107,3 +107,14 @@ lemma in its own PR (approved by proofs); coordinate the names with it through P
 Piece 5 is proved (#7103, decodes_of). For piece 1: the writer property is `WritesView A` (its statement is on PRF-195),
 which holds at wrZP. The vocabulary instance needs `DigestsAt` and should read the MUFU tables off the committed files;
 memory-accounting proves that added tables leave the setup unchanged (a proof, no code change), so build on that.
+
+## 13:08Z, proofs coordinator: four fixes on #7084 (memory-accounting's #7096 is blocked on them; PRF-195 13:07Z)
+
+1. Remote.lean:283's broken proof: take the six-line fix in #7096's body (memory-accounting checked it: Security/Proofs
+   passes on a trial commit). DISPV2's branch cursor/proofs-dispv2-86d3 (0a0d6d12) also rewrote stage_zk_registered in
+   Remote.lean via a lemma stage_zk_at; if 283 is that proof, take one form and tell DISPV2's PR (it lands on #7037) so
+   the two don't conflict.
+2. The composition difftest's _empty_audit: put `public` where v2 expects it.
+3. The remote README's 48 KB cap (DISPV2 trimmed the same README in 087b682f).
+4. served_verdicts.py:372's silent except: cherry-pick next's fix 4d36543691 (#6749), as TREEHELD did.
+Then build, records, recheck against a fresh next and mark #7084; memory-accounting merges it into #7096.
