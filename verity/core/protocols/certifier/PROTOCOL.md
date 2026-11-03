@@ -2010,32 +2010,32 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's host and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
   loopback on the prover's host.
-- **The cells' wiring is open to the verifier.** A proof block's read is (q, k), connection q's
-  cell k of the execution phase. The verifier places it at its bucket's row and slot with the network certifier's wiring
-  (`Wiring.place`), which the signed head names by a salted digest, so the reads are the network certifier's and never the
-  prover's (the phase-8 attack's finding, closed). Which cell each proof block reads is the Program's: the proof blocks'
-  wiring (`Units`, a (q, k) a proof block) is fixed with the Program from the schedule, the ordinals and the signed
-  wiring alone, never the cells' bytes, and the port's value names its digest, which Lean's registered reads hold the
-  statement's header to, so a statement made for another proof blocks' wiring is refused even at the same rows (the
+- **The cells' wiring is open to the verifier.** A proof block's read is `(q, k)`, connection `q`'s cell `k` of the
+  execution phase. The verifier places it at its bucket's row and slot with the network certifier's wiring
+  (`Wiring.place`), which the signed head names by a salted digest, so the reads are the network certifier's and never
+  the prover's (the phase-8 attack's finding, closed). Which cell each proof block reads is the Program's: the proof
+  blocks' wiring (`Units`, a `(q, k)` a proof block) is fixed with the Program from the schedule, the ordinals and the
+  signed wiring alone, never the cells' bytes, and the port's value names its digest, which Lean's registered reads hold
+  the statement's header to, so a statement made for another proof blocks' wiring is refused even at the same rows (the
   phase-11 attack's pad for a data cell, closed; no gate). But the wiring is opened to the verifier, and it and the rows
   the proof blocks read give away each connection's first row and cell count, both the prover's. A permutation argument
-  closes it, with no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the
-  execution phase's N = T·S cells as pairs (k, cell k of V, the network certifier's value), reordered into proof block
+  closes it, with no new verifier form. Before the window's coins, the prover registers Z′, a value of its own: the
+  execution phase's T·`S` cells as pairs (e, cell e of Z, the network certifier's value), reordered into proof block
   order, a fixed number of positions per consuming proof block (its cells in wire order, then empty cells), so the
-  population's shape is public and its occupancy isn't. Under two live coins α and γ, a population reads every row of V
-  (a bucket's S cells) and of V′ through two registered ports, both in public order. It carries ∏(γ − f(k, V_k)) and ∏(γ
-  − f(V′_m)) over the cells from proof block to proof block as committed values, and the last proof block's one output
-  bit says whether they are equal. Here f(k, x) = k + α·x(α), with x(α) a cell's B/8 words of 64 bits as a polynomial
-  over GF(2^64): at a public α it is XOR gates alone, and each cell costs one GF(2^64) product. Each consuming proof
-  block then reads its own positions of V′, which are public, and checks in-circuit that its cells' k are its
-  connection's schedule (bucket s + Δ_nc + ⌊i/r⌋ for egress cell i), that its cells' stream field is its ordinal and that
-  its spare positions hold B zero bytes, so the wiring stays witness. A wrong V′ passes with probability at most (N·B/8
-  + N)/2^64 (Schwartz–Zippel). An unproved proof block could forge its running product, so every proof block of the
-    permutation population is proved, not a sample. The steps,
-  each a PR: (1) V′'s commitment and registration in `warden_rows`; (2) the permutation proof block's Definition, its
-  circuit-check sidecar and its cost at the served schedule; (3) the demonstration on `warden_zk.py`, with a wrong
-  wiring refused; (4) the consuming proof blocks read V′, the wiring is no longer opened, and this gap closes. The I/O
-  tie, which reads every row of the window in order, needs no wiring.
+  population's shape is public and its occupancy isn't. Under two live coins ζ and γ, a population reads every row of Z
+  (a bucket's `S` cells) and of Z′ through two registered ports, both in public order. It carries ∏ (γ − f(e, Z_e)) over
+  Z's cells and ∏ (γ − f(z)) over Z′'s entries z from proof block to proof block as committed values, and the last proof
+  block's one output bit says whether they are equal. Here f(e, y) = e + ζ·y(ζ), with y(ζ) a cell's `B`/8 words of 64
+  bits as a polynomial over GF(2^64): at a public ζ it is XOR gates alone, and each cell costs one GF(2^64) product.
+  Each consuming proof block then reads its own positions of Z′, which are public, and checks in-circuit that its cells'
+  positions e are its connection's schedule (bucket s + Δ_nc + ⌊i/r⌋ for egress cell i), that its cells' stream field is
+  its ordinal and that its spare positions hold `B` zero bytes, so the wiring stays witness. A wrong Z′ passes with
+  probability at most T·`S`·(`B`/8 + 1)/2^64 (Schwartz–Zippel). An unproved proof block could forge its running product,
+  so every proof block of the permutation population is proved, not a sample. The steps, each a PR: (1) Z′'s commitment
+  and registration in `warden_rows`; (2) the permutation proof block's Definition, its circuit-check sidecar and its
+  cost at the served schedule; (3) the demonstration on `warden_zk.py`, with a wrong wiring refused; (4) the consuming
+  proof blocks read Z′, the wiring is no longer opened, and this gap closes. The I/O tie, which reads every row of the
+  window in order, needs no wiring.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
   as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the network certifier signs ("The warden's cells as
   rows").
