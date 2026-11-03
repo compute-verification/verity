@@ -5,9 +5,9 @@ each bin (≤ 1.8 kB, Fit's at the reference policy c = 4096 w, k = 10 kB; ≤ 1
 with Δ_grad for each. Night 1's: within E ≤ 1 MB and ≤ 100 kB, which parameters to touch for the most loss per training
 FLOP, and how a mask's own encoding cost trades against its values.
 
-`train.py` is the one script; `islands/e1mb/train.py` and `islands/e100kb/train.py` on this branch are links to it, so the
-harness screens and runs this file: `launch.py e1mb|e100kb START --island sparse --node NODE --note "MECHANISM: ..." --
---klass e1mb|e100kb --mech ...`. `--cap BYTES` sets a bin below the class's cap (the class is the bin the harness checks).
+`train.py` is the one script. At v3's pin: `launch.py START --island sparse --node NODE --note "MECHANISM: ..." -- --cap
+BYTES --mech ...`, with `--cap` E's byte bin (required, since v3 has no classes). v2.3's records (the pilot) took the class
+too, `--klass reference|e1mb|e100kb`, with `--cap` a bin below its cap.
 
 | `--mech` | the mask | how E carries it |
 |---|---|---|

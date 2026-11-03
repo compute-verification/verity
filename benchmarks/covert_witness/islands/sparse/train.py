@@ -1,9 +1,8 @@
-"""Island `sparse` (classes e1mb and e100kb): which parameters a capped update should touch, chosen from the gradient at θ,
-encoded as mask plus values in the fixed formats; and the first-order trade between the mask's encoding cost and its values.
+"""Island `sparse`: which parameters a capped update should touch, chosen from the gradient at θ, encoded as mask plus
+values in the fixed formats; and the first-order trade between the mask's encoding cost and its values.
 
-`islands/e1mb/train.py` and `islands/e100kb/train.py` on this branch are links to this file, which takes the class as
-`--klass` on a pin with classes (the harness runs the resolved path, so the link's directory doesn't reach it). A pin
-without classes (v3) takes no `--klass`, and `--cap` is E's byte cap there.
+On v2.3's pin (the pilot, with classes) it takes the class as `--klass`; v3's has none, so it takes no `--klass` there
+and `--cap` (E's byte cap) is required.
 
 A probe (`--probe N` batches) takes the mean gradient G at θ of every tensor, priced in the step log as a forward pass plus
 the full backward's FLOPs (`extra`). From G the record's notes get, for each budget in BUDGETS, the share of ||G||² that each
@@ -38,7 +37,7 @@ trains: the update application's Δ_t).
 E is encoded at the end of every 5% of the harness's steps (the probe's batches included, `hooks.plan`), so each of the
 harness's checkpoints scores the most training its 5% holds.
 
-    python launch.py e1mb s50 --note TEXT -- --klass e1mb --mech lines [--targets all] [--norms all] [--lr 3e-4]
+    python launch.py START --island sparse --note "MECHANISM: ..." -- --cap BYTES --mech qlora [--embed-rank R] [--lr 1e-3]
 """
 from __future__ import annotations
 
