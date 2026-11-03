@@ -168,7 +168,7 @@ theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.
     DecodesOnZKJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
-  decodesZCJH_liveIP I own ht hc dj y₀ wr L hT hCust.1 fun S =>
-    drawOkZKHJP_of_size I own ht hc law kd n hdiv dj hCust.2 S (hsz S)
+  decodesZCJH_liveIP I own ht hc dj y₀ wr L hT hCust.1 fun ω =>
+    drawOkZKHJP_of_size I own ht hc law kd n hdiv dj hCust.2 (L.draw ω) (hsz (L.draw ω))
 
 end FlockSoundness.Discharge.ZkHidden

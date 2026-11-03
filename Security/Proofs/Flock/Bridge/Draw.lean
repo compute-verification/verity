@@ -295,7 +295,7 @@ theorem drawUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
 theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) : (execSel (n := n) t (.subset n) n).draw ω = univ := by
   change (match SampledProofs.Draw.drawUnits (.subset n) n (Properties.SampledProofs.bytesOf (t ω 0)) with
-    | .ok r => univ.filter fun u => u.val ∈ r.1
+    | .ok r => univ.filter fun u : Fin n => u.val ∈ r.1
     | .error _ => univ) = univ
   split
   · rename_i r hr

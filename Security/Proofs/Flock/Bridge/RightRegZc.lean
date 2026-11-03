@@ -191,7 +191,7 @@ theorem zk_flock_escapeC_regC (hlow : LoweringSoundZK A P planZ tab decode) (how
       (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj)
     (zc_knowledgeSound_regC A Hs P planZ tab vb canon _ _ hlow hown hcan hj)
     (zk_linkSoundC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht)
-    (fun (X : Reg × (Fin C.N → Bool)) _ => W ⊆ wrongRegZc A P planZ tab vb canon X.1 X.2) σ).trans
+    (fun (rx : Reg × (Fin C.N → Bool)) _ => W ⊆ wrongRegZc A P planZ tab vb canon rx.1 rx.2) σ).trans
     (add_le_add (add_le_add ?_ le_rfl) le_rfl)
   exact prCoin_mono fun ω h => h.2.mono_right h.1
 
