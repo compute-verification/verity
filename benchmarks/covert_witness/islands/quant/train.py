@@ -524,9 +524,15 @@ def submit(a, *args, **kw) -> None:
     prepare.submit(Path(a.out), a.start, *([a.klass] if getattr(prepare, "CLASSES", None) else []), *args, **kw)
 
 
-QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)")
+QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)|shrink(\d)")
 #: a qat arm that trains the weights unquantized; its checkpoints encode `--variants` of them, as ptq's do
 QAT_FP = "fp"
+
+
+def qat_bits(scheme: str) -> int:
+    """A qat scheme's code width: 1 for sign, 2 for tern and sparse, else its digit."""
+    m = QAT_SCHEME.fullmatch(scheme)
+    return 1 if scheme == "sign" else 2 if scheme in ("tern", "sparse") else int(m.group(1) or m.group(2))
 
 
 @torch.no_grad()
@@ -535,7 +541,9 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float
     round to nearest; a group of zeros quantizes to zeros. `sparse`: sign(V) on the ceil(keep · group) entries of largest
     |V| (ties at the threshold kept, zeros never), at `mult` times their mean |V|; with `block` B > 1 the kept entries
     are the ceil(keep · group / B) runs of B consecutive entries with the largest sum of |V|, so the support costs the
-    entropy coder a B-th as much a kept entry."""
+    entropy coder a B-th as much a kept entry. `shrink{b}`: soft threshold, so an entry enters the support at zero rather
+    than at the full scale: r = |V| less the ceil(keep · group)-th largest |V| (at least 0), rounded at `mult` times the
+    mean of r's positive entries to 0..qmax (b-bit levels -qmax..qmax), with V's sign."""
     g = v.numel() if group < 0 else qf.groups_of(v, group)
     vg = v.reshape(-1, g)
     if scheme == "sparse":
@@ -554,14 +562,22 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float
         s = qf._f16(mult * (a * kept).sum(1) / kept.sum(1).clamp(min=1))
         k = torch.where(kept, torch.where(vg >= 0, 2, 0), 1).to(torch.uint8)
         return qf.QArray(torch.tensor([-1.0, 0.0, 1.0, 0.0], dtype=torch.float16), s, k.view(-1), 2, g, tuple(v.shape))
-    s = qf._f16(mult * vg.abs().mean(1))
-    sf = s.float()
-    if scheme == "sign":
-        codes = (vg >= 0).to(torch.uint8)
-        return qf.QArray(torch.tensor([-1.0, 1.0], dtype=torch.float16), s, codes.view(-1), 1, g, tuple(v.shape))
-    bits = 2 if scheme == "tern" else int(QAT_SCHEME.fullmatch(scheme).group(1))
+    bits = qat_bits(scheme)
     qmax = 2 ** (bits - 1) - 1
-    k = torch.clamp(torch.round(vg / torch.where(sf > 0, sf, 1.0)[:, None]), -qmax, qmax) * (sf > 0)[:, None]
+    if scheme.startswith("shrink"):
+        a = vg.abs()
+        n_keep = min(g, max(1, math.ceil(keep * g)))
+        r = (a - a.kthvalue(g - n_keep + 1, dim=1, keepdim=True).values).clamp(min=0)
+        s = qf._f16(mult * r.sum(1) / (r > 0).sum(1).clamp(min=1))
+        sf = s.float()
+        k = torch.clamp(torch.round(r / torch.where(sf > 0, sf, 1.0)[:, None]), 0, qmax) * vg.sign() * (sf > 0)[:, None]
+    else:
+        s = qf._f16(mult * vg.abs().mean(1))
+        sf = s.float()
+        if scheme == "sign":
+            codes = (vg >= 0).to(torch.uint8)
+            return qf.QArray(torch.tensor([-1.0, 1.0], dtype=torch.float16), s, codes.view(-1), 1, g, tuple(v.shape))
+        k = torch.clamp(torch.round(vg / torch.where(sf > 0, sf, 1.0)[:, None]), -qmax, qmax) * (sf > 0)[:, None]
     cb = torch.zeros(2 ** bits)
     cb[: 2 * qmax + 1] = torch.arange(-qmax, qmax + 1, dtype=torch.float32)
     return qf.QArray(cb.to(torch.float16), s, (k + qmax).to(torch.uint8).view(-1), bits, g, tuple(v.shape))
@@ -852,8 +868,8 @@ def main() -> int:
                     help="all | blocks | blockmats | top{K} (the top K blocks and the final norm) | name regexes, comma-separated")
     ap.add_argument("--variants", default="fp,rtn4g128,rtn3g128,rtn2g128,sign,tern0.7", help="ptq")
     ap.add_argument("--norm-bits", type=int, default=8, help="ptq: the norm gains' rtn bits")
-    ap.add_argument("--qat", default="tern", help="qat: sign | tern | rtn{b} | fp (unquantized; its checkpoints encode "
-                                                  "--variants, as ptq's do)")
+    ap.add_argument("--qat", default="tern", help="qat: sign | tern | sparse | shrink{b} | rtn{b} | fp (unquantized; its "
+                                                  "checkpoints encode --variants, as ptq's do)")
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
     ap.add_argument("--qat-keep", type=float, default=0.05, help="qat sparse: the share of each group kept (nonzero)")
@@ -981,8 +997,7 @@ def main() -> int:
         if vote and not (coded and ((not mats and x.qat_norm_bits) or (mats and not rest and x.qat != "sign"))):
             raise SystemExit("quant: --opt vote steps codes: vectors only (--train norm --qat-norm-bits B), or matrices "
                              "only (--qat sparse|tern|rtnB, on every --qat-keep-th entry's strided support)")
-        vbits = (x.qat_norm_bits if not mats else 2 if x.qat in ("sparse", "tern") else
-                 int(QAT_SCHEME.fullmatch(x.qat).group(1)))
+        vbits = x.qat_norm_bits if not mats else qat_bits(x.qat) if coded else 0
         # matrices vote per sequence from one backward (SampleVotes), with their weights out of autograd
         sample = vote and bool(mats)
         for n in mats:
