@@ -42,7 +42,8 @@
 #     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
 #     that names or counts a window, its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
-#     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
+#     cap (`served_verdicts.py public-registration`), SAMPLED-PROOFS' leak count charges that cap (`sampled-line
+#     --cap-bits`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
@@ -95,7 +96,9 @@
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
-#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
+#     class, and V3C-COMPILED holds it to B's output (`prove_path.py window-circuit` at the class, capped at CAP) on the
+#     window's advice opened at the root its line published before any coin (`records_audit.py compile`, within WC_TIMEOUT,
+#     its verdict in full in $D/v3c-w<K>-<class>/compile, the line its codes alone); then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
 #     registration's members (V3C_LAW, default subset:1) and proves them; then `records_audit.py period` writes the audit
 #     as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json, and a copy in $OUT/v3c-audit: the
 #     registration, the Program, its answer and its free inputs), and V3c fails where it writes none.
