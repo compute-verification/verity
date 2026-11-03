@@ -148,10 +148,11 @@ noncomputable def chaseM (S : SessionIn V q k θ F c σ)
     (b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g)) : ℕ :=
   ⌈chaseBeta (V.units θ F) / (q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false)⌉₊
 
-/-- **`chaseAt`'s plays at most**: `chaseM`'s largest value over the file's wire bits. -/
-noncomputable def chaseMax (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) : ℕ :=
-  Finset.univ.sup (q.chaseM V S readX)
+/-- **`chaseAt`'s further plays**: at each wire bit `b`, `chaseM b` independent plays, of which `chaseAt` reads those
+at the bit its first play is off at. -/
+abbrev ChasePlays (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) :
+    Type :=
+  (b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g)) → Fin (q.chaseM V S readX b) → q.Play V S
 
 open Classical in
 /-- **A play's witness reading the plurality at the bit `b`**: the play's witness, where a unit the draw holds has the
@@ -164,16 +165,15 @@ noncomputable def chaseHit (S : SessionIn V q k θ F c σ)
       (readX (S.x t.1) wt b.1).getLsbD b.2 = (q.extract V S readX b.1).getLsbD b.2)
 
 /-- **The pair `chaseAt` hands `collOf`** at its first play `p.1` and further plays `p.2`: where the first play is off
-at the unit and bit `b` (`chaseSel`), the first play's statement and witness with the first of the next `chaseM b`
-plays that reads the plurality at `b`; none elsewhere. -/
+at the unit and bit `b` (`chaseSel`), the first play's statement and witness with the first of `b`'s `chaseM b`
+further plays that reads the plurality at `b`; none elsewhere. -/
 noncomputable def chasePair (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (p : q.Play V S × (Fin (q.chaseMax V S readX) → q.Play V S)) :
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (p : q.Play V S × q.ChasePlays V S readX) :
     Option (Msg × Claims.Flock.Wit × Msg × Claims.Flock.Wit) :=
   (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).bind fun b => (q.playWit V S p.1.1 (p.1.2 p.1.1)).bind fun w₀ =>
-    ((List.finRange (q.chaseMax V S readX)).filterMap fun j =>
-      if j.val < q.chaseM V S readX b.2 then (q.chaseHit V S readX b.2 (p.2 j)).map fun w => (S.x (p.2 j).1, w)
-      else none).head?.map fun xw => (S.x p.1.1, w₀, xw.1, xw.2)
+    ((List.finRange (q.chaseM V S readX b.2)).filterMap fun j =>
+      (q.chaseHit V S readX b.2 (p.2 b.2 j)).map fun w => (S.x (p.2 b.2 j).1, w)).head?.map
+        fun xw => (S.x p.1.1, w₀, xw.1, xw.2)
 
 open Classical in
 /-- **The chasing finder**: it plays the session once; where that play is off the plurality at the unit and bit `b`
@@ -182,12 +182,11 @@ first further one that reads the plurality at `b` (`chasePair`). Its cost is eve
 `collOf`'s. Its rule reads the strategy's weights (`chaseM`, and the plurality through `chaseSel`), as fixed data. -/
 noncomputable def chaseAt (Se : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (collOf : CollOf) : Claims.Finder where
-  S := q.Play V Se × (Fin (q.chaseMax V Se readX) → q.Play V Se)
+  S := q.Play V Se × q.ChasePlays V Se readX
   out p := (collRun collOf (q.chasePair V Se readX p)).1
   cost p := q.playCost V Se p.1.1 (p.1.2 p.1.1) +
     ((q.chaseSel V Se readX p.1.1 (p.1.2 p.1.1)).elim 0 fun b =>
-      ∑ j : Fin (q.chaseMax V Se readX),
-        if j.val < q.chaseM V Se readX b.2 then q.playCost V Se (p.2 j).1 ((p.2 j).2 (p.2 j).1) else 0) +
+      ∑ j : Fin (q.chaseM V Se readX b.2), q.playCost V Se (p.2 b.2 j).1 ((p.2 b.2 j).2 (p.2 b.2 j).1)) +
     (collRun collOf (q.chasePair V Se readX p)).2
 
 /-- **The chasing finder's budget**: `(2 + β n) · E[playBudget] + dColl`, a defined function of the strategy's cost `t'`
