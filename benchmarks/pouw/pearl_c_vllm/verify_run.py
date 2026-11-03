@@ -9,8 +9,8 @@
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
-- **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
-  Their root must be the one the pass published before any draw.
+- **The records** (each matmul's real rows, width, excluded and voluntary rows; each weight's excluded and voluntary rows)
+  are the manifest's (`records_of`).  Their root must be the one the pass published before any draw.
 - **The draws' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
   `uniform/io-getrandombytes`), the verifier's own, drawn here after the transcript is fixed: a
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
@@ -182,6 +182,16 @@ def read(path: Path) -> tuple[dict, str, str]:
     return man, digest, f"{man.get('run')}:{path} sha256:{digest}"
 
 
+def records_of(man: dict, matmuls) -> list[PW.UnitRecord]:
+    """The records the manifest declares, a call's and its weight's: real rows, |K|, excluded and voluntary A rows (a call's
+    ``excluded_a`` and ``voluntary_a``), and excluded and voluntary B rows (its weight's ``excluded_b`` and ``voluntary_b``)."""
+    def weight(mm):
+        return man["weights"][str(mm.weight)]
+    return [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]), tuple(weight(mm)["excluded_b"]),
+                          tuple(u.get("voluntary_a", ())), tuple(weight(mm).get("voluntary_b", ())))
+            for mm, u in zip(matmuls, man["matmuls"])]
+
+
 @dataclass
 class Pass:
     """One pass as the verifier holds it once its manifest is read: its epoch, records and transcript, checked against
@@ -213,8 +223,7 @@ def load(path: Path, coins: CoinCommitment | None = None, recorded: bool = False
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, salt = PD.manifest_epoch(man, coins, recorded)
-    records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
-                             tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
+    records = records_of(man, matmuls)
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
     reason = CW.check_records(epoch, splits, records)
     if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
