@@ -1,4 +1,7 @@
 import Batteries.Tactic.OpenPrivate
+-- `Ledger` realizes the match equations `mvcgen` splits `sessionNamed` with; realizing them here too clashes wherever
+-- both modules are imported.
+import Proofs.Properties.Pouw.LiveSalt.Ledger
 import Proofs.Properties.Verity.SampledDraw
 import Std.Tactic.Do
 
