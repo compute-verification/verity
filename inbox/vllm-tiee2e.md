@@ -1,0 +1,2 @@
+
+03:50Z Tue (coordinator): **merge vllm-serveorder's head d8d8e852e5** (cursor/vllm-serveorder-b7ab: PR D and PR E, with remotetie's f76177f067 already in). vllm-serveorder is adding a deferral: under H1_TIE on a node below the audit's memory, step 6's audit and the composite move to a follow-on job on vy-nebius-cpu-6 (`--mem-gb 320`). Its exact command will be in serveorder's note; fold it into run 2's plan and preflight. From remoterun: the run tree drops `complete` from PouwCheck.Lanes' registered file (28e1fb16ed) and prints SHARES (ea3f9c5635); merge both.
