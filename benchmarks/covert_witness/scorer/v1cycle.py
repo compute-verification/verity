@@ -80,8 +80,10 @@ CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"), ("4.8"
 #: 4.8 saves a traced step's product rows in every trace (the toolsmith's 66162c92b1 line; coordinator 12:20Z), and
 #: 4.12.1's stores everything 4.12.x reads, each row's fed, P and gathered and the rows at each k of the console's dial
 #: (the toolsmith's 16:34Z line), and 4.12.7's lists the matrix products a step writes with elementwise ops: a trace
-#: captured before 4.12.7 reads unmeasured for the fresh term (the toolsmith's 18:53Z line)
-CAPTURE_FINAL = "4.12.7"
+#: captured before 4.12.7 reads unmeasured for the fresh term (the toolsmith's 18:53Z line); 4.12.9's finds a broadcast
+#: product through a map, a copy or a multiplication by ones, and reads every earlier trace 'retrace' for the products
+#: term. The capture is frozen at 4.12.9 through Wednesday's finals (coordinator 20:11Z)
+CAPTURE_FINAL = "4.12.9"
 #: the (machine, pool, cap) node traces go to, each pool's research slots any lane's (auto.py's SPILL, and cpu-9's):
 #: a shard takes a slot free there now past its waiters (`pool_room`), at most `cap` shards in flight there across every
 #: layer's cache, half the pool's slots, so the rest stays other lanes'. Named machines, never `--on auto`, which
@@ -302,20 +304,48 @@ def replaces(new: Path, tiered: list[Path] = ()) -> bool:
     return all(a >= b for a, b in zip(traced_runs(new, *tiered), traced_runs(trace40.TE40_WT)))
 
 
+def published_runs(table: Path, p: dict) -> set[str]:
+    """The runs of what the console shows from `table` (`p`): each coverage cell's row (console/algorithm-policy.json
+    beside it), the frontier's, the reached rows with a measured rho_default that no other such row of their data and
+    gain target beats on both p and rho_default, and the partial reached rows' (a lower bound, beside the frontier)."""
+    ix = {c: i for i, c in enumerate(p["columns"])}
+    shown = table.parent.parent / "console" / "algorithm-policy.json"
+    q = json.loads(shown.read_text()) if shown.exists() else {"columns": ["record"], "rows": []}
+    runs = {r[q["columns"].index("record")].rsplit("@", 1)[0] for r in q["rows"]}
+    by: dict[tuple, list] = collections.defaultdict(list)
+    for r in p["rows"]:
+        if r[ix["reached"]] != "yes" or not isinstance(r[ix["rho_default"]], (int, float)) or r[ix["p"]] is None:
+            continue
+        if r[ix["basis_default"]] == "partial":
+            runs.add(r[ix["record"]].rsplit("@", 1)[0])
+        else:
+            by[(r[ix["data"]], r[ix["gain_target"]])].append((r[ix["p"]], r[ix["rho_default"]], r[ix["record"]]))
+    for grp in by.values():
+        runs |= {rec.rsplit("@", 1)[0] for a, b, rec in grp
+                 if not any(c <= a and d <= b and (c, d) != (a, b) for c, d, _ in grp)}
+    return runs
+
+
 def retrace_order(v3: set[str]) -> dict[str, int]:
-    """v3's runs a retrace takes first (coordinator 12:20Z), from the newest algorithm-policy table a refresh wrote
-    under OUT_ROOT: 0 a run that reached a gain, by its row or, a run with no row (refused or not yet traced, such as
+    """The runs a retrace takes first (coordinator 12:20Z), from the newest algorithm-policy table a refresh PUT under
+    OUT_ROOT (else the newest it wrote): -1 a published row's (`published_runs`, coordinator 20:56Z); 0 a run that
+    reached a gain, v3's or the pilot's, by its row or, a v3 run with no row (refused or not yet traced, such as
     sparse's and quant's first 1.1x points, coordinator 15:08Z), by a checkpoint's loss in the ledger at or under a
-    reached row's at the least gain target from its start; 1 each family's best not-reached run (by gain; method_key
-    where the family is unnamed). The rest of v3 follows, then the pilot."""
-    for t in sorted(OUT_ROOT.glob("2026-*/algorithm-policy/tables/algorithm-policy.json"), reverse=True):
+    reached row's at the least gain target from its start; 1 each v3 family's best not-reached run (by gain;
+    method_key where the family is unnamed). The rest of v3 follows, then the pilot."""
+    def put(t: Path) -> bool:
+        log = t.parents[1] / "run.log"
+        return log.exists() and "/training/algorithm-policy: 200" in log.read_text()
+    tables = sorted(OUT_ROOT.glob("2026-*/algorithm-policy/tables/algorithm-policy.json"), reverse=True)
+    for t in sorted(tables, key=lambda t: not put(t)):
         try:
             p = json.loads(t.read_text())
         except ValueError:
             continue
         ix = {c: i for i, c in enumerate(p["columns"])}
         rows = [r for r in p["rows"] if r[ix["record"]].rsplit("@", 1)[0] in v3]
-        rank = {r[ix["record"]].rsplit("@", 1)[0]: 0 for r in rows if r[ix["reached"]] == "yes"}
+        rank = {r[ix["record"]].rsplit("@", 1)[0]: 0 for r in p["rows"] if r[ix["reached"]] == "yes"}
+        rank |= {run: -1 for run in published_runs(t, p)}
         start = {r["run_id"]: r["start"] for r in trace40.scope()}
         least = min((r[ix["gain_target"]] for r in rows), default=None)
         bar: dict[str, float] = {}
@@ -326,7 +356,7 @@ def retrace_order(v3: set[str]) -> dict[str, int]:
         for line in (trace40.LEDGER / "index.jsonl").open():
             x = json.loads(line)
             if x.get("run_id") in v3 and (x.get("val_bpb") or math.inf) <= bar.get(start.get(x["run_id"]), -math.inf):
-                rank[x["run_id"]] = 0
+                rank.setdefault(x["run_id"], 0)
         best: dict[str, tuple[float, str]] = {}
         for r in rows:
             run, fam, gain = r[ix["record"]].rsplit("@", 1)[0], r[ix["family"]] or r[ix["method_key"]], r[ix["gain"]]
@@ -361,7 +391,17 @@ def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
     runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)
             and here(r["run_id"])]
     first = retrace_order(v3)
-    return sorted(((2 * (r not in v3) + first.get(r, 2), r) for r in runs), key=lambda x: x[0])
+    return sorted(((first[r] if first.get(r, 1) <= 0 else 2 * (r not in v3) + first.get(r, 2), r) for r in runs),
+                  key=lambda x: x[0])
+
+
+def reached_left(te: Path) -> list[str]:
+    """The published and reached runs (`retrace_order`'s ranks 0 and below) in scope that `te`'s cache hasn't traced
+    or failed: while any is left, a refresh over CAPTURE_FINAL's capture PUTs nothing, so the console's products terms
+    move to the new capture together and its frontier doesn't flip empty and back (coordinator 20:56Z)."""
+    done = trace40.done(trace40.cache(te))
+    scope = {r["run_id"] for r in trace40.scope()}
+    return sorted(r for r, k in retrace_order(v3_scope()).items() if k <= 0 and r in scope and r not in done)
 
 
 def ledger_args(out: Path, root: Path | None = None) -> list[str]:
@@ -543,7 +583,7 @@ def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None
 def branches(out: Path, put: bool, root: Path | None = None) -> str:
     """te_core.panels' frontier-branches into `out` after the re-score (its gate cache reused), on the ledger at
     `root`, PUT with `put`; the PUT's status, or why there is none."""
-    r = subprocess.run([sys.executable, "-m", "te_core.panels", FB, *ledger_args(out, root),
+    r = subprocess.run([sys.executable, "-m", "te_core.panels", FB, *ledger_args(out, root), *ladder_fit(),
                         *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
     (out / "panels.log").write_text(r.stdout + r.stderr)
@@ -569,6 +609,16 @@ FIT = "frontier-fit"
 #: the schemas te_core.frontier_fit's `ladder_points` reads
 LADDER = ("cursor/te-ladder-v3-4207", "benchmarks/covert_witness/islands/ladder-v3")
 LADDER_SCHEMAS = ("te-ladder/F/v1", "te-ladder/fit/v1", "te-ladder/report/v2")
+#: the scoring cap's ladder (the integrator's CAP.json in policy.ladder_fit's format), which every panel build reads as
+#: --ladder-fit (coordinator 20:11Z)
+LADDER_FIT = os.environ.get("TE_LADDER_FIT", "art:031cf1c6aa64e69fe5affa8f8ba20fa90df25f780d89e7b85951997af9d438c3")
+
+
+def ladder_fit() -> list[str]:
+    """`--ladder-fit` and LADDER_FIT's CAP.json, fetched from the evidence store; none when it can't be fetched."""
+    r = subprocess.run(["research", "data", "fetch", LADDER_FIT], capture_output=True, text=True, check=False)
+    cap = Path(r.stdout.strip().splitlines()[-1]) / "CAP.json" if not r.returncode and r.stdout.strip() else None
+    return ["--ladder-fit", str(cap)] if cap and cap.exists() else []
 
 
 def ladder_points(out: Path) -> list[Path]:
@@ -601,9 +651,10 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     if AP_V2 not in src("algorithm_policy.py"):
         return {"algorithm-policy": "not run (the builder's v2 isn't on this te_core yet)"}
     d = out / "algorithm-policy"
-    ladder = ladder_points(out / "ladder")
+    ladder, cap = ladder_points(out / "ladder"), ladder_fit()
     r = subprocess.run([sys.executable, "-m", "te_core.algorithm_policy", *ledger_args(d, root),
-                        *(x for p in ladder for x in ("--ladder-points", str(p))), *(["--publish"] if put else [])],
+                        *(x for p in ladder for x in ("--ladder-points", str(p))), *cap,
+                        *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
     d.mkdir(parents=True, exist_ok=True)
     (d / "run.log").write_text(r.stdout + r.stderr)
@@ -617,6 +668,7 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     board = next((x.removeprefix("board: ") for x in r.stdout.splitlines() if x.startswith("board: coverage")), None)
     res["coverage"] = [board] if board else coverage(d, r.stdout)
     res["ladder"] = [p.name for p in ladder]
+    res["ladder_fit"] = LADDER_FIT if cap else None
     fit = d / "tables" / f"{FIT}.json"
     used = re.search(r"(\d+) ladder points(?: \((art:\w+)\))?", json.loads(fit.read_text()).get("source") or ""
                      ) if fit.exists() else None
@@ -784,7 +836,13 @@ def main() -> int:
         measured_ledger(out, shards.get(trace40.TE40_WT, []), over=over, wait=not args.no_trace and not nxt),
         trace40.MEASURED)
     last = rescore(rs, args.gates, final, root)
-    policy = {} if final else policy_panels(out, commit, not args.no_put, root)
+    on = nxt or trace40.TE40_WT
+    left = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
+    hold = (f"{len(left)} of the published and reached runs not yet traced on capture {capture_version(on)}"
+            if left else None)
+    policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root)
+    if hold:
+        policy |= {k: f"not PUT ({hold})" for k in ("algorithm-policy", FIT) if k in policy}
     retired = not final and fb_retired(out, policy)
     put = "not PUT (final values)" if final else branches(rs, not args.no_put and not retired, root)
     if retired:
@@ -834,6 +892,8 @@ def main() -> int:
         meta["tiers"] = tiers
     if pools:
         meta["pools"] = pools
+    if left:
+        meta["put_held_for"] = left
     if held:
         meta["held"] = held
     if traced:
