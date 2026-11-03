@@ -1023,8 +1023,8 @@ if os.environ.get("IO_FAIL"):
     print("inference_only.py: no torch", file=sys.stderr)
     sys.exit(2)
 print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions" if sys.argv[1] == "policy" else
-      "INFERENCE-ONLY accept: 16 blocks (padded) of session abab… (the registered one), 7 gates and 3 fresh bits a block, "
-      "against c 7, k 3, n 16")
+      "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
+      "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
 NCI_CHECK = "verity/core/protocols/network/nci/lean/.lake/build/bin/nci-check"
 
@@ -1078,8 +1078,9 @@ def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_
     runs `nci-check --count` only where the build built it. $OUT names no window."""
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
-    assert rc == 0 and lines == ["INFERENCE-ONLY accept: 16 blocks (padded) of session abab… (the registered one), 7 gates "
-                                 "and 3 fresh bits a block, against c 7, k 3, n 16"]
+    assert rc == 0 and lines == ["INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a "
+                                 "block, against c 7, k 3, n 16 (no count published: n is judged on the blocks' exact "
+                                 "count, held on the node)"]
     assert calls == [["verdict", "--policy", str(out / "inference-only-policy.json"), "--serve-run", str(d), "--circuit",
                       str(d / "window-circuit-w7-4-32-4.json"), "--registration", str(d / "advice" / "w7" / "registration.json"),
                       "--pins", str(d / "weights_registration.json"),
@@ -1094,6 +1095,50 @@ def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_s
     assert (tmp_path / "serve" / "inference-only.err").read_text() == "inference_only.py: no torch\n"
     rc, lines, _calls = _inference_only(tmp_path / "policy", "inference-policy", IO_FAIL="1")
     assert (rc, lines) == (2, ["INFERENCE-ONLY POLICY failed (exit 2): inference_only.py: no torch"])
+
+
+@pytest.mark.parametrize("n, said", [
+    (40, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: accept, against c "),
+    (1, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: refuse: the blocks' exact count "
+        "is more than n = 1, against c "),
+    (None, "BLOCK-COUNTS: none, since the run declares no c, k and n"),
+])
+def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_count_private(tmp_path, n, said):
+    """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
+    `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
+    count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
+    from verity.ml.definitions.registry.catalog import load
+    from verity.ml.windows import interface as IF
+
+    load()
+    gemm = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
+    entries = (IF.InferenceEntry(gemm, 0, (2, 2), ("slot", "-"), 0),)
+    record = IF.descriptor_record(IF.Circuit("test/blocks", ((IF.resolve(gemm), 4),),
+                                             blocks=IF.Blocks(slots=2, steps=3, inference=entries)), 1)
+    tree, venv, d, out = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve", tmp_path / "out"
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    for p in (tree, d / "advice" / "w0", out):
+        p.mkdir(parents=True)
+    (d / "window-circuit-w0-4-32-4.json").write_text(json.dumps(record))
+    (d / "advice" / "w0" / "registration.json").write_text("{}")
+    (d / "serve.json").write_text(json.dumps({"clocks": {"time": 1_762_000_000}}))
+    if n is not None:
+        (out / "inference-only-policy.json").write_text(json.dumps({"c": 10 ** 12, "k": 10 ** 12, "n": n}))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(out),
+           "CLASSES": "4,32,4", "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "block-counts", "0"], cwd=tree, env=env,
+                        check=False).returncode
+    (line,) = (out / "verdicts.txt").read_text().splitlines()
+    assert rc == 0 and line.startswith(said), line
+    public, private = out / "block-counts-4-32-4.json", d / "private" / "block-counts-4-32-4.json"
+    if n is None:
+        assert not public.exists() and not private.exists()
+        return
+    doc, held = json.loads(public.read_text()), json.loads(private.read_text())
+    assert (doc["verdict"], doc["n"]) == ("accept" if n == 40 else "refuse", n)
+    assert not {"blocks", "total", "windows"} & set(doc) and not any("blocks" in c for c in doc["classes"])
+    assert (held["total"], held["windows"], private.stat().st_mode & 0o777) == (2, 1, 0o600)
+    assert " 2 blocks" not in line and "count 2" not in line
 
 
 W63K4 = "8,32,4,4,16"
@@ -1788,7 +1833,7 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     """The inference-only verdict the served node judged goes with the deferral, listed and hashed with the follow-on's
     inputs, and into the follow-on's record as the served node wrote it, said before the record: the follow-on judges it
     no second time."""
-    verdict = {"format": "verity-bench/inference-only-verdict/v1", "verdict": "accept", "blocks": [["ab", 7, 3, 16]]}
+    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept", "classes": [["ab", 7, 3]]}
     (tmp_path / "served-out" / "record").mkdir(parents=True)
     (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
     assert _deferred(tmp_path).returncode == 0
