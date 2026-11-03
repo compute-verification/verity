@@ -6,7 +6,6 @@ y (the sampled proofs' blocks after the linear) is tied to.  A served call's tre
 own tree launches (`DeviceTrees`), `commit_y`'s bytes."""
 from __future__ import annotations
 
-import copy
 from pathlib import Path
 from typing import Any
 
@@ -60,16 +59,16 @@ def retain_y(d: Path, index: int, y_bf16: bytes, n: int, salt: bytes, salt_key: 
             "tree": _write(d / "y" / f"{index}.tree", tree)}
 
 
-def y_tree(run: Any, y: Any, index: int, cur: Any = None) -> Any:
+def y_tree(run: Any, y: Any, index: int) -> Any:
     """Call `index`'s tree over its real rows `y` (BF16, m x n) as uint8 bytes in `commit_y`'s layout, its root the last
-    node: on a device by the run's `DeviceTrees` (in pass `cur`, the run's open pass if None), on the CPU by `commit_y`."""
+    node: on a device by the run's `DeviceTrees`, on the CPU by `commit_y`."""
     import torch
     if not y.is_cuda:
         tree = commit_y(_bytes(y.contiguous().view(torch.uint8)), y.shape[1], run.salt, index, run.salt_key)[1]
         return torch.frombuffer(bytearray(tree), dtype=torch.uint8)
     if run._y_trees is None:
         run._y_trees = DeviceTrees(run)
-    return run._y_trees(y, index, cur)
+    return run._y_trees(y, index)
 
 
 class DeviceTrees:
@@ -78,33 +77,32 @@ class DeviceTrees:
     nonce `HM96_Y` + index and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
     current stream, into a tree that starts as the pass's poison byte where the pass has one.  One pipeline a width n, y's
     rows its rows of k = n words, so n is a k the kernels take; its first tree is held to `commit_y` over a fixed
-    `Y_CHECK_ROWS`-row y.  Its launches go through a copy of the kernel's device of their own, whose stream is theirs to
-    set, so they may run on another thread than the run's own launches."""
+    `Y_CHECK_ROWS`-row y."""
 
     def __init__(self, run: Any) -> None:
-        self.run, self.pipes, self.dev = run, {}, copy.copy(run.kernel.dev)
+        self.run, self.pipes = run, {}
         self.dom = _zeros(64, run.device)
 
-    def __call__(self, y: Any, index: int, cur: Any = None) -> Any:
+    def __call__(self, y: Any, index: int) -> Any:
         n = y.shape[1]
         if n not in self.pipes:
             p = self._pipe(n)
             self._check(p, n, index)
             self.pipes[n] = p
-        return self._tree(self.pipes[n], y.contiguous(), index, cur)
+        return self._tree(self.pipes[n], y.contiguous(), index)
 
     def _pipe(self, n: int) -> Any:
         run, R = self.run, self.run.kernel.run
         try:
-            return R.Pipeline(self.dev, R.BM, R.BM, n, run.variant, {"dom_b": self.dom.data_ptr(), **run.const_keys}, 0, 0,
+            return R.Pipeline(run.kernel.dev, R.BM, R.BM, n, run.variant, {"dom_b": self.dom.data_ptr(), **run.const_keys}, 0, 0,
                               bufs={"tree_b": 0, "segdig_b": 0})
         except ValueError as e:
             raise ValueError(f"y's device tree hashes y's rows as the kernels' rows of k = {n} words: {e}") from None
 
-    def _tree(self, p: Any, y: Any, index: int, cur: Any = None) -> Any:
+    def _tree(self, p: Any, y: Any, index: int) -> Any:
         import torch
-        R, dev, (m, n) = self.run.kernel.run, self.dev, y.shape
-        poison = getattr(self.run.cur if cur is None else cur, "poison", None)
+        R, dev, (m, n) = self.run.kernel.run, self.run.kernel.dev, y.shape
+        poison = getattr(self.run.cur, "poison", None)
         size = R.NB * (2 * R.pow2(m) - 1)
         tree = (torch.empty(size, dtype=torch.uint8, device=y.device) if poison is None
                 else torch.full((size,), poison, dtype=torch.uint8, device=y.device))

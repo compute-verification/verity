@@ -18,7 +18,7 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, launched, write_behind, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, write_behind, write_manifest
 from verity_vllm.protocols.pouw.pearl_c.host import behind as host_behind
 from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
@@ -33,7 +33,6 @@ class _Pass:
     flag_rows: int = 0               # rows of the pass's screen flags so far
     records: list[PW.UnitRecord] = field(default_factory=list)
     files: list[dict] = field(default_factory=list)
-    launches: list[Any] = field(default_factory=list)  # its retained calls' work still behind them (`host.launched`)
     writes: list[Any] = field(default_factory=list)   # its files' writes still behind its calls (`write_behind`)
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
@@ -118,7 +117,6 @@ class PassEnds:
                         self.retained_ends()
                         complete()
         if not deferred:
-            joined(cur.launches)
             joined(cur.writes)
         self.details["passes"].append(out)
         return out
@@ -141,9 +139,8 @@ class PassEnds:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
         and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
         behind the call, `write_behind`, joined by the pass's end).  On a device the call's buffers are copied as they are on
-        its stream, and the rest is issued behind it by the device's launch thread (`host.launched`) on the run's retain
-        stream (`_retain_stream`): y's tree, the copies to the host, and the record and y's root, decided from the bytes the
-        writes land (`screen.excluded_host`)."""
+        its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
+        host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`)."""
         import torch
         d = cur.retain / "calls"
         if not d.is_dir():
@@ -159,41 +156,33 @@ class PassEnds:
         def y_root(host: Any) -> None:
             files["y"]["root"] = host[-self.nb:].numpy().tobytes().hex()
 
-        def landed(got: list[dict]) -> None:
-            files.update(rows=got[0], tree=got[1])
-            if y is not None:
-                files["y"].update(rows=got[2], tree=got[3])
-
         if not xa.is_cuda:
             cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]), ex))
             out = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
             if y is not None:
                 out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index), True, y_root)]
-            landed(write_behind(tuple(out), cur.writes))
-            cur.files.append(files)
-            return
-        side, ready = self._retain_stream(xa.device), torch.cuda.Event()
-        kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()])
-        ready.record()
-        cur.records.append(None)
-        cur.files.append(files)
-
-        def record(host: Any, flags: Any) -> None:
-            words = host.numpy().view("<u2").reshape(-1, mm.shape.k)
-            cur.records[rec] = PW.UnitRecord(*unit, excluded_host(flags.numpy().reshape(-1, 2), words), ex)
-
-        def launch() -> None:
+            got = write_behind(tuple(out), cur.writes)
+        else:
+            side = self._retain_stream(xa.device)
+            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()])
+            side.wait_stream(torch.cuda.current_stream(xa.device))
+            cur.records.append(None)
             with torch.cuda.stream(side):
-                side.wait_event(ready)
                 for t in kept:
                     t.record_stream(side)
                 rows, a_tree, held, *ys = kept
-                kept.clear()
+
+                def record(host: Any, flags: Any) -> None:
+                    words = host.numpy().view("<u2").reshape(-1, mm.shape.k)
+                    cur.records[rec] = PW.UnitRecord(*unit, excluded_host(flags.numpy().reshape(-1, 2), words), ex)
                 out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True)]
                 if ys:
-                    out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index, cur), True, y_root)]
-                landed(write_behind(tuple(out), cur.writes, fresh=True))
-        cur.launches.append(launched(xa.device, launch, sum(t.numel() * t.element_size() for t in kept)))
+                    out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index), True, y_root)]
+                got = write_behind(tuple(out), cur.writes, fresh=True)
+        files.update(rows=got[0], tree=got[1])
+        if y is not None:
+            files["y"].update(rows=got[2], tree=got[3])
+        cur.files.append(files)
 
     def _retain_stream(self, device: Any) -> Any:
         if self._retain_side is None:
@@ -241,7 +230,6 @@ class PassEnds:
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}
 
         def complete() -> None:
-            joined(cur.launches)
             joined(cur.writes)
             head["records_root"] = PW.records_root(self.salt, epoch.weights_root, splits, cur.records).hex()
             matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,

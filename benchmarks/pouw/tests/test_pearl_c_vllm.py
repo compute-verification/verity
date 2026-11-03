@@ -837,31 +837,6 @@ def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monk
     assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
 
 
-def test_the_launch_thread_runs_calls_in_order_and_holds_a_caller_past_its_bytes(monkeypatch):
-    """`host._Launcher`: calls run one at a time in the order given; a caller whose call would put the bytes given and not
-    yet run past `LAUNCH_BYTES` waits until they fit, and a call past it alone runs."""
-    monkeypatch.setattr(PH, "LAUNCH_BYTES", 10)
-    launcher, gate, waiting, order, held = PH._Launcher(torch.device("cpu")), threading.Event(), threading.Event(), [], []
-    wait = launcher.cv.wait
-
-    def noted(*a):
-        waiting.set()
-        return wait(*a)
-    launcher.cv.wait = noted
-    first = launcher.submit(lambda: (gate.wait(), order.append(1)), 6)
-    caller = threading.Thread(target=lambda: held.append(launcher.submit(lambda: order.append(2), 6)))
-    caller.start()
-    waiting.wait()
-    assert not held and launcher.queued == 6
-    gate.set()
-    caller.join()
-    first.result()
-    held[0].result()
-    assert order == [1, 2] and launcher.queued == 0
-    launcher.submit(lambda: order.append(3), 100).result()
-    assert order == [1, 2, 3] and launcher.queued == 0
-
-
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
     """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
