@@ -1,5 +1,5 @@
 """Covert workloads under the policy, each a model: from a workload's dials to ρ's inputs, and ρ by te_core.formalism.at
-at a policy (c, k), for the console's *Standard training under the policy* plot (TRN-41).
+at a policy (c, k), for the console's *Standard training under the policy* plot.
 
     python -m te_core.workloads [--json OUT]    # every workload's reference points at the three policies
 
@@ -9,7 +9,7 @@ where it comes from) and w_fwd. `columns` gives them as the console's columns, t
 `w_fit_gates`, `alpha_ratio` and `C_gates`, on which `algorithm_policy.page_rho` gives `formalism.at`'s ρ. `reference`
 evaluates each workload's reference points (`Workload.points`) at the three `POLICIES`, and its `Check`s, pilot records
 beside the model; `workloads.json` is its output, which the console's tests pin. The spec, each mapping with its
-reasons, is note:training-20261103T0600Z-draft-workload-models.
+reasons, is the note `NOTE` names.
 
 The conventions every workload shares:
 
@@ -22,6 +22,8 @@ The conventions every workload shares:
 - **Work**: a token's MACs at te_core.gates' prices, its weight GEMMs at the workload's precision and its attention in
   bf16 at te_core.flops' count (the whole span, so a training token at context T has 2·L·d·T), with `ELEMENTWISE` bf16
   elementwise MACs per MAC. a is the bf16 residual stream, 16·d.
+- **The decoder** d, by te_core 4.2's rule: 0 where E stores θ' itself (every full-weight workload), the harness's
+  decoder for an E holding a LoRA (`Adapter.decoder_gates`), and compressed DiLoCo's replay of a phase.
 - **A1's reading** (the dial `t`): u is 0 up to the free share t and x·u(1) beyond it, u_in x·u(1) (`profile`:
   `formalism.with_tail` of `formalism.even`); t = 0 is the evenly spread reading. Dense training's default t is
   `T_DENSE`, te_core's literal t measured on the 45M pilot's trace; elsewhere t is the modelled share of a token's
@@ -38,7 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import VERSION, algorithm_policy, formalism, policy
-from .gates import per_mac
+from .gates import gates, per_mac
 from .opnames import FUSED_OPTIMIZER_MACS
 
 NOTE = "note:training-20261103T0600Z-draft-workload-models"
@@ -63,6 +65,8 @@ NEWTON_SCHULZ_STEPS = 5
 STATE_BITS = {"adamw": 64, "sgd": 0, "muon": 32}
 #: (d_in + d_out) per rank per layer of each LoRA target set, in d_models
 TARGETS = {"q": 2.0, "qv": 4.0, "attn": 8.0, "mlp": 3 * (1 + MLP), "all": 8.0 + 3 * (1 + MLP)}
+#: the entries of the matrices each LoRA target set adapts, per layer, in d_model²
+TARGET_ENTRIES = {"q": 1.0, "qv": 2.0, "attn": 4.0, "mlp": 3 * MLP, "all": 4.0 + 3 * MLP}
 
 
 def session(inputs: int, outputs: int, params: float = REFERENCE_PARAMS) -> tuple[float, float]:
@@ -192,19 +196,29 @@ def delta_grad(sh: Shape, optimizer: str) -> float:
 
 @dataclass(frozen=True)
 class Adapter:
-    """A LoRA on `targets` (`TARGETS`) of the top `layers` layers at `rank`: its trained values, and its MACs a token
-    (one pass: x·A and (x·A)·B per adapted matrix)."""
+    """A LoRA on `targets` (`TARGETS`) of the top `layers` layers at `rank`: its trained values, the entries of the
+    matrices it adapts, and its MACs a token (one pass: x·A and (x·A)·B per adapted matrix)."""
     values: float
     layers: float
+    rank: float
+    entries: float
 
     @classmethod
     def of(cls, sh: Shape, rank: float, targets: str, layers: float | None) -> Adapter:
         n = sh.n_layer if layers is None else min(float(layers), sh.n_layer)
-        return cls(rank * TARGETS[targets] * sh.d_model * n, n)
+        return cls(rank * TARGETS[targets] * sh.d_model * n, n, float(rank),
+                   TARGET_ENTRIES[targets] * sh.d_model ** 2 * n)
 
     @property
     def macs(self) -> float:
         return self.values
+
+    def decoder_gates(self, quantized: bool = False) -> float:
+        """d for an E holding this LoRA, te_core 4.2's witness: the harness's decoder (`prepare.rebuild_macs`), r + 2
+        fp32 multiply-adds an adapted entry (B @ A, the scale, the add) and, for factors below 16 bits (its lora2),
+        r·(d_in + d_out) more to dequantize them, at `formalism.DECODER_DEFINITION`'s gates each."""
+        macs = (self.rank + 2) * self.entries + (self.values if quantized else 0.0)
+        return macs * gates(formalism.DECODER_DEFINITION)
 
 
 def lora_training(sh: Shape, ad: Adapter, span: float) -> Token:
@@ -264,7 +278,13 @@ def _labels(**extra) -> dict:
             "a_bits": "upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
             "u": "assumption (A1): 0 up to the free share t, x u(1) beyond it",
             "u_in": "assumption (A1'): evenly spread, x u(1)",
-            "decoder_gates": "model: none, Delta is theta' itself"} | extra
+            "decoder_gates": "model: none, E stores theta' itself"} | extra
+
+
+#: d's label for an E holding a LoRA (`Adapter.decoder_gates`)
+LORA_DECODER = ("model: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted "
+                f"entry and r (d_in + d_out) to dequantize factors below 16 bits, at {formalism.DECODER_DEFINITION}'s "
+                "gates (te_core 4.2's witness)")
 
 
 def _dense_t(t: float | None) -> float:
@@ -348,9 +368,9 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
     `samples_per_trained` of them for each sequence a learner trains on in bf16 (every position of each, prompt and
     generated). Every token is affected (the generated ids are sampled from θ'), and only the prompts' ids are inputs.
     `update` "full" trains every weight (u(1) the least of the two kinds', the rollouts' narrower weights); "lora" a
-    LoRA kept apart from the base (u(1) = Δ, its values). One profile serves both kinds, at the larger free share and
-    the smaller u(1), as te_core's single A1 needs; `sensitivity` gives the bounds that count each kind's tokens
-    apart."""
+    LoRA kept apart from the base (u(1) = Δ, its values; d the harness's decoder for it, `Adapter.decoder_gates`). One
+    profile serves both kinds, at the larger free share and the smaller u(1), as te_core's single A1 needs;
+    `sensitivity` gives the bounds that count each kind's tokens apart."""
     sh = dense(n_params)
     seq = prompt_tokens + generated_tokens
     span = decode_span(prompt_tokens, generated_tokens)
@@ -359,6 +379,7 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
         u1s = (n_params * WEIGHT_BITS[rollout_precision], 16 * n_params)
         ts = (roll.t, T_DENSE)
         delta, dg, opt = 16 * n_params, delta_grad(sh, optimizer), optimizer_gates(sh, optimizer)
+        decoder = 0.0
     else:
         ad = Adapter.of(sh, rank, targets, layers)
         roll, learn = lora_forward(sh, ad, rollout_precision, span), lora_training(sh, ad, seq)
@@ -368,6 +389,7 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
         state = "sgd" if optimizer == "sgd" else "adamw"
         dg = (32 + STATE_BITS[state]) * ad.values
         opt = ad.values * FUSED_OPTIMIZER_MACS[f"_fused_{state}_"] * per_mac("elementwise/f32")
+        decoder = ad.decoder_gates()
     if t is not None:
         ts = (float(t), float(t))
     tf = max(ts)
@@ -383,7 +405,9 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
                               else "model: the adapter's values at 16 bits, Delta"),
                      delta_bits="model: theta' at bf16, 16 N" if update == "full" else "model: the adapter at 16 bits",
                      delta_grad_bits="model: the gradient at 32 bits a value and the optimizer's state")
-    m = _measured(parts, tau, ACT_BITS * sh.d_model, min(u1s), tf, delta, labels)
+    if update != "full":
+        labels["decoder_gates"] = LORA_DECODER
+    m = _measured(parts, tau, ACT_BITS * sh.d_model, min(u1s), tf, delta, labels, decoder=decoder)
     return Model("rl", _dials(rl, locals()), m, w_fwd(sh, rollout_precision, span),
                  {"d_model": sh.d_model, "n_layer": sh.n_layer, "rollout_w": roll.w, "learner_w": learn.w,
                   "rollout_tokens": n_r, "learner_tokens": n_l,
@@ -417,8 +441,9 @@ def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "al
          adapter_bits: float = 16, optimizer: str = "adamw", seq_len: float = 1024, batch_tokens: float = 65_536,
          t: float | None = None, tokens: float = 1e8) -> Model:
     """Fine-tuning a registered model with a LoRA on `targets` of its top `layers` layers (None: all): Δ the adapter's
-    values at `adapter_bits` (fp32 latents for Δ_t below 16), Δ_grad their gradient at 32 bits and the optimizer's
-    state, u(1) = Δ, and t the share of the affected work that reads no adapter value."""
+    values at `adapter_bits` (fp32 latents for Δ_t below 16), d the harness's decoder for it (`Adapter.decoder_gates`),
+    Δ_grad their gradient at 32 bits and the optimizer's state, u(1) = Δ, and t the share of the affected work that
+    reads no adapter value."""
     sh = dense(n_params)
     ad = Adapter.of(sh, rank, targets, layers)
     tok = lora_training(sh, ad, seq_len)
@@ -431,11 +456,12 @@ def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "al
                           dg)
     labels = _labels(u1_bits="model: the adapter's values, Delta",
                      delta_bits=f"model: the adapter's values at {adapter_bits:g} bits",
-                     delta_grad_bits=f"model: their gradient at 32 bits and {optimizer}'s state")
+                     delta_grad_bits=f"model: their gradient at 32 bits and {optimizer}'s state",
+                     decoder_gates=LORA_DECODER)
     latents = adapter_bits < 16
     if latents:
         labels["delta_t_bits"] = "model: fp32 latents, 32 bits a value (a straight-through run)"
-    m = _measured([part], TAU_BITS, ACT_BITS * sh.d_model, delta, tf, delta, labels,
+    m = _measured([part], TAU_BITS, ACT_BITS * sh.d_model, delta, tf, delta, labels, decoder=ad.decoder_gates(latents),
                   delta_t=32 * ad.values if latents else None)
     return Model("lora", _dials(lora, locals()), m, w_fwd(sh, "bf16", seq_len),
                  {"d_model": sh.d_model, "n_layer": sh.n_layer, "adapter_values": ad.values, "w_gates": tok.w,
@@ -472,8 +498,9 @@ def _dials(fn, scope: dict) -> dict:
 # ---- ρ and the console's columns ---------------------------------------------------------------------------------------
 
 def columns(m: Model) -> dict:
-    """The console's columns for the model: `C_gates`, te_core.algorithm_policy's `INPUTS` (u and u_in capped at Δ, as
-    formalism.at reads them where d < c), `w_fit_gates` and `alpha_ratio`."""
+    """The console's columns for the model: `C_gates`, te_core.algorithm_policy's `INPUTS` (u and u_in capped at Δ
+    where d is 0; `page_rho` caps them wherever d < c, as formalism.at reads them), `w_fit_gates` and
+    `alpha_ratio`."""
     me = m.measured
     return ({"C_gates": me.gates} | dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(me, m.w_fwd)))
             | {"w_fit_gates": me.w_fit, "alpha_ratio": me.alpha_ratio})
@@ -529,7 +556,8 @@ class Dial:
 @dataclass(frozen=True)
 class Check:
     """A pilot record beside the model at `dials`: the record's console columns (te_core 4.1's measured quantities,
-    t literal; `RECORD_SOURCE`), on which page_rho gives the record's ρ at each policy."""
+    t literal; `RECORD_SOURCE`), on which page_rho gives the record's ρ at each policy. te_core 4.2 refuses the
+    records' traces, made before its capture listed read-backs, until the runs are traced again."""
     name: str
     dials: dict
     record: str
@@ -549,7 +577,8 @@ class Workload:
     checks: tuple[Check, ...] = ()
 
 
-RECORD_SOURCE = ("te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); "
+RECORD_SOURCE = ("te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 "
+                 "refuses the trace, made before its capture listed read-backs, until the run is traced again); "
                  "delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k")
 #: the console's u and u_in of a 45M full-training record: 0 up to the literal t, then the whole traced u(1) (the fp32
 #: embedding and bf16 matrices); u_in jumps there at x = 0, the trace's cut through the embedding table
@@ -662,7 +691,8 @@ WORKLOADS = {w.name: w for w in (
                      "u_points": "0:0;0.999235:0;0.999235:788712;1:788712",
                      "u_in_points": "0:0;0.00105837:32768;0.00315535:65536;0.100031:262144;1:788712"},
                     "48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every "
-                    "adapter value in dependency order before most of its work), where the model's A1' is even"),)),
+                    "adapter value in dependency order before most of its work), where the model's A1' is even; d 0, "
+                    "te_core 4.1's stub, where the model's is the harness's decoder (2.4e11 gates, 0.07% of c)"),)),
     Workload("distill", "Distillation from a registered teacher",
              "A student trained on a registered teacher's outputs, the teacher's forward in each token block.",
              distill,

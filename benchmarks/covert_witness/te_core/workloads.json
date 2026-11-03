@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.1",
+ "te_core": "4.2",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "policies": {
   "default": {
@@ -314,7 +314,7 @@
    "checks": {
     "45M ref-optim/adamw-rewarm-mild": {
      "record": "r20261102-140347-a1c2@946",
-     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 refuses the trace, made before its capture listed read-backs, until the run is traced again); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
      "dials": {
       "n_params": 45029888,
       "precision": "bf16",
@@ -372,7 +372,7 @@
     },
     "45M ref-optim/cooldown-forks": {
      "record": "r20261102-134356-ee8f@694",
-     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 refuses the trace, made before its capture listed read-backs, until the run is traced again); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
      "dials": {
       "n_params": 45029888,
       "precision": "bf16",
@@ -685,8 +685,8 @@
       "sigma": 0.9293628678472258,
       "tau_bits": 16,
       "a_bits": 8192.0,
-      "u_points": "0:0;0.692646:0;0.692646:40960;1:40960",
-      "u_in_points": "0:0;5.68511e-5:40960;1:40960",
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
       "delta_bits": 40960.0,
       "delta_t_bits": 40960.0,
       "d_gates": 119789042282004.48,
@@ -1007,7 +1007,7 @@
       "u_in_points": "0:0;1:1.51388e7",
       "delta_bits": 15138816.0,
       "delta_t_bits": 15138816.0,
-      "d_gates": 0.0,
+      "d_gates": 4382720262144.0,
       "delta_grad_bits": 90832896.0,
       "w_fit_gates": 23371404040.0,
       "alpha_ratio": 0.5688045535989597
@@ -1108,7 +1108,7 @@
       "u_in_points": "0:0;1:16384",
       "delta_bits": 16384.0,
       "delta_t_bits": 16384.0,
-      "d_gates": 0.0,
+      "d_gates": 9938141184.0,
       "delta_grad_bits": 98304.0,
       "w_fit_gates": 21935155786.56,
       "alpha_ratio": 0.5629790276600861
@@ -1134,7 +1134,7 @@
        "fit_delta_grad_bits": 16384.0
       },
       "looser": {
-       "rho": 1.0,
+       "rho": 1.0000085656582538,
        "basis": "fit",
        "s": 15771.397412536357,
        "x0": 1.0,
@@ -1177,8 +1177,8 @@
        "per_kind": 1.0
       },
       "looser": {
-       "tokens_worth": 1.0,
-       "per_kind": 1.0
+       "tokens_worth": 1.0000085656582538,
+       "per_kind": 1.0000085656582538
       }
      }
     }
@@ -1574,7 +1574,7 @@
       "u_in_points": "0:0;1:7.56941e6",
       "delta_bits": 7569408.0,
       "delta_t_bits": 7569408.0,
-      "d_gates": 0.0,
+      "d_gates": 2434844590080.0,
       "delta_grad_bits": 45416448.0,
       "w_fit_gates": 167682372605.44,
       "alpha_ratio": 1.0
@@ -1641,7 +1641,7 @@
       "u_in_points": "0:0;1:98304",
       "delta_bits": 98304.0,
       "delta_t_bits": 98304.0,
-      "d_gates": 0.0,
+      "d_gates": 59628847104.0,
       "delta_grad_bits": 589824.0,
       "w_fit_gates": 165553675302.4,
       "alpha_ratio": 1.0
@@ -1708,7 +1708,7 @@
       "u_in_points": "0:0;1:16384",
       "delta_bits": 16384.0,
       "delta_t_bits": 16384.0,
-      "d_gates": 0.0,
+      "d_gates": 9938141184.0,
       "delta_grad_bits": 98304.0,
       "w_fit_gates": 125197122265.6,
       "alpha_ratio": 1.0
@@ -1734,7 +1734,7 @@
        "fit_delta_grad_bits": 16384.0
       },
       "looser": {
-       "rho": 1.0,
+       "rho": 1.0000085656582538,
        "basis": "fit",
        "s": 9267.312168923578,
        "x0": 1.0,
@@ -1755,7 +1755,7 @@
    "checks": {
     "45M sparse/lora-alloc": {
      "record": "r20261102-132959-286b@1720",
-     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 refuses the trace, made before its capture listed read-backs, until the run is traced again); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
      "dials": {
       "n_params": 45029888,
       "rank": 4,
@@ -1768,7 +1768,7 @@
       "t": null,
       "tokens": 100000000.0
      },
-     "differs": "48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every adapter value in dependency order before most of its work), where the model's A1' is even",
+     "differs": "48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every adapter value in dependency order before most of its work), where the model's A1' is even; d 0, te_core 4.1's stub, where the model's is the harness's decoder (2.4e11 gates, 0.07% of c)",
      "record_inputs": {
       "w_gates": 166764000000.0,
       "sigma": 0.999972,
@@ -1794,7 +1794,7 @@
       "u_in_points": "0:0;1:786432",
       "delta_bits": 786432.0,
       "delta_t_bits": 786432.0,
-      "d_gates": 0.0,
+      "d_gates": 238515388416.0,
       "delta_grad_bits": 4718592.0,
       "w_fit_gates": 165749739527.68,
       "alpha_ratio": 1.0

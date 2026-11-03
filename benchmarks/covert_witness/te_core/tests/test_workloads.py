@@ -5,7 +5,8 @@ are what the 45M pilot's traces measure; the full-training records are within 1%
 above it by under 30% (the model's even u_in is A1''s conservative form; the trace's front-loads); and the readings
 the spec quotes hold: DiLoCo is standard training's bound until a phase and every sync fit a block, a teacher
 lowers rho by the student's share of the work and leaves the blocks the policy forces, RL's per-kind bound is the
-largest, and a LoRA's rho falls to 1 once Delta <= k."""
+largest, and a LoRA's rho falls to 1 once Delta <= k (Fit's c/(c - d) where Fit holds, d the harness's decoder for
+the LoRA's E)."""
 import inspect
 import json
 import math
@@ -131,7 +132,15 @@ def test_rl_bounds_that_count_each_kind_exceed_te_cores(ref):
 def test_lora_falls_to_one_once_delta_fits_k(ref):
     one = dict(zip(POLICIES, rhos(ref, "lora", "rank 1 on W_q")))
     assert one["default"]["rho"] > 50 and one["looser"]["rho"] == 1.0
-    assert all(r["rho"] == 1.0 for r in rhos(ref, "lora", "rank 1 on W_q, one layer"))
+    for r in rhos(ref, "lora", "rank 1 on W_q, one layer"):
+        assert (r["rho"] == 1.0) if r["basis"] == "target" else (1.0 < r["rho"] < 1.0001)
+
+
+def test_a_lora_decoder_is_the_harnesss_rebuild():
+    # prepare.rebuild_macs: (r + 2) fp32 multiply-adds per adapted entry, and r (d_in + d_out) to dequantize (lora2)
+    ad = W.Adapter.of(W.dense(W.REFERENCE_PARAMS), 1, "q", 1)
+    assert math.isclose(ad.decoder_gates(), 3 * 512 ** 2 * 12_637, rel_tol=1e-12)
+    assert math.isclose(ad.decoder_gates(quantized=True), (3 * 512 ** 2 + 1024) * 12_637, rel_tol=1e-12)
 
 
 def test_policies_and_their_attention():
