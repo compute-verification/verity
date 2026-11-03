@@ -1,4 +1,4 @@
-"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
+"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the challenger exactly what `Flock.Firewall.run` (the Lean
 program `flock-firewall`) sends, byte for byte, on an honest session and on every session a worker can make of it here (each
 schedule edit of `test_rec_live`, every prefix, drop, duplicate and swap of a request, requests after ``Finish``, forged
 requests, and seeded random byte flips). The Lean program's type is the contract (live PROTOCOL.md §10.3): each message is the
@@ -54,13 +54,13 @@ def honest2() -> list[bytes]:
     return r[:5] + [RL.encode_req(RL.REQ_OPEN, "circuit/rep0/x", "circuit/rep0", b"x", 1)] + r[5:7] + [child] + r[7:]
 
 
-#: how `Flock.Firewall.calls` writes each call the proxy makes on the coin server
+#: how `Flock.Firewall.calls` writes each call the proxy makes on the challenger
 CALL = {"start": lambda a: ["start"], "commit": lambda a: ["commit"], "y": lambda a: ["y"],
         "open": lambda a: ["open", a[0], a[1], a[2]], "round": lambda a: ["round", a[0], a[3]]}
 
 
 def proxy_session(schedule: dict, reqs: list[bytes]) -> tuple[dict, list]:
-    """The coin server's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``."""
+    """The challenger's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``."""
     salts, coins, calls = iter(SALTS), RL.CoinServer(_coins), []
     for name, show in CALL.items():
         f = getattr(coins, name)
@@ -185,7 +185,7 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
 
 @pytest.fixture(scope="module")
 def lean_runs():
-    """Every case and every placement through `flock-firewall`: each one's record and the coin server's calls."""
+    """Every case and every placement through `flock-firewall`: each one's record and the challenger's calls."""
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
     subprocess.run(["lake", "build", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
@@ -204,7 +204,7 @@ def lean_records(lean_runs):
 
 
 def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
-    """The same record and the same calls on the coin server, in the same order."""
+    """The same record and the same calls on the challenger, in the same order."""
     cs, lean = lean_runs
     differ = [(name, mine, got) for (name, s, r), got in zip(cs, lean)
               if (mine := dict(zip(("record", "calls"), proxy_session(s, r)))) != got]
@@ -212,7 +212,7 @@ def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
 
 
 def test_the_coin_server_never_sees_where_an_open_was_sent(lean_runs):
-    """The coin server is the auditor's, so its calls, not only its record, must not show where the worker sent each Open
+    """The challenger is the auditor's, so its calls, not only its record, must not show where the worker sent each Open
     (ZK server-contract's gap 3): `Flock.Firewall.run` opens a stream there just before its first round. Every placement of
     the two Opens gives the honest session's calls, and every cut of one a prefix of them."""
     cs, lean = lean_runs
@@ -239,7 +239,7 @@ def test_a_stopped_record_does_not_show_an_open(lean_records):
 
 
 def test_the_cases_reach_every_ending(lean_records):
-    """The cases are not all refused at the first request: some finish, and many stop after the coin server saw rounds."""
+    """The cases are not all refused at the first request: some finish, and many stop after the challenger saw rounds."""
     _, lean = lean_records
     ends = [r["end"] for r in lean]
     assert ends.count("finish") >= 2 and ends.count("stop") >= 50

@@ -8,7 +8,7 @@
 # executable, cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the
 # session's h is the full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from
 # the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves,
-# without --zk, holding the session's sample to its own law: --stratified N --program --partition). The coin server answers
+# without --zk, holding the session's sample to its own law: --stratified N --program --partition). The challenger answers
 # Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep. Then
 # three controls on copies of the prover's record, each of which Lean must refuse: rep 0's first challenge flipped, the
 # draw removed, and the sample's last unit dropped (rec_inner.py forge --record prover). Run from the verity tree (research run
@@ -20,7 +20,7 @@
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
 #   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
-#   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
+#   reps, on the challenger's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
 #   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
 #   sparse claims (--points, after the sparse streams, into the same session); rec_vstar checks R's openings and rec_vstage
 #   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold). R's top

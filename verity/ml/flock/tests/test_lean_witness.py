@@ -74,7 +74,7 @@ CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479
 #: the gate run's files these tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
 #: the art's own listing (`out/data.sha256`)
 F1 = HERE / "fixtures" / "f1-gate"
-#: the gate's inner transcript, the coin server's record of its inner session (the gate run's `inner/s1/public.json`,
+#: the gate's inner transcript, the challenger's record of its inner session (the gate run's `inner/s1/public.json`,
 #: xz-compressed, and its line of the art's listing), tracked: a check's pod fetches a registered fixture only once `main`
 #: registers it
 F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
@@ -400,11 +400,11 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built, f1_gate, f1, once, part):  # noqa: F811
     """`flock-verify verify --zk`, the verifier of record, passes level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
-    session its coefficients are checked against, and the coin server's inner transcript (`inner/s1/public.json`), whose
+    session its coefficients are checked against, and the challenger's inner transcript (`inner/s1/public.json`), whose
     link points, level-3 tops and `root_B` the unit is held to (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
     `85-rec-reprice.sh`'s STEP=lean runs it, through every check and every refusal the verdict runs last (the form's, a
     draw-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
-    inner session ran before the coin server drew it, so its record holds no draw, and a session over it is refused
+    inner session ran before the challenger drew it, so its record holds no draw, and a session over it is refused
     (`RecSetup.innerDrawn`), with that reason alone, and not as a private circuit's. The checks above are the model's
     predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails here and nowhere
     else. About two minutes, beside the gate's witness runs."""

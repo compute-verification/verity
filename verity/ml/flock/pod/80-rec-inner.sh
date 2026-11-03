@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The first recursive session's inner side (rec_inner.py, verity_flock.rec_live): RoPE d64 staged as M0's statement, proved
-# on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose coin server (the challenger) sees only salted
+# on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose challenger sees only salted
 # tops, message commitments and the schedule (the statement's public shape's) and answers Register with the verifier's full draw
 # (stage/draw.json, rec_live.full_draw: every unit); then the recorded session replayed by upstream's verifier (flock-circuit
 # replay) and by Lean's flock-verify (--coins os, the sample held to its own law: --stratified N --program --partition), V*'s

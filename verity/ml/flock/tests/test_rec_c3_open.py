@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(not (BIN and Path(BIN).exists()), reason="FLOCK_
 
 
 def _session(cmd: list[str], g: random.Random, d: Path) -> tuple[list[tuple], list[tuple[bytes, list[int]]], int]:
-    """One connection of a coin server, the prover ``cmd`` its client: its requests (rounds' content aside), each round's
+    """One connection of a challenger, the prover ``cmd`` its client: its requests (rounds' content aside), each round's
     content and coins, the prover's exit code."""
     sock = socket.create_server(("127.0.0.1", 0))
     host, port = sock.getsockname()
