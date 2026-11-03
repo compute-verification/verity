@@ -7,7 +7,9 @@ commit round `k` with no salted tops, the `kc`-th commit round of the rep schedu
 module
 
 public import Flock.Test.RecReads
+public import Flock.JsonParse
 meta import Flock.Test.RecReads
+meta import Flock.JsonParse
 
 @[expose] public section
 
@@ -20,7 +22,7 @@ def distinct : Record :=
   { honest with
     rounds := honest.rounds.mapIdx fun j x => if x.commits.isEmpty then x else { x with commits := [node j] } }
 
-def trD : Json := (Json.parse (text distinct)).toOption.getD Json.null
+def trD : Json := (JsonParse.parse (text distinct)).toOption.getD Json.null
 
 /-- Each rep's `c_k` as `innerCommits` holds them, off `distinct`. -/
 def csD : InnerCommits :=
