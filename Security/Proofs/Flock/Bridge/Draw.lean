@@ -20,7 +20,9 @@ and its `δ` is that law's own `P_a`. This file holds what the statement reads a
 * `execSel src law pop`: the deployed draw as a law on the verifier's bytes `src`, a draw that runs out of them drawing
   every unit; `execSel_escape_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
 * `lawOn_size`: a draw file that decodes to the verifier's draw under such a law has `kd` units (`ofJson_shape`, and
-  `UnitDraw.ofJson`'s per-stratum count: `ofJson_count`, `ofJson_count_work`).
+  `UnitDraw.ofJson`'s per-stratum count: `ofJson_count`, `ofJson_count_work`);
+* `All`: the rule's law is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
+  (`lawOn_all`), and under it the deployed draw holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -226,7 +228,7 @@ def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (law : Flock.Draw.Law) (pop : ℕ) : Audit.Law n where
   Ω := Ω
   draw ω := match SampledProofs.Draw.drawUnits law pop (Properties.SampledProofs.bytesOf (t ω 0)) with
-    | .ok (units, _) => univ.filter fun u => u.val ∈ units
+    | .ok r => univ.filter fun u => u.val ∈ r.1
     | .error _ => univ
 
 /-- **The deployed draw escapes `W`** with probability at most its law's `P_a` of `W`'s slots, on a uniform byte source
@@ -250,11 +252,11 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
   calc (execSel (n := n) t law n).escape W ≤ prCoin (fun ω => E 0 (t ω 0)) := by
         refine prCoin_mono fun ω hd => ?_
         change Disjoint (match SampledProofs.Draw.drawUnits law n (Properties.SampledProofs.bytesOf (t ω 0)) with
-          | .ok (units, _) => univ.filter fun u => u.val ∈ units
+          | .ok r => univ.filter fun u => u.val ∈ r.1
           | .error _ => univ) W at hd
         split at hd
-        · rename_i units read hdu
-          refine ⟨units, read, hdu, fun u hu hun => ?_⟩
+        · rename_i r hdu
+          refine ⟨r.1, r.2, hdu, fun u hu hun => ?_⟩
           obtain ⟨v, hv, rfl⟩ := Finset.mem_map.1 hu
           exact Finset.disjoint_left.1 hd (Finset.mem_filter.2 ⟨Finset.mem_univ _, hun⟩) hv
         · exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
@@ -265,6 +267,40 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     _ = prCoin (E 0) := Fin.prod_univ_one _
     _ = ENNReal.ofReal (Claims.Pr (E 0)) := by rw [Claims.Sampling.Pr_eq_toReal_prCoin, ENNReal.ofReal_toReal hfin]
     _ ≤ _ := ENNReal.ofReal_le_ofReal (drawUnits_miss_le hlaw hns _ hU (L 0))
+
+/-- **`All`'s law is on the strata**: `subset n` over the `n` units, drawing all of them. -/
+theorem lawOn_all (ns : List ℕ) : LawOn (.subset ns.sum) ns ns.sum := ⟨rfl, le_rfl⟩
+
+/-- **Under `All` the deployed draw holds every unit**: a draw of `subset n` over `[0, n)` that ends is the image of
+`[0, n)` under a permutation that keeps it (`subset_spec`), so all of `[0, n)`, whatever the bytes. -/
+theorem drawUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
+    (h : SampledProofs.Draw.drawUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
+  have hs : Properties.SampledProofs.SecurityProofs.SeqMiss
+      [⟨2 * n * Flock.Draw.width n + 64, Flock.Draw.subset n n, fun D => ∀ x ∈ D, x ∈ r.1⟩] src 0 :=
+    Properties.SampledProofs.SecurityProofs.drawUnits_seq (.subset n) n src r.1 r.2 h
+  obtain ⟨j, D, ⟨-, -, hD, -⟩, hm, -⟩ := hs
+  change Flock.Draw.subset n n _ = some D at hD
+  change ∀ x ∈ D, x ∈ r.1 at hm
+  obtain ⟨π, -, hπ, hmem⟩ := Discharge.Exec.subset_spec hD
+  have himg : (Finset.range n).image π = Finset.range n :=
+    Finset.eq_of_subset_of_card_le (fun x hx => by
+        obtain ⟨i, hi, rfl⟩ := Finset.mem_image.1 hx
+        exact Finset.mem_range.2 (hπ i (Finset.mem_range.1 hi)))
+      (by rw [Finset.card_image_of_injective _ π.injective])
+  have hu' : u ∈ (Finset.range n).image π := by rw [himg]; exact Finset.mem_range.2 hu
+  obtain ⟨i, hi, hiu⟩ := Finset.mem_image.1 hu'
+  exact hm u ((hmem u).2 ⟨i, Finset.mem_range.1 hi, hiu⟩)
+
+/-- **Under `All` the verifier draws every unit, for any coins**: `execSel` at `subset n` over the `n` units. -/
+theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+    (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) : (execSel (n := n) t (.subset n) n).draw ω = univ := by
+  change (match SampledProofs.Draw.drawUnits (.subset n) n (Properties.SampledProofs.bytesOf (t ω 0)) with
+    | .ok r => univ.filter fun u => u.val ∈ r.1
+    | .error _ => univ) = univ
+  split
+  · rename_i r hr
+    exact Finset.filter_true_of_mem fun u _ => drawUnits_all n _ r hr u.val u.isLt
+  · rfl
 
 /-- **A draw file of the verifier's draw under such a law decodes only to `kd` units**: a subset draw has its `k`
 (`ofJson_shape`), and a stratified or work draw `k_s` units in each stratum (`ofJson_count`, `ofJson_count_work`), whose
