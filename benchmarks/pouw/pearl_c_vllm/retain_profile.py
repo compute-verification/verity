@@ -40,6 +40,11 @@ HERE = Path(__file__).resolve().parent
 GiB = 1 << 30
 #: (module, attribute) of each part timed by `serve`, by its name in the profile; a dotted attribute is a class's method
 PARTS = {
+    "gemm": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun._gemm"),
+    "after": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun._after"),
+    "begin": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.begin"),
+    "poison": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.poison"),
+    "join_sides": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.join_sides"),
     "retained_call": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._retained"),
     "excluded": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded"),
     "excluded_host": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded_host"),

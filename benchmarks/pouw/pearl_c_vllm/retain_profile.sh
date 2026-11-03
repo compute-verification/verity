@@ -10,7 +10,8 @@
 # Everything kept goes to $OUT (served JSON, profiles, logs); the passes go in a mktemp directory under PASSES_ROOT (default
 # SCRATCH_ROOT, default /workspace/tmp; /dev/shm serves into tmpfs), removed at exit.  env: SPEC, LOADS, LEASE_MIN,
 # VERITY_BENCH_VENV; PROBE=0 skips the probe and UNRETAINED=0 the unretained serves; PLAIN=1 adds each load's retained
-# `served_passes.py serve`, without the profile's timers; WAIT_ENDS=1 serves with
+# `served_passes.py serve`, without the profile's timers, and PROFILE_UNRETAINED=1 a profiled serve of each load with no pass
+# retained; WAIT_ENDS=1 serves with
 # `retain_profile.py serve --wait-ends`; SEED=S serves seeded (`--seed S`) and writes each load's file digests; with it,
 # OLD_SRC=DIR (another commit's source tree on the node) serves each load again with DIR's verity_vllm and compares the
 # two serves' files.
@@ -40,12 +41,12 @@ if [ "${PROBE:-1}" != 0 ]; then
   lease $P/retain_profile.py probe --scratch "$S/probe" --out "$OUT/probe.json" > "$OUT/probe.log" 2>&1
   echo "probe exit $?: $(tail -1 "$OUT/probe.log" | cut -c1-600)"
 fi
-seed=(); [ -n "${SEED:-}" ] && seed=(--seed "$SEED")
+seed=() extra=(); [ -n "${SEED:-}" ] && seed=(--seed "$SEED")
 [ "${WAIT_ENDS:-0}" != 0 ] && seed+=(--wait-ends)
 retained() {  # NAME TAG [env...]: one profiled retained serve of load NAME into $R/NAME-TAG, its digests with SEED
   local name=$1 tag=$2; shift 2
   env "$@" gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- $P/retain_profile.py serve --profile "$OUT/$name-$tag-profile.json" \
-    "${seed[@]}" "${args[@]}" --passes "$R/$name-$tag" --out "$OUT/$name-$tag.json" > "$OUT/$name-$tag.log" 2>&1
+    "${seed[@]}" "${args[@]}" "${extra[@]}" --passes "$R/$name-$tag" --out "$OUT/$name-$tag.json" > "$OUT/$name-$tag.log" 2>&1
   echo "$name $tag exit $?: $(grep -m1 '^served ' "$OUT/$name-$tag.log" | cut -c1-400)"
   echo "$name $tag bytes: $(du -sb "$R/$name-$tag" | cut -f1)"
   [ -n "${SEED:-}" ] && $P/retain_profile.py digests "$R/$name-$tag" --out "$OUT/$name-$tag-digests.json"
@@ -68,6 +69,9 @@ for load in $LOADS; do
     rm -rf "${R:?}/$name-plain"
   fi
   retained "$name" retained
+  if [ "${PROFILE_UNRETAINED:-0}" != 0 ]; then
+    extra=(--no-retain); retained "$name" unretained-profiled; extra=()
+  fi
   if [ -n "${SEED:-}" ] && [ -n "${OLD_SRC:-}" ]; then
     retained "$name" old "PYTHONPATH=$OLD_SRC/integrations/vllm:$PYTHONPATH"
     "$VENV/bin/python" -c 'import json, sys; a, b = (json.load(open(f)) for f in sys.argv[1:]); d = sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k)); print(f"{sys.argv[1]} vs old: {len(a)} and {len(b)} files, {len(d)} differ", d[:8])' \
