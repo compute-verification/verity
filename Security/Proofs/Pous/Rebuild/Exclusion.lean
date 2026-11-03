@@ -64,7 +64,7 @@ about `Π₂`, each within `D ≤ 1505` rounds and `Q ≤ 2^128` queries, output
 theorem rebuild_pr_le (d : ℕ) (hd : 5 ≤ d) (dom : ℕ → Bits 512)
     (hdom : Function.Injective (fun i : Fin (2 ^ 9) => dom i)) (W : Bits (2 ^ 9 * 524288)) (D Q : ℕ)
     (hD : D ≤ 1505) (hQ : Q ≤ 2 ^ 128)
-    (A : Fin (2 ^ 9) → Prog (idealPerm (524288 + (524288 + 512))) (Bits 524288)) (hA : ∀ i, (A i).Bounded D Q) :
+    (A : Fin (2 ^ 9) → OracleAlgorithm (idealPerm (524288 + (524288 + 512))) (Bits 524288)) (hA : ∀ i, (A i).Bounded D Q) :
     pr (fun π : Equiv.Perm (Bits (524288 + (524288 + 512))) =>
         ∀ i, (A i).run ((idealPerm (524288 + (524288 + 512))).answer π) =
           ((chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i) ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by

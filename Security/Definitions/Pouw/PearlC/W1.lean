@@ -27,9 +27,9 @@ amended by H5):
 **The machine** (`Instr`, `Code`, `exec`). Memory is addressed by `(region, index)` (`Addr`) and holds 32-bit words.
 The regions are the scratch (0), the salt's bytes (1), the preprocessed state σ (2: its length, then its entries as
 32-bit words), the program's constant bank (3), the activations (4) and the weights (5), both FP32 words at
-`Nat.pair`-coded positions, and the outputs: the ticket words (6) and the useful words (7). A program (`Prog`) is a
+`Nat.pair`-coded positions, and the outputs: the ticket words (6) and the useful words (7). A program (`CodeImage`) is a
 constant bank and a code tree, both functions of the public layout, so the layout's control flow, unrolling and
-addressing are compiled in and free, as public control flow is on a GPU. Its text is bounded (`Prog.bounded`, below).
+addressing are compiled in and free, as public control flow is on a GPU. Its text is bounded (`CodeImage.bounded`, below).
 What depends on data is an `ite` (a branch on a word) or an `ld`/`st` with a register address, and W1's taint rule
 prices both: an `ite` costs one INT32 instruction, and every instruction under it pays one INT32 instruction per word it
 writes (`Instr.price`). An instruction is one lane: its price is W1's per-lane price, except a tensor-core instruction,
@@ -103,7 +103,7 @@ element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm
 - program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
   data (every operand is an address).
 
-**The text bound** (`Prog.bounded`). At
+**The text bound** (`CodeImage.bounded`). At
 every layout a program has at most `2^64` code nodes (`Code.size`) and `2^64` constants. W1 charges only the path a run
 takes, so with unbounded text a tree of `ite`s on the salt's 256 bits holds one leaf per salt. That is a table of the
 reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions. Under the bound
@@ -559,7 +559,7 @@ def Code.size : Code → ℕ
 
 /-- **A program**: a constant bank and a code tree, each a function of the public layout, of bounded text: at every
 layout at most `2^64` code nodes and `2^64` constants. -/
-structure Prog where
+structure CodeImage where
   consts : Layout → List ℕ
   code : Layout → Code
   bounded : ∀ L : Layout, (code L).size ≤ 2 ^ 64 ∧ (consts L).length ≤ 2 ^ 64
@@ -580,7 +580,7 @@ def exec (dv : W1Device) : Bool → Code → St → St
       exec dv t k (if w32 (st.mem p) = 0 then exec dv true b st1 else exec dv true a st1)
 
 /-- The initial memory: the salt's bytes, the state, the constant bank, the activations and the weights, as words. -/
-def init (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : Mem := fun a =>
+def init (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes) (σ : State) : Mem := fun a =>
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
   if a.1 = 1 then salt.getD a.2 0 % 256
@@ -599,7 +599,7 @@ def readout (U : Workload) (act : ℕ → Codes) (M : Mem) : Transcript := fun u
   else none
 
 /-- The final state of a run. -/
-def final (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : St :=
+def final (dv : W1Device) (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes) (σ : State) : St :=
   exec dv false (pr.code U.layout) ⟨init salt pr U act σ, [], 0⟩
 
 variable {Q R S : Type}
@@ -617,7 +617,7 @@ open Classical in
 free) and the salt's bytes `salt`: the instructions' prices plus `fetch` per distinct pre-salt or supplied word read and
 not free. No oracle call. -/
 noncomputable def w1 (dv : W1Device) (P : Protocol Q R S) (salt : S → List ℕ) : CostModel Q R S where
-  Prog := Prog
+  Prog := CodeImage
   run := fun pr _ U act σ s => readout U act (final dv (salt s) pr U act σ).mem
   cost := fun pr H U act σ s =>
     let st := final dv (salt s) pr U act σ
@@ -627,14 +627,14 @@ noncomputable def w1 (dv : W1Device) (P : Protocol Q R S) (salt : S → List ℕ
 
 /-- The words a run fetches first: its distinct pre-salt or supplied words, every one charged, none refunded. This is
 the run's device-memory read as the bandwidth account counts it, in 32-bit words. -/
-def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : ℕ :=
+def w1Read (dv : W1Device) (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes) (σ : State) : ℕ :=
   (final dv salt pr U act σ).fetched.dedup.length
 
 /-- **W1 priced, with no refund**: a run's compute, the instructions' prices (`final`'s `cost`), plus
 `fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
 γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
 noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where
-  Prog := Prog
+  Prog := CodeImage
   run := fun pr _ U act σ s => readout U act (final dv (salt s) pr U act σ).mem
   cost := fun pr _ U act σ s =>
     (((final dv (salt s) pr U act σ).cost + dv.prices.fetch * w1Read dv (salt s) pr U act σ : ℚ) : ℝ)

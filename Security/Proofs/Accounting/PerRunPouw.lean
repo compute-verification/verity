@@ -32,36 +32,6 @@ theorem Adversary.abort {CM : CostModel Q R S} (hCM : BudgetAbort CM) (A : Adver
   refine ⟨⟨A.pre, prog', A.act⟩, fun H s => ⟨(h H _ s).1, ?_⟩, fun H s hc => (h H _ s).2.2 hc⟩
   exact (Nat.add_le_add_left (h H _ s).2.1 _).trans (hq H s)
 
-/-- A cost model whose programs' costs and calls do not depend on the oracle, the preprocessed state or the salt, with
-nonnegative costs and a program that costs nothing and calls nothing, truncates: the aborted program is the program
-itself when its cost is within the budget, and the null program otherwise. So `BudgetAbort` holds of straight-line
-cost models, and the per-run guarantees' extra hypothesis is satisfiable. -/
-theorem budgetAbort_of_oblivious (CM : CostModel Q R S)
-    (hnn : ∀ prog H U act σ s, 0 ≤ CM.cost prog H U act σ s)
-    (hobl : ∀ prog U act, ∃ c : ℝ, ∃ n : ℕ, ∀ H σ s, CM.cost prog H U act σ s = c ∧ CM.calls prog H U act σ s = n)
-    (null : CM.Prog) (hnull : ∀ H U act σ s, CM.cost null H U act σ s = 0 ∧ CM.calls null H U act σ s = 0) :
-    BudgetAbort CM := by
-  classical
-  refine ⟨hnn, fun prog U act b hb => ?_⟩
-  obtain ⟨c, n, hc⟩ := hobl prog U act
-  by_cases hcb : c ≤ b
-  · exact ⟨prog, fun H σ s => ⟨(hc H σ s).1 ▸ hcb, le_rfl, fun _ => ⟨rfl, rfl⟩⟩⟩
-  · refine ⟨null, fun H σ s => ⟨(hnull H U act σ s).1 ▸ hb, (hnull H U act σ s).2 ▸ Nat.zero_le _, fun h => ?_⟩⟩
-    exact absurd ((hc H σ s).1 ▸ h) hcb
-
-/-- The per-run form is at least as strong as `EndToEnd` at a cost model that truncates: an adversary within `(T, q)`
-makes at most `q` calls, and its realized cost is at most `T` on every run, so `T` below the certificate puts every run
-below it. -/
-theorem endToEnd_of_perRun [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {U : Workload} {T c e : ℝ} {q t : ℕ} {A : Adversary CM} (hA : A.Bounded U T q)
-    (h : CallsWithin A U q →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-          AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧ onlineCost A U x.1 x.2.1 < c)
-        ≤ e) :
-    pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-        AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧ T < c) ≤ e :=
-  (pr_mono fun x hx => ⟨hx.1, ((hA x.1 x.2.1).1.trans_lt hx.2)⟩).trans (h fun H s => (hA H s).2)
-
 namespace SecurityProofs
 
 theorem PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun := by

@@ -68,7 +68,7 @@ theorem a6_rederive_untimed {M : IdealModel} (sch : Scheme M) (κ : ℕ) (π : �
 passes every sequential audit with probability 1 (the timed form of `redesign.md` Proposition 1). -/
 theorem a6_rederive_timed {M : IdealModel} (sch : Scheme M) (κ D Q k : ℕ)
     (z : Bits sch.n → M.Ω → sch.Coins → Bits κ)
-    (R : Bits sch.n → Bits sch.t → Bits κ → Fin sch.B → Prog M (Bits sch.ℓ))
+    (R : Bits sch.n → Bits sch.t → Bits κ → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
     (hRb : ∀ W pp s i, (R W pp s i).Bounded D Q)
     (hR : ∀ W ω r i, (R W (sch.enc W ω r).1 (z W ω r) i).run (M.answer ω) = (sch.enc W ω r).2 i) :
     ∃ (A₁ : Preprocessor sch κ) (A₂ : SeqResponder sch κ D Q), ∀ W, pr (seqAccepts sch k W A₁ A₂) = 1 := by

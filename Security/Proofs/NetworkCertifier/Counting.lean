@@ -199,7 +199,7 @@ theorem ingressUpTo_congr {In : Type} (op : ℕ → List (Obs L K S) → In) {o 
   have e2 : o'.take i = (o'.take t).take i := by rw [List.take_take, Nat.min_eq_left (by omega)]
   rw [e1, e2, h]
 
-theorem accepted_take {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In) {k m : ℕ}
+theorem accepted_take {In Adv : Type} (P : EgressPrediction L S In Adv) (op : ℕ → List (Obs L K S) → In) {k m : ℕ}
     (hm : m ≤ k) {o : List (Obs L K S)} {a : Adv} (h : Accepted P op k o a) : Accepted P op m (o.take m) a := by
   intro t ht
   obtain ⟨hlen, hrows, hstat⟩ := h t (by omega)
@@ -215,7 +215,7 @@ theorem accepted_take {In Adv : Type} (P : Program L S In Adv) (op : ℕ → Lis
 whatever the sender's strategy (over all secrets) and however the operator reacts. Suppose that after any prefix of
 length `t`, the runs accepted up to `t + 1` continue with at most `N t` distinct observations; this is the doc's
 `N_acc`, defined by prefix acceptance. Then there are at most `∏_{t<n} N t` such sequences. -/
-theorem encard_acceptedRuns_le (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ) (N : ℕ → ℕ)
+theorem encard_acceptedRuns_le (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ) (N : ℕ → ℕ)
     (hN : ∀ t < n, ∀ h : List (Obs L K S),
       {x | ∃ z, AcceptedUpTo P I.op (t + 1) (I.obsRun z (t + 1)) ∧ I.obsRun z (t + 1) = h ++ [x]}.encard ≤ N t) :
     {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard ≤ ((∏ t ∈ Finset.range n, N t : ℕ) : ℕ∞) := by
@@ -233,7 +233,7 @@ theorem encard_acceptedRuns_le (I : Interaction L K S Z In Act Wire) (P : Progra
 records, jitter and statuses) and recovers every secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs`
 has at most as many elements as there are accepted observation sequences. This needs no W2, and the wire version below
 follows from it. -/
-theorem encard_obsDecodable_le (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ)
+theorem encard_obsDecodable_le (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
     (dec : List (Obs L K S) → Z) (hdec : ∀ z ∈ Zs, dec (I.obsRun z n) = z) :
     Zs.encard ≤ {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard := by
@@ -247,7 +247,7 @@ theorem encard_obsDecodable_le (I : Interaction L K S Z In Act Wire) (P : Progra
 /-- **Zero error, through the wire (uses W2).** A decoder reads the wire of the first `n` steps and recovers every
 secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs` has at most as many elements as there are accepted
 observation sequences. -/
-theorem encard_decodable_le (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ)
+theorem encard_decodable_le (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z) :
@@ -257,7 +257,7 @@ theorem encard_decodable_le (I : Interaction L K S Z In Act Wire) (P : Program L
 
 /-- **W6 on accepted runs.** Under fail-closed certification, a run accepted up to `n` takes no fault action at any step
 `i` whose window closes before `n`. (`hwin`: every step lies in its own window, which ends no earlier.) -/
-theorem no_fault_of_accepted (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (winEnd : ℕ → ℕ)
+theorem no_fault_of_accepted (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (winEnd : ℕ → ℕ)
     (hwin : ∀ i, i ≤ winEnd i)
     (hW6 : FailClosed I.certifier winEnd) (z : Z) (n : ℕ) (hacc : AcceptedUpTo P I.op n (I.obsRun z n))
     (i : ℕ) (hi : i < (I.actRun z n).length) (hend : winEnd i < n) :

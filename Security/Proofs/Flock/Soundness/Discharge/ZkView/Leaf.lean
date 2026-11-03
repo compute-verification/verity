@@ -113,11 +113,4 @@ theorem Coined.content_size {K W Hi VL : Type} [Field K] {z : Sizes} (T : Coined
     (p : LeafPos z) : (T.content w b p).size = 64 := by
   rcases p with p | ⟨r, p⟩ | r <;> exact Sha512.hash_size _
 
-theorem honest_msg : HonestMsg := by
-  intro K W Hi VL _ J n Cn zs T out hc w x c
-  dsimp only [honest, ZK.Strategy.comap, pairProver]
-  refine congrArg (msgsAt T out w x.1 c) (funext fun l => ?_)
-  rw [Coined.exeLeaf, leafSplit _ _ ((T c l.1).content_size _ _ _)]
-  rfl
-
 end FlockSoundness.Discharge.ZkView

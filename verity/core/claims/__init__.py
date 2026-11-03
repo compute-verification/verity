@@ -285,9 +285,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
-    # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
-    # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
-    # and its sm_120 instances) read the verifier's clock in the cost model
+    # `Pouw.Assumptions.HonestClock`, stated once for both PoUW games: the premise by which the deadline guarantees
+    # (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline and its sm_120
+    # instances) read the verifier's clock in the cost model
     Entry("honest-clock", "assumption",
           "Honest clock: the cost behind a transcript the verifier receives by the deadline is spent after the salt's "
           "release and by the deadline, so the prover's computation stopped at the deadline outputs every transcript "

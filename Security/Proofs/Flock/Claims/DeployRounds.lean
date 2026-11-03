@@ -83,16 +83,6 @@ theorem sampleWith_ok (hs : Hashes V) {t t₁ : Transcript} {c : F128} (h : samp
   obtain ⟨rfl, rfl⟩ := pure_ok h₄
   exact ⟨hn', hr, hk⟩
 
-/-- `sampleKWith` then `f`: round `t.k` issued two coins. -/
-theorem sampleKWith_bind (hs : Hashes V) {f : F256 → TM β} {t t' : Transcript} {b : β}
-    (h : (sampleKWith hs >>= f) t = .ok (b, t')) :
-    t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 2 ∧ ∃ c t₁, t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 ∧ f c t₁ = .ok (b, t') := by
-  obtain ⟨c, t₁, h₁, h₂⟩ := bind_ok h
-  obtain ⟨cs, t₂, h₃, h₄⟩ := bind_ok h₁
-  obtain ⟨hlt, hn', -, hr, hk⟩ := squeezeWith_ok hs (by decide) h₃
-  obtain ⟨rfl, rfl⟩ := pure_ok h₄
-  exact ⟨hlt, hn', _, _, hr, hk, h₂⟩
-
 theorem sampleKWith_ok (hs : Hashes V) {t t₁ : Transcript} {c : F256} (h : sampleKWith hs t = .ok (c, t₁)) :
     (t.rounds[t.k]!).n = 2 ∧ t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 := by
   obtain ⟨cs, t₂, h₃, h₄⟩ := bind_ok h

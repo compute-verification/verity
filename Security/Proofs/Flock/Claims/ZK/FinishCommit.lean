@@ -25,8 +25,6 @@ open FlockSoundness.Refine
 
 /-! ## A level's codeword -/
 
-theorem encodeRows_eq : encodeRows = FlockComplete.encodeRows := rfl
-
 theorem rowsFft_size (lv : Level) (g : Array F128) : (rowsFft lv g).size = 2 ^ lv.d := by
   simp [rowsFft]
 

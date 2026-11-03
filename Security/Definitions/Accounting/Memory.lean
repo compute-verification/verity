@@ -31,7 +31,7 @@ reads `z` from it. Only the states the audit reaches are read. -/
 def Determines {I : Pous.IdealModel} (sch : Pous.Scheme I) {N q : ℕ} (c : ℕ) (W : Pous.Bits sch.n)
     (π : ℕ → Pous.Bits N → Pous.Bits q) (A₁ : Pous.Bits q → Pous.Preprocessor sch N)
     (step : Pous.Bits q → Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
-      Pous.Prog I (Pous.Bits sch.ℓ × Pous.Bits N)) : Prop :=
+      Pous.OracleAlgorithm I (Pous.Bits sch.ℓ × Pous.Bits N)) : Prop :=
   ∀ (z : Pous.Bits q) (x : Pous.Outcome sch c) (j : ℕ), j < c →
     π j (Pous.Sampled.seqState (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
       (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) = z
@@ -47,7 +47,7 @@ and the run's outcome (primitive, coins, challenges) and of `j`, with at most `2
 def DeterminesAdvice {I : Pous.IdealModel} (sch : Pous.Scheme I) {N a q : ℕ} (c : ℕ) (W : Pous.Bits sch.n)
     (π : ℕ → Pous.Bits N → Pous.Bits a → Pous.Bits q) (A₁ : Pous.Bits q → Pous.Preprocessor sch N)
     (step : Pous.Bits q → Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
-      Pous.Prog I (Pous.Bits sch.ℓ × Pous.Bits N)) : Prop :=
+      Pous.OracleAlgorithm I (Pous.Bits sch.ℓ × Pous.Bits N)) : Prop :=
   ∀ (z : Pous.Bits q) (x : Pous.Outcome sch c) (j : ℕ), j < c → ∃ α : Pous.Bits a,
     π j (Pous.Sampled.seqState (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
       (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) α = z

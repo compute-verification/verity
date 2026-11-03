@@ -76,10 +76,6 @@ noncomputable def plainWire (mPts : ℕ) (h : 2 * mPts ≤ 65536) : Wire 65536 1
   decRd _ := finDecode
   decRd_enc _ := finDecode_code
 
-/-- **The plain wire reads roots as the deployed link does**: `plainRoot_of_first`'s premise on the wire. -/
-theorem plainWire_root (mPts : ℕ) (h : 2 * mPts ≤ 65536) (a : Claims.Msg) :
-    (plainWire mPts h).root a = ((linkOf a).getD default).1.toArray := rfl
-
 theorem liveOutJ_ext' {J mPts : ℕ} {o o' : LiveOutJ J mPts} (h₁ : o.rootB = o'.rootB) (h₂ : o.pts = o'.pts)
     (h₃ : o.reps = o'.reps) (h₄ : o.proofs = o'.proofs) : o = o' := by
   cases o

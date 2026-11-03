@@ -80,19 +80,6 @@ theorem allInh_lincheckRounds [Field F] [Fintype F] : ∀ (n : ℕ) (claim : F),
         | dsimp only)
       all_goals exact allInh_lincheckRounds n _
 
-theorem allInh_lincheck [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : AllInh (lincheck A S zc) := by
-  unfold lincheck
-  repeat' (first
-    | exact AllInh.ret _
-    | exact AllInh.pure' _
-    | exact AllInh.recv' _
-    | exact AllInh.draw' _
-    | refine AllInh.bind' ?_ fun _ => ?_
-    | intro _
-    | split
-    | dsimp only)
-  all_goals exact allInh_lincheckRounds _ _
-
 theorem allInh_opening [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
     AllInh (opening A hm claims) := by
   unfold opening

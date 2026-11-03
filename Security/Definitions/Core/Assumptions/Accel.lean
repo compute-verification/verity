@@ -25,7 +25,7 @@ def AccelProductForm (x : Accel.Open) : Prop := x.ProductForm
 ceiling, takes every content `M` of its stores with `D M` to `f M` within `T` seconds. Then for some semantics `x`
 meeting P1 and P2 (the card's own: what its instructions compute), some program of the machine at `c` and `x`, with a
 schedule chosen before the content as the card's code is, takes every such `M` to `f M` within `T` seconds
-(`Machine.Fits`). It holds because every instruction the card executes is dominated by an ACCEL op (`Accel.Op`)
+(`Machine.Fits`). It holds because every instruction the card executes is dominated by an ACCEL op (`Accel.Opcode`)
 reading and writing at least its words, at no more units of each resource (the coverage table,
 `benchmarks/pouw/machine_model/data/cover/rows.toml`), and the model's coarsenings (pooling, no latency, no per-clock
 limit, free resources) only let a program do more. A table is a SKU's at its firmware's maximum (`Accel.H200`,

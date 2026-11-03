@@ -35,9 +35,6 @@ variable (C : Verity.Circuit)
 
 theorem w_le_W (g : Fin C.N) : C.w g ≤ W C := le_sup (f := C.w) (mem_univ g)
 
-theorem enc_val (x : Bit C) : ((enc C x : Fin (C.N * W C)) : ℕ) = x.2 + W C * x.1 := by
-  simp [enc, finProdFinEquiv]
-
 variable {C}
 
 theorem mem_bits {S : Finset (Fin C.N)} {x : Bit C} : x ∈ bits C S ↔ x.1 ∈ S ∧ (x.2 : ℕ) < C.w x.1 := by

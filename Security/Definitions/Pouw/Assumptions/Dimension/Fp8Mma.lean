@@ -5,12 +5,12 @@ import Definitions.Pouw.Assumptions.Dimension.Embed
 
 **Draft semantics, pending review**.
 
-`Op.mma outs p` is `M4090`'s tensor-core class: any functions `outs`, one per 32-bit accumulator register written, at
-the full instruction's price `p`, well-formed when `16·len(outs) ≤ p`. `Shape4090` names the 4090's `mma.sync` shapes
-with their measured prices (units of one int8 MAC), and
-`mmaOp s outs = Op.mma outs (regPrice s · len(outs))` is the instruction of shape `s`. Nothing in `Op` changes: the
-shapes are instances of `Op.mma`, so every `M4090` theorem (`EmbedM4090`, `PerWordM4090`, `PerWordM4090Gap`) covers
-programs that use them.
+`M4090Instr.mma outs p` is `M4090`'s tensor-core class: any functions `outs`, one per 32-bit accumulator register
+written, at the full instruction's price `p`, well-formed when `16·len(outs) ≤ p`. `Shape4090` names the 4090's
+`mma.sync` shapes with their measured prices (units of one int8 MAC), and
+`mmaOp s outs = M4090Instr.mma outs (regPrice s · len(outs))` is the instruction of shape `s`. Nothing in `M4090Instr`
+changes: the shapes are instances of `M4090Instr.mma`, so every `M4090` theorem (`EmbedM4090`, `PerWordM4090`,
+`PerWordM4090Gap`) covers programs that use them.
 
 * **Price per register** `regPrice s = k · elements per register · price per MAC`. An FP16 accumulator register is
   `.f16x2`, two elements, so its price is twice the per-element price.
@@ -32,7 +32,7 @@ programs that use them.
   `ADA_E4M3_M16N8K32` (not formalized here), at 64 per checked FP32 word.
 * **The consequence.** The cheapest price per register written in `M4090` stays 16 (int8 m16n8k16, legacy m8n8k4 and
   `int`), and 8 on the FP32 pipe. A dimension bound in `M4090` therefore gives at most 16 per independent target
-  word, and that is attained (`Ceiling4090`): on FP8 atom words, whose honest cost is 64, at most 16/64 = 25%.
+  word: on FP8 atom words, whose honest cost is 64, at most 16/64 = 25%.
 -/
 
 namespace Pouw.Dimension.Fp8Mma
@@ -90,7 +90,8 @@ def Shape4090.mac2 : Shape4090 → ℕ
 def Shape4090.regPrice (s : Shape4090) : ℕ := s.k * s.elems * s.mac2 / 2
 
 /-- The `M4090` instruction of shape `s` writing the accumulator registers `outs` (any functions). -/
-def mmaOp {G : Type} (s : Shape4090) (outs : List (G → ℚ)) : Op G := Op.mma outs (s.regPrice * outs.length)
+def mmaOp {G : Type} (s : Shape4090) (outs : List (G → ℚ)) : M4090Instr G :=
+  M4090Instr.mma outs (s.regPrice * outs.length)
 
 /-! ## Pinned statements (draft semantics, pending review) -/
 
@@ -104,15 +105,5 @@ def ShapeTable4090 : Prop :=
 theorems cover programs that use the FP8 classes. -/
 def ShapeWF4090 : Prop :=
   ∀ (N m n k : ℕ) (s : Shape4090) (outs : List (Noise N m n k → ℚ)), (mmaOp s outs).WF
-
-/-- **No bound in `M4090` exceeds 16 per target word** (draft semantics, pending review): for
-every FP32 semantics and every finite set `W` of functions of the noise, a lower bound `b` on the cost of every
-`M4090` program that outputs all of `W` satisfies `b ≤ 16·|W|`. On FP8 atom words, whose honest cost is 64 each,
-that is at most a quarter: `4·b ≤ 64·|W|`. -/
-def Ceiling4090 : Prop :=
-  ∀ (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (W : Finset (Noise N m n k → ℚ)) (b : ℝ),
-    (∀ q : (m4090 N m n k fpSem).Prog, (∀ w ∈ W, w ∈ (m4090 N m n k fpSem).outputs q) →
-      b ≤ (m4090 N m n k fpSem).cost q) →
-    b ≤ 16 * W.card ∧ 4 * b ≤ Shape4090.e4m3F32.regPrice * W.card
 
 end Pouw.Dimension.Fp8Mma
