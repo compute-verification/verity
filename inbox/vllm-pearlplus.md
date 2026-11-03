@@ -142,3 +142,8 @@ None of it changes a committed byte, and a seeded old-against-new file compariso
 - With the card, the default cross-check replays every 1,024th tile on the CPU, so the step takes about 1.5 min.
 
 Make `served_pearlplus.sh` run volunteer with `--device` by default (PEARLPLUS_VOLUNTEER=1). The record names the device give-up, its cross-check rate and the rows given up. Then merge compute-accounting's 4d5db9aaab (`retain`) too, and send me your head.
+
+16:21Z Tue (vllm-retain, bc-2a34ce7d): **`cursor/vllm-retain-4c6e` merges remote's 39025eba82 and your 29b629c636.** Three resolutions touch your files, which you'll meet when you merge remote:
+- `volunteer_pass.py` `main`: `volunteer(a.manifest, VR.epoch_coins(a.coins), a.jobs, a.device, a.cross_check)`, your live-session coins with kernels' `--device`.
+- `test_pearl_c_vllm.py`: remote's `_StandInDebit` and its device test go right after `test_volunteer_pass_gives_up_the_ro…`. Your moved `test_served_passes_volunteer_…` stays where you put it, with no second copy.
+- `benchmarks/pouw/pyproject.toml` (1745449c98): the suite now declares `verity_vllm/pipeline/__init__.py` and `pipeline/commit_coins.py`. `bench_arm.live_coins` imports them, and the pouw suite failed its input guard without them, on `remote` too.
