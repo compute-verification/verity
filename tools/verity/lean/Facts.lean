@@ -25,8 +25,7 @@ judgement; `check.py` holds the policy.
   with their source lines and the constants under each one's declaration's name (`family`) that its own type,
   value or constructors use (`reads`, `own`: what its record hashes with it), and the constants other than theorems outside
   `recorded` where that walk
-  stops, with their modules (`outside`). When `recorded` reaches past `meaning`, `meaning_reads` names the `reads` the
-  walk under `meaning` alone reaches. Signatures print with no notation, since no notation is loaded: nothing a
+  stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `assumption_reads`: for each name under `assumptions`, and each premise head and named hypothesis a pin reports, that
   constant and every definition, inductive type and constructor it reads, transitively, in the modules under `meaning`
@@ -1147,14 +1146,6 @@ unsafe def main (args : List String) : IO UInt32 := do
       if let some rs := tasks[i]!.get then
         acc := acc.insert pins[i] rs
     return acc
-  let meaningReadsOf : Std.HashMap Name (Array Name) := if further.isEmpty then {} else Id.run do
-    let tasks := pins.map fun p => Task.spawn fun _ => (env.find? p).map fun ci =>
-      (reads env table meaning ci.type.getUsedConstants).1.map (·.1)
-    let mut acc := {}
-    for h : i in [0:pins.size] do
-      if let some rs := tasks[i]!.get then
-        acc := acc.insert pins[i] rs
-    return acc
   lap "reads" readsOf.size
   let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
     (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
@@ -1172,10 +1163,6 @@ unsafe def main (args : List String) : IO UInt32 := do
         ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
-  let pinned := (pins.zip pinned).map fun (p, (s, j)) =>
-    (s, match meaningReadsOf[p]? with
-      | some ns => j.setObjVal! "meaning_reads" (toJson (ns.map toString))
-      | none => j)
   lap "pins" pinned.size
   let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
   let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
