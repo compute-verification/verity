@@ -73,8 +73,12 @@ CAPTURE_FINAL = "4.4"
 #: where node traces run: `auto` spreads shards of TRACE_SHARD runs over the CPU pool (coordinator 07:48Z)
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "auto")
 TRACE_SHARD = 6
-#: the pilot's records are traced again only once the toolsmith's capture is final (4.4's 'capture final' line,
-#: coordinator 07:48Z): TE_TRACE_PILOT=1
+#: the most shards a refresh launches, so the pool (about 27 free slots at 08:50Z) keeps room for other lanes' runs;
+#: the next refresh launches the rest, v3's first
+TRACE_MAX_SHARDS = 30
+#: a shard's custody key lifetime: `--on auto` adds its 4 h queue wait to the 150 min timeout (23,400 s), past the
+#: default key's 6 h, so `research run` refuses the launch without it
+TRACE_CUSTODY_TTL = "8h"
 #: how long a refresh waits for its node runs; one still tracing is taken at the next refresh
 TRACE_WAIT_S = 1080
 #: the integrator's te_core whose capture TE40_WT's isn't (`next_capture`), checked out with no files: its runs traced
@@ -276,7 +280,7 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
 
     # the ended node runs taken first, so the runs they failed (under an older CODE) are traced again in this one
     settle()
-    todo = to_trace(te, {r for runs in pending.values() for r in runs}) if launch else []
+    todo = to_trace(te, {r for runs in pending.values() for r in runs})[:TRACE_SHARD * TRACE_MAX_SHARDS] if launch else []
     packed = {"runs": len(todo)}
     for i in range(0, len(todo), TRACE_SHARD):
         shard, pack = todo[i:i + TRACE_SHARD], out / f"trace40-pack-{i // TRACE_SHARD}.tar"
@@ -290,7 +294,7 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         workers, gb = trace_resources(len(runs))
         r = subprocess.run(["research", "run", "--on", TRACE_NODE, "--project", "verity", "--source", str(HERE.parents[2]),
                             "--cwd", "source", "--send", str(pack), "--cpus", str(workers), "--mem-gb", str(gb),
-                            "--env", f"WORKERS={workers}", "--timeout", "150m", "--",
+                            "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL, "--",
                             "bash", "benchmarks/covert_witness/scorer/job40.sh"],
                            capture_output=True, text=True, check=False, env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
         said = r.stdout + r.stderr
