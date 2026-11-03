@@ -13,7 +13,8 @@ is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
 names them or not. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
-accepted session under another population is rejected (`population_why`).
+accepted session under another population is rejected (`population_why`): by `verify` handed that population's strata, and
+by the v2 audit, which derives them from a registration whose partition queries the program for another population.
 
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
@@ -156,11 +157,11 @@ def fx(tmp_path_factory) -> Path:
 
 
 def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
-            strata=STRATA):
+            strata=STRATA, partition=None):
     st = fx / "stage"
     return PF.verify(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                      program=(st / "program.json").read_bytes(),
-                     partition=json.loads((st / "partition.json").read_text()),
+                     partition=partition or json.loads((st / "partition.json").read_text()),
                      registered=json.loads((st / "registered.json").read_text()) if own else None, strata=strata)
 
 
@@ -259,11 +260,11 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     assert got is None and why[0] == "proof", why
 
 
-def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True, partition=None):
     st = fx / "stage"
     return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                           program=json.loads((st / "program.json").read_bytes()),
-                          partition=json.loads((st / "partition.json").read_text()),
+                          partition=partition or json.loads((st / "partition.json").read_text()),
                           registered=json.loads((st / "registered.json").read_text()) if own else None)
 
 
@@ -301,6 +302,34 @@ def test_an_accepted_session_of_another_population_is_rejected(fx):
     (f,), why = _verify(fx, fx / "session", strata=(("RoPEHead_v1{D=64}", ((0, 31),)),))
     assert why is None, why
     assert (f.accepted, f.units) == (False, ()) and f.why == PF.population_why(range(32), [("t", [[0, 31]])]), f
+
+
+@lean
+@pytest.mark.slow
+def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
+    """A registration whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
+    heads' calls, rather than its template's 32 instances: the v2 audit derives that population from the registration
+    itself (`FilePart.check`, last in `verdictOf`) and rejects the honest session, whose circuit file holds the 32, with
+    `population_why`'s reason; `verify`, handed the strata Python derives from the same program and query
+    (`partition.strata`), agrees. `test_an_accepted_session_of_another_population_is_rejected` hands Python its strata;
+    this is the one run of the Lean's own derivation on a population other than the file's."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as PA
+    from verity.ml.circuits.codec import decode_program
+    from verity.ml.definitions.registry.catalog import load
+
+    st = fx / "stage"
+    part = {**json.loads((st / "partition.json").read_text()),
+            "query": {"name": "Q_call", "version": 1, "params": {"X": 16}}}
+    strata = PA.strata(decode_program(json.loads((st / "program.json").read_text()), load()[0]), part["query"])
+    why = PF.population_why(range(32), strata)
+    assert why is not None and why.startswith("partition: the public file's 32 units are not"), (why, strata)
+    mine, refused = _v2(fx, fx / "session", partition=part)
+    assert refused is None, refused
+    (f,) = mine
+    assert (f.accepted, f.why, f.units) == (False, why, ()), f
+    got, refused = _verify(fx, fx / "session", strata=strata, partition=part)
+    assert refused is None, refused
+    _same(got, mine)
 
 
 @lean
