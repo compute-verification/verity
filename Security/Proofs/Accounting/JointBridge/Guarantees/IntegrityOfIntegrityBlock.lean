@@ -6,14 +6,14 @@ import Proofs.Flock.EndToEnd.Carry.Statement
 
 A server-time block's sampled-proofs audit (`Audit.sampled` of the block's period, `Accounting.PeriodRun`) is C-Flock's
 integrity audit of block `b` of a server's monitoring period of sessions with carried state
-(`Flock.Guarantees.IntegrityBlockCarried`): the sessions `t` in `S.sessions b`, each a sampling block `S.W t`
+(`Flock.Guarantees.IntegrityBlockCarried`): the sessions `t` in `S.sessions b`, each an execution phase `S.W t`
 (`Flock.Guarantees.SamplingBlock`), a `--zk` session under hidden outputs with a fresh live subset draw, played by one
 adaptive prover over the whole monitoring period (`Flock.Guarantees.CarriedBlocks.run`), the state a block carries across
 a wipe read at its carried leaves, each at one value in every session that shares it.
 `RealizesIntegrityOfIntegrityBlock` ties the block's period to it: the period's sampled audit's own coins drive the
-monitoring period's game at the prover's strategy, as far as block `b`'s sampling blocks' records go, its verdict is
-flock-verify's on every sampling block of the server-time block, and the claim's units and wrong units are those
-sampling blocks'.
+monitoring period's game at the prover's strategy, as far as block `b`'s execution phases' records go, its verdict is
+flock-verify's on every execution phase of the server-time block, and the claim's units and wrong units are those
+execution phases'.
 
 `IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
 `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`, `IntegrityBlockCarried`'s: the coins model's per-period
@@ -33,26 +33,26 @@ open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
 /-- The period `r` of server-time block `b` has as its sampled-proofs audit C-Flock's integrity audit of block `b` of
-the server's monitoring period of sessions `S` with carried leaves (`Flock.Guarantees.CarriedBlocks`), each session a
-sampling block `S.W t`. Every field is a property of the deployed run:
+the server's monitoring period of sessions `S` with carried leaves (`Flock.Guarantees.CarriedBlocks`), each session an
+execution phase `S.W t`. Every field is a property of the deployed run:
 
 * `strat`, `record`, `law`: the node is one prover strategy of the monitoring period's game at each value of the other
   coins
   (every other audit's, and every other server-time block's), and the period's sampled audit's own coins
-  (`r.own .sampled`), drawn uniformly, drive that game as far as block `b`'s sampling blocks go: every event of their
+  (`r.own .sampled`), drawn uniformly, drive that game as far as block `b`'s execution phases go: every event of their
   records has the probability, over those coins, that the game's run gives the records of the sessions in
   `S.sessions b`, at that strategy. This is the live coin flow: each of the block's subset draws comes from the
   verifier's byte source, which the period's sampled coordinate is (A3,
   `FlockSoundness.Assumptions.UniformRandomBytes`, stays a hypothesis of the guarantee). The sessions of the
   server-time blocks before `b` are played at the coins they were, which the strategy sees through `ξ`.
-* `accepts_iff`: the period's sampled audit accepts exactly when flock-verify accepts every sampling block of the
+* `accepts_iff`: the period's sampled audit accepts exactly when flock-verify accepts every execution phase of the
   server-time block.
 * `wrong_eq`: the wrong units of the period's partition in its committed transcript are, in number, the block's
-  sampling blocks' wrong units (`CarriedBlocks.wrongSet`: `wrongRegZ` in the transcript fixed at registration, over the
+  execution phases' wrong units (`CarriedBlocks.wrongSet`: `wrongRegZ` in the transcript fixed at registration, over the
   key program's partition, each carried leaf read at its one value). This is the program-from-circuit correspondence (M1: the key program and its partition are
   the circuit `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is
   this field.
-* `units_eq`, `gates_nonempty`: the partition's public unit-size property. Its units are the block's sampling blocks'
+* `units_eq`, `gates_nonempty`: the partition's public unit-size property. Its units are the block's execution phases'
   units, and every unit has at least one of the circuit's gates, so no empty unit, trivially correct, dilutes the share
   `ε` the claim bounds. -/
 structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
@@ -61,18 +61,18 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   /-- the prover strategy the node plays the monitoring period's game with, at the coins (it reads only the other
   coins) -/
   strat : ((i : I) → Ω i) → FlockSoundness.Game.Strategy S.game
-  /-- block `b`'s sampling blocks' records at the coins: flock-verify's verdict and the wrong units of each -/
+  /-- block `b`'s execution phases' records at the coins: flock-verify's verdict and the wrong units of each -/
   record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
   /-- the period's sampled audit's own coins drive the monitoring period's game at the strategy, on block `b`'s
-  sampling blocks -/
+  execution phases -/
   law : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value (fun l => E (l.filter fun w => w.idx ∈ S.sessions b)) (S.run (strat ξ))
-  /-- the sampled audit accepts exactly when flock-verify accepts every sampling block of the server-time block -/
+  /-- the sampled audit accepts exactly when flock-verify accepts every execution phase of the server-time block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
-  /-- the period's wrong units are its sampling blocks' (M1, the program-from-circuit correspondence) -/
+  /-- the period's wrong units are its execution phases' (M1, the program-from-circuit correspondence) -/
   wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
-  /-- the partition's units are the block's sampling blocks' units -/
+  /-- the partition's units are the block's execution phases' units -/
   units_eq : r.units = ∑ t ∈ S.sessions b, (S.W t).n
   /-- every unit of the partition has at least one gate -/
   gates_nonempty : ∀ u, (r.parts.gates u).Nonempty
@@ -84,9 +84,9 @@ open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Dischar
 /-- **The integrity audit of a server-time block, from C-Flock's integrity audit of that block.** For the period `r` of
 server-time block `b` whose sampled-proofs audit realizes C-Flock's integrity audit of block `b` of the server's
 sessions `S` with carried leaves (`RealizesIntegrityOfIntegrityBlock`), each of the block's draws covering at least a
-fraction `q > 0` of its sampling block's units, under A3 for each of the block's draw bytes, `cr/sha-512` (`TableCRZ`)
-and `ecr/sha-512` (`LinkCRZC`) at every strategy the node plays a sampling block with on some run (`Period.Plays`), and
-`ecr/sha-512` (`SHA512CRExpected`) at each carried leaf's finder at every strategy the node plays, at certificates
+fraction `q > 0` of its execution phase's units, under A3 for each of the block's draw bytes, `cr/sha-512` (`TableCRZ`)
+and `ecr/sha-512` (`LinkCRZC`) at every strategy the node plays an execution phase with on some run (`Period.Plays`),
+and `ecr/sha-512` (`SHA512CRExpected`) at each carried leaf's finder at every strategy the node plays, at certificates
 whose share `ε` of the block's units is at least `ln(1/δ)/q`, the period's sampled audit has its per-period guarantee
 (`PeriodRun.Sound`) at error
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,b},$$

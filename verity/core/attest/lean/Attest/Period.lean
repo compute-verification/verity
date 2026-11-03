@@ -4,7 +4,7 @@ import Attest.FrameV3Sha512
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
 
-`verity.core.attest`, whose module docstring is the spec. An auditor party on a device commits each sampling block's
+`verity.core.attest`, whose module docstring is the spec. An auditor party on a device commits each execution phase's
 records (each a byte string) as the leaves of one frame-v3-sha512 tree per certification period (`root`, over the domain
 `periodDomain count` at the binding `PERIOD_BINDING`, owner −1, leaf schema `PERIOD_SCHEMA`), and its lower HSS key signs the
 root once per period (`Lms.periodRootMessage`, binding the deployment, the party, the attachment the challenger drew, the
@@ -14,7 +14,7 @@ record shows them in the clear. `checkKey` is the verifier's check of them, in t
 `check` is what the period's proof runs on its witness: the root's signature verifies under the lower key (one LMS
 verification), and each record it reads opens to the root at its position (`FrameV3Sha512.verifyOpening`). `accepts` is
 both, the verifier's acceptance of a period. `checkLiveness` is the verifier's check, in the clear, of the party's one
-public liveness record per sampling block (`Lms.verifyLiveness`).
+public liveness record per execution phase (`Lms.verifyLiveness`).
 -/
 
 namespace Attest
@@ -91,7 +91,7 @@ def accepts (p : Lms.Params) (identity deployment : ByteArray) (party : String) 
   if !(← checkKey p identity deployment party k) then return false
   check p deployment party k.lower s reads
 
-/-- **The liveness check**, in the clear: `sig` (its bytes) is the party's public liveness record of sampling block
+/-- **The liveness check**, in the clear: `sig` (its bytes) is the party's public liveness record of execution phase
 `block` of the period, at the parameters `p`. Refused for bytes that are not an HSS signature at `p`. -/
 def checkLiveness (p : Lms.Params) (identity deployment : ByteArray) (party : String) (attachment : ByteArray)
     (link : String) (period block : Nat) (sig : ByteArray) : Lms.E Bool := do
