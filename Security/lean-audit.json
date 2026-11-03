@@ -1636,7 +1636,7 @@
   },
   "Pouw.Assumptions.Lead.OutsourceWithinEgressLead": {
    "owner": "@compute-research",
-   "digest": "c1bb656ed92468175b675fca308191cf386453b6b711291acbbc825145df0fad"
+   "digest": "3cc045b249e430cd65f2b4dd4ed641064204a53cd7e7054c3baf9e34ca1ffc52"
   },
   "Pouw.Assumptions.Lead.SerialForwards": {
    "owner": "@compute-research",
@@ -1852,7 +1852,7 @@
   },
   "Pouw.Guarantees.Lead.G_tail": {
    "owner": "@compute-accounting",
-   "digest": "af7d257f94deec551acc7fe28f57c7be206e514d7a60596ccd11e969046a571b"
+   "digest": "0427ba67394e82cf31436889163c6c201b6395d3685492c16b6fe58bcbb2b274"
   },
   "Pouw.Gγ": {
    "owner": "@compute-accounting",
@@ -1868,7 +1868,7 @@
   },
   "Pouw.Lead.Accepted": {
    "owner": "@compute-research",
-   "digest": "3c7e805c9e77b225f9ac0dfa0dee7a1ee30254b6ec8439aa6c4416f11ad7c796"
+   "digest": "de719d852ecc89522c5505d0c152e1bb8e7b4aa42485cb274507fe78d908f6af"
   },
   "Pouw.Lead.Forward.Accepted": {
    "owner": "@compute-research",
@@ -2229,6 +2229,30 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Pouw.Dimension.Pointwise.Apart": {
+   "owner": "@compute-research",
+   "digest": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c"
+  },
+  "Pouw.Dimension.Pointwise.Far": {
+   "owner": "@compute-research",
+   "digest": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75"
+  },
+  "Pouw.Dimension.Pointwise.Held": {
+   "owner": "@compute-research",
+   "digest": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a"
+  },
+  "Pouw.Dimension.Ssn.FreeInputs": {
+   "owner": "@compute-research",
+   "digest": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8"
+  },
+  "Pouw.Guarantees.Lead.LlamaForward": {
+   "owner": "@compute-research",
+   "digest": "c39dfc52a153e903c1527f06213a41c7bc2b012fdbb499fd02b3664138cabc13"
+  },
+  "Pouw.Lead.Game.FixedGapBelow": {
+   "owner": "@compute-accounting",
+   "digest": "9520b85dc0101c1d0788a506593e7584326d898e8978c4f5ea6a664dfd4f5a79"
   }
  },
  "meaning": [
@@ -10691,11 +10715,294 @@
    "assumptions": [],
    "type_hash": "131176022b9b1a842a9f525f329f5df7557314edf7ab86e150ec59c801e04f7f"
   },
+  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest :",
+    "  Exists fun real =>",
+    "    Exists fun σ =>",
+    "      Exists fun A =>",
+    "        Exists fun B =>",
+    "          And Pouw.Guarantees.Lead.G_tail",
+    "            (And",
+    "              (Pouw.Lead.Game.FixedGapBelow (Pouw.Lead.pt512x64 4096 4096)",
+    "                (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                  { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                  { f := 0, pre := List.nil, post := List.nil }",
+    "                  (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 =>",
+    "                  0))",
+    "              (And",
+    "                (Pouw.Assumptions.Lead.CommitL1w",
+    "                  (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                  (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                    { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                    { f := 0, pre := List.nil, post := List.nil }",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    fun x x_1 => 0)",
+    "                  (Pouw.Lead.l1wIsA (Pouw.Lead.pt512x64 4096 4096)",
+    "                    { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                    { f := 0, pre := List.nil, post := List.nil }",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    fun x x_1 => 0)",
+    "                  fun x x_1 x_2 => 0)",
+    "                (And",
+    "                  (Pouw.Assumptions.Lead.TileGrain",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                      { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                      { f := 0, pre := List.nil, post := List.nil }",
+    "                      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                      fun x x_1 => 0)",
+    "                    (fun x x_1 x_2 => 0) (Pouw.Lead.certStream (Pouw.Lead.pt512x64 4096 4096)) real)",
+    "                  (And",
+    "                    (Pouw.Assumptions.Lead.HonestHashRuled",
+    "                      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                      (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                        { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                        { f := 0, pre := List.nil, post := List.nil }",
+    "                        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        fun x x_1 => 0)",
+    "                      (fun x x_1 x_2 => 0) real)",
+    "                    (And",
+    "                      (Pouw.Assumptions.Lead.OutsourceWithinEgressLead Pouw.Dimension.H100.h100Nominal",
+    "                        (Pouw.Lead.betaLead (Pouw.Lead.pt512x64 4096 4096)",
+    "                          (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                            { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                            { f := 0, pre := List.nil, post := List.nil }",
+    "                            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                            fun x x_1 => 0))",
+    "                        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                          { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                          { f := 0, pre := List.nil, post := List.nil }",
+    "                          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                          fun x x_1 => 0)",
+    "                        (fun x x_1 x_2 => 0) real)",
+    "                      (And (Pouw.Dimension.H100.H32 Pouw.Dimension.H100.h100Nominal)",
+    "                        (And (Pouw.Assumptions.Lead.W1 Pouw.Dimension.H100.h100Nominal real)",
+    "                          (And (Pouw.Assumptions.Lead.OneInstructionMinimal real)",
+    "                            (And (Pouw.Assumptions.Lead.CardWithinAccelW1 real real)",
+    "                              (And",
+    "                                (Pouw.Assumptions.Lead.ShaWrites",
+    "                                  (Pouw.Lead.l1wIsA (Pouw.Lead.pt512x64 4096 4096)",
+    "                                    { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                                    { f := 0, pre := List.nil, post := List.nil }",
+    "                                    (fun x i =>",
+    "                                      ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                                    fun x x_1 => 0)",
+    "                                  real)",
+    "                                (And",
+    "                                  (Pouw.Workload.InDomain (Pouw.Lead.Game.domain 1)",
+    "                                    {",
+    "                                      layout :=",
+    "                                        { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 },",
+    "                                          wid := fun x => 0 },",
+    "                                      weight := fun x x_1 x_2 => 0 })",
+    "                                  (And (Real.instLE.le 0 B)",
+    "                                    (And",
+    "                                      (A.Bounded",
+    "                                        {",
+    "                                          layout :=",
+    "                                            { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 },",
+    "                                              wid := fun x => 0 },",
+    "                                          weight := fun x x_1 x_2 => 0 }",
+    "                                        B 0)",
+    "                                      (∀ (H : Unit → Unit) (s : Pouw.Lead.Game.Salt (Pouw.Lead.pt512x64 4096 4096) 1)",
+    "                                        (ω : Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096)),",
+    "                                        And",
+    "                                          (Pouw.Lead.Accepted (Pouw.Lead.pt512x64 4096 4096)",
+    "                                            (fun x i =>",
+    "                                              ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val",
+    "                                                  0).toUInt8)",
+    "                                            (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                                              { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil,",
+    "                                                nb := 1 }",
+    "                                              { f := 0, pre := List.nil, post := List.nil }",
+    "                                              (fun x i =>",
+    "                                                ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val",
+    "                                                    0).toUInt8)",
+    "                                              fun x x_1 => 0)",
+    "                                            (fun x x_1 x_2 => 0) σ.val ω)",
+    "                                          (SetLike.instMembership.mem",
+    "                                            (Pouw.correctSet",
+    "                                              (Pouw.Lead.Game.protocol (Pouw.Lead.pt512x64 4096 4096) 1 Unit Unit",
+    "                                                (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                                                  { key := List.nil, salt := List.nil, calls := 1,",
+    "                                                    y := fun x => List.nil, nb := 1 }",
+    "                                                  { f := 0, pre := List.nil, post := List.nil }",
+    "                                                  (fun x i =>",
+    "                                                    ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val",
+    "                                                        0).toUInt8)",
+    "                                                  fun x x_1 => 0))",
+    "                                              {",
+    "                                                layout :=",
+    "                                                  { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 },",
+    "                                                    wid := fun x => 0 },",
+    "                                                weight := fun x x_1 x_2 => 0 }",
+    "                                              H s",
+    "                                              (A.transcript",
+    "                                                {",
+    "                                                  layout :=",
+    "                                                    { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 },",
+    "                                                      wid := fun x => 0 },",
+    "                                                  weight := fun x x_1 x_2 => 0 }",
+    "                                                H s))",
+    "                                            0)))))))))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "63fcf61348dcc40c513286dbda930c6f5817974a75d1398e8a00a1748a71a67b"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial :",
+    "  Exists fun C =>",
+    "    Exists fun A =>",
+    "      Not",
+    "        (Real.instLE.le",
+    "          (Pouw.pr fun x =>",
+    "            And",
+    "              (Pouw.AuditAccepts",
+    "                (Pouw.correctSet (Pouw.Lead.Game.protocol (Pouw.Lead.pt512x64 4096 4096) 1 Unit Unit C.val)",
+    "                  { layout := { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 }, wid := fun x => 0 },",
+    "                    weight := fun x x_1 x_2 => 0 }",
+    "                  x.fst x.snd.fst",
+    "                  (A.val.transcript",
+    "                    { layout := { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 }, wid := fun x => 0 },",
+    "                      weight := fun x x_1 x_2 => 0 }",
+    "                    x.fst x.snd.fst))",
+    "                x.snd.snd)",
+    "              (And",
+    "                (Real.instLT.lt 0",
+    "                  (instHMul.hMul",
+    "                    (instHMul.hMul (instHSub.hSub 1 (Pouw.Lead.Game.gamma (Pouw.Lead.pt512x64 4096 4096) C.val))",
+    "                      (instHSub.hSub 1 (1 / 2)))",
+    "                    (Pouw.totalWref (Pouw.Lead.Game.protocol (Pouw.Lead.pt512x64 4096 4096) 1 Unit Unit C.val)",
+    "                      { layout := { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 }, wid := fun x => 0 },",
+    "                          weight := fun x x_1 x_2 => 0 }.layout)))",
+    "                (Not",
+    "                  (A.val.Breaks",
+    "                    { layout := { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 }, wid := fun x => 0 },",
+    "                      weight := fun x x_1 x_2 => 0 }",
+    "                    x.fst x.snd.fst))))",
+    "          (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 (1 / 2)) 1)",
+    "            (instHMul.hMul",
+    "              { layout := { N := 1, shape := fun x => { m := 64, k := 4096, n := 4096 }, wid := fun x => 0 },",
+    "                      weight := fun x x_1 x_2 => 0 }.layout.N.cast",
+    "              (Pouw.Lead.etaLead (Pouw.Lead.pt512x64 4096 4096)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "2ca3fa2d6665d516cb5e8381a5bc2b2a059c45e17c6f072840042cec40050a3c"
+  },
   "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Lead.Bridge.GammaFromTail : Pouw.Guarantees.Lead.GammaFromTail"],
    "assumptions": [],
    "type_hash": "568fb9c96145303ef31282db233548fc9cc846e250e3063afd8a5cc05b6aae2b"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest :",
+    "  Exists fun real =>",
+    "    Exists fun σ =>",
+    "      And Pouw.Guarantees.Lead.G_tail",
+    "        (And",
+    "          (Pouw.Lead.Game.FixedGapBelow (Pouw.Lead.pt512x64 4096 4096)",
+    "            (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "              { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "              { f := 0, pre := List.nil, post := List.nil }",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 => 0))",
+    "          (And",
+    "            (Pouw.Assumptions.Lead.CommitL1w",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                { f := 0, pre := List.nil, post := List.nil }",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 => 0)",
+    "              (Pouw.Lead.l1wIsA (Pouw.Lead.pt512x64 4096 4096)",
+    "                { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                { f := 0, pre := List.nil, post := List.nil }",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 => 0)",
+    "              fun x x_1 x_2 => 0)",
+    "            (And",
+    "              (Pouw.Assumptions.Lead.TileGrain",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                  { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                  { f := 0, pre := List.nil, post := List.nil }",
+    "                  (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 =>",
+    "                  0)",
+    "                (fun x x_1 x_2 => 0) (Pouw.Lead.certStream (Pouw.Lead.pt512x64 4096 4096)) real)",
+    "              (And",
+    "                (Pouw.Assumptions.Lead.HonestHashRuled",
+    "                  (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                  (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                    { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                    { f := 0, pre := List.nil, post := List.nil }",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    fun x x_1 => 0)",
+    "                  (fun x x_1 x_2 => 0) real)",
+    "                (And",
+    "                  (Pouw.Assumptions.Lead.OutsourceWithinEgressLead Pouw.Dimension.H100.h100Nominal",
+    "                    (Pouw.Lead.betaLead (Pouw.Lead.pt512x64 4096 4096)",
+    "                      (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                        { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                        { f := 0, pre := List.nil, post := List.nil }",
+    "                        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        fun x x_1 => 0))",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                      { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                      { f := 0, pre := List.nil, post := List.nil }",
+    "                      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                      fun x x_1 => 0)",
+    "                    (fun x x_1 x_2 => 0) real)",
+    "                  (And (Pouw.Dimension.H100.H32 Pouw.Dimension.H100.h100Nominal)",
+    "                    (And (Pouw.Assumptions.Lead.W1 Pouw.Dimension.H100.h100Nominal real)",
+    "                      (And (Pouw.Assumptions.Lead.OneInstructionMinimal real)",
+    "                        (And (Pouw.Assumptions.Lead.CardWithinAccelW1 real real)",
+    "                          (And",
+    "                            (Pouw.Assumptions.Lead.ShaWrites",
+    "                              (Pouw.Lead.l1wIsA (Pouw.Lead.pt512x64 4096 4096)",
+    "                                { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                                { f := 0, pre := List.nil, post := List.nil }",
+    "                                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                                fun x x_1 => 0)",
+    "                              real)",
+    "                            (∀ (ω : Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096)),",
+    "                              Pouw.Lead.Accepted (Pouw.Lead.pt512x64 4096 4096)",
+    "                                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                                (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 4096 4096)",
+    "                                  { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                                  { f := 0, pre := List.nil, post := List.nil }",
+    "                                  (fun x i =>",
+    "                                    ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                                  fun x x_1 => 0)",
+    "                                (fun x x_1 x_2 => 0) σ.val ω)))))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "50ae46549cddc35ddefac0e2c0cf57bf7e52407c406dd086b6eb142f18b0b844"
+  },
+  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial :",
+    "  Exists fun C =>",
+    "    Not",
+    "      (Pouw.Gγ",
+    "        (Pouw.Lead.Game.costModel (Pouw.Lead.pt512x64 4096 4096) 1 Unit Unit Pouw.Dimension.H100.h100Nominal",
+    "          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) C.val",
+    "          (fun x x_1 x_2 x_3 x_4 => 0) fun σ =>",
+    "          ∀ (ω : Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096)),",
+    "            Pouw.Lead.Accepted (Pouw.Lead.pt512x64 4096 4096)",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) C.val",
+    "              (fun x x_1 x_2 => 0) σ ω)",
+    "        (Pouw.Lead.Game.protocol (Pouw.Lead.pt512x64 4096 4096) 1 Unit Unit C.val) (Pouw.Lead.Game.domain 1)",
+    "        (Pouw.Lead.Game.gamma (Pouw.Lead.pt512x64 4096 4096) C.val) (Pouw.Lead.Game.eta (Pouw.Lead.pt512x64 4096 4096)))"
+   ],
+   "assumptions": [],
+   "type_hash": "f6da02f99d6da3210bed1b2e92aabd4378e9156f733a8e77b7351bb61a6803ec"
   },
   "Pouw.SecurityProofs.Lead.Compose.G": {
    "owner": "@compute-research",
@@ -10764,22 +11071,254 @@
    "type_hash": "51ed57ae366e0ea3430be448aad4630668f855ab33eaa1b1cc2c495c5638fa02"
   },
   "Pouw.SecurityProofs.Lead.Witness.G_honest": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Witness.G_honest :",
+    "  Exists fun Real =>",
+    "    Exists fun σ =>",
+    "      And",
+    "        (Pouw.Assumptions.Lead.CertifierCoins Unit.unit (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048)))",
+    "          fun x => Pouw.Assumptions.Lead.certCode (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048))))",
+    "        (And",
+    "          (Pouw.Assumptions.Lead.CommitL1w",
+    "            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "              { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "              { f := 0, pre := List.nil, post := List.nil }",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 => 0)",
+    "            (Pouw.Lead.l1wIsA (Pouw.Lead.pt512x64 2048 2048)",
+    "              { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "              { f := 0, pre := List.nil, post := List.nil }",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) fun x x_1 => 0)",
+    "            fun x x_1 x_2 => 0)",
+    "          (And (Pouw.Dimension.H100.H32 Pouw.Dimension.H100.h100Nominal)",
+    "            (And (Pouw.Assumptions.Lead.W1 Pouw.Dimension.H100.h100Nominal Real)",
+    "              (And",
+    "                (Pouw.Assumptions.Lead.TileGrain",
+    "                  (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                  (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                    { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                    { f := 0, pre := List.nil, post := List.nil }",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    fun x x_1 => 0)",
+    "                  (fun x x_1 x_2 => 0) (Pouw.Lead.certStream (Pouw.Lead.pt512x64 2048 2048)) Real)",
+    "                (And (Pouw.Assumptions.Lead.OneInstructionMinimal Real)",
+    "                  (And (Pouw.Assumptions.Lead.CardWithinAccelW1 Real Real)",
+    "                    (And",
+    "                      (Pouw.Assumptions.Lead.ShaWrites",
+    "                        (Pouw.Lead.l1wIsA (Pouw.Lead.pt512x64 2048 2048)",
+    "                          { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                          { f := 0, pre := List.nil, post := List.nil }",
+    "                          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                          fun x x_1 => 0)",
+    "                        Real)",
+    "                      (And",
+    "                        (Pouw.Assumptions.Lead.HonestHashRuled",
+    "                          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                          (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                            { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                            { f := 0, pre := List.nil, post := List.nil }",
+    "                            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                            fun x x_1 => 0)",
+    "                          (fun x x_1 x_2 => 0) Real)",
+    "                        (And",
+    "                          (Pouw.Assumptions.Lead.OutsourceWithinEgressLead Pouw.Dimension.H100.h100Nominal",
+    "                            (Pouw.Lead.betaLead (Pouw.Lead.pt512x64 2048 2048)",
+    "                              (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                                { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                                { f := 0, pre := List.nil, post := List.nil }",
+    "                                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                                fun x x_1 => 0))",
+    "                            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                            (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                              { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                              { f := 0, pre := List.nil, post := List.nil }",
+    "                              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                              fun x x_1 => 0)",
+    "                            (fun x x_1 x_2 => 0) Real)",
+    "                          (∀ (e : Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048)),",
+    "                            Pouw.Lead.Accepted (Pouw.Lead.pt512x64 2048 2048)",
+    "                              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                              (Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                                { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                                { f := 0, pre := List.nil, post := List.nil }",
+    "                                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                                fun x x_1 => 0)",
+    "                              (fun x x_1 x_2 => 0) σ.val",
+    "                              (Pouw.Assumptions.Lead.released Unit.unit",
+    "                                (fun x =>",
+    "                                  Pouw.Assumptions.Lead.certCode",
+    "                                    (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048))))",
+    "                                σ.val e)))))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "07b3660c3c9eab161df89056e7c11e7410e3f9635a0fc9a08babdccbb5afe1e1"
   },
   "Pouw.SecurityProofs.Lead.Witness.G_nontrivial": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial :",
+    "  Exists fun C =>",
+    "    Exists fun σ =>",
+    "      Not",
+    "        (Or",
+    "          (Rat.instLE.le",
+    "            (instHMul.hMul 32",
+    "              (instHSub.hSub",
+    "                (instHMul.hMul Finset.univ.card.cast (Pouw.Lead.honestRegs (Pouw.Lead.pt512x64 2048 2048) C.val))",
+    "                (instHMul.hMul (Fintype.card (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048))).cast",
+    "                  (Pouw.Lead.gapRegs (Pouw.Lead.pt512x64 2048 2048) C.val))))",
+    "            (Finset.univ.sum fun e =>",
+    "              instHAdd.hAdd",
+    "                (Pouw.Lead.Strategy.work Pouw.Dimension.H100.h100Nominal σ.val",
+    "                    (Pouw.Assumptions.Lead.released Unit.unit",
+    "                      (fun x =>",
+    "                        Pouw.Assumptions.Lead.certCode (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048))))",
+    "                      σ.val e)).cast",
+    "                (instHMul.hMul (Pouw.Lead.betaLead (Pouw.Lead.pt512x64 2048 2048) C.val)",
+    "                  (σ.val.exec",
+    "                        (Pouw.Assumptions.Lead.released Unit.unit",
+    "                          (fun x =>",
+    "                            Pouw.Assumptions.Lead.certCode",
+    "                              (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048))))",
+    "                          σ.val e)).egress.cast)))",
+    "          (Exists fun e =>",
+    "            And (SetLike.instMembership.mem Finset.univ e)",
+    "              (Pouw.Lead.Break (Pouw.Lead.pt512x64 2048 2048)",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) C.val",
+    "                (fun x x_1 x_2 => 0) σ.val",
+    "                (Pouw.Assumptions.Lead.released Unit.unit",
+    "                  (fun x =>",
+    "                    Pouw.Assumptions.Lead.certCode (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 2048 2048))))",
+    "                  σ.val e))))"
+   ],
+   "assumptions": [],
+   "type_hash": "22ea221c68f2edba265520e853c4a214bdcb74881c777353a72ffbf80de85bc2"
   },
   "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial :",
+    "  Exists fun C =>",
+    "    Exists fun σ =>",
+    "      Not",
+    "        (Real.instLE.le",
+    "          (Pouw.pr fun e =>",
+    "            And",
+    "              (Pouw.Lead.Accepted (Pouw.Lead.pt512x64 4096 4096)",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) C.val",
+    "                (fun x x_1 x_2 => 0) σ.val",
+    "                (Pouw.Assumptions.Lead.released Unit.unit",
+    "                  (fun x =>",
+    "                    Pouw.Assumptions.Lead.certCode (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096))))",
+    "                  σ.val e))",
+    "              (And",
+    "                (Not",
+    "                  (Pouw.Lead.Break (Pouw.Lead.pt512x64 4096 4096)",
+    "                    (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) C.val",
+    "                    (fun x x_1 x_2 => 0) σ.val",
+    "                    (Pouw.Assumptions.Lead.released Unit.unit",
+    "                      (fun x =>",
+    "                        Pouw.Assumptions.Lead.certCode (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096))))",
+    "                      σ.val e)))",
+    "                (Rat.instLT.lt",
+    "                  (instHAdd.hAdd",
+    "                    (Pouw.Lead.Strategy.work Pouw.Dimension.H100.h100Nominal σ.val",
+    "                        (Pouw.Assumptions.Lead.released Unit.unit",
+    "                          (fun x =>",
+    "                            Pouw.Assumptions.Lead.certCode",
+    "                              (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096))))",
+    "                          σ.val e)).cast",
+    "                    (instHMul.hMul (Pouw.Lead.betaLead (Pouw.Lead.pt512x64 4096 4096) C.val)",
+    "                      (σ.val.exec",
+    "                            (Pouw.Assumptions.Lead.released Unit.unit",
+    "                              (fun x =>",
+    "                                Pouw.Assumptions.Lead.certCode",
+    "                                  (Equiv.refl (Pouw.Lead.Coins (Pouw.Lead.pt512x64 4096 4096))))",
+    "                              σ.val e)).egress.cast))",
+    "                  (instHMul.hMul 32",
+    "                    (instHSub.hSub (Pouw.Lead.honestRegs (Pouw.Lead.pt512x64 4096 4096) C.val)",
+    "                      (Pouw.Lead.gapFixed (Pouw.Lead.pt512x64 4096 4096) C.val))))))",
+    "          (Pouw.Lead.etaLead (Pouw.Lead.pt512x64 4096 4096)))"
+   ],
+   "assumptions": [],
+   "type_hash": "0e4eca4db5b4757003e5af4332e70c53eaf86209f3bbfb93e96705d50eaa0237"
   },
   "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial :",
+    "  Exists fun F => Not (Rat.instLE.le F.val.networkRegs (instHDiv.hDiv (instHMul.hMul F.val.betaMax F.val.bits) 32))"
+   ],
+   "assumptions": [],
+   "type_hash": "8cea1ade9a76280a9d27575a8b4eedd8c285da6115648480a734be614881739b"
   },
   "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest :",
+    "  Exists fun σ =>",
+    "    Exists fun ω =>",
+    "      And",
+    "        (Pouw.Guarantees.Lead.LlamaForward",
+    "          {",
+    "            calls :=",
+    "              List.cons",
+    "                { L := Pouw.Lead.pt512x64 2048 2048,",
+    "                  C :=",
+    "                    Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                      { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                      { f := 0, pre := List.nil, post := List.nil }",
+    "                      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                      fun x x_1 => 0,",
+    "                  σ := σ.val, ω := ω }",
+    "                List.nil,",
+    "            count := 0, release := 1 })",
+    "        (And",
+    "          (Pouw.Assumptions.Lead.SerialForwards",
+    "            {",
+    "              calls :=",
+    "                List.cons",
+    "                  { L := Pouw.Lead.pt512x64 2048 2048,",
+    "                    C :=",
+    "                      Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                        { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                        { f := 0, pre := List.nil, post := List.nil }",
+    "                        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        fun x x_1 => 0,",
+    "                    σ := σ.val, ω := ω }",
+    "                  List.nil,",
+    "              count := 0, release := 1 })",
+    "          {",
+    "              calls :=",
+    "                List.cons",
+    "                  { L := Pouw.Lead.pt512x64 2048 2048,",
+    "                    C :=",
+    "                      Pouw.Lead.l1wCommit (Pouw.Lead.pt512x64 2048 2048)",
+    "                        { key := List.nil, salt := List.nil, calls := 1, y := fun x => List.nil, nb := 1 }",
+    "                        { f := 0, pre := List.nil, post := List.nil }",
+    "                        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        fun x x_1 => 0,",
+    "                    σ := σ.val, ω := ω }",
+    "                  List.nil,",
+    "              count := 0, release := 1 }.Accepted)"
+   ],
+   "assumptions": [],
+   "type_hash": "9dbd894564b8f2919c44cd9439fe9b285677522b1654e6c135c149d98c9245b9"
   },
   "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial :",
+    "  Exists fun F =>",
+    "    Not",
+    "      (Rat.instLE.le F.val.networkRegs",
+    "        (instHMul.hMul (363 / 1000000)",
+    "          (List.map (fun c => instHMul.hMul (instHDiv.hDiv c.L.cap.cast 32) (Pouw.Lead.servedRegs c.L))",
+    "              F.val.calls).sum))"
+   ],
+   "assumptions": [],
+   "type_hash": "fc04d5c5ffdd4cba03d0933a878c54fdaf8d3b18c469d97e4b9de3472563919d"
   },
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
@@ -12600,18 +13139,6 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
-  },
-  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest": {
-   "owner": "@compute-accounting"
-  },
-  "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial": {
-   "owner": "@compute-accounting"
-  },
-  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest": {
-   "owner": "@compute-accounting"
-  },
-  "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial": {
-   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -14136,27 +14663,23 @@
    "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
     "∀ (u : Nat), instLTNat.lt u U.layout.N → Eq (P.Wref U.layout u) (instHMul.hMul κ (w u).cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PearlCCoins Q R S U w t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
     "∀ (prog : CM.Prog) (H : Q → R) (U : Pouw.PearlC.Workload) (act : Nat → Pouw.PearlC.Codes) (σ : Pouw.PearlC.State) (s : S), Real.instLE.le 0 (CM.cost prog H U act σ s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Nat), instLTNat.lt u U.layout.N → Eq (P.Wref U.layout u) (instHMul.hMul κ (w u).cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PearlCCoins Q R S U w t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPouw": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PouwCoins P U t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PouwCoins P U t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
     "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14247,19 +14770,13 @@
     "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.UnitsFooling": {
     "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.HMu.PersistentOneWord": {
     "∀ (n : Nat) (x : W), Function.Injective fun s => step n s x": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14274,8 +14791,7 @@
     "∀ (y : ι → ZMod p), Real.instLE.le (ν y) κR": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.JointHorizonBlocksLive": {
-    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.block b).accepts Accounting.Audit.pous o) (Not (S.MemoryTerm (σ b) s b o))) G s) (δPous b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.wipe b).accepts o) (Not ((S.wipe b).Survives fw o))) G s) (εWipe b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.block b).accepts Accounting.Audit.pous o) (Not (S.MemoryTerm (σ b) s b o))) G s) (δPous b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.JointPeriodLiveECR": {
     "∀ (a : Accounting.Audit), Monotone (loss a)": "Monotone taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14377,21 +14893,16 @@
    },
    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.PooledDraw": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
     "instLENat.le T.passes P": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14801,8 +15312,7 @@
     "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le t' (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEnd": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15833,12 +16343,10 @@
     "∀ (i : Fin m), Real.instLE.le (instHMul.hMul q (n i).cast) (k i).cast": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.BackgroundRebuildExcluded": {
     "List.instMembership.mem (List.cons { fst := 0, snd := 111 } (List.cons { fst := 1, snd := 160 } (List.cons { fst := 2, snd := 203 } (List.cons { fst := 3, snd := 243 } List.nil)))) tk": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15983,9 +16491,7 @@
    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
     "∀ (u : Fin N), (Us u).Legal": "Us taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (f : Pouw.Fp8Atom.H1T.MSalt Us → Rat), List.instMembership.mem L f → Set.instMembership.mem (Pouw.Fp8Atom.H1T.mfree Us) f": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.Fp8Atom.H1T.Idx Us), Exists fun r => And (List.instMembership.mem (Pouw.Dimension.H100.regs100 fpSem P L) r) (∀ (G : Pouw.Fp8Atom.H1T.MSalt Us), Eq (r G) (Pouw.Fp8Atom.H1T.mword Us x G))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Pouw.Dimension.H100.H32 pr": "Pouw.Dimension.H100.H32 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : Pouw.Dimension.H100.Op100 (Pouw.Fp8Atom.H1T.MSalt Us)), List.instMembership.mem P o → Pouw.Dimension.H100.Op100.WFw pr (Pouw.Fp8Atom.H1T.mfree Us) o": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Pouw.Fp8Atom.H1T.Idx Us), Exists fun r => And (List.instMembership.mem (Pouw.Dimension.H100.regs100 fpSem P L) r) (∀ (G : Pouw.Fp8Atom.H1T.MSalt Us), Eq (r G) (Pouw.Fp8Atom.H1T.mword Us x G))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.NCP.GameProofs.gammaFromTTNCP": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (instHMul.hMul 3 (U.layout.shape u).Wmm.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16030,8 +16536,7 @@
     "Finset.instPartialOrder.le U (Finset.range N)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
-    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FreedOfFloor": {
     "∀ (j : Pd.J) (r : G.Res), Real.instLE.le 0 (Pd.needs j r)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16053,10 +16558,7 @@
     "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : P.Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
     "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16065,10 +16567,7 @@
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (o : nf.Orc) (r : nf.Root) (c : Prod (Fin nf.n) (Prod (Fin nf.n') (Fin nf.nb))) (v : Pouw.Dither.Word) (p : nf.Path), nf.opens o r c v p → And (Pouw.MerkleExtract.Opens (EquivLike.toFunLike.coe eo o) E (rD r) (pl p) v) (Eq (List.map Prod.fst (pl p)) (dirs c))": "nf.opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : (Pouw.Dither.noFoldRound nf).Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.EndToEnd": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16355,24 +16854,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
@@ -22314,8 +22795,13 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -22912,7 +23398,11 @@
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
@@ -22923,6 +23413,12 @@
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
     "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -23601,11 +24097,27 @@
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -26644,7 +27156,11 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.EmbeddingReadBinding",
-    "Hash.SecurityProofs.RowBinding"
+    "Hash.SecurityProofs.RowBinding",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"
    ]
   },
   "Definitions.Hash.RowLeaf": {
@@ -26770,7 +27286,11 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
-    "Hash.SecurityProofs.TreeBinding"
+    "Hash.SecurityProofs.TreeBinding",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"
    ]
   },
   "Definitions.Nci": {
@@ -29923,12 +30443,22 @@
    "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged"
    ]
@@ -29968,12 +30498,22 @@
    "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged"
    ]
@@ -30004,9 +30544,12 @@
    "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged",
     "Pouw.SecurityProofs.Writes.SsnServedDistinct"
@@ -30119,14 +30662,14 @@
    ]
   },
   "Definitions.Pouw.Assumptions.Lead": {
-   "digest": "d081446036d886b4bec4292a0b9d8ef7d456991f1479a3c4e10f6c55a1dbbb65",
+   "digest": "c830d53eb0cdd703b2554c35351b8826959bec8ecdac945f50dac36de4f52b8c",
    "definitions": {
     "Pouw.Assumptions.Lead.CardWithinAccelW1": "490e140a3224a61bb688b4558277fb195a991b6867847a944e7dd9d56d180f2d",
     "Pouw.Assumptions.Lead.CertifierCoins": "dac19ea8e9da14a56eb26effd7c85954ae2790fd4738c521622c237c1afc4e49",
     "Pouw.Assumptions.Lead.CommitL1w": "432a64db140ea1e95fe60399e33d18f724ca468af63b9245890107f4058817d3",
     "Pouw.Assumptions.Lead.HonestHashRuled": "9aa8c125fcc8ed2aae5d6ed602764229385051720470b48161175f626e6c04ed",
     "Pouw.Assumptions.Lead.OneInstructionMinimal": "c6d521aab045d905d77c91be4b0c34272bc637fdf989c0c7e282f5bf678c609a",
-    "Pouw.Assumptions.Lead.OutsourceWithinEgressLead": "c1bb656ed92468175b675fca308191cf386453b6b711291acbbc825145df0fad",
+    "Pouw.Assumptions.Lead.OutsourceWithinEgressLead": "3cc045b249e430cd65f2b4dd4ed641064204a53cd7e7054c3baf9e34ca1ffc52",
     "Pouw.Assumptions.Lead.SerialForwards": "5810fbb215691023b9ce279b7e9ce946e63e4ac1b51d4d42422d4d82440ba440",
     "Pouw.Assumptions.Lead.ShaWrites": "947cae386e3f1a19f45b418ddb688ee007cbdf85b6b0167d381acba5488fbd8b",
     "Pouw.Assumptions.Lead.TileGrain": "2281c6db94c147f00dadd9837c28b61f18ca9ab8d23bf710798ec0ea45372a84",
@@ -30137,11 +30680,19 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
-    "Pouw.SecurityProofs.Lead.Tail.G_tail"
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
    ]
   },
   "Definitions.Pouw.Assumptions.NCP.Assumptions": {
@@ -30563,7 +31114,10 @@
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.NCP.BiasU8Iff",
     "Pouw.SecurityProofs.NCP.Cancel",
     "Pouw.SecurityProofs.NCP.CheckedUEq",
@@ -30652,10 +31206,15 @@
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
     "Pouw.SecurityProofs.Lead.Tail.tailAt",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -30793,7 +31352,10 @@
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -30934,8 +31496,11 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Dimension.Pointwise": {
-   "digest": "b2a0b5765cbe0046394be625adc0d37bf2cbd842f8fe9437ca2089a7f3dc0bc2",
+   "digest": "b9054afcde8a2e41e53ba5487877213b8f8860a138d25c4bc38b2b55d280a077",
    "definitions": {
+    "Pouw.Dimension.Pointwise.Apart": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c",
+    "Pouw.Dimension.Pointwise.Far": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75",
+    "Pouw.Dimension.Pointwise.Held": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a",
     "Pouw.Dimension.Pointwise.Step": "457a797f45b8c536735a705919447fdc20b94df29276bde7116dd4fc0aabdd2b",
     "Pouw.Dimension.Pointwise.Step.apply": "225c1b966740cb345110c8004561cbf066229b453a273994b6baeb2580e74414",
     "Pouw.Dimension.Pointwise.Step.casesOn": "633436503aec3c4157f0f36e12270570521218251603d5efdffe32afd705e56c",
@@ -30949,21 +31514,32 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial",
     "Pouw.SecurityProofs.Writes.RunBall",
     "Pouw.SecurityProofs.Writes.RunPairs"
    ]
   },
   "Definitions.Pouw.Dimension.Ssn": {
-   "digest": "614aa0b2266386aaf81b034cf6f5df30e24eec009db8a7c950d9e2e9c07698c4",
+   "digest": "b578663e6b7d7040665842113700d3019c75e58284dd6ec9a11c3471afacb73d",
    "definitions": {
     "Pouw.Dimension.Ssn.Bits": "361c76227363fba6d5b6efeb6c23a2a67d09ab72d28a62f5abfc2ab78a091e4c",
     "Pouw.Dimension.Ssn.FreeB": "8fe3f27a9f5e37393e7bb51e211fa36a357d21294d546080290fc18fe2428f41",
+    "Pouw.Dimension.Ssn.FreeInputs": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8",
     "Pouw.Dimension.Ssn.ShiftSeparatedOn": "b92a45db2049205cb25ace93cfd3cc8f021a2969cb798111eb6182ef50571545",
     "Pouw.Dimension.Ssn.aff": "9716b39f925cdc42dcb52cd8349c7ce3fe3c571384a6c8ea8c124c97d41f051b",
     "Pouw.Dimension.Ssn.bitCoef": "6292b3a8c99a1fb8eaa0b79ee0cdf44098070b6b1e2ddeebb64213a982156127",
@@ -31807,7 +32383,10 @@
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -31975,26 +32554,29 @@
    ]
   },
   "Definitions.Pouw.Guarantees.Lead": {
-   "digest": "9c3575dd0a9e60bdf5a90ffa4cf4a67100150237db0fe9375a097601ad28af4e",
+   "digest": "dbe2d1e52eeb09e8323e51cbc67aee05a2018dde8925bdfe50ae21d45aaf8e68",
    "definitions": {
     "Pouw.Guarantees.Lead.ChunksOf": "f927170f60f4894145db559ac76704c0a71e7fe4c98458d639bcc6190e55dc07",
-    "Pouw.Guarantees.Lead.G": "60e65e57585285b4ecd6f88f0296dfa706c52be9c87e95f90e62efeedd5aa474",
-    "Pouw.Guarantees.Lead.G_tail": "af7d257f94deec551acc7fe28f57c7be206e514d7a60596ccd11e969046a571b",
+    "Pouw.Guarantees.Lead.G": "0e6203917d2b9f2f6c142780b59e610d3a57628b8ccc69736988066086ef9627",
+    "Pouw.Guarantees.Lead.G_tail": "0427ba67394e82cf31436889163c6c201b6395d3685492c16b6fe58bcbb2b274",
     "Pouw.Guarantees.Lead.GapAll": "c0266d1c617a576e51c504f99116b3eeb64f32e6c8c156a50f116eec1c8799e5",
-    "Pouw.Guarantees.Lead.GapAt": "62fad0d9220668662e51d8f7f055966fc61d4cabad608aabfbb97e4b5959533b",
-    "Pouw.Guarantees.Lead.GapAt320": "a07d510bb6d30f080818bd1db660f917919edcc1a3f86b81d3957f6586cbbbb0",
-    "Pouw.Guarantees.Lead.GapAtDecode": "bf81412bd94936ecc3cc3a23f4cd320ae7fc25a1252a924094cf4eda0172adca",
+    "Pouw.Guarantees.Lead.GapAt": "1d305422afee99f61dd314ba5f894667e368879d46fd0595bffc554555db413e",
+    "Pouw.Guarantees.Lead.GapAtDecode": "7972a17a832b96d54d61aed8ba0a0ddc4ac9401cd1ed8e75054f9c94e3544a24",
     "Pouw.Guarantees.Lead.GapFixedAt": "fdb8630257063bea8a32ededab9a50d9e561b6aa58defe605d99a8d6d3a81b4d",
-    "Pouw.Guarantees.Lead.Honest": "734b7917204c11d8892765ba6d524bda05f718e7930c533e83b61a2210d65394",
-    "Pouw.Guarantees.Lead.NetworkFwd": "28351581c695741f71568ce405749fcdd0967ef35b64dd4e13087e51eb18448d",
-    "Pouw.Guarantees.Lead.NetworkLlama": "3b36761be69d1e7f3f799803efe4042e49aa8f615b069eaf22443fe637020924",
-    "Pouw.Guarantees.Lead.Nontrivial": "d8b98297ac95a276de831dbeff885e14173158e673f4fa90bd48092c6baf8605",
-    "Pouw.Guarantees.Lead.NontrivialTail": "feea306f697912cbd25c87ede2472485318aabb32ad70073c77b972e811aae58",
-    "Pouw.Guarantees.Lead.TailAt": "b7150539b0f15a57ea9530759a665340867964056370924229df5a8df7309a96"
+    "Pouw.Guarantees.Lead.LlamaForward": "c39dfc52a153e903c1527f06213a41c7bc2b012fdbb499fd02b3664138cabc13",
+    "Pouw.Guarantees.Lead.NetworkFwd": "28c22b072054703e048b9219505c976d324618b6dc4d0f5bb0d05c036563d493",
+    "Pouw.Guarantees.Lead.NetworkLlama": "a9ba99cc7d0fe5f44459b5046c28829cb1ee40cbdda4f53520b1f54d02edc53d",
+    "Pouw.Guarantees.Lead.Nontrivial": "9e20e3ff9057ab10ffb4bddd7d78462f79fdf721ef2f8aed67fd3af42f8188e9",
+    "Pouw.Guarantees.Lead.NontrivialTail": "f05d64347b37e6785c972158927052ef8af2a8bd04e9963012080e8e676c21d7",
+    "Pouw.Guarantees.Lead.TailAt": "3e37366aca3355a7543801c1ddab1c07b3309d5d5b9d07b31162057f416ad8d1"
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
@@ -32005,14 +32587,18 @@
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
     "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
-    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+    "Pouw.SecurityProofs.Lead.Tail.tailAt",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
    ]
   },
   "Definitions.Pouw.Guarantees.LeadGame": {
-   "digest": "2fd5a79f4d127614536293af6110939370e5d1e9f015642a4fe524cf284eb9f3",
+   "digest": "14a921e2d0bdce903f7dd0ed06ec1ab7d8bb0b2ec0211d4903a3c0c947008318",
    "definitions": {
-    "Pouw.Guarantees.Lead.EndToEndFromTail": "50124401f081cc3d21238a0d90cc90ba4b2208aefe5ef80f44f89d85de2df4b1",
-    "Pouw.Guarantees.Lead.GammaFromTail": "0adb60ec17e7be14c7cdacb9a8f58d4a4029e1cb76054588e060794241fc7baa"
+    "Pouw.Guarantees.Lead.EndToEndFromTail": "613917b1ab8c5fe7143c96f3ed9b8171f037f20d6701dd9fd28f64dfe76fc51e",
+    "Pouw.Guarantees.Lead.GammaFromTail": "924764c93346bb69aa6527177295a8321e90e918682edff3f576e1592401232a"
    },
    "guarantees": ["Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail", "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail"]
   },
@@ -32355,12 +32941,12 @@
    "guarantees": ["Pouw.SecurityProofs.ShaRealize.ExtractOfRealize"]
   },
   "Definitions.Pouw.Guarantees.Writes": {
-   "digest": "9c1e1a62dc0a63b28e465ac8a50f3c830ecb2f22ddd15324fb06fc9a07b0c4ce",
+   "digest": "e5b003e141595673c896bbe479ae99713a225fc31d0968bd6115f1a363f75a38",
    "definitions": {
     "Pouw.Guarantees.Writes.DistinctWritesMH100Floor": "e0e1af11bc1fbf2fd5bb28968437145f64041b363aa21830905d76064094d33d",
-    "Pouw.Guarantees.Writes.RunBall": "2aa89369655045ee524da819c1566e1832bcb160649a9881152cdb4bcf0e1668",
-    "Pouw.Guarantees.Writes.RunPairs": "82832b893c3158656d5e6f49dd4eb79dbef63b8980bd6204f7b22f9869dc09f3",
-    "Pouw.Guarantees.Writes.SsnServedCharged": "414bb8fa8d8c56432eb10b2386ae017389e253b6ead8696b0d3bbe364eeb86ec",
+    "Pouw.Guarantees.Writes.RunBall": "994c363d1ec2a9068fa6f5bad0e05f4a7017e70e948f4df61786ba84d311cc71",
+    "Pouw.Guarantees.Writes.RunPairs": "10d2512fb17de3a34fa73c90461c6536d0ea3cfe84db8bd54d9da4efe29e0825",
+    "Pouw.Guarantees.Writes.SsnServedCharged": "2358c2577c3d76e5272bf4c4a28dcc6b19f9385873933dfc94688b0cddf092d2",
     "Pouw.Guarantees.Writes.SsnServedDistinct": "fbdcbbbe7d5a87903a41bc43ee656db6990eeaf3dcc9dc0f8a1a1fa659efd768",
     "Pouw.Guarantees.Writes.SsnServedShift": "69d500eb4e8a4d159f61f106dbcf09c12115243483e7ec0f720c331a451cd7c7"
    },
@@ -32604,11 +33190,62 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound", "Accounting.SecurityProofs.TS.TileSessionSound"]
   },
+  "Definitions.Pouw.Lead.Deployed": {
+   "digest": "61f633f3e6c3dfcaf8134ce6a3235c3812944acf4f8d3dcf8982f64be1a7c0fb",
+   "definitions": {
+    "Pouw.Lead.CallForward": "8bdc36ff006cce8c0d035eebe3db2c920c0706cf245c6322b1c521511bcbf4f4",
+    "Pouw.Lead.CallForward.before": "43e0bad20876aaf540828f1b628176a8d8fbb07384e33c651d58f18d3273189f",
+    "Pouw.Lead.CallForward.f": "5ac99f736f88a370753d384e485ce1c54398439ad2000c1f0e94145fb9094dc5",
+    "Pouw.Lead.CallForward.leaves": "5385529c4f18c27788a6e8f72a55562540c48445d46567c2682d21a834636ba9",
+    "Pouw.Lead.CallForward.post": "fc71fe5b35bc10d0c00a7360bd95bb036e62c68a8b75e4a0e850b227df44f8c3",
+    "Pouw.Lead.CallForward.pre": "578ae7e79935bc94b1c4c4d3bd7e3f290c1fa4784653913eee41002054ac87df",
+    "Pouw.Lead.CallForward.value": "4ede51e29a39c642d308446d03dc71e37c9f0cd0fd5b761f2dcef6b7bc2cdd75",
+    "Pouw.Lead.CallForward.values": "4451e67cc4cde6d21f0382a8c1493f6e9a1d646a5d12b275cab57c54e7b8d9ac",
+    "Pouw.Lead.CallWords": "140bc080a882017f4ece549a8250d77f0a9632683b1387c75b84153c0871fe7d",
+    "Pouw.Lead.L1w": "e9bd41452e694424c59ba62b987457fe815673f2ba2efbc65ae914b3ed3f6da3",
+    "Pouw.Lead.L1w.aDom": "948223723d5c3400d98d98507fbb2407a777cc9d9110fac84b908e4666b7fae2",
+    "Pouw.Lead.L1w.calls": "985e80acc9db07430525afc69e1d396b169847cd3bc776c307412ae4de1b91b7",
+    "Pouw.Lead.L1w.key": "7bc0ef36de68a5fc464465fe0937d703ba23fb0c7ef7d52d4f640aa82f06ffbe",
+    "Pouw.Lead.L1w.nb": "456e8e89637e407840a010f71a51143903fd66eccd3879b6a45739aa9fd06124",
+    "Pouw.Lead.L1w.salt": "dbde5835bb815ba78ed79909d960bf564682b430e718d8059ce958b1126aad7f",
+    "Pouw.Lead.L1w.wordsDom": "2e4187c39cca6affce03bd11ca1282f319365895b40f69ceaa17fed7b7e8a636",
+    "Pouw.Lead.L1w.y": "34c43065d88a23f187cc3c0f348d7c4bf7c7646bfac78f7cbc2ff12b8486ce0a",
+    "Pouw.Lead.Layout.feedRowWords": "589f736e6bd69ec7b8c96b44afde607d9d184facdcb57fb2fbde94a92cbf13c6",
+    "Pouw.Lead.aBytes": "90e3fc86340e9528cc55127175556cb03670323e6d4901c727a46efbb9899f4e",
+    "Pouw.Lead.aLeaves": "8d67cf81fecfe0dc428fa7647b3dee0d1cec27c2d7e1b017baf70ea30a14e206",
+    "Pouw.Lead.aPos": "9fba54db2f4a16eee486442717c1c46a63f9c2206a61a37f4944076bf4d16abc",
+    "Pouw.Lead.aSchema": "debfc1845629c9cf67529d88cbbbd26c3955f329f1ea23d386e0ec71ed2ee5d3",
+    "Pouw.Lead.aSeg": "d59baf34bbacdfcd85aa93e5d11b225b68c1c7470e3836c736501cd556d12953",
+    "Pouw.Lead.aSegment": "f02d84e8d15effe1a603f7f885e62fd813e0c4e4c5d4209afb05af8442bc62ef",
+    "Pouw.Lead.callChunks": "d1da5ad0799c2eea69851a96394b338df9ed1fbf940fcacaafe1997cf9d3f7cf",
+    "Pouw.Lead.certStream": "f88fcb1f514dd885fca97102de76752a75f4b11142293f82cf687fc61bdbbc40",
+    "Pouw.Lead.feedSlot": "e9441c50ff32c355c58f4ec9b843b7aba4d98c6c5a9d8eddd9b729014656f20d",
+    "Pouw.Lead.instanceDom": "6b1ec63e1f53ac8d3647bdf01934efd986f857b7156b11b1635086266e06804d",
+    "Pouw.Lead.l1wCommit": "570741163a2e932aecd21d8d2e76bf0e0be2ed99a7224db6f3a90e6724ac9109",
+    "Pouw.Lead.l1wIsA": "1c0185329ff878836f48bb218781b156a7a9c2d15ebe5ae83a3f7cc6175f4026",
+    "Pouw.Lead.tileFrag": "817c0a8f0bc52a832bb7e114e0c29d58d8d13e0282196c12357087a33c2b6452",
+    "Pouw.Lead.wordAt": "2ecbf6e8f15782fd6e53f74d8dadd2cd40d718fbe8b0d2b934a4a73fd01d168c",
+    "Pouw.Lead.wordBytes": "a196c34723a90e7abbcbba4d00daf1ba409618bbae75d1e5a6c9eacd2eb4e264",
+    "Pouw.Lead.wordsBytes": "e5292acc04044d92090f987cd1169ea9c9777daa00c6010ae6b98cc1d7a8dba3",
+    "Pouw.Lead.wordsChunk": "d69c5a7eb65fc0a84e97ab7f2ab4e38ac954d8dde0aff01d68aa4144a1c2d6ca",
+    "Pouw.Lead.wordsLeaves": "5cf0e91371922e847288fd988e0c726243f0290e5be306af0ed89f6194029a1a",
+    "Pouw.Lead.wordsPos": "3196c0168792003c1d05dc246929aa5eb50115f2500eab4fd1da3977e3ce7850",
+    "Pouw.Lead.wordsSchema": "d62732e38ebeaddbcffc45ed2d6a8edbcf9a6f0053e3c51357196028c551b096",
+    "Pouw.Lead.wordsTiles": "561857c7a0981614b616c24e3989ed931736e510d4497a4b8613f2209592e30b"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"
+   ]
+  },
   "Definitions.Pouw.Lead.Forward": {
-   "digest": "ea95c2f9908c39bb885dc7c6d445660603152b06d3579b2541f019074877b406",
+   "digest": "8f9911136b81cf54c7e9faf920a685ddc026184eec184ac283428151c646be1c",
    "definitions": {
     "Pouw.Lead.Forward": "962ebe056052b34d6e74054660fef224feec500146441beab4daf37d90ae544e",
     "Pouw.Lead.Forward.Accepted": "98407f08b716f4ad3cb2e88b349f6cfbedd91a922de31bfaf77e9f2e4eb0023b",
+    "Pouw.Lead.Forward.betaMax": "39ac60bbbbd198f0b614286d8c36f7ded267b5c0e8550e1de9088b6fc38bdeeb",
     "Pouw.Lead.Forward.bits": "1e3a31208686ea8f3253a060e54bf478c7fda5390e0fd68f24f737e050e70390",
     "Pouw.Lead.Forward.calls": "0d2c37d478ff31025b4ed6e14f52486050bb9eaa0d1419c81eef8e4d920fbc7c",
     "Pouw.Lead.Forward.count": "77abed78f55b5287a1b6ff927ca5efb98df63701c2cf5cf8fd15b57b5896f51a",
@@ -32621,16 +33258,23 @@
     "Pouw.Lead.FwdCall.σ": "ed86ea64dce903241d831c0e217ab9757911641e73faf16f3c58f453c7053fa7",
     "Pouw.Lead.FwdCall.ω": "42c3a112cdf42bd09abf9627932826bac9793f42caeb1a4d2d3f13ae975201b1"
    },
-   "guarantees": ["Pouw.SecurityProofs.Lead.Network.networkFwd", "Pouw.SecurityProofs.Lead.Network.networkLlama"]
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
+   ]
   },
   "Definitions.Pouw.Lead.Game": {
-   "digest": "ccce1ee19b1e79e8b48a8e70c0643879b3c7c75863bc6466e9efa0fdd5359ddd",
+   "digest": "fe16cc5cd2b826864d741139025d708d83a40bd07e04146426047904c33bb924",
    "definitions": {
+    "Pouw.Lead.Game.FixedGapBelow": "9520b85dc0101c1d0788a506593e7584326d898e8978c4f5ea6a664dfd4f5a79",
     "Pouw.Lead.Game.LeadProg": "865dc5ec1450c9082a20d2995c674dc4059b174194ebb151a5e9de9971353e77",
     "Pouw.Lead.Game.LeadProg.play": "6ae14fbc66d8bdc84f09960f6cad0d7e3f581c6f7ce9771a137f61f8be3d9261",
     "Pouw.Lead.Game.LeadProg.σ": "084f7a1d94d734a49d672a7817e14c8cfb19fc357670e78e247c23515bab2e2b",
     "Pouw.Lead.Game.Salt": "c9575bf2c659c37c003807d6877992d886dd903aad13f3b96bde693255dbb4f4",
-    "Pouw.Lead.Game.costModel": "6328e20e9334d0be69bd88d96fb33012e6e1b24d0fcfd08ebdbda6821aede1f7",
+    "Pouw.Lead.Game.costModel": "cf7342b32b00699e3359ef19b2469a9953b1ab8d05d139670835cfbb6e4e2b4b",
     "Pouw.Lead.Game.domain": "f713c1fdf27567d5fe480ec28f85da202100560bae46b3d61a3e913214e3f7ad",
     "Pouw.Lead.Game.eta": "15aed09069f9673df2f7f78d107212e75f523bd44023360e3631397a09efeabd",
     "Pouw.Lead.Game.gamma": "23e6fb838e202873b763e3760e7c2a2a4ac1a17224f8ed16d7a8ea20f82f3237",
@@ -32638,13 +33282,20 @@
     "Pouw.Lead.Game.protocol": "213b54b80f8ed7d75278425cb9ea33bd2b519af301fff46366536ea1ce07f52b",
     "Pouw.Lead.Game.rest": "7bf0718d9accc8bc22d92a0e3a461359b4e98bfe64c44519649bafddea6f414d",
     "Pouw.Lead.Game.unitCommit": "eba89a63459e97ee23b30812ece656750239fcb9dcd9e823e2d33be20c9a4145",
-    "Pouw.Lead.Game.unitHashed": "dac97801c107ccf728596dd254156b76c234fb382e2f2ee239b4fd61689325f7",
-    "Pouw.Lead.Game.unitWork": "88156e8a13d49cdb8fda776fa249284d46acbe4da5144fc516bda100521b9259"
+    "Pouw.Lead.Game.unitCost": "1833eb3ddd4604c1cbcb4cdca019998156093203fc83b71b708cdf088cc32aaf",
+    "Pouw.Lead.Game.unitHashed": "dac97801c107ccf728596dd254156b76c234fb382e2f2ee239b4fd61689325f7"
    },
-   "guarantees": ["Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail", "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail"]
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial"
+   ]
   },
   "Definitions.Pouw.Lead.Gap": {
-   "digest": "81fcf952cd2ef1911803277eebb72c587df776b50e3010b5298a123e1be5431a",
+   "digest": "0162414ac3815375063c43088719acfea49b90bd07840c2fb30ac3e6ab08c307",
    "definitions": {
     "Pouw.Lead.aBlocks": "558ecb126600ad0370679b3b28f6e05e31b48522d88d6f6bcd4861ca5d5986bf",
     "Pouw.Lead.betaLead": "914fa2ad5896a67f86d3627bb52224cd5e9eed88afed9821a3d39be5a99bdbaa",
@@ -32654,20 +33305,18 @@
     "Pouw.Lead.coinTail": "1ba7f4b54b99be6d005dc96bd8162013f4ff14fd190130ea74c2e3ccb7904256",
     "Pouw.Lead.etaLead": "6f99ffabe2d1ececd2a626cea13e2bfe2ea6c6f99076a56ca9140551ae69d6be",
     "Pouw.Lead.gapBound": "a234bc057a0087f61035ac30833d368a87a248af9b70754839e2c0a80f17ded6",
-    "Pouw.Lead.gapFixed": "fa2bf057d0cd43de51e7791cc06dd3074e58c41fceb69101763bee4c715c0bfe",
+    "Pouw.Lead.gapFixed": "2a0a29f5242176cd122d416aba43c0bd54fb47cee5eb371bab4b79f7f040f99b",
     "Pouw.Lead.gapFixedServed": "c348cd6c83d8b60dedf10f6d2b6311e4b6b442ef50c2d56a162731ddd79c57b4",
-    "Pouw.Lead.gapRegs": "9820110a991d0c54dc19522441d8fa12baac6802fc8ae8470328684292e1a924",
+    "Pouw.Lead.gapRegs": "494c02c7072932de6bea65473a589bad5be9f95635f654c4ec9d679e413396d8",
     "Pouw.Lead.gapServed": "6bbedbab39ebea62b498d669c99d992890014615a907aeb57dc840b5570bed85",
-    "Pouw.Lead.gapShare": "b0e7885972f11c0117365939ea25a988469e9e03ea41e4076ee2e4be3393876d",
     "Pouw.Lead.headGap": "9049f30668f12d4ab2aedb5e90b7ceff412766a48d97977db9d3861e7ed968ad",
     "Pouw.Lead.hidingGap": "56297794d2b42b6394b3fa9cfa4b7d3595faeb88709d80153f1e808cb01ad6ce",
     "Pouw.Lead.honestRegs": "694afdcdc8f60a66e9dc4751ff2095bb88a6e92f637386f6f638a293080775be",
     "Pouw.Lead.nMax": "6b11e56f78020bbf39ab23abc6a0e6e3a295d59cefa13ff74848ab4b8b533d15",
-    "Pouw.Lead.networkGap": "40d51810983a2e5754f585b0d09b988c9ac72f61308e534d4234731a2c1b9bdd",
     "Pouw.Lead.pStarGap": "78133775d9bf60ee8bb6eb4872073376a6992a484ea1b3c7f36237ba9746cbd9",
     "Pouw.Lead.servedRegs": "21440cbccdb49b3028669242974f9bbeb2dbc90d00cf7487abfc3fc3b0c6c093",
     "Pouw.Lead.shaARegs": "582a8301075db6885329c7ab131f756c4c038a734b8067fb87a735983e51e193",
-    "Pouw.Lead.shaWordsRegs": "170e2b754b66b5cd90f9c6a2fd1ae63c26a62f011c8a7415c0ce0a0535601a2c",
+    "Pouw.Lead.shaWordsRegs": "7a0419d074e3514787b515cfc2421670b7711a89870e4fe7f639a4d749eb0e66",
     "Pouw.Lead.stockRegs": "4e9d0c8daa8c421fc01948ac4a031804d08cc9ec1d2712a796e2cfb0893033dc",
     "Pouw.Lead.tableGap": "cfdceb49a10e0f979f7d460ac180b31d9a6b0aa463385112b546f29f172bf638",
     "Pouw.Lead.tableTail": "20edb580a968499e1002ae579e87e567741c4d8ca450784ecdb388750c794c55",
@@ -32678,7 +33327,11 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
@@ -32689,11 +33342,17 @@
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
     "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
-    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+    "Pouw.SecurityProofs.Lead.Tail.tailAt",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
    ]
   },
   "Definitions.Pouw.Lead.Layout": {
-   "digest": "63eb563c8f7ad08a246be2a29537211cff764286244320b847abeb791e69278c",
+   "digest": "83cfbe578141d194885ef9ef001af416706c71423180f7b024c8ea0cdda4bdd2",
    "definitions": {
     "Pouw.Lead.Coins": "cbc5035dfbc812778c140ae05b86c3954683dc9827dff0b46e637289622562d9",
     "Pouw.Lead.Coins.G": "2acfe6610bb0482c548af03d1b4cff3f0326cce9a890d0d4ac07f84cfa8568dd",
@@ -32719,7 +33378,7 @@
     "Pouw.Lead.coinTerm": "3f1433047c78a85e9a12b1ae1720fc84432292157a652ceb28a3021e3f54c177",
     "Pouw.Lead.colCode": "49f41129e47e64eb7e9872b319e1ca2a83746cd63a6ae68290b26111c16aa6fb",
     "Pouw.Lead.laneTerm": "0525ccc2bed9271bd227ed7a0efde80abb0874dfe4836e3082ecb940a5448ff6",
-    "Pouw.Lead.lead": "4ae7a6f59210705fc573c75c2719ba8ed6332a76a81014c233736ad173ded735",
+    "Pouw.Lead.lead": "22951f34ef6193bf0575396149a5755c6bb9e6d4095c1a4e6643f121ad2abf95",
     "Pouw.Lead.lead320": "3048d1533dc518a4eef1f33c8725489e8e7799f664463d491eacba428d085b9a",
     "Pouw.Lead.llamaCalls": "21b31c090119027c8e268aa92d393af2dcecc13a98c78febc5f01b09bccebbcf",
     "Pouw.Lead.padCols": "254471b5ccbae05d0247897bbb535b6f05d96361b41ab9932e4a3dfdcaf88776",
@@ -32734,7 +33393,11 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
@@ -32745,23 +33408,29 @@
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
     "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
-    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+    "Pouw.SecurityProofs.Lead.Tail.tailAt",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
    ]
   },
   "Definitions.Pouw.Lead.Model": {
-   "digest": "eb343996ab4551042db7441b8a55715b925ecdd1a923076901a3f9ae418eafa5",
+   "digest": "979bbcb59a1b24f5e74d364928b076020de9de80d0e0683c5544e5e44775c8ff",
    "definitions": {
-    "Pouw.Lead.Accepted": "3c7e805c9e77b225f9ac0dfa0dee7a1ee30254b6ec8439aa6c4416f11ad7c796",
+    "Pouw.Lead.Accepted": "de719d852ecc89522c5505d0c152e1bb8e7b4aa42485cb274507fe78d908f6af",
     "Pouw.Lead.Addr": "45d78774487edc84a060cb6d5abc36a908147dfbc79d3930b86b27b9432ef439",
     "Pouw.Lead.Break": "249e3f23bf720bc42fa503c1ae12a93a9157e7f5cd3403478a9f428a93de6827",
     "Pouw.Lead.CoinIdx": "ee782d186ef39ebdae8d535726cf5a118bd2c84db96304277f88d560aff15f0b",
     "Pouw.Lead.CoinStream": "58a11c43125ca8f118bbd7206164eb369f53afd8c2a422394a271af242d8ced6",
     "Pouw.Lead.CoinStream.val": "f8eae88ee41cfa6a89b8d6f4685a031bccd4d8c543c2a9be648e20c246907857",
     "Pouw.Lead.CoinStream.ι": "1812fe152abbc0b9988a6ef9234b9182212035148cfed53309a8bc92095d045d",
-    "Pouw.Lead.Commit": "09a5e864badfaf354cef5c95983296d63e1bd214a76fa955732d09094896630f",
+    "Pouw.Lead.Commit": "cda49b4a7e67febe0b7d1f64aadb83a771b298636d1df04639f18c2f7c77f7ec",
     "Pouw.Lead.Commit.aMsgs": "0de94ac2fc0922ebab031be94cd62072e58ddfc428f460c689707fbd07fea05d",
     "Pouw.Lead.Commit.aRoot": "71d6ef2759e3412b0d9f78e8b903bcb3bcc3c26181439c631935eb68d112e7f7",
-    "Pouw.Lead.Commit.chunks": "607702a3cc0dc31be6f60c44f3fd833b5fca416e861c6668cb04fde18828ab8b",
+    "Pouw.Lead.Commit.chunks": "d27cb567493b0ad89028fa897a9738316fcede7d654d70a910a1958e8ef25467",
     "Pouw.Lead.Commit.msgs": "ab66a11818d80246bce0c0a134a30d04c2317d79efdaa6dc45c098ee26467ed0",
     "Pouw.Lead.Commit.root": "561537657c6967392f4f95e74a32e9c3584ac154868f908c6d06cc71e5153c87",
     "Pouw.Lead.Exec": "ca0bff9b600787b912a2c8322033a9e0cfbdaea092c246581896f07a970eb783",
@@ -32775,9 +33444,9 @@
     "Pouw.Lead.Layout.colBlocks": "916d1483af85f9c2f19eeb77e6ab9e242e048e2b57c2cfba1ee45c4f7f9e66da",
     "Pouw.Lead.Layout.rowBlocks": "45ee56a3769911d750b1474c8626cd0cd60b385c974392e38f637523078b04cf",
     "Pouw.Lead.Op100.regs": "6cba65a8fdde776351f97dced9c87a7493fb7a3cfd2f7906aa3cdd3b2d3fb360",
-    "Pouw.Lead.Strategy": "51f71f98f7e73d59c2af8a0cecd7e618b1be75a3eea920a20301b20c39e4c4a4",
+    "Pouw.Lead.Strategy": "13c94fc178686995c5fd6fc1537cf22a87140d2a89aeca564959e13354904a3c",
     "Pouw.Lead.Strategy.aRoot": "e385bd4d41b0aafabe7c1853ec094d6f2d54233ef5f8934189b6031794bc6d7c",
-    "Pouw.Lead.Strategy.exec": "e01eb9d315c98f253ca159b58922fd05e5fb3a78c1419d336ab0f0f157a321ac",
+    "Pouw.Lead.Strategy.exec": "e8905121c3c0c42db61e545abc8f0d9107dd3d9244a0cd19c852844697fe95fb",
     "Pouw.Lead.Strategy.init": "60850f86e8bbd82f188154460e6988986745fcdbab3bc80c767879612a3aafee",
     "Pouw.Lead.Strategy.pre": "ff2defa23bdded7284c661ebd56028a7150531b4285402779250852344a1e6bf",
     "Pouw.Lead.Strategy.work": "0413b94300b914269086448862cbb2e14dd93429b51abcb5f9c12923bcc2e14c",
@@ -32791,7 +33460,11 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
@@ -32802,7 +33475,13 @@
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
     "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
-    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+    "Pouw.SecurityProofs.Lead.Tail.tailAt",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
    ]
   },
   "Definitions.Pouw.MerkleExtract": {
@@ -35009,6 +35688,14 @@
     "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.EndToEndFromTail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_honest",
+    "Pouw.SecurityProofs.Lead.Bridge.GammaFromTail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_honest",
+    "Pouw.SecurityProofs.Lead.Witness.G_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial",
+    "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
