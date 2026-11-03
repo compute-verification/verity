@@ -1,55 +1,45 @@
-"""The search's frontier, read from the ledger's index.
+"""The search's frontier, read from the ledger's index and scored by the training formalism v2 (te_core.formalism).
 
-    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT ...] [--facts FACTS.json] [--formalism]
+    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT ...] [--facts FACTS.json]
 
 It reads only the submissions measured by the pinned measurement commit or an earlier commit its `pinned.json` names as
 measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, repeated, names others), and leaves
 out, each marked with its reason (`status`): an invalid record, one whose read-outs `cw.readout_leaks` lists
-(`read-out-leak`, invalid: the coordinator's 14:22Z rule), one that updates the tied embedding with no block below the
-top (`tied-lookup`: the scorer's rule, coordinator 13:32Z), an unscored one, one measured by any other commit
-(`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
-first to submit an E is the one its compute is counted for), one with covered steps ingested by a te_core before
-3.0 (`re-ingest`: 3.0 prices ρ by thresholds; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ... --run-id RUN`
-prices it again), and one a later ingest of its run supersedes (`re-ingested`). A row ingested before 3.13 carries
-neither the read-outs nor the changed tensors; `--facts` gives them by run id (`with_facts`). Per (k, r) cell of the
-grid (score.K_BITS x score.R):
+(`read-out-leak`, invalid: the coordinator's 14:22Z rule), an unscored one, one measured by any other commit
+(`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the first to submit
+an E is the one its compute is counted for), and one a later ingest of its run supersedes (`re-ingested`). A row
+ingested before 3.13 carries no read-outs; `--facts` gives them by run id (`with_facts`). Under 4.0 an update of the
+tied embedding alone is deep (its lookup's rows are update-dependent and reach every later layer), so the scorer's
+tied-lookup rule (coordinator 13:32Z) is retired. `measured(r)` says whether a row's quantities were measured on its
+record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled.
 
-- the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
-- the elites: per niche (mechanism tag x β range x φ range x start), the submission with the least val bits per byte,
-  the least |C| ρ breaking ties;
-- the coverage map: every niche of the observed mechanism tags, β and φ ranges and starts, the empty ones listed;
-- W*(l*), honest(l*) and the effective slowdown W*/honest at l* = the start's bits per byte less 0.5%, 1%, 2% and 5%,
-  by the coordinator's 19:50Z ruling (`target`): honest(l*) is the least |C| over every checkpoint of every valid
-  submission, of any class or direction, that reaches l*, W*(l*) the least |C| ρ over the same checkpoints, so
-  W*/honest ≥ 1. The reference directions' honest(l*) alone is printed beside it as context. The table prints
-  training FLOPs, 2|C|.
+Each valid submission is scored by the formalism (`formalism_rows`): |C| in Boolean gates, ρ at every (c, k) of its
+start's policy grid and at its reference shapes (te_core.policy's `cells`; c/(c − d) where Fit holds for the training,
+Slowdown's target elsewhere). Per start and l* = its bits per byte less 0.5%, 1%, 2% and 5% (`formalism_report`), by the
+coordinator's 19:50Z ruling (`target`): honest H(l*) is the least |C| over every checkpoint of every valid submission,
+of any class or direction, that reaches l*, W*(l*) the least |C| ρ over the same checkpoints, and Security's
+S = W*/H ≥ 1, with W*'s route, its x0 and s* (the assumptions' bounds, and the attack side's best-known values) and
+every quantity's source. The reference directions' H alone is kept beside it as context.
 
-With `--formalism` it scores the valid submissions by the training formalism v2 instead (te_core.formalism): |C| in
-Boolean gates, ρ at every (c, k) of the start's policy grid and at its reference shapes (te_core.policy's `cells`;
-c/(c − d) where Fit holds, Slowdown's target elsewhere), and per start and l* honest H, W* in each cell and Security's
-S = W*/H by the same 19:50Z rule, with W*'s x0 and s* (the assumptions' bounds, and the attack side's best-known values)
-and every quantity's source (`formalism_report`).
-
-`candidates(rows, T)` are the frontier members and elites at tier T - 1 not yet promoted to T; which of them are promoted
-is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the scorer).
+`candidates(rows, T)` are the frontier members (no other submission beats them on both |C| ρ and val bits per byte)
+and the elites (per niche, mechanism tag x affected-share range x start, the least val bits per byte, the least |C| ρ
+breaking ties) at each reference shape, among the submissions at tier T - 1 not yet promoted to T; which of them are
+promoted is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the
+scorer).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
-import re
 import sys
 from pathlib import Path
 
 from . import formalism, policy
-from .ledger import Ledger, coverage_of, version
-from .score import K_BITS, R, cell
+from .ledger import Ledger, version
 
-BETA_EDGES = (1e-3, 1e-2, 1e-1, 1.0, 10.0)
-PHI_EDGES = (0.1, 0.25, 0.5, 0.75)
+AFFECTED_EDGES = (0.1, 0.25, 0.5, 0.75)
 TARGETS = (0.005, 0.01, 0.02, 0.05)
-KEYS = [cell(k, r) for k in K_BITS for r in R]
 REF_DIRECTIONS = ("ref-optim", "ref-data")
 
 
@@ -57,26 +47,17 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
     return sum(x >= e for e in edges)
 
 
-#: the first te_core whose ingest prices ρ by thresholds (a row's `te_core`): an earlier ingest could price a run with
-#: covered steps at its cheapest step's β, so such a row counts once its run is ingested again
-PRICED_FROM = (3, 0)
+#: the first te_core whose ingest measures the formalism's quantities from the traced step circuit (a row's `te_core`)
+MEASURED_FROM = (4, 0)
 
 
 def _run_key(r: dict):
     return (r["run_id"], r.get("measurement_commit"), r.get("checkpoint_step")) if r.get("run_id") else None
 
 
-def tied_lookup(changed: list[str], layers: int | None) -> bool:
-    """The scorer's rule (coordinator 13:32Z): a record that updates the tied embedding with no block below the top is
-    priced wrong, v2.3's counter pricing the updated table's lookup at 0. `changed` is the witness's
-    `changed.actual`, `layers` its `structure.layers`."""
-    below = [n for n in changed if (m := re.match(r"blocks\.(\d+)\.", n)) and layers and int(m[1]) < layers - 1]
-    return "embed" in changed and not below
-
-
 def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
-    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args`, `changed`,
-    `layers` and `readout_leaks`, as `ledger.facts` gives them), for rows ingested before te_core 3.13."""
+    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args` and
+    `readout_leaks`, as `ledger.facts` gives them), for rows ingested before te_core 3.13."""
     return [r | facts.get(r.get("run_id"), {}) for r in rows]
 
 
@@ -96,10 +77,10 @@ def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 
 def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
-    """Each left-out record's reason: re-ingested, invalid, read-out-leak, tied-lookup, unscored, other-version,
-    duplicate-e, re-ingest. `pin` is a
-    commit or the commits of one version. A later ingest of the same run's checkpoint (its run id; a row without one is
-    never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E repeats an earlier
+    """Each left-out record's reason: re-ingested, invalid, read-out-leak, unscored, other-version, duplicate-e.
+    `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint (its run id; a row
+    without one is never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E
+    repeats an earlier
     record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
     E it had at an old one counts."""
     pins = set(commits(pin))
@@ -118,17 +99,23 @@ def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
             out[r["id"]] = "invalid"
         elif r.get("readout_leaks"):
             out[r["id"]] = "read-out-leak"
-        elif r.get("changed") is not None and tied_lookup(r["changed"], r.get("layers")):
-            out[r["id"]] = "tied-lookup"
         elif r.get("val_bpb") is None:
             out[r["id"]] = "unscored"
         elif r.get("measurement_commit") not in pins:
             out[r["id"]] = "other-version"
-        elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
-            out[r["id"]] = "re-ingest"
         if e and out.get(r["id"]) != "duplicate-e":
             first.setdefault(e, set()).add((r.get("measurement_commit") in pins, r.get("agent")))
     return out
+
+
+def measured(r: dict) -> bool:
+    """Whether a row's formalism quantities were measured on its record's traced step: ingested by te_core 4.0 or
+    later with the step's traced structure (`ledger ingest --structures TRACED.json`, `annotate.with_structures`),
+    every updated step traced (none `untraced`), its block carrying the trace. Any other row's φ, τ, a, u, t and Δ_grad
+    are stubs; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ... --run-id RUN --structures TRACED.json`
+    measures it."""
+    return (version(r.get("te_core")) >= MEASURED_FROM and not (r.get("annotation") or {}).get("untraced")
+            and "trace" in (r.get("formalism") or {}))
 
 
 def valid(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> list[dict]:
@@ -136,7 +123,7 @@ def valid(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> list[di
     return [r for r in rows if r["id"] not in left_out]
 
 
-def cost(r: dict, key: str, size: str = "macs") -> float:
+def cost(r: dict, key: str, size: str = "gates") -> float:
     return r[size] * r["rho"][key]
 
 
@@ -150,26 +137,22 @@ def pareto(rows: list[dict], key: str) -> list[dict]:
     return out
 
 
-def niche(r: dict, key: str) -> tuple:
-    return (r.get("mechanism", ""), bin_of(r["beta"][key], BETA_EDGES), bin_of(r["phi"][key], PHI_EDGES), r["start"])
+def affected_share(m: formalism.Measured) -> float:
+    """|A ∩ ∪T| / |C|: the share of |C| in the token blocks' affected gates."""
+    return sum(p.affected_gates for p in m.parts) / m.gates if m.gates else 0.0
+
+
+def niche(r: dict) -> tuple:
+    return (r.get("mechanism", ""), bin_of(affected_share(r["measured"]), AFFECTED_EDGES), r["start"])
 
 
 def elites(rows: list[dict], key: str) -> dict[tuple, dict]:
     out: dict[tuple, dict] = {}
     for r in rows:
-        n = niche(r, key)
+        n = niche(r)
         if n not in out or (r["val_bpb"], cost(r, key)) < (out[n]["val_bpb"], cost(out[n], key)):
             out[n] = r
     return out
-
-
-def coverage_map(rows: list[dict], key: str) -> dict:
-    mechs = sorted({r.get("mechanism", "") for r in rows})
-    starts = sorted({r["start"] for r in rows})
-    filled = set(elites(rows, key))
-    every = [(m, b, f, s) for m in mechs for b in range(len(BETA_EDGES) + 1) for f in range(len(PHI_EDGES) + 1)
-             for s in starts]
-    return {"filled": len(filled), "cells": len(every), "empty": [list(c) for c in every if c not in filled]}
 
 
 def _of(r: dict | None) -> dict | None:
@@ -177,15 +160,15 @@ def _of(r: dict | None) -> dict | None:
                   "mechanism": r.get("mechanism")}
 
 
-def target(on: list[dict], l_star: float, keys=KEYS, reference=None, size: str = "macs") -> dict:
+def target(on: list[dict], l_star: float, keys, reference=None, size: str = "gates") -> dict:
     """The coordinator's 19:50Z ruling at one l*, over one start's valid submissions `on` (each a checkpoint, with
     `id`, its |C| in `size`, `val_bpb` and `rho`). honest(l*) is the least |C| over every checkpoint of every
     submission, of any class or direction, that reaches l* (a checkpoint is a model someone reached; the sealed final
     reruns guard against picking noise), and W*(l*) in each cell of `keys` the least |C| ρ over the same checkpoints,
     so W*/honest ≥ 1 (ρ ≥ 1) and is the effective slowdown; `fit` is whether Fit holds for the training at W*'s
     checkpoint (None: the row doesn't say). `honest_reference` is the least |C| over the reference directions'
-    checkpoints alone, as context (`reference` picks them, by default a direction in `REF_DIRECTIONS`). |C| is MACs,
-    or the formalism's gates (`formalism_targets`)."""
+    checkpoints alone, as context (`reference` picks them, by default a direction in `REF_DIRECTIONS`). |C| is the
+    formalism's gates (`formalism_targets`)."""
     is_ref = reference or (lambda r: r.get("direction") in REF_DIRECTIONS)
     reach = [r for r in on if r.get("val_bpb") is not None and r["val_bpb"] <= l_star]
     h = min(reach, key=lambda r: r[size], default=None)
@@ -206,51 +189,21 @@ def start_bpb(on: list[dict]) -> float | None:
     return v[len(v) // 2] if v else None
 
 
-def targets(rows: list[dict], key: str) -> list[dict]:
-    """`target` per start and l* = its l0 less each of `TARGETS`, in cell `key`."""
-    out = []
-    for start in sorted({r["start"] for r in rows}):
-        on = [r for r in rows if r["start"] == start]
-        l0 = start_bpb(on)
-        if l0 is None:
-            continue
-        for f in TARGETS:
-            t = target(on, l0 * (1 - f), [key])
-            c = t["cells"][key]
-            out.append({"start": start, "drop": f, "l_star": t["l_star"], "w_star": c["w_star"], "w_star_of": c["of"],
-                        "rho": c["rho"], "honest": t["honest"], "honest_of": t["honest_of"],
-                        "honest_reference": t["honest_reference"], "honest_reference_of": t["honest_reference_of"],
-                        "effective_slowdown": c["effective_slowdown"]})
-    return out
-
-
-def report(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> dict:
-    rows = valid(rows, pin)
-    out = {}
-    for key in KEYS:
-        el = elites(rows, key)
-        out[key] = {
-            "frontier": [{"id": r["id"], "cost": cost(r, key), "val_bpb": r["val_bpb"], "rho": r["rho"][key]}
-                         for r in pareto(rows, key)],
-            "elites": [{"niche": list(n), "id": r["id"], "val_bpb": r["val_bpb"], "cost": cost(r, key)}
-                       for n, r in sorted(el.items())],
-            "coverage": coverage_map(rows, key),
-            "targets": targets(rows, key),
-        }
-    return out
-
-
 def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tuple[list[dict], dict[str, str]]:
     """Each row whose start has a shape and that the scoring cap admits (te_core.policy's `eligible`, under the ladder's
     fit `ladder`), with its formalism quantities (`measured`), |C| in gates, ρ in every cell of its start (te_core.policy's
     `cells`: the grid's and the reference shapes'), whether Fit holds there for the training (`fit`) and Slowdown's terms
-    there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`, `over-cap` or
-    `unmeasured`)."""
+    there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`; `pilot-start`, a record
+    on data v3 from a start whose shape has another tokenizer, as the pilot's FineWeb-Edu starts do, since v3's branch
+    points are v3's starts; `over-cap` or `unmeasured`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
         if shape is None:
             skipped[r["id"]] = "no-shape"
+            continue
+        if r.get("data") == "v3" and shape.get("tokenizer") != policy.V3_TOKENIZER:
+            skipped[r["id"]] = "pilot-start"
             continue
         if not policy.eligible((r.get("model") or {}).get("forward_gates_per_token"),
                                r.get("start_forward_gates_per_token") or policy.w_fwd(shape), r.get("val_bpb"), ladder):
@@ -356,36 +309,17 @@ def formalism_markdown(rep: dict) -> str:
     return "\n".join(lines)
 
 
-def candidates(rows: list[dict], tier: int, pin: str | tuple[str, ...] | None = None) -> list[str]:
-    """The frontier members and elites, in any cell, among submissions run at tier - 1 and not yet promoted to `tier`."""
+def candidates(rows: list[dict], tier: int, pin: str | tuple[str, ...] | None = None,
+               shapes: dict[str, dict] | None = None) -> list[str]:
+    """The frontier members and elites at each reference shape (policy.MARKS), among the valid
+    submissions run at tier - 1 and not yet promoted to `tier` that the formalism scores (`formalism_rows`)."""
+    shapes = policy.starts() if shapes is None else shapes
     pool = [r for r in valid(rows, pin) if r["tier"] == tier - 1 and r.get("promoted", 0) < tier]
+    scored, _ = formalism_rows(pool, shapes)
     ids = set()
-    for key in KEYS:
-        ids |= {r["id"] for r in pareto(pool, key)} | {r["id"] for r in elites(pool, key).values()}
+    for key in policy.MARKS:
+        ids |= {r["id"] for r in pareto(scored, key)} | {r["id"] for r in elites(scored, key).values()}
     return sorted(ids)
-
-
-def _flops(macs: float | None, of: dict | None) -> str:
-    return "—" if macs is None else f"{2 * macs:.3g} ({of['id']}@{of['checkpoint']})"
-
-
-def markdown(rep: dict) -> str:
-    lines = ["| cell | frontier | elites | niches filled |", "|---|---|---|---|"]
-    for key, v in rep.items():
-        lines.append(f"| {key} | {len(v['frontier'])} | {len(v['elites'])} | {v['coverage']['filled']}/"
-                     f"{v['coverage']['cells']} |")
-    keys = list(rep)
-    lines += ["", "W*/honest per cell (training FLOPs, 2|C|; honest over every checkpoint of every valid record, the "
-              "reference directions' alone as context):", "",
-              "| start | target | l* | honest | reference directions only | " + " | ".join(keys) + " |",
-              "|---|---|---|---|---|" + "---|" * len(keys)]
-    for i, t in enumerate(rep[keys[0]]["targets"] if keys else []):
-        honest = _flops(t["honest"], t["honest_of"])
-        eff = ["—" if rep[k]["targets"][i]["effective_slowdown"] is None
-               else f"{rep[k]['targets'][i]['effective_slowdown']:.3g}" for k in keys]
-        lines.append(f"| {t['start']} | -{100 * t['drop']:g}% | {t['l_star']:.4f} | {honest} | "
-                     f"{_flops(t['honest_reference'], t['honest_reference_of'])} | " + " | ".join(eff) + " |")
-    return "\n".join(lines)
 
 
 def main(argv=None) -> int:
@@ -395,9 +329,9 @@ def main(argv=None) -> int:
     ap.add_argument("--pin", action="append", default=None,
                     help="a measurement commit, repeated for one version's (default covert_witness's pin.py)")
     ap.add_argument("--facts", type=Path, default=None,
-                    help="JSON, run id -> args, changed, layers, readout_leaks, for rows ingested before 3.13")
+                    help="JSON, run id -> args, readout_leaks, for rows ingested before 3.13")
     ap.add_argument("--formalism", action="store_true",
-                    help="score by the training formalism v2 over the policy grid (te_core.formalism, te_core.policy)")
+                    help="accepted for te_core 3.14-3.18's command lines: the formalism is the only score")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
     ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
@@ -409,21 +343,14 @@ def main(argv=None) -> int:
     if a.facts:
         rows = with_facts(rows, json.loads(a.facts.read_text()))
     pin = tuple(a.pin) if a.pin else pinned()
-    if a.formalism:
-        rep = formalism_report(rows, pin)
-        if a.json:
-            a.json.write_text(json.dumps({"pin": list(pin), "left_out": status(rows, pin)} | rep, indent=1) + "\n")
-        print(formalism_markdown(rep))
-        print(f"pin {' + '.join(c[:12] for c in pin)}: {rep['scored']} scored, {len(rep['skipped'])} without a start shape "
-              "or measurement")
-        return 0
-    rep = report(rows, pin)
+    rep = formalism_report(rows, pin)
     left_out = status(rows, pin)
     if a.json:
-        a.json.write_text(json.dumps({"pin": list(pin), "left_out": left_out, "cells": rep}, indent=1) + "\n")
-    print(markdown(rep))
+        a.json.write_text(json.dumps({"pin": list(pin), "left_out": left_out} | rep, indent=1, default=str) + "\n")
+    print(formalism_markdown(rep))
     reasons = sorted(set(left_out.values()))
-    print(f"pin {' + '.join(c[:12] for c in pin)}: {len(rows) - len(left_out)} of {len(rows)} submissions; left out: "
+    print(f"pin {' + '.join(c[:12] for c in pin)}: {rep['scored']} scored of {len(rows)} submissions, "
+          f"{len(rep['skipped'])} without a start shape or measurement; left out: "
           + (", ".join(f"{sum(v == x for v in left_out.values())} {x}" for x in reasons) or "none"))
     return 0
 

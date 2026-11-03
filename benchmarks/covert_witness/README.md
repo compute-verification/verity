@@ -69,9 +69,9 @@ scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its 
   and end loss, its algorithm's inefficiency p = C/H against its policy's slowdown ρ), `python -m
   te_core.algorithm_policy --out DIR --publish`.
   **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score and panels over the pin's
-  valid records, each with the
-  formalism block built from `analysis/rescore_v1.py`'s per-record quantities (from the scorer's directory), or the
-  stubs with `--stubs`.
+  valid records, on the quantities measured on each record's traced step (te_core 4.0's default; `--charge-context`
+  charges earlier tokens' affected keys and values), or `analysis/rescore_v1.py`'s per-record quantities with
+  `--quantities analysis` (from the scorer's directory), or the stubs with `--stubs`.
 
 **Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
 its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves
@@ -133,16 +133,19 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
   `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
   reads another run's directory. Each start's manifest entry has its `shape` (`starts_store.shape`), which the policy
-  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are ref-optim's ladder
+  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 ladder
   (`islands/ref-optim/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
-  parameter with C0 counted), which join the store with tokenizer `bpe32k` when it publishes.
+  parameter with C0 counted), which join the store with tokenizer `bpe32k` in their `shape` when it publishes, each
+  batch in a commit that changes only `starts_store.json` on the pin, pinned with it as `same_version`. At v3 a branch
+  starts only from v3's starts: launch.py refuses a pilot start, and scoring leaves out a v3 record from one
+  (`pilot-start`).
 - **Evaluator** (`evaluate.py`, `prepare.evaluate_bpb`): bits per byte at context 1024 of decode(θ, E). The model has
   θ's tensors, shapes and dtypes, or with E in the model format (`prepare.encode_model`, CWMODL1) its own lf
   architecture with θ's vocabulary, context and tying (`prepare.model_config`), grown, pruned or distilled, every tensor
   θ doesn't give it in E. Nothing in the harness caps its cost: the evaluation job records each model's parameters and
   forward MACs and gates per token (`te_core.cw.forward_cost`), and scoring admits a checkpoint only within the cap
   (`te_core.policy.eligible`: at most the greater of the start's forward and the compute-optimal model's at its loss
-  under the v3 ladder's fit).
+  under the v3 ladder's fit, and twice the start's forward until that fit exists).
 - **Training job** (`candidate.sh`, `sandbox.py`, the harness `te_core/` and its README): the island's program runs as
   `python -m te_core.run --script islands/<island>/train.py`, which counts every multiply-accumulate it computes through
   torch, times its steps (a step is one `TrainData.next` to the next), writes the first E in each 5% of the run to its
@@ -197,7 +200,7 @@ node from one; `prep.sh` prepares a node (`data_v3.py verify --keep`, `prepare.r
 store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
 `analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2, analytically: gates, token blocks' gates, σ, the affected
-gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
+gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore --quantities analysis` scores them. Its docstring
 lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in

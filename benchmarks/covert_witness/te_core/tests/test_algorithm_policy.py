@@ -53,7 +53,8 @@ def ledger_rows(runs=RUNS) -> list[dict]:
 def run(tmp_path, monkeypatch, runs=RUNS, *extra, index=None) -> tuple[int, dict]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     man = tmp_path / "starts_store.json"
-    man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}, "s2": {"shape": SHAPE2}}}))
+    man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}, "s2": {"shape": SHAPE2},
+                                          "t1": {"shape": SHAPE | {"tokenizer": policy.V3_TOKENIZER}}}}))
     rows = ledger_rows(runs) if index is None else index
     monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(lambda: rows),
                                                                       "root": tmp_path})())
@@ -64,10 +65,12 @@ def run(tmp_path, monkeypatch, runs=RUNS, *extra, index=None) -> tuple[int, dict
 
 
 def dial(d: dict, c: float, k: float) -> tuple[float, str]:
-    """ρ's formula on a row's columns alone, written apart from te_core.formalism: Fit for the training, else Slowdown's
-    bound from u and u_in's points."""
+    """ρ's formula on a row's columns alone, with te_core 4.x's per-part Fit (w_fit_gates) and ᾱ/α_max (alpha_ratio)
+    where the row has them, written apart from te_core.formalism: Fit for the training, else Slowdown's bound from u
+    and u_in's points."""
     s, dg = c / d["w_gates"], d["delta_grad_bits"]
-    if d["delta_bits"] + s * d["tau_bits"] <= k and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
+    s_fit = c / d.get("w_fit_gates", d["w_gates"])
+    if d["delta_bits"] + s_fit * d["tau_bits"] <= k and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
         return c / (c - d["d_gates"]), "fit"
     u, u_in = AP.profile(d["u_points"]), AP.profile(d["u_in_points"])
     x0 = 0.0
@@ -88,7 +91,7 @@ def dial(d: dict, c: float, k: float) -> tuple[float, str]:
             ux = ua if xb == xa else ua + (ub - ua) * (x - xa) / (xb - xa)
             if x > 0 and ux <= k:
                 best = max(best, x * (k - ux))
-    lead = d["sigma"] * (1 - x0) * s
+    lead = d["sigma"] * (1 - x0) * s * d.get("alpha_ratio", 1.0)
     return (1.0 if lead == 0 else max(1.0, lead * d["a_bits"] / best) if best > 0 else math.inf), "target"
 
 
@@ -214,13 +217,13 @@ def test_a_cut_names_the_full_tables_art_id_and_publish_stores_it(tmp_path, monk
 
 
 def test_each_data_has_its_own_envelope_and_a_cut_too_big_for_both_keeps_the_headlines(tmp_path, monkeypatch):
-    """A loss on harness v3's data is no loss on the pilot's: a start's v3 records have their own l0 and H, and their
+    """A loss on harness v3's data is no loss on the pilot's: a v3 start's records have their own l0 and H, and their
     rows say v3; the figure shows v3 once it has rows; a cut whose every-data rows don't fit keeps v3's alone."""
     extra = [("s1", f"lora{i}", "lowrank/lora", "adapter", 8e6, 2e7, None, 0.3, [(1, (4 + i) * 1e15, 1.19)])
              for i in range(6)]
     pilot = ledger_rows(RUNS + extra)
-    v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start_bpb": 1.5 * r["start_bpb"],
-               "val_bpb": 1.5 * r["val_bpb"]} for r in pilot if r["run_id"] == "lora"]
+    v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start": "t1",
+               "start_bpb": 1.5 * r["start_bpb"], "val_bpb": 1.5 * r["val_bpb"]} for r in pilot if r["run_id"] == "lora"]
     code, got = run(tmp_path, monkeypatch, index=pilot + v3)
     p = got["panel"]
     on = [d for d in plots.frame(p) if d["data"] == "v3"]

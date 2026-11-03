@@ -16,7 +16,8 @@ over H is S = p·ρ.
 
 The panel (`COLUMNS`) has one row per run (its run id) and end loss it reaches, taken at that first checkpoint: the
 start (te_core.panels' label, C0 and l0), the end loss, C and p, the inputs ρ is computed from there (`INPUTS`), which
-of those are stubs, bounds, assumptions or estimates rather than measured (`estimated`, from the record's labels: `KINDS`), ρ and its basis at the dial's default
+of those are stubs, bounds, assumptions or estimates rather than measured (`estimated`, from the record's labels:
+`KINDS`), ρ and its basis at the dial's default
 (te_core.panels' `DEFAULT`: c = 4,096 tokens of the start's forward, k = 80,000 bits), and the run's method, family,
 record (run id@step) and data. The route takes at most 24 columns, so H (C/p) and the target (`target`, from l0 and
 the end loss) aren't columns of their own. `page_rho` is the formula the console's dial runs on a row's columns alone,
@@ -122,23 +123,34 @@ def estimated(m: formalism.Measured) -> str:
 
 
 def inputs(m: formalism.Measured, w_fwd: float) -> list:
-    """`INPUTS` for a checkpoint's quantities, d = 0 while unmeasured."""
-    return [m.w, w_fwd, m.sigma, m.tau_bits, m.a_bits, points(m.u), points(m.u_in), m.delta_bits, m.delta_t,
-            m.decoder_gates or 0.0, m.delta_grad_bits]
+    """`INPUTS` for a checkpoint's quantities, d = 0 while unmeasured, u and u_in capped at Δ where Δ counts
+    (te_core.formalism's `capped`), as `formalism.at` reads them wherever d < c, and Δ_grad the one Fit binds on
+    (`Measured.fit_delta_grad_bits`)."""
+    u, u_in = (m.u, m.u_in) if m.delta_bits is None else (formalism.capped(m.u, m.delta_bits),
+                                                          formalism.capped(m.u_in, m.delta_bits))
+    return [m.w, w_fwd, m.sigma, m.tau_bits, m.a_bits, points(u), points(u_in), m.delta_bits, m.delta_t,
+            m.decoder_gates or 0.0, m.fit_delta_grad_bits]
 
 
 def page_rho(d: dict, c: float, k: float) -> tuple[float, str]:
-    """ρ and its basis at (c, k) from a row's columns alone, the formula the console's dial runs (the draft note's):
-    s = c/w; Fit for the training, delta + s·tau <= k, 2·delta_grad <= k and delta_t + delta_grad <= k (a null
-    delta_grad fails), gives c/(c − d); else x0 = the largest x with u_in(x) <= k, s* = max_x x(k − u(x))/a and
-    ρ = max(1, sigma·(1 − x0)·s/s*), infinite where s* is 0 and the rest isn't."""
+    """ρ and its basis at (c, k) from a row's columns alone, the formula the console's dial runs (the draft note's,
+    with te_core 4.x's two terms where a row has them, te_core.panels' candidates: `w_fit_gates`, the least w of a
+    part, which Fit's compute block binds on, else w; and `alpha_ratio`, ᾱ/α_max, else 1): Fit for the training,
+    delta + (c/w_fit)·tau <= k, 2·delta_grad <= k and delta_t + delta_grad <= k (a null delta_grad fails), gives
+    c/(c − d); else s = c/w, x0 = the largest x with u_in(x) <= k, s* = max_x x(k − u(x))/a and
+    ρ = max(1, sigma·(1 − x0)·s·alpha_ratio/s*), infinite where s* is 0 and the rest isn't; where d < c and delta is
+    known, u and u_in are at most delta (the columns already are)."""
     s, dg = c / d["w_gates"], d["delta_grad_bits"]
-    if d["d_gates"] < c and d["delta_bits"] is not None and d["delta_bits"] + s * d["tau_bits"] <= k \
+    s_fit = c / d.get("w_fit_gates", d["w_gates"])
+    if d["d_gates"] < c and d["delta_bits"] is not None and d["delta_bits"] + s_fit * d["tau_bits"] <= k \
             and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
         return c / (c - d["d_gates"]), "fit"
-    x0 = formalism.bottom_share(profile(d["u_in_points"]), k)
-    s_star = formalism.room(profile(d["u_points"]), k) / d["a_bits"]
-    lead = d["sigma"] * (1 - x0) * s
+    u, u_in = profile(d["u_points"]), profile(d["u_in_points"])
+    if d["d_gates"] < c and d["delta_bits"] is not None:
+        u, u_in = formalism.capped(u, d["delta_bits"]), formalism.capped(u_in, d["delta_bits"])
+    x0 = formalism.bottom_share(u_in, k)
+    s_star = formalism.room(u, k) / d["a_bits"]
+    lead = d["sigma"] * (1 - x0) * s * d.get("alpha_ratio", 1.0)
     return max(1.0, lead / s_star if s_star > 0 else math.inf if lead else 0.0), "target"
 
 
@@ -365,7 +377,7 @@ def main(argv=None) -> int:
     scored, _ = plots.load(d["rows"], pin, shapes, d["keep"], d["ladder"])
     source = a.source or (f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}; pin "
                           f"{' + '.join(c[:12] for c in pin)}; {len(scored)} valid checkpoints, quantities "
-                          f"{'rescore_v1' if d['use'] else 'stubs'})")
+                          f"{d['quantities']})")
     p = build(scored, shapes, source)
     full = a.out / f"{NAME}.json"
     full.write_text(json.dumps(p, allow_nan=False) + "\n")
