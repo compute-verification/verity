@@ -11,9 +11,11 @@ import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
 from te_core.capture import CaptureRefused, capture_fn, capture_step, phase
+from te_core.flops import gather_selects
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
+LOOKUP = gather_selects(V) * H  # an updated (tied) table's lookup per token
 
 
 def lm_batch():
@@ -88,15 +90,18 @@ def test_transformer_full_training():
     fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "using"]
     assert [m.upstream for m in fwd] == [0, 0, 0, 3, 4, 5, 6, 6, 6, 9, 10, 11, 12]
     h2, hi = H * H, H * I
-    # each norm with updated gains is a using node of H MACs per token upstream of the GEMMs after it
+    # the updated table's lookup is a using node at position 0, the circuit's gather of its rows (LOOKUP per token); each
+    # norm with updated gains is a using node of H MACs per token upstream of the GEMMs after it
+    lookup, *gains = g.using_elementwise
+    assert lookup.node == "embedding" and lookup.upstream_macs == 0 and lookup.per_token == LOOKUP
     norms = [1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5]
-    assert len(g.using_elementwise) == 2 * L + 1 and all(m.per_token == H for m in g.using_elementwise)
-    assert [m.upstream_macs for m in fwd] == [n * H + u for n, u in zip(norms, [
+    assert len(gains) == 2 * L + 1 and all(m.per_token == H for m in gains)
+    assert [m.upstream_macs for m in fwd] == [LOOKUP + n * H + u for n, u in zip(norms, [
         0, 0, 0, 3 * h2, 4 * h2, 4 * h2 + hi, 4 * h2 + 2 * hi, 4 * h2 + 2 * hi, 4 * h2 + 2 * hi, 7 * h2 + 2 * hi,
         8 * h2 + 2 * hi, 8 * h2 + 3 * hi, 8 * h2 + 4 * hi])]
     head_dx = next(m for m in g.matmuls if m.phase == "backward" and m.role == "using")
     assert head_dx.macs == T * V * H and head_dx.upstream == 13 and head_dx.upstream_fwd == 13
-    assert head_dx.upstream_macs == 8 * h2 + 4 * hi + H * V + 5 * H
+    assert head_dx.upstream_macs == LOOKUP + 8 * h2 + 4 * hi + H * V + 5 * H
     q0 = fwd[0]
     assert q0.params == (None, "blocks.0.q.weight") and q0.token_dims == {"m": ("batch", "seq")} and q0.per_token == h2
     qk = next(m for m in g.matmuls if m.op == "aten.bmm.default")

@@ -1,5 +1,6 @@
 """The `lf` model, learning_frontier's dense decoder: Llama-style (RMSNorm, SwiGLU, RoPE, no biases), context 1024, the GPT-2
-vocabulary padded to 50,304, input and output embeddings tied. Its parameter names are the start registry's tensor names.
+vocabulary padded to 50,304 (data v3's starts: bpe32k's 32,000, `Size.config(vocab=32000)`), input and output embeddings
+tied. Its parameter names are the start registry's tensor names.
 """
 from __future__ import annotations
 
@@ -23,8 +24,8 @@ class Size:
     n_head: int
     d_ff: int
 
-    def config(self) -> dict:
-        return {"family": "lf", **asdict(self), "vocab": VOCAB, "ctx": CTX, "tied": True}
+    def config(self, vocab: int = VOCAB) -> dict:
+        return {"family": "lf", **asdict(self), "vocab": vocab, "ctx": CTX, "tied": True}
 
 
 SIZES = {s.name: s for s in (
