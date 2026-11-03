@@ -46,7 +46,9 @@
 "FIREWALL" = "ZK_SERVER"
 
 # --- sampling design (was law, draw law), in prose: GLOSSARY.md keeps `law` identifiers, record keys and the Lean's
-# `Law`, so the bare word is a word only in Markdown ([[words_in]]) and phrases name it elsewhere
+# `Law`, so the bare word is a word only in Markdown ([[words_in]]) and phrases name it elsewhere (the binders
+# `receipt draw law` of `SampledProofs.Record` are two names, not the phrase)
+"receipt draw law" = "receipt sample law"
 "draw laws" = "sampling designs"
 "draw law" = "sampling design"
 "Draw laws" = "Sampling designs"
