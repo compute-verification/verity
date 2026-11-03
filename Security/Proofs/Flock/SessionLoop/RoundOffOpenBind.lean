@@ -209,6 +209,7 @@ theorem unrefused_open (T : ZKMal.CoinLayer.TableData)
       FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! := by
     rw [hn, Masked.repSlot_eq hsx hz, ← Masked.repBase_eq hsx]
     try dsimp only
+    try omega
   have hρl : ops.length < Masked.rhoSlot x j r := by
     unfold Masked.rhoSlot
     rw [Masked.repSlot_eq hsx hz, eP, ← Masked.repBase_eq hsx]
@@ -402,7 +403,8 @@ theorem runCut_openBody {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.
     rfl
   refine ⟨?_, hbody⟩
   by_contra hge
-  have e := congrArg List.length ((getElem!_neg _ _ hge).symm.trans hbody)
+  have e := congrArg List.length
+    ((getElem!_neg (runCut x c (ligP0 x j r) spec src).2 (ligP0 x j r) hge).symm.trans hbody)
   rw [List.length_append, FlockSoundness.Refine.Frame.enc_length] at e
   exact absurd e (by show ¬ (0 = _); omega)
 
@@ -414,6 +416,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
+open _root_.Flock.Firewall.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 namespace Loop
@@ -747,9 +750,9 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     exact hssz
   have hcoins : (ofLoop Masked.dataE L₁ real).coins x ((m₀, ρ₀) :: ops).length = tr.sch.n := by
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
-    rw [List.length_cons, Nat.add_sub_cancel, hn, Masked.repSlot_eq hsx hz]
-    exact ((loopNr_l0 hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) (i := 0) (Nat.zero_le _)).trans
-      (if_pos rfl)).trans htrz.symm
+    rw [List.length_cons, Nat.add_sub_cancel, hn, Masked.repSlot_eq hsx hz, htrz]
+    exact (loopNr_l0 hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) (i := 0) (Nat.zero_le _)).trans
+      (if_pos rfl)
   rw [ofLoop_scheduled Masked.dataE L₁ real x w (ν, t) (m₀, ρ₀) ops _ hsx (q := i + 1) (by omega) hre hs' hlt', hj1,
     hbody, hcoins] at hck
   obtain ⟨o, hro, ho⟩ := roundFree_openBind ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops))
