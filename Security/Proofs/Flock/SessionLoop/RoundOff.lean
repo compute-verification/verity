@@ -154,9 +154,7 @@ theorem swSrcE_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
       (finS.swViewsAt x C (finS.wt x w) (vs x w ν C) t) j.val).rep r.val).padLeaf =
       Masked.padLeafCut Masked.PE x (Masked.czExe Masked.PE x C)
         (fun j => Masked.viewCut (finS.swViewsAt x C (finS.wt x w) (vs x w ν C) t j)) j r := by
-    first
-    | (simp only [Masked.tabSrcView, Masked.tabSrcCut, Masked.repSrcCut, j.isLt, r.isLt, ↓reduceDIte, Fin.eta]; done)
-    | (simp only [Masked.tabSrcView, Masked.tabSrcCut, Masked.repSrcCut, j.isLt, r.isLt, ↓reduceDIte]; rfl)
+    simp only [Masked.tabSrcView, Masked.tabSrcCut, Masked.repSrcCut, j.isLt, r.isLt, ↓reduceDIte, Fin.eta]
   have hrw : ((finS.C x j).T (finS.cz x C j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν C j)
       (finS.randAt x C t j).1.1 (finS.randAt x C t j).1.2.1 := hrows ν C t j hout
   refine e1.trans (e2.trans (e3.symm.trans ?_))
