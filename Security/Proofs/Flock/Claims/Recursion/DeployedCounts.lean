@@ -36,8 +36,9 @@ condition on `x` beyond `lamLin2_deployedB_ge`'s `hS`, and `hn` from its `hO` (`
 So each staged statement has at most `131072 + 4096 · 65536 · 66 = 17716871168` setup inputs (`deployedSetup_staged_le`),
 the run at most `nS x · 17716871168` (`setupCalls_deployedB_le_cap`), and at `nS x ≤ 2^16` at most `2^55`
 (`setupCalls_deployedB_le_joint`), the call bound `lamLin2_deployedB_ge` charges (`lamLin2_deployedB_ge_joint`). The
-parts are at most `4096` wherever one staged part sets up: they are one a statement of `RecVStar.statements` at the
-verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps (`nS_le_staged`).
+parts are at most `RecBudget.MAX_STATEMENTS = 16` wherever one staged part sets up: they are one a statement of
+`RecVStar.statements` at the verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps
+(`nS_le_staged`).
 -/
 
 set_option Elab.async false
@@ -396,10 +397,11 @@ theorem budget_table_ok {n : RecVStar.Inner} {sts : Array Stmt} (h : RecBudget.t
   · omega
 
 /-- **`RecBudget.statements` at an inner shape**: V\*'s list there, where `RecVStar.statements` returns one, holds at
-most `4096` statements. -/
+most `RecBudget.MAX_STATEMENTS = 16` statements. -/
 theorem budget_statements_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
-    (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) : ss.size ≤ 4096 := by
-  have hS : RecBudget.MAX_STATEMENTS = 4096 := rfl
+    (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
+    ss.size ≤ RecBudget.MAX_STATEMENTS := by
+  have hS : RecBudget.MAX_STATEMENTS = 16 := rfl
   unfold RecBudget.statements at h
   dsimp only at h
   rw [hss] at h
@@ -459,11 +461,12 @@ theorem regSize_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ}
   obtain ⟨hsz, hdep⟩ := budget_regs_ok hR
   exact ⟨fun reg hreg => by have := hdep reg hreg; omega, by omega⟩
 
-/-- **`x` has at most `4096` V\* parts wherever one staged part sets up**: the parts are one a statement of V\*'s list at
-the verifier's inner shape (`readX_listed`), which the setup's `RecBudget.statements` holds to `4096` (`insO_staged`: the
-setup's inner shape is `x`'s). -/
+/-- **`x` has at most `RecBudget.MAX_STATEMENTS = 16` V\* parts wherever one staged part sets up**: the parts are one a
+statement of V\*'s list at the verifier's inner shape (`readX_listed`), which the setup's `RecBudget.statements` holds
+to `MAX_STATEMENTS` (`insO_staged`: the setup's inner shape is `x`'s). -/
 theorem nS_le_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns} {spec : SessionSpec}
-    {sts : Array Stmt} (hs : setupO (staged st x ms s) = some (i, spec, sts)) : nS x ≤ 4096 := by
+    {sts : Array Stmt} (hs : setupO (staged st x ms s) = some (i, spec, sts)) :
+    nS x ≤ RecBudget.MAX_STATEMENTS := by
   obtain ⟨hins, hset⟩ := setupO_some hs
   obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
   obtain ⟨vs, hvs, hlen, -⟩ := readX_listed hr
@@ -473,14 +476,15 @@ theorem nS_le_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {
   rw [hn, hlen]
   exact budget_statements_ok hB hvs
 
-/-- **`hn` from `hO`**: where every staged part is in scope (`PartIn`, whose setup passes), `x` has at most `2^16` V\*
-parts (`nS_le_staged` at part 0, or none). -/
+/-- **`hn` from `hO`**: where every staged part is in scope (`PartIn`, whose setup passes), `x` has at most
+`RecBudget.MAX_STATEMENTS = 16` V\* parts (`nS_le_staged` at part 0, or none). -/
 theorem nS_le_of_partIn {st : Stage} {x : Msg}
-    (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts') : nS x ≤ 2 ^ 16 := by
+    (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts') :
+    nS x ≤ RecBudget.MAX_STATEMENTS := by
   rcases Nat.eq_zero_or_pos (nS x) with h0 | hpos
   · rw [h0]; exact Nat.zero_le _
   · obtain ⟨i, spec', sts', hp⟩ := hO 0 hpos
-    exact (nS_le_staged hp.setup).trans (by norm_num)
+    exact nS_le_staged hp.setup
 
 theorem mem_vstar_staged {st : Stage} {x : Msg} {ps : List (Msg × Out)} {xO : Msg} (h : xO ∈ vstar st x ps) :
     ∃ ms s, xO = staged st x ms s := by
@@ -561,8 +565,8 @@ What is left, none a hash premise or a statement about the prover: `hU`, the cla
 queries); `hO` (the scope condition `PartIn` at each staged part, which the verifier's own `setupO` evaluates on the
 staged public statement) and `hin` (the inner statement's plain setup); and `hS` (the inner setup at most `2^56` hm96
 inputs), a deployment-size condition read off `x`. The V\* parts' count needs none: they are one a statement of
-`RecVStar.statements` at the verifier's inner shape, which `RecBudget.statements` refuses past `4096` (`nS_le_of_partIn`,
-from `hO`). The registrations need none either: the verifier refuses a V\* session's registration of more than
+`RecVStar.statements` at the verifier's inner shape, which `RecBudget.statements` refuses past `MAX_STATEMENTS = 16`
+(`nS_le_of_partIn`, from `hO`). The registrations need none either: the verifier refuses a V\* session's registration of more than
 `4096` ports or a tree of more than `64` levels and a table of more than `65536` instances (`RecBudget`), and the
 tables (one, `RecSetup.oneFull`), statements with public inputs (`setupTables_counts`) and check 5's query count
 (`q < 256`, `fast100`'s, a verifier constant) need no hypothesis either. -/
@@ -584,7 +588,7 @@ theorem lamLin2_deployedB_ge_joint (rel : _root_.Flock.Readable.Parsed → _root
       (recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
       ((recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar).vstar x
         ps)).length ≤ 2 ^ 55 :=
-  have hn := nS_le_of_partIn hO
+  have hn : nS x ≤ 2 ^ 16 := (nS_le_of_partIn hO).trans (by decide)
   ⟨lamLin2_deployedB_ge rel b L nextE colsE wE join rowIn final w decI hin hO hn hS hU,
     setupCalls_deployedB_le_joint rel b L _ H x ps hn⟩
 
