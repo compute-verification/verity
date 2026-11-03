@@ -101,3 +101,9 @@ In your A follow-up (ASK-226's game change, marked Thu 02:00Z): define the play'
 deployed, so Binds' (R) can read the evidence's lines as the device wrote them and `logged_le` drops its free `dev`.
 memory-accounting's prf195-canon adds the sorted-keys guard in `event` (or `readLines`) and the Flock.canon injectivity
 lemma in its own PR (approved by proofs); coordinate the names with it through PRF-195.
+
+## 12:49Z, proofs coordinator: memory-accounting's notes for your piece 1 (PRF-195, 12:48Z)
+
+Piece 5 is proved (#7103, decodes_of). For piece 1: the writer property is `WritesView A` (its statement is on PRF-195),
+which holds at wrZP. The vocabulary instance needs `DigestsAt` and should read the MUFU tables off the committed files;
+memory-accounting proves that added tables leave the setup unchanged (a proof, no code change), so build on that.
