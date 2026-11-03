@@ -1,12 +1,14 @@
 """The training-step frontend (`program.frontend.train_step`, `derive_graph`, the training rules): each training rule's Program run
-against torch on small CPU tensors, bit for bit where the rule states torch CPU's own f32 operation and to a tolerance where the
-reference vocabulary's arithmetic is its own (sequential sums, a correctly rounded exp); the functional AdamW against
-`torch.optim.AdamW(foreach=False)`; `BoxPermute` against torch's permute; and the lf model's s step derived in reference mode,
-which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
+on small CPU tensors of even and odd lengths, bit for bit against torch where the rule states torch CPU's own f32 operation, and
+where the reference vocabulary's arithmetic is its own (sequential sums, a correctly rounded exp) bit for bit against the rule's
+stated arithmetic, composed from the evaluators of the Definitions it names, and to a tolerance against torch; the functional AdamW
+against `torch.optim.AdamW(foreach=False)`; `BoxPermute` against torch's permute; and the lf model's s step derived in reference
+mode, which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
 
 import bisect
 import functools
+import math
 
 import numpy as np
 import pytest
@@ -16,11 +18,14 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity.ml.circuits.boundary import gate_width
+from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.parts import Part, n_members
 from verity.ml.circuits.program import is_input
 from verity.ml.circuits.query_ast import GateSet, evaluate, parse
 from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.errors import FrontendError
@@ -84,34 +89,54 @@ def _data(*shape, positive=False, seed=0) -> torch.Tensor:
     return x.abs() + 1e-3 if positive else x
 
 
+def _masked(x: torch.Tensor) -> torch.Tensor:
+    """`x` with its first row -inf throughout and its second causal (-inf after its first two elements)."""
+    x = x.clone()
+    x[0] = float("-inf")
+    x[1, 2:] = float("-inf")
+    return x
+
+
 X, Y = _data(4, 16), _data(4, 16, seed=1)
 POS = _data(4, 16, positive=True, seed=2)
 ROW, COL = _data(16, seed=3), _data(4, 1, seed=4)
+#: odd lengths, where torch's vectorized loops end in a scalar tail: 67 elements, and rows of 67
+X67, Y67, POS67 = _data(67, seed=8), _data(67, seed=9), _data(67, positive=True, seed=10)
+M67, N67, ROW67, COL3 = _data(3, 67, seed=11), _data(3, 67, seed=12), _data(67, seed=13), _data(3, 1, seed=14)
 
-#: the element-wise rules torch CPU computes with the same f32 operations: bit for bit
+
+def _elementwise(x, y, pos, m, row, col) -> dict:
+    """The element-wise cases on one set of inputs: `pos` positive, `m` a matrix that `row` and `col` broadcast against."""
+    return {
+        "add": (lambda a, b: (a + b,), (x, y)),
+        "sub": (lambda a, b: (a - b,), (x, y)),
+        "mul": (lambda a, b: (a * b,), (x, y)),
+        "div": (lambda a, b: (a / b,), (x, pos)),
+        "add_scalar": (lambda a: (a + 0.1,), (x,)),
+        "mul_scalar": (lambda a: (a * 0.3,), (x,)),
+        "div_scalar": (lambda a: (a / 3.0,), (x,)),
+        "mul_row": (lambda a, r: (a * r,), (m, row)),
+        "mul_col": (lambda a, c: (a * c,), (m, col)),
+        "neg": (lambda a: (-a,), (x,)),
+        "sqrt": (lambda a: (torch.sqrt(a),), (pos,)),
+        "rsqrt": (lambda a: (torch.rsqrt(a),), (pos,)),
+        "reciprocal": (lambda a: (torch.reciprocal(a),), (pos,)),
+        "pow2": (lambda a: (a ** 2,), (x,)),
+        "pow3": (lambda a: (a ** 3,), (x,)),
+        "pow_half": (lambda a: (a ** 0.5,), (pos,)),
+        "pow_m_half": (lambda a: (a ** -0.5,), (pos,)),
+        "pow_m1": (lambda a: (a ** -1,), (pos,)),
+        "pow_m2": (lambda a: (a ** -2,), (pos,)),
+        "lerp_small": (lambda a, b: (torch.lerp(a, b, 0.1),), (x, y)),
+        "lerp_large": (lambda a, b: (torch.lerp(a, b, 0.9),), (x, y)),
+        "addcmul": (lambda a, b, c: (torch.addcmul(a, b, c, value=0.05),), (x, y, pos)),
+    }
+
+
+#: the rules torch CPU computes with the same f32 operations: bit for bit
 EXACT = {
-    "add": (lambda x, y: (x + y,), (X, Y)),
-    "sub": (lambda x, y: (x - y,), (X, Y)),
-    "mul": (lambda x, y: (x * y,), (X, Y)),
-    "div": (lambda x, y: (x / y,), (X, POS)),
-    "add_scalar": (lambda x: (x + 0.1,), (X,)),
-    "mul_scalar": (lambda x: (x * 0.3,), (X,)),
-    "div_scalar": (lambda x: (x / 3.0,), (X,)),
-    "mul_row": (lambda x, r: (x * r,), (X, ROW)),
-    "mul_col": (lambda x, c: (x * c,), (X, COL)),
-    "neg": (lambda x: (-x,), (X,)),
-    "sqrt": (lambda x: (torch.sqrt(x),), (POS,)),
-    "rsqrt": (lambda x: (torch.rsqrt(x),), (POS,)),
-    "reciprocal": (lambda x: (torch.reciprocal(x),), (POS,)),
-    "pow2": (lambda x: (x ** 2,), (X,)),
-    "pow3": (lambda x: (x ** 3,), (X,)),
-    "pow_half": (lambda x: (x ** 0.5,), (POS,)),
-    "pow_m_half": (lambda x: (x ** -0.5,), (POS,)),
-    "pow_m1": (lambda x: (x ** -1,), (POS,)),
-    "pow_m2": (lambda x: (x ** -2,), (POS,)),
-    "lerp_small": (lambda x, y: (torch.lerp(x, y, 0.1),), (X, Y)),
-    "lerp_large": (lambda x, y: (torch.lerp(x, y, 0.9),), (X, Y)),
-    "addcmul": (lambda x, y, z: (torch.addcmul(x, y, z, value=0.05),), (X, Y, POS)),
+    **_elementwise(X, Y, POS, X, ROW, COL),
+    **{f"{k}_67": case for k, case in _elementwise(X67, Y67, POS67, M67, ROW67, COL3).items()},
     "nll_backward": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 1, -100, tw),),
                      (torch.tensor(1.0), X, torch.tensor([3, 0, 15, 7]), torch.tensor(4.0))),
     "nll_backward_ignored": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 1, 0, tw),),
@@ -120,26 +145,156 @@ EXACT = {
                                   (torch.tensor(1.0), X, torch.tensor([3, -100, 15, 7]), torch.tensor(3.0))),
     "embedding_backward": (lambda g, i: (aten.embedding_dense_backward(g, i, 6, -1, False),),
                            (X, torch.tensor([2, 5, 2, 0]))),
+    "embedding_backward_67": (lambda g, i: (aten.embedding_dense_backward(g, i, 6, -1, False),), (M67, torch.tensor([2, 5, 2]))),
     "permute_of_concat": (lambda x, y: ((torch.cat([x, y], dim=1).t() * 2.0),), (X, Y)),
 }
 
-#: the rules whose reference arithmetic is the vocabulary's own (a sequential sum, a correctly rounded exp, a dot by fma)
+
+def _f32(v: float) -> int:
+    return int(np.float32(v).view(np.uint32))
+
+
+ONE, NEG_ONE, NEG_INF = _f32(1.0), _f32(-1.0), 0xFF800000
+
+
+def _rows_of(x: torch.Tensor) -> list[list[int]]:
+    return [_bits(r) for r in x.reshape(-1, x.shape[-1])]
+
+
+def _dot(x: list[int], w: list[int]) -> int:
+    """`DotRef_v1{K}`: acc = +0, then acc = `F32Fma_v1(x[k], w[k], acc)` for k ascending."""
+    acc = 0
+    for a, b in zip(x, w, strict=True):
+        acc = P.F32Fma.evaluate(a, b, acc)
+    return acc
+
+
+def _softmax_row(x: list[int]) -> list[int]:
+    """`SoftmaxRef_v1{N,f32}`: m an `F32MaxRef_v1` fold from x[0]; e_i = `F32ExpRn_v1(F32Sub_v1(x_i, m))`; s = +0, then
+    `F32Add_v1(s, e_i)` ascending; r = `F32Div_v1(1, s)`; `F32Mul_v1(e_i, r)`."""
+    m = x[0]
+    for v in x[1:]:
+        m = R.F32MaxRef.evaluate(m, v)
+    e = [R.F32ExpRn.evaluate(R.F32Sub.evaluate(v, m)) for v in x]
+    s = 0
+    for v in e:
+        s = P.F32Add.evaluate(s, v)
+    r = P.F32Div.evaluate(ONE, s)
+    return [P.F32Mul.evaluate(v, r) for v in e]
+
+
+def _reduce(dims=None, mean=False):
+    """`Reduce`: the reduced axes moved last, a `DotRef` against ones per kept element; `mean` then `F32Div_v1` by f32(N)."""
+    def ref(x):
+        r = x.dim()
+        ds = sorted({d % r for d in dims}) if dims else list(range(r))
+        n = math.prod(x.shape[a] for a in ds)
+        sums = [_dot(row, [ONE] * n) for row in _rows_of(x.permute([a for a in range(r) if a not in ds] + ds).reshape(-1, n))]
+        return [P.F32Div.evaluate(s, _f32(float(n))) for s in sums] if mean else sums
+    return ref
+
+
+def _mm(a, b):
+    """`Matmul` in reference mode, `LinearRef_v1{K,N,f32}` per row of `a`: out[m][n] = `DotRef(a[m, :], b[:, n])`."""
+    return [_dot(row, col) for row in _rows_of(a) for col in _rows_of(b.t())]
+
+
+def _exp_scaled(x):
+    """`exp(x * 0.01)`: `F32ExpRn_v1(F32Mul_v1(x, f32(0.01)))`."""
+    return [R.F32ExpRn.evaluate(P.F32Mul.evaluate(v, _f32(0.01))) for v in _bits(x)]
+
+
+def _sigmoid(x):
+    """`Unary`'s sigmoid: `F32Div_v1(1, F32Add_v1(F32ExpRn_v1(F32Neg_v1(x)), 1))`."""
+    return [P.F32Div.evaluate(ONE, P.F32Add.evaluate(R.F32ExpRn.evaluate(SC.F32Neg.evaluate(v)), ONE)) for v in _bits(x)]
+
+
+def _safe_softmax(x):
+    """`SafeSoftmax`: a row of `SoftmaxRef`, or +0 throughout where its `F32Eq_v1` against -inf, folded by `BitAnd_v1`, holds
+    (`SelectF32_v1`)."""
+    out = []
+    for row in _rows_of(x):
+        dead = 1
+        for v in row:
+            dead = SC.BitAnd.evaluate(dead, SC.F32Eq.evaluate(v, NEG_INF))
+        out += [SC.SelectF32.evaluate(dead, 0, w) for w in _softmax_row(row)]
+    return out
+
+
+def _softmax_backward(g, y):
+    """`SoftmaxBackward`: per row d = `DotRef(g, y)`, then `F32Mul_v1(y_i, F32Sub_v1(g_i, d))`."""
+    out = []
+    for gr, yr in zip(_rows_of(g), _rows_of(y), strict=True):
+        d = _dot(gr, yr)
+        out += [P.F32Mul.evaluate(b, R.F32Sub.evaluate(a, d)) for a, b in zip(gr, yr)]
+    return out
+
+
+def _log_softmax_backward(g, y):
+    """`LogSoftmaxBackward`: per row s = `DotRef(g, ones)`, then `F32Sub_v1(g_i, F32Mul_v1(F32ExpRn_v1(y_i), s))`."""
+    out = []
+    for gr, yr in zip(_rows_of(g), _rows_of(y), strict=True):
+        s = _dot(gr, [ONE] * len(gr))
+        out += [R.F32Sub.evaluate(a, P.F32Mul.evaluate(R.F32ExpRn.evaluate(b), s)) for a, b in zip(gr, yr)]
+    return out
+
+
+def _nll_forward(ignore: int):
+    """`NllLossForward`: per row the target (`I64ToI32_v1`) and its entry (`GatherF32x{V}_v1`), +0 where the target is `ignore`
+    (`I32Eq_v1`, `SelectF32_v1`), the loss `F32Div_v1(DotRef(entries, -1s), DotRef(weights, ones))` and that count."""
+    def ref(logp, t):
+        rows = _rows_of(logp)
+        toks = [R.I64ToI32.evaluate(k & (1 << 64) - 1) for k in t.tolist()]
+        ign = [SC.I32Eq.evaluate(k, ignore & 0xFFFFFFFF) for k in toks]
+        picked = [SC.SelectF32.evaluate(i, 0, R.gather_f32(len(r)).evaluate(k, *r)) for i, k, r in zip(ign, toks, rows, strict=True)]
+        cnt = _dot([SC.SelectF32.evaluate(i, 0, ONE) for i in ign], [ONE] * len(rows))
+        return [P.F32Div.evaluate(_dot(picked, [NEG_ONE] * len(rows)), cnt), cnt]
+    return ref
+
+
+#: the rules whose reference arithmetic is the vocabulary's own (a sequential sum, a correctly rounded exp, a dot by fma), each with
+#: its stated arithmetic composed from the evaluators of the Definitions it names
 CLOSE = {
-    "exp": (lambda x: (torch.exp(x * 0.01),), (X,)),
-    "sigmoid": (lambda x: (torch.sigmoid(x),), (X,)),
-    "sum_last": (lambda x: (x.sum(-1),), (X,)),
-    "mean_last": (lambda x: (x.mean(-1, keepdim=True),), (X,)),
-    "sum_first": (lambda x: (x.sum(0),), (X,)),
-    "sum_no_dims": (lambda x: (aten.sum.dim_IntList(x, []),), (X,)),
-    "sum_all": (lambda x: (x.sum(),), (X,)),
-    "mean_all": (lambda x: (x.mean(),), (X,)),
-    "mm": (lambda a, b: (a @ b,), (X, _data(16, 8, seed=5))),
-    "bmm": (lambda a, b: (torch.bmm(a, b),), (_data(2, 4, 16, seed=6), _data(2, 16, 4, seed=7))),
-    "safe_softmax": (lambda x: (aten._safe_softmax(x, -1),), (X,)),
-    "softmax_backward": (lambda g, y: (aten._softmax_backward_data(g, y, -1, torch.float32),), (Y, torch.softmax(X, -1))),
+    "exp": (lambda x: (torch.exp(x * 0.01),), (X,), _exp_scaled),
+    "exp_67": (lambda x: (torch.exp(x * 0.01),), (X67,), _exp_scaled),
+    "sigmoid": (lambda x: (torch.sigmoid(x),), (X,), _sigmoid),
+    "sigmoid_67": (lambda x: (torch.sigmoid(x),), (X67,), _sigmoid),
+    "sum_last": (lambda x: (x.sum(-1),), (X,), _reduce([-1])),
+    "sum_last_67": (lambda x: (x.sum(-1),), (M67,), _reduce([-1])),
+    "mean_last": (lambda x: (x.mean(-1, keepdim=True),), (X,), _reduce([-1], mean=True)),
+    "mean_last_67": (lambda x: (x.mean(-1, keepdim=True),), (_data(16, 67, seed=19),), _reduce([-1], mean=True)),
+    "sum_first": (lambda x: (x.sum(0),), (X,), _reduce([0])),
+    "sum_first_67": (lambda x: (x.sum(0),), (M67,), _reduce([0])),
+    "sum_no_dims": (lambda x: (aten.sum.dim_IntList(x, []),), (X,), _reduce()),
+    "sum_all": (lambda x: (x.sum(),), (X,), _reduce()),
+    "sum_all_67": (lambda x: (x.sum(),), (X67,), _reduce()),
+    "mean_all": (lambda x: (x.mean(),), (X,), _reduce(mean=True)),
+    "mean_all_67": (lambda x: (x.mean(),), (M67,), _reduce(mean=True)),
+    "mm": (lambda a, b: (a @ b,), (X, _data(16, 8, seed=5)), _mm),
+    "mm_67": (lambda a, b: (a @ b,), (M67, _data(67, 5, seed=15)), _mm),
+    "bmm": (lambda a, b: (torch.bmm(a, b),), (_data(2, 4, 16, seed=6), _data(2, 16, 4, seed=7)),
+            lambda a, b: [w for i in range(a.shape[0]) for w in _mm(a[i], b[i])]),
+    "bmm_67": (lambda a, b: (torch.bmm(a, b),), (_data(2, 3, 67, seed=16), _data(2, 67, 5, seed=17)),
+               lambda a, b: [w for i in range(a.shape[0]) for w in _mm(a[i], b[i])]),
+    "safe_softmax": (lambda x: (aten._safe_softmax(x, -1),), (X,), _safe_softmax),
+    "safe_softmax_masked": (lambda x: (aten._safe_softmax(x, -1),), (_masked(X),), _safe_softmax),
+    "safe_softmax_masked_67": (lambda x: (aten._safe_softmax(x, -1),), (_masked(M67),), _safe_softmax),
+    "softmax_backward": (lambda g, y: (aten._softmax_backward_data(g, y, -1, torch.float32),), (Y, torch.softmax(X, -1)),
+                         _softmax_backward),
+    "softmax_backward_67": (lambda g, y: (aten._softmax_backward_data(g, y, -1, torch.float32),), (N67, torch.softmax(M67, -1)),
+                            _softmax_backward),
+    # y of flipped rows, so that `_data`'s 3e7 is not at one place of g and y: there the output is 3e7 less the row's sum, which
+    # the sums' orders decide past any relative tolerance
     "log_softmax_backward": (lambda g, y: (aten._log_softmax_backward_data(g, y, -1, torch.float32),),
-                             (Y, torch.log_softmax(X, -1))),
-    "nll_forward": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 1, -100), (X, torch.tensor([3, 0, 15, 7]))),
+                             (Y, torch.log_softmax(X.flip(-1), -1)), _log_softmax_backward),
+    "log_softmax_backward_67": (lambda g, y: (aten._log_softmax_backward_data(g, y, -1, torch.float32),),
+                                (N67, torch.log_softmax(M67.flip(-1), -1)), _log_softmax_backward),
+    "nll_forward": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 1, -100), (X, torch.tensor([3, 0, 15, 7])),
+                    _nll_forward(-100)),
+    "nll_forward_ignored": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 1, 0), (X, torch.tensor([3, 0, 15, 0])),
+                            _nll_forward(0)),
+    "nll_forward_67": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 1, -100),
+                       (_data(5, 67, seed=18), torch.tensor([3, -100, 66, 7, 0])), _nll_forward(-100)),
 }
 
 
@@ -149,10 +304,25 @@ def test_rule_bit_exact(name: str) -> None:
     _same_bits(*_run(f, *xs))
 
 
+@functools.cache
+def _close(name: str) -> tuple[torch.Tensor, torch.Tensor]:
+    f, xs, _ref = CLOSE[name]
+    return _run(f, *xs)
+
+
+@pytest.mark.parametrize("name", sorted(CLOSE))
+def test_rule_is_its_stated_arithmetic(name: str) -> None:
+    """A rule of the vocabulary's own arithmetic is that arithmetic bit for bit: its stated formula, composed from the evaluators
+    of the Definitions it names in its stated order. A tolerance against torch can't tell a summation order, an fma from a
+    multiply and an add, a reciprocal's product from a division, or a dropped mask, from the stated arithmetic."""
+    _f, xs, ref = CLOSE[name]
+    want = torch.from_numpy(np.array(ref(*xs), dtype=np.uint32).view(np.float32).copy())
+    _same_bits(_close(name)[0], want)
+
+
 @pytest.mark.parametrize("name", sorted(CLOSE))
 def test_rule_close(name: str) -> None:
-    f, xs = CLOSE[name]
-    got, want = _run(f, *xs)
+    got, want = _close(name)
     torch.testing.assert_close(got, want, rtol=2e-6, atol=1e-6)
 
 
@@ -163,10 +333,10 @@ def test_log_softmax_refused_with_the_definition_it_needs() -> None:
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and "F32LogRn" in u.hint, u
 
 
-def _adamw_inputs(seed: int = 0):
+def _adamw_inputs(seed: int = 0, n: int = 64):
     g = torch.Generator().manual_seed(seed)
-    p, grad, m = (torch.randn(64, generator=g) for _ in range(3))
-    v = torch.rand(64, generator=g) * 1e-3
+    p, grad, m = (torch.randn(n, generator=g) for _ in range(3))
+    v = torch.rand(n, generator=g) * 1e-3
     return p, grad, m, v
 
 
@@ -189,11 +359,12 @@ def test_functional_adamw_is_torch_adamw() -> None:
             _same_bits(got, want)
 
 
-def test_adamw_update_program_bit_exact() -> None:
+@pytest.mark.parametrize("n", [64, 67])
+def test_adamw_update_program_bit_exact(n: int) -> None:
     """The derived optimizer update (decoupled decay, lerp, addcmul, sqrt, division, addcdiv) is torch's (with IEEE sqrt), word for
     word."""
     f = AdamW(**ADAMW)
-    p, grad, m, v = _adamw_inputs(1)
+    p, grad, m, v = _adamw_inputs(1, n)
     s = [torch.tensor(x, dtype=torch.float32) for x in f.scalars(1).values()]
     _same_bits(*_run(lambda *a: f.update(*a), p, grad, m, v, *s))
 
