@@ -438,12 +438,35 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     c = subprocess.run([sys.executable, "-c", console], cwd=RESCORE_WT / "benchmarks" / "covert_witness",
                        capture_output=True, text=True, check=False)
     res["console"] = json.loads(c.stdout) if not c.returncode else None
+    table = d / "tables" / "algorithm-policy.json"
+    art = re.search(r"\((art:\w+)\)", board or "")
+    c = subprocess.run([sys.executable, "-c", CONSOLE_COVERAGE, str(table), now(), art[1] if art else ""],
+                       cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
+                       check=False) if table.exists() else None
+    res["coverage_console"] = (json.loads(c.stdout.strip().splitlines()[-1]) if c and not c.returncode else
+                               {"error": (c.stderr.strip().splitlines() or ["rc"])[-1][:200]} if c else None)
     return res
 
 
 #: what training/algorithm-policy's console copy carries once frontier-branches is no longer PUT, only stored
 #: (coordinator 05:22Z and 07:48Z)
 FB_SUCCESSOR = ("gain", "gain_target", "start_effective_gates")
+#: the coverage at the console default (coordinator 11:46Z): te_core.algorithm_policy's own on its uncut table, each
+#: row's rho_console in rho_default's place ("inf" infinite; a null one, unmeasured, in no cell); argv: the table,
+#: the stamp and the tables art
+CONSOLE_COVERAGE = """
+import json, math, sys
+from te_core import algorithm_policy as a
+p = json.load(open(sys.argv[1]))
+c = p["columns"]
+i, j, d = c.index("rho_default"), c.index("rho_console"), c.index("data")
+null = sum(r[j] is None for r in p["rows"])
+p["rows"] = [r[:i] + [math.inf if r[j] == "inf" else r[j]] + r[i + 1:] for r in p["rows"] if r[j] is not None]
+cov = a.coverage(p)
+line = a.board_line(cov, {r[d]: True for r in p["rows"]}, sys.argv[2], sys.argv[3] or None)
+print(json.dumps({"line": line.replace("decade of rho_default", "decade of rho_console"), "unmeasured": null,
+                  "empty": sum(x["state"] == "empty" for x in cov), "cells": len(cov)}))
+"""
 FB_RETIRED = ("training/algorithm-policy is PUT with " + ", ".join(FB_SUCCESSOR)
               + " on its rows; frontier-branches is in the evidence store only")
 
@@ -573,8 +596,8 @@ def main() -> int:
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
         meta["algorithm_policy"] = {k: v for k, v in policy.items()
-                                    if k not in ("coverage", "ladder", "ladder_used", "console")}
-        meta["console"] = policy.get("console")
+                                    if k not in ("coverage", "ladder", "ladder_used", "console", "coverage_console")}
+        meta["console"], meta["coverage_console"] = policy.get("console"), policy.get("coverage_console")
         if "ladder" in policy:
             meta["ladder_points"], meta["ladder_used"] = policy["ladder"], policy.get("ladder_used")
         apc = out / "algorithm-policy" / "console" / "algorithm-policy.json"
@@ -654,6 +677,13 @@ def main() -> int:
            f"coverage (te_core.algorithm_policy, te_core {meta['te_core_version']}: gain size by decade of ρ, the "
            f"frontier point or the best failed attempt in each cell; tables art {ids.get('tables', '–')[:16]}): "
            + "; ".join(said) + "." if said else None)
+    cc = meta.get("coverage_console") or {}
+    if cc.get("line"):
+        ck = meta.get("console")
+        at = f" (c = {ck[0]:.6g} gates, k = {ck[1]:,.0f} bits)" if ck else ""
+        cov = ((cov + " " if cov else "") + f"At the console default{at}, reading A rows at max(1, the measured "
+               f"kinds) and reading B rows at the token form, a target, {cc['unmeasured']} rows unmeasured (null) in "
+               f"no cell: {cc['line']}")
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
