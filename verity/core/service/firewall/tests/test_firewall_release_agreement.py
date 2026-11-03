@@ -46,7 +46,7 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 
 def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop"}
     return v["cases"]
 
 

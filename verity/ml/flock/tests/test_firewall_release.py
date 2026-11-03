@@ -319,10 +319,11 @@ def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
     recursive session released whole, statements that can't be one's), the budget, unended recursive sessions reaching
-    it, an honest stream that never does, the schedule, and strings Python escapes. ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
-    read and write one record."""
+    it, an honest stream that never does, the schedule, strings Python escapes, and no stop of a session not yet opened
+    (by ``stop``, or of a slot's holder that died), so that each stop counts against its stream. ``core_firewall``'s
+    ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers read and write one record."""
     v = json.loads(VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]
@@ -376,7 +377,7 @@ def _serve(tmp_path, sessions, fw, **kw):
         try:
             got["res"] = RL.serve("127.0.0.1:0", tmp_path / "inner", T._counter_rand(), sessions=sessions,
                                   schedule=G._schedule(), ready=lambda a: (got.update(addr=a), bound.set()), firewall=fw,
-                                  stream="pouw", **{"parts": PARTS, **kw})
+                                  stream="pouw", **{"parts": PARTS, "budget": FW.BUDGET_MIN, **kw})
         except Exception as e:  # noqa: BLE001 - kept as text, so that no frame keeps serve's connection open
             got["error"] = f"{type(e).__name__}: {e}"
         finally:
@@ -413,18 +414,26 @@ def test_an_inner_stop_ends_the_recursive_session(tmp_path):
     assert fw.failures("pouw") == 1
 
 
-def test_serve_opens_each_recursive_session_with_the_streams_budget_and_its_public_schedule(tmp_path):
+def test_serve_opens_each_recursive_session_with_the_streams_budget_and_its_public_schedule(tmp_path, capsys):
     """`rec_live.serve` opens each recursive session with its statements in their order, the stream's ``budget`` and the
     public windows, the schedule starting when the connection was accepted (``now_ms``, injected); once the stream's
     unended recursive sessions and its failures reach its budget (here one stopped at its inner session and two finished),
-    the next connection is closed before anything is served, and ``serve`` returns. A budget below 3 is refused before
-    ``serve`` listens."""
+    the next connection is closed before anything is served, and ``serve`` returns. No budget, or one below 3, is refused
+    before ``serve`` listens, and ``--firewall`` without ``--budget`` before ``main`` serves: a stream without a budget
+    bounds none of its recursive sessions."""
     fw = FW.Firewall(tmp_path / "fw")
     windows = {"windows_ms": [12000, 28000]}
     with pytest.raises(ValueError, match=r"statements in their order \(parts\)"):
         RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw)
+    with pytest.raises(ValueError, match=r"opens its stream with a failure budget \(budget, at least 3\)"):
+        RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw, parts=["L0"])
     with pytest.raises(ValueError, match="a failure budget is an integer of at least 3, not 2"):
         RL.serve("127.0.0.1:0", tmp_path / "x", schedule=G._schedule(), firewall=fw, parts=["L0"], budget=2)
+    with pytest.raises(SystemExit) as e:
+        RL.main(["--out", str(tmp_path / "x"), "--schedule", str(tmp_path / "none.json"), "--firewall", str(tmp_path / "fw"),
+                 "--parts", "L0"])
+    assert e.value.code == 2 and "--firewall needs --budget" in capsys.readouterr().err
+    assert not (tmp_path / "x").exists() and fw.record() == []
     t, got = _serve(tmp_path, 4, fw, parts=["L0", "alg"], budget=3, release=windows, now_ms=lambda: 1234)
     w = G._Wire(got["addr"])
     assert not G._held(G._run(w, y=bytes(48)))
