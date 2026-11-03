@@ -21,7 +21,8 @@ Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
   in every step, then each group's coordinates on a 2^q-level grid with a bf16 scale; the gradient crosses back in the
   same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates; `q4o4`: each
   token's 4 largest coordinates go apart at bf16 with their indices, and the rest is coded with its own scale; `q4m`: the
-  state coded about the boundary's running mean from earlier batches, on the Gaussian grid). Training sees only the coded
+  state coded about the boundary's running mean from earlier batches, on the Gaussian grid; `q2b2s`: the gradient
+  stochastically rounded on a grid scaled by its RMS, clipped beyond the end levels). Training sees only the coded
   state; the evaluator scores the uncoded model, and the probe windows are scored both ways.
 - `--cut B:dq2,...`: the forward codes only the update's effect h - h_frozen at B; h_frozen, θ's residual for the same
   tokens, comes from frozen copies of the trained blocks (the receiving side recomputes it from the token's data), and
@@ -200,15 +201,24 @@ def fresh_rotation(d: int, seed: int, device) -> torch.Tensor:
 GAUSS_STEP = {1: 1.596, 2: 0.9957, 3: 0.5860, 4: 0.3352, 5: 0.1881, 6: 0.1041, 7: 0.0569, 8: 0.0308}
 #: The widths whose plain code scales by GAUSS_STEP; wider plain codes scale by the absmax (an `m` code: every width).
 GAUSS_PLAIN = (1, 2, 3)
+#: The step minimizing a unit Gaussian's mean squared error under stochastic rounding onto the mid-rise grid, clipped
+#: at the end levels (numerically, 4M draws): 0.18 at 2 bits against the absmax grid's 0.82 for a 512-vector.
+STOCH_STEP = {1: 1.289, 2: 0.8409, 3: 0.5274, 4: 0.3085, 5: 0.1742, 6: 0.0996, 7: 0.0548, 8: 0.0299}
 
 
 def quantize(y: torch.Tensor, bits: int, group: int, stochastic: bool, gauss: bool = False) -> torch.Tensor:
     """Each group of `group` trailing coordinates on a grid of 2^bits levels with one bf16 scale per group. Nearest
     rounding (forward) uses the mid-rise grid (k + 1/2)·step, step GAUSS_STEP times the group's RMS at GAUSS_PLAIN's
     widths (every width in GAUSS_STEP with `gauss`) and 2·absmax / 2^bits above. Stochastic rounding (gradients) uses
-    the grid whose end levels are ±absmax (rounded up), so no value is clipped and the code is unbiased."""
+    the grid whose end levels are ±absmax (rounded up), so no value is clipped and the code is unbiased; with `gauss`
+    it uses the mid-rise grid at STOCH_STEP times the group's RMS, unbiased between the end levels and clipped beyond."""
     shape = y.shape
     y = y.reshape(-1, shape[-1] // group, group)
+    if stochastic and gauss:
+        step = (y.pow(2).mean(-1, keepdim=True).sqrt() * STOCH_STEP[bits]).to(torch.bfloat16).float().clamp_min(1e-30)
+        half = 2 ** (bits - 1)
+        j = torch.floor(y / step - 0.5 + torch.rand_like(y)).clamp(-half, half - 1)
+        return ((j + 0.5) * step).reshape(shape)
     if stochastic:
         top = (y.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).to(torch.bfloat16).float().clamp_min(1e-30)
         step = 2 * top / (2 ** bits - 1)
@@ -239,11 +249,11 @@ class Coded(torch.autograd.Function):
     the same code with stochastic rounding. With `rotate` false the vector is coded in its own basis. With `outliers`
     k > 0 the forward first takes out each token's k largest coordinates, which go apart at bf16 (with their indices),
     and codes the rest. With a `mean` (d,) the forward codes x − mean on the GAUSS_STEP grid at every width and adds the
-    mean back."""
+    mean back. With `grad_gauss` the gradient goes on quantize's RMS-scaled stochastic grid (STOCH_STEP)."""
 
     @staticmethod
-    def forward(ctx, x, bits_f, bits_b, group, seed, rotate, outliers=0, mean=None):
-        ctx.cfg = (bits_b, group, seed, rotate)
+    def forward(ctx, x, bits_f, bits_b, group, seed, rotate, outliers=0, mean=None, grad_gauss=False):
+        ctx.cfg = (bits_b, group, seed, rotate, grad_gauss)
         with torch.autocast(x.device.type, enabled=False):
             y = x.float() if mean is None else x.float() - mean
             if outliers:
@@ -261,26 +271,28 @@ class Coded(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, g):
-        bits_b, group, seed, rotate = ctx.cfg
+        bits_b, group, seed, rotate, grad_gauss = ctx.cfg
         with torch.autocast(g.device.type, enabled=False):
             y = g.float()
             if rotate:
                 r = fresh_rotation(g.shape[-1], seed, g.device)
-                out = quantize(y @ r.T, bits_b, group, True) @ r
+                out = quantize(y @ r.T, bits_b, group, True, grad_gauss) @ r
             else:
-                out = quantize(y, bits_b, group, True)
-        return out.to(g.dtype), None, None, None, None, None, None, None
+                out = quantize(y, bits_b, group, True, grad_gauss)
+        return out.to(g.dtype), None, None, None, None, None, None, None, None
 
 
-CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?:o(?P<k>\d+))?(?:b(?P<bb>\d+))?(?:g(?P<group>\d+))?")
+CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?:o(?P<k>\d+))?(?:b(?P<bb>\d+)(?P<bs>s?))?"
+                    r"(?:g(?P<group>\d+))?")
 
 
 def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
-    as CODE = [d]q<forward bits>[m][o<k>][b<backward bits>][g<group>] in a randomized-DCT basis (group d unless given);
-    `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index each. `m` codes
-    the forward about the boundary's running mean (CUT_MEAN; earlier batches only, so causal) on the Gaussian grid,
-    charged a bf16 mean per coordinate every SESSION tokens. With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
+    as CODE = [d]q<forward bits>[m][o<k>][b<backward bits>[s]][g<group>] in a randomized-DCT basis (group d unless
+    given); `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index each. `m`
+    codes the forward about the boundary's running mean (CUT_MEAN; earlier batches only, so causal) on the Gaussian
+    grid, charged a bf16 mean per coordinate every SESSION tokens. `b<bits>s` rounds the gradient onto the RMS-scaled
+    grid (STOCH_STEP) at the same bits. With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
     B for the same tokens, which the receiving side recomputes from the token's data; it needs B above the lowest
     trained block `low` (at or below it the effect is 0)."""
     out = []
@@ -288,7 +300,7 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         where, code = part.split(":")
         m = CUT_RE.fullmatch(code)
         if not m:
-            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[m][o<k>][b<bits>][g<group>]")
+            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[m][o<k>][b<bits>[s]][g<group>]")
         delta = m.group("delta") == "d"
         mean = m.group("mean") == "m"
         bf = int(m.group("bf"))
@@ -297,9 +309,12 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         group = int(m.group("group") or d)
         if d % group or not (1 <= bf <= 16 and 1 <= bb <= 16) or not 0 <= k < d:
             raise SystemExit(f"wildcard: --cut {part!r}: bits 1-16, outliers below d and a group dividing d = {d}")
+        grad_gauss = m.group("bs") == "s"
         if mean and (delta or k or bf not in GAUSS_STEP):
             raise SystemExit(f"wildcard: --cut {part!r}: `m` codes a whole state (no d prefix), without o<k>, at "
                              f"{min(GAUSS_STEP)}-{max(GAUSS_STEP)} bits")
+        if grad_gauss and bb not in STOCH_STEP:
+            raise SystemExit(f"wildcard: --cut {part!r}: `b<bits>s` at {min(STOCH_STEP)}-{max(STOCH_STEP)} bits")
         side = k * (16 + math.ceil(math.log2(d))) + (math.ceil(16 * d / SESSION) if mean else 0)
         fwd = code_bits(d, bf, group) + side
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
@@ -309,7 +324,8 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
                 raise SystemExit(f"wildcard: --cut {b}:{code} codes h - h_frozen, which needs trained blocks only, "
                                  f"the lowest below boundary {b} (lowest trained block: {low})")
             out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta, "outliers": k,
-                        "mean": mean, "a_fwd_bits": fwd, "a_bwd_bits": code_bits(d, bb, group)})
+                        "mean": mean, "grad_gauss": grad_gauss, "a_fwd_bits": fwd,
+                        "a_bwd_bits": code_bits(d, bb, group)})
     return sorted(out, key=lambda c: c["boundary"])
 
 
@@ -364,12 +380,14 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                     acc = CUT["spectrum"].setdefault(c["boundary"], {"of": "h - h_frozen" if c["delta"] else "h"})
                     spectrum_add(acc, out - f if c["delta"] else out, out)
             if c["delta"]:
-                return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"])
+                return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"],
+                                       None, c["grad_gauss"])
             mu = None
             if c["mean"]:
                 mu = CUT_MEAN.get(c["boundary"])
                 mu = torch.zeros(out.shape[-1], device=out.device) if mu is None else mu
-            coded = Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"], mu)
+            coded = Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"], mu,
+                                c["grad_gauss"])
             if c["mean"] and (torch.is_grad_enabled() or CUT.get("calibrate")):
                 with torch.no_grad():
                     now = out.detach().float().mean(tuple(range(out.dim() - 1)))
@@ -1014,7 +1032,7 @@ def main() -> int:
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
-    ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][o<k>][b<bits>][g<group>],...: block boundaries handed on coded "
+    ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][o<k>][b<bits>[s]][g<group>],...: block boundaries handed on coded "
                                             "(parse_cut)")
     ap.add_argument("--cut-probe-rows", type=int, default=128,
                     help="with --cut: probe windows scored coded and uncoded at theta and at the end (0: none)")
