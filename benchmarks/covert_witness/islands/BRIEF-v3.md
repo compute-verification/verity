@@ -11,8 +11,8 @@ Until then, keep working at the v2.3 pin, whose results are now the FineWeb-Edu 
 ## The focus (Daniel, Mon 6:55 PM PST; TRN-40)
 
 The algorithm-against-policy plot is the campaign's focus: x is p = |C|/H, y is ρ at the page's policy, with one frontier
-per gain size: Small, Medium and Large are exactly 1.1×, 2× and 11× effective compute (+10%, +100% and +1000%), the loss a run reaches mapped
-through a scaling law fitted to the unconstrained frontier, over the start's own compute (Daniel, Mon 7:15 PM PST). There's no prescribed sweep: attack every region of every gain size's frontier, low p at high ρ, the middle, and
+per gain size: Small, Medium and Large are exactly 1.1×, 2× and 11× effective compute (+10%, +100% and +1000%), a gain from loss L0 to L1 being
+C(L1)/C(L0) on a scaling law fitted to the unconstrained frontier, both ends read off the fit (Daniel, Mon 7:05 and 7:15 PM PST). There's no prescribed sweep: attack every region of every gain size's frontier, low p at high ρ, the middle, and
 the region below the floor of about 300 down to Fit. A run counts once it beats a frontier somewhere. Publish every
 attempt, including runs that never reach, which the panel marks not reached; runs may go to p ≈ 100 on the long tier.
 The builder's coverage table on the board (gain size by decade of ρ) shows where the gaps are.
