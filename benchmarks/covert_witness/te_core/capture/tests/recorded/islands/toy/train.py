@@ -15,7 +15,8 @@ words, `unpack_votes` to int16 votes summed in a post-accumulate hook, islands/q
 votes packed 8 a uint8 (``vote-bytes``), or as lowrank-restart's codes (``vote-planes``: 2-bit codes of an f16 absmax
 scale per 8 entries, passed as torch.bool planes and the scales, its delta_grad.py `Code.pack` and `unpack` at
 cf8a20f44f, rounded to the nearest code). ``--session`` plans the run and prints each step's `current_step()` and
-`progress_bucket()`."""
+`progress_bucket()`. ``--size-e`` sizes each step's E as sparse and shallow do, through `prepare._quant_array` on 4-bit
+codes of the trained matrices, with no encode."""
 from __future__ import annotations
 
 import argparse
@@ -89,6 +90,7 @@ def main() -> int:
     ap.add_argument("--micro", type=int, default=1)
     ap.add_argument("--sampled-head", action="store_true")
     ap.add_argument("--attn", action="store_true")
+    ap.add_argument("--size-e", action="store_true")
     a = ap.parse_args()
     warm = a.warm_tokens // (a.batch * prepare.EVAL_CTX)
     net, _, _ = prepare.load_start("toy")
@@ -214,6 +216,11 @@ def main() -> int:
     for i in range(a.steps):
         with hooks.step() if a.windows else contextlib.nullcontext():
             P = step(i, P)
+            if a.size_e:
+                with torch.no_grad():
+                    for n, p in P.items():
+                        codes = (p / (p.abs().amax() + 1e-12) * 7 + 8).round().clamp(0, 15)
+                        prepare._quant_array(argparse.Namespace(bits=4, codes=codes, codebook=torch.arange(16.0)), n)
             if i + 1 == warm:
                 with torch.no_grad():
                     P["fc"].mul_(0.5)
