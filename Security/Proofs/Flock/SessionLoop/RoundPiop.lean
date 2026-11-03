@@ -314,6 +314,40 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
+/-- **The worker's free words are `vs`'s values after one history** `(m₀, ρ₀) :: ops` at the tape `(ν, t)` and the check
+coins `κ`: `TakesVals`'s conclusion there, wherever `LiveRoundEq` reads the history (`0 < ops.length < refK x` openings,
+live, whose openings pass under the tape's nonce), the frame takes the stream's coins and the worker's round is rep
+stream `2j + r`'s. -/
+def TakesValsAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
+    (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg)
+    (ops : List (Msg × Msg)) : Prop :=
+  ∀ (v : Msg) (m : _root_.Flock.Firewall.Frame.Masker) (out : ByteArray) (s : _root_.Flock.Firewall.Frame.Masker)
+    (fr : Array ℕ) (j : Fin (Masked.jOf x)) (r : Fin 2),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
+      CoinOpen.shaH).1 = true →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m →
+    _root_.Flock.Firewall.Frame.roundFree (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m with stopped := false } ⟨v.toArray⟩
+      (L.coins x (ops.length + 1)) = .ok (out, s, fr) →
+    L.rep x (ops.length + 1) = 2 * j.val + r.val →
+    ∀ k < fr.size,
+      (_root_.Flock.Firewall.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]! =
+        vsWord vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+          (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
+          (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[m.pos + k]!
+
+/-- `TakesVals` is `TakesValsAt` after every history. -/
+theorem takesVals_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) :
+    TakesVals vs L wk x w ↔ ∀ ν t κ m₀ ρ₀ ops, TakesValsAt vs L wk x w ν t κ m₀ ρ₀ ops :=
+  Iff.rfl
+
 /-- **The session's round `n ≥ 1` at the deployed tables where the coins show no refusal by it**: `sessionCut`'s body
 `n` on the cut, tagged `0`, where the cut session reached it (`enc_finS`). -/
 theorem enc_finS_of {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n ≠ 0)
@@ -584,7 +618,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     dsimp only
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left (by rw [hsz']; exact hjjR),
       hpi' (a + 1) (by omega) hjjR]
-    simp only [Option.getD_some, Array.toList_toArray]
+    simp only [Option.getD_some, List.toList_toArray]
   -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
@@ -617,7 +651,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     hKN.2.1 hKN.2.2 _ (check_none_passes hck)
   have hv' : v = encs G ++ (Frame.sq (piopK (a + 1)) (piopN (Masked.stAt x j).m (a + 1))).enc := by
     have e := congrArg (fun b : ByteArray => b.data.toList) hvG
-    simp only [Array.toList_toArray] at e
+    simp only [List.toList_toArray] at e
     rw [e, htrm]
   refine ⟨m, G, hA, hon, hin, ?_, ?_, hmidG, plainFrames_of_alike hAG (fun f hf => (hF0 f hf).2), hv', ?_, ?_, lay,
     mask, by rw [hjh] at hds; exact hds⟩

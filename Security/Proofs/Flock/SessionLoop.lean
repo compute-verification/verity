@@ -31,6 +31,8 @@ import Proofs.Flock.Claims.ZK.FinishFwL0
 import Proofs.Flock.SessionLoop.FinishIsLoop
 import Proofs.Flock.SessionLoop.PiopState
 import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.PcsRank
+import Proofs.Flock.SessionLoop.SchedUnrefused
 import Proofs.Flock.SessionLoop.LiveSchedOwn
 import Proofs.Flock.SessionLoop.CutInnerLive
 import Proofs.Flock.SessionLoop.InnerSlot
