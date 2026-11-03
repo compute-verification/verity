@@ -22,7 +22,9 @@ Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
   same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates; `q4o4`: each
   token's 4 largest coordinates go apart at bf16 with their indices, and the rest is coded with its own scale; `q4m`: the
   state coded about the boundary's running mean from earlier batches, on the Gaussian grid; `q2b2s`: the gradient
-  stochastically rounded on a grid scaled by its RMS, clipped beyond the end levels). Training sees only the coded
+  stochastically rounded on a grid scaled by its RMS, clipped beyond the end levels; `q5meb2e`: either direction
+  entropy-coded, a fixed number of bits a token on an unclipped grid whose symbol model learns from earlier batches,
+  `ecode`). Training sees only the coded
   state; the evaluator scores the uncoded model, and the probe windows are scored both ways.
 - `--cut B:dq2,...`: the forward codes only the update's effect h - h_frozen at B; h_frozen, θ's residual for the same
   tokens, comes from frozen copies of the trained blocks (the receiving side recomputes it from the token's data), and
@@ -243,17 +245,149 @@ def code_bits(d: int, bits: int, group: int) -> int:
     return d * bits + 16 * (d // group)
 
 
+#: Entropy-coded codes (`e`): a token's rotated coordinates over its bf16 RMS are rounded onto step·j for any integer
+#: j (nearest forward; stochastic back, so the gradient is unbiased and nothing is clipped), and the symbols are coded
+#: under a model of |j| (E_BINS bins, the last an escape followed by an Elias-gamma count, a sign bit for j != 0) in
+#: at most d·bits bits, an arithmetic coder's 2 included. A token takes the finest step step_0·2^(m/4), m < E_LEVELS,
+#: that fits, else the fixed-rate code at the same width. The model is the EMA of earlier batches' symbols (16-bit
+#: probabilities, charged once a session); a token's side bits are the RMS, the level flag and its share of the model.
+E_BINS = 48
+E_LEVELS = 8
+E_DECAY = 0.9
+#: A stochastic token takes the finest step whose expected length plus E_MARGIN standard deviations of its draw fits,
+#: a choice its values alone make, so its rounding stays unbiased; a drawn length that still overflows (rare) takes
+#: the fixed-rate code.
+E_MARGIN = 4.0
+ECODE: dict = {}
+
+
+def e_side_bits() -> int:
+    return 16 + math.ceil(math.log2(E_LEVELS + 1)) + math.ceil(16 * E_LEVELS * E_BINS / SESSION)
+
+
+def symbol_probs(step: float, stochastic: bool) -> torch.Tensor:
+    """P(|j| in each bin) for a unit Gaussian rounded onto step·j, nearest (mid-tread) or stochastically."""
+    x = torch.linspace(0, 12, 240001, dtype=torch.float64)
+    w = torch.exp(-x ** 2 / 2)
+    w = w / w.sum()
+    u = x / step
+    p = torch.zeros(E_BINS, dtype=torch.float64)
+    if stochastic:
+        f = torch.floor(u)
+        r = u - f
+        p.index_add_(0, f.clamp(max=E_BINS - 1).long(), w * (1 - r))
+        p.index_add_(0, (f + 1).clamp(max=E_BINS - 1).long(), w * r)
+    else:
+        p.index_add_(0, torch.floor(u + 0.5).clamp(max=E_BINS - 1).long(), w)
+    return p
+
+
+def bin_bits(p: torch.Tensor) -> torch.Tensor:
+    """Code lengths per |j| bin under model p, held as 16-bit probabilities (each at least 2^-16), sign included."""
+    q = (p / p.sum() * 2 ** 16).round().clamp_min(1)
+    return -torch.log2(q / q.sum()) + (torch.arange(len(p), device=p.device) > 0).to(p.dtype)
+
+
+def symbol_bits(j: torch.Tensor, lb: torch.Tensor) -> torch.Tensor:
+    top = E_BINS - 1
+    a = j.abs()
+    n = (a - top + 1).clamp_min(1)
+    return lb[a.clamp(max=top).long()] + torch.where(a >= top, 2 * torch.floor(torch.log2(n)) + 1, 0.0)
+
+
+def e_step(d: int, bits: int, stochastic: bool) -> float:
+    """The finest step at which a Gaussian token's mean length plus one standard deviation, and the coder's 2 bits,
+    fit d·bits."""
+    lo, hi = 1e-3, 16.0
+    for _ in range(50):
+        s = (lo * hi) ** 0.5
+        p = symbol_probs(s, stochastic)
+        lb = bin_bits(p)
+        mean = float((p * lb).sum())
+        var = float((p * lb ** 2).sum()) - mean ** 2
+        lo, hi = (lo, s) if d * mean + (d * var) ** 0.5 + 2 <= d * bits else (s, hi)
+    return hi
+
+
+def ecode(y: torch.Tensor, bits: int, key, stochastic: bool, learn: bool) -> torch.Tensor:
+    """Each token (a row of y) in the entropy-coded code of ECODE[key] (E_BINS above); with `learn` the token's
+    symbols then move the model (so a token's code reads only earlier batches)."""
+    shape, d = y.shape, y.shape[-1]
+    y = y.reshape(-1, d)
+    st = ECODE.get(key)
+    if st is None:
+        steps = [e_step(d, bits, stochastic) * 2 ** (m / 4) for m in range(E_LEVELS)]
+        p = torch.stack([symbol_probs(s, stochastic) for s in steps]).float().to(y.device)
+        st = ECODE[key] = {"steps": steps, "p": p, "lb": torch.stack([bin_bits(q) for q in p]),
+                           "count": torch.zeros(E_LEVELS + 2, device=y.device), "length": torch.zeros((), device=y.device)}
+    rms = y.pow(2).mean(-1, keepdim=True).sqrt().to(torch.bfloat16).float().clamp_min(1e-30)
+    w = y / rms
+    budget = d * bits - 2
+    level = torch.full((len(y),), E_LEVELS, dtype=torch.long, device=y.device)
+    length = torch.zeros(len(y), device=y.device)
+    sym = torch.zeros_like(w)
+    for m in reversed(range(E_LEVELS)):
+        u = w / st["steps"][m]
+        lb = st["lb"][m]
+        if stochastic:
+            f = torch.floor(u)
+            r = u - f
+            l0, l1 = symbol_bits(f, lb), symbol_bits(f + 1, lb)
+            spread = (r * (1 - r) * (l1 - l0) ** 2).sum(-1).sqrt()
+            fits = ((1 - r) * l0 + r * l1).sum(-1) + E_MARGIN * spread <= budget
+            j = f + (torch.rand_like(r) < r).float()
+        else:
+            j = torch.floor(u + 0.5)
+        n = symbol_bits(j, lb).sum(-1)
+        if not stochastic:
+            fits = n <= budget
+        level = torch.where(fits, m, level)
+        length = torch.where(fits, n, length)
+        sym = torch.where(fits[:, None], j, sym)
+    coded = level < E_LEVELS
+    drawn_over = coded & (length > budget)
+    coded &= ~drawn_over
+    step = torch.tensor(st["steps"], device=y.device)[level.clamp(max=E_LEVELS - 1)]
+    out = torch.where(coded[:, None], sym * step[:, None] * rms, quantize(y, bits, d, stochastic, not stochastic))
+    if learn:
+        with torch.no_grad():
+            for m in range(E_LEVELS):
+                rows = coded & (level == m)
+                hist = torch.bincount(sym[rows].abs().clamp(max=E_BINS - 1).long().flatten(), minlength=E_BINS)
+                if hist.sum() > 0:
+                    st["p"][m] = E_DECAY * st["p"][m] + (1 - E_DECAY) * hist.float() / hist.sum()
+                    st["lb"][m] = bin_bits(st["p"][m])
+            st["count"] += torch.bincount(torch.where(drawn_over, E_LEVELS + 1, level), minlength=E_LEVELS + 2)
+            st["length"] += torch.where(coded, length, 0.0).sum()
+    return out.reshape(shape)
+
+
+def ecode_report() -> dict:
+    """Per e code: its steps (in units of the token's RMS), how many tokens took each step, the fixed-rate code
+    (`fixed`) and a drawn overflow (`overflow`), and the mean payload bits of an entropy-coded token."""
+    out = {}
+    for key, st in ECODE.items():
+        c = [int(x) for x in st["count"].tolist()]
+        out[f"{key[0]}{key[1]}"] = {"steps": [round(s, 4) for s in st["steps"]], "tokens_by_step": c[:E_LEVELS],
+                                    "fixed": c[E_LEVELS], "overflow": c[E_LEVELS + 1],
+                                    "mean_bits": float(st["length"]) / max(1, sum(c[:E_LEVELS]))}
+    return out
+
+
 class Coded(torch.autograd.Function):
     """A token's d-vector handed across a cut as a code: rotated by R, quantized per group, rotated back (forward,
     nearest rounding); the backward passes the gradient straight through the quantizer and hands it across the cut in
     the same code with stochastic rounding. With `rotate` false the vector is coded in its own basis. With `outliers`
     k > 0 the forward first takes out each token's k largest coordinates, which go apart at bf16 (with their indices),
     and codes the rest. With a `mean` (d,) the forward codes x − mean on the GAUSS_STEP grid at every width and adds the
-    mean back. With `grad_gauss` the gradient goes on quantize's RMS-scaled stochastic grid (STOCH_STEP)."""
+    mean back. With `grad_gauss` the gradient goes on quantize's RMS-scaled stochastic grid (STOCH_STEP). An `ekeys`
+    entry (forward, back) codes that direction in the entropy-coded code of ECODE[key] (`ecode`); the forward's model
+    learns only with `learn`."""
 
     @staticmethod
-    def forward(ctx, x, bits_f, bits_b, group, seed, rotate, outliers=0, mean=None, grad_gauss=False):
-        ctx.cfg = (bits_b, group, seed, rotate, grad_gauss)
+    def forward(ctx, x, bits_f, bits_b, group, seed, rotate, outliers=0, mean=None, grad_gauss=False, ekeys=(None, None),
+                learn=False):
+        ctx.cfg = (bits_b, group, seed, rotate, grad_gauss, ekeys[1])
         with torch.autocast(x.device.type, enabled=False):
             y = x.float() if mean is None else x.float() - mean
             if outliers:
@@ -262,7 +396,10 @@ class Coded(torch.autograd.Function):
                 y = y.scatter(-1, idx, 0.0)
             if rotate:
                 r = fresh_rotation(x.shape[-1], seed, x.device)
-                y = quantize(y @ r.T, bits_f, group, False, mean is not None) @ r
+                z = y @ r.T
+                z = ecode(z, bits_f, ekeys[0], False, learn) if ekeys[0] else quantize(z, bits_f, group, False,
+                                                                                       mean is not None)
+                y = z @ r
             else:
                 y = quantize(y, bits_f, group, False, mean is not None)
             if outliers:
@@ -271,28 +408,30 @@ class Coded(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, g):
-        bits_b, group, seed, rotate, grad_gauss = ctx.cfg
+        bits_b, group, seed, rotate, grad_gauss, ekey = ctx.cfg
         with torch.autocast(g.device.type, enabled=False):
             y = g.float()
             if rotate:
                 r = fresh_rotation(g.shape[-1], seed, g.device)
-                out = quantize(y @ r.T, bits_b, group, True, grad_gauss) @ r
+                z = y @ r.T
+                out = (ecode(z, bits_b, ekey, True, True) if ekey else quantize(z, bits_b, group, True, grad_gauss)) @ r
             else:
                 out = quantize(y, bits_b, group, True, grad_gauss)
-        return out.to(g.dtype), None, None, None, None, None, None, None, None
+        return out.to(g.dtype), None, None, None, None, None, None, None, None, None, None
 
 
-CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?:o(?P<k>\d+))?(?:b(?P<bb>\d+)(?P<bs>s?))?"
+CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?P<fe>e?)(?:o(?P<k>\d+))?(?:b(?P<bb>\d+)(?P<bs>[se]?))?"
                     r"(?:g(?P<group>\d+))?")
 
 
 def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
-    as CODE = [d]q<forward bits>[m][o<k>][b<backward bits>[s]][g<group>] in a randomized-DCT basis (group d unless
-    given); `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index each. `m`
-    codes the forward about the boundary's running mean (CUT_MEAN; earlier batches only, so causal) on the Gaussian
-    grid, charged a bf16 mean per coordinate every SESSION tokens. `b<bits>s` rounds the gradient onto the RMS-scaled
-    grid (STOCH_STEP) at the same bits. With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
+    as CODE = [d]q<forward bits>[m][e][o<k>][b<backward bits>[s|e]][g<group>] in a randomized-DCT basis (group d
+    unless given); `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index
+    each. `m` codes the forward about the boundary's running mean (CUT_MEAN; earlier batches only, so causal) on the
+    Gaussian grid, charged a bf16 mean per coordinate every SESSION tokens. `b<bits>s` rounds the gradient onto the
+    RMS-scaled grid (STOCH_STEP) at the same bits. `e` (after q's bits, or b's) codes that direction entropy-coded in
+    d·bits bits plus e_side_bits (`ecode`; whole tokens, no o<k>). With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
     B for the same tokens, which the receiving side recomputes from the token's data; it needs B above the lowest
     trained block `low` (at or below it the effect is 0)."""
     out = []
@@ -300,7 +439,7 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         where, code = part.split(":")
         m = CUT_RE.fullmatch(code)
         if not m:
-            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[m][o<k>][b<bits>[s]][g<group>]")
+            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[m][e][o<k>][b<bits>[s|e]][g<group>]")
         delta = m.group("delta") == "d"
         mean = m.group("mean") == "m"
         bf = int(m.group("bf"))
@@ -315,8 +454,13 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
                              f"{min(GAUSS_STEP)}-{max(GAUSS_STEP)} bits")
         if grad_gauss and bb not in STOCH_STEP:
             raise SystemExit(f"wildcard: --cut {part!r}: `b<bits>s` at {min(STOCH_STEP)}-{max(STOCH_STEP)} bits")
+        ecode_f, ecode_b = m.group("fe") == "e", m.group("bs") == "e"
+        if (ecode_f or ecode_b) and (group != d or (ecode_f and k) or not (bf <= 8 and bb <= 8)):
+            raise SystemExit(f"wildcard: --cut {part!r}: an `e` code takes whole tokens (no g<group>), no o<k>, at "
+                             f"most 8 bits")
         side = k * (16 + math.ceil(math.log2(d))) + (math.ceil(16 * d / SESSION) if mean else 0)
-        fwd = code_bits(d, bf, group) + side
+        fwd = (d * bf + e_side_bits() if ecode_f else code_bits(d, bf, group)) + side
+        bwd = d * bb + e_side_bits() if ecode_b else code_bits(d, bb, group)
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
             if not 1 <= b <= L:
                 raise SystemExit(f"wildcard: --cut boundary {b} is not in 1..{L}")
@@ -324,8 +468,8 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
                 raise SystemExit(f"wildcard: --cut {b}:{code} codes h - h_frozen, which needs trained blocks only, "
                                  f"the lowest below boundary {b} (lowest trained block: {low})")
             out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta, "outliers": k,
-                        "mean": mean, "grad_gauss": grad_gauss, "a_fwd_bits": fwd,
-                        "a_bwd_bits": code_bits(d, bb, group)})
+                        "mean": mean, "grad_gauss": grad_gauss, "ecode_fwd": ecode_f, "ecode_bwd": ecode_b,
+                        "a_fwd_bits": fwd, "a_bwd_bits": bwd})
     return sorted(out, key=lambda c: c["boundary"])
 
 
@@ -357,8 +501,9 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
     CUT["on"]. A delta code's hook adds h_frozen back after coding h - h_frozen; h_frozen is carried up from block
     `low`'s input through frozen copies of blocks low.. (frozen_blocks). An `m` code's hook codes about CUT_MEAN, then
     moves CUT_MEAN toward this batch's mean only in a training forward or with CUT["calibrate"] (never a probe's), so
-    a token's code reads no later token."""
+    a token's code reads no later token. An `e` code's model learns on the same terms (`ecode`)."""
     CUT_MEAN.clear()
+    ECODE.clear()
     by_block = {c["boundary"] - 1: c for c in cuts}
     top = max((c["boundary"] for c in cuts if c["delta"]), default=None)
     frozen = frozen_blocks(net, theta, low, top) if top is not None else {}
@@ -375,20 +520,22 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
             if c is None:
                 return out
             seed = 1000 + c["boundary"]
+            learn = torch.is_grad_enabled() or bool(CUT.get("calibrate"))
+            ekeys = ((c["boundary"], "f") if c["ecode_fwd"] else None, (c["boundary"], "b") if c["ecode_bwd"] else None)
             if CUT.get("spectrum") is not None:
                 with torch.no_grad():
                     acc = CUT["spectrum"].setdefault(c["boundary"], {"of": "h - h_frozen" if c["delta"] else "h"})
                     spectrum_add(acc, out - f if c["delta"] else out, out)
             if c["delta"]:
                 return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"],
-                                       None, c["grad_gauss"])
+                                       None, c["grad_gauss"], ekeys, learn)
             mu = None
             if c["mean"]:
                 mu = CUT_MEAN.get(c["boundary"])
                 mu = torch.zeros(out.shape[-1], device=out.device) if mu is None else mu
             coded = Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"], mu,
-                                c["grad_gauss"])
-            if c["mean"] and (torch.is_grad_enabled() or CUT.get("calibrate")):
+                                c["grad_gauss"], ekeys, learn)
+            if c["mean"] and learn:
                 with torch.no_grad():
                     now = out.detach().float().mean(tuple(range(out.dim() - 1)))
                     old = CUT_MEAN.get(c["boundary"])
@@ -573,7 +720,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         reserve += 4 * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": probe_tokens}])[
             "flops"] + 2 * code_fwd * probe_tokens
         reserve += 4 * len(cuts) * (probe_tokens * d * d + (probe_tokens // SESSION + 1) * d ** 3)
-    calibrate = any(c["mean"] for c in cuts)
+    calibrate = any(c["mean"] or c["ecode_fwd"] for c in cuts)
     if calibrate:
         calib_tokens = a.micro * prepare.EVAL_CTX
         reserve += prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": calib_tokens}])["flops"]
@@ -611,7 +758,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             CUT["calibrate"] = True
             probe_loss(fwd, data.next(a.micro), a.micro, steps)
             CUT["calibrate"] = False
-            steps.append({"op": "extra", "flops": code_fwd * calib_tokens, "what": "cut code (mean calibration)"})
+            steps.append({"op": "extra", "flops": code_fwd * calib_tokens, "what": "cut code (calibration)"})
         print(json.dumps({"cut_mean": {b: float(m.pow(2).mean().sqrt()) for b, m in CUT_MEAN.items()}}), flush=True)
     if cut_probe is not None:
         cut_probes("theta")
@@ -660,6 +807,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             cut_probes("end")
         info["cuts"] = {"codes": cuts, "gradient_crosses": [c["boundary"] for c in crossed], "probe": probes,
                         "probe_rows": 0 if cut_probe is None else len(cut_probe)}
+        if ECODE:
+            info["cuts"]["ecode"] = ecode_report()
+            print(json.dumps({"ecode": info["cuts"]["ecode"]}), flush=True)
     if a.z_bits:
         info["z_code"] = {"bits": a.z_bits, "rank": a.lora_rank, "a_bits_per_direction": a.lora_rank * a.z_bits + 16}
     if alphas:
@@ -1032,7 +1182,7 @@ def main() -> int:
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
-    ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][o<k>][b<bits>[s]][g<group>],...: block boundaries handed on coded "
+    ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][e][o<k>][b<bits>[s|e]][g<group>],...: block boundaries handed on coded "
                                             "(parse_cut)")
     ap.add_argument("--cut-probe-rows", type=int, default=128,
                     help="with --cut: probe windows scored coded and uncoded at theta and at the end (0: none)")
