@@ -139,8 +139,8 @@ HD void wl_bytes(WordLeaf& s, const uint8_t* p, size_t nbytes) {
 // ---- SHA-512 over an 8-byte tag and 8-byte-aligned data (the key's row, strip and node digests) ------------------------------
 
 HD void sha512_tag8(uint64_t tag, const uint8_t* d, size_t nbytes, uint8_t out[64]) {
-  uint64_t h[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
-                   0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
+  uint64_t h[8];
+  sx::iv(h);
   const size_t nw = 1 + nbytes / 8, full = nw / 16, r = nw % 16;
   const uint64_t bits = (uint64_t)(8 + nbytes) * 8;
   uint64_t w[16];

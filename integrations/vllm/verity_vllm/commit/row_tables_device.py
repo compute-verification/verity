@@ -9,10 +9,11 @@ step waits on; the next step's compute does not wait on it.
 
 The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
-roots (`row_table.step_tree`), with `ncp2.cuh`'s SHA-512.  The host computes the domain ids, the rows' rank order and the tables'
-layout (`plan`).  `host_step` runs the same functions on the CPU (`row_table_host.cpp`, built with the system C++ compiler), the
-twin the CPU tests hold to `row_tables.step_roots` on machines without a GPU.  Builds are keyed by what they compile (sources,
-flags and the compiler's version) under ``~/.cache/verity/row_table``; nvcc is the one on the path.
+roots (`row_table.step_tree`), with the GPU's one SHA-512 (`verity.ml.kernels.SHA512`, through `ncp2.cuh`).  The host
+computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
+(`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
+without a GPU.  Builds are keyed by what they compile (sources, flags and the compiler's version) under
+``~/.cache/verity/row_table``; nvcc is the one on the path.
 """
 from __future__ import annotations
 
@@ -34,6 +35,7 @@ from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
+from verity.ml.kernels import SHA512
 
 from . import row_tables as RTB
 
@@ -41,10 +43,13 @@ __all__ = ["Device", "Pending", "Plan", "device_lib", "host_lib", "host_step", "
            "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
-DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
-HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
-NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
-CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
+#: the GPU's one SHA-512 (`verity.ml.kernels.SHA512`), which ncp2.cuh includes: a source of every build, by its absolute path
+#: (``CUDA_DIR / s`` is then the path itself, so its bytes key the build), and its directory on every build's include path
+SHA512_SOURCE, SHA512_INCLUDE = str(SHA512.resolve()), f"-I{SHA512.resolve().parent}"
+DEVICE_SOURCES = (SHA512_SOURCE, "ncp2.cuh", "row_table.cuh", "row_table.cu")
+HOST_SOURCES = (SHA512_SOURCE, "ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
+NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", SHA512_INCLUDE)
+CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared", SHA512_INCLUDE)
 BUILD_DIR = Path.home() / ".cache" / "verity" / "row_table"
 #: words of a table's layout (`row_table.cuh`'s ``Tab``) and the bytes of a row segment
 TAB_WORDS, SEG_BYTES = 14, 1024

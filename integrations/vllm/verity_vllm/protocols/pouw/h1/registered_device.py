@@ -28,8 +28,8 @@ from verity_vllm.commit import row_tables_device as RTD
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "available", "device_commit", "device_hash", "device_lib",
            "device_public_salts", "host_commit", "host_lib", "host_public_salts", "nvcc", "pub", "table"]
 
-DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
-HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
+DEVICE_SOURCES = (RTD.SHA512_SOURCE, "ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
+HOST_SOURCES = (RTD.SHA512_SOURCE, "ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
 #: bytes of rows a chunk copies to the device
 CHUNK_BYTES = 1 << 28
 #: rows a value may have: row j's salt is ChaCha20 blocks 3j .. 3j + 2 under a 32-bit low counter word
