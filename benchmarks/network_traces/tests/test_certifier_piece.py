@@ -694,21 +694,17 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
-def test_the_front_sends_a_span_of_prompt_lengths_with_a_stop_prompt_last(tmp_path, monkeypatch):
-    """``--prompt-ids 1:32 --stop-prompt``: the group's prompts are 1 to 32 ids below the vocabulary, and the last is 32
-    ids of the pattern whose copying next id is the EOS id (`served_session.prompts`); the gate's request is unchanged.
-    The seed is pinned."""
+def test_the_front_sends_a_span_of_prompt_lengths(tmp_path, monkeypatch):
+    """``--prompt-ids 1:32``: the group's prompts are `served_session.prompts`' at the span, 1 to 32 ids below the
+    vocabulary, and the gate's request is unchanged. The seed is pinned."""
     _stub_gate(tmp_path, monkeypatch)
     monkeypatch.setattr(CP.secrets, "token_bytes", lambda n: b"s" * n)
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--prompt-ids", "1:32",
-                    "--stop-prompt"]) == 0
-    *rest, last = json.loads((tmp_path / "prompts.json").read_text())
-    assert len(rest) == CP.PROMPTS - 1 and all(1 <= len(p) <= 32 and max(p) < 128000 for p in rest)
-    assert len(last) == 32 and last[1:] == (last[1:4] + [CP.SS.EOS]) * 7 + last[1:4]
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--prompt-ids", "1:32"]) == 0
+    ps = json.loads((tmp_path / "prompts.json").read_text())
+    assert ps == CP.SS.prompts(CP.PROMPTS, (1, 32), 128000, b"s" * 32) and len({len(p) for p in ps}) > 1
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63k4 --window-per-group")
-    assert json.loads((out / "session.json").read_text())["prompts"] == {"count": CP.PROMPTS,
-                                                                         "ids": sum(map(len, rest)) + 32}
+    assert json.loads((out / "session.json").read_text())["prompts"] == {"count": CP.PROMPTS, "ids": sum(map(len, ps))}
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
@@ -794,9 +790,10 @@ def test_the_pick_passes_over_the_warm_ups_windows_for_the_groups(tmp_path):
 
 
 class _Endpoint(http.server.BaseHTTPRequestHandler):
-    """serve-openai's completions as the warm-up sees them: each answered whole, and recorded in the serve dir's
-    request_users.jsonl first (serve-openai records a request there once its window has closed) unless ``record`` is
-    off; each request noted with whether the gate had been asked by then."""
+    """serve-openai's completions as the warm-up sees them: each answered whole, finishing on a stop for the requests
+    numbered in ``stops`` and on the length otherwise, and recorded in the serve dir's request_users.jsonl first
+    (serve-openai records a request there once its window has closed) unless ``record`` is off; each request noted with
+    whether the gate had been asked by then."""
 
     def do_POST(self):
         s = self.server
@@ -810,7 +807,8 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
         if s.record:
             with open(s.serve / "request_users.jsonl", "a") as fh:
                 fh.write(json.dumps({"engine_id": f"cmpl-{len(s.seen)}-0", "user": body["user"]}) + "\n")
-        out = json.dumps({"id": f"cmpl-{len(s.seen)}", "choices": [{"text": "", "finish_reason": "length"}]}).encode()
+        finish = "stop" if len(s.seen) in s.stops else "length"
+        out = json.dumps({"id": f"cmpl-{len(s.seen)}", "choices": [{"text": "", "finish_reason": finish}]}).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(out)))
@@ -825,7 +823,7 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
 def endpoint(tmp_path, monkeypatch):
     _stub_gate(tmp_path, monkeypatch)
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Endpoint)
-    srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir = [], 200, True, tmp_path / "serve", tmp_path
+    srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir, srv.stops = [], 200, True, tmp_path / "serve", tmp_path, ()
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
@@ -849,6 +847,36 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json",
                                                      "warmup.json"]
+
+
+def test_a_stop_prompt_is_the_first_tried_whose_answer_stops_and_goes_last_in_the_group(tmp_path, endpoint):
+    """``--stop-prompt N``: after the ``--warmup`` requests, fresh prompts of HI ids go to the endpoint as warm-ups do
+    (greedy, ``--tokens`` max_tokens), one at a time, until one's answer finishes on a stop, and that prompt is the
+    group's last; the gate's request is unchanged. None of N stopping refuses the front before the gate is asked."""
+    port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
+    endpoint.stops = {4}
+    argv = ["front", str(port), str(serve), str(out), "--key", str(tmp_path / "key"), "--prompt-ids", "8:32",
+            "--warmup", "1", "--stop-prompt", "5"]
+    assert CP.main(argv) == 0
+    bodies = [s["body"] for s in endpoint.seen]
+    assert [len(b["prompt"]) for b in bodies[1:]] == [32] * 3 and not any(s["gate asked"] for s in endpoint.seen)
+    assert {(b["max_tokens"], b["temperature"], b["top_p"]) for b in bodies} == {(CP.TOKENS, 0.0, 1.0)}
+    *rest, last = json.loads((tmp_path / "prompts.json").read_text())
+    assert last == bodies[3]["prompt"] and len(rest) == CP.PROMPTS - 1 and all(8 <= len(p) <= 32 for p in rest)
+    warm = json.loads((out / "warmup.json").read_text())
+    assert [w["finish_reason"] for w in warm["requests"]] == ["length"]
+    assert [(w["user"], w["finish_reason"]) for w in warm["stop_prompt"]] == [
+        (b["user"], f) for b, f in zip(bodies[1:], ("length", "length", "stop"))]
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63k4 --window-per-group")
+    endpoint.seen.clear()
+    endpoint.stops = ()
+    (tmp_path / "request").unlink()
+    assert CP.main([*argv[:-4], "--stop-prompt", "2"]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == (
+        "--stop-prompt 2: no answer to 2 prompts of 32 ids finished on a stop within --tokens 4")
+    assert len(endpoint.seen) == 2 and not (tmp_path / "request").exists()
+    assert CP.main([*argv[:-1], "-1"]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == "--stop-prompt -1: a count of requests, 0 for none"
 
 
 def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):

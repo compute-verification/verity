@@ -2,8 +2,8 @@
 the active network certifier in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24 | --prompt-ids LO:HI] [--stop-prompt] [--tokens 4] [--vocab 128000]
-        [--scan-class w63k4] [--height 10] [--minutes M] [--bucket-ms MS] [--warmup N]
+        [--prompts 4] [--prompt-ids 24 | --prompt-ids LO:HI] [--tokens 4] [--vocab 128000] [--scan-class w63k4]
+        [--height 10] [--minutes M] [--bucket-ms MS] [--warmup N] [--stop-prompt N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
@@ -15,9 +15,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab`` (``LO:HI``:
   each prompt's length drawn in LO … HI), sampled from a fresh secret seed, each with ``--tokens`` its max_tokens, which
-  the model's EOS ends sooner; ``--stop-prompt`` makes the group's last prompt a pattern of three of its ids and the
-  EOS id, repeated, then the three, which the model's copying ends with its own EOS (`served_session.prompts`), so the
-  group holds a request that stops on the stop id. A group is sent half a bucket into execution phase 0
+  the model's EOS ends sooner. A group is sent half a bucket into execution phase 0
   and its cells are execution phase 0's alone (``--tokens`` at most 4 keeps the group in one execution phase), so the
   engine admits the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
@@ -34,7 +32,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   `served_session.USERS`, which it does only once the request's window has closed. So each warm-up is a window of one
   request, closed before the gate is asked, which the pick passes over for the group's whenever the group's window
   holds two or more; one that fails or isn't recorded within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't
-  make a slow endpoint pass; a tick whose D·τ covers its answer does. The gate's fetch,
+  make a slow endpoint pass; a tick whose D·τ covers its answer does. ``--stop-prompt N`` then puts last in the group
+  a prompt whose answer the model's own EOS ends (`stop_prompt`): up to N fresh prompts of HI ids, each sent as a
+  warm-up is, until one's answer finishes on a stop within ``--tokens``. The gate's requests are greedy (temperature 0,
+  top_p 1), as a warm-up is, and serving is batch-invariant, so the group's answer to that prompt stops alike; none of
+  N stopping refuses the front, before the gate is asked. The gate's fetch,
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
@@ -202,15 +204,21 @@ def front(a: argparse.Namespace) -> int:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:
             raise SS.Refused(f"--tokens {a.tokens}: a group past one link-window, which the period's rows form refuses")
-        if a.warmup < 0:
-            raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
-        ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32),
-                        stop=SS.EOS if getattr(a, "stop_prompt", False) else None)
+        for flag, n in (("--warmup", a.warmup), ("--stop-prompt", a.stop_prompt)):
+            if n < 0:
+                raise SS.Refused(f"{flag} {n}: a count of requests, 0 for none")
+        ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         SS.check(a, data)
+        warm = {}
         if a.warmup:
-            warm = warmup(a, serve_dir)
-            (out / "warmup.json").write_text(json.dumps({"requests": warm}, indent=1) + "\n")
+            warm["requests"] = warmup(a, serve_dir)
+            (out / "warmup.json").write_text(json.dumps(warm, indent=1) + "\n")
+        if a.stop_prompt:
+            ps[-1], warm["stop_prompt"] = stop_prompt(a, serve_dir)
+            (out / "warmup.json").write_text(json.dumps(warm, indent=1) + "\n")
+            data = json.dumps(ps, separators=(",", ":")).encode()
+            SS.check(a, data)
         rc = SS.session(a, data, ps)
         if (doc := out / "session.json").is_file():
             shutil.copyfile(doc, keep / json.loads(doc.read_text())["run"] / SESSION)
@@ -221,12 +229,27 @@ def front(a: argparse.Namespace) -> int:
         return e.code
 
 
-def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
-           sleep: Callable[[float], object] = time.sleep) -> list[dict]:
-    """``--warmup``'s requests (the module docstring), each its user, finish and seconds; `served_session.Refused`
-    when one fails or serve-openai hasn't recorded every one's window closed within `WARMUP_CLOSE_S`."""
+def stop_prompt(a: argparse.Namespace, serve_dir: Path, **kw) -> tuple[list[int], list[dict]]:
+    """``--stop-prompt N``'s prompt (the module docstring), the first of N fresh prompts of HI ids whose warm-up answer
+    finishes on a stop, and the warm-ups it took; `served_session.Refused` when none of N does."""
+    hi = SS.bounds(a.prompt_ids)[1]
+    ps = SS.prompts(a.stop_prompt, hi, a.vocab, secrets.token_bytes(32))
+    tried = warmup(a, serve_dir, ps, **kw)
+    if tried[-1]["finish_reason"] != "stop":
+        raise SS.Refused(f"--stop-prompt {a.stop_prompt}: no answer to {a.stop_prompt} prompts of {hi} ids finished "
+                         f"on a stop within --tokens {a.tokens}")
+    return ps[len(tried) - 1], tried
+
+
+def warmup(a: argparse.Namespace, serve_dir: Path, ps: list[list[int]] | None = None, *,
+           clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], object] = time.sleep) -> list[dict]:
+    """``--warmup``'s requests (the module docstring), each its user, finish and seconds; or `stop_prompt`'s, `ps`
+    until one's answer finishes on a stop. `served_session.Refused` when one fails or serve-openai hasn't recorded
+    every one's window closed within `WARMUP_CLOSE_S`."""
+    flag = "--warmup" if ps is None else "--stop-prompt"
+    ps = SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32)) if ps is None else ps
     tag, done = secrets.token_hex(4), []
-    for i, p in enumerate(SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32))):
+    for i, p in enumerate(ps):
         body = {"user": f"warmup-{tag}-{i}", "prompt": p, "max_tokens": a.tokens, "temperature": 0.0, "top_p": 1.0}
         req = urllib.request.Request(f"http://127.0.0.1:{a.port}/v1/completions", json.dumps(body).encode(),
                                      {"content-type": "application/json"})
@@ -235,14 +258,16 @@ def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float]
             with urllib.request.urlopen(req, timeout=WARMUP_REQUEST_S) as r:  # noqa: S310
                 got = json.loads(r.read())
         except (OSError, ValueError) as e:
-            raise SS.Refused(f"--warmup: request {i}: {type(e).__name__}: {e}") from None
+            raise SS.Refused(f"{flag}: request {i}: {type(e).__name__}: {e}") from None
         done.append({"user": body["user"], "finish_reason": ((got.get("choices") or [{}])[0]).get("finish_reason"),
                      "seconds": round(clock() - t, 3)})
-        print(f"warm-up {i + 1}/{a.warmup}: {done[-1]}", flush=True)
+        print(f"{flag} {i + 1}/{len(ps)}: {done[-1]}", flush=True)
+        if flag == "--stop-prompt" and done[-1]["finish_reason"] == "stop":
+            break
     users, until = {d["user"] for d in done}, clock() + WARMUP_CLOSE_S
     while left := users - {r.get("user") for r in _lines(serve_dir / SS.USERS)}:
         if clock() > until:
-            raise SS.Refused(f"--warmup: serve-openai recorded no closed window of {sorted(left)} in "
+            raise SS.Refused(f"{flag}: serve-openai recorded no closed window of {sorted(left)} in "
                              f"{serve_dir / SS.USERS} within {WARMUP_CLOSE_S} s")
         sleep(1)
     return done
@@ -793,8 +818,8 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--peer", default="vy-dc-h200")
     f.add_argument("--prompts", type=int, default=PROMPTS)
     f.add_argument("--prompt-ids", type=SS.span, default=PROMPT_IDS, help="N, or LO:HI each prompt's length drawn in")
-    f.add_argument("--stop-prompt", action="store_true",
-                   help=f"the group's last prompt a pattern the model's copying ends with its EOS id, {SS.EOS}")
+    f.add_argument("--stop-prompt", type=int, default=0, metavar="N",
+                   help="the group's last prompt the first of N, tried as warm-ups, whose answer ends on a stop")
     f.add_argument("--tokens", type=int, default=TOKENS)
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,

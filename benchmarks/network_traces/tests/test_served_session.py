@@ -1,7 +1,7 @@
 """served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, or each
-prompt's length drawn in a LO:HI span with a stop prompt last, at most KO out), which this tree's gate accepts, with the
-endpoint's sealed flags and its hand start, and a request the gate or the class refuses is refused with its reason; a
-session through a stub gate keeps
+prompt's length drawn in a LO:HI span, at most KO out), which this tree's gate accepts, with the endpoint's sealed flags
+and its hand start, and a request the gate or the class refuses is refused with its reason; a session through a stub
+gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
@@ -156,29 +156,15 @@ def test_prompt_ids_lo_hi_draws_each_prompts_length_in_the_span_from_the_seed():
         hashlib.sha512(b"seed" + (1).to_bytes(4, "big") + (3).to_bytes(4, "big")).digest()[:8], "big") % 256
 
 
-@pytest.mark.parametrize("ids, k", [((1, 32), 7), (24, 5), ((7, 7), 1), ((1, 10), 1)])
-def test_a_stop_prompt_is_the_last_prompt_hi_ids_long_whose_copying_next_id_is_the_stop_id(ids, k):
-    """With a stop id, the group's last prompt is HI ids: (HI − 3) mod 4 drawn ids, then three drawn ids and the stop
-    id k = (HI − 3) div 4 times, and the three again; the other prompts are the draw's. HI under 7 is refused."""
-    hi = SS.bounds(ids)[1]
-    *rest, last = SS.prompts(4, ids, SS.VOCAB, b"seed", stop=SS.EOS)
-    assert rest == SS.prompts(4, ids, SS.VOCAB, b"seed")[:-1] and len(last) == hi and SS.EOS == 128001
-    head, three = last[:(hi - 3) % 4], last[(hi - 3) % 4:][:3]
-    assert last == head + (three + [SS.EOS]) * k + three and all(t < SS.VOCAB for t in head + three)
-    with pytest.raises(SS.Refused, match="takes 7 ids, not --prompt-ids 1:6"):
-        SS.prompts(4, (1, 6), SS.VOCAB, b"seed", stop=SS.EOS)
-
-
 def test_a_span_plan_at_w63k4_is_the_gates_request_and_its_session_runs_the_span(tmp_path, capsys):
-    """The w63k4 plan at ``--prompt-ids 1:32``, a stop prompt in its group, is the gate's request (its ids the group's
-    total), its session runs the span, and its endpoint's context is HI + KO; the local stand-in, which serves one
-    prompt length, refuses a span."""
+    """The w63k4 plan at ``--prompt-ids 1:32`` is the gate's request (its ids the group's total), its session runs the
+    span, and its endpoint's context is HI + KO; the local stand-in, which serves one prompt length, refuses a span."""
     a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "1:32", "--tokens", "4", "--prompts",
                                 "4", "--requests", "4", "--height", "10"])
     a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
-    ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed", stop=SS.EOS)
+    ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     doc = SS.plan(a, json.dumps(ps).encode())
-    assert doc["prompts"] == {"count": 4, "ids": sum(map(len, ps))} and len(ps[-1]) == 32
+    assert doc["prompts"] == {"count": 4, "ids": sum(map(len, ps))} and len({len(p) for p in ps}) > 1
     session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
     assert (session.prompt_ids, session.scan_class) == ((1, 32), "w63k4")
     wide = SS.parser().parse_args(["plan", "--prompt-ids", f"1:{SS.KI}", "--minutes", str(a.minutes)])

@@ -171,8 +171,6 @@ KEY = Path.home() / ".ssh" / SITE["gate_key"]
 KEEP = Path(SITE["keep"])
 #: Llama 3's regular token ids; 128,000 and up are its special tokens
 VOCAB = 128_000
-#: the base Llama-3.2-1B's one EOS id
-EOS = 128_001
 #: the minutes past `auditor.warden_minutes` a session asks for
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
@@ -246,23 +244,13 @@ def _draw(seed: bytes, *at: int) -> int:
     return int.from_bytes(hashlib.sha512(seed + b"".join(x.to_bytes(4, "big") for x in at)).digest()[:8], "big")
 
 
-def prompts(n: int, ids: int | tuple[int, int], vocab: int, seed: bytes, stop: int | None = None) -> list[list[int]]:
+def prompts(n: int, ids: int | tuple[int, int], vocab: int, seed: bytes) -> list[list[int]]:
     """`n` prompts of token ids below `vocab`, of `ids` ids or, for ``(LO, HI)``, prompt j's length LO +
     (SHA-512(seed ‖ "len" ‖ u32be j)'s first 8 bytes mod HI − LO + 1): prompt j's id i is SHA-512(seed ‖ u32be j ‖
-    u32be i)'s first 8 bytes, mod `vocab`. With `stop`, the last prompt is instead HI ids: its first (HI − 3) mod 4
-    ids, then its next three and `stop`, (HI − 3) div 4 times, and the three again: a pattern whose next id, by the
-    model's copying, is the stop id, so the model's own EOS ends it."""
+    u32be i)'s first 8 bytes, mod `vocab`."""
     lo, hi = bounds(ids)
     lens = [lo + _draw(seed + b"len", j) % (hi - lo + 1) if hi > lo else lo for j in range(n)]
-    out = [[_draw(seed, j, i) % vocab for i in range(lens[j])] for j in range(n)]
-    if stop is not None and n:
-        if hi < 7:
-            raise Refused(f"--stop-prompt: a pattern of three ids and the stop id, then the three, takes 7 ids, not "
-                          f"--prompt-ids {label(ids)}")
-        head = (hi - 3) % 4
-        last = [_draw(seed, n - 1, i) % vocab for i in range(head + 3)]
-        out[-1] = last[:head] + (last[head:] + [stop]) * ((hi - 3) // 4) + last[head:]
-    return out
+    return [[_draw(seed, j, i) % vocab for i in range(lens[j])] for j in range(n)]
 
 
 def words(a: argparse.Namespace) -> list[str]:
