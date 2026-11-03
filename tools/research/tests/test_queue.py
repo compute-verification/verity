@@ -707,6 +707,27 @@ def test_a_pass_stands_across_no_base_that_changes_what_the_checks_run_or_delete
     assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[5:]) == [1, 2], world.logs
 
 
+def test_a_pass_stands_from_the_base_the_member_had_on_next_though_the_saved_state_sorts_its_records_by_hash(world):
+    """The state is saved with its keys sorted, so a head's preflight records come back in the order of their bases' hashes, not
+    of time.  Here the newest by position is of the first base, below a change to what the checks run.  The pass onto the base
+    the member had on `next` is read first (`Queue._next_base`), and a later move of `main` that changes nothing the checks
+    run keeps it."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 1
+    first = _git(world.origin, "rev-parse", "main^{tree}")
+    for i in range(64):                                     # a base whose tree sorts below the first one's
+        moved = _move_main(world, {"tests/test_pins.py": f"# {i}\n"})
+        if _git(world.origin, "rev-parse", f"{moved}^{{tree}}") < first:
+            break
+    assert _git(world.origin, "rev-parse", "main^{tree}") < first
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
+    _move_main(world, {"c.txt": "moved\n"})
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
+    assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
+
+
 def test_a_new_head_is_preflighted_though_its_change_onto_next_is_the_old_heads_file_for_file(world):
     """A verdict is its head's: a head pushed again, here rebased onto a `main` that moved so that its change onto `next` is the
     old head's file for file, is preflighted, while the member below it keeps its pass."""
