@@ -138,6 +138,10 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
     read as, but the egress ``o1`` of a round whose network certifier's rows aren't the trace's."""
     t0 = time.time()
     st, bs, n, every = sg.st, list(member.buckets), len(member.buckets), tie.cls.EVERY
+    nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
+    if not 25 <= st.meta["k_log"] + nbl <= M.a7.M_MAX:
+        raise SystemExit(f"{member.name}: m = {st.meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX}, the --zk "
+                         "prover's")
     known = tie.known_tree(heads)
     words, tables, refs, salts, entries, want = {}, {}, {}, {}, {}, {}
 
@@ -204,16 +208,25 @@ def host_read(name: str, staged: dict[str, dict]) -> list[str]:
     return bad
 
 
-def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, sgs: dict, name: str,
-                out: Path, port: int) -> dict:
-    """Round `name` on a stream of its own: registered (the network certifier's heads, the trace's roots and the
-    prover's ``scan/view`` and ``scan/next``), every proof block drawn, each statement staged and (unless ``--dry``)
-    proved by one firewalled session, delivered, and decided by the verifier of record (`EgressTie.outcome`)."""
+def tie_of(out: Path, setup, warden_run: Path | None = None, proof_deadline: float = 6 * 3600.0) -> SimpleNamespace:
+    """The link-window (`one_link` of scan_zk's `link`), its egress tie and the stand-in trace."""
+    at = one_link(SZ.link(out / "warden", warden_run, setup, 1), out / "warden")
+    if at.void or at.tampered is None:
+        raise SystemExit(f"the run's link-window is void (FAIL buckets {at.void}): the egress tie proves a served one")
+    tie = SC.EgressTie(at.sides["ingress"][0].head.link, at.params, at.session, setup.cls,
+                       proof_deadline=proof_deadline)
+    return SimpleNamespace(at=at, tie=tie, tr=trace(tie, at.chain))
+
+
+def stage_round(M, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, sgs: dict, name: str, out: Path,
+                delta: float) -> SimpleNamespace:
+    """Round `name` on a stream of its own, registered (the network certifier's heads, the trace's roots and the
+    prover's ``scan/view`` and ``scan/next``), every proof block drawn and each statement staged and read on the host."""
     egress = at.tampered if name == "tampered" else at.sides["egress"][0]
     cells = SimpleNamespace(ingress=at.sides["ingress"][0].cells, egress=egress.cells)
     heads = SC.Heads(at.sides["ingress"][0].head, egress.head)
     view, next_ = prover_trees(tie, heads, at.chain, tr.state)
-    stream = tie.stream(budget=1, delta=a.delta, challenger=CHALLENGER)
+    stream = tie.stream(budget=1, delta=delta, challenger=CHALLENGER)
     reg = tie.register(stream, tie.registration(heads, tr.trace, view.root, next_.root), heads, tr.trace)
     draw = stream.select(reg)
     if draw.units != list(range(tie.N)):
@@ -228,6 +241,15 @@ def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespac
         raise SystemExit(f"{name}: the host's read of the staged statements isn't the round's: {bad}")
     log(f"{name}: registered {reg.digest[:16]}, every one of {tie.N} proof blocks drawn; staged "
         + "; ".join(f"{k} {m['n']} units of {m['ands']} ANDs" for k, m in staged.items()))
+    return SimpleNamespace(stream=stream, draw=draw, heads=heads, staged=staged, res=res)
+
+
+def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, sgs: dict, name: str,
+                out: Path, port: int) -> dict:
+    """Round `name` staged (`stage_round`) and, unless ``--dry``, each statement proved by one firewalled session,
+    delivered, and decided by the verifier of record (`EgressTie.outcome`)."""
+    sr = stage_round(M, tie, at, tr, sgs, name, out, a.delta)
+    stream, draw, heads, staged, res = sr.stream, sr.draw, sr.heads, sr.staged, sr.res
     if a.dry:
         return res
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
@@ -264,12 +286,8 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SZ.SETUPS[a.setup]
-    at = one_link(SZ.link(out / "warden", a.warden_run, setup, 1), out / "warden")
-    if at.void or at.tampered is None:
-        raise SystemExit(f"the run's link-window is void (FAIL buckets {at.void}): the egress tie proves a served one")
-    head = at.sides["ingress"][0].head
-    tie = SC.EgressTie(head.link, at.params, at.session, setup.cls, proof_deadline=a.proof_deadline)
-    tr = trace(tie, at.chain)
+    t = tie_of(out, setup, a.warden_run, a.proof_deadline)
+    at, tie, tr = t.at, t.tie, t.tr
     summary = {"source": at.source, "setup": setup.name, "link": tie.link, "T": tie.T, "N": tie.N,
                "members": [{"name": m.name, "template": m.template, "base": m.base, "n": len(m.units)}
                            for m in tie.members],
