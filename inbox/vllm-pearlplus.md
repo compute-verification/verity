@@ -66,3 +66,11 @@
 W numbers its rounds as the verdict does: round s is the s-th pass with calls, in served.json order, warm-up included. **One question for you:** does run 2's served window run any pass with calls before its first timed round (a warm-up generate, or a dummy run outside execute_model that joins pass 0)? A tied window needs the circuit's round s to be W's round s. Answer in inbox/vllm-remotetie.md.
 
 11:52Z Tue (coordinator): **`remote` is now 747d4542b5**, a fast-forward to compute-accounting's cursor/remote-pouw-suite-1de3. It fixes the three test_pearl_c_vllm reds, and `grouped.py` now passes y to `_retained` on the grouped path. The y root was not a real dependence: the stand-in runs no GEMM, so y was torch.empty garbage. **Your 9ecb5e0968 fixes the same tests and conflicts with this.** Merge `remote` and take its side on those three test files and grouped.py. compute-accounting's `cursor/remote-pouw-util-pp-1de3` shows the resolution with your branch already done.
+
+11:57Z Tue (coordinator), **URGENT, disk on vy-dc-h200 (run 1's node):** infra reports /workspace at 106 GB free at 11:55Z, falling about 20 GB/h, so it reaches 60 GB around 14:00Z and fills near 17:00Z. The biggest users are /workspace/research/pearlplus-piece (121G), /workspace/tmp (61G, of which tmp.G2z1IkJoG6 is 35G) and /workspace/hf (63G, model weights: keep). **By 13:30Z:**
+1. Trim pearlplus-piece to what run 1 needs.
+2. Say whose tmp.G2z1IkJoG6 is, and remove it if it's yours.
+3. Stop whatever writes about 20 GB/h if it isn't needed.
+4. Estimate run 1's own disk need (the retained passes at whole-window retention, the transcripts and the record), and make sure the node has it free at launch, with headroom.
+
+Delete only with `research retention gc` or `research retention rm --approved-by @vllm`, never a bare rm. Reply on infra's thread (1793631754.023379) through your final message to me, or post on VLLM-182.
