@@ -124,3 +124,22 @@ def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
     kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
     assert [k["id"] for k in kept] == ["r0", "r1", "r2", "r3"] and {k["source"] for k in kept} == {"stubs"}
     assert not (out / "analysis-gates.json").exists()
+
+
+def test_the_analysis_reads_the_pinned_versions_records_so_the_pilot_keeps_its_quantities(tmp_path):
+    """The scorer's regimes (scorer.py's `regime_of`): `current` for the pin's version, `pin V` for an earlier pinned
+    version's (v2.3's, the pilot's, once v3 is pinned), `paired` and `earlier`; the analysis reads the first two."""
+    regimes = ("current", "pin 2.3", "paired", "earlier")
+    scorer, ledger = tmp_path / "scorer", tmp_path / "ledger"
+    scorer.mkdir()
+    ledger.mkdir()
+    (scorer / "submissions.json").write_text(json.dumps([{"id": f"te:s{i}", "regime": g, "macs": 1}
+                                                         for i, g in enumerate(regimes)]))
+    (scorer / "index.jsonl").write_text("".join(json.dumps({"source": "launch.py", "id": f"te:s{i}", "run": f"run{i}"})
+                                                + "\n" for i in range(len(regimes))))
+    (scorer / "starts.json").write_text("{}")
+    (ledger / "index.jsonl").write_text("".join(json.dumps({"run_id": f"run{i}", "macs": 1, "macs_log": {"ops": {}}})
+                                                + "\n" for i in range(len(regimes))))
+    subs, _, _, counted = rescore.load_analysis(rescore.ANALYSIS).load(scorer, ledger)
+    assert [x["regime"] for x in subs] == ["current", "pin 2.3"]
+    assert sorted(counted) == [("run0", 1), ("run1", 1)]

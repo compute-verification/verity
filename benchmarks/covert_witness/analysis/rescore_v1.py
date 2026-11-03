@@ -2,8 +2,8 @@
 """The per-record quantities of the v2.3 search's valid records under the training formalism v2,
 which te_core.rescore scores: this file holds no formula of its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
 
-It reads the night's state as the scorer left it: `submissions.json` (the current regime: the valid records'
-checkpoints), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's
+It reads the night's state as the scorer left it: `submissions.json` (the pinned versions' regimes, `load`: the valid
+records' checkpoints), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's
 directory, and te_core's ledger (`index.jsonl`, every checkpoint's counted operations, joined on run id and MACs).
 
     PYTHONPATH=. uv run python benchmarks/covert_witness/analysis/rescore_v1.py --out /tmp/te-v1-quantities
@@ -220,8 +220,15 @@ def family(r: dict) -> str:
     return "partial"
 
 
+def pinned_regime(regime: str) -> bool:
+    """A record of a pinned version (the scorer's `regime_of`): `current`, the pin's version, or `pin V`, an earlier
+    one's, so the pilot's records keep their quantities once a newer version is pinned (te_core.frontier keeps the
+    pin's and the pilot's); not `paired` or `earlier`."""
+    return regime == "current" or regime.startswith("pin ")
+
+
 def load(scorer: Path, ledger: Path):
-    subs = [x for x in json.loads((scorer / "submissions.json").read_text()) if x["regime"] == "current"]
+    subs = [x for x in json.loads((scorer / "submissions.json").read_text()) if pinned_regime(x["regime"])]
     launch = {}
     for line in (scorer / "index.jsonl").open():
         r = json.loads(line)
