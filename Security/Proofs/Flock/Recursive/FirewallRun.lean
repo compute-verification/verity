@@ -479,6 +479,7 @@ theorem step_commit (s : Schedule) (rootF : ByteArray) (roots publics : List (St
   obtain ⟨rfl, rfl, rfl⟩ := h
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
+  refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind (Rel.mapM _ (fun e => e.2) blankRoot (fun e r r' => ?_) _ _ _) fun t t' q q' h => ?_
   · obtain ⟨n, v⟩ := e
     refine Rel.bind (Rel.saltedTop v) fun l l' r₁ r₁' h => ?_
@@ -536,6 +537,7 @@ theorem step_finish (s : Schedule) : Rel ys ys' [] [] (step s .finish) (step s .
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
+  refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
   refine Rel.bind (Rel.set ?_) fun _ _ q q' h => ?_
@@ -574,6 +576,7 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
     obtain ⟨rfl, rfl, rfl⟩ := h
     refine Rel.bind Rel.lift fun _ _ q q' h => ?_
     obtain ⟨-, rfl, rfl⟩ := h
+    refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
     refine Rel.bind (Rel.mapM Firewall.salted (fun c => [c]) (fun _ => ByteArray.empty) (fun row _ _ => Rel.salted row)
       _ _ _)
       fun bcs bcs' q q' h => ?_
