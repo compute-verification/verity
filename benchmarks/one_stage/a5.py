@@ -254,7 +254,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
     row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
     items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's and registered
-    value's layout), its selection the partition file's rule, and its proof deadline every member's session. A program that
+    value's layout, a value's word width where it isn't 16 bits), its selection the partition file's rule, and its proof deadline every member's session. A program that
     takes values (`program_values`) has them registered beside the ports, on a stream that takes them and the tie's log
     (`tie`); -> (the stream, `register`'s counts, None for one template's)."""
     defs: dict[str, list] = {}
@@ -275,7 +275,8 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
               ("window", "the window's provenance"),
               *([("leaf_layer", "the leaf layer over the public bodies")] if leaf_layer is not None else []),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain")),
-              *((f"{x}:{v}", "a registered value's layout") for v, _n, _w in taken for x in ("leaves", "words", "domain"))]
+              *((f"{x}:{v}", "a registered value's layout") for v, _n, w in taken
+                for x in ("leaves", "words", "domain", *(("word_bits",) if w != REG.WORD_BITS else ())))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(want)) + tuple(S.Value(v, None, "serve", registered=True) for v, _n, _w in taken)
     spec = S.Spec(values, S.Law(a.rule),
