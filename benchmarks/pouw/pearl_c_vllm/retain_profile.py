@@ -189,15 +189,15 @@ class _Profile:
 
     def wrap_y_tree(self, f):
         @functools.wraps(f)
-        def timed(run, y, index):
+        def timed(run, y, index, *rest):
             import torch
             at = self.ends
             if not y.is_cuda:
-                return f(run, y, index)
+                return f(run, y, index, *rest)
             a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
             a.record()
             t = time.perf_counter()
-            out = f(run, y, index)
+            out = f(run, y, index, *rest)
             b.record()
             self.add(at, "y_tree", time.perf_counter() - t, y.numel() * y.element_size())
             self.events.append((at, a, b))
