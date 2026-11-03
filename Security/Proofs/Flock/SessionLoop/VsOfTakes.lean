@@ -6,8 +6,8 @@ import Proofs.Flock.SessionLoop.FinL0Vals
 # A pad-blind worker meets `TakesVals` at its own values
 
 * **`Loop.takesVals_vsOf`**: at `SessionLoopZKDeployed`'s release with the loop's own inner rounds (`withInner`), at
-  every statement the loop serves, `phased bx post` meets `TakesVals` at `vsOf bx`, at every witness, every `bx` and
-  whatever `post` reads.
+  every statement the loop serves, `phased bx post` meets `TakesVals` at `vsOf bx`, at every witness at which
+  `vsServed bx`'s rows hold (`RowsOK`, where `vsOf bx` is `vsServed bx`), every `bx` and whatever `post` reads.
 * `Loop.freedAt_unique`: two rounds that free pad `i` of rep stream `2j + r` along one coin vector free it as one word.
   At the same prefix the worker's round (`bwOf` hands `bx` the answers after `Hello`'s), the frame's state and the free
   list are the same (`frameAnswer_congr`, `Free.roundFree_agree`), so the place in the absorbed order is the same; at a
@@ -473,8 +473,9 @@ theorem freedAt_unique
 
 /-- **A pad-blind worker of the algebraic phase meets `TakesVals` at its own values**: at `SessionLoopZKDeployed`'s
 release with the loop's own inner rounds (`withInner`), its tables `realOf src`, at every statement the loop serves, every
-witness, every algebraic phase's worker `bx` and any worker `post` after the phase, `phased bx post` meets `TakesVals`
-at `vsOf bx`. Each word the frame frees in the worker's round is at a pad
+algebraic phase's worker `bx`, every witness at which `vsServed bx`'s rows hold (`RowsOK`, so `vsOf bx` is
+`vsServed bx` there) and any worker `post` after the phase, `phased bx post` meets `TakesVals` at `vsOf bx`. Each word
+the frame frees in the worker's round is at a pad
 below `n_E` other than `final_c`'s (`absorbed_lt_hab`, at the rep's layout: `lay_ofLoopLink`), where `vsOf` is the word
 some round frees there along the coins (`freeWord`), and that round frees it as this word (`freedAt_unique`). -/
 theorem takesVals_vsOf
@@ -491,6 +492,7 @@ theorem takesVals_vsOf
       List (Msg × Msg) → Array ByteArray)
     (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit) (hSv : Serves x)
     (bx : AlgWorker (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real))
+    (hRo : RowsOK (vsServed _ bx) x w)
     (post : (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real).toSrv.Worker) :
     TakesVals (vsOf _ bx) (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real)
       (phased _ bx post) x w := by
@@ -566,7 +568,7 @@ theorem takesVals_vsOf
         (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real
         hP bx h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hn List.length_ofFn.symm)) hF hc).symm
   rw [hord.1]
-  refine Eq.symm ((vsWord_vsOf _ bx hSv w ν _ t j r hiE).trans ?_)
+  refine Eq.symm ((vsWord_vsOf _ bx hSv w hRo ν _ t j r hiE).trans ?_)
   rw [ite_eq_right hab.2]
   exact vsOfWord_of_free _ bx _ _ _ hfw
 
