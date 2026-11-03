@@ -4,6 +4,7 @@ import Proofs.Core.Game.Tape
 import Proofs.Properties.Challenger.Break
 import Proofs.Properties.Challenger.Drawn
 import Proofs.Properties.Challenger.CanonLine
+import Proofs.Properties.Challenger.Limits
 
 /-!
 # The log the sampled check read is the device's, or a break: the read finder and the forger
@@ -37,9 +38,13 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   saw none (`signed := []`). Each runs the play once and `findBreak` once per record: its SHA-512 calls are the
   strategy's, one per string `findBreak` hashes and `lmsCalls` per signature it verifies (`breakCalls`).
   `withBinding` puts them in a `Constructions`.
+* **The records are read at the deployed key, within `LIMITS`** (`keyOf_deployed`, `breakCalls_le`): v2 refuses a
+  challenger key off `Lms.deployed` and coins past `LIMITS` (`Properties.Challenger.Limits`), so the parameters' key
+  is at `lmsVerify`'s parameters and `findBreak` spends at most `recordCalls` per record beside the strings the device
+  hashes.
 * **The reduction** (`logged_le`). Suppose every accepted run that isn't `Logged` carries a break under the
   parameters' key in one of its records (`Binds`). Then an accepted play that isn't `Logged` is at most as likely as
-  the read finder's collision plus the forger's forgery, at a key at the deployed LMS parameters (`lmsVerify`'s).
+  the read finder's collision plus the forger's forgery.
 -/
 
 namespace Verity.Sampled.Binding
@@ -435,6 +440,121 @@ def breakCalls (dev : History) (s : Sent) : ℕ :=
   ((records s).map fun x => (signatures x.1.key x.2).length * lmsCalls x.1.key.params +
     (readHashed x.1.key x.1.label x.2).length + (deviceHashed dev x.1.key.pub).length).sum
 
+/-! ## v2's records are read at the deployed key, within `LIMITS` -/
+
+/-- The sampled component's one-stage parameters are `OneStageZk.paramsOfJson`'s, at what it reads past the form. -/
+theorem dispatch_params {j : Json} {p : SampledProofs.OneStageZk.Params}
+    (h : VStar.Recursive.Sampled.paramsOfJson j = .ok (.inl p)) :
+    ∃ rest, SampledProofs.OneStageZk.paramsOfJson rest = .ok p := by
+  unfold VStar.Recursive.Sampled.paramsOfJson at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | (cases h; exact ⟨_, by assumption⟩)
+
+/-- The sampled component's one-stage evidence is `OneStageZk.evidenceOf`'s, at the bytes it reads past the form. -/
+theorem dispatch_evidence {b : ByteArray} {e : SampledProofs.OneStageZk.Evidence}
+    (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl e)) :
+    ∃ b', SampledProofs.OneStageZk.evidenceOf b' = .ok e := by
+  unfold VStar.Recursive.Sampled.evidenceOf at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | (cases h; exact ⟨_, by assumption⟩)
+
+/-- **The challenger key the sampled component's one-stage parameters name is at `Lms.deployed`**
+(`Limits.paramsOfJson_deployed`). -/
+theorem dispatch_deployed {a : ByteArray} {p : SampledProofs.OneStageZk.Params}
+    (h : (Core.canonicalJson a >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p)) :
+    ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
+  cases hj : Core.canonicalJson a with
+  | error _ => rw [hj] at h; cases h
+  | ok j =>
+    rw [hj, ok_bind] at h
+    obtain ⟨rest, hr⟩ := dispatch_params h
+    exact Limits.paramsOfJson_deployed hr
+
+theorem keyAt_deployed {n : Core.Composition.Named} {key : ChallengerKey} (h : keyAt n = some key) :
+    key.params = Lms.deployed := by
+  unfold keyAt at h
+  split at h
+  · split at h
+    · obtain ⟨key', label, hch, hk⟩ := dispatch_deployed (by assumption)
+      rw [hch] at h
+      cases h
+      exact hk
+    · cases h
+  · cases h
+
+/-- **The parameters' challenger key is at the deployed LMS parameters** (`lmsVerify`'s): v2 refuses a key at any
+other (`Limits.paramsOfJson_deployed`). -/
+theorem keyOf_deployed (θ : ByteArray) : ∀ key ∈ keyOf θ, key.params = Lms.deployed := by
+  intro key hkey
+  have hkey : keyOf θ = some key := hkey
+  unfold keyOf at hkey
+  split at hkey
+  · obtain ⟨n, -, hn⟩ := List.exists_of_findSome?_eq_some hkey
+    exact keyAt_deployed hn
+  · cases hkey
+
+/-- **At most `findBreak`'s SHA-512 calls on one v2 record**, apart from the strings the device hashes:
+`Limits.signaturesAt LIMITS` signatures at `lmsCalls Lms.deployed` each and `Limits.readsAt LIMITS` strings
+(`Limits.record_calls_le`); its key is at `Lms.deployed`. -/
+def recordCalls : ℕ := Limits.signaturesAt LIMITS * lmsCalls Lms.deployed + Limits.readsAt LIMITS
+
+/-- **Each v2 record is read at the deployed key, within `recordCalls`**: v2's parameters name its key at
+`Lms.deployed` and v2's evidence holds its coins within `LIMITS` (`Limits.evidenceOf_within`). -/
+theorem record?_le {n : Core.Composition.Named} {x : Core.Composition.Case} {r : Draws × Json}
+    (h : record? n x = some r) :
+    r.1.key.params = Lms.deployed ∧
+      (signatures r.1.key r.2).length * lmsCalls r.1.key.params + (readHashed r.1.key r.1.label r.2).length ≤
+        recordCalls := by
+  unfold record? at h
+  split at h
+  · obtain ⟨d, hd, rfl⟩ := Option.map_eq_some_iff.1 h
+    obtain ⟨key, label, hch, hk⟩ := dispatch_deployed (by assumption)
+    have hkd := key_of_source hd
+    rw [hch] at hkd
+    have hkd' : key = d.key := Option.some.inj hkd
+    have hdp : d.key.params = Lms.deployed := hkd' ▸ hk
+    obtain ⟨b, hb⟩ := dispatch_evidence (by assumption)
+    have hw := Limits.evidenceOf_within hb
+    refine ⟨hdp, ?_⟩
+    dsimp only
+    rw [hdp]
+    exact Nat.add_le_add (Nat.mul_le_mul_right _ (Limits.signatures_le _ _ _ hw))
+      (Limits.readHashed_le _ _ _ _ hw)
+  · cases h
+
+theorem records_le {s : Sent} {x : Draws × Json} (hx : x ∈ records s) :
+    x.1.key.params = Lms.deployed ∧
+      (signatures x.1.key x.2).length * lmsCalls x.1.key.params + (readHashed x.1.key x.1.label x.2).length ≤
+        recordCalls := by
+  unfold records at hx
+  split at hx
+  · obtain ⟨y, -, hy⟩ := List.mem_filterMap.1 hx
+    exact record?_le hy
+  · simp at hx
+
+/-- **`findBreak`'s SHA-512 calls on the records of `s` are at most `recordCalls` per record**, beside the strings
+the device hashes under each record's key (`Properties.Challenger.deviceHashed`). -/
+theorem breakCalls_le (dev : History) (s : Sent) :
+    breakCalls dev s ≤ (records s).length * recordCalls +
+      ((records s).map fun x => (deviceHashed dev x.1.key.pub).length).sum := by
+  unfold breakCalls
+  have hle : ∀ x ∈ records s, (signatures x.1.key x.2).length * lmsCalls x.1.key.params +
+      (readHashed x.1.key x.1.label x.2).length ≤ recordCalls := fun x hx => (records_le hx).2
+  generalize records s = l at hle ⊢
+  induction l with
+  | nil => simp
+  | cons x l ih =>
+    simp only [List.map_cons, List.sum_cons, List.length_cons, Nat.succ_mul]
+    have h1 := hle x (List.mem_cons.2 (.inl rfl))
+    have h2 := ih fun y hy => hle y (List.mem_cons_of_mem _ hy)
+    omega
+
 /-- A finding's collision, as two messages. -/
 def collisionOf : Finding → Option (Claims.Msg × Claims.Msg)
   | .collision x y => some (x.data.toList, y.data.toList)
@@ -562,9 +682,9 @@ def Binds (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent →
     ∃ x ∈ records o.sent, keyOf θ = some x.1.key ∧ Break (dev o) x.1.key x.1.label x.2
 
 /-- **A run with a break under the parameters' key in one of its records is one where the read finder or the
-forger succeeds**, at a key at the deployed LMS parameters. -/
+forger succeeds**, the parameters' key being at the deployed LMS parameters (`keyOf_deployed`). -/
 theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
-    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hkey : ∀ key ∈ keyOf θ, key.params = Lms.deployed)
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ) {x : Draws × Json}
     (hx : x ∈ records (Verity.Game.Tape.out _ σ t).sent) (hk : keyOf θ = some x.1.key)
     (hb : Break (dev (Verity.Game.Tape.out _ σ t)) x.1.key x.1.label x.2) :
@@ -580,7 +700,7 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
     exact findBreak_valid hx'
   | forgery m sig =>
     right
-    have hd : x.1.key.params = Lms.deployed := hkey _ hk
+    have hd : x.1.key.params = Lms.deployed := keyOf_deployed θ _ hk
     let o := Verity.Game.Tape.out _ σ t
     let l := (records o.sent).filterMap fun x' =>
       if keyOf θ = some x'.1.key then findBreak (dev o) x'.1.key x'.1.label x'.2 else none
@@ -609,11 +729,12 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
 
 /-- **(a): an accepted play whose log the check read isn't the device's is at most as likely as the read finder's
 collision plus the forger's forgery**, where each accepted run that isn't `Logged` carries a break under the
-parameters' key in one of its records (`Binds`) and that key is at the deployed LMS parameters. -/
+parameters' key in one of its records (`Binds`). That key is at the deployed LMS parameters (`keyOf_deployed`), and
+each finder spends on a play the strategy's calls and at most `recordCalls` per record beside the strings the device
+hashes (`breakCalls_le`). -/
 theorem logged_le (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent → Option (List Read))
     (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ)
-    (hkey : ∀ key ∈ keyOf θ, key.params = Lms.deployed) :
+    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Logged reads o) (V.game θ F c) σ ≤
       ENNReal.ofReal ((readFinder V dev θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal ((forger V dev θ F c σ).Pr Verity.lmsVerify) := by
@@ -626,18 +747,17 @@ theorem logged_le (V : Vocab d α) (k : Verity.Registration.Composite) (reads : 
         refine Verity.Game.prCoin_mono fun t ⟨hv, hl⟩ => ?_
         have hθ := (play_reaches (Verity.Game.Tape.reaches_out _ σ t)).1
         obtain ⟨x, hx, hk, hbr⟩ := hb _ hθ hv hl
-        exact finders_of_break V dev θ F c σ hkey t hx hk hbr
+        exact finders_of_break V dev θ F c σ t hx hk hbr
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
 
 /-- **(a) at the leg's constructions with this read finder and forger** (`withBinding`). -/
 theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (k : Verity.Registration.Composite)
     (reads : Sent → Option (List Read)) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
-    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ)
-    (hkey : ∀ key ∈ keyOf θ, key.params = Lms.deployed) :
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Logged reads o) (V.game θ F c) σ ≤
       ENNReal.ofReal (((withBinding K dev).readFinder θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal (((withBinding K dev).forger θ F c σ).Pr Verity.lmsVerify) :=
-  logged_le V k reads dev θ F c σ hb hkey
+  logged_le V k reads dev θ F c σ hb
 
 end Verity.Sampled.Binding
