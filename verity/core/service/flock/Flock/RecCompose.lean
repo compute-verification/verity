@@ -36,6 +36,7 @@ module
 public import Lean.Data.Json
 public import Flock.Bytes
 public import Flock.Hash
+public import Flock.JsonParse
 
 @[expose] public section
 
@@ -219,7 +220,7 @@ def Accepts (n : Nat) (rows inner : String) (links : Option (String × Nat)) (vs
 def verdicts (log : String) : Except String (Array Json) :=
   (log.splitOn "\n").foldlM (init := #[]) fun out line =>
     if line.startsWith "VERDICT " then
-      match Json.parse (line.drop 8).toString with
+      match JsonParse.parse (line.drop 8).toString with
       | .ok j => pure (out.push j)
       | .error e => throw s!"a VERDICT line that is not JSON: {e}"
     else pure out
@@ -360,7 +361,7 @@ def eventsOf : Nat → List Json → Except String (List Event)
 /-- **The record** `{"kind": "verity/rec-run/v1", "events": [...]}`: its events, in the order the challenger logged
 them. -/
 def runOf (text : String) : Except String (List Event) :=
-  match Json.parse text with
+  match JsonParse.parse text with
   | .error _ => .error "run record: not JSON"
   | .ok j =>
     if (j.getObjValAs? String "kind").toOption != some RUN_KIND then .error s!"run record: not a {RUN_KIND} record"

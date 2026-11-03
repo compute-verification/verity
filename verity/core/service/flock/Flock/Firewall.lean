@@ -6,6 +6,7 @@ module
 
 public import Lean.Data.Json
 public import Flock.Hm96
+public import Flock.JsonParse
 
 @[expose] public section
 
@@ -351,7 +352,7 @@ def step (s : Schedule) : Req → Fw Unit
   | .hello text => do
     if (← get).finished then throw "session finished"
     if (← get).hello then throw "a second Hello"
-    let v ← match Json.parse text with
+    let v ← match JsonParse.parse text with
       | .ok v => pure v
       | .error e => throw e
     let ok := match v.getObjVal? "link" with
@@ -508,7 +509,7 @@ def cmd (_ : List String) : IO UInt32 := do
     let line ← stdin.getLine
     if line.isEmpty then break
     if line.all Char.isWhitespace then continue
-    let out := match Json.parse line >>= case with
+    let out := match JsonParse.parse line >>= case with
       | .ok r => r
       | .error e => Json.mkObj [("error", .str e)]
     stdout.putStrLn out.compress
