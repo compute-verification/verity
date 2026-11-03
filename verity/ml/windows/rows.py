@@ -74,7 +74,8 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.hm96 import batch as HB
+from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
@@ -140,101 +141,32 @@ def value_rows(value: Any, positions: Sequence[int] | np.ndarray) -> np.ndarray:
     return np.asarray(a, dtype=np.uint16).reshape(len(at), value.words)
 
 
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+# --- salts: hm96's salt stream under RFC 8439's nonce -------------------------------------------------------------------
 
-
-# --- salts: ChaCha20 (RFC 8439) over numpy -------------------------------------------------------------------------------
-
-_SIGMA = np.frombuffer(b"expand 32-byte k", dtype="<u4")
-_QR = ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15), (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13), (3, 4, 9, 14))
-
-
-def _rotl(v: np.ndarray, n: int) -> np.ndarray:
-    return (v << np.uint32(n)) | (v >> np.uint32(32 - n))
-
-
-def chacha20(key: bytes, nonce: bytes, nbytes: int, counter: int = 0) -> bytes:
-    """``nbytes`` of the RFC 8439 ChaCha20 keystream (32-byte key, 12-byte nonce, 32-bit block counter from ``counter``)."""
-    if len(key) != 32 or len(nonce) != 12:
-        raise ValueError("ChaCha20 takes a 32-byte key and a 12-byte nonce")
-    nblk = -(-nbytes // 64)
-    if counter + nblk > 1 << 32:
+def _stream(key: bytes, nonce: int, n: int) -> bytes:
+    """The salts of rows 0 .. n - 1 under ``key`` at the 96-bit ``nonce`` (12 bytes LE), row i at offset 192 i of RFC 8439's
+    ChaCha20 stream from block 0: `hm96.batch.salts`, whose 64-bit counter and nonce are RFC 8439's 32-bit counter and
+    96-bit nonce read another way."""
+    if not 0 <= nonce < 1 << 96:
+        raise ValueError("an RFC 8439 nonce is 12 bytes")
+    if HB.SALT_BLOCKS * n > 1 << 32:
         raise ValueError("the 32-bit block counter would wrap")
-    out = []
-    for lo in range(0, nblk, 1 << 16):
-        m = min(1 << 16, nblk - lo)
-        s = np.empty((16, m), dtype=np.uint32)
-        s[0:4] = _SIGMA[:, None]
-        s[4:12] = np.frombuffer(key, dtype="<u4")[:, None]
-        s[12] = np.arange(counter + lo, counter + lo + m, dtype=np.uint64).astype(np.uint32)
-        s[13:16] = np.frombuffer(nonce, dtype="<u4")[:, None]
-        x = s.copy()
-        for _ in range(10):
-            for a, b, c, d in _QR:
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 16)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 12)  # noqa: E702
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 8)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 7)  # noqa: E702
-        x += s
-        out.append(np.ascontiguousarray(x.T).astype("<u4").tobytes())
-    return b"".join(out)[:nbytes]
+    return HB.salts(key, nonce >> 32, np.arange(n), (nonce & 0xFFFFFFFF) << 32)
 
 
 def salts(key: bytes, port_index: int, n: int) -> bytes:
-    """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated)."""
-    return chacha20(key, port_index.to_bytes(12, "little"), n * SALT_BYTES)
+    """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated): nonce = the port's index."""
+    return _stream(key, port_index, n)
 
 
 def segment_salts(key: bytes, segment: int, n: int) -> bytes:
     """The salts of ``segment``'s ``n`` table rows under the run's row key (192 bytes each, concatenated): its tables in order,
-    each table's rows in rank order, one stream per segment (nonce = the segment, 12 bytes LE)."""
-    return chacha20(key, segment.to_bytes(12, "little"), n * SALT_BYTES)
-
-
-# --- the frame on SHA-512, batched ---------------------------------------------------------------------------------------
-
-def _uint(v: int) -> bytes:
-    return v.to_bytes(max(1, (v.bit_length() + 7) // 8), "big")
-
-
-def _part(p: bytes) -> bytes:
-    return len(p).to_bytes(8, "big") + p
-
-
-class _Frame:
-    """``merkle._hash`` for one SHA-512 domain, with the constant prefix of each tag hashed once."""
-
-    def __init__(self, domain_id: bytes) -> None:
-        head = lambda tag: hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag + _part(domain_id))  # noqa: E731
-        self._leaf, self._node, self._pad = head(b"leaf"), head(b"node"), head(b"pad")
-
-    def leaf(self, rank: int, schema: bytes, value: bytes) -> bytes:
-        u = _part(_uint(rank))
-        h = self._leaf.copy()
-        h.update(u + u + schema + _part(value))
-        return h.digest()
-
-    def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
-        h = self._node.copy()
-        h.update(_part(_uint(level)) + _part(_uint(index)) + _part(left) + _part(right))
-        return h.digest()
-
-    def pad(self, rank: int) -> bytes:
-        h = self._pad.copy()
-        h.update(_part(_uint(rank)))
-        return h.digest()
-
-    def reduce(self, level: list[bytes], first: int, depth: int = 0) -> bytes:
-        """Fold a level whose first node has global index ``first`` at ``depth`` up to one node."""
-        while len(level) > 1:
-            level = [self.node(depth, (first >> 1) + j, level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
-            first >>= 1
-            depth += 1
-        return level[0]
+    each table's rows in rank order, one stream per segment (nonce = the segment)."""
+    return _stream(key, segment, n)
 
 
 def _width(n: int) -> int:
-    return 1 << max(0, (n - 1).bit_length())
+    return 1 << merkle_depth(n)
 
 
 def _copy_update(h: Any, data: bytes | memoryview) -> bytes:
@@ -251,7 +183,7 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
     (a ``string`` port's are given)."""
     port, start, size = task
     j = _JOB["ports"][port]
-    fr, n = _Frame(j["domain_id"]), j["count"]
+    dom, n = j["domain"], j["count"]
     hi = min(start + size, n)
     leaves: list[bytes] = []
     bc = b""
@@ -266,16 +198,16 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
         for i in range(m):
             s = bytes(b[i * 64:(i + 1) * 64]) + _copy_update(salt_h, yv[i * SALT_BYTES:(i + 1) * SALT_BYTES])
             out += s
-            leaves.append(fr.leaf(start + i, schema, _copy_update(leaf_h, s)))
+            leaves.append(dom.leaf(start + i, start + i, schema, _copy_update(leaf_h, s)))
         bc = bytes(out)
     elif j["kind"] == "string" and hi > start:
         s, leaf_h = memoryview(j["strings"]), _JOB["leaf_h"]
-        leaves = [fr.leaf(i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
+        leaves = [dom.leaf(i, i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
     elif j["kind"] == "word" and hi > start:
         w = j["words"][start:hi].astype(">u2").tobytes()
-        leaves = [fr.leaf(start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
-    leaves += [fr.pad(r) for r in range(max(start, n), start + size)]
-    return port, start, fr.reduce(leaves, start), bc
+        leaves = [dom.leaf(start + i, start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
+    leaves += [dom.pad(r) for r in range(max(start, n), start + size)]
+    return port, start, levels(dom.domain_id, leaves, start, hash=dom.hash)[-1][0], bc
 
 
 # --- the window ----------------------------------------------------------------------------------------------------------
@@ -573,16 +505,16 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     for p, s in (strings or {}).items():
         if len(s) != domains[p].count * BC_BYTES:
             raise ValueError(f"{p}: {len(s)} bytes of strings, not {domains[p].count} rows' b || c")
-        ports[p] = {"kind": "string", "count": domains[p].count, "domain_id": domains[p].domain_id, "strings": bytes(s),
-                    "schema": _part((schemas or {}).get(p, ROW_SCHEMA).encode())}
+        ports[p] = {"kind": "string", "count": domains[p].count, "domain": domains[p], "strings": bytes(s),
+                    "schema": (schemas or {}).get(p, ROW_SCHEMA)}
     for p, r in rows.items():
         r = np.ascontiguousarray(r).astype("<u2")
         s = (schemas or {}).get(p, ROW_SCHEMA)
-        ports[p] = {"kind": "row", "count": domains[p].count, "domain_id": domains[p].domain_id, "rows": r.tobytes(),
-                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": _part(s.encode())}
+        ports[p] = {"kind": "row", "count": domains[p].count, "domain": domains[p], "rows": r.tobytes(),
+                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": s}
     for p, w in words.items():
-        ports[p] = {"kind": "word", "count": domains[p].count, "domain_id": domains[p].domain_id,
-                    "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": _part(WORD_SCHEMA.encode())}
+        ports[p] = {"kind": "word", "count": domains[p].count, "domain": domains[p],
+                    "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": WORD_SCHEMA}
     _JOB.update(ports=ports, hiding=HidingLeaves(instance=INST), salt_h=hashlib.sha512(INST.salt_prefix),
                 leaf_h=hashlib.sha512(INST.leaf_prefix(INST.default_key)))
     tasks = []
@@ -605,7 +537,7 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     for p, j in ports.items():
         mine = sorted(by.get(p, ()))
         size = min(chunk, _width(j["count"]))
-        roots[p] = _Frame(j["domain_id"]).reduce([node for _, node, _ in mine], 0, (size - 1).bit_length())
+        roots[p] = levels(j["domain"].domain_id, [node for _, node, _ in mine], 0, (size - 1).bit_length(), j["domain"].hash)[-1][0]
         if j["kind"] == "row":
             bc[p] = b"".join(b for _, _, b in mine)
         elif j["kind"] == "string":
