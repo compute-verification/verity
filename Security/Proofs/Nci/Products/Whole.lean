@@ -18,9 +18,9 @@ For an inference block `I` with reads `U = in(I) \ θ`:
    `H ≤ (k/b) (1 + Σ_i A_ij μ_i)` by 2, 3 and the bound below `t`; the post-fixed point closes the step.
 5. **The cap** (`SecurityProofs.WholeCap`): the operand entries of a block's whole MACs of product `q` have distinct
    values (`Standard.card_add_card_le_hadCones`), each paid or made, so `b |π₁₂ T| + b |π₂₃ T| ≤ |U ∩ cones| + e k`
-   (`System.ops_le`) by 2, 3 and the class bound, for `T` the MACs of the block's whole cells among them. With
-   `|U ∩ cones| + |U ∩ macs| ≤ k`, the cap along chains (`Verity.Combinatorics.sum_card_le_chain`) runs at
-   `k' = k (1 + e)`; the split cells and the received partial sums are as in `NoCellCap`.
+   (`System.ops_le`) by 2, 3 and the class bound (`System.sum_fanout_le`), for `T` the MACs of the block's whole cells
+   among them. With `|U ∩ cones| + |U ∩ macs| ≤ k`, the cap along chains (`Verity.Combinatorics.sum_card_le_chain`)
+   runs at `k' = k (1 + e)`; the split cells and the received partial sums are as in `NoCellCap`.
 6. **The bound** (`SecurityProofs.WholeBound`): each product's cap inverted by `chainBlocks_le`, then the max over `G`.
 -/
 
@@ -287,6 +287,19 @@ namespace System
 
 variable {ι κ : Type} [Fintype ι] [DecidableEq ι] (sys : System d ι κ)
 
+/-- **Made values' sources**: in an inference block, the output entries whose whole chains it holds make at most
+`e_j k / b` of class `j`'s values in all, by P-match and the class bound, `e_j` its whole-making factor. -/
+theorem sum_fanout_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ}
+    (hS : ∀ p, (sys.prod p).Wiring) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
+    (hM : sys.Matched A) (hb : 0 < b) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j) (hμ : sys.PostFixed k b cs A μ)
+    {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) (j : κ) :
+    ∑ x ∈ univ.sigma (fun q => (sys.prod q).wholeOut I), A (sys.cls x.1) j ≤ (k : ℝ) / b * wholeFactor A μ j := by
+  rw [sys.sum_sigma_wholeOut _ (fun i => A i j) I, wholeFactor, mul_sum]
+  refine sum_le_sum fun i _ => ?_
+  have hc := SecurityProofs.ClassBound d ι κ sys c k b cs A μ I i hS hV hsh hW hM hb hcs hA hμ hI
+  calc A i j * _ ≤ A i j * (μ i * k / b) := mul_le_mul_of_nonneg_left hc (hA _ _)
+    _ = (k : ℝ) / b * (A i j * μ i) := by ring
+
 /-- **Operands paid or made whole**: MACs `T` of product `q` whole in a block have
 `b |π₁₂ T| + b |π₂₃ T| ≤ |U ∩ cones| + e k`, `e` the class's whole-making factor. -/
 theorem ops_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ}
@@ -315,13 +328,7 @@ theorem ops_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A 
     refine ⟨mem_biUnion.2 ⟨q, mem_filter.2 ⟨mem_univ _, rfl⟩, (sys.prod q).hadCones_subset_values I hvH⟩, ?_⟩
     obtain ⟨x, hxs, hx⟩ := (hW I hI q v hvH).resolve_left hvb
     exact ⟨x, hxs, mem_sigma.2 ⟨mem_univ _, mem_filter.2 ⟨mem_univ _, hx⟩⟩⟩
-  have hX : ∑ x ∈ univ.sigma (fun q' => (sys.prod q').wholeOut I), A (sys.cls x.1) (sys.cls q) ≤
-      (k : ℝ) / b * wholeFactor A μ (sys.cls q) := by
-    rw [sys.sum_sigma_wholeOut _ (fun i => A i (sys.cls q)) I, wholeFactor, mul_sum]
-    refine sum_le_sum fun i _ => ?_
-    have hc := SecurityProofs.ClassBound d ι κ sys c k b cs A μ I i hS hV hsh hW hM hb hcs hA hμ hI
-    calc A i (sys.cls q) * _ ≤ A i (sys.cls q) * (μ i * k / b) := mul_le_mul_of_nonneg_left hc (hA _ _)
-      _ = (k : ℝ) / b * (A i (sys.cls q) * μ i) := by ring
+  have hX := sys.sum_fanout_le hS hV hsh hW hM hb hcs hA hμ hI (sys.cls q)
   rw [← card_filter_add_card_filter_not (s := (sys.prod q).hadCones I)
     (fun v => b ≤ (d.unregistered I ∩ v).card)] at h1
   have h1' : ((T.image fun x => (x.1, x.2.1)).card : ℝ) + (T.image fun x => (x.2.1, x.2.2)).card ≤
