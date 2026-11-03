@@ -430,18 +430,21 @@ measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gate
   esac
   return 0
 }
-block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, public (padded
-  # counts); a day's total counts each of the day's windows
-  local c tag f pins=() day
+block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, judged against
+  # the inference-only policy (IO_POLICY) where the run has one: the judgment public, its exact counts in the serve dir's private/
+  local c tag f pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
+  [ -f "$decl" ] || { say "BLOCK-COUNTS: none, since the run declares no c, k and n"; return 0; }
   [ -f "$WREG" ] && pins=(--pins "$WREG")
   day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") || return 0
+  (umask 077; mkdir -p "$D/private")
   for c in $CLASSES; do
     tag=${c//,/-}; [ "$c" = record ] && tag=record
     f=$D/window-circuit-w$K-$tag.json
     [ -f "$f" ] || continue
-    if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" \
+    if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
+         --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
          --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
-      say "BLOCK-COUNTS class $c, the picked window alone: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-200)"
+      say "BLOCK-COUNTS class $c, the picked window alone: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-400)"
     else say "BLOCK-COUNTS class $c refused: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-600)"; fi
   done
 }

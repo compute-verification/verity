@@ -1,5 +1,6 @@
-"""A day's (c, k)-inference blocks, counted from its served windows' circuit records, as a public report
-(`records.block_counts`): ``verity-vllm block-counts``, the data the inference-only check's per-day n is calibrated from.
+"""A day's (c, k)-inference blocks, counted from its served windows' circuit records and judged against the day's declared
+c, k and n (`NciCheck.Count`'s rule): ``verity-vllm block-counts``. The public output is the judgment alone
+(`records.block_counts`); the exact counts go only to a private file.
 
 **Blocks.** A window's inference blocks are B's (`inference_blocks`): one a slot, its class Program over every step, which is
 one session, since no request is carried across windows. A block holds, of each template, the units of its slot's digit in
@@ -15,7 +16,7 @@ table (`gate_table`) gives each primitive its two-input Boolean gates as the cen
 or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version (`definitions.boolean.boolean_version`).
 A primitive with none, or whose Boolean version reaches a primitive that is no gate, is *unpriced*: its activations a
 block are listed apart and its gates are not guessed. circuit-check pins no per-primitive table, so the table counted by is
-published with the report.
+published with the judgment.
 
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
 verifier's pins (`interface.input_count`: θ the weights pinned before the run at the roots the window's registration
@@ -23,18 +24,25 @@ records) over its m slots, since no wire crosses slots. The wires are the record
 Definition doesn't carry, so this is the record's count and not `NciCheck.Count`'s ``fresh`` on the session Definition,
 which would count every wired read.
 
-**Counts.** A window adds m blocks to its class. A class's blocks are published padded to the grid
-(`partition_v2.grid`), the day's total is the classes' padded blocks summed, and c and k are the largest gates and fresh
-bits of a class with a block. The work is per distinct circuit record (a class's windows share theirs, by digest): one pass
-over its templates' Definitions and its description, never a unit.
+**The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
+declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
+named by its SHA-512. Its rules, in `NciCheck.Count`'s order: every class's block at most c gates (undecided where a block
+reaches an unpriced primitive, its gates then a lower bound, unless that bound already passes c) and k fresh bits, and the
+day's blocks at most n. The day is accepted when every rule accepts, and refused otherwise, its reason the first rule that
+doesn't, naming c, k or n and never a count. The work is per distinct circuit record (a class's windows share theirs, by
+digest): one pass over its templates' Definitions and its description, never a unit.
 
-**Public.** The report holds only per-class shapes, padded counts and the gate table (`records.block_counts`). The window
-records, their registrations, the partition's entries, values, placement and times stay where the tool read them.
+**Public and private.** The public judgment holds the verdict, each rule's outcome, c, k, n, the declaration's digest,
+per-class shapes (gates and fresh bits a block) and the gate table (`records.block_counts`): no count of blocks or windows,
+padded or exact, since at m blocks a window any count of blocks tells the count of windows. Days whose counts differ but
+fall under n publish the same bytes. The exact counts, each class's and the day's, go only to ``--private`` (written 0600).
+The window records, their registrations, the partition's entries, values, placement and times stay where the tool read them.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
@@ -147,14 +155,41 @@ def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots:
     return bits // m
 
 
+def declaration(doc: Any) -> tuple[str, int, int, int]:
+    """A declaration's SHA-512 (its JSON, sorted keys, compact) and its natural ``c``, ``k`` and ``n``; refused
+    (ValueError) where it isn't a JSON object holding them."""
+    if not isinstance(doc, Mapping):
+        raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
+    got = [doc.get(f) for f in ("c", "k", "n")]
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
+        raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
+    return (hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), *got)
+
+
+def judge(classes: Sequence[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
+    """`NciCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
+    the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
+    checks = {**RBC.shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}
+    over = next((x for x in classes if x.gates > c), None)
+    unpriced = sorted({p for x in classes for p in x.unpriced})
+    fat = next((x for x in classes if x.fresh > k), None)
+    reasons = {"gates": (f"a block of {over.gates} gates, more than c = {c}" if over else
+                         f"undecided: a block reaches {', '.join(unpriced)}, which the gate table can't price, so its "
+                         f"gates are a lower bound against c = {c}"),
+               "fresh": f"a block of {fat.fresh} fresh bits, more than k = {k}" if fat else "",
+               "count": f"the blocks' exact count is more than n = {n}"}
+    return checks, next((reasons[r] for r in RBC.RULES if checks[r] != "accept"), None)
+
+
 @dataclass
 class Day:
-    """A day's served windows, counted one at a time (`add`), as `report` publishes them."""
+    """A day's served windows, counted one at a time (`add`), as `judgment` judges them."""
     day: str
     pins: Mapping[str, str] | None = None
     _sessions: dict[str, tuple[Any, int, int]] = field(default_factory=dict)
     _fresh: dict[tuple[str, frozenset], int] = field(default_factory=dict)
     _classes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _windows: int = 0
 
     def add(self, doc: Mapping[str, Any], roots: Mapping[str, str] | None = None) -> str:
         """One served window: its circuit record and the roots its registration records. -> its class's definition."""
@@ -168,42 +203,61 @@ class Day:
         d = PV2.definition_digest(fn)
         c = self._classes.setdefault(d, {"fn": fn, "slots": m, "steps": steps, "fresh": 0, "count": 0})
         c["fresh"], c["count"] = max(c["fresh"], self._fresh[held]), c["count"] + m
+        self._windows += 1
         return d
 
-    def report(self) -> RBC.BlockCounts:
-        """The public report (`records.block_counts`) of the windows added."""
-        table, _ = gate_table(primitives(c["fn"] for c in self._classes.values()))
+    def judgment(self, decl: Mapping[str, Any]) -> tuple[RBC.BlockJudgment, dict[str, Any]]:
+        """The public judgment (`records.block_counts`) of the windows added against the declaration ``decl``, and the
+        private one: the public one with each class's exact blocks, the day's and its windows."""
+        digest, c, k, n = declaration(decl)
+        table, _ = gate_table(primitives(x["fn"] for x in self._classes.values()))
         memo: dict = {}
-        classes = []
-        for d, c in sorted(self._classes.items()):
-            g, miss = gates(c["fn"], table, memo)
-            classes.append(RBC.BlockClass(definition=d, slots=c["slots"], steps=c["steps"], gates=g,
-                                          unpriced=dict(sorted(miss.items())), fresh=c["fresh"],
-                                          blocks=PV2.grid(c["count"])))
-        return RBC.BlockCounts(day=self.day, table=table, classes=tuple(classes), **RBC.summary(classes))
+        classes, exact = [], {}
+        for d, x in sorted(self._classes.items()):
+            g, miss = gates(x["fn"], table, memo)
+            classes.append(RBC.BlockClass(definition=d, slots=x["slots"], steps=x["steps"], gates=g,
+                                          unpriced=dict(sorted(miss.items())), fresh=x["fresh"]))
+            exact[d] = x["count"]
+        total = sum(exact.values())
+        checks, reason = judge(classes, total, c, k, n)
+        pub = RBC.BlockJudgment(day=self.day, declaration=digest, c=c, k=k, n=n, table=table, classes=tuple(classes),
+                                checks=checks, verdict="accept" if reason is None else "refuse", reason=reason)
+        return pub, {**pub.dump(), "blocks": exact, "total": total, "windows": self._windows}
 
 
-def count(day: str, windows: Sequence[tuple[Mapping[str, Any], Mapping[str, str] | None]],
-          pins: Mapping[str, str] | None = None) -> RBC.BlockCounts:
-    """``day``'s report from its served ``windows``, each ``(circuit record, the roots its registration records)``, at the
-    verifier's ``pins``."""
+def judgment(day: str, windows: Sequence[tuple[Mapping[str, Any], Mapping[str, str] | None]], decl: Mapping[str, Any],
+             pins: Mapping[str, str] | None = None) -> tuple[RBC.BlockJudgment, dict[str, Any]]:
+    """``day``'s public and private judgment (`Day.judgment`) from its served ``windows``, each ``(circuit record, the
+    roots its registration records)``, against ``decl`` at the verifier's ``pins``."""
     d = Day(day, pins)
     for doc, roots in windows:
         d.add(doc, roots)
-    return d.report()
+    return d.judgment(decl)
+
+
+def write_private(path: Path, doc: Mapping[str, Any]) -> None:
+    """``doc`` as JSON at ``path``, readable by its owner alone (0600) from its creation."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
 
 @dataclass
 class Options:
-    """A day's (c, k)-inference blocks from its served windows' circuit records, as a public report: per block class its
-    shape and padded count, the day's total, and the gate table."""
+    """A day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared c, k and n:
+    the public judgment alone (no count), and the exact counts in a private file."""
     day: str = option("--day", help="the UTC day served, YYYY-MM-DD")
-    window: list = option("--window", nargs=2, action="append", metavar=("CIRCUIT", "REGISTRATION"),
+    declaration: Path = option("--declaration", type=Path,
+                               help="the day's declaration: a JSON object with natural c, k and n (the inference-only policy)")
+    private: Path = option("--private", type=Path,
+                           help="write the private judgment, with the exact counts, here (0600), beside the run's private files")
+    window: list = option("--window", nargs=2, action="append", metavar=("CIRCUIT", "REGISTRATION"), default=[],
                           help="one served window: its circuit record (circuit.json) and its registration (the "
                                "registered roots it records), or - for none; repeat for each of the day's windows")
     pins: Path | None = option("--pins", default=None, type=Path,
                                help="the committer's weights registration, the verifier's pins (none: every read is free)")
-    out: Path | None = option("--out", default=None, type=Path, help="write the report here as well as to stdout")
+    out: Path | None = option("--out", default=None, type=Path, help="write the public judgment here as well as to stdout")
 
 
 def main(a: Options) -> int:
@@ -214,13 +268,17 @@ def main(a: Options) -> int:
     for circuit, registration in a.window:
         roots = None if registration == "-" else IF.registered_roots(json.loads(Path(registration).read_text()))
         d.add(json.loads(Path(circuit).read_text()), roots)
-    rep = RBC.BlockCounts.of(d.report().dump(), "block-counts")
-    text = json.dumps(rep.dump(), indent=1, sort_keys=True)
+    pub, private = d.judgment(json.loads(a.declaration.read_text()))
+    pub = RBC.BlockJudgment.of(pub.dump(), "block-counts")
+    write_private(a.private, private)
+    text = json.dumps(pub.dump(), indent=1, sort_keys=True)
     if a.out:
         a.out.write_text(text + "\n")
     print(text)
-    print(f"[block-counts] {a.day}: {rep.total} blocks in {len(rep.classes)} class(es), c {rep.c}, k {rep.k}", file=sys.stderr)
+    print(f"[block-counts] {a.day}: {pub.verdict}{'' if pub.reason is None else ': ' + pub.reason}, against c {pub.c}, "
+          f"k {pub.k}, n {pub.n}", file=sys.stderr)
     return 0
 
 
-__all__ = ["Day", "Options", "count", "fresh", "gate_table", "gates", "main", "primitives", "session"]
+__all__ = ["Day", "Options", "declaration", "fresh", "gate_table", "gates", "judge", "judgment", "main", "primitives",
+           "session", "write_private"]
