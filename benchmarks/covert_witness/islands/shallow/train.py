@@ -252,7 +252,7 @@ def main() -> int:
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--budget-fraction", type=float, default=0.95, help="of TRAIN_FLOP_BUDGET by the analytic meter")
+    ap.add_argument("--budget-fraction", type=float, default=0.95, help="of the tier's training FLOPs (prepare.budget) by the analytic meter")
     ap.add_argument("--arms", default="", help="`;`-separated runs from θ sharing the budget, each `KEY=VALUE ...` over "
                                                + ",".join(ARM_KEYS) + "; each arm's end is a checkpoint")
     ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True)
@@ -260,7 +260,7 @@ def main() -> int:
     arms = parse_arms(a)
     torch.backends.cuda.matmul.allow_tf32 = True
     if prepare.start_record(a.start)["config"]["family"] != "lf":
-        raise SystemExit("shallow: this train.py tunes the lf starts (s50, s100, m50, m100)")
+        raise SystemExit("shallow: this train.py tunes the lf starts")
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
     default = a.full if a.full is not None else default_full(a.blocks, a.parts, a.final)
@@ -311,7 +311,7 @@ def main() -> int:
     mats = [n for n in full if params[n].ndim == 2]
     store_extra = svd_flops(params, mats) if store.startswith("svd:") else 0
     c = prepare.EVAL_CTX
-    budget = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - (CHECKPOINTS + len(arms)) * store_extra
+    budget = a.budget_fraction * prepare.budget(a.start)["train_flops"] - (CHECKPOINTS + len(arms)) * store_extra
     plans = []
     for arm in arms:
         extra = sum(ns_flops(tuple(params[n].shape)) for n in arm.mats) if arm.mats and arm.opt == "muon" else 0
