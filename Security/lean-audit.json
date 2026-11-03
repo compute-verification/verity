@@ -1502,6 +1502,10 @@
    "owner": "@training",
    "digest": "b2b1269f578e446e41908eac1acb5b57c9cb4c1a480a2ef42894b54d12b7b28c"
   },
+  "Nci.Products.Standard.Cells": {
+   "owner": "@training",
+   "digest": "88cea31bb74f7dc5d934ce75f8df7a9532f49cfc5574b079c457296907674e08"
+  },
   "Nci.Products.Standard.Chained": {
    "owner": "@training",
    "digest": "f1c559f1a7ed29d2bea09eab7b2560881448bcc2e5b07c20c2e44bd177b928da"
@@ -1517,6 +1521,38 @@
   "Nci.Products.Standard.Unsplit": {
    "owner": "@training",
    "digest": "4f85d64a194b810cb5e0d4253454e15bcc8437807c363b74a688b7b9933a4d50"
+  },
+  "Nci.Products.Standard.Wiring": {
+   "owner": "@training",
+   "digest": "ba5f96822f00db1e211abc917b926cc22d5bc87d53600f1adf3540a6e25c419d"
+  },
+  "Nci.Products.System.Apart": {
+   "owner": "@training",
+   "digest": "f4f57dcaba93f0d609d3dc26b6085acc7b1f0e0f23795f40a45f45067bc5bd42"
+  },
+  "Nci.Products.System.Matched": {
+   "owner": "@training",
+   "digest": "7a46b972417331fc8a5eda909b7f487aabe5175028c3876fdd9d9b19619501d1"
+  },
+  "Nci.Products.System.PostFixed": {
+   "owner": "@training",
+   "digest": "3bc21e3390df026f7e32940d14b090ab7b1a83d6948b3e7d5444c492b53f2d0c"
+  },
+  "Nci.Products.System.Shared": {
+   "owner": "@training",
+   "digest": "93f886f68876ff0215b665a45ceaf5502fd4d6e5bc6bfadaafae9903b92508d4"
+  },
+  "Nci.Products.System.SharedOn": {
+   "owner": "@training",
+   "digest": "9e31f07082ef419b15c2249516589da2e30fd84ac82f5c5add1d0bf375c84938"
+  },
+  "Nci.Products.System.Values": {
+   "owner": "@training",
+   "digest": "63cc3131732755b97b4a8252b31f6ebb4e3e8025a387657b72bfb41223a7b787"
+  },
+  "Nci.Products.System.WidthExtended": {
+   "owner": "@training",
+   "digest": "c85c92fbc5678b2564e8c6e1cbe21013244bbd505be0a37b5859a1421676ae9b"
   },
   "Nci.Small": {
    "owner": "@lean",
@@ -2245,42 +2281,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Nci.Products.Standard.Cells": {
-   "owner": "@training",
-   "digest": "88cea31bb74f7dc5d934ce75f8df7a9532f49cfc5574b079c457296907674e08"
-  },
-  "Nci.Products.Standard.Wiring": {
-   "owner": "@training",
-   "digest": "ba5f96822f00db1e211abc917b926cc22d5bc87d53600f1adf3540a6e25c419d"
-  },
-  "Nci.Products.System.Apart": {
-   "owner": "@training",
-   "digest": "f4f57dcaba93f0d609d3dc26b6085acc7b1f0e0f23795f40a45f45067bc5bd42"
-  },
-  "Nci.Products.System.Matched": {
-   "owner": "@training",
-   "digest": "7a46b972417331fc8a5eda909b7f487aabe5175028c3876fdd9d9b19619501d1"
-  },
-  "Nci.Products.System.PostFixed": {
-   "owner": "@training",
-   "digest": "3bc21e3390df026f7e32940d14b090ab7b1a83d6948b3e7d5444c492b53f2d0c"
-  },
-  "Nci.Products.System.Shared": {
-   "owner": "@training",
-   "digest": "93f886f68876ff0215b665a45ceaf5502fd4d6e5bc6bfadaafae9903b92508d4"
-  },
-  "Nci.Products.System.SharedOn": {
-   "owner": "@training",
-   "digest": "9e31f07082ef419b15c2249516589da2e30fd84ac82f5c5add1d0bf375c84938"
-  },
-  "Nci.Products.System.Values": {
-   "owner": "@training",
-   "digest": "63cc3131732755b97b4a8252b31f6ebb4e3e8025a387657b72bfb41223a7b787"
-  },
-  "Nci.Products.System.WidthExtended": {
-   "owner": "@training",
-   "digest": "c85c92fbc5678b2564e8c6e1cbe21013244bbd505be0a37b5859a1421676ae9b"
   }
  },
  "meaning": [
