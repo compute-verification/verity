@@ -39,6 +39,7 @@ import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 import Proofs.Core.DeviceFigures
 import Proofs.Core.Site
+import Proofs.Core.QSort
 
 /-!
 # Proofs of core's guarantees
