@@ -88,7 +88,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     -- the registration's law over strata of sizes `ns`, drawing `kd` proof blocks
-    (law : Flock.Draw.Law) (kd : ℕ) (ns : List ℕ) (hns : ns.sum = n) (hlaw : Bridge.LawOn law ns kd)
+    (law : Flock.Draw.Law) (kd : ℕ) (ns : List ℕ) (_hns : ns.sum = n) (hlaw : Bridge.LawOn law ns kd)
     (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
@@ -116,7 +116,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw hns hCust.2)) τ
+        (Bridge.lawOn_size hlaw hCust.2)) τ
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -206,7 +206,7 @@ def SampledKSLiveV5 : Prop :=
     (_hdup : Flock.Registered.dupName D.unroll = none)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
-    (desc : Claims.Msg) (qr : Lean.Json) (hpop : Bridge.PopMatches desc qr n)
+    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     -- the registration's law over the query's strata, drawing kd proof blocks
     (law : Flock.Draw.Law) (kd : ℕ) (hlaw : Bridge.LawOn law (Bridge.nsOf desc qr) kd) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -235,7 +235,7 @@ def SampledKSLiveV5 : Prop :=
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw (Bridge.nsOf_sum hpop) hCust.2)) τ
+        (Bridge.lawOn_size hlaw hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)

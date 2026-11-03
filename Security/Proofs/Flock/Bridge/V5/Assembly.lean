@@ -74,7 +74,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     · rintro ⟨hv, hlt⟩; exact ⟨⟨v, hlt⟩, hv, rfl⟩
   rw [Bridge.pa_partOf_window P hns, Bridge.window_zero_filter, ← hW] at hle
   have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots law kd hdiv dj S₀ d₀ y₀ wr dg N L hTags
-    hCust (Bridge.lawOn_size hlaw hns hCust.2) τ
+    hCust (Bridge.lawOn_size hlaw hCust.2) τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h
   have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ wrongRegZc execArith P (planZHJP dj y₀)

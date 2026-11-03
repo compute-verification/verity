@@ -110,7 +110,7 @@ theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := 
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope law kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2
   have h := Discharge.ZkHidden.zk_session_soundHJ_custody_escCP I own ht (Flock.Desc.parse_flat hD) hU hpi hpub hscope
-    law kd hdiv dj y₀ wr dg N L hTags hCust (lawOn_size hlaw hns hCust.2) hk hRw hM hρ hr ht' W
+    law kd hdiv dj y₀ wr dg N L hTags hCust (lawOn_size hlaw hCust.2) hk hRw hM hρ hr ht' W
     (fun g o => canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
     (hOC n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀) τ
     (qF := qF) (qS := qS) hCR
