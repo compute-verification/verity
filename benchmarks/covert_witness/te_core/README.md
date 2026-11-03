@@ -68,17 +68,27 @@ other quantity bits.
   serving position p holds p + 1 cuts; s\* becomes the harmonic mean over positions of the most such a block can do
   (`formalism.context_s_star`, the formula and the choices favourable to the block in `formalism`'s docstring).
 - **ρ (slowdown)**: c/(c − d) where Fit holds for the training, else max(1, Slowdown's).
-- **The one bound** (`formalism.bound`, and `formalism.at` with a `reading`; opt-in, `at`'s default is Slowdown's
-  token form): the counting lemma over kinds of block work, ρ ≥ max over the kinds (token, gradient reduction, update
-  application, decoding) of each kind's share of |C| over its cap a block, each term returned with its inputs and
-  labelled "te_core VERSION, reading A|B"; where Fit fails ρ is max(1, that max). The reduction and update kinds rest
-  on assumptions (R) and (U), which blocks split by layers or tensors rather than tokens break, so `kinds` names the
-  kinds the max is over. `rho_vectors.json` holds its test vectors, which the console's rho.ts runs.
+- **The one bound** (`formalism.bound`, and `formalism.at` with reading A; opt-in, `at`'s default is Slowdown's
+  token form): the counting lemma over the kinds of block work that are lower bounds on their own, ρ ≥ max over the
+  kinds (fresh products, token, decoding) of each kind's share of |C| over its cap a block. It returns each kind's
+  term (None, with the reason, where unmeasured), the max, the kind it binds on and what each kind rests on: fresh
+  products a theorem for the run's circuit (Loomis-Whitney, `io_bound`, unmeasured until that module is in the
+  tree), token A1 under reading A with its witness family, decoding assumption (D). Where Fit fails ρ is max(1, that
+  max). Gradient reduction, update application, reading B's token form and the per-gate token term come out beside it
+  as labelled sensitivities, never in the max: (R) and (U) hold only for partitions split by tokens, and per_gate only
+  for blocks that are no union of witnesses. `rho_vectors.json` holds its
+  test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞).
 - **Reading A** (A1's approved reading): a block reads at least the update bits its work reads, once, plus
   each token's computed state where its work on the token begins, the context it reads and doesn't compute included.
-  The trace's `entries` (one token's path in segments, what each run of them reads) are the default packer's
-  witness blocks, `capture.circuit.check` counts any set of the trace's ops the same way, and `formalism.packer`
-  gives the token and decoding kinds' terms. A row traced before 4.4 has no `entries`: reading A refuses it.
+  A1's values are the least reads of the default packer's witness family: the runs of one traced token's path in
+  segments (the trace's `entries`, which `capture.circuit.check` counts the same way as any set of the trace's ops)
+  and the matrix-product tiles of the record's op log (`tiles`, from the row's `macs_log` or the trace's GEMMs),
+  weight-gradient tiles among them. `formalism.packer` gives the token and decoding kinds' terms from both, closed
+  under unions: a block holds at most its gates and at most the best run block plus every product's tile at k plus
+  every gate no tile places (`tiles.held`), so the term is the affected gates' share of |C| over that cap a block.
+  Each gate at its own best witness (`formalism.per_gate`) is a sensitivity: a block holding one gate of a product for
+  its few operand bits also holds the best run or another product's tile. Without entries (a row traced before 4.4)
+  or an op log the token kind is unmeasured, never ∞.
 - **Where the quantities come from**: each is measured on the record's traced step (`capture.circuit`, read through
   `ledger ingest --structures`; `frontier.measured` says whether a row's were), a, u_in, u, t and Δ_grad as upper
   bounds from that witness. A row without a trace gets labelled stubs (`formalism.STUBS`, and `formalism.V23` for a row
@@ -133,12 +143,13 @@ from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one 
 off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
 11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
 g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ
-under reading B (`reading`), at the dial's default (`rho_default`) and the console's (`rho_console`), with the kind
-it binds on (`binding_kind`), each kind's term of te_core's one bound (`rho_terms`, the kinds outside the max as
-sensitivities), the te_core that priced it (`te_core`), and, in one JSON cell (`rho_inputs`), the inputs the console's
-dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u and u_in exact), so S =
-pρ; `build` refuses a row whose cells miss `formalism.at` at a dial cell or the console's default. Its coverage (gain
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
+the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
+cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
+`build` refuses a row whose cells miss `formalism.at` at a dial cell. Beside them, `formalism.published` at the
+console's default policy: `rho_console` (the one bound's ρ under reading A where the row's trace has entries and an op
+log, else reading B's, a target), its `reading`, the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds`
+(the terms its max takes and the sensitivities it leaves out). Its coverage (gain
 target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
@@ -251,15 +262,19 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over kinds under reading A or B (`bound`, `packer`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`) and the console's ρ on it (`published`, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
 | `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
-| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with the dashboard's cells (`rho_inputs`, `rho_terms`, `binding`) and ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
+| `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`) and the dashboard's cells (`published`'s), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
 | `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ priced as `algorithm_policy` prices a run (its `READING` over `IN_RHO`, `binding`, `rho_terms`) at the dial's default and the console's, its inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s ρ at both) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT |
-| `rho_vectors.py` | the one bound's test vectors (`rho_vectors.json`, `--write`): wildcard's grown adapter, a dense and a LoRA step on the tiny start at the dial's cells, under readings A and B |
+| `tiles.py` | reading A's matrix-product tiles: a record's ops as products (`of_log` from a `macs_log`, `of_graph` from a traced step, `products`), the most MACs a tile reading k bits holds (`volume`) and each op's tile cap (`cap`, `caps`), and the most a block's tiles hold beside each other (`held`) |
+| `workloads.py` | the covert workloads of the console's *Standard training under the policy* plot, each a model: one function per workload from its dials (`Dial`) to the inputs of the one bound's menu (`KINDS`: the fresh products, `Fresh`, priced here by the Loomis-Whitney cap, and four of `formalism.bound`'s sensitivities, `TE_CORE`: reading B's token form and decoding, reduction and update; the token kind's inputs as the console's columns, `columns`, the others as `menu`), every kind's term, their max and the binding kind at the three policies (`rho`, `POLICIES`: the console default, it with attention counted, and the registered serving policy), reading A's verdict on the token kind (`reading_a`), measured records beside the model with every kind's term on each (`Check`, `recorded`), and each input's source, measured with its record or assumed with why (`input_status`); `python -m te_core.workloads --json te_core/workloads.json`, and `--records TABLES ART` to rewrite `workloads_records.json` from the island's panel |
+| `workloads.json` | `workloads.py`'s reference points and checks, which the console's tests pin (`tests/test_workloads.py` fails while it's stale) |
+| `workloads_records.json` | the standard-workloads island's measured rows that `workloads.py` checks the model on: each row's panel cells (dials, run, `rho_inputs`, `input_status`), its parts and its traced steps' facts |
+| `rho_vectors.py` | the one bound's test vectors (`rho_vectors.json`, `--write`): wildcard's grown adapter, a dense and a LoRA step on the tiny start at the dial's cells, under reading A, each case's op log beside its circuit |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
