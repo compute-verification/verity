@@ -30,6 +30,9 @@ PENDING = {
         "Tue 3 Nov: reads a session's record as treesHeld does, and switches with it",
     ("Security/Proofs/Properties/Verity/Sampled/Trees.lean", "records_held"):
         "Tue 3 Nov: states treesHeld's record read through the parser treesHeld calls, and switches with it",
+    ("verity/core/service/sampled_proofs/SampledProofs/FilePart.lean", "unitIndices"):
+        "the population check's read of the public file's header, which moves to the total parser once that check is on "
+        "main",
 }
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
