@@ -1104,7 +1104,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     below the width implies the bottleneck rank r = √(ρ_a k)/(2w) (a K-long product made whole at 4K²w²/k an entry),
     so β = `beta_eff`(w, r, k) = w·ρ_a/(w + ρ_a). On a step with an adapter (`r_step`, the least contraction K of a
     forward product of two affected operands, one token-free, that widens it 4K-fold or more on a step where a
-    frozen weight is an operand, or that builds a weight with both sides 4K or more: a LoRA's B·(Ax), a DoRA's B·A),
+    frozen weight multiplies an operand the update reaches (a LoRA's frozen layers, not a distilling teacher's, which
+    read only tokens), or that builds a weight with both sides 4K or more: a LoRA's B·(Ax), a DoRA's B·A),
     every token-indexed operand with more than r_step entries a token, or with no dim but tokens (attention's
     scores), is at most `beta_eff`(w, r_step, k): the update reaches it only through the adapters, and its rate
     stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
@@ -1112,8 +1113,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     `SHARED_PREFIX`/n of their MACs, as `products_of_trace`'s do, and every output. An operand no token indexes is a
     weight (`weight`), which `he_figure` caps at the record's code bits a trained weight, the others activations,
     which it caps at β(k); a backward product contracting over tokens is a weight gradient (`dw`); the head's are the
-    backward products over its vocabulary width V, the widest output of a forward product indexed by tokens on m
-    (`head`). The trained weights (`trained_weights`, None without `tokens`) are each forward product's weight
+    backward products over its vocabulary width V, the widest output of a forward product indexed by tokens on m that
+    the update reaches, a frozen head's too (`head`). The trained weights (`trained_weights`, None without `tokens`) are each forward product's weight
     operands' entries, a product of one token-indexed operand counted as count·(its tokens)/`tokens` weights (to the
     nearest whole one, the weights a step's forward reads once a token), a product of two weights as count of each.
     Grouped by (β_a, β_b, the widths, which is a weight, b_y, forward or not, its contraction K, `dw`, `head`): {"k",
@@ -1134,7 +1135,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     def entries(r: dict, i: int) -> float:
         return math.prod(r["dims"][x] for x in sides[i])
 
-    frozen = any(r["phase"] == "forward" and not r["affected"][i] and not token(r, i) for r in rows for i in (0, 1))
+    frozen = any(r["phase"] == "forward" and not r["affected"][i] and not token(r, i) and r["affected"][1 - i]
+                 for r in rows for i in (0, 1))
     ranks = []
     for r in rows:
         d, td = r["dims"], r["token_dims"]
@@ -1145,7 +1147,7 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
             ranks.append(d["k"])
     r_step = min(ranks, default=None)
     vocab = max((r["dims"]["n"] for r in rows if r["phase"] == "forward" and r["token_dims"] == ["m"]
-                 and all(r["affected"])), default=None)
+                 and any(r["affected"])), default=None)
     groups: dict = {}
     total = alone = gathered = left = trained = 0.0
     for r in rows:

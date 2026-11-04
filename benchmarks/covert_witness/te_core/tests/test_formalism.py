@@ -767,6 +767,34 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
         F.he_figure(F.he_of_rows(HE_STEP, 9e8), c, C)
 
 
+def test_the_adapter_rule_needs_a_frozen_weight_the_update_reaches_and_a_frozen_head_keeps_its_width():
+    """standard-workloads' 12:37Z LOOPHOLE: a distilling teacher's weights are frozen but read only tokens, so the
+    student's head (its d_model widened to the vocabulary) is no adapter: r_step is None and every activation keeps its
+    width, as without the teacher. A LoRA's frozen layers read what its adapters wrote, so B·(Ax) sets r_step to its
+    rank and an activation wider than it is charged β_eff. With its head frozen, the vocabulary is still the head's
+    width, so the adapters' backward products over d_model aren't the head's; a trained head's are."""
+    k, d, V, r = 65_536.0, 512, 32_000, 8
+
+    def frozen(row, *i):
+        return row | {"affected": [j not in i for j in (0, 1)]}
+
+    student = [he_row("forward", ["m"], 1024, 256, 704), he_row("forward", ["m"], 1024, 704, 256),
+               he_row("forward", ["m"], 1024, 256, V)]
+    alone, distilled = (F.he_of_rows(rows, k) for rows in (student, [frozen(he_row("forward", ["m"], 1024, d, V), 0, 1),
+                                                                     *student]))
+    assert distilled["r_step"] is alone["r_step"] is None
+    assert distilled["groups"] == alone["groups"] and all(b == 16 for g in alone["groups"] for b in g["beta"])
+    lora = [frozen(he_row("forward", ["m"], 1024, d, d), 1), he_row("forward", ["m"], 1024, d, r),
+            he_row("forward", ["m"], 1024, r, d), frozen(he_row("forward", ["m"], 1024, d, V), 1),
+            he_row("backward", ["m"], 1024, d, r), he_row("backward", ["k"], d, 1024, r)]
+    he = F.he_of_rows(lora, k)
+    assert he["r_step"] == r and not any(g["head"] for g in he["groups"])
+    dx = [g["beta"] for g in he["groups"] if not g["forward"] and not g["dw"]]
+    assert dx == [[round(F.beta_eff(16, r, k), 9), 16]]
+    trained = F.he_of_rows([*lora[:3], he_row("forward", ["m"], 1024, d, V), he_row("backward", ["m"], 1024, V, d)], k)
+    assert [g["k_dim"] for g in trained["groups"] if g["head"]] == [V]
+
+
 def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ_in_beta():
     """F = 2/√3 is proved for one β on a layer's three shared arrays (weights, activations, output gradients); with a β
     each, Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M's products multiply, so both terms take the least
