@@ -71,8 +71,9 @@ Warden.lean     the warden's code is the client view: its lane is the client vie
                                          cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
                                          Tap reads the network certifier's cells from
 Wires.lean      a gate's value reads only what it depends on (valOver_congr_inp); under a wiring that fits
-                                         the program the wires' resolution is a fixed point (resolveWires_fix) that
-                                         carries no ingress (resolveWires_ingress)
+                                         the program the wires' resolution is a fixed point (resolveWires_fix), and
+                                         a gate's resolution reads only what it depends on through reads and wires
+                                         (resolveWires_congr_inp)
 KSWired.lean    sampling at the incorrect set (KSWired) from KS_of's hypotheses at the wired check
                                          (KSWired_of), and from KS at a layout with no wires (ksWired_none)
 NoWires.lean    each guarantee restated over the wiring gives, at a layout with no wires, its statement
@@ -131,6 +132,11 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
 PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, none with a binder over the
                                          instance: PooledLeakAccepted's pair and PeriodLeakAccepted's nontrivial,
                                          whose honest half `unwitnessed` exempts
+WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
+                                         (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,
+                                         cycle_excludes) or a wire-writing free input from freeInputs (the
+                                         pass-through, pass_excludes) lets accepted traces carry more sequences
+                                         than the bound
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program

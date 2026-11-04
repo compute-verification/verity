@@ -7,8 +7,9 @@ A gate's value under held gates reads only the inputs of the gates it depends on
 Program resolves the wires in as many rounds as `C` has gates (`resolveWires`). Under a wiring that fits the program,
 the resolution is stable past the wired gates the wires' rank puts below a wired gate (`resolveWires_stable`,
 `wiredBelow`), so it is a fixed point: each wired gate reads what its writer computes on the resolved inputs
-(`resolveWires_fix`). A writer depends on no ingress gate before the horizon, so the resolution is the same at any
-ingress (`resolveWires_ingress`). With no wires the wiring fits every program (`wiresFit_none`).
+(`resolveWires_fix`). A gate's resolution reads only the inputs it depends on through reads and wires
+(`resolveWires_congr_inp`), so two ingresses that agree there resolve it alike. With no wires the wiring fits every
+program (`wiresFit_none`), and depending through reads and wires is depending (`dependsWired_none`).
 -/
 
 namespace NetTiming
@@ -37,6 +38,15 @@ theorem bgate_val_congr (x : BGate) {rd rd' : ℕ → Option Bool} (own : Option
 theorem depends_of_read {C : Prog} {g : ℕ} {x : BGate} (hx : C.gates[g]? = some x) {i : ℕ} (hi : i ∈ x.reads) :
     Depends C i g :=
   Relation.ReflTransGen.single (by simp [hx, hi])
+
+theorem dependsWired_of_depends {C : Prog} {wires : ℕ → Option ℕ} {i g : ℕ} (h : Depends C i g) :
+    DependsWired C wires i g :=
+  Relation.ReflTransGen.mono (fun _ _ hab => Or.inl hab) h
+
+/-- With no wires, depending through reads and wires is depending. -/
+theorem dependsWired_none {C : Prog} {wires : ℕ → Option ℕ} (hw : wires = fun _ => none) {i g : ℕ}
+    (h : DependsWired C wires i g) : Depends C i g :=
+  Relation.ReflTransGen.mono (fun a b hab => hab.resolve_right (by simp [hw])) h
 
 theorem valOver_of_some (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ} {b : Bool}
     (hf : free g = some b) : valOver C inp free g = b := by
@@ -114,23 +124,6 @@ theorem wiresFit_none {L S : ℕ} {lay : BoundaryGates L S} (h : lay.wires = fun
     lay.WiresFit C k :=
   ⟨fun g w hw => by simp [h] at hw, fun _ => 0, fun g w g' hw => by simp [h] at hw⟩
 
-/-- An input in no step's ingress before the horizon reads the advice, at any ingress of at most that many steps. -/
-theorem inputOf_of_not_ingress {L S : ℕ} (lay : BoundaryGates L S) {k : ℕ} {ins : List (List Bool)}
-    (hlen : ins.length ≤ k) (a : ℕ → Bool) {g : ℕ} (hg : ∀ t < k, g ∉ lay.ingress t) : lay.inputOf k ins a g = a g := by
-  unfold BoundaryGates.inputOf
-  split
-  · rename_i i j h
-    obtain ⟨i', hi', he⟩ := List.exists_of_findSome?_eq_some h
-    obtain ⟨j', hj', -⟩ := Option.map_eq_some_iff.1 he
-    obtain ⟨hjl, hjg, -⟩ := List.findIdx?_eq_some_iff_getElem.1 hj'
-    have hm : g ∈ lay.ingress i' := by
-      rw [← beq_iff_eq.1 hjg]
-      exact List.getElem_mem hjl
-    exact absurd hm (hg i' (by rw [List.mem_range] at hi'; omega))
-  · rw [ite_eq_right]
-    simp only [List.any_eq_true, List.mem_range, List.contains_iff_mem, not_exists, not_and]
-    exact fun i hi hm => hg i hi hm
-
 section Fit
 
 variable {L S : ℕ} {C : Prog} {lay : BoundaryGates L S} {k : ℕ}
@@ -182,31 +175,27 @@ theorem resolveWires_fix (hwf : lay.WiresFit C k) (r : ℕ → ℕ)
     have hlt := card_wiredBelow_lt_of_depends hwf hr hw hw' hdep
     exact resolveWires_stable hwf r hr inp free N g' (by simp [hw']) (by omega)
 
-/-- **The wires carry no ingress**: a wired gate resolves to the same value at any two ingresses of at most `k`
-steps, since its writer depends on no ingress gate before `k`. -/
-theorem resolveWires_ingress (hwf : lay.WiresFit C k) {ins ins' : List (List Bool)} (hlen : ins.length ≤ k)
-    (hlen' : ins'.length ≤ k) (a : ℕ → Bool) (free : ℕ → Option Bool) :
-    ∀ m g, lay.wires g ≠ none →
-      resolveWires C lay.wires (lay.inputOf k ins a) free m g =
-        resolveWires C lay.wires (lay.inputOf k ins' a) free m g := by
+end Fit
+
+/-- **A gate's resolution reads only what it depends on through reads and wires**: inputs that agree at every gate
+`g` depends on through reads and wires resolve `g` alike, in any number of rounds. -/
+theorem resolveWires_congr_inp (C : Prog) (wires : ℕ → Option ℕ) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool) :
+    ∀ m g, (∀ i, DependsWired C wires i g → inp i = inp' i) →
+      resolveWires C wires inp free m g = resolveWires C wires inp' free m g := by
   intro m
   induction m with
   | zero =>
-    intro g hg
-    obtain ⟨w, hw⟩ := Option.ne_none_iff_exists'.1 hg
-    simp only [resolveWires, hw]
+    intro g h
+    cases hw : wires g with
+    | none => rw [resolveWires_of_none hw, resolveWires_of_none hw, h g Relation.ReflTransGen.refl]
+    | some w => simp only [resolveWires, hw]
   | succ m ih =>
-  intro g hg
-  obtain ⟨w, hw⟩ := Option.ne_none_iff_exists'.1 hg
-  rw [resolveWires_succ hw, resolveWires_succ hw]
-  refine valOver_congr_inp C free w fun g' hdep => ?_
-  cases hw' : lay.wires g' with
-  | none =>
-    have hni : ∀ t < k, g' ∉ lay.ingress t := fun t ht hm => (hwf.1 g w hw).2.2.2 t ht g' hm hdep
-    rw [resolveWires_of_none hw', resolveWires_of_none hw', inputOf_of_not_ingress lay hlen a hni,
-      inputOf_of_not_ingress lay hlen' a hni]
-  | some w' => exact ih g' (by simp [hw'])
-
-end Fit
+    intro g h
+    cases hw : wires g with
+    | none => rw [resolveWires_of_none hw, resolveWires_of_none hw, h g Relation.ReflTransGen.refl]
+    | some w =>
+      rw [resolveWires_succ hw, resolveWires_succ hw]
+      exact valOver_congr_inp C free w fun g' hdep =>
+        ih g' fun i hi => h i ((hi.trans (dependsWired_of_depends hdep)).tail (Or.inr hw))
 
 end NetTiming
