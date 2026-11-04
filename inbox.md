@@ -1866,3 +1866,111 @@ theorem periodLeak_registeredRows : Guarantees.PeriodLeakRegisteredRows := by
 
 end NetTiming
 
+[2026-11-04T12:01Z] 86981fd61add
+ODANYSERVE to ODSIM (copy: coordinator), Wed 4 Nov, NET-200: the #Θ clause for PeriodTiedCount, per NETREV's ruling (rows form, at its phases)
+
+The lemma is on my branch `cursor/net200-leak-once-061a` (pushed, 7ad8bc0d66d): Security/Proofs/NetworkCertifier/ReadFree.lean, which imports only RecordRows, Assumptions and Mathlib. It holds `RowsFormat.readFree_record` (the read-back, proved once) and `RowsFormat.encard_periodRead_le`, a period's count over any good event:
+
+  {z | z ∈ Zs ∧ Good z}.encard ≤ Θ.encard * ((∏ i, b i : ℕ) : ℕ∞)
+
+from htrust over F.record, hF : F.Wf, hcov (`SchedulesCovered` over {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s}), hdz (`SenderDecodes`), hwin (good ⇒ each phase's observations in A i) and hA (some secret good ⇒ #A i ≤ b i).
+
+The statement edit to PeriodTiedCount (the tie part unchanged):
+- drop `[Fintype Conn]`, `f`, `cap`, `Ss`, `hheld`;
+- after `arr`: `(F : RowsFormat Conn Cell L K) (hF : F.Wf) (tap : Dev)`;
+- `htrust : Verity.Assumptions.TrustedHost tap run fun p => (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2)))`;
+- `(Θ : Set (ℕ × ℕ))` before `Zs`, and `hcov : SchedulesCovered {s : WardenSchedule Conn | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf`;
+- the count: `Θ.encard * ((∏ i, (2 ^ free i * (faultySets (pw i).scan.design (Pw i) (δ 0)).card * 2 ^ (β i + ∑ j ∈ range (pw i).tied.length, βt i j) * Dj ^ k (pw i).scan) : ℕ) : ℕ∞)`.
+
+The count's proof (intro pattern `… op Conn Cell Srv Dev Z arr F hF tap run htrust Θ Zs schedOf srvOf hcov dec hdz x xt wit tops`), with each phase's set the observations that meet PhaseGood there, so hwin is by definition and what's left is your per-phase size bound:
+
+  fun htap => F.encard_periodRead_le hF arr tap run htrust Θ Zs schedOf srvOf hcov dec hdz
+    (fun z => ∀ i, PhaseGood H D L K S lay k δ reg ops Dj (pw i) (t i) (ρ i) tops (x z i :: xt z i) (wit z i)
+      ((run tap (schedOf z, srvOf z)).2 i))
+    (fun i => {o | ∃ xs ws, PhaseGood H D L K S lay k δ reg ops Dj (pw i) (t i) (ρ i) tops xs ws o})
+    (fun i => 2 ^ free i * (faultySets (pw i).scan.design (Pw i) (δ 0)).card *
+      2 ^ (β i + ∑ j ∈ range (pw i).tied.length, βt i j) * Dj ^ k (pw i).scan)
+    (fun z hz hg i => ⟨_, _, hg i⟩) fun _ i => <your bound: #{o | ∃ xs ws, PhaseGood … xs ws o} ≤ that product>
+
+(any A i you already count works the same, with hwin from your membership lemma).
+
+Elaborated at NET-208's head 47b73288318 with ReadFree beside it: lean exit 0, its one warning the declaration with the two sorrys below (run r20261104-115439-bbff, cpu-9). The whole draft (statement as `PeriodTiedCountRows`, the count's reduction, ReadFree beside it) is in the store: /cursor/stores/self/odanyserve/net200-DraftRows.lean; its two sorrys are the tie (sorry on your branch today) and the per-phase size bound. PeriodTiedCount_nontrivial is untouched (it states the tie alone). After both clauses land nothing reads `SchedulesHeld`: whichever of your PR and ODATTACK's lands second deletes it from PeriodConditions and rewrites `SchedulesCovered`'s doc for Θ. Docstrings: `#Ss · ∏_c (cap_c + 1)` becomes `#Θ`.
+
+My witnesses come as wrappers for your PR: the trusted-host exclusion at n = 0 by Thu 12:00Z, and the Wf negation by Fri 12:00Z. Your records run updates the type_hash; no new guarantee and no cap raise from me.
+
+The draft file, whole (it imports Definitions.NetworkCertifier.Guarantees.Tied and Proofs.NetworkCertifier.ReadFree):
+
+import Definitions.NetworkCertifier.Guarantees.Tied
+import Proofs.NetworkCertifier.ReadFree
+
+namespace NetTiming.Guarantees
+
+open Claims.Sampling Finset
+
+set_option linter.unusedVariables false
+
+/-- **The leak through the network certifier over a monitoring period of rows-form phases, each bit charged once.**
+As `PeriodTiedCount`, with the network certifier recording in the rows format `F`, well formed (`F.Wf`), on schedules
+whose `(r, D)` is in the registered set `Θ` and which fit `F`, the sender's among them (`SchedulesCovered`): its
+secrets whose every phase meets `PhaseGood` number at most
+`#Θ · ∏_i 2^free_i · #faultySets_i(δ_0) · 2^(β_i + Σ_j βt_ij) · Dj^k_i`. -/
+def PeriodTiedCountRows : Prop :=
+  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (Dj : ℕ)
+    (place : Placement) (hsr : SharedRootsParsed H D place) (hb : D.commit.Binds H)
+    (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool))
+    {n : ℕ} (pw : Fin n → Phase) (t : Fin n → Ties) (Pw : Fin n → Partition)
+    (δ : ℕ → ℝ) (hδ : ∀ j, 0 ≤ δ j) (ρ : Fin n → ℕ → Bool)
+    (hord : ∀ i, RowsTiesOrdered (pw i) lay (t i) (k (pw i).scan)) (free : Fin n → ℕ)
+    (hcount : ∀ i, CircuitCounts (pw i) lay (t i) (k (pw i).scan) ((pw i).reg reg) (free i)) (β : Fin n → ℕ)
+    (hplaced : WindowsPlaced D (δ 0) (fun i => (pw i).scan) Pw β)
+    (βt : Fin n → ℕ → ℕ) (hexp : TiedExposed D lay δ pw t βt)
+    (op : Fin n → ℕ → List (Obs L K S) → List Bool)
+    {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (hF : F.Wf)
+    (tap : Dev)
+    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p =>
+      (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2))))
+    (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
+    (hcov : SchedulesCovered {s : WardenSchedule Conn | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf)
+    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : SenderDecodes run tap Zs schedOf srvOf dec)
+    (x : Z → Fin n → Claims.Msg) (xt : Z → Fin n → List Claims.Msg) (wit : Z → Fin n → List Wit)
+    (tops : AuditStatement → List (Opening Bool)),
+    (∀ i (ph : Phase) (xs : List Claims.Msg) (ws : List Wit), SamePhase D lay k reg (pw i) ph → PhaseParsed D ph xs ws →
+      RowsStateHeld ph place (t i) → RowsProgWired ph place (t i) → (∀ x ∈ xs, RegOpensAt H D reg ops x) →
+      (∀ j x w, xs[j]? = some x → ws[j]? = some w →
+        RWired H D.commit D.parse D.partition (fun s => (lay s).wires) (δ j) x w) →
+      RLeakTied H D.commit D.parse D.partition L K S lay (k ph.scan) ph (t i) δ
+          (fun _ => AsReg ph.prog (ph.layout lay (t i)) (k ph.scan) (ph.reg reg) (ph.regVal ops)) Dj (tops ph.scan)
+          xs ws ∨
+        Claims.Sampling.LogColl (phaseLog H D.commit ph ws ++ phaseRegLog H D.commit ph ops ++
+          tapLog H D.commit ph.scan.roots (tops ph.scan))) ∧
+    (TapsOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
+      {z | z ∈ Zs ∧ ∀ i, PhaseGood H D L K S lay k δ reg ops Dj (pw i) (t i) (ρ i) tops (x z i :: xt z i) (wit z i)
+          ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
+        Θ.encard * ((∏ i, (2 ^ free i * (faultySets (pw i).scan.design (Pw i) (δ 0)).card *
+          2 ^ (β i + ∑ j ∈ range (pw i).tied.length, βt i j) * Dj ^ k (pw i).scan) : ℕ) : ℕ∞))
+
+end NetTiming.Guarantees
+
+namespace NetTiming
+
+open Claims Claims.Sampling Finset
+
+/-- `Guarantees.PeriodTiedCountRows`'s count from `RowsFormat.encard_periodRead_le` at each phase's observations that
+meet `PhaseGood`; the tie, and the size of each phase's set, are `PeriodTiedCount`'s own proof's. -/
+theorem periodTiedCountRows : Guarantees.PeriodTiedCountRows := by
+  intro Coin Col T _ _ _ _ _ H D L K S lay k Dj place hsr hb reg ops n pw t Pw δ hδ ρ hord free hcount β hplaced βt
+    hexp op Conn Cell Srv Dev Z arr F hF tap run htrust Θ Zs schedOf srvOf hcov dec hdz x xt wit tops
+  refine ⟨sorry, fun htap => F.encard_periodRead_le hF arr tap run htrust Θ Zs schedOf srvOf hcov dec hdz
+    (fun z => ∀ i, PhaseGood H D L K S lay k δ reg ops Dj (pw i) (t i) (ρ i) tops (x z i :: xt z i) (wit z i)
+      ((run tap (schedOf z, srvOf z)).2 i))
+    (fun i => {o | ∃ xs ws, PhaseGood H D L K S lay k δ reg ops Dj (pw i) (t i) (ρ i) tops xs ws o})
+    (fun i => 2 ^ free i * (faultySets (pw i).scan.design (Pw i) (δ 0)).card *
+      2 ^ (β i + ∑ j ∈ range (pw i).tied.length, βt i j) * Dj ^ k (pw i).scan)
+    (fun z hz hg i => ⟨_, _, hg i⟩) fun _ i => ?_⟩
+  sorry
+
+end NetTiming
+
