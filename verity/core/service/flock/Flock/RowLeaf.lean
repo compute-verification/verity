@@ -4,7 +4,11 @@ hashes each instance's input rows into the digests the frame-v3 roots are built 
 and the public check of its digests. The statement composes it with the units, the mask slot and the output region.
 Today's leaf is the keyed-BLAKE3 row (`Blake3Row`); `hm96-sha256/v1` (Halevi–Micali on SHA-256) is the next.
 -/
-import Flock.Public
+module
+
+public import Flock.Public
+
+@[expose] public section
 
 namespace Flock
 

@@ -4,16 +4,18 @@ import Lean
 # Kernel replay of a package's declarations, and of its import closure
 
 `lake env lean --run Replay.lean OUT M₁ M₂ … [--reused R₁ …] [--closure D₁ …] [--closure-reused E₁ …]` reads every
-constant the named modules declare from their `.olean` files, imports once the modules they import from outside that set,
-and sends each constant of the `Mᵢ` and the `Dᵢ` to the kernel (`Kernel.Environment.replay`). The `Mᵢ` and `Rᵢ` are the
-package's own modules, the `Dᵢ` and `Eᵢ` modules of its import closure (Mathlib, ArkLib, the toolchain's own). A module
-`Rᵢ` or `Eᵢ` passed this replay before with the same `.olean` files, its imports' included, on the same toolchain
-(`check.py`'s replay cache): its constants go into the environment as an import adds them, unchecked. Every module a
-module of the set imports is in the set or imported, and no imported module imports one of the set (`check.py` sends the
-set closed upward), so with an empty cache and the whole closure in the set nothing is imported: each declaration of the
-closure goes to the kernel once, `leanchecker --fresh`'s check, and a warm cache sends none. A declaration that never
-passed the kernel (`debug.skipKernelTC`, `addDeclWithoutChecking`, a tampered `.olean`) is rejected here, which
-`#print axioms` cannot see.
+constant the named modules declare from their `.olean` files (a `module`'s from its private part, `.olean.private`, the
+only part that holds its proofs and unexposed bodies, so a `module` missing it or its server part is refused; a file
+outside the module system from its `.olean` alone, whatever lies beside it), imports once the modules they import from
+outside that set, and sends each constant of the `Mᵢ` and the `Dᵢ` to the kernel (`Kernel.Environment.replay`). The `Mᵢ`
+and `Rᵢ` are the package's own modules, the `Dᵢ` and `Eᵢ` modules of its import closure (Mathlib, ArkLib, the
+toolchain's own). A module `Rᵢ` or `Eᵢ` passed this replay before with the same `.olean` files, its imports' included,
+on the same toolchain (`check.py`'s replay cache): its constants go into the environment as an import adds them,
+unchecked. Every module a module of the set imports is in the set or imported, and no imported module imports one of the
+set (`check.py` sends the set closed upward), so with an empty cache and the whole closure in the set nothing is
+imported: each declaration of the closure goes to the kernel once, `leanchecker --fresh`'s check, and a warm cache sends
+none. A declaration that never passed the kernel (`debug.skipKernelTC`, `addDeclWithoutChecking`, a tampered `.olean`)
+is rejected here, which `#print axioms` cannot see.
 
 The constants go to the kernel side by side, on Lean's threads (`LEAN_NUM_THREADS`), one declaration at a time (an
 inductive type with its constructors and recursors, the quotient's four constants, or one other constant). They are put
@@ -62,9 +64,10 @@ set that can't all be imported together, as an env's modules can't (each executa
 order with each module after those it imports, a module that declares a constant a module before it declares too (not one
 theorem with one statement), or that imports such a module, is deferred, left out of this replay and named in `deferred`
 for the next, which imports what it imports from this one.
-A module under the module system whose private part is missing is refused there, since its public part makes its
-theorems axioms. `--closure-of R₁ …` adds to `--closure` the `Rᵢ` and every module they import, transitively; an
-argument `@F` stands for F's lines.
+A module under the module system whose private part is missing is refused there too, since its public part makes its
+theorems axioms; only `--records` and `--env` without `--env-out` read a module from the parts it has.
+`--closure-of R₁ …` adds to `--closure` the `Rᵢ` and every module they import, transitively; an argument `@F` stands for
+F's lines.
 -/
 
 open Lean Elab Term
@@ -405,16 +408,23 @@ unsafe def main (args : List String) : IO UInt32 := do
     if seen.contains m then continue
     seen := seen.insert m
     let olean ← findOLean m
-    let mut files := #[olean]
-    for level in [OLeanLevel.server, OLeanLevel.private] do
-      if ← (level.adjustFileName olean).pathExists then
-        files := files.push (level.adjustFileName olean)
-    let parts ← readModuleDataParts files
-    let (some (data, _), some (header, _)) := (parts.back?, parts[0]?) | throw <| IO.userError s!"no module data for {m}"
-    let priv := OLeanLevel.private.adjustFileName olean
-    if envOut.isSome && data.isModule && !(← priv.pathExists) then
-      throw <| IO.userError s!"{m} is under the module system and its private part ({priv}) is missing: its public \
-        part makes its theorems axioms"
+    -- as `importModules` reads them: a `module`'s proofs and unexposed bodies are only in its private part, read on top
+    -- of its `.olean` and server part; a file outside the module system is its `.olean` alone, whatever lies beside it.
+    -- A `module` missing a part is refused, but by `--records` or `--env` without `--env-out`, which read it from the
+    -- parts it has (the lean-module runner's imports, whose public part alone serves a `module` importer)
+    let (header, region) ← CompactedRegion.read (α := ModuleData) olean #[]
+    let mut data := header
+    if header.isModule then
+      let mut regions := #[region]
+      for level in [OLeanLevel.server, OLeanLevel.private] do
+        let part := level.adjustFileName olean
+        unless ← part.pathExists do
+          if envOut.isNone && (records.isSome || envIn.isSome) then break
+          throw <| IO.userError s!"{m} is a `module` and {part} is missing: its private part alone holds its proofs, \
+            and its public part makes its theorems axioms"
+        let (d, r) ← CompactedRegion.read (α := ModuleData) part regions
+        data := d
+        regions := regions.push r
     loaded := loaded.push (m, header.imports, data)
     if expand.contains m then
       for i in header.imports do

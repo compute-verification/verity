@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.Inputs
+module
+
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Inputs
 
 /-!
 # VBridge G item 4: the running sums `rec-acc` chain into E's `hacc`
@@ -27,6 +29,8 @@ running sums before and after its openings (`Chain.rep_ends`), the message eleme
   not needed.
 * `accChains_of_units`: `AccChains`, from the same facts at every accepted outer proof.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.AccChain
 

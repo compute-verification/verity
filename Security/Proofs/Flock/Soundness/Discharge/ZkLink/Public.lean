@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration
@@ -24,6 +26,8 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
   (`ValueBindingZ.opening_spec`), so the unit is right;
 * `zk_flock_countC_reg`: the count curve for it, with `zk_flock_countC`'s bound.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partition
 

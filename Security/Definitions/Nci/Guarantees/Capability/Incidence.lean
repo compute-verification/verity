@@ -1,4 +1,6 @@
-import Definitions.Nci.Capability
+module
+
+public import Definitions.Nci.Capability
 
 /-!
 # Local bounds: caps from incidence
@@ -8,6 +10,8 @@ How many counted products the held slots and operands support. `IncidenceCap` is
 `r h²/(4 βw βx)` when `r h ≤ 2 βw aout` (pairs limit it) and `aout (h − βw aout / r)/βx` otherwise (operand supply and
 fan-out limit it): two regimes of one calculation.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

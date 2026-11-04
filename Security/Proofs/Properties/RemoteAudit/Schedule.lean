@@ -1,7 +1,12 @@
-import Properties.RemoteAudit.Schedule
-import Definitions.Accounting.Assumptions.Stacking
-import Mathlib.Tactic.Choose
-import Batteries.Lean.Except
+module
+
+public import Properties.RemoteAudit.Schedule
+public import Definitions.Accounting.Assumptions.Stacking
+public import Mathlib.Tactic.Choose
+public import Batteries.Lean.Except
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Repr
 
 /-!
 # The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`)
@@ -33,6 +38,8 @@ from step 3, so a session whose third pass's plan drops it, as a coin might say,
 at 200 bits under a cap of 200 and is refused under 199 (the examples at the end; `test_schedule.py` plays the same
 session in Python).
 -/
+
+@[expose] public section
 
 open RemoteAudit
 
@@ -225,11 +232,11 @@ theorem flatMap_byteBits_injective {l l' : List UInt8} (h : l.flatMap byteBits =
   exact ⟨byteBits_injective this.1, this.2⟩
 
 /-- A block a well-formed schedule may hold: freed only after its write. -/
-def BlockOk : Schedule.Block → Prop
+def BlockOk : Schedule.Chunk → Prop
   | some (w, some f) => w < f
   | _ => True
 
-theorem blockCode_prefix (x y : Schedule.Block) (r r' : List Nat) (hx : BlockOk x) (hy : BlockOk y)
+theorem blockCode_prefix (x y : Schedule.Chunk) (r r' : List Nat) (hx : BlockOk x) (hy : BlockOk y)
     (h : Schedule.blockCode x ++ r = Schedule.blockCode y ++ r') : x = y ∧ r = r' := by
   rcases x with _ | ⟨w, _ | f⟩ <;> rcases y with _ | ⟨w', _ | f'⟩ <;>
     simp only [Schedule.blockCode, BlockOk, List.cons_append, List.nil_append, List.cons.injEq] at h hx hy
@@ -247,7 +254,7 @@ theorem blockCode_prefix (x y : Schedule.Block) (r r' : List Nat) (hx : BlockOk 
 
 def regCode (x : Nat × Nat × Nat) : List Nat := [x.1, x.2.1, x.2.2]
 
-def appendCode (a : Array Schedule.Block) : List Nat := a.size :: a.toList.flatMap Schedule.blockCode
+def appendCode (a : Array Schedule.Chunk) : List Nat := a.size :: a.toList.flatMap Schedule.blockCode
 
 theorem regCode_prefix (x y : Nat × Nat × Nat) (r r' : List Nat) (_ : True) (_ : True)
     (h : regCode x ++ r = regCode y ++ r') : x = y ∧ r = r' := by
@@ -257,7 +264,7 @@ theorem regCode_prefix (x y : Nat × Nat × Nat) (r r' : List Nat) (_ : True) (_
   obtain ⟨rfl, rfl, rfl, rfl⟩ := h
   exact ⟨rfl, rfl⟩
 
-theorem appendCode_prefix (x y : Array Schedule.Block) (r r' : List Nat) (hx : ∀ b ∈ x.toList, BlockOk b)
+theorem appendCode_prefix (x y : Array Schedule.Chunk) (r r' : List Nat) (hx : ∀ b ∈ x.toList, BlockOk b)
     (hy : ∀ b ∈ y.toList, BlockOk b) (h : appendCode x ++ r = appendCode y ++ r') : x = y ∧ r = r' := by
   simp only [appendCode, List.cons_append, List.cons.injEq] at h
   obtain ⟨hs, h⟩ := h

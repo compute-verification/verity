@@ -1,6 +1,8 @@
-import Definitions.Claims
-import Definitions.Pouw.RelativeSecurity
-import Definitions.Pouw.RelativeSecurityJ10R
+module
+
+public import Definitions.Claims
+public import Definitions.Pouw.RelativeSecurity
+public import Definitions.Pouw.RelativeSecurityJ10R
 
 /-!
 # Relative security's named premises for the staged window (trusted)
@@ -47,6 +49,8 @@ premise here is weakened for it. The charge counts every product of the call's p
 call's product, one whose products each serve several rows or columns, is charged fewer products and is outside the
 call's one-sided scope (charging purity at `jFrame`): K1 is not claimed there, as it isn't per unit.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 
@@ -108,9 +112,13 @@ The finders and their costs, path by path:
   the table: its cost is about the draws times `T`.
 - **Zero knowledge: extraction first.** The openings a zero-knowledge break equivocates are witness, inside C-Flock's
   proofs, so the finder must extract them before it can compare: its cost is the knowledge extractor's, C-Flock's link
-  finders' `2t'(1 + k)` calls at `t'` one run's (`linkBoundZC`), not `2T`. So `cz` is about `2(1 + k)` times the
-  calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
+  finders' `2t'(1 + k)` calls at `t'` one run's, the prover's and the verifier's (`linkBoundZC`), not `2T`. So `cz`
+  is about `2(1 + k)` times the calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
   `B` are needed, `fz` runs both and outputs the first collision either finds, at their costs summed.
+
+The floors per prover read this premise at the fork finders built from `M` (`forkFinders`: `1` continuation for
+binding, `kz` for zero knowledge), never at finders of the analysis's choosing, and conclude at those finders' collision
+probabilities (`breakPr`), so collision resistance is applied to them outside the floors.
 
 It assumes nothing of SHA-512. `ecr/sha-512` enters only the floors' bound, adversary by adversary (`breakBound`), at a
 budget computed from the adversary: a finder that meets `Claims.ExpectedCR` within `cb · time M + db` SHA-512 calls in

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwTau
-import Proofs.Flock.Claims.ZK.FinishTau
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.Claims.ZK.FinishTau
 
 /-!
 # The firewall's seven constraints as `SwRows`
@@ -16,6 +18,8 @@ view's first seven rows (`SwRows`): seven constraints, each of the layout's leng
 * **`Masked.swRows_coef`**: the same by coefficient, level 0's lengths `nE + 4`, the inner layout's.
 * `Finish.piopFw_split`: `hinner`'s PIOP run is the zerocheck, lincheck and ring-switch runs that `tauFw_at` reads.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

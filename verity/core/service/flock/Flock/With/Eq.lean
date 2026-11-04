@@ -3,7 +3,11 @@ The oracle copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sh
 verifier's function it copies, so `verifyWith Sha512.hash` is `verify` for every session whose tables' Merkle schemes are the
 registry's (`MerkleScheme.Named`).
 -/
-import Flock.With.Verify
+module
+
+public import Flock.With.Verify
+
+@[expose] public section
 
 namespace Flock
 

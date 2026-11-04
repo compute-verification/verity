@@ -1,8 +1,10 @@
-import Proofs.Properties.Verity.Recursive
-import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Recursion.BitsLin2
-import Proofs.Flock.Claims.Recursion.DeployFacts
-import Proofs.Core.Circuit
+module
+
+public import Proofs.Properties.Verity.Recursive
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.DeployFacts
+public import Proofs.Core.Circuit
 
 /-!
 # The target, proved: sampled proofs at the recursive configuration
@@ -31,6 +33,8 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   - at the units (`ex_off_le_units`), `p_u` is the probability of drawing `u`, and the majority at any bit of `u`'s
     wires weighs at least `p_u / 2` (`drawn_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

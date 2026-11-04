@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Mathlib.Basic.Real.Basic
+module
+
+public import Definitions.Core.Formalism
+public import Mathlib.Basic.Real.Basic
 
 /-!
 # Serving blocks and the training class's counts (trusted)
@@ -33,6 +35,8 @@ and `Overlap` (a gate is in at most `μ` operations' bodies). The last two bound
 assigned to a serving block but not computed wholly inside it: each has a gate outside the block that a gate of the
 block reads, an unregistered input of the block, so at most `ω_max μ k_S` of `Ω_S` escapes the per-block cap.
 -/
+
+@[expose] public section
 
 namespace Accounting.ServingBlocks
 

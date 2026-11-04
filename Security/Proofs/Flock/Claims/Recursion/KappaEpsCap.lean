@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 
 /-!
 # Route 2C's split bound at the audit's call caps: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
@@ -10,6 +12,8 @@ setup calls `nS x · 138543104` (`setupCalls_deployedB_le_cap`), at most `16 · 
 of `16` parts (`RecBudget.MAX_STATEMENTS`, `nS_le_sixteen`). So at the deployment's tables (`OneTableAt`: `SizesAt` but
 for its inner-setup bound), `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`kappa_eps_oneTable_cap`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

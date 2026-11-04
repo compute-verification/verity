@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.BitsK
-import Proofs.Flock.Claims.Recursion.CallsClosed
+module
+
+public import Proofs.Flock.Recursive.BitsK
+public import Proofs.Flock.Claims.Recursion.CallsClosed
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts
@@ -22,6 +24,8 @@ What is left is what the statement names: the decoders' list-decoding spec (`dec
 run, and SHA-512's named collision assumptions, `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and
 `F0I`, each finder charged the verifier's own calls at `n = nR` and `v = 2^32`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

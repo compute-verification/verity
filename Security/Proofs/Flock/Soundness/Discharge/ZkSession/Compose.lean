@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
 
 /-!
 # A masked rep followed by the inner proof (live/PROTOCOL.md §5, VEIL Lemma 4.3)
@@ -14,6 +16,8 @@ protocol", which bounds it by the clear protocol's soundness), then the rep acce
 `ε + εInner`. The pads are fixed by the commitment before the phase starts, and in the unique-decoding regime the
 inner proof's `InnerGood` names one pad vector, the decoding of `Ch`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

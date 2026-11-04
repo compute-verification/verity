@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.OuterSessionZK
-import Proofs.Flock.Claims.Sampling.Seq
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.ZK.Blind
-import Proofs.Flock.SessionLoop.FinishParts
+module
+
+public import Proofs.Flock.Recursive.OuterSessionZK
+public import Proofs.Flock.Claims.Sampling.Seq
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.ZK.Blind
+public import Proofs.Flock.SessionLoop.FinishParts
 
 /-!
 # Recursion: the committed-coin statements' `_hOuter` at V*'s statements run by the session loop
@@ -28,6 +30,8 @@ values `vs`, one after another, each on its own tape.
 * `outerViewZK_loop`: `RecursiveZK`'s `_hOuter` (`OuterViewZK`) at one worker's statements, the simulator their public
   statements'.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
 

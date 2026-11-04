@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Hash.Basic
+module
+
+public import Mathlib
+public import Definitions.Hash.Basic
 
 /-!
 # `sha512/row-seg/v1` over a hash (trusted)
@@ -17,6 +19,8 @@ zero (`packBits`). It is cut into `s = ⌈ℓ/8192⌉` segments of 8192 bits, th
 so the digest's messages bind the row's bit length `ℓ` (in `Q(ℓ)`) and each segment's (in `S`). `RowSeg.hashed` lists
 every message the digest hashed: the segments' messages, then the outer one.
 -/
+
+@[expose] public section
 
 namespace Hash
 

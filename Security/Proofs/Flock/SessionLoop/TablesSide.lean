@@ -1,11 +1,14 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.CausalExe
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The tables' side of `SessionLoopZKDeployed` at the deployed tables
 
-At the session `CoinLayer.session Loop.loopNr Masked.dataE`, the premises `Flock.Guarantees.SessionLoopZKDeployed` takes
-of the tables, each at the deployed prover `Masked.PE`, its stopped round plan and its tape plan `Masked.UE`:
+At the session `CoinLayer.session Loop.loopNr Masked.dataE`, the tables' side `Flock.SecurityProofs.SessionLoopZKDeployed`
+discharges (all of it but `SwCausal`), each at the deployed prover `Masked.PE`, its stopped round plan and its tape plan
+`Masked.UE`:
 
 * `tables_dataE`: every table is one it sets up (`Masked.tables`).
 * `complete_dataE`: at the deployed relation each table's share is valid (`complete_tabC`).
@@ -18,6 +21,8 @@ of the tables, each at the deployed prover `Masked.PE`, its stopped round plan a
 `SwCausal` reads it at every coin vector. It holds at the honest values (`swCausal_honestVals_dataE`, from
 `RefSession.swCausal_vals`), so the statement applies to an honest worker.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

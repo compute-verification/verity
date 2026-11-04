@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Hash.Basic
+module
+
+public import Mathlib
+public import Definitions.Hash.Basic
 
 /-!
 # The hash area's named assumptions
@@ -18,6 +20,8 @@ It is a predicate on one forger at one key, since some forger outputs a valid si
 it), so it is asked of that forger only, the one a reduction builds at the device's key, as `Claims.ExpectedCR` is asked
 of one finder. The verifier is an argument: a statement reads it at the compiled one.
 -/
+
+@[expose] public section
 
 namespace Hash.Assumptions
 

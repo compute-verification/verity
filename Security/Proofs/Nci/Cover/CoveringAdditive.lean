@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.CoverAdditive
-import Proofs.Nci.Covering
-import Proofs.Nci.Cover.Additive
+module
+
+public import Definitions.Nci.Guarantees.CoverAdditive
+public import Proofs.Nci.Covering
+public import Proofs.Nci.Cover.Additive
 
 /-!
 # The additive covering bound
@@ -11,6 +13,8 @@ computations. A block `S`'s completed weights cost it `c_w` inputs each outside 
 in the two-cost proof. The two sets of inputs are disjoint parts of `in(S) \ θ`, so `c_w |θ'_S| + c_a |J_S| ≤ k`, and
 AM–GM (`four_mul_le_sq`) bounds `|θ'_S| |J_S|` by `(k / c_w)(k / c_a) / 4`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

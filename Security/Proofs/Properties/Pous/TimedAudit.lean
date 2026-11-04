@@ -1,5 +1,9 @@
-import Properties.Pous.TimedAudit
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Properties.Pous.TimedAudit
+public import Proofs.Properties.NetworkCertifier.Bytes
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The timed audit's property, proved
@@ -9,6 +13,8 @@ import Proofs.Properties.NetworkCertifier.Bytes
 audit (`verdictOf_accepted`, `audit_ok`). Two trees over leaves of 64 bytes with one root have the same leaves unless
 two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's leaf to `C*`'s.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties.SecurityProofs
 
@@ -277,13 +283,13 @@ theorem gate_refused_nil {s : Certificate.Store} {k delta rtt : Nat} (h : (Certi
 
 /-! ## The verdict -/
 
-theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := rfl
+theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := (rfl)
 
-theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := rfl
+theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := (rfl)
 
 theorem verdict_accepted (a b c d e f g : Json) :
     (Json.mkObj [("k", a), ("limit_ns", b), ("gaps", c), ("audits", d), ("audits_accepted", e), ("accepted", f),
-      ("profile", g)]).getObjValD "accepted" = f := rfl
+      ("profile", g)]).getObjValD "accepted" = f := (rfl)
 
 theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : TimedAuditAccepted ready leafBytes doc) :
     ∃ v, TimedAudit.verdictOf ready leafBytes doc = .ok v ∧ v.getObjValD "accepted" = .bool true := by

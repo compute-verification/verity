@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Runs.Prog
-import Proofs.Flock.VBridge.Runs.Lg
+module
+
+public import Proofs.Flock.VBridge.Runs.Prog
+public import Proofs.Flock.VBridge.Runs.Lg
 
 /-!
 # A rep's run from its algebra, Ligerito included
@@ -8,6 +10,8 @@ import Proofs.Flock.VBridge.Runs.Lg
 proof file decoded and holding V*'s messages and openings, the rep's program accepts and ends at the record's last
 round, as `TableFiles.Runs` asks, once the Ligerito rounds' bytes are the frames `hlg_of_residuals` names.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 

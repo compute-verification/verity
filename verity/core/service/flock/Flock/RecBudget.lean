@@ -22,7 +22,11 @@ refuses one of more than `MAX_INNER_ROWS` instances or with a shared-row table o
 (`innerRows`): over its at most `1024` ports (`checkInRange`'s regions) the inner setup's evaluations are then at most
 `12 + 1024 · 20 · 2^17 < 2^32`, and the inner verifier's, with its tables' and a decision's, below `2^32` too.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock
 namespace RecBudget

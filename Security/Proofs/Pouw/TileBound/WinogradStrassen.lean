@@ -1,4 +1,6 @@
-import Proofs.Pouw.TileBound.Proofs
+module
+
+public import Proofs.Pouw.TileBound.Proofs
 
 /-!
 # A program that beats the honest count in the abstract slot model (a later bundle; outside the 36 merged pins)
@@ -17,6 +19,8 @@ It costs `7(mn + m + n)` against honest `8mn`. That is below honest
 whenever `7(m + n) < mn`, for instance at `m = n = 16`. So the model's int8 cell is open for a real program, not only for
 the numbers `support_admits_open` exhibits. On the card, tile index sharing and integer scale classes stop it (§7.3).
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

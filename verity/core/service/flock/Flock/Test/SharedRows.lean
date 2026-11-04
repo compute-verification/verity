@@ -4,7 +4,12 @@ register passes only at that registration (the first entry reading the value; th
 R's tops `rec-top-stacked-L<l>` passes only where the shared rows register them. A port reading a value the shared rows
 do not register, other than R's tops, is not checked here.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.SharedRows
 

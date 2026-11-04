@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Project
-import Proofs.Properties.Verity.SampledCoins
+module
+
+public import Proofs.Properties.Verity.Sampled.Project
+public import Proofs.Properties.Verity.SampledCoins
 
 /-!
 # Sampled proofs' coupling: the coin map
@@ -42,6 +44,8 @@ frame's coins are 512 uniform bits, one for one with 64 of the bytes the sample 
   uniform (`sampleMap_start`, `avg_srcCoins`), so its premise holds within the openings' gaps alone
   (`sampleMap_couples`, `couplingTarget_withProject_of_sample`).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

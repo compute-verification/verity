@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Covering
+module
+
+public import Definitions.Nci.Assumptions.Covering
 
 /-!
 # The covering bound's two assumptions at two costs: `c_w` a weight, `c_a` an activation
@@ -19,6 +21,8 @@ slot and `c_w = H(θ'_{t0} | θ)`, what training added since the commitment, whi
 training step's version, `c_w` is at most one step's increment entropy: on an exact Pythia resume about 1.1-1.7 bits a
 weight at bf16, 0.2-0.3 at FP8, 0.03-0.05 at FP4.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

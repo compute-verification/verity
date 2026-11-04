@@ -29,6 +29,20 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
   definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
   proof-only definitions is not a guarantee.
+- **Every module is on Lean's module system** (`tests/test_lean_packages.py`): a new file starts `module`, imports with
+  `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
+  writes that, with `backward.privateInPublic` when the file declares a private definition, and puts
+  `backward.proofsInPublic = true` in each package's `[leanOptions]`, so a proof inside a statement or an exposed body
+  stays in it and the lock's records don't move. A proof's body is private,
+  so an edit to it rebuilds no importer. What the module system refuses is fixed
+  in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
+  toolchain doesn't expose (`decide`, `rfl`, `unfold`) rewrites by core's lemma for it or has `import all` of its
+  module, never of an in-tree one (a module's build reads only its imports' public parts), and moves to a module of its
+  own when that `import all` slows its file's other proofs; a theorem whose statement names another module's private
+  declaration (core's `Array.qsort.sort`) is private, beside a public one over the public definition; an exported
+  `:= rfl` that unfolds an unexposed definition is `:= (rfl)`; a public definition that reads another private
+  declaration, and a module whose private declarations another opens (`open private … from M`), take
+  `modules.py --option backward.privateInPublic FILE`.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine gets its own worktree, its dependencies copied (never symlinked) from a
   checkout with the same manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages
@@ -37,9 +51,13 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Build, iterate, check
 
 - **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
-  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
-  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
-  on a project machine with `--on` (the README).
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. Its
+  last line is the axiom probe's, since lean's exit 0 isn't proved: each theorem of FILE whose axioms go beyond `propext`,
+  `Classical.choice` and `Quot.sound` (`sorryAx` too), or none. It never writes a record. After editing a file others
+  import, `lake build` its module, then try an importer. It also runs on a project machine with `--on` (the README).
+  Once a file that adds or renames declarations passes, try it with `--siblings --on NODE`: a name another module of the
+  package declares fails only where both are imported, which is otherwise the package root, an hour into a records run
+  (on Security/Proofs about 15 s and 8 GB, so not on an agent VM).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
@@ -148,7 +166,7 @@ repository.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
   failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail.
+  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.

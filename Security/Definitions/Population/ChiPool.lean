@@ -1,4 +1,6 @@
-import Definitions.Population.Exfiltration
+module
+
+public import Definitions.Population.Exfiltration
 
 /-!
 # The cheating pool with the verdict lag
@@ -15,6 +17,8 @@ those windows; `Strategy.cumLag Δ` counts them.
   window's commitment.
 * `Strategy.cumLag Δ` is the first-detection case, `j = 1`.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

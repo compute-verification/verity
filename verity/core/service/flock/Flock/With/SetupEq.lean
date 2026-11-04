@@ -2,8 +2,12 @@
 Setup's oracle copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sha512.hash`, each `…With` of
 `Flock.With.Setup` is the compiled verifier's function it copies, so `Stmt.setupTablesWith` at SHA-512 is `Stmt.setupTables`.
 -/
-import Flock.With.Setup
-import Flock.With.Eq
+module
+
+public import Flock.With.Setup
+public import Flock.With.Eq
+
+@[expose] public section
 
 namespace Flock
 
