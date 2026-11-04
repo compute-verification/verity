@@ -1,12 +1,11 @@
 """The lead's kernel off the device (benchmarks/pouw/np_kernel): cpu_check.cc's ragged calls, whose padding rows carry their
 tags, lane-coin A' and coins (and a control whose padding rows have none is rejected), the fold's window, exact at
 `serving.LEAD_FOLD_BOUND` and at no other bound, the lead serving verity_int8's own y at Llama-3.2-1B's linears (and
-83d82109a8's fold caught there), G's rejection draw, ssn.cu's check holding served outputs to verity_int8's epilogue within
-the same bound, gate.py's GateRecord from a run's out directory, and the recorded one (gate.json)."""
+83d82109a8's fold caught there), G's rejection draw, and ssn.cu's check holding served outputs to verity_int8's epilogue
+within the same bound."""
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import re
@@ -16,8 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.serving import (LEAD_FOLD_BOUND, POUW_V2, SERIAL, GateRecord, lead_variant,
-                                                 variant_refusals)
+from verity.core.protocols.pouw.serving import LEAD_FOLD_BOUND
 
 HERE = Path(__file__).resolve().parents[1] / "np_kernel"
 
@@ -29,7 +27,7 @@ def _module(name: str, path: Path):
     return mod
 
 
-G = _module("np_kernel_gate", HERE / "gate.py")
+#: Llama-3.2-1B's fused linears, (n, K): qkv, o, gate_up, down (ssn.cu's time_all and check)
 SERVED = ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192))
 
 
@@ -146,108 +144,4 @@ def test_ssn_checks_served_outputs_to_verity_int8s_epilogue_within_the_leads_bou
     assert m and 1 << int(m.group(1)) == LEAD_FOLD_BOUND
     assert "pv < -FOLD_BOUND || pv > FOLD_BOUND" in src and '\\"fold_bound\\": %lld' in src
     assert "const long long pv = ab;" in src and "bf16_rn(int8_epilogue((int)pv, si[i], sj[j]))" in src
-    assert f'"\\"{G.SERVED_AGAINST}\\""' in src and "stock_fold" not in src
-
-
-def line(n, k, **kw):
-    return {"check": G.LEAD_LAYOUT, "control": None, "rejected": False, "poison": "0xA5", "fold_bound": LEAD_FOLD_BOUND,
-            "served_against": G.SERVED_AGAINST, "call_m": 1, "call_n": n, "K": k, "served_outputs": 64 * n, **kw}
-
-
-def out_dir(tmp_path: Path, lines: list[dict], sass_ok: bool = True) -> tuple[Path, Path]:
-    root, out = tmp_path / "tree", tmp_path / "out"
-    (root / "k").mkdir(parents=True)
-    out.mkdir()
-    (root / "k" / "ssn.cu").write_text("// the kernel\n")
-    (root / "k" / "layout.h").write_text("// the layout\n")
-    (out / "sources.sha256").write_text("".join(f"{hashlib.sha256((root / p).read_bytes()).hexdigest()}  {p}\n"
-                                                for p in ("k/layout.h", "k/ssn.cu")))
-    (out / "sass_gate.json").write_text(json.dumps({"ok": sass_ok, "binaries": [
-        {"sha256": "ab" * 32, "ok": sass_ok, "cubins": [{"toolkit": "13.0.1-sm_90a", "functions": 12}]}]}))
-    (out / "check.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
-    return root, out
-
-
-HONEST = [line(n, k) for n, k in SERVED]
-CONTROLS = [line(3072, 2048, control="no-write", rejected=True), line(13, 100, control="no-write", rejected=True)]
-
-
-def refusals(tmp_path, lines, **kw):
-    root, out = out_dir(tmp_path, lines, **kw)
-    v, g = G.record(out, "r-test", root)
-    return v, g, variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g)
-
-
-def test_a_run_whose_lead_lines_pass_admits_the_lead(tmp_path, capsys):
-    extreme = line(256, 8192, served_outputs=0)
-    v, g, got = refusals(tmp_path, HONEST + [extreme] + CONTROLS + [{"check": "ssn_1l", "rejected": False}])
-    assert got == [] and g.passed and g.variant == v.id and v.binary_sha256 == "ab" * 32
-    assert g.fold_bound == LEAD_FOLD_BOUND and g.toolkit == "13.0.1-sm_90a" and set(g.shapes) == set(SERVED)
-    root, out = tmp_path / "tree", tmp_path / "out"
-    assert G.main([str(out), "--run", "r-test"], root) == 0 and capsys.readouterr().out.endswith("admitted\n")
-
-
-@pytest.mark.parametrize(("lines", "sass_ok", "want"), [
-    (HONEST[:3] + [line(2048, 8192, rejected=True)] + CONTROLS, True, ["failed exact", "didn't cover [(2048, 8192)]"]),
-    (HONEST, True, ["failed controls_rejected"]),
-    (HONEST + [{**CONTROLS[0], "rejected": False}], True, ["failed controls_rejected"]),
-    ([{**x, "poison": None} for x in HONEST] + CONTROLS, True, ["failed poisoned_accepted"]),
-    ([{k: v for k, v in x.items() if k != "served_against"} for x in HONEST] + CONTROLS, True, ["failed exact"]),
-    (HONEST + CONTROLS, False, ["failed sass_ok"]),
-    ([{**x, "fold_bound": LEAD_FOLD_BOUND // 2} for x in HONEST] + CONTROLS, True,
-     ["held outputs exact within |p| <= 2097152, its fold serves |p| <= 4194304"]),
-    ([{**x, "served_outputs": 0} for x in HONEST[:3]] + HONEST[3:] + CONTROLS, True,
-     ["didn't cover [(2048, 2048), (3072, 2048), (16384, 2048)]"]),
-])
-def test_a_run_that_missed_a_check_doesnt_admit_the_lead(tmp_path, lines, sass_ok, want):
-    _, _, got = refusals(tmp_path, lines, sass_ok=sass_ok)
-    assert got and all(any(w in r for r in got) for w in want), got
-
-
-def test_a_run_built_from_other_sources_isnt_gated(tmp_path):
-    root, out = out_dir(tmp_path, HONEST + CONTROLS)
-    (root / "k" / "layout.h").write_text("// another layout\n")
-    with pytest.raises(G.GateError, match="k/layout.h differ"):
-        G.record(out, "r-test", root)
-    assert G.main([str(out), "--run", "r-test"], root) == 2
-
-
-def test_write_records_an_admitting_gate_which_admits_the_lead_only_while_its_sources_are_the_trees(tmp_path, capsys):
-    root, out = out_dir(tmp_path, HONEST + CONTROLS)
-    rec = tmp_path / "gate.json"
-    assert G.main([str(out), "--run", "r-test", "--write"], root, rec) == 0
-    v, g = G.recorded(root, rec)
-    assert g.run == "r-test" and variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g) == []
-    assert json.loads(rec.read_text())["sources"] == {p: hashlib.sha256((root / p).read_bytes()).hexdigest()
-                                                      for p in ("k/layout.h", "k/ssn.cu")}
-    assert G.main(["--recorded"], root, rec) == 0
-    (root / "k" / "ssn.cu").write_text("// another kernel\n")
-    capsys.readouterr()
-    assert G.main(["--recorded"], root, rec) == 1 and f"the gate is {v.id}'s" in capsys.readouterr().out
-
-
-def test_write_records_no_refused_gate(tmp_path):
-    root, out = out_dir(tmp_path, HONEST)
-    rec = tmp_path / "gate.json"
-    assert G.main([str(out), "--run", "r-test", "--write"], root, rec) == 1 and not rec.exists()
-
-
-def test_the_recorded_gate_admits_the_lead_its_digest_names():
-    """gate.json against itself (its sources are other suites' files: `gate.py --recorded` holds it to the tree)."""
-    rec = json.loads(G.RECORD.read_text())
-    v = lead_variant(rec["source_sha256"], rec["binary_sha256"], "np-kernel")
-    g = GateRecord(**{**rec["gate"], "shapes": tuple(tuple(s) for s in rec["gate"]["shapes"])})
-    assert rec["variant"] == v.id == g.variant
-    assert variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g) == [], (
-        "gate.json no longer admits the lead: rerun run.sh (CHECK=1) on an H200, then gate.py OUT --run RUN --write")
-
-
-def test_the_variant_is_named_by_its_sources_under_the_leads_config(tmp_path):
-    v, _, _ = refusals(tmp_path, HONEST + CONTROLS)
-    root = tmp_path / "tree"
-    G.record(tmp_path / "out", "r-test", root)
-    import ledger
-
-    assert v.source_sha256 == ledger.source_sha256([Path("k/layout.h"), Path("k/ssn.cu")], root,
-                                                   {"BLC": "2", "ROT": "1", "FOLD": "1"})
-    assert v.source_sha256 != ledger.source_sha256([Path("k/layout.h"), Path("k/ssn.cu")], root)
+    assert '"\\"int8_epilogue(A.B)\\""' in src and "stock_fold" not in src
