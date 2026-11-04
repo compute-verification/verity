@@ -171,10 +171,10 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
 
 def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mfu():
     """The slowdown is a hardware multiple over the reference training algorithm at `MFU₀` (0.4), at least 1, so the
-    adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05; remote with the
-    floor credit at the card table's clock is above it, and onsite far above. Under reference efficiency free compute
-    counts at `MFU₀`, so each is its padded size ratio (3.04 remote); without it the monitored terms shrink by 2.5 and
-    the dark leaves don't (1.22 remote, onsite still above 10)."""
+    adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05 (1.04 with the
+    H200's tensor at 1,980 MHz); remote with the floor credit at the card table's clock is above it, and onsite far
+    above. Under reference efficiency free compute counts at `MFU₀`, so each is its padded size ratio (3.04 remote);
+    without it the monitored terms shrink by 2.5 and the dark leaves don't (1.22 remote, onsite still above 10)."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
     assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
