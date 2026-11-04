@@ -13,6 +13,7 @@ import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.SessionLoop.TablesSide
+import Proofs.Flock.SessionLoop.Level0SrcSat
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishTrunc
 import Proofs.Flock.Claims.ZK.FinHmkLive
@@ -50,7 +51,8 @@ which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the l
 (`LeanRelease.ofLoopLink`),
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
-holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausal` (`Loop.finishIs`).
+holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausal` (`Loop.finishIs`). That level-0 half is
+satisfiable at every statement (`Loop.level0Src_tapeSrc`, `Proofs.Flock.SessionLoop.Level0SrcSat`).
 
 `SessionLoopZKDeployed` is over every worker. Its premises on the worker (`LiveRoundEq`, `FillRoundEq`) read it in the
 algebraic phase only (`Proofs.Flock.SessionLoop.Phase`): a worker that, until the algebraic phase's last coins, reads
