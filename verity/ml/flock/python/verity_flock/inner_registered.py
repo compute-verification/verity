@@ -11,7 +11,10 @@ registration's rows and salts are the description table's own (the salts sampled
 verifier's files and writes ``registered.json`` beside them, the verifier's own ``--registered`` file
 (`verity/registered-reads/v0`): the root, leaf count, row width and domain the registration names, and every unit's
 position (the description port's ref of the unit's instance), which the Lean verifier does not read for an inner statement
-(`Registered.checkDescription`: no position depends on which unit an instance is). The description's registered value is
+(`Registered.checkDescription`: no position depends on which unit an instance is). Every other port, each input row and
+output row, is the prover's own registration of its table under the value of its name, its rows and salts the staged
+ones, so the reads file names every port of the statement, as `flock-verify` requires of any `--registered` file
+(`Registered.checkComplete`); those are no part of the circuit registration. The description's registered value is
 its packed row (16 description bits to a u16 word, as the class statement lays out the parameter), so its row width is
 the port's words, not the parameter's leaf count.
 
@@ -216,9 +219,10 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
              partition: Mapping | None = None) -> dict:
     """Register the description rows of the staged statement in ``stage`` (``ports``: ``{port: value}``, default the one
     `description_port` as `VALUE`) and write the header's ``registered`` and the verifier's ``registered.json``. ``extra``:
-    that many more registered rows (zero rows under fresh salts) past the table's, which no instance reads. With
-    ``program`` and ``partition`` (the statement's core ``Program`` and ``verity/partition/v1`` object), the entries also
-    join the circuit registration (`bind`). Returns ``{port: {"entry", "root", "leaves", "positions"}}``."""
+    that many more registered rows (zero rows under fresh salts) past the table's, which no instance reads. Every other port
+    is registered as the prover's own value of its name (the module docstring). With ``program`` and ``partition`` (the
+    statement's core ``Program`` and ``verity/partition/v1`` object), the description entries also join the circuit
+    registration (`bind`). Returns ``{port: {"entry", "root", "leaves", "positions"}}`` for every port."""
     if (program is None) != (partition is None):
         raise ValueError("the circuit registration takes the statement's program and its partition object together")
     head, tabs = tables(stage)
@@ -229,13 +233,14 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
         raise ValueError(f"{stage}: META names no program_sha512, which the registration's domain binds")
     entries, own, out, records = {}, {}, {}, []
     population = max(head["units"]["indices"], default=-1) + 1
-    for name, value in ports.items():
+    for name in ports:
         if name not in head["input_ports"]:
             raise ValueError(f"{name} is not an input port of {stage} ({head['input_ports']})")
+    for name, value in {**ports, **{p: p for p in tabs if p not in ports}}.items():
         t = tabs[name]
         rows = [tuple(int(w) for w in r) for r in t["rows"]]
         salts = list(t["salts"])
-        if extra:
+        if extra and name in ports:
             rows += [(0,) * len(rows[0])] * extra
             salts += [os.urandom(FC.SALT_BYTES) for _ in range(extra)]
         reg = G.Registered.commit(program_sha512, value, rows, salts)
@@ -248,7 +253,8 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
             reads[u] = t["refs"][i]
         own[name] = {**reg.entry(), "word_bits": G.WORD_BITS, "reads": reads}
         out[name] = {"entry": entries[name], "root": reg.root.hex(), "leaves": reg.leaves, "positions": positions}
-        records.append(reg.entry())
+        if name in ports:
+            records.append(reg.entry())
     _write_header(stage, entries)
     (stage / OWN).write_text(json.dumps({"format": G.READS, "ports": own}, sort_keys=True))
     if program is not None:

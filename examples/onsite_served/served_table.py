@@ -57,8 +57,8 @@ WORKERS, FIREWALL, PROVER, VERIFIER = SP.WORKERS, SP.FIREWALL, WP.PROVER, SP.VER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", "network-certifier"
 #: served_verdicts.py's record reads each piece's answer by its runner name
-RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "space": "pous", "bandwidth": "bandwidth",
-                "communication": "certifier", "wipe": "wipe"}
+RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
+                "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -114,6 +114,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
+    Component("inference-only", SP.IDS["inference-only"], parties=(_VERIFIER,), requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(_MEMORY_CHALLENGER, _PROVER, _VERIFIER),
               channels=(Channel(PROVER, MEMORY_CHALLENGER, ("Setup", "Response")),
                         Channel(MEMORY_CHALLENGER, PROVER, ("Challenge",), carries_coins=True),
@@ -133,24 +134,23 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=((CHALLENGER, NETWORK_CERTIFIER),)),
     Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
-              channels=(*WP.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("WipeReport",), after=("End",))),
-              product=False),
+              channels=(*WP.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("WipeReport",), after=("End",)))),
 )}
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
                    "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
-#: onsite's components, the five `Core.Onsite.components` holds, and the wipe beside them
-ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "pous", "bandwidth", "certifier")
-PROTOCOLS = (*ONSITE_COMPONENTS, "wipe")
+#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
+ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
+PROTOCOLS = ONSITE_COMPONENTS
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
 PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-HEADER = ("The onsite run of the served window: onsite's five components and the wipe, each party on its machine. Run it",
-          "on each machine with `verity run THIS --on MACHINE --bindings FILE` (examples/onsite_served/README.md); the",
-          "deploy bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
+HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
+          "machine with `verity run THIS --on MACHINE --bindings FILE` (examples/onsite_served/README.md); the deploy",
+          "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
 
 
 def configuration(commit: str) -> dict[str, Any]:
@@ -289,6 +289,10 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pouw),
         VERIFIER: Piece("pouw", VERIFIER, CHECK, "PoUW's row"),
     },
+    "inference-only": {
+        VERIFIER: Piece("inference-only", VERIFIER, CHECK, "the inference-only policy's row: no served window produces "
+                        "the declared division yet, so the record has none and the onsite check stays undecided"),
+    },
     "pous": {
         PROVER: Piece("pous", PROVER, SERVED_WINDOW, "PoUS's served piece: one period over the served weights held as "
                       "P2's C* on the card, the memory challenger's timed reads answered from it",
@@ -320,7 +324,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
                       binds=("host", "address", "command"), hooks=_wipe_piece),
         MEMORY_CHALLENGER: Piece("wipe", MEMORY_CHALLENGER, GATE, "the wipe's memory challenger, on its own coins and "
                                  "clock, signing the session"),
-        VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row, outside the product"),
+        VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row"),
     },
 }
 WORKLOADS: dict[str, tuple[Workload, Piece]] = {SERVED_WINDOW: (SERVED, SERVE)}
@@ -378,7 +382,7 @@ VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite check: `served_verdicts.py record` over the served window's public record in ``state``
     (``out/``, all a verifier on another machine needs of it, the prover node named by its ``machine.txt``); the
-    period's line in `verity_cli.run`'s verdict form."""
+    period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed subprotocol."""
     py, out = sys.executable, state / "out"
     serve, machine = out / "serve", out / "machine.txt"
     slots = str(cfg["workload"]["params"]["slots"])
@@ -399,11 +403,13 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     names = {v: k for k, v in RECORD_NAMES.items()}
     rows = json.loads((state / "record" / "onsite" / "verdicts.json").read_text())["protocols"]
     components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
-    listed = [c for c in cfg["protocols"] if MANIFESTS[c].product]
-    return {"block": k, "components": components,
-            "product": ONSITE if sorted(listed) == sorted(ONSITE_COMPONENTS) else "verity/product/v0",
-            "reason": line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None),
-            "registration": None, "coins": coins_of(cfg), "verdict": VERDICTS.get(line["composed"], "undecided")}
+    absent = sorted(c for c, v in components.items() if v == "absent")
+    verdict = VERDICTS.get(line["composed"], "undecided")
+    return {"block": k, "components": components, "product": K.composite(cfg["protocols"], MANIFESTS),
+            "reason": line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None)
+            or (f"no row for {absent}" if absent else None),
+            "registration": None, "coins": coins_of(cfg),
+            "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
 def coins_of(cfg: Mapping[str, Any]) -> str:

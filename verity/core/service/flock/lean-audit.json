@@ -77,6 +77,7 @@
   "Flock.Test.FramesAsk",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.Served",
   "Flock.Test.RequireLink",
   "Flock.Test.FV3",
   "VStar",

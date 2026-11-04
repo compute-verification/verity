@@ -2,7 +2,9 @@
 The one-stage audit's pieces as JSON functions, which `sampled-proofs-difftest` serves (`Difftest.serve`) for the
 difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proofs-one-stage serve`):
 
-* `decode`: a case's three decoders run independently (`answer` stops at the first refusal);
+* `decode`: a case's three decoders run independently (`answer` stops at the first refusal), the parameters and the
+  evidence as parsed (`OneStage.paramsParsed`, `evidenceParsed`), before the protocol's refusals of what soundness
+  doesn't cover;
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
@@ -49,6 +51,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
   `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
   auditor's ledger opens for the verifier's window (`trusted_session_of`).
+* `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
+  release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
+  one tree a session (`sessions_tree_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
@@ -69,6 +74,7 @@ import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
+import SampledProofs.ChallengerTrees
 import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
@@ -80,7 +86,7 @@ open Lean (Json)
 open Flock (V)
 
 private def params (j : Json) : V OneStage.Params := do
-  OneStage.paramsOfJson (← Core.canonicalJson (← Flock.canon j).toUTF8)
+  OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon j).toUTF8)
 
 private def orNull {α} (f : α → Json) : V α → Json
   | .ok a => f a
@@ -101,7 +107,7 @@ def decode (j : Json) : V Json := do
   let e ← Flock.unhex (← Flock.J.str j "evidence" "the case")
   return Json.mkObj [("params", Json.bool (params p).toBool),
     ("commitment", orNull (fun c => Json.str (Flock.hexOf c.digest)) (OneStage.commitmentOf c)),
-    ("evidence", Json.bool (OneStage.evidenceOf e).toBool)]
+    ("evidence", Json.bool (OneStage.evidenceParsed e).toBool)]
 
 /-- `{"params"}` to `{"digest", "population", "strata", "law"}`, each null where Python raises. -/
 def partition (j : Json) : V Json := do
@@ -579,6 +585,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
+   ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 
