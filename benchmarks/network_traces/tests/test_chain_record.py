@@ -528,6 +528,26 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
         cr.leak(run)
+    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "egress_cells": 7}}))
+    with pytest.raises(SystemExit, match="0 of scan_zk's classes have a schedule of 7 egress cells"):
+        cr.leak(run)
+
+
+def test_leak_counts_a_w63k4_run_at_w63k4s_class(tmp_path):
+    """The gate's ``--scan-class w63k4`` schedules 5 egress cells, and K is counted at that class (KO 4, KI 32), not
+    at w63's."""
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.W63K4.params)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 1, "requests": 4}}))
+    doc = cr.leak(run)
+    assert cr.run_class(sz.W63K4.params) == sz.W63K4.cls and cr.run_class(sz.W63.params) == sz.W63.cls
+    assert (doc["class"]["KO"], doc["class"]["KI"]) == (4, 32)
+    assert (doc["terms"]["cell"], doc["terms"]["connections_per_block"]) == (3, 128)
+    assert doc["terms"]["schedules_per_block"] == doc["terms"]["cells_per_block"] == 384
 
 
 def test_subset_bound():

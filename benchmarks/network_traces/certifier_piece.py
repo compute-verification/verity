@@ -319,7 +319,8 @@ def warmup(a: argparse.Namespace, serve_dir: Path, ps: list[list[int]] | None = 
     return done
 
 
-def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> None:
+def relay(listen: int, to: int, *, host: str = "127.0.0.1", ready: Callable[[], None] = lambda: None) -> None:
+    """A TCP relay from 127.0.0.1:``listen`` to ``host``:``to``, one upstream connection a connection."""
     srv = socket.create_server(("127.0.0.1", listen))
     ready()
 
@@ -339,7 +340,7 @@ def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> 
     while True:
         conn, _ = srv.accept()
         try:
-            up = socket.create_connection(("127.0.0.1", to))
+            up = socket.create_connection((host, to))
         except OSError:
             conn.close()
             continue
