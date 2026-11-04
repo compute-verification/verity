@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 
 `Claims.Sampling`'s failure event and its bound (`Proofs.Flock.Claims.Sampling.KS`), for a compiled sampled verifier `L`
 over any proof system for proof blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted
-inner run are `A`'s extractor's at each proof block's shape (`BlockEC`), indexed by proof block.
+inner run are `A`'s extractor's at each proof block's shape (`Compiled.BlockEC`), indexed by proof block.
 
 * `Found`: a sampled proof block's extraction finds a witness in `A`'s relation at its session's statement, as
   `Compiled.unitExt` runs it before its openings. `GoodAt`: the block is in the sample and below `n_PU`, and is found.
@@ -63,9 +63,6 @@ namespace Compiled
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 /-! ## The extractor's coins, per outer run -/
-
-/-- The extractor's coins at one accepted inner run: `A`'s extractor's at each proof block's shape. -/
-abbrev BlockEC (L : Compiled Coin A) (x : Msg) := (u : Fin (L.nPU x)) → A.EC (L.sh x u)
 
 /-- The extractor's coins for one outer run: its inner wait's, and at each of its accepted runs every proof block's. -/
 abbrev E1 (L : Compiled Coin A) (x : Msg) := (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.BlockEC x)
