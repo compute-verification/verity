@@ -292,7 +292,8 @@ theorem uniform_rows (k : ℕ) (R : Rows) (ins : ℕ → ℕ → ℕ) (one : ℕ
     have hN : (uniform k R ins one n).size = k + n * R.nComp := by
       simp only [KeyProg.size, uniform_inputs, uniform_rows_size]
     simp only [uniform, KeyProg.snoc, hN, uniform_rows k R ins one n, range_add_one, List.flatMap_append,
-      List.flatMap_singleton, List.append_toArray] <;> rfl
+      List.flatMap_singleton, List.append_toArray]
+    rfl
 
 /-- The stacked rows' inputs: a unit's source gates. -/
 def srcs (c : Flock.Circuit) : ℕ := ((Rows.ofNet c.unit).stack c.upv).nIn
@@ -332,7 +333,8 @@ theorem keyProg_rows (c : Flock.Circuit) (n : ℕ) :
       (List.range ((Rows.ofNet c.unit).stack c.upv).nComp).map fun i =>
         ((((Rows.ofNet c.unit).stack c.upv).a.getD i []).map (wireOf c n u),
           (((Rows.ofNet c.unit).stack c.upv).b.getD i []).map (wireOf c n u))).toArray := by
-  simp only [keyProg, uniform_rows] <;> rfl
+  simp only [keyProg, uniform_rows]
+  rfl
 
 /-- **Unit `u`'s row `i`** is the stacked rows' row `i` on `wireOf`. -/
 theorem keyProg_row? (c : Flock.Circuit) {n u i : ℕ} (hu : u < n) (hi : i < (keyProg c n).perUnit) :
@@ -340,7 +342,7 @@ theorem keyProg_row? (c : Flock.Circuit) {n u i : ℕ} (hu : u < n) (hi : i < (k
       some ((((Rows.ofNet c.unit).stack c.upv).a.getD i []).map (wireOf c n u),
         (((Rows.ofNet c.unit).stack c.upv).b.getD i []).map (wireOf c n u)) := by
   have hc : ¬ ((keyProg c n).inputs + (u * (keyProg c n).perUnit + i) < (keyProg c n).inputs) := by omega
-  have hi' : i < ((Rows.ofNet c.unit).stack c.upv).nComp := hi
+  have hi' : i < ((Rows.ofNet c.unit).stack c.upv).nComp := by rw [← keyProg_perUnit c n]; exact hi
   rw [KeyProg.row?, if_neg hc, Nat.add_sub_cancel_left, keyProg_rows, List.getElem?_toArray, keyProg_perUnit]
   have h := getElem?_flatMap_range (fun u => (List.range ((Rows.ofNet c.unit).stack c.upv).nComp).map fun i =>
       ((((Rows.ofNet c.unit).stack c.upv).a.getD i []).map (wireOf c n u),
