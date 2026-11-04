@@ -147,6 +147,7 @@ import Proofs.Pouw.PearlC.TileCapRev1Gamma
 import Proofs.Pouw.PearlC.TileCircuit
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.TileGammaTol
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
