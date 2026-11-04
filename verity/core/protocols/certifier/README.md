@@ -342,13 +342,16 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
   reads an LMS key only, and rejects any other.
 - on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
-  plain proof block's public row with both ends' grids at the warden's parameters digest, which both take as an input
-  (the warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest
-  isn't 64 bytes, whose ends have a profile, or whose two grids differ.
-- every proving run of N2 recorded before the switch, plain, served and warden, replayed through both to the verdict it
-  recorded, negative controls included: each execution phase with injected controls that both reject, and a warden
-  run's also with another warden's digest, which both reject, and `unread`, a sync off Σ_sync that changes neither
-  verdict.
+  plain proof block's public row with both ends' grids at the network certifier's parameters digest, which both take as
+  an input (the network certifier's deployment publishes it), and no sync read, as in the Python; it refuses a network
+  certifier case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.
+- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
+  controls included: 193 execution phases of seven runs, plain and served, 180 accepted and 13 refused, each with nine
+  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
+  network certifier runs give 30 execution phases from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a
+  sample of 8 on the H200 network certifier run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused
+  (r20261026-104647-c07b, r20261026-105654-6220). Each has ten controls: nine that both reject, among them another
+  network certifier's digest, and `unread`, a sync off Σ_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
