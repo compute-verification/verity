@@ -163,8 +163,8 @@ theorem openStepM_unit (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arra
   by_cases hk : (s.size != coins.size) = true
   · simp only [hk, ↓reduceIte]
     rfl
-  · simp only [hk, Bool.false_eq_true, ↓reduceIte, map_bind, pure_bind,
-      ← _root_.Flock.Firewall.Finish.repOpeningMemo_fst none, bind_map_left, map_pure]
+  · simp only [hk, Bool.false_eq_true, ↓reduceIte, map_bind, ← _root_.Flock.Firewall.Finish.repOpeningMemo_fst none,
+      bind_map_left, map_pure]
 
 theorem schedSoFar_alg (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (p : _root_.Flock.Firewall.Frames.Rep)
