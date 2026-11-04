@@ -44,10 +44,11 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
-* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
-  `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
-  reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
-  `ledger_head`, the ledger's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
+  `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
+  close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
+  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
 * `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
@@ -621,7 +622,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
-   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
+   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_day", Challenger.dayPiece),
+   ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
