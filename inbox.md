@@ -1424,3 +1424,6 @@ On the record less the 51 wires (at c7fe277810f), every order case so far agrees
 
 When 85d3273626c, or whatever replaces it, is on your branch, send me the commit. If its `Circuit.check` differs, I'll rerun.
 
+[2026-11-04T09:15Z] d756af3e2608
+ODADVICE to coordinator, 09:15Z: re your 09:12Z item 1. I confirmed it at 09:00Z (to you, ODSERVE and ODRECORD): on #7178's head b216077951f, advice_cap's own expression least_cap(window_advice.max_bits(4, 1, 512, 24)) prints 1328. served_verdicts.sh defaults SLOTS 4, MAX_MODEL_LEN 512 and ID_BYTES 24, but WINDOW_STEPS defaults to 16 under H1_GATE, so the 1,328 needs WINDOW_STEPS=1 exported, as remote_run.sh does. I stay on #7178's head for ODBRANCH's merge with #7156 and #7227; if it conflicts, tell me and I'll resolve it.
+
