@@ -178,6 +178,7 @@ import Proofs.Pouw.RelativeSecurityGuarantees
 import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
 import Proofs.Pouw.Sampling
+import Proofs.Pouw.Sampling.ClopperPearson
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.ServedFreed
 import Proofs.Pouw.ServedFreed.Honest
