@@ -160,7 +160,9 @@ def test_a_prompt_over_KI_ids_is_refused_at_the_cell_that_takes_it_past(run):
     assert refused == end and run.states[end + 1].slots[0].fields == CLS.KI
 
 
-def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
+def test_a_window_circuit_reads_the_scan_s_state_tree_from_leaf_t0(run):
+    """`window_state` numbers the rows as the state tree's leaves: leaf 0 the empty state, leaf t + 1 bucket t's o1, so
+    the window from t0 reads leaves t0 … t0 + n − 1, which is the chain's own numbering (``states[t + 1]`` is S_t)."""
     ch, T = run.chain, PARAMS.window
     registered = ch.states[1:]
     assert len(registered) == T and IS.window_state(CLS, registered, 0, T) == ch.states[:T]

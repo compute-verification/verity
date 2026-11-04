@@ -220,12 +220,12 @@ A spec-level reference for network accounting's timing channel:
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
-  slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
+  slot's Program reads is S_{b−1}, leaf b of the scan's state tree (`verity/certifier/scan-state/v1`, `token_row`;
+  leaf 0 the empty state, leaf t + 1 bucket t's o1): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
   ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
-  `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
-  empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
+  `window_state` the rows a window circuit of the link-window from bucket t0 reads, the state tree's leaves t0 on. A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); a link-window's
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
