@@ -19,10 +19,10 @@ its interior values.
   row datum (`dataOfRow`, `dataAt`). `correct_of_revealV5`: they make `u` correct (`opening_spec` and
   `loweringSoundZK_of_place`), carry the constants (`openingsCanonV5_const`) and open under the deployed commitment
   (`openingsCanonV5`, `transports_shapedP_at`).
-* `witnessOf_surj`, `witZ_surj`: every witness of a `--zk` table's statement is one a message packs.
+* `packOf`, `packZ`: the message packing a witness of a `--zk` table's statement, which gives it back
+  (`witnessOf_packOf`, `wit_packZ`).
 * `tabOfZHJP_one`: at one table and a constant draw, a drawn proof block's table is any set-up table's at that draw
-  (`DrawSetupZHJP.table_congr`), so `exists_sat_one`: a witness satisfying a set-up table's statement is a satisfying
-  message of the proof block's table.
+  (`DrawSetupZHJP.table_congr`).
 -/
 
 namespace Flock.Bridge
@@ -110,42 +110,55 @@ section Messages
 
 open FlockSoundness FlockSoundness.Model FlockSoundness.Discharge.ZkSession FlockSoundness.Discharge.ZkBind
 
-/-- **Every witness is one a message packs** at `m = 7 + k + L`: `witnessOf` at `2^k` lanes of `2^L` columns of
-128-bit field elements (`execArith`'s `pack`). -/
-theorem witnessOf_surj {m k L : ℕ} (hm : m = 7 + k + L) (z : Witness m) :
-    ∃ M : Message FlockLevel3.GF128 k L, witnessOf execArith m k L M = z := by
-  have hpow : 2 ^ m = 2 ^ L * 2 ^ k * 128 := by
-    rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, ← pow_add]; congr 1; omega
-  refine ⟨fun ℓ c => execArith.pack fun v => z ⟨(c.val * 2 ^ k + ℓ.val) * 128 + v.val, ?_⟩, ?_⟩
-  · have := c.isLt; have := ℓ.isLt; have := v.isLt
-    rw [hpow]
-    calc (c.val * 2 ^ k + ℓ.val) * 128 + v.val < (c.val * 2 ^ k + ℓ.val + 1) * 128 := by nlinarith
-      _ ≤ (c.val * 2 ^ k + 2 ^ k) * 128 := Nat.mul_le_mul_right 128 (by have := ℓ.isLt; omega)
-      _ = (c.val + 1) * 2 ^ k * 128 := by ring
-      _ ≤ 2 ^ L * 2 ^ k * 128 :=
-        Nat.mul_le_mul_right 128 (Nat.mul_le_mul_right _ (by have := c.isLt; omega))
-  · funext a
-    have ha : a.val < 2 ^ L * 2 ^ k * 128 := hpow ▸ a.isLt
-    have hc : a.val / 128 / 2 ^ k < 2 ^ L := by
-      rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), Nat.div_lt_iff_lt_mul (by norm_num)]
-      linarith
-    simp only [witnessOf]
-    rw [dite_eq_left_of_eq_true (eq_true hc), execArith_correct.unpack_pack]
-    congr 1
-    apply Fin.ext
-    simp only
-    rw [Nat.div_add_mod' (a.val / 128) (2 ^ k), Nat.div_add_mod']
+theorem two_pow_split {m k L : ℕ} (hm : m = 7 + k + L) : 2 ^ m = 2 ^ L * 2 ^ k * 128 := by
+  rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, ← pow_add]; congr 1; omega
 
-/-- **Every witness of a `--zk` table's statement is one a message packs** (`witnessOf_surj` at the table's schedule:
-`m - 7 = k₀ + cols₀`, `m = S.m ≥ 13`). -/
-theorem witZ_surj {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) (z : Witness T.S.m) :
-    ∃ M : Message FlockLevel3.GF128 T.sch.k0 T.sch.level₀.logCols, wit execArith T.S T.sch M = z :=
-  witnessOf_surj (by
-    have h1 := T.hshape.2.2.1
-    have h2 := T.hmsch
-    have h3 := T.hm
-    show T.S.m = 7 + T.sch.k0 + (T.sch.levels.headD default).logCols
-    omega) z
+theorem packOf_lt {m k L : ℕ} (hm : m = 7 + k + L) (ℓ : Fin (2 ^ k)) (c : Fin (2 ^ L)) (v : Fin 128) :
+    (c.val * 2 ^ k + ℓ.val) * 128 + v.val < 2 ^ m := by
+  have := c.isLt; have := ℓ.isLt; have := v.isLt
+  rw [two_pow_split hm]
+  calc (c.val * 2 ^ k + ℓ.val) * 128 + v.val < (c.val * 2 ^ k + ℓ.val + 1) * 128 := by nlinarith
+    _ ≤ (c.val * 2 ^ k + 2 ^ k) * 128 := Nat.mul_le_mul_right 128 (by omega)
+    _ = (c.val + 1) * 2 ^ k * 128 := by ring
+    _ ≤ 2 ^ L * 2 ^ k * 128 := Nat.mul_le_mul_right 128 (Nat.mul_le_mul_right _ (by omega))
+
+/-- **The message packing a witness** at `m = 7 + k + L`: lane `ℓ`'s column `c` is the 128-bit field element of the
+witness's bits from `(c · 2^k + ℓ) · 128` on (`execArith`'s `pack`). -/
+noncomputable def packOf {m k L : ℕ} (hm : m = 7 + k + L) (z : Witness m) : Message FlockLevel3.GF128 k L :=
+  fun ℓ c => execArith.pack fun v => z ⟨(c.val * 2 ^ k + ℓ.val) * 128 + v.val, packOf_lt hm ℓ c v⟩
+
+/-- **A witness is the one its packing gives** (`witnessOf` inverts `packOf`). -/
+theorem witnessOf_packOf {m k L : ℕ} (hm : m = 7 + k + L) (z : Witness m) :
+    witnessOf execArith m k L (packOf hm z) = z := by
+  funext a
+  have ha : a.val < 2 ^ L * 2 ^ k * 128 := two_pow_split hm ▸ a.isLt
+  have hc : a.val / 128 / 2 ^ k < 2 ^ L := by
+    rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), Nat.div_lt_iff_lt_mul (by norm_num)]
+    linarith
+  simp only [witnessOf, packOf]
+  rw [dite_eq_left_of_eq_true (eq_true hc), execArith_correct.unpack_pack]
+  congr 1
+  apply Fin.ext
+  simp only
+  rw [Nat.div_add_mod' (a.val / 128) (2 ^ k), Nat.div_add_mod']
+
+/-- A `--zk` table's schedule splits its `m`: `m = 7 + k₀ + cols₀` (`m - 7 = k₀ + cols₀`, `m = S.m ≥ 13`). -/
+theorem tabZK_m {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) :
+    T.S.m = 7 + T.sch.k0 + T.sch.level₀.logCols := by
+  have h1 := T.hshape.2.2.1
+  have h2 := T.hmsch
+  have h3 := T.hm
+  show T.S.m = 7 + T.sch.k0 + (T.sch.levels.headD default).logCols
+  omega
+
+/-- **The message of a `--zk` table packing a witness** of its statement (`packOf` at the table's schedule). -/
+noncomputable def packZ {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) (z : Witness T.S.m) :
+    Message FlockLevel3.GF128 T.sch.k0 T.sch.level₀.logCols :=
+  packOf (tabZK_m T) z
+
+theorem wit_packZ {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) (z : Witness T.S.m) :
+    wit execArith T.S T.sch (packZ T z) = z :=
+  witnessOf_packOf (tabZK_m T) z
 
 end Messages
 
@@ -182,29 +195,16 @@ theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : DrawSetupZHJP
     Finset.filter_true_of_mem fun v _ => Fin.ext ((partOf_one h1 d v.val).trans hj.symm)
   have hd : drawJ I d (Composed.partOf I d u.val).val = d := by
     unfold drawJ
-    rw [if_pos h1]
+    rw [ite_eq_left h1]
   have hne : Nonempty (DrawSetupZHJP (inputsJ I (Composed.partOf I d u.val)) own mPts
       (partS I d S (Composed.partOf I d u.val)) (drawJ I d (Composed.partOf I d u.val))) := by
     rw [hS, hd, hj]
     exact ⟨y⟩
   have key : tableZHJP (fun _ => d) y₀ S (Composed.partOf I d u.val) = (Classical.choice hne).table := by
     unfold tableZHJP
-    exact dif_pos hne
+    exact dite_eq_left hne
   rw [key]
   exact DrawSetupZHJP.table_congr _ _ (congrArg (inputsJ I) hj) hS hd
-
-/-- **A witness satisfying a set-up table's statement is a satisfying message of a drawn proof block's table**, at one
-table and a constant draw (`tabOfZHJP_one`, `witZ_surj`). -/
-theorem exists_sat_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
-    {S : Finset (Fin n)} (y : DrawSetupZHJP (inputsJ I 0) own mPts S d) (R : Reg) (u : Fin n)
-    {z : Witness y.table.S.m} (hz : y.table.S.Satisfies z) :
-    ∃ M, (tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u).S.Satisfies
-      (wit execArith (tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u).S
-        (tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u).sch M) := by
-  have e := congrArg TabZK.S (tabOfZHJP_one (Reg := Reg) h1 y₀ y R u).symm
-  obtain ⟨M, hM⟩ := witZ_surj (tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u)
-    (FlockSoundness.Discharge.ZkBind.witOf e z)
-  exact ⟨M, by rw [hM]; exact FlockSoundness.Discharge.ZkBind.sat_witOf e hz⟩
 
 end OneTable
 
