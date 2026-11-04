@@ -7,7 +7,10 @@ only once that commit's after-landing run, the full check, passed every step on 
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
-                                                   (`research.stale`), which drive closes at `stale_close_days`
+                                                   (`research.stale`), which drive closes at `stale_close_days`; then
+                                                   every open PR whose body names no Linear issue (`named_issue`: a key
+                                                   after a Linear magic word, a bare key of a team main's Slack registry
+                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of `next`; a new push or ready mark re-admits it;
@@ -20,7 +23,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
                                                    --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
                                                    once it ends); or, with
-                                                   --mark, on the owner's word alone (`MarkOnly`).  First the records gate
+                                                   --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
+                                                   whose head is on another repository or whose author isn't the
+                                                   organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
+                                                   the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
@@ -71,6 +77,9 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    follow), which otherwise first runs the after-landing run on `checked` itself,
                                                    and lands nothing until it ends
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
+    research queue accept-checked SHA --by ci       record `checked`'s tip SHA, a commit drive didn't write, as one drive takes,
+                                                   so its ticks, held on it (`Driver._unwritten`), go on from it
+                                                   (on the control pod: `/data/infra/drive.sh queue accept-checked SHA --by ci`)
     research queue drive-shard-add TIP K RUN_ID     count RUN_ID, a run replacing shard K's twin, as one of that shard's in the
                                                    after-landing run of `checked` at TIP (`drive_shard_add`), refused unless
                                                    RUN_ID's own record is a check.py run of TIP's commit with --shard K/N
@@ -86,11 +95,19 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
-    research queue open --head BRANCH --title T --body-file F [--sha SHA] [--base main] [--draft]
+    research queue open --head BRANCH --title T --body-file F --issue KEY|none:REASON [--sha SHA] [--base main] [--draft]
                                                    open a PR for any pushed branch through gh (the repo's broker wrapper when the
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
-                                                   branch; refuses when BRANCH isn't on the remote, isn't at --sha, or already
-                                                   has an open PR; prints the PR's URL (`open_pr`)
+                                                   branch, its body F with a last line naming its Linear issue: `Refs KEY`
+                                                   (Linear's non-closing magic word: the merge leaves the issue open), or
+                                                   `Issue: none: REASON` (`with_issue`); refuses a KEY that isn't one (like
+                                                   ENG-123) or that Linear has no issue for, an empty REASON, and when BRANCH
+                                                   isn't on the remote, isn't at --sha, or already has an open PR; prints the
+                                                   PR's URL (`open_pr`), then links the PR to KEY through the Linear app
+                                                   (`link_issue`: Linear's GitHub integration is off for this repository, so
+                                                   the line alone links nothing); a link that fails leaves the PR open, printing
+                                                   why and the `link` command that retries it
+    research queue link PR --issue KEY             link the open PR to Linear issue KEY through the Linear app, as `open` does
     research queue edit PR --body-file F [--dry-run]
                                                    replace the PR's body with F outright, through gh as `open` does, keeping only
                                                    the Cursor PR tool's markers and footer (`edit_pr`); refuses a body that drops or
@@ -114,7 +131,10 @@ only once that commit's after-landing run, the full check, passed every step on 
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
-no change waits on a per-head grant.  A PR based on another branch is never admitted: `ready` marks it and says so,
+no change waits on a per-head grant.  A PR whose head is on another repository than the queue's (GitHub's `head.repo.full_name`:
+a fork's, or a deleted one's) or whose author is neither an owner or member of the organization (`author_association`; a
+collaborator's isn't enough) nor one of `AUTHORS` (the team's Apps, the repository's admin) is refused, at its mark and at
+admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -140,9 +160,9 @@ only an hour later; the preflight builds those modules (`LakeBuild`), from a mac
 (a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
 leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and refuses nothing
-(the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), and the checks run
-on that tree.  The merge runs the merge drivers of the commit it merges onto, as the sync's clone defines them (`base_drivers`):
-a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
+(the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), the merged tree's
+Lean is ported as the sync ports it (`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it
+merges onto, as the sync's clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
 `tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so drive's sync runs the merged tree's
 cheap checks again on each merge it makes (`Preflight.onto`, `Queue._preflighted`): see `next`.
 
@@ -160,8 +180,10 @@ order) and merges the rest on top, each by `git merge-tree` and `git commit-tree
 that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
 change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
-along (they're merged again), and a `checked` that moved outside the queue rebuilds `next` on it, unless it moved only by files a member whose Lean
-check runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `next` as it is until that check ends.  Only drive
+along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
+`next` on it; one drive didn't write holds drive's tick, which syncs nothing on it until `checked` is reset to the last tip
+drive wrote or ci accepts it (`Driver._unwritten`, `accept-checked`).  No rebuild while `checked` moved only by files a member
+whose Lean check runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `next` as it is until that check ends.  Only drive
 syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
 keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
@@ -204,6 +226,13 @@ that contains one left out waits, recorded (the state's `waiting`) and named in 
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
 
+Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`, and its `PORTED_ROOTS` are modules:
+`on_modules`, since the codemod may land before the port), the sync runs that codemod over the whole merged tree, in a
+worktree of it, and what it ports goes into the merge commit, with each pin recording it (`ported`): git runs the `.lean`
+merge driver only on a file both sides changed, so a `.lean` file either side added before the port (the PR, or `checked`
+since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves the PR
+out with why.
+
 Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
 (`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
 (`checked`'s tip once the members below it land): `tools/move/rename.py --map NAME.toml` at the root of a worktree of it, one
@@ -222,8 +251,8 @@ move on `next`.  The preflight merges no move PR's head, and notes rather than r
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `checked` (no new merge commit), and checks `checked` after each landing,
 reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
-`CI` what it refuses.  A push refused because `checked` moved leaves it alone; the next sync rebuilds `next` on the new
-`checked`.  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
+`CI` what it refuses.  A push refused because `checked` moved leaves it alone; drive's next tick takes the new `checked` only
+if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `CI` and the owner's handle, once per PR head:
@@ -273,7 +302,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
 
-from . import quick_tier, waitcap
+from . import linear, quick_tier, waitcap
 from .gates import git_env
 from .store import ids, vocab
 
@@ -285,6 +314,12 @@ RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 DRIVE_FLAGS = "tools/verity/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
+#: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
+#: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
+MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
+#: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
+#: the codemod is on the module system when each is a module (`on_modules`)
+PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
 AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
@@ -308,6 +343,18 @@ AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 #: a move PR's declaration in its body (`PR.move`): the word map, under `tools/move/`, that `rename.py --map` runs
 MOVE_RE = re.compile(r"^[ \t>*_]*Move[:\s]+`?(tools/move/[\w.-]+\.toml)`?[ \t.]*$", re.M)
+#: a Linear issue's key, as `open --issue KEY` takes it
+ISSUE_KEY_RE = re.compile(r"[A-Z][A-Z0-9]*-\d+")
+#: the line `open --issue KEY` writes: `Refs` is one of Linear's non-closing magic words, so the PR links to the issue and its
+#: merge doesn't move the issue to done
+ISSUE_LINE = "Refs {key}"
+#: the line `open --issue none:REASON` writes, and what `named_issue` reads as a body that names no issue on purpose
+NO_ISSUE_LINE = "Issue: none: {reason}"
+NO_ISSUE_RE = re.compile(r"^[ \t>*_]*Issue:[ \t]*none:[ \t]*(\S.*?)[ \t]*$", re.M)
+#: a key after any of Linear's magic words (closing, non-closing or relation), whatever its team
+ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|towards?|relates to|related to|close[sd]?|closing|"
+                           r"fix(?:e[sd])?|fixing|resolve[sd]?|resolving|complete[sd]?|completing|implement(?:s|ed|ing)?)"
+                           r"[ \t:]+(?-i:([A-Z][A-Z0-9]*-\d+))\b")
 #: the trailer of a move drive regenerated (`Queue._regenerate`), naming its map
 MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
 #: the scripts a move runs, each as the landing branch has it (`move_scripts`): the move, its certificate, and carrying a branch
@@ -323,6 +370,13 @@ SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
+#: the repository the queue serves, `GitHub.repo` by default: a PR whose head is on another one is never marked or admitted
+REPO = "compute-verification/verity"
+#: the `author_association`s GitHub gives the organization's own people: a collaborator's (COLLABORATOR) is not one of them
+MEMBER_ASSOCIATIONS = ("OWNER", "MEMBER")
+#: the authors marked and admitted beside those: the Apps that open and land the team's PRs, and the repository's admin, whom
+#: GitHub reports as a collaborator
+AUTHORS = ("verity-agents[bot]", "verity-drive[bot]", "danielreuter")
 
 
 class QueueError(Exception):
@@ -372,12 +426,33 @@ class PR:
     labels: tuple[str, ...] = ()
     base: str = "main"
     branch: str = ""
+    #: its head branch is another repository's (or one GitHub no longer has), never this one's to delete
+    fork: bool = False
+    #: GitHub's `head.repo.full_name`: None when the head's repository was deleted
+    head_repo: str | None = REPO
+    author: str = ""
+    association: str = "MEMBER"
 
     @classmethod
     def from_api(cls, d: dict) -> "PR":
+        repo = lambda side: ((d.get(side) or {}).get("repo") or {}).get("full_name")  # noqa: E731
         return cls(number=int(d["number"]), head=d["head"]["sha"], title=d.get("title") or "", body=d.get("body") or "",
                    draft=bool(d.get("draft")), labels=tuple(sorted(x["name"] for x in d.get("labels") or [])),
-                   base=(d.get("base") or {}).get("ref", "main"), branch=d["head"].get("ref") or "")
+                   base=(d.get("base") or {}).get("ref", "main"), branch=d["head"].get("ref") or "",
+                   fork=repo("head") != repo("base"), head_repo=repo("head"), author=(d.get("user") or {}).get("login") or "",
+                   association=d.get("author_association") or "")
+
+    def outside(self, repo: str) -> str | None:
+        """Why the PR is never marked ready (`ready`, `judge`) nor admitted (`Queue.entries`), or None: its head is on another
+        repository than ``repo`` (a fork's, or one deleted since), or its author is neither one of the organization's owners
+        and members (`MEMBER_ASSOCIATIONS`) nor one of `AUTHORS`."""
+        fix = "a maintainer opens it from a branch of this repository"
+        if self.head_repo != repo:
+            return f"its head is on {self.head_repo or 'a deleted repository'}, not {repo}: {fix}"
+        if self.association not in MEMBER_ASSOCIATIONS and self.author not in AUTHORS:
+            return (f"its author {self.author or '(none)'} is no owner or member of the organization "
+                    f"({self.association or 'no association'}) and none of {', '.join(AUTHORS)}: {fix}")
+        return None
 
     @property
     def owner(self) -> str | None:
@@ -536,6 +611,9 @@ class DriveFlags:
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts alone decide
     executor: str = "off"
+    #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
+    #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
+    executor_enqueue: tuple[str, ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -585,6 +663,11 @@ class DriveFlags:
             if doc["executor"] not in EXECUTOR_MODES:
                 raise bad("executor", f"one of {', '.join(EXECUTOR_MODES)}")
             got["executor"] = doc["executor"]
+        if "executor_enqueue" in doc:
+            v = doc["executor_enqueue"]
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
+                raise bad("executor_enqueue", "a command as a non-empty list of its words, as [\"python3\", \"enqueue.py\"]")
+            got["executor_enqueue"] = tuple(v)
         if "marked_after" in doc:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
@@ -1196,6 +1279,8 @@ class Queue:
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         #: the branch drive lands on and `next` is built on (`into`); None: drive.toml's `land_into` at `main`
         self.land_into, self._into = land_into, None
+        #: whether the last `fetch` found `into` on origin, not `main` read in its place
+        self.into_fetched = False
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
         #: how many members at the bottom of `next` a running check covers, or a passed Lean check of drive's (`lean_hold`;
@@ -1243,7 +1328,9 @@ class Queue:
         #: the files each merge commit of `next` changed (`touched_by`)
         self._touched: dict[str, set[str]] = {}
         #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
-        self._registry: tuple[set, dict[str, str]] | None = None
+        self._registry: tuple[set, dict[str, str], set[str]] | None = None
+        #: every open PR the last `status` listed, `main`-based or not (its entries leave out an unmarked PR on another branch)
+        self.listed: list[PR] = []
         #: a sync's moves below the member it merges (`queue_log`'s, then each it regenerates), the heads it merges after it
         #: (`_restack` batches them), and its regenerated moves and restacks by key (the state's `moves_made` and `restacks`,
         #: kept while a sync uses them: `_used`)
@@ -1302,10 +1389,12 @@ class Queue:
                     _git(self.workdir, "update-ref", "-d", f"refs/queue/pr/{p.number}", check=False)
                     self.log(f"research queue: #{p.number}'s pull ref can't be fetched, so it waits this sync: "
                              f"{(r.stderr or r.stdout).strip()[-200:]}")
+        self.into_fetched = False
         if (into := self.into) != "main":
             # a landing branch the remote doesn't have reads as `main` here; drive's tick refuses without it (`drive_names`)
             if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode == 0:
                 self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{into}:{self.base}")
+                self.into_fetched = True
             else:
                 _git(self.workdir, "update-ref", self.base, "refs/remotes/origin/main")
         # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
@@ -1391,6 +1480,11 @@ class Queue:
         """`into` as fetched: the ref `next` is built on."""
         return f"refs/remotes/origin/{self.into}"
 
+    @property
+    def slug(self) -> str:
+        """OWNER/NAME of the repository the queue serves (`GitHub.repo`; `REPO` without a GitHub, as the preflight's queue has)."""
+        return getattr(self.github, "repo", None) or REPO
+
     def chain(self) -> list[Member]:
         """The members on the queue's branch above its base (`base`), oldest first; none when the branch is missing or the base
         isn't below it."""
@@ -1446,7 +1540,9 @@ class Queue:
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
-            if rules.hold_label in p.labels:
+            if why := p.outside(self.slug):
+                e.state, e.why = "refused", why
+            elif rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
@@ -1671,9 +1767,11 @@ class Queue:
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`merged_tree`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (merging each candidate in the worktree, with
         many of them conflicting, takes tens of minutes).  A merge whose every conflict is in a pin is kept, each pin rebuilt
-        from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) raises: merging without it would leave
-        out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).  ``head``: the commit
-        merged in its place, its head restacked through a move (`_merge_through`), under the same message."""
+        from the merged tree (`repinned`), and the merged tree's Lean takes the Lean module system once the tree has it
+        (`ported`), which refuses the merge when it can't.  A git without `--attr-source` (before 2.40) raises: merging
+        without it would leave out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).
+        ``head``: the commit merged in its place, its head restacked through a move (`_merge_through`), under the same
+        message."""
         head = head or pr.head
         tree, files, r = merged_tree(self.workdir, tip, head, plain=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
@@ -1684,6 +1782,12 @@ class Queue:
             self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
         elif not _git(self.workdir, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
             return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
+        tree, files, pins, why = ported(self.workdir, tree)
+        if tree is None:
+            return None, why
+        if files:
+            self.log(f"research queue: #{pr.number}'s merged tree holds Lean made before the module system: {', '.join(files)} "
+                     f"ported by `{MODULES}`" + (f", and the pins {', '.join(pins)} rebuilt" if pins else ""))
         commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", head, "-m", _message(pr), env=IDENTITY).stdout.strip()
         return commit, ""
 
@@ -1897,7 +2001,7 @@ class Queue:
         suffix (`cursor/<name>-4292`); None when none of them is a handle."""
         if (got := self._read_registry()) is None:
             return None
-        names, holders = got
+        names, holders, _ = got
         by = self.marked_by(pr.number, pr.head) if self.marked_by else None
         suffix = pr.branch.rpartition("-")[2] if "-" in pr.branch else ""
         tail = sorted({n for a, n in holders.items() if len(suffix) == 4 and a.endswith(suffix)})
@@ -1906,10 +2010,10 @@ class Queue:
                 return c
         return None
 
-    def _read_registry(self) -> tuple[set, dict[str, str]] | None:
-        """(the handles, {agent id: handle}) of `main`'s registry, read once per `fetch`: a review tick asks `handle` of each
-        member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on the control pod's network volume,
-        times over a hundred members.  None when it can't be parsed."""
+    def _read_registry(self) -> tuple[set, dict[str, str], set[str]] | None:
+        """(the handles, {agent id: handle}, the Linear team keys its handles own) of `main`'s registry, read once per `fetch`: a
+        review tick asks `handle` of each member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on
+        the control pod's network volume, times over a hundred members.  None when it can't be parsed."""
         if self._registry is None:
             r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
             try:
@@ -1918,8 +2022,14 @@ class Queue:
                 return None
             self._registry = ({h.get("handle") for h in reg if isinstance(h, dict)},
                               {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
-                               for a in AGENT_RE.findall(str(h.get("holder", "")))})
+                               for a in AGENT_RE.findall(str(h.get("holder", "")))},
+                              {h["linear"] for h in reg if isinstance(h, dict) and isinstance(h.get("linear"), str)})
         return self._registry
+
+    def issue_teams(self) -> set[str]:
+        """The Linear team keys `main`'s registry gives its handles (`linear`), whose bare keys `named_issue` counts; empty when
+        it can't be read."""
+        return got[2] if (got := self._read_registry()) else set()
 
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`).  Off drive it refuses before anything (`_drive_only`)."""
@@ -2168,7 +2278,7 @@ class Queue:
         its cutoff and drive.toml at `main` there, so it fetches once."""
         self._clone()
         state = self.load_state()
-        open_prs = self.github.open_prs()
+        open_prs = self.listed = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
         self.unlock()
         if fetched is not None:
@@ -2434,6 +2544,88 @@ def _with_json(text: str, key: str, value: dict) -> str:
         if old == doc[key]:
             return text[:m.end()] + json.dumps(value, indent=1).replace("\n", "\n" + m.group(1)) + text[end:]
     return json.dumps({**doc, key: value}, indent=1) + "\n"
+
+
+def ported(repo: Path, tree: str) -> tuple[str | None, list[str], list[str], str]:
+    """(``tree``, a merge's tree, with its Lean on Lean's module system, the files that took the port, the pins that recorded
+    one of them, "") or (None, [], [], why not).  Git runs the `.lean` merge driver, which ports a side made before the port,
+    only on a file both sides changed, so a `.lean` file either side added before the port stays as it was written (a PR's,
+    or one `checked` added since the port's base, under the port's own merge), and a module importing it doesn't build.  Only
+    a tree on the module system (`on_modules`) is touched: that tree's `MODULES` runs over all of it, at the root of a
+    worktree of it, and leaves a ported tree as it is; each pin's record of a file it rewrote moves with it
+    (`_repinned_files`).  No cheaper test stands in for the run: a header check of every `.lean` file would read a script or a
+    test fixture, which the codemod leaves alone, as a file to port.  The codemod, or the header reader, failing is the
+    reason."""
+    on, why = on_modules(repo, tree)
+    if not on:
+        return (None if why else tree), [], [], why
+    new, files, pins, why = _codemod(repo, tree)
+    return new, list(files), list(pins), why
+
+
+#: `on_modules`' reading, run apart from the queue as the codemod is: the tree's `HEADERS` (stdin's "headers") says whether each
+#: of stdin's "roots" has a header that starts with `module`
+_ROOTS_READ = ("import json, sys, types\nd = json.load(sys.stdin)\nm = types.ModuleType('headers')\n"
+               "exec(compile(d['headers'], 'headers.py', 'exec'), m.__dict__)\n"
+               "print(json.dumps([(h := m.header(s)) is not None and h.module for s in d['roots']]))\n")
+
+
+def on_modules(repo: Path, tree: str) -> tuple[bool, str]:
+    """(whether ``tree`` is on Lean's module system, "") or (False, why it can't tell).  It is when it holds `MODULES` and
+    `HEADERS` and each of `PORTED_ROOTS` is a module as that `HEADERS` reads it (`header(src).module`, as `MODULES` reads
+    one).  The port's tooling may land before the port, so a tree holding the codemod whose roots aren't modules isn't on it,
+    and its merges are git's alone: the codemod run there would port the whole tree."""
+    specs = [f"{tree}:{p}" for p in (MODULES, HEADERS, *PORTED_ROOTS)]
+    blobs = _blobs(repo, specs)
+    if len(blobs) < len(specs):
+        return False, ""
+    doc = {"headers": blobs[specs[1]].decode(errors="replace"),
+           "roots": [blobs[s].decode(errors="replace") for s in specs[2:]]}
+    r = subprocess.run([sys.executable, "-c", _ROOTS_READ], input=json.dumps(doc), capture_output=True, text=True,
+                       env=_script_env())
+    if r.returncode:
+        return False, (f"`{HEADERS}` failed to read the headers of {', '.join(PORTED_ROOTS)} (exit {r.returncode}): "
+                       f"{_tail(r, 3)}")
+    return all(json.loads(r.stdout.splitlines()[-1])), ""
+
+
+@functools.lru_cache(maxsize=256)
+def _codemod(repo: Path, tree: str) -> tuple[str | None, tuple[str, ...], tuple[str, ...], str]:
+    """`ported`'s run of ``tree``'s `MODULES` over it, once a tree: a sync merges a member again onto an unchanged tree."""
+    commit = _git(repo, "commit-tree", tree, "-m", "ported", env=IDENTITY).stdout.strip()
+    with merged_worktree(repo, commit) as wt:
+        r = subprocess.run([sys.executable, MODULES], cwd=wt, capture_output=True, text=True, env=_script_env())
+        if r.returncode:
+            return None, (), (), (f"`{MODULES}` failed on the merged tree (exit {r.returncode}): {_tail(r, 3)}; port by hand "
+                                  "what it names")
+        _git(wt, "add", "-u")
+        diff = _git(wt, "diff", "--cached", "-z", "--no-renames", "--name-only", commit).stdout
+        if not (files := tuple(f for f in diff.split("\0") if f)):
+            return tree, (), (), ""
+        pins = _repinned_files(repo, wt, tree, files)
+        _git(wt, "add", "-u")
+        return _out(wt, "write-tree"), files, pins, ""
+
+
+def _repinned_files(repo: Path, wt: Path, tree: str, files: tuple[str, ...]) -> tuple[str, ...]:
+    """The pins (`pins_at` ``tree``) that recorded one of ``files`` at its digest in ``tree``, each rewritten in ``wt``, a
+    worktree of ``tree`` where those files changed, to record its digest there, every other byte kept."""
+    before = _blobs(repo, [f"{tree}:{f}" for f in files])
+    moved = {f: (hashlib.sha256(before[f"{tree}:{f}"]).hexdigest(), hashlib.sha256((wt / f).read_bytes()).hexdigest())
+             for f in files if f"{tree}:{f}" in before and (wt / f).is_file()}
+    out = []
+    for path, (key, under) in pins_at(repo, tree).items():
+        if not (pin := wt / path).is_file():
+            continue
+        text = new = pin.read_bytes().decode(errors="surrogateescape")
+        for f, (old, now) in moved.items():
+            rel = posixpath.relpath(f, under) if under else f
+            new = (re.sub(rf"(?m)^{old}(?=  {re.escape(rel)}$)", now, new) if key is None
+                   else re.sub(rf'({re.escape(json.dumps(rel))}\s*:\s*"){old}"', rf'\g<1>{now}"', new))
+        if new != text:
+            pin.write_bytes(new.encode(errors="surrogateescape"))
+            out.append(path)
+    return tuple(out)
 
 
 def rules_at(repo: Path, ref: str) -> Rules | None:
@@ -3567,12 +3759,20 @@ class Preflight:
         else:
             if files:
                 notes.append(Ran(f"conflicts only in pins: {', '.join(files)}, rebuilt from the merged tree"))
-            if drops := lock_drops(self.repo, base, pr.head, tree):
-                found.append(lock_drop_refusal(drops, onto.split("`")[1]))
-            try:
-                found += self._merged(pr, base, tree, onto, notes, members)
-            except QueueError as e:
-                notes.append(f"the merged tree's checks ({e})")
+            tree, files, pins, why = ported(self.repo, tree)
+            if tree is None:
+                found.append(why)
+                notes.append("the merged tree's checks: its Lean doesn't take the module system")
+            else:
+                if files:
+                    notes.append(Ran(f"Lean made before the module system: {', '.join(files)} ported by `{MODULES}`"
+                                     + (f", and the pins {', '.join(pins)} rebuilt" if pins else "")))
+                if drops := lock_drops(self.repo, base, pr.head, tree):
+                    found.append(lock_drop_refusal(drops, onto.split("`")[1]))
+                try:
+                    found += self._merged(pr, base, tree, onto, notes, members)
+                except QueueError as e:
+                    notes.append(f"the merged tree's checks ({e})")
         skipped = [n for n in notes if not isinstance(n, Ran)]
         took = "; ".join([f"{self.clock() - start:.0f} s", *(n for n in notes if isinstance(n, Ran))])
         if found:
@@ -4507,8 +4707,9 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
-    unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it,
-    ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
+    `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
+    refused, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
     it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
@@ -4541,6 +4742,9 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2, pr, prs
+    if why := pr.outside(github.repo):
+        print(f"research queue ready: #{pr.number} is not marked ready: {why}", file=sys.stderr)
+        return 1, pr, prs
     if sha and not pr.head.startswith(sha):
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
@@ -4613,6 +4817,8 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
         return refuse(f"run {rid} ran the quick tier at {str(head)[:12]}, " + (
             f"the head of each of {', '.join('#' + str(p.number) for p in prs)}: mark one with `research queue ready`" if prs else
             "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
+    if why := prs[0].outside(github.repo):
+        return refuse(f"#{prs[0].number} is not marked ready: {why}")
     if records is not None and (why := records(prs[0])):
         return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
     covers = allowed(repo or Path.cwd(), tier.get("base") if isinstance(tier, dict) else None)
@@ -4752,6 +4958,29 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     return 0
 
 
+def accept_checked(q: Queue, sha: str, by: str) -> int:
+    """`research queue accept-checked SHA --by ci`: record the landing branch (`checked`, `Queue.into`) at SHA, the tip it is at,
+    among the tips drive takes (`drive["checked_tips"]`) though drive didn't write it, so drive's ticks, held on it
+    (`Driver._unwritten`), go on from it.  Refused but by ci, for a SHA that isn't the branch's tip, and off drive
+    (`/data/infra/drive.sh queue accept-checked SHA --by ci` on the control pod)."""
+    from .drive import CHECKED_TIPS
+
+    if _who(by) != "ci":
+        raise QueueError(f"accept-checked: only ci accepts a `{q.into}` drive didn't write (--by ci), not {by}")
+    q._clone()
+    q.fetch()
+    full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
+    tip = _out(q.workdir, "rev-parse", q.base)
+    if full != tip:
+        raise QueueError(f"accept-checked: {sha} is not `{q.into}`'s tip, {tip[:12]}: only the commit it is at is accepted")
+    state = q.load_state()
+    tips = state.setdefault("drive", {}).setdefault("checked_tips", [])
+    tips[:] = [*(t for t in tips if t != tip), tip][-CHECKED_TIPS:]
+    q.save_state(state)
+    print(f"research queue: `{q.into}` {tip[:12]} accepted by {by}: drive's next tick goes on from it")
+    return 0
+
+
 def drive_shard_add(q: Queue, tip: str, k: int, rid: str) -> int:
     """`research queue drive-shard-add TIP K RUN_ID`: count RUN_ID among shard K's twins (``groups``) of the after-landing run of
     `checked` at TIP (``ids`` too, so drive reads its state), a run launched by hand in place of a twin that waits or was lost: the
@@ -4819,6 +5048,75 @@ def broker_gh(top: Path) -> str:
     common = _git(top, "rev-parse", "--path-format=absolute", "--git-common-dir", check=False).stdout.strip()
     wrapper = Path(common) / "verity-auth" / "bin" / "gh" if common else None
     return str(wrapper) if wrapper and wrapper.is_file() else (shutil.which("gh") or "gh")
+
+
+def issue_line(spec: str) -> str:
+    """The body line `open --issue SPEC` writes: `Refs KEY` for a Linear key (`ISSUE_KEY_RE`), `Issue: none: REASON` for
+    `none:REASON`.  Anything else, or `none:` with no reason, is refused (`QueueError`)."""
+    if spec.startswith("none:"):
+        if not (reason := spec.removeprefix("none:").strip()):
+            raise QueueError("open: --issue none:REASON needs the reason this PR has no Linear issue")
+        return NO_ISSUE_LINE.format(reason=reason)
+    if not ISSUE_KEY_RE.fullmatch(spec):
+        raise QueueError(f"open: --issue {spec!r} is neither a Linear key (like ENG-123) nor none:REASON")
+    return ISSUE_LINE.format(key=spec)
+
+
+def with_issue(body: str, spec: str) -> str:
+    """``body`` with `issue_line(spec)` as its last line, unless a line of it already is that line."""
+    line = issue_line(spec)
+    return body if line in body.splitlines() else f"{body.rstrip()}\n\n{line}\n"
+
+
+def issue_app(key: str) -> tuple[linear.Linear, str] | Exception:
+    """The Linear app and the id of issue ``key``, resolved before anything is sent; the failure instead when the app can't be
+    asked (no credentials, Linear down), which `link_issue` reports.  A key Linear has no issue for raises QueueError."""
+    try:
+        app = linear.Linear()
+        return app, app.issue_id(key)
+    except linear.NoIssue as e:
+        raise QueueError(f"--issue {key}: {e}: give the PR's issue, or none:REASON; nothing sent") from None
+    except (linear.LinearError, OSError) as e:
+        return e
+
+
+def link_issue(key: str, url: str, app: tuple[linear.Linear, str] | Exception | None = None) -> str:
+    """Link the PR at ``url`` to the Linear issue ``key`` through the Linear app (`Linear.link_pr`): its `Refs KEY` line alone
+    links nothing.  ``app`` is `issue_app(key)` when the caller resolved it already.  What it linked; a failure raises
+    QueueError naming the command that links it later (`research queue link N --issue KEY`)."""
+    got = app or issue_app(key)
+    try:
+        if isinstance(got, Exception):
+            raise got
+        return f"{url} {'linked' if got[0].link_pr(got[1], url) else 'was linked already'} to {key} through the Linear app"
+    except (linear.LinearError, OSError) as e:
+        n = (m := re.search(r"/pull/(\d+)$", url)) and m.group(1)
+        raise QueueError(f"{url} is not linked to {key} in Linear ({e}); link it with "
+                         f"`research queue link {n or 'N'} --issue {key}`") from None
+
+
+def named_issue(body: str, teams: Iterable[str] = ()) -> str | None:
+    """The Linear issue ``body`` names: a key after a Linear magic word (`Refs ENG-123`, any team's), else the first bare key
+    of one of ``teams`` (the registry's Linear team keys: `SHA-512` names no issue), else `none: REASON` from its `Issue:
+    none:` line; None when it names none."""
+    if m := ISSUE_LINK_RE.search(body):
+        return m.group(1)
+    if teams and (m := re.search(rf"\b(?:{'|'.join(map(re.escape, sorted(teams)))})-\d+\b", body)):
+        return m.group(0)
+    if m := NO_ISSUE_RE.search(body):
+        return f"none: {m.group(1)}"
+    return None
+
+
+def _unnamed(prs: Iterable[PR], teams: Iterable[str]) -> str:
+    """`status`'s section of the open PRs whose body names no Linear issue (`named_issue`), with the fix; empty when none."""
+    prs = sorted(prs, key=lambda p: p.number)
+    rows = [p for p in prs if named_issue(p.body, teams) is None]
+    if not rows:
+        return ""
+    head = (f"\n\nno Linear issue named ({len(rows)} of {len(prs)} open PRs; add a `Refs KEY` or `Issue: none: REASON` line "
+            "with `research queue edit N --body-file F`):")
+    return head + "".join(f"\n  #{p.number:<5} {(p.owner or '-')[:24]:<24} {p.title}" for p in rows)
 
 
 def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str = "main", sha: str | None = None,
@@ -4953,12 +5251,12 @@ def _checked_heads(a: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "stats",
-                                            "checked-heads", "review", "baseline", "lean-check", "drive-shard-add",
+    ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
+                                            "checked-heads", "review", "baseline", "accept-checked", "lean-check", "drive-shard-add",
                                             "shadow-report"])
-    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit: the PR number; judge: the quick tier's run id; baseline: the "
+    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
-                    "drive-shard-add: the after-landing run's tip")
+                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
@@ -5029,8 +5327,14 @@ def main(argv: list[str]) -> int:
                                   "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
                                   "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
-    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner); "
+    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim but for --issue's last line (its first line "
+                                                   "`Lane NAME` names the owner); "
                                                    "edit: the PR's whole new body, in place of all its text")
+    ap.add_argument("--issue", metavar="KEY|none:REASON",
+                    help="open (required): the PR's Linear issue, a key like ENG-123, written into the body as a `Refs KEY` line "
+                         "and linked to the PR through the Linear app (Linear's GitHub integration is off for this "
+                         "repository, so the line alone links nothing); or none:REASON, written as an `Issue: none: REASON` "
+                         "line, for a PR with no issue; link (required): the KEY to link the open PR to")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
@@ -5055,24 +5359,51 @@ def main(argv: list[str]) -> int:
         text, _ = shadow_report(shadow_records(LocalStore(a.store), log=lambda s: print(s, file=sys.stderr)), max(a.tips, 1))
         print(text)
         return 0
-    if a.command == "open":
-        if not (a.head and a.title and a.body_file):
-            ap.error("open needs --head BRANCH, --title T and --body-file F")
+    if a.issue is not None and a.command not in ("open", "link"):
+        ap.error("--issue is for open and link only")
+    if a.command == "link":
+        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
+            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
         try:
+            remote = a.remote or _out(Path.cwd(), "remote", "get-url", "origin")
+            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
+            if not repo:
+                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
+            return 0
+        except (QueueError, OSError) as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
+    if a.command == "open":
+        if not (a.head and a.title and a.body_file and a.issue):
+            ap.error("open needs --head BRANCH, --title T, --body-file F and --issue KEY (the PR's Linear issue, like ENG-123, "
+                     "or none:REASON)")
+        try:
+            body = with_issue(a.body_file.read_text(), a.issue)
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             remote = a.remote or _out(top, "remote", "get-url", "origin")
             repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
             if not repo:
                 raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            app = issue_app(a.issue) if ISSUE_KEY_RE.fullmatch(a.issue) else None
             if a.dry_run:                                   # --dry-run never opens a real PR
+                link = (f"; would link it to {a.issue} through the Linear app" if isinstance(app, tuple)
+                        else f"; couldn't ask the Linear app to link {a.issue}: {app}" if app else "")
                 print(f"research queue open: would open {a.head}{'@' + a.sha[:12] if a.sha else ''} onto {a.base} in {repo}"
-                      f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(a.body_file.read_text())} bytes of body; dry run)")
+                      f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(body)} bytes of body, ending "
+                      f"{body.rstrip().splitlines()[-1]!r}{link}; dry run)")
                 return 0
-            print(open_pr(top, repo, a.head, a.title, a.body_file.read_text(), base=a.base, sha=a.sha, draft=a.draft))
-            return 0
+            url = open_pr(top, repo, a.head, a.title, body, base=a.base, sha=a.sha, draft=a.draft)
         except (QueueError, OSError) as e:
             print(f"research queue: {e}", file=sys.stderr)
             return 1
+        print(url)
+        if app:
+            try:
+                print(f"research queue open: {link_issue(a.issue, url, app)}")
+            except QueueError as e:                         # the PR is open: only an unknown key fails `open`
+                print(f"research queue: {e}", file=sys.stderr)
+        return 0
     if a.command == "edit":
         if not (a.pr and a.pr.isdigit() and a.body_file):
             ap.error("edit needs the PR number and --body-file F")
@@ -5115,6 +5446,8 @@ def main(argv: list[str]) -> int:
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     if a.command == "baseline" and not (a.pr and a.by):
         ap.error("baseline SHA records a green `main` for the review landing: pass the commit and --by ci")
+    if a.command == "accept-checked" and not (a.pr and a.by):
+        ap.error("accept-checked SHA records `checked`'s tip as one drive takes: pass the commit and --by ci")
     if a.command == "lean-check" and not (a.pr and a.by):
         ap.error("lean-check COMMIT launches a Lean check of a commit of `next` through drive: pass the commit and --by <lane> "
                  "(or set $RESEARCH_LANE)")
@@ -5123,7 +5456,7 @@ def main(argv: list[str]) -> int:
     if a.command == "drive-shard-add" and not (a.pr and len(a.shard_run) == 2 and a.shard_run[0].isdigit()):
         ap.error("drive-shard-add TIP K RUN_ID: the after-landing run's tip, the shard's number and the run to count in it")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline", "lean-check", "drive-shard-add") and a.pr is not None:
+    if a.command not in ("judge", "baseline", "accept-checked", "lean-check", "drive-shard-add") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -5189,15 +5522,17 @@ def main(argv: list[str]) -> int:
                         got.stale_close_days)
 
             entries = q.status(fetched=at_main)
+            teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
+                                   "issue": named_issue(e.pr.body, teams),
                                    "stale": e.idle_since is not None,
                                    "idle_since": None if e.idle_since is None else
                                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e.idle_since))}
                                   for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
             else:
-                print(_render(entries))
+                print(_render(entries) + _unnamed(q.listed, teams))
             return 0
         if a.command == "review":
             return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
@@ -5209,6 +5544,11 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
                                  f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
             return baseline(q, a.pr, a.by, a.steps)
+        if a.command == "accept-checked":
+            if not on_drive():
+                raise QueueError(f"accept-checked: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
+                                 f"run `/data/infra/drive.sh queue accept-checked {a.pr} --by {a.by}` there")
+            return accept_checked(q, a.pr, a.by)
         if a.command == "drive-shard-add":
             if not on_drive():
                 raise QueueError(f"drive-shard-add: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
@@ -5249,7 +5589,8 @@ def main(argv: list[str]) -> int:
                    stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
                    stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
-                   lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor).tick(dry_run=a.dry_run)
+                   lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
+                   executor_enqueue=flags.executor_enqueue).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

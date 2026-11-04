@@ -49,7 +49,7 @@ from verity.core.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
 from .manifest import SOURCES, Manifest, PlaceResult, place, site_of
-from .party import Action, Finish, Identity, Party, Received, Record, Send, Timer
+from .party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
@@ -214,7 +214,7 @@ class Host:
                 return
             self.transcript.append("out", a.channel, ep.sends.kind(m.type, m.version), f)
             self.transmit(ep, f)
-        elif isinstance(a, Record):
+        elif isinstance(a, LogEntry):
             self.transcript.append("record", "", a.kind, canonical(a.entry))
         elif isinstance(a, Finish):
             self._end(a)

@@ -6,6 +6,7 @@ public import Definitions.Pouw.Guarantees.Dither
 public import Definitions.Pouw.Guarantees.DitherInstance
 public import Definitions.Pouw.Guarantees.Eps1
 public import Definitions.Pouw.Guarantees.Game
+public import Definitions.Pouw.Guarantees.KeyedLeaf
 public import Definitions.Pouw.Guarantees.NCP
 public import Definitions.Pouw.Guarantees.OnsiteFreed
 public import Definitions.Pouw.Guarantees.PearlC
