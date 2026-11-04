@@ -217,10 +217,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
   module or of a module under `shape.premises` that a hypothesis mentions, or a hypothesis's head that the repository
-  builds. `--update` writes each one's `digest`: its `reads`
+  builds (a condition or a scope). `--update` writes each one's `digest`: its `reads`
   record's, else, wherever its module lies, that of it and every definition it reads in `meaning` and this repository's
   modules (`Facts.lean`'s `assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
-  and the landing DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
+  and the landing DM shows it; one no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.

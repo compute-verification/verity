@@ -761,9 +761,10 @@ a conclusion applies (outside an assumptions module, `unfoldSpec?`), and in each
 constant it doesn't unfold that states it (`asserts`: a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive
 definition's step), only the assumptions and the constants of a module under `premises` (`shape.premises`) its
 hypotheses mention, and the heads (`packedHeads`) of its hypotheses that are constants of a module this repository builds
-(`built`) outside an assumptions module (`only`): an antecedent the package states (`TapOpens … → bound`) is a premise
-the guarantee rests on, named and recorded like an assumption's, while its other hypotheses (an acceptance event, a
-target, `x ∈ S`) are what the conclusion means. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
+(`built`) outside an assumptions module (`only`): an antecedent the package states, a condition (`TapOpens … → bound`)
+or a scope (`∀ m, ScopeAcc … m → bound`), is named and recorded like an assumption, so a change to it fails under its
+own name, while one headed by the toolchain's or a dependency's constants (`x ∈ S`, `a = b`) is what the conclusion
+means. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
 holding when `prob E ≤ ε`), is what the conclusion means too: `A` there is part of the event, not something the
 statement rests on. -/
 partial def premisesOf (env : Environment) (meaning premises : Array Name) (built : NameSet) (moduleOf : Name → Option Name)

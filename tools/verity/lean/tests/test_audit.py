@@ -886,8 +886,8 @@ def ported(text: str) -> str:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_port_to_the_module_system_leaves_the_lock_byte_identical_though_lean_renumbers_the_helpers(tmp_path):
     """A public declaration of a module never shares the matcher a private one made, so a port to the module system
-    gives `q` and the statement `Spec` (which `spec` is lifted into) their own `q.match_1` and `q._sparseCasesOn_1` where
-    they read the private `p`'s before. Every text holds those helpers in place, a read definition's and a lifted
+    gives `q` its own `q.match_1` and `q._sparseCasesOn_1`, which the statement `Spec` (which `spec` is lifted into) then
+    shares, where both read the private `p`'s before. Every text holds those helpers in place, a read definition's and a lifted
     statement's alike, so the port's record is byte for byte the one before it, and passes as it is."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -910,7 +910,7 @@ def test_a_port_to_the_module_system_leaves_the_lock_byte_identical_though_lean_
     assert own["Control.q"] == own["Control.Spec"] == [], "both share the private `p`'s matcher"
     port.write_text(ported(PORT))
     after, own = built()
-    assert own["Control.q"] == own["Control.Spec"] == ["Control.q.match_1"]
+    assert own["Control.q"] == ["Control.q.match_1"] and own["Control.Spec"] == []
     assert after == before
     assert unshaped(A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None)) == []
 
@@ -918,14 +918,16 @@ def test_a_port_to_the_module_system_leaves_the_lock_byte_identical_though_lean_
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_an_antecedent_in_a_conclusion_headed_by_the_package_s_definition_is_a_named_premise(tmp_path):
     """`Facts.lean`'s `premisesOf` on a real build: in a conclusion (`… ∧ ((∀ n, Opens n) → …)`), a hypothesis whose head is
-    a definition of the package (`Opens`, outside an assumptions module, as `TapOpens` is) is a premise the guarantee rests
-    on. An update lists it under `assumptions` with the guarantee's owner and the digest its `reads` record holds, and the
-    guarantee's record lists it under `premises`, as `main_thm`'s lists the assumption it takes; one headed by the
-    toolchain's `Eq` (`m = 0 → …`) is what the conclusion means, and none."""
+    a definition of the package's spec (`Opens`, outside an assumptions module, as `TapOpens` is) is a premise the
+    guarantee rests on. An update lists it under `assumptions` with the guarantee's owner and the digest its `reads` record
+    holds, and the guarantee's record lists it under `premises`, as `main_thm`'s lists the assumption it takes; one headed
+    by the toolchain's `Eq` (`m = 0 → …`) is what the conclusion means, and none."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text(defs.read_text().replace("end Control", "def Opens (n : Nat) : Prop := n + 0 = n\n\nend Control"))
     (pkg / "Control" / "Rests.lean").write_text(
-        "import Control.Defs\nnamespace Control\ndef Opens (n : Nat) : Prop := n + 0 = n\n"
+        "import Control.Defs\nnamespace Control\n"
         "theorem rests (m : Nat) : double m = m + m ∧ ((∀ n, Opens n) → m = 0 → double m = 0) :=\n"
         "  ⟨by unfold double; omega, fun _ h => by subst h; rfl⟩\nend Control\n")
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Rests\n")
@@ -937,7 +939,7 @@ def test_an_antecedent_in_a_conclusion_headed_by_the_package_s_definition_is_a_n
     assert {g: r["premises"] for g, r in rec["guarantees"].items()} == {"Control.main_thm": ["Control.Hyp"],
                                                                         "Control.rests": ["Control.Opens"]}
     assert rec["assumptions"]["Control.Opens"] == {
-        "owner": "@lean", "digest": rec["reads"]["Control.Rests"]["definitions"]["Control.Opens"]}
+        "owner": "@lean", "digest": rec["reads"]["Control.Defs"]["definitions"]["Control.Opens"]}
     assert unshaped(A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None)) == []
 
 
@@ -1846,8 +1848,8 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     and outside `meaning` (`Control.Guarantees.Loop`, as C-Flock's `SessionLoopZKDeployed` is in
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
     (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry and module record
-    stay, though the build no longer has `G` read it), changes the record, which the audit refuses until `--update`
-    records it, and the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and
+    stay, though the build no longer has `G` read it), changes the record, and the drop its `premises` too, which the
+    audit refuses until `--update` records it, and the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and
     neither change would move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
     pkg, build, audit, lock = excepted_toy(
         tmp_path, "Control.Loop", LOOP,
@@ -1865,16 +1867,21 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     assert "Control.doubles" in rep["readers"]["Control.Defs"], "and through it, what it reads under `meaning`"
     assert "Control.twice" in first["reads"]["Control.Defs"]["definitions"]
     seen = {first["reads"]["Control.Loop"]["digest"]}
-    for text, shows, hyp_readers in (
-            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["Control.doubles", "Control.main_thm"]),
-            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n", ["Control.main_thm"])):
+    assert first["guarantees"]["Control.doubles"]["premises"] == ["Control.Hyp"]
+    for text, shows, hyp_readers, premises in (
+            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["Control.doubles", "Control.main_thm"],
+             ["Control.Hyp"]),
+            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n", ["Control.main_thm"], [])):
         before = lock()
         loop.write_text(text)
         build()
         codes = sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape"))
-        assert codes == ["guarantees.reads-changed"], codes
+        assert codes == ["guarantees.reads-changed"] if premises else ["guarantees.premises-changed",
+                                                                       "guarantees.reads-changed"], codes
         rep = audit(True)
         after = lock()
+        assert after["guarantees"]["Control.doubles"].pop("premises") == premises
+        before["guarantees"]["Control.doubles"].pop("premises")
         assert unshaped(rep) == [] and after["guarantees"] == before["guarantees"]
         assert after["assumptions"] == before["assumptions"] and set(after["assumptions"]) == {"Control.Hyp"}
         assert rep["readers"]["Control.Assumptions"] == hyp_readers
