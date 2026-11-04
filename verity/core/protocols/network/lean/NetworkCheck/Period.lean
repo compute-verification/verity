@@ -205,7 +205,7 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
 `eps`:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
-     "scans": [terms, …], "schedules": c, "windows": m}
+     "held": ["circuit", "free"], "scans": [terms, …], "schedules": c, "windows": m}
 
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`WardenSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
@@ -228,6 +228,11 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
 * `eps` is the scans' δ summed, `m · δ`, and each tied audit's drawn in part (`chargedOf`), whose bound
   `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
   `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+* `held` names, sorted, the checks of a tied audit the rows form holds (`heldNames`): `circuit`, its Program is the
+  class circuit (`heldChecks`), and `free`, the free inputs its link-window's term counts are that Program's input
+  gates, counted off its registered descriptor (`inputGates`), never a parameter. The check refuses a period where
+  either fails, so every accepted rows-form public names both, and a reader of `K` charges a tied audit its counted
+  free inputs only for a public that does.
 
 **Profile**: the link and `m`.
 
@@ -1394,11 +1399,15 @@ def factsJson (fs : Array Facts) : Json :=
   .arr <| fs.map fun f => Json.mkObj [("delta", .str f.delta.toString), ("drawn", toJson f.drawn),
     ("units", toJson f.units), ("wrong_units", toJson f.wrong)]
 
+/-- The checks of a tied audit the rows form holds, by name, sorted: its Program is the class circuit (`heldChecks`),
+and its free inputs are its Program's input gates (`inputGates`). The rows form's public names them. -/
+def heldNames : Array String := #["circuit", "free"]
+
 def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units true)] else []))
+    (if x.rows then [("held", toJson heldNames), ("scans", termsJson x.units true)] else []))
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]

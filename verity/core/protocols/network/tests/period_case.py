@@ -995,6 +995,8 @@ UNWIRED = "the scan's prog is no compute audit's slot entries"
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 #: `heldCheck`'s refusal, after its window's number.
 UNHELD = "the tied audit's window circuit is not the registered class circuit"
+#: `heldNames`: the checks of a tied audit the rows form holds, sorted, which its public names.
+HELD = ("circuit", "free")
 
 
 def clog2(x: int) -> int:
@@ -1035,7 +1037,7 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         s = p.scan
         units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
         schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "scans": units}
+        out = {"audits": [_facts_json(f) for f in facts], "held": list(HELD), "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
                                 + t.get("faulty_entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
