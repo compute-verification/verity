@@ -387,3 +387,25 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 
 - It adds remotetie's fixed-commit fix (window-commit builds its own Builds; run 2's refusal). Merge `remote` before your next suite run.
 - **Pearl+ tie (pearlplus):** `PEARL_TIE`'s defaults must be exactly the class's fixed load. At 4,32,2 that is `--fixed 4 --prompt-range 32:32`, all released together, each request running exactly the class's outputs, with no carry and no prefix-cache hit. Today they default prompts to 16–24 ids and accept a varied load, so the commit would refuse after the serve. Fix it before the run of record.
+
+11:50Z Wed (vllm-pearlplus): **`cursor/vllm-pprecord-496a` at 2b5d2bb422, pushed: coin v2 and `remote` c682341a12e merged in. Suites are queued; verdict about 16:00Z.**
+- **29ef05a2d0 merges `remote` ffd5de2b708 (coin v2).** It is done ahead of my 13:30Z ETA. The tie runs on v2's draw:
+  - `served_passes.py verify --tie W` draws through `bench_arm.live_draw` (PEARLC_CHALLENGER_GATE/PEER/LANE).
+  - `served_verdicts.py pearlplus --tie W` checks a challenger record with v2's `pearlplus_draw`. A node record leaves the draws as the node's own.
+  - My afbcd3000e draw is dropped (`pearl_c/draw.py`, `--draw-gate`/`--draw-peer`). `LiveDraw` now reserves through `pouw_h1_window.reserve_draw`, the call H1's window draws already use.
+- **2b5d2bb422 merges `remote` c682341a12e.** Its tree is identical to 29ef05a2d0's, because remotetie's a0066b441b was already merged here (62a2beb4c9).
+- **Suites on that tree** (`--quick`, vy-nebius-cpu-3, both waiting for a slot):
+  - r20261104-113932-16f4: benchmarks/one_stage, verity-pouw-benchmarks, benchmarks/prove_path, verity-bench, verity-bench-specs and repository.
+  - r20261104-113932-9d00: verity-vllm.
+  - Locally on the merge: `benchmarks/one_stage` and the pearl_c_vllm tests, 341 passed. verity-vllm's pouw tests, 197 passed (one xdist worker OOM-killed by the VM's memory cgroup passes alone). ruff adds nothing.
+  - I send you the SHA for `remote` once both are green, apart from the base tree's known reds.
+- **Your 11:43Z fixed-load point was fixed in 63ae09f7ba, which this merge contains.**
+  - Under `PEARL_TIE`, LOAD defaults to fixed, SLOTS and PROMPTS come from `V3C_CLASS` (4 and 32:32), and MAX_TOKENS = WINDOW_STEPS = its outputs (2). The load is `serve_load.py --fixed 4 --window-steps 2 --prompt-range 32:32`.
+  - Each request has `ignore_eos` and `max_tokens` 2. Under `--admit release-order`, request 0 goes out only after the other three are held, so all four are prefilled at the window's first step and run exactly 2 steps: no carry, and the window pick refuses any carried request anyway.
+  - The preflight refuses any other LOAD, SLOTS or PROMPTS. serve-openai's prefix cache is off by default.
+  - I'm adding two refusals under `PEARL_TIE`: `--prefix-caching` in SERVE_ARGS, and a certifier front (its group closes into a window of its own, which the pick takes on a tie). PRODUCT=remote already refuses a front.
+- **Your 11:07Z lane rule** goes in next. ETA: pushed by 13:30Z.
+  - `LiveDraw` takes the run's Pearl-C period. It refuses before reserving if any lane reserve already follows that period's close. After reserving, and before asking the coin, it re-reads the ledger and refuses unless its reserve is the lane's first after the close, which is the compose's own condition.
+  - served_pearlplus.sh closes the period right before verify, so nothing in the run can reserve in between.
+  - The preflight's gate check already refuses to start while lane vllm has a period open.
+- **Unchanged:** the arm's live salt at 16:00Z; task 4 at Thu 06:00Z; asks 1 (the y tag) and 2 (should the draw root bind R?) are still open.
