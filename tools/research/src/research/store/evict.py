@@ -59,8 +59,10 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import sealed
-from .local import LocalStore, sha256_file
+from concurrent.futures import ThreadPoolExecutor
+
+from . import ids, sealed
+from .local import LocalStore, manifest_key, object_key, sha256_file
 from .model import utc_now
 
 MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
@@ -208,16 +210,36 @@ def _sha256(p: Path) -> str:
     return sha256_file(p)[0]
 
 
+def on_remote(store: LocalStore, art: str) -> bool:
+    """`art`'s manifest and every blob it names are on the remote at their sizes: one HEAD each, no read-back. Enough to drop a
+    local copy whose files match the manifest (`plan_runs` hashes them), and so not recorded as a verified replica."""
+    r = store.remote
+    if r is None:
+        return False
+    try:
+        m = store.get_manifest(art)
+        head = r.head(manifest_key(ids.hex_of(art)))
+        if head is None or head["bytes"] != len(m.canonical()):
+            return False
+        return all((h := r.head(object_key(b))) is not None and h["bytes"] == size for b, size in m.blobs())
+    except Exception:  # noqa: BLE001  an unreadable manifest or a failed HEAD keeps the run's files
+        return False
+
+
 def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES, quiet_s: float = QUIET_S, hash_max: int = HASH_MAX,
-              now: float | None = None, log: Callable[[str], None] | None = None) -> list[dict[str, Any]]:
+              now: float | None = None, log: Callable[[str], None] | None = None, remote_check: bool = False,
+              jobs: int = 16) -> list[dict[str, Any]]:
     """Per run dir with evictable files: `{"run", "dir", "artifact", "files": [{"path", "bytes", "sha256", "artifact"}], "restore"}`,
-    oldest run first; `artifact` is the first of the run's PRESERVED trees (`_sources`) that holds one of them."""
+    oldest run first; `artifact` is the first of the run's PRESERVED trees (`_sources`) that holds one of them. With `remote_check`
+    (an agent VM, whose copies `research fetch` made and whose catalog records no verified replica), a tree the catalog doesn't
+    record as verified counts once `on_remote` finds it on the remote, `jobs` trees at a time."""
     say = log or (lambda s: None)
     now = time.time() if now is None else now
     verified = verified_remote(store)
     plan: list[dict[str, Any]] = []
     if not runs_root.is_dir():
         return plan
+    pending: list[tuple[str, Path, list[tuple[str, int]], list[tuple[str, str]]]] = []
     for run in sorted(os.listdir(runs_root)):
         rd = runs_root / run
         if not rd.is_dir() or (rd / EVICTED_FILE).exists():
@@ -258,31 +280,52 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
             say(f"{run}: no run_record, run_files or tree output artifact ({sum(b for _, b in big) / 1e6:.0f} MB), skipping")
             continue
         preserved = [(art, under) for art, under in sources if art in verified]
+        if not preserved and remote_check:
+            pending.append((run, rd, big, sources))
+            continue
         if not preserved:
             say(f"{run}: {', '.join(art[:20] for art, _ in sources)} not verified on the remote, skipping")
             continue
-        tree: dict[str, tuple[str, int, str]] = {}
-        for art, under in preserved:
-            try:
-                m = store.get_manifest(art)
-            except Exception as e:  # noqa: BLE001
-                say(f"{run}: manifest {art[:20]} unreadable ({e}), keeping its files")
+        _plan_files(store, run, rd, big, preserved, hash_max, plan, say)
+    if pending:
+        arts = sorted({art for *_, sources in pending for art, _ in sources})
+        with ThreadPoolExecutor(max(1, jobs)) as ex:
+            there = {a for a, ok in zip(arts, ex.map(lambda a: on_remote(store, a), arts)) if ok}
+        say(f"{len(there)} of {len(arts)} trees of {len(pending)} run dirs the catalog doesn't record are on the remote")
+        for run, rd, big, sources in pending:
+            preserved = [(art, under) for art, under in sources if art in there]
+            if not preserved:
+                say(f"{run}: {', '.join(art[:20] for art, _ in sources)} not on the remote, skipping")
                 continue
-            for tf in m.payload.files if m.payload and m.payload.type == "tree" else []:
-                tree.setdefault(f"{under}/{tf.path}" if under else tf.path, (tf.sha256, tf.bytes, art))
-        files = []
-        for rel, size in big:
-            if rel not in tree or tree[rel][1] != size:
-                continue
-            if size <= hash_max and _sha256(rd / rel) != tree[rel][0]:
-                say(f"{run}: {rel} sha256 differs from the artifact, keeping")
-                continue
-            files.append({"path": rel, "bytes": size, "sha256": tree[rel][0], "artifact": tree[rel][2]})
-        if files:
-            used = [(art, under) for art, under in preserved if any(f["artifact"] == art for f in files)]
-            plan.append({"run": run, "dir": str(rd), "artifact": used[0][0], "files": files,
-                         "restore": " && ".join(f"research data fetch {art} --to {rd / under if under else rd}" for art, under in used)})
+            _plan_files(store, run, rd, big, preserved, hash_max, plan, say)
+        plan.sort(key=lambda r: r["run"])
     return plan
+
+
+def _plan_files(store: LocalStore, run: str, rd: Path, big: list[tuple[str, int]], preserved: list[tuple[str, str]], hash_max: int,
+                plan: list[dict[str, Any]], say: Callable[[str], None]) -> None:
+    """Add to `plan` the run dir's big files that match a file of one of its `preserved` trees (sha256-checked up to `hash_max`)."""
+    tree: dict[str, tuple[str, int, str]] = {}
+    for art, under in preserved:
+        try:
+            m = store.get_manifest(art)
+        except Exception as e:  # noqa: BLE001
+            say(f"{run}: manifest {art[:20]} unreadable ({e}), keeping its files")
+            continue
+        for tf in m.payload.files if m.payload and m.payload.type == "tree" else []:
+            tree.setdefault(f"{under}/{tf.path}" if under else tf.path, (tf.sha256, tf.bytes, art))
+    files = []
+    for rel, size in big:
+        if rel not in tree or tree[rel][1] != size:
+            continue
+        if size <= hash_max and _sha256(rd / rel) != tree[rel][0]:
+            say(f"{run}: {rel} sha256 differs from the artifact, keeping")
+            continue
+        files.append({"path": rel, "bytes": size, "sha256": tree[rel][0], "artifact": tree[rel][2]})
+    if files:
+        used = [(art, under) for art, under in preserved if any(f["artifact"] == art for f in files)]
+        plan.append({"run": run, "dir": str(rd), "artifact": used[0][0], "files": files,
+                     "restore": " && ".join(f"research data fetch {art} --to {rd / under if under else rd}" for art, under in used)})
 
 
 def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
@@ -310,10 +353,11 @@ def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
 
 def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES,
                quiet_s: float = QUIET_S, hash_max: int = HASH_MAX, free_fn: Callable[[], int] | None = None, now: float | None = None,
-               log: Callable[[str], None] | None = None) -> dict[str, Any]:
+               log: Callable[[str], None] | None = None, remote_check: bool = False) -> dict[str, Any]:
     say = log or (lambda s: None)
     free = free_fn or (lambda: free_bytes(runs_root if runs_root.exists() else store.root))
-    plan = plan_runs(store, runs_root, min_bytes=min_bytes, quiet_s=quiet_s, hash_max=hash_max, now=now, log=log)
+    plan = plan_runs(store, runs_root, min_bytes=min_bytes, quiet_s=quiet_s, hash_max=hash_max, now=now, log=log,
+                     remote_check=remote_check)
     total = sum(f["bytes"] for r in plan for f in r["files"])
     rep: dict[str, Any] = {"runs_root": str(runs_root), "dry_run": dry_run, "target_free_bytes": target_free_bytes, "free_before": free(),
                            "evictable_bytes": total, "evictable_runs": len(plan), "runs": [], "evicted_bytes": 0, "reached_target": False}
