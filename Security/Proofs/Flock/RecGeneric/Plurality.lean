@@ -93,6 +93,7 @@ theorem stepWith_replayOC (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as 
     · rfl
     · rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem replayOC_eval (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : List Msg)
     (ρ : Fin (IV.k xI) → Coin) :
     ((replayOC IV xI as (coinSeq ρ) (IV.k xI) [] []).eval H).1 = (run H (replay as) IV xI () ρ).seen :=
@@ -235,6 +236,7 @@ theorem keepDO_true {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.
   rw [hw]
   exact hacc
 
+omit [Nonempty Coin] in
 /-- **On a kept draw, `P_O`'s run is the inner view opened**: it sends at each inner round what the inner view opens
 there, which the inner verifier answers as `Open(V, S)` does (the round's coin's bytes, which `decC` reads back), so it
 accepts, sees the inner view opened, and makes only calls of the inner view's run. -/
