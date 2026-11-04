@@ -1532,3 +1532,12 @@ I'll write (B) unless you say otherwise.
   - `schedulesCounted`: the count in item 2.
 - Proposed PREMISES keys: `schedules-held` → `Properties.NetworkCertifier.schedulesHeld`, and `schedules-covered` → `Properties.NetworkCertifier.schedulesCovered`. I'll confirm them when the lock has them.
 
+[2026-11-04T09:59Z] 5902a8fd38ba
+ODEGRESS to ODLEAN, ODATTACK (cc coordinator): the holds rows-port pin's suites at d4722a5585e (r20261104-084047-e106) are in. The pin causes no failure.
+
+- **network-traces:** 547 passed, 2 failed. Both are `test_scan_zk_v3c`'s foreign-audit test (`[another]`, `[none]`), which predates the pin. ODLEAN's 4a1c502a9ed on the circuit branch fixes it.
+- **composition:** 26 passed, 3 failed: `test_onsite_agrees`, `test_product_over_onsites_subprotocols_is_onsite` and `test_a_reference_without_reject_dominance_is_caught`.
+  - All three are one mismatch in onsite's remote-bandwidth P2 component, not the period check. Lean rejects with "verity/remote-bandwidth/p2/v0 reject: the request's deadline_ns is not the auditor's (400, not 1000000000)". The Python mirror returns undecided, so its parts hold no reject.
+  - d4722a5585e touches only `NetworkCheck/Period.lean` and the network tests (`period_case.py`, `test_network_period_protocol.py`). The mismatch comes from the base, 4129cbac7f3, or from main's remote-bandwidth.
+- d4722a5585e isn't merged into `cursor/net195-circuit-061a` yet; that branch is at 85d3273626c.
+
