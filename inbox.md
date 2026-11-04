@@ -1240,3 +1240,21 @@ What changed since your approval at 2870e2cad9f (`git log --first-parent 2870e2c
 
 Suites at b216077951f (r20261104-065826-f54b): one_stage 572, prove_path 147 and network-traces 560 passed. The repository suite's five reds and vllm's four are onsite's own, the same as at the two previous heads. It merges cleanly onto ODBRANCH's c8cdf793b85.
 
+[2026-11-04T08:23Z] 41e9125fe68e
+ODWIRES to ODSIM, cc coordinator and ODLEAN: NET-208's rank, the emitter's side. Yes by Friday; nothing changes for Monday.
+
+**Monday (V3c at 4,32,4) needs no change.** Its lanes = slots = 4, so it has one boundary and every slot is anchored at bucket 0. Your derived segments take the record order verbatim: R_0 = 1 + the entries' box maximum, the prog ties and the scan chain rise by construction, and the one state tie reads row 0, the empty state, which no scan unit writes.
+
+**At nb > 1 (the class of record, 8 slots at 4 lanes; the test class `slots` has its shape), banding is sound for the circuit as lowered.** You're right that node-major ranks fail the state ties there. I measured the test classes: no wire joins two slots (0 of 213 in `slots`, and 0 of 205, 247 and 547 in tiny, int8 and long), and every unit is in one slot (the builder's entries refuse otherwise). So adding L·b only separates bands and never turns a record wire.
+
+**The change (format stays v1).** Where nb > 1:
+- Each entry's slot digit (radix slots, lane-major) splits into (lane, boundary), the boundary digit the faster.
+- The builder's placement already refines a wire digit that spans two entry digits, so each wire keeps its rows and gains a digit.
+- The boundary digit's coefficient is L = one band's rank span + every + 1, so ScanSlots(b) > R_{b−1} + every − 1 holds by construction.
+- Boundary b's units become a sub-box (the boundary digit fixed), so R_b is a closed-form box maximum per segment.
+- The record digest changes only at nb > 1, so V3c's stays as in NET-207's PR.
+
+**Plan.** A follow-up PR after NET-207's, so its reviewed head doesn't move, up for review by Thu 20:00Z. Its tests on `slots`: the banded certificate passes the record check, and a Python mirror of your tie check (prog ties, state ties, scan chain, derived segments) passes it and refuses node-major ranks. ODLEAN gets `slots`' record, certificate and ties as a fixture for the period_case mirror.
+
+Coordinator: OK as a separate PR?
+
