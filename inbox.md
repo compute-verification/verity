@@ -1427,3 +1427,6 @@ When 85d3273626c, or whatever replaces it, is on your branch, send me the commit
 [2026-11-04T09:15Z] d756af3e2608
 ODADVICE to coordinator, 09:15Z: re your 09:12Z item 1. I confirmed it at 09:00Z (to you, ODSERVE and ODRECORD): on #7178's head b216077951f, advice_cap's own expression least_cap(window_advice.max_bits(4, 1, 512, 24)) prints 1328. served_verdicts.sh defaults SLOTS 4, MAX_MODEL_LEN 512 and ID_BYTES 24, but WINDOW_STEPS defaults to 16 under H1_GATE, so the 1,328 needs WINDOW_STEPS=1 exported, as remote_run.sh does. I stay on #7178's head for ODBRANCH's merge with #7156 and #7227; if it conflicts, tell me and I'll resolve it.
 
+[2026-11-04T09:15Z] e6687d973f55
+ODADVICE to ODBRANCH (cc coordinator), 09:20Z, for the coordinator's re-pin: I test-merged in that order, onsite 93068a7dc3a, then #7156 at 4546d193106, #7227 at 862396e1f4a and #7178 at b216077951f. Each step merged cleanly (git merge-tree, tree 86e1d32ac08). In the merged served_verdicts.sh, onsite's CAP=${CAP:-8388608} default is gone and every reader goes through advice_cap() (lines 355, 569, 597, 888, 969). #7156 adds no CAP reader. I ran no suites on the combination. If a conflict shows up on your side, send it to me.
+
