@@ -1085,13 +1085,14 @@ def test_nothing_is_stacked_for_a_member_above_the_running_check_that_changes_no
 
 def test_an_ejection_from_a_stacked_checks_prefix_rebuilds_next_at_once_and_cancels_only_that_check(world, monkeypatch):
     """An ejection from a running Lean check's prefix waits for it to end before `next` is rebuilt; a stacked check reaches
-    `next`'s top, so that would hold every sync for its whole run.  It is rebuilt at once, the stacked check cancelled, and the
-    lower one runs on."""
+    `next`'s top, so that would hold every sync for its whole run.  It is rebuilt at once, the stacked check cancelled in the
+    same tick (the Lean checks are judged again after the sync), and the lower one runs on."""
     h, two, three = _stacked(world, monkeypatch)
     world.gh.ready.discard((3, world.gh.prs[3].head))
     assert Q.lean_running(h.d.q.load_state(), 3) is None
     h.tick()
-    assert [m.pr for m in h.q.chain()] == [2] and h.cancelled == [], world.logs
+    assert [m.pr for m in h.q.chain()] == [2] and h.cancelled == [h.lean_ids()[1]], world.logs
+    assert list(h.d.q.load_state()["drive"]["lean"]) == [two]
     h.tick()
     assert h.cancelled == [h.lean_ids()[1]] and list(h.d.q.load_state()["drive"]["lean"]) == [two]
 
@@ -2224,7 +2225,8 @@ def test_lean_runs_reads_the_registry_s_live_lean_checks_of_the_commits_asked_an
     h.q.first = (2,)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [2, 1]
-    assert sum("run registry's Lean checks can't be read (OSError: runs root gone)" in s for s in world.logs) == 1, world.logs
+    # read before the sync and again after it, to land on what the Lean checks are then
+    assert sum("run registry's Lean checks can't be read (OSError: runs root gone)" in s for s in world.logs) == 2, world.logs
 
 
 def test_a_landing_that_does_not_compile_lands_what_is_below_the_pr_that_broke_it(world, monkeypatch):

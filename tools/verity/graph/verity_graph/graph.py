@@ -373,7 +373,8 @@ def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | N
     needed = sorted({p for t in ts for p in t["inputs"]} | {p for spec_files in envs.values() for p in spec_files})
     digests = {p: contract.file_digest(root / p) for p in needed}
     env_docs = {name: {"spec": sp, "digest": contract.env_digest(sp, digests)} for name, sp in envs.items()}
+    key = contract.keyer(digests)
     for t in ts:
         if not t["reads"]:
-            t["key"] = contract.key(t, digests, None, env_docs[t["env"]]["digest"])
+            t["key"] = key(t, None, env_docs[t["env"]]["digest"])
     return {"schema": contract.SCHEMA_GRAPH, "commit": at, "envs": env_docs, "files": digests, "tasks": ts}
