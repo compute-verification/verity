@@ -11,25 +11,29 @@ vy-admin does (`register_model`: ``admin model-register --model MODEL --circuit 
 DIR``, DIR ``--checkpoint``); on the auditor host vy-admin makes that registration. It builds each stratum's
 circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
 lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
-the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --model MODEL
+the lane's period (`period_open_argv`: ``period-open --name P --cap 2 --circuit DIGEST --draw-k K --model MODEL
 --circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof system's committed draw K, `declared_draw_k`, which core's credit reads as the
 open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
 against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
-window's served rows to, `credit.committed_length`), reserves the window's challenge phase (``reserve --peer PEER --scheme S --families
-F``), and serves
+window's served rows to, `credit.committed_length`; cap 2, the window's challenge phase and its draw's), reserves the
+window's challenge phase (``reserve --peer PEER --scheme S --families F``) and its draw's (``--families`` the draw
+coin alone, `pouw_h1_challenger.draw_families`), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
---model MODEL --circuit DIGEST --challenger AT --session RESERVE --gate GATE`` (the window's b/<K> salted with the key the
+--model MODEL --circuit DIGEST --challenger AT --session RESERVE --draw-session DRAW --gate GATE`` (the window's
+b/<K> salted with the key the
 gate's ``model-key`` gives the lane's key), under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
 ``gpu-lease`` hands out): the window opens its challenge phase through ``GATE open --session S --root R`` once round
 0 is admitted, R = `salt.window_open_root(W, round 0's request table root, S)`, its salt coin opens after R,
 and each call's A and z/y tables are committed as the window Program's registered values, beside the period's ``b/<K>``
 (`pouw_h1_served.Served`) under the round roots; the served Program's layout must be the declared one's. The serving process stops at its last
-served step: it hands the window and its challenge phase's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
-ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same challenge phase
-(`serve`; the verdict's ``stages`` has when each phase exited and ``lease_after_served_s``). Once the challenge phase has its ``end`` entry it
-closes the period, takes the ledger (``GATE ledger``), the host's pins log (``GATE pins``, the bytes the gate publishes as
-``challenger-pins head``), the challenge phase's tree (``GATE fetch S``) and the key's pin (``GATE pubkey``), and runs the
+served step: it hands the window and its challenge phase's stream to this process (``--handoff``, `pouw_h1_handoff`)
+and exits, ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same
+challenge phase, then opens its draw's challenge phase (reserved ``--withhold``) through ``GATE open --session D --root DRAW_ROOT`` and
+takes its draw coin (`serve`; the verdict's ``stages`` has when each phase exited and ``lease_after_served_s``). Once
+both challenge phases have their ``end`` entries it closes the period, takes the ledger (``GATE ledger``), the host's
+pins log (``GATE pins``, the bytes the gate publishes as ``challenger-pins head``), the challenge phases' trees
+(``GATE fetch S``, ``GATE fetch D``) and the key's pin (``GATE pubkey``), and runs the
 verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
 against the ledger's newest head, `trusted_rounds_reason` on the challenge phase's ``out/`` with the window's ``{root}``, each
 reading the challenge phase through core's `challenger.pinned_session` under that pins log and the verifier's own first-parent
@@ -244,10 +248,11 @@ def register_model(gate: Gate, checkpoint: str, pdir: Path, circuit: str, scratc
     return {**doc, "ok": doc.get("circuit") == circuit and doc.get("model") == MODEL and "refused" not in doc}
 
 
-def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path, circuit: str | None = None
-          ) -> dict[str, Any]:
-    """The window in two phases, both logged to ``serve.log``: served on the GPU (under ``gpu-lease`` with
-    ``--gpu-lease``), which hands its window and its challenge phase's stream to this process (`pouw_h1_handoff.Holder`) and
+def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path, circuit: str | None = None,
+          draw: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The window in two phases, both logged to ``serve.log``, its challenge phase `reserved` and its draw's `draw` (the
+    gate's reserve answers): served on the GPU (under ``gpu-lease`` with ``--gpu-lease``), which hands its window and
+    its challenge phase's stream to this process (`pouw_h1_handoff.Holder`) and
     exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
     window's salt key, its saved state and each call's values are the prover's (`pouw_h1_prover`, DRAWN1): kept past the
     close in ``--prover-root``/SESSION, owner-only and outside the run's directory, under a ``research keep`` record."""
@@ -261,7 +266,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     holder = HO.Holder(scratch / "stream.sock")
     gpu = [sys.executable, "-m", "tests.protocols.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
     argv = [*gpu, *(["--served", "--model", MODEL, "--circuit", circuit] if a.served else []),
-            "--challenger", a.at_addr, "--session", json.dumps(reserved),
+            "--challenger", a.at_addr, "--session", json.dumps(reserved), "--draw-session", json.dumps(draw),
             "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by, "--prover-dir", str(prover),
             "--handoff", str(holder.path), "--handoff-state", str(prover / PV.STATE)]
     if a.gpu_lease:
@@ -282,7 +287,8 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
                 doc["holder"] = holder.error or "the serving stage handed no stream over"
                 return {**doc, "rc": doc["serving_rc"] or 1}
             try:
-                doc["close_rc"] = subprocess.run([*gpu, "--close-from", str(prover / PV.STATE), "--stream-fd", str(fd)],
+                doc["close_rc"] = subprocess.run([*gpu, "--close-from", str(prover / PV.STATE), "--stream-fd", str(fd),
+                                                  "--gate", shlex.join(gate.argv)],
                                                  stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1], pass_fds=(fd,),
                                                  env={**os.environ, "CUDA_VISIBLE_DEVICES": ""}).returncode
             finally:
@@ -317,8 +323,9 @@ def key_custody(prover: Path, published: Path) -> dict[str, Any]:
             "ok": not found and modes == {"directory": "0o700", "key": "0o600"}}
 
 
-def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
-    """The ledger, the host's pins log, the key's pin and the challenge phase's tree as the gate gives them, in `d`."""
+def evidence(gate: Gate, session: str, d: Path, draw: str | None = None) -> dict[str, Any]:
+    """The ledger, the host's pins log, the key's pin and the challenge phase's tree as the gate gives them, in `d`, and
+    its draw's challenge phase `draw`'s tree beside it (``draw_fetched``)."""
     d.mkdir(parents=True, exist_ok=True)
     rc, ledger = gate.raw("ledger")
     (d / "windows.jsonl").write_bytes(ledger if rc == 0 else b"")
@@ -326,21 +333,24 @@ def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
     (d / "pins.jsonl").write_bytes(pins if prc == 0 else b"")
     pub = gate("pubkey")
     (d / "pubkey.json").write_text(json.dumps(pub, indent=1) + "\n")
-    rc, tgz = gate.raw("fetch", session)
-    if rc == 0:
-        with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
-            t.extractall(d / "fetch", filter="data")
+
+    def fetched(s: str) -> bool:
+        frc, tgz = gate.raw("fetch", s)
+        if frc == 0:
+            with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
+                t.extractall(d / "fetch", filter="data")
+        return frc == 0
     return {"ledger_lines": ledger.count(b"\n") if rc == 0 else 0, "pins_lines": pins.count(b"\n") if prc == 0 else 0,
-            "pubkey": pub, "fetched": rc == 0}
+            "pubkey": pub, "fetched": fetched(session), **({"draw_fetched": fetched(draw)} if draw is not None else {})}
 
 
 def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, window: dict | None = None,
           period: str | None = None, descriptor: bytes | None = None, pins: list[Path] | None = None,
-          main: list[str] | None = None) -> dict[str, Any]:
+          main: list[str] | None = None, draw: Path | None = None) -> dict[str, Any]:
     """`pouw_h1_gpu.check_challenger`, the verifier's side: with `window` on the challenge phase's ``out/``
-    (`trusted_rounds_reason`), else on its tree (`session_reason`), under the host's pins log's heads `pins` and the
-    verifier's own first-parent history of main `main`; its credit over `descriptor`, the period's circuit's bytes
-    (`program_bytes`)."""
+    (`trusted_rounds_reason`), else on its tree (`session_reason`), and its draw's tree `draw` alike, under the host's
+    pins log's heads `pins` and the verifier's own first-parent history of main `main`; its credit over `descriptor`,
+    the period's circuit's bytes (`program_bytes`)."""
     from tests.protocols import pouw_h1_gpu as GPU
     wfile = None
     if window is not None:
@@ -349,7 +359,8 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
         wfile.write_text(json.dumps(window) + "\n")
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
-                               [str(p) for p in pins or ()], main)
+                               [str(p) for p in pins or ()], main,
+                               None if draw is None else str(draw / "out" if window is not None else draw))
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
@@ -361,10 +372,13 @@ def _edited(record: dict, edit: Any, path: Path) -> Path:
     return path
 
 
-def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: str) -> tuple[dict[str, Any], str]:
+def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: str
+          ) -> tuple[dict[str, Any], str, str]:
     """`honest` (the window's commitment) with its coins swapped for a challenge phase the gate reserves and opens on
-    `opened_on`, its salt opened after `opened_on` and its round and flip coins after the window's own roots, as
-    `test_pouw_h1._salted` forges one in process: (the forged commitment, its challenge phase)."""
+    `opened_on`, its salt opened after `opened_on` and its round coins after the window's own roots, and its flip coin
+    from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
+    (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
+    challenge phase, its sample's)."""
     from verity.core.protocols.pouw import window as Wd
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -373,6 +387,10 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
                     "--minutes", "30")
     if "refused" in reserved:
         raise ValueError(f"reserve: {reserved['refused']}")
+    drawn = gate("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--minutes", "30",
+                 "--withhold")
+    if "refused" in drawn:
+        raise ValueError(f"reserve of the draw session: {drawn['refused']}")
     answer = gate("open", "--session", reserved["session"], "--root", opened_on.hex())
     if "refused" in answer:
         raise ValueError(f"open: {answer['refused']}")
@@ -382,12 +400,16 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     salt = client.open(Wd.SALT, 0, opened_on)
     log = [{**r, "coin": client.open(Wd.ROUND, s, bytes.fromhex(r["root"])).to_json()} for s, r in enumerate(honest["rounds"])]
     root = RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
-    draw = client.open(Wd.DRAW, 0, root)
     client.close()
     coins = client.commitment.to_json()
+    fields = ("session", *PHW.RESERVE_FIELDS)
+    ds = PHW.DrawSession("forge", at, PHW.reserved_of({k: v for k, v in drawn.items() if k in fields}, "draw_session"),
+                         PHW.gate_of(gate))
+    draw = ds.record(root)
     return ({**honest, "coins": coins, "round_coins": coins, "salt_opening": salt.to_json(), "rounds": log,
-             "session": PHC.carried(answer), "draw": {**honest["draw"], "root": root.hex(), "coin": draw.to_json()}},
-            reserved["session"])
+             "session": PHC.carried(answer), "draw_session": ds.session,
+             "draw": {**honest["draw"], "root": root.hex(), "coin": draw.to_json()}},
+            reserved["session"], drawn["session"])
 
 
 def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at: str, circuit: str = "00" * 64,
@@ -404,13 +426,14 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
     g = out / "gate"
     tree, ledger, pins = g / "fetch" / sid, [g / "windows.jsonl"], [g / "pins.jsonl"]
+    draw = g / "fetch" / c["draw_session"]["session"]
     rt = out / "red_team"
     cases: dict[str, Any] = {}
 
     def case(name: str, rec: Path, *, window: dict | None = None, led: list[Path] | None = None, tr: Path | None = None,
-             pn: list[Path] | None = None, mn: Any = main) -> None:
+             pn: list[Path] | None = None, mn: Any = main, dr: Path | None = None) -> None:
         got = check(rec, tr or tree, pin, led or ledger, rt / name, window, period, pins=pins if pn is None else pn,
-                    main=mn)
+                    main=mn, draw=dr or draw)
         cases[name] = {**got, "refused": not got["ok"]}
 
     case("r_bare_weights_root", _edited(record, lambda d: d["commitment"]["session"].update(root=weights), rt / "bare.json"))
@@ -439,14 +462,14 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("table_root_changed", _edited(record, lambda d: d["calls"][first]["tables"].update(a="00" * 64), rt / "table.json"))
     case("table_a_root_unbound", _edited(record, lambda d: d["calls"][first]["tables"].update(a=None), rt / "unbound.json"))
     case("table_rounds_cut", _edited(record, lambda d: d["commitment"]["rounds"].pop(), rt / "rounds-cut.json"))
-    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period, pins=pins, main=main)
+    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period, pins=pins, main=main, draw=draw)
     cases["other_pin"] = {**got, "refused": not got["ok"]}
     if gate is not None:
         forged_period = f"{period}-forged"
-        bare = gate(*period_open_argv(f"{period}-bare", 1, circuit, draw_k, None, circuit_files or {}),
+        bare = gate(*period_open_argv(f"{period}-bare", 2, circuit, draw_k, None, circuit_files or {}),
                     "--weights-root", other)
         cases["r_period_open_bare_weights_root"] = {"answer": bare, "refused": "refused" in bare}
-        cases["forged_period_open"] = gate(*period_open_argv(forged_period, 2, circuit, draw_k, model,
+        cases["forged_period_open"] = gate(*period_open_argv(forged_period, 4, circuit, draw_k, model,
                                                              circuit_files or {}))
         forged = {}
         for name, root in (("forged_bare_weights_root", bytes.fromhex(weights)), ("forged_other_window_root", bytes.fromhex(other))):
@@ -454,20 +477,22 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
                 forged[name] = forge(gate, c, root, peer, at)
             except Exception as e:  # noqa: BLE001
                 cases[name] = {"refused": True, "at": "forge", "reason": f"{type(e).__name__}: {e}"}
-        for name, (_c, s) in forged.items():
+        for name, (_c, s, ds) in forged.items():
             gate("wait", s)
+            gate("wait", ds)
         cases["forged_period_close"] = gate("period-close", "--name", forged_period)
-        fe = evidence(gate, sid, rt / "forged_gate")
+        fe = evidence(gate, sid, rt / "forged_gate", c["draw_session"]["session"])
         cases["forged_gate"] = fe
-        for name, (commits, s) in forged.items():
-            rc, tgz = gate.raw("fetch", s)
-            with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
-                t.extractall(rt / "forged_gate" / "fetch", filter="data")
+        for name, (commits, s, ds) in forged.items():
+            for fetched in (s, ds):
+                rc, tgz = gate.raw("fetch", fetched)
+                with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
+                    t.extractall(rt / "forged_gate" / "fetch", filter="data")
             rec = _edited(record, lambda d, commits=commits: d.update(commitment=commits), rt / f"{name}.json")
             case(name, rec, led=[rt / "forged_gate" / "windows.jsonl"], tr=rt / "forged_gate" / "fetch" / s,
-                 pn=[rt / "forged_gate" / "pins.jsonl"])
+                 pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / ds)
         case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"],
-             pn=[rt / "forged_gate" / "pins.jsonl"])
+             pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / c["draw_session"]["session"])
         cases["honest_under_later_head"]["refused"] = not cases["honest_under_later_head"]["ok"]
     must = [k for k in cases if k.startswith(("r_", "ledger_", "pins_", "main_", "table_", "other_pin", "forged_b",
                                               "forged_o"))]
@@ -522,7 +547,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
                                       f"{circuit[:16]}..., the period's")
         return doc
     files = doc["circuits"]["files"]
-    doc["period_open"] = gate(*period_open_argv(a.period, 1, circuit, draw_k, model, files))
+    doc["period_open"] = gate(*period_open_argv(a.period, 2, circuit, draw_k, model, files))
     if a.served and not (doc["period_open"].get("body") or {}).get("weights_root"):
         doc["gate_log"] = gate.log
         doc["refused"] = (f"the period's open signs no weights' root: the gate has no registration of {MODEL} under "
@@ -534,15 +559,21 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     if "refused" in reserved:
         doc["gate_log"] = gate.log
         return doc
-    sid = reserved["session"]
-    doc["stages"] = serve(a, gate, reserved, out / "serve", circuit)
+    drawn = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+                 "--minutes", str(a.minutes), "--withhold")
+    doc["draw_reserved"] = drawn
+    if "refused" in drawn:
+        doc["gate_log"] = gate.log
+        return doc
+    sid, dsid = reserved["session"], drawn["session"]
+    doc["stages"] = serve(a, gate, reserved, out / "serve", circuit, drawn)
     doc["serve_rc"] = doc["stages"]["rc"]
     doc["key_custody"] = key_custody(Path(doc["stages"]["prover"]["directory"]), out)
-    status = gate("status", sid)
-    if status.get("open") is not None:
-        doc["unit"] = gate("wait", sid) if a.gate is None else _poll_end(gate, sid)
+    for s, unit in ((sid, "unit"), (dsid, "draw_unit")):
+        if gate("status", s).get("open") is not None:
+            doc[unit] = gate("wait", s) if a.gate is None else _poll_end(gate, s)
     doc["period_close"] = gate("period-close", "--name", a.period)
-    doc["evidence"] = evidence(gate, sid, out / "gate")
+    doc["evidence"] = evidence(gate, sid, out / "gate", dsid)
     try:
         serve_doc = json.loads((out / "serve" / "pouw_h1_gpu.json").read_text())
         h = serve_doc["h1"]
@@ -569,10 +600,12 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         tree, ledger, pins = g / "fetch" / sid, [g / "windows.jsonl"], [g / "pins.jsonl"]
         record = json.loads(calls.read_text())
         desc, root = program_bytes(pdir), record["commitment"]["session"]["root"]
+        draw = g / "fetch" / dsid
         doc["verify"] = {
-            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc, pins, main),
+            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc, pins, main,
+                             draw),
             "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc, pins,
-                             main),
+                             main, draw),
         }
         doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit,
                                    draw_k, model, files, main)

@@ -6,15 +6,15 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 
 `stmtOkZk`: at every good masked case, a non-empty `Σ`, a printable draw that decodes to the statement's instances
 (`DrawOk`), the statement's draw the one it was set up at, and a `Hello` that parses to an object whose `coins` is an
-object, printable with the prover's nonce put in: `StmtOkZk`, from the case's setup alone, under the JSON library's
-specification (`JsonSpec`), as `stmtOk` at the plain verifier.
+object, printable with the prover's nonce put in: `StmtOkZk`, from the case's setup alone, as
+`stmtOk` at the plain verifier.
 
 * `Σ`, the draw's instances and the session's draw are as in `stmtOk`, at the one table `readyZk` asks
   (`CaseZk.one`). Under `--zk` the draw's law is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
   plain verifier (`good_stratified`, `good_subset`).
 * The masked verifier's coins are the keyed coin tree (`Read.coins`), so the hello's `coins` is the tree's spec with an
-  empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Json.parse` reads back an alike object
-  (`JsonSpec.parse_canon`), printable as the printed one is (`Same.good`), and so after the prover's nonce is put in
+  empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Flock.JsonParse.parse` reads back an alike object
+  (`FlockComplete.JsonRT.parse_canon`), printable as the printed one is (`Same.good`), and so after the prover's nonce is put in
   (`good_setObjVal`).
 -/
 
@@ -67,13 +67,13 @@ theorem good_coins (cs : CoinTree.Spec) (nonce : String) : Good (cs.coins nonce)
 
 /-- **A canonical object with a keyed coin tree's `coins`** parses back to an object whose `coins` is an object, printable
 with the prover's nonce put in. -/
-theorem helloZk_mk (S : Claims.JsonSpec printJ Flock.canon) {L : List (String × Json)} (hd : Distinct L)
+theorem helloZk_mk {L : List (String × Json)} (hd : Distinct L)
     (hg : ∀ p ∈ L, Good p.2) {cs : CoinTree.Spec} (hc : ("coins", cs.coins "") ∈ L) {hello : String}
     (h : Flock.canon (Json.mkObj L) = .ok hello) :
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hgL := good_mkObj hd hg
-  obtain ⟨j, hp, hs⟩ := S.parse_canon _ _ hgL h
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_canon _ _ hgL h
   obtain ⟨cv, hcv, hcvs⟩ := hs.getObjVal (getObjVal?_mkObj hd hc)
   have hgj := hs.good hgL
   have hgc := hcvs.good (good_coins cs "")
@@ -92,15 +92,15 @@ theorem helloZk_mk (S : Claims.JsonSpec printJ Flock.canon) {L : List (String ×
 
 /-- **The masked verifier's hello**: at a keyed coin tree, it parses to an object whose `coins` is an object, printable
 with the prover's nonce put in. -/
-theorem helloZk_of (S : Claims.JsonSpec printJ Flock.canon) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
+theorem helloZk_of {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
     {cs : CoinTree.Spec} {hello : String} (h : Flock.helloOf tags sigma mPts (.tree cs) = .ok hello) :
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   unfold Flock.helloOf at h
   dsimp only at h
   repeat' split at h
   all_goals
-    refine helloZk_mk S (by simp) ?hg (cs := cs) (by simp) h
+    refine helloZk_mk (by simp) ?hg (cs := cs) (by simp) h
     case hg =>
     repeat' first
       | exact good_nil
@@ -150,7 +150,7 @@ theorem _root_.FlockComplete.CaseZk.one (c : CaseZk H rel) :
 library's specification: Σ is a SHA-512 digest, the draw is printable and decodes to the statement's instances, the
 session's draw is the statement's, and the keyed coin tree's hello parses to an object whose `coins` is an object,
 printable with the prover's nonce put in. -/
-theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
+theorem stmtOkZk : StmtOkZk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
   obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello, -⟩ := setupOne_stmt h1
@@ -166,7 +166,7 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
     simp only [Readable.Read.coins, hz, ite_true]
     exact ⟨_, rfl⟩
   rw [hcs] at hhello
-  refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], by rw [hspec]; exact helloZk_of S hhello⟩
+  refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], by rw [hspec]; exact helloZk_of hhello⟩
   unfold DrawOk
   rw [hU]
   dsimp only

@@ -106,7 +106,7 @@ theorem wp_ite {ε α : Type} {c : Prop} [Decidable c] {x y : Except ε α} {Q :
 
 theorem ledgerMessage_spec (I : ByteArray) (m : Json) : ⦃⌜True⌝⦄ ledgerMessage I m ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-theorem join_spec (ps : Array Period) (cur : Array (String × String)) (i : Nat) (lane s : String) :
+theorem join_spec (ps : Array MonitoringPeriod) (cur : Array (String × String)) (i : Nat) (lane s : String) :
     ⦃⌜True⌝⦄ join ps cur i lane s ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem inv_nil : LedgerInv [] #[] false where
@@ -348,7 +348,7 @@ theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Led
 -- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- The ledger's invariant holds of every ledger `verifyLedger` accepts. -/
-theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array Period}
+theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
     (h : verifyLedger es key = .ok r) : ∃ v2, LedgerInv es.toList r.1 v2 := by
   unfold verifyLedger at h
   rw [bind_ok] at h
@@ -443,7 +443,7 @@ theorem entries_arr {ls : Array Json} {es : Array LedgerEntry}
 -- the closers must not unfold `verifyLedger` or the key's hash while they search the context
 set_option maxHeartbeats 1000000 in
 /-- `checked` runs `verifyLedger` on the entries `LiveSalt.entries` reads. -/
-theorem checked_ok {ledger : Json} {key : ChallengerKey} {r : Array Win × Array Period}
+theorem checked_ok {ledger : Json} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
     (h : checked ledger key = .ok r) :
     ∃ es : Array LedgerEntry, entries ledger = es.toList ∧ verifyLedger es key = .ok r := by
   refine of_triple (Q := fun r => ∃ es : Array LedgerEntry, entries ledger = es.toList ∧ verifyLedger es key = .ok r) ?_ h
@@ -468,13 +468,13 @@ set_option maxHeartbeats 4000000 in
 /-- `auditedOpen` takes the v2 window named by the caller's root, closed by its `end`. -/
 theorem auditedOpen_ok {ledger window : Json} {key : ChallengerKey} {r : Audited × Json}
     (h : auditedOpen ledger window key = .ok r) :
-    ∃ (wp : Array Win × Array Period) (win : Win) (e : LedgerEntry), checked ledger key = .ok wp ∧
+    ∃ (wp : Array Win × Array MonitoringPeriod) (win : Win) (e : LedgerEntry), checked ledger key = .ok wp ∧
       wp.1.find? (fun w => w.root == strOf (SampledProofs.getD window "root")) = some win ∧
       (win.opened.schema == LEDGER_SCHEMA) = true ∧ win.ended = some e ∧
       jsonTrue (SampledProofs.getD e.body "closed") = true ∧
       SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r.1.recordLeaf ∧
       r.1.session = win.opened.session ∧ r.1.commitment = strOf (SampledProofs.getD e.body "commitment") := by
-  refine of_triple (Q := fun r => ∃ (wp : Array Win × Array Period) (win : Win) (e : LedgerEntry),
+  refine of_triple (Q := fun r => ∃ (wp : Array Win × Array MonitoringPeriod) (win : Win) (e : LedgerEntry),
       checked ledger key = .ok wp ∧
       wp.1.find? (fun w => w.root == strOf (SampledProofs.getD window "root")) = some win ∧
       (win.opened.schema == LEDGER_SCHEMA) = true ∧ win.ended = some e ∧

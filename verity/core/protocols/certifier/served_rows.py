@@ -116,7 +116,7 @@ def _row(bits: Sequence[int]) -> tuple[bytes, int]:
 class Served:
     """The prover's side: the registration, its rows and their salts, and the steps G a row holds."""
 
-    registration: ADV.Registration
+    registration: ADV.Committed
     G: int
 
     def record(self) -> dict:
@@ -136,7 +136,7 @@ def register(S, session: Sequence[Sequence[tuple[Row, ...] | None]], run_root: b
     fresh salts unless given."""
     G = _blocks(S, G)
     rows = [_row(block_bits(S, w, G, j)) for w in session for j in range(S.P // G)]
-    return Served(ADV.register([r for r, _n in rows], rows[0][1], binding(run_root), salts), G)
+    return Served(ADV.commit([r for r, _n in rows], rows[0][1], binding(run_root), salts), G)
 
 
 def leaf_ok(record: Mapping, run_root: bytes, i: int, bc: bytes, path: Sequence[bytes]) -> bool:

@@ -164,6 +164,10 @@ theorem accPort_deployed {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c
       simp only [accRead] at hread
       split_ifs at hread
       all_goals exact absurd hread Bool.false_ne_true
+    | link UB PB N =>
+      simp only [accRead] at hread
+      split_ifs at hread
+      all_goals exact absurd hread Bool.false_ne_true
 
 /-! ## At `layR`'s calls -/
 
