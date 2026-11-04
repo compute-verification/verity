@@ -71,6 +71,7 @@
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
   "Proofs.Properties.Firewall",
+  "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
