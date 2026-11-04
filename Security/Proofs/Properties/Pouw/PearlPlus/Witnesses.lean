@@ -1,6 +1,7 @@
 import Properties.Pouw.PearlPlus
 import Properties.Pouw.PearlPlus.Witnesses
 import Proofs.Properties.Pouw.Commit
+import Proofs.Properties.Pouw.PearlPlus.Noise
 import Std.Data.String.ToNat
 
 /-!
@@ -667,10 +668,6 @@ def rowSeedA : ByteArray :=
 def lineKeyA : ByteArray :=
   beBytes 32 [0x9f31bc07d278c3502ee6ffab08f73ce847b175833166316570371968113900d7]
 
-/-- The key of B's E lines (`Words.lineKey` of seed_B). -/
-def lineKeyB : ByteArray :=
-  beBytes 32 [0xdec3da263f57eff0219219320eca345ad8292b1475b9b5c621d864115e2ece4e]
-
 /-- Row A's E line: 32 E4M3 codes at norm 256. -/
 def eA : Array Nat := #[
   0xe5, 0xd6, 0xd3, 0x61, 0x60, 0xe9, 0xe2, 0xe8, 0xe6, 0x5b, 0x67, 0x64, 0x3f, 0x56, 0x66, 0x69,
@@ -801,9 +798,9 @@ theorem tileKeepsTheCap_nontrivial :
 `check` accepts `testRun`, the test pass's run at one draw read as a test instance's: `load` reads the test pass from its
 manifest, `plan` draws its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
 test noise (`Witness.test_noise`), and passes the tile on it (`tileAcceptMeans_honest`). The noise is 2k = 256 noise lines
-and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, and the replay and the
-noise are proved over their steps as parameters (`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never
-reduces a step of unknown arguments. -/
+and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, in a module of its
+own (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps as parameters
+(`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never reduces a step of unknown arguments. -/
 
 namespace Witness
 
@@ -866,110 +863,6 @@ theorem basis_eq (sb : ByteArray) (side k : Nat) :
 theorem test_seedB : Words.seedB testSalt testRootB = testSeedB := by decide +kernel
 
 theorem test_keyB' : Words.lineKey testSeedB = lineKeyB := test_keyB
-
-theorem test_fa0 : ((((List.range 128).zip testFa.toList).drop (16 * 0)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa1 : ((((List.range 128).zip testFa.toList).drop (16 * 1)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa2 : ((((List.range 128).zip testFa.toList).drop (16 * 2)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa3 : ((((List.range 128).zip testFa.toList).drop (16 * 3)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa4 : ((((List.range 128).zip testFa.toList).drop (16 * 4)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa5 : ((((List.range 128).zip testFa.toList).drop (16 * 5)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa6 : ((((List.range 128).zip testFa.toList).drop (16 * 6)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fa7 : ((((List.range 128).zip testFa.toList).drop (16 * 7)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb0 : ((((List.range 128).zip testFb.toList).drop (16 * 0)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb1 : ((((List.range 128).zip testFb.toList).drop (16 * 1)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb2 : ((((List.range 128).zip testFb.toList).drop (16 * 2)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb3 : ((((List.range 128).zip testFb.toList).drop (16 * 3)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb4 : ((((List.range 128).zip testFb.toList).drop (16 * 4)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb5 : ((((List.range 128).zip testFb.toList).drop (16 * 5)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb6 : ((((List.range 128).zip testFb.toList).drop (16 * 6)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_fb7 : ((((List.range 128).zip testFb.toList).drop (16 * 7)).take 16).all
-    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram0 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 0)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram1 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 1)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram2 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 2)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram3 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 3)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram4 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 4)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram5 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 5)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram6 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 6)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
-
-theorem test_gram7 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
-    (4 * 7)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
-      Words.chain p.1 faq).toOption = some p.2)) = true := by
-  decide +kernel
 
 theorem test_fa : Words.basis testSeedB 0 128 = .ok testFa := by
   rw [basis_eq, test_keyB']
