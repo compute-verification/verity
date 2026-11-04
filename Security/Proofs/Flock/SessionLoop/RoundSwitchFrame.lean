@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.L0PinSwitch
 import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frame at a rep's ring-switch rounds
