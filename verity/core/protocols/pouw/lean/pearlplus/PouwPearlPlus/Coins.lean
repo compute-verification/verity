@@ -48,7 +48,7 @@ inductive EpochCoins where
   | inproc (c : CoinCommitment)
   | live (c : LiveCommitment)
 
-instance : Coe CoinCommitment EpochCoins := ⟨.inproc⟩
+instance instCoeCoinCommitmentEpochCoins : Coe CoinCommitment EpochCoins := ⟨.inproc⟩
 
 /-- `verify_run.epoch_coins`: a live session's commitment when the document's scheme is `LIVE_SCHEME`, else an in-process
 challenger's. -/
