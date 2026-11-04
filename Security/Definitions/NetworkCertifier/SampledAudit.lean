@@ -118,16 +118,20 @@ def circuitProgram {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) :
 def Depends (C : Prog) (i g : ℕ) : Prop :=
   Relation.ReflTransGen (fun a b => a ∈ (C.gates[b]?.map BGate.reads).getD []) i g
 
+/-- **The wires are acyclic** in `C`: some rank `r` falls along every wire, from a wired gate `g` to each wired gate its
+writer depends on (`Depends` is reflexive, so a writer that is itself a wired gate ranks below `g`). With no wires it
+holds (`r = 0`). -/
+def WiresAcyclic (C : Prog) (wires : ℕ → Option ℕ) : Prop :=
+  ∃ r : ℕ → ℕ, ∀ g w g', wires g = some w → wires g' ≠ none → Depends C g' w → r g' < r g
+
 /-- **The wiring fits the program** over the horizon `k`. Each wired gate is an input of `C` and no ingress gate before
 `k`, and its writer is a gate `C` returns, so both values are committed; no writer depends on an ingress gate before `k`,
-so a wire carries no step's ingress; and the wires are acyclic: some rank `r` falls along every wire, from a wired gate
-`g` to each wired gate its writer depends on (`Depends` is reflexive, so a writer that is itself a wired gate ranks
-below `g`). With no wires it holds (`r = 0`). -/
+so a wire carries no step's ingress; and the wires are acyclic (`WiresAcyclic`). -/
 def BoundaryGates.WiresFit {L S : ℕ} (lay : BoundaryGates L S) (C : Prog) (k : ℕ) : Prop :=
   (∀ g w, lay.wires g = some w →
     C.gates[g]? = some .input ∧ (∀ t < k, g ∉ lay.ingress t) ∧ w ∈ C.outs ∧
       ∀ t < k, ∀ i ∈ lay.ingress t, ¬ Depends C i w) ∧
-    ∃ r : ℕ → ℕ, ∀ g w g', lay.wires g = some w → lay.wires g' ≠ none → Depends C g' w → r g' < r g
+    WiresAcyclic C lay.wires
 
 /-- **The layout fits the program** over the horizon `k`, which the verifier checks before it samples. Before `k`: every
 egress gate is one `C` returns, so its value is committed, and is not an input, so `C` computes it (the circuit's Program
