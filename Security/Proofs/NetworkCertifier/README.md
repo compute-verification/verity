@@ -143,8 +143,9 @@ PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, 
 WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
                                          (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,
                                          cycle_excludes) or a wire-writing free input from freeInputs (the
-                                         pass-through, pass_excludes) lets accepted traces carry more sequences
-                                         than the bound
+                                         pass-through, pass_excludes, its writer an input the program doesn't
+                                         return, as a later copy of an input bit reads its first) lets accepted
+                                         traces carry more sequences than the bound
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
