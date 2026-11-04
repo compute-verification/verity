@@ -202,9 +202,10 @@ def test_the_piece_takes_the_fronts_outcome_from_its_out(onsite, tmp_path):
         onsite.piece(argparse.Namespace(**vars(args) | {"out": str(tmp_path / "other"), "front": None}))
 
 
-def test_the_pieces_record_of_the_deployment_is_the_local_gates_own_copy(onsite, tmp_path):
+def test_the_pieces_record_of_the_deployment_is_the_local_gates_own_copy(onsite, tmp_path, capsys):
     """`auditor_record`: the lab, its own auditor, hands the piece its local gate's own out/deployment.json of the kept
-    run as the auditor's record (`warden_chain.RECORD`), and none where the gate kept no copy of the run."""
+    run as the auditor's record (`warden_chain.RECORD`), and none, saying why, where the gate kept no copy of the run
+    or the serve dir kept no run."""
     serve, run = tmp_path / "serve", "r1"
     kept = serve / onsite.CP.PRIVATE
     (kept / run).mkdir(parents=True)
@@ -218,6 +219,10 @@ def test_the_pieces_record_of_the_deployment_is_the_local_gates_own_copy(onsite,
     assert rec["deployment_sha512"] == hashlib.sha512((gate / "deployment.json").read_bytes()).hexdigest()
     shutil.rmtree(kept / onsite.CP.SS.LOCAL_GATE)
     assert onsite.auditor_record(serve, tmp_path / "none.json") is None and not (tmp_path / "none.json").exists()
+    assert "0 copies of run r1 at its local gate, not one" in capsys.readouterr().out
+    shutil.rmtree(kept / run)
+    assert onsite.auditor_record(serve, tmp_path / "none.json") is None
+    assert "no auditor's record of the run's deployment (" in capsys.readouterr().out
 
 
 def test_keep_is_refused_inside_out(onsite, tmp_path):
