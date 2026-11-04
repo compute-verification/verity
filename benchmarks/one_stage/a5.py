@@ -1093,14 +1093,14 @@ def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
                         for k, base, n, g, own in members}}
 
 
-def draw_ran_out(law: dict, population: int, read: bytes) -> bool | None:
+def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
     """Whether the draw under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), which
-    fails the window in v2's per-member form (`OneStageZk.RAN_OUT`, `coins.ran_out`); None where the law refuses
-    otherwise."""
+    fails the window in v2's per-member form (`OneStageZk.RAN_OUT`, `coins.ran_out`); where the law refuses otherwise,
+    why."""
     try:
         return CC.ran_out(law, population, read)
-    except ValueError:
-        return None
+    except ValueError as e:
+        return str(e)
 
 
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
