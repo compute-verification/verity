@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.DescAgree
+module
+
+public import Proofs.Properties.Nci.DescAgree
 
 /-!
 # `Prog.gate`'s walk, within `Desc.walkable`
@@ -24,6 +26,8 @@ from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates i
 `Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`), and `Resolve.bodiesOk` proves `Resolve.BodiesOk`.
 `descAgrees_of_gaps` gives `DescAgrees` from those two and `NovelExact`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Walk
 

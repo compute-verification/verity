@@ -1,6 +1,8 @@
-import Definitions.Flock.Statement
-import Proofs.Flock.Soundness.Refine.Tapes
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
+module
+
+public import Definitions.Flock.Statement
+public import Proofs.Flock.Soundness.Refine.Tapes
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
 
 /-!
 # The honest `final_c` is the replay's `c` claim's value
@@ -14,6 +16,8 @@ variables, with `c` the witness cast) is the model's value of the claim `(0, L_s
 value under the pad `h_fc`, the hypothesis the ring switch's completeness takes (`fOf p.zerocheck.finalC =
 (claimOf st.m rp.claims[1]!).eval z + fOf h[lay.fc]!`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.ZerocheckMasked
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Lowering
-import Proofs.Flock.Soundness.GateRows
+module
+
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.GateRows
 
 /-!
 # A unit's certificate: rows that are a gate circuit's rows compute it
@@ -25,6 +27,8 @@ Boolean semantics is stated there.
 * `IsRowsUnit.computes_of_cert`: at a unit that is not wrong, with its constant 1, each committed output wire carries
   `D`'s output on the unit's input wires.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

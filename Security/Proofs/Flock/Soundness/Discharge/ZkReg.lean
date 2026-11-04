@@ -1,21 +1,24 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
-import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundH
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHCustody
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
-import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
-import Proofs.Flock.Soundness.Discharge.ZkReg.PublicInst
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHCustody
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJSt
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicInst
 
 /-!
 # One `--zk` sampled session with registered reads
@@ -38,3 +41,5 @@ and `zk_session_soundHJR_custody_drawn_reg`, at the drawn units; `PublicInst`: t
 the template instance's program (`instProg`), with no condition on the unit's input groups or on where the outputs are
 returned.
 -/
+
+@[expose] public section

@@ -1,10 +1,12 @@
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Batteries.Tactic.OpenPrivate
 -- `Ledger` realizes the match equations `mvcgen` splits `sessionNamed` with; realizing them here too clashes wherever
 -- both modules are imported.
-import Proofs.Properties.Pouw.LiveSalt.Ledger
-import Proofs.Properties.Verity.SampledDraw
-import Proofs.Properties.Verity.SampledLog
-import Std.Tactic.Do
+public import Proofs.Properties.Pouw.LiveSalt.Ledger
+public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.SampledLog
+public import Std.Tactic.Do
 
 /-!
 # The device's log as v2's check reads it, and the draw it shows
@@ -48,6 +50,8 @@ reads the log (`ReadsLog`, `drawRead_coinsRead`).
 Each fact about one of the challenger's monadic functions is a Hoare triple proved by `mvcgen`, read back at an `.ok`
 result (`of_triple`, in `SampledLog`).
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

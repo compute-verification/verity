@@ -1,5 +1,7 @@
-import Definitions.Pouw.H1Zy.Lane
-import Definitions.Pouw.H1Zy.CombineBits
+module
+
+public import Definitions.Pouw.H1Zy.Lane
+public import Definitions.Pouw.H1Zy.CombineBits
 
 /-!
 # `PouwH1LaneZy_v1{PouwH1Tile_v1}` on bits (trusted)
@@ -23,6 +25,8 @@ Two pieces stay at their word views, lifted to bits: the dequant (`liftDq`: `Pou
 not restated) and the chain's words (`liftChain`). `Proofs.Pouw.H1Zy.LaneBits` proves each restated piece's lowering
 computes its word view, and `laneBits` at those two lifts computes `laneOk`.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

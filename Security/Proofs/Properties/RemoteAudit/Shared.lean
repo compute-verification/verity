@@ -1,5 +1,7 @@
-import Properties.RemoteAudit.Shared
-import Proofs.Properties.RemoteAudit.Order
+module
+
+public import Properties.RemoteAudit.Shared
+public import Proofs.Properties.RemoteAudit.Order
 
 /-!
 # One openings coin per draw: the properties at `g` windows a draw
@@ -28,6 +30,8 @@ plus its number there (`flatMap_split`, `sum_take_mid`).
 `*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`),
 and a draw of one window is `verifyWindow`'s (`acceptDrawsOpenable_one`).
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 

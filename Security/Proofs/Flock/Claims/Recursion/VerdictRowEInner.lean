@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowECommit
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowECommit
 
 /-!
 # An algebra part's `acc0`/`acc1` slots carry the commit string of the `rec-acc` row they read
@@ -17,6 +19,8 @@ sums (`innerAccRow_table`):
 So the ties take only an equation on chain positions, as `accCommit_eq` does: the rec-open slot's
 (`innerAccCommit_eq`), or the other algebra part's (`innerInnerCommit_eq`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

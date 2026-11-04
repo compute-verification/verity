@@ -1,5 +1,7 @@
-import Definitions.Flock.Audit.Law
-import Proofs.Flock.Soundness.Game.Prob
+module
+
+public import Definitions.Flock.Audit.Law
+public import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Draw laws
@@ -19,6 +21,8 @@ misses a set `B` of units.
 `C(n - |B|, k) / C(n, k)` (`subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

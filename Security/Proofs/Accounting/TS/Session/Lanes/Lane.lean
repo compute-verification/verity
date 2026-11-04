@@ -1,7 +1,9 @@
-import Proofs.Accounting.TS.Session.Lanes.Combine
-import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneBits
-import Definitions.Pouw.H1Zy.Chain
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Combine
+public import Proofs.Pouw.H1Zy.Lane
+public import Proofs.Pouw.H1Zy.LaneBits
+public import Definitions.Pouw.H1Zy.Chain
 
 /-!
 # A lane's part of `LeafChecks` from its Definition
@@ -33,6 +35,8 @@ at their lowerings (`Pouw.H1Zy.laneBits`: the s8 multiply's Baugh–Wooley steps
 each restated piece's lowering computes its word view, and so their composition the body on words, is proved
 (`Pouw.H1Zy.laneBits_bv`). The two are equivalent (`laneLowers_iff`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

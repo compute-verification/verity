@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
 
 /-!
 # The decoder is right at `J` tables
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
 * `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` (at `op_carries`,
   `lig_carries`) makes each run a `RepRun` for `decJ`, and `playsT_of_repRun` a run on its tape `repTapeJ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 

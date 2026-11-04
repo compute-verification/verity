@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Committed
-import Proofs.Flock.Verifier.Encode
+module
+
+public import Proofs.Flock.Claims.Bridge.Committed
+public import Proofs.Flock.Verifier.Encode
 
 /-!
 # The coin tree's hiding from `Hm96Hiding`
@@ -24,6 +26,8 @@ This file derives it from the claims' hiding assumption `Hm96Hiding` (one hm96 l
   assumption the claims list; `Pr_runC_le_deploy` is it at `Deploy.V`, whose answer `Coin.bytes` determines its coin
   (`coin_bytes_injective`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 
