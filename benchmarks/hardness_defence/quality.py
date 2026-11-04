@@ -24,6 +24,9 @@ ARMS = [
     ("70b", "design U (2%)", "r20261104-082313-bf53", "70b-u2"),
     ("70b", "q, k, v uncredited", "r20261104-091006-89f8", "70b-qkv-out"),
     ("70b", "39 broken or concentrated uncredited", "r20261104-091026-b6ff", "70b-broken-out"),
+    ("70b", "8 concentrated gate/up uncredited", "r20261104-095716-8e45", "70b-gu-out"),
+    ("70b", "31 broken q, k, v uncredited", "r20261104-095739-e299", "70b-qkvb-out"),
+    ("70b", "layer 0 q, k, v and layer 1 v uncredited", "r20261104-095749-e38f", "70b-unfix-out"),
 ]
 
 

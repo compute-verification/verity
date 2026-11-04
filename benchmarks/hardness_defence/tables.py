@@ -76,11 +76,12 @@ SOURCES = [
     ("r20261104-083537-aba6", "70b-gu-clip20", "70b", {}),
     ("r20261104-083537-aba6", "70b-defl32-*", "70b", {"deflate": 32}),
     ("r20261104-083537-aba6", "70b-defl8-*", "70b", {"deflate": 8}),
-    ("r20261104-092045-32ee", "8b-orders-*", "8b", {}),
-    ("r20261104-092045-32ee", "70b-orders-*", "70b", {}),
-    ("r20261104-093237-c694", "8b-*", "8b", {}),
-    ("r20261104-093237-c694", "70b-*", "70b", {}),
-    ("r20261104-093237-b5f7", "70b-*", "70b", {}),
+    ("r20261104-092045-32ee", "8b-orders-*", "8b", {"orders": True}),
+    ("r20261104-092045-32ee", "70b-orders-*", "70b", {"orders": True}),
+    ("r20261104-093237-c694", "8b-*", "8b", {"orders": True}),
+    ("r20261104-093237-c694", "70b-*", "70b", {"orders": True}),
+    ("r20261104-093237-b5f7", "70b-*", "70b", {"orders": True}),
+    ("r20261104-104721-53db", "70b-*", "70b", {"orders": True}),
 ]
 
 
@@ -113,20 +114,24 @@ def total_macs(model: str) -> int:
 
 class Book:
     """model -> tensor -> variant -> {chip@price: (over the leaf, route)}; a variant is (target, rot, deflate, live
-    noise f, K chunks), and split records whether any record of that variant searched the split."""
+    noise f, K chunks). split and orders record whether any record of that variant searched the split, and the
+    attacker's row and column orders (`price.permute`)."""
 
     def __init__(self):
         self.v = collections.defaultdict(lambda: collections.defaultdict(dict))
         self.split = set()
+        self.orders = set()
         self.runs = collections.defaultdict(set)
 
-    def add(self, model, tensor, var, scores, split, run):
+    def add(self, model, tensor, var, scores, split, run, orders=False):
         cur = self.v[model][tensor].setdefault(var, {})
         for k, (ol, route) in scores.items():
             if k not in cur or ol < cur[k][0]:
                 cur[k] = (ol, route)
         if split:
             self.split.add((model, tensor, var))
+        if orders:
+            self.orders.add((model, tensor, var))
         self.runs[(model, tensor, var)].add(run)
 
     def get(self, model, tensor, target=0.02, rot="hadamard", deflate=0, noise=0, chunks=1):
@@ -146,20 +151,22 @@ def load(runs: Path) -> Book:
                     target = round(float(target), 4)
                     rot = rec.get("rot") or "hadamard"
                     deflate = tags.get("deflate", 0)
+                    orders = tags.get("orders", False)
                     if rec.get("chunked"):
                         var = (target, rot, deflate, 0, rec["chunks"])
                         scores = {k: (v["over_leaf"], v["route"]) for k, v in rec["best"].items()}
-                        book.add(model, rec["tensor"], var, scores, True, run)
+                        book.add(model, rec["tensor"], var, scores, True, run, orders)
                         continue
                     split = bool(rec.get("isvd")) or "energy_top" in rec
                     scores = {}
                     for k in KEYS:
                         s = rotated.score(rec, k)
                         scores[k] = (s["over_leaf"], s["route"])
-                    book.add(model, rec["tensor"], (target, rot, deflate, 0, 1), scores, split, run)
+                    book.add(model, rec["tensor"], (target, rot, deflate, 0, 1), scores, split, run, orders)
                     if "noise" in rec:
                         ns = {k: (s["over_leaf"], s["route"]) for k in KEYS for s in [rotated.noise_score(rec, k)]}
-                        book.add(model, rec["tensor"], (target, rot, deflate, rec["noise"]["f"], 1), ns, True, run)
+                        book.add(model, rec["tensor"], (target, rot, deflate, rec["noise"]["f"], 1), ns, True, run,
+                                 orders)
     return book
 
 
@@ -295,19 +302,20 @@ def main():
             print(f"| {name} | {model} | {cells[0]} | {cells[1]} | {setter} | {100 * share:.2f}% | {len(unpriced)} |")
     if args.matrices:
         print()
-        print("| model | matrix | 2% least (sm_120 / H200 at 0.84) | route | clip chosen | its least | split priced |")
+        print("| model | matrix | 2% least (sm_120 / H200 at 0.84) | route | clip chosen | its least | split, orders |")
         print("|---|---|---|---|---|---|---|")
         for model in MODELS:
             for t in all_tensors(model):
                 s = book.get(model, t)
                 var, ok = clip_choice(book, model, t)
-                if s is None or least_of(s) >= LINE + 0.01:
+                if s is None or least_of(s) >= LINE + 0.04:
                     continue
                 c = book.v[model][t][var]
                 k0 = min(KEYS, key=lambda k: s[k][0])
+                searched = [w for w, seen in (("split", book.split), ("orders", book.orders)) if (model, t, var) in seen]
                 print(f"| {model} | {short(t)} | {s['sm120@0.84'][0]:.3f} / {s['h200@0.84'][0]:.3f} | {s[k0][1]} | "
                       f"{var[0]:.0%}{'' if ok else ' (none clears)'} | {least_of(c):.3f} | "
-                      f"{'yes' if (model, t, (0.02, 'hadamard', 0, 0, 1)) in book.split else 'no'} |")
+                      f"{', '.join(searched) or 'neither'} |")
 
 
 if __name__ == "__main__":
