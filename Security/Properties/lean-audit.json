@@ -651,6 +651,10 @@
   "Pous.Period.SecurityProofs.periodHeldSha512At": {
    "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
    "nontrivial": "Pous.Period.SecurityProofs.periodHeldSha512_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsCircuitHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2923,6 +2927,15 @@
    "signature": ["Properties.NetworkPeriod.clockKBoundsCount : Properties.NetworkPeriod.ClockKBoundsCount"],
    "assumptions": [],
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
@@ -5971,6 +5984,10 @@
    "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
     "function": "NetworkCertifier.handingBuckets",
     "outcome": "none"
+   },
+   "Properties.NetworkPeriod.rowsCircuitHeld": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -6071,7 +6088,9 @@
    "Pous.Period.SecurityProofs.periodHeldCoins": "frozen (premise): periodHeld in the shared coin game (Verity.Game.prCoin over the memory challenger's hm96 coins and uniform streams, at any primitive), where the session, the device record and the schedule don't read the primitive (Pous.Period.ReadsNoPrimitive); it takes periodHeld's premises (P2RingAuditSecure, the device model Pous.Period.DeviceModel, the instantiation Pous.Period.Instantiates and the certificate's fit in the ring game's state bound, Pous.Period.Fits), none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldSha512": "frozen (premise): periodHeldCoins at the deployed memory challenger's streams (Pous.Period.challengerStreams: derive and stream, SHA-512 keyed by its 64-byte secret source), over the source and the hm96 coins, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests, the coin key and the streams' 105 · 64 blocks, to periodHeld's premises, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldCoinsAt": "frozen (premise): periodHeldAt in the shared coin game, as periodHeldCoins is periodHeld's, at every point and block count N from 2^19 to 2^27; it takes periodHeldAt's premises (Pous.Guarantees.RoundsBound at 105 rounds, the open conjecture P2RingRoundSecureWide, Pous.Period.RingDeviceAt and Pous.Period.Fits) and Pous.Period.ReadsNoPrimitive, none of them under shape.premises.",
-   "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises."
+   "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises.",
+   "Properties.NetworkPeriod.rowsCircuitHeld_honest": "completeness: RowsCircuitHeld's honest lemma: the period check accepts a rows-form period of no link-window under the class circuit c, and a link-window whose tied audit runs c holds it",
+   "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial": "lemma: RowsCircuitHeld's nontrivial lemma: RowsCircuitHeldAt fails at a rows-form period of one link-window whose tied audit runs another Program than the class circuit, which a verifier that accepts everything accepts"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

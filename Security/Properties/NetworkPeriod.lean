@@ -28,15 +28,21 @@ supplies each of the statement's quantities as at most the check's number:
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
-state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`
-and `RowsStateTied`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot
-entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's
-own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the `SCAN_STATE` of an audit its
-`prog` is wired to, so a state that skips or alters one of the scan's transitions is no Program's input. Each
-says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
+state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
+`RowsStateTied` and `RowsCircuitHeld`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a
+compute audit's slot entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1`
+template of that audit's own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the
+`SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or alters one of the scan's transitions is no
+Program's input. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
 its property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf`), which the nontrivial lemmas state
 false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
 than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
+
+The free inputs a tied audit's term counts are those of the Program it runs. `RowsCircuitHeld` says the check accepts no
+link-window whose tied audit runs a Program other than the class circuit, the parameters' `circuit`: the one Program the
+workload's class registers, fixed for the period, so the prover chooses no link-window's circuit. Its witnesses are an
+empty rows-form period `check` accepts, beside a tied audit that runs the class circuit, and an explicit period whose
+tied audit runs another (`RowsCircuitHeldAt` false), which a check that accepts everything accepts.
 -/
 
 namespace Properties.NetworkPeriod
@@ -113,6 +119,22 @@ refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
+
+/-- What `RowsCircuitHeld` says of a period its check accepted: in the rows form, each link-window's tied compute audits
+run the parameters' class circuit (`held`). -/
+def RowsCircuitHeldAt (p : Params) (c : Commitment) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → held p.circuit c.audits reg = true
+
+/-- **The rows form accepts no link-window whose tied compute audit's window circuit is not the class circuit.** If the
+check accepts a period in the rows form, every audit a link-window's scan's `prog` is an output of (`tiedAudits`) has a
+registration whose `program` is the parameters' `circuit`, the SHA-512 of the Program of the one window circuit the
+workload's class registers (`held`). A window circuit's own digest binds its window's run; its Program is one for the
+period, so no link-window's tied audit runs a Program the prover chose for that window, and the free inputs its term
+counts are the class circuit's. -/
+def RowsCircuitHeld : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsCircuitHeldAt p c
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at
