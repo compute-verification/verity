@@ -2,6 +2,7 @@ import Definitions.NetworkCertifier.SampledCharge
 import Definitions.NetworkCertifier.SampledReg
 import Definitions.NetworkCertifier.Tap
 import Definitions.NetworkCertifier.TapRows
+import Definitions.NetworkCertifier.PeriodConditions
 
 /-!
 # A monitoring period of sampled audits: each window's good event
@@ -21,11 +22,8 @@ registration and never the extracted trace at the registered inputs, so a trace 
 fails it only through the leak relation, which fails, on an accepted run, only where the extraction fails or the trace's
 openings collide with the network certifier's (`Btap`) or the registration's (`Breg`).
 
-The conditions a monitoring period's statement takes are named here: the registration opens its registered inputs at
-a statement (`RegOpensAt`), the network certifier registers its observations at every window (`TapsOpen`), each
-window's registration and the committed bits of its faulty sets (`WindowsPlaced`), the schedules the network
-certifier's record format holds (`SchedulesHeld`), the schedules a covert sender's secrets run on among them
-(`SchedulesCovered`), and those secrets recovered from the client's view (`SenderDecodes`).
+The registration opens its registered inputs at a statement (`RegOpensAt`). The other conditions a monitoring period's
+statement takes are named in `Definitions.NetworkCertifier.PeriodConditions`.
 -/
 
 namespace NetTiming
@@ -76,47 +74,6 @@ def RegOpensAt (H : Msg → Msg) (D : Deploy Coin Col T) (reg : AuditStatement �
     (ops : AuditStatement → List (Opening Bool)) (x : Msg) : Prop :=
   ∀ s, D.parse x = some s → RegOpens H D.commit s (reg s) (ops s)
 
-/-- **The network certifier registers its observations at every window**: for each secret `z` of `Zs` and window
-`i`, at the statement `x z i` parses to, its openings `tops s` register the observations `obs z i` at the window's
-operator `op i` under the statement's roots (`TapOpens`). -/
-def TapsOpen {L K S n : ℕ} {Z : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (op : Fin n → ℕ → List (Obs L K S) → List Bool)
-    (tops : AuditStatement → List (Opening Bool)) (Zs : Set Z) (x : Z → Fin n → Msg)
-    (obs : Z → Fin n → List (Obs L K S)) : Prop :=
-  ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (tops s) (obs z i)
-
-/-- **The windows' registrations**: each window's statement `sw i` has the partition `Pw i`, and each of its possible
-faulty sets at `δ` commits at most `β i` bits. -/
-def WindowsPlaced {n : ℕ} (D : Deploy Coin Col T) (δ : ℝ) (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
-    (β : Fin n → ℕ) : Prop :=
-  (∀ i, D.partition (sw i) = some (Pw i)) ∧
-    ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i
-
 end Period
-
-/-- **The schedules the network certifier's record format holds**: each schedule of `Ss` gives connection `c` at most
-`cap c` cells, and the record format `f` holds it (`TapRecord.fits`). -/
-def SchedulesHeld {Conn Cell Ob : Type} (f : TapRecord Conn Cell Ob) (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) :
-    Prop :=
-  ∀ s ∈ Ss, (∀ c, s.cells c ≤ cap c) ∧ f.fits s
-
-/-- **The schedules a covert sender's secrets run on are counted**: the schedule the network certifier runs for each
-secret `z` of `Zs` (`schedOf z`) is one of `Ss`. The sender doesn't choose `Ss`: the count charges `log2 #Ss`, and
-`SchedulesHeld` is stated over it. So this holds of every covert sender only where `Ss` holds every schedule the deployed
-network certifier can run, through its admission and its caps at the deployment's parameters. That is a fact about the
-network certifier's code, a premise. -/
-def SchedulesCovered {Conn Z : Type} (Ss : Set (WardenSchedule Conn)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) :
-    Prop :=
-  ∀ z ∈ Zs, schedOf z ∈ Ss
-
-/-- **A covert sender's secrets, recovered from the client's view**: the decoder `dec` recovers each secret `z` of `Zs`,
-run on the schedule `schedOf z` and the server behavior `srvOf z`, from the cells the network certifier's run `run tap`
-gives the client. These are the count's own terms, a quantified hypothesis on the adversary's strategy (its secrets,
-schedules, server behaviors and decoder), with `run` the network certifier's by `trusted-host`: nothing about the
-verifier's or the prover's code. -/
-def SenderDecodes {Conn Cell Srv Dev Z Ob : Type}
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × Ob) (tap : Dev) (Zs : Set Z)
-    (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (dec : (Conn → List (ℕ × CellView Cell)) → Z) : Prop :=
-  ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z
 
 end NetTiming

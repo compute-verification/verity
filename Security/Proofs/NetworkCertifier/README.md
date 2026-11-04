@@ -45,11 +45,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/TapRows.lean  trusted: the network certifier's rows: its registration at the
                                transfer gates (tapVal, TapOpens), the leak relation at them (RLeakTap) and the
                                collision finder against its openings (Btap)
+../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: the named conditions of a monitoring period's
+                               statements (TapsOpen, WindowsPlaced, SchedulesHeld, SchedulesCovered, SenderDecodes)
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
                                as a window's (SameRegistration), a window's good event (WindowGood; WindowGoodReg
-                               at the registration's values) and the period statement's named conditions
-                               (RegOpensAt, TapsOpen, WindowsPlaced, SchedulesHeld, SchedulesCovered,
-                               SenderDecodes)
+                               at the registration's values) and the registration's openings at a statement
+                               (RegOpensAt)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
                                monitoring period of sampled audits (PeriodLeakAccepted; PeriodLeakRegistered at the
                                registration's values)
