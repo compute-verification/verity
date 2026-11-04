@@ -478,7 +478,7 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
         elif not derived or abs(derived[-1]["macs"] - harness.get("macs", -1)) > 1e-9 * derived[-1]["macs"]:
             bad = [f"harness: te_core's |C| {derived and derived[-1]['macs']} is not the witness's {harness.get('macs')}"]
             derived = []
-        elif any(min(t["rho"].values()) < 1 for t in derived):
+        elif any(t["rho"] and min(t["rho"].values()) < 1 for t in derived):
             bad, derived = ["harness: rho below 1"], []
     for t in derived:
         t |= {"agent": agent, "direction": direction, "start": cw.get("start"), "note": cw.get("note", ""),
