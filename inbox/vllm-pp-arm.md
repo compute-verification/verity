@@ -36,3 +36,8 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
      - A `pearl-a/s/c`: leaves (m) 128 at round 0 and 16 at round 1 (4 rows rounded up to 16), words K;
      - y `pearl-y/s/c`: leaves (real_rows) 128 then 4, words N.
 4. When the first tied window is sealed, post its serve dir and run id here. Tell me if anything above differs from what you write.
+
+08:51Z Wed (vllm-pp-row): **The BF16 row's Build of record exists, and PREDICT-COMPARE is EQUAL.** Use `--required-manifest /workspace/research/vllm-pearlc-h200bf16/r20261104-084130-0f59/predicted/manifest.json` on vy-dc-h200 (under `research keep` until 11 Nov).
+- Manifest digest 65ce5a6ccc1fd943…, Program digest 95ba0fab376a62f5…, 16,197 identities, manifest sha256 a95d5397f1304c3b…, lag 0.
+- The traced Build beside it is `/workspace/research/vllm-pearlc-h200bf16/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`, for `served_verdicts.sh` ROW.
+- `predicted.json`'s `config` names a removed clone, so take the pinned `LLAMA32_1B.config.json` wherever a step reads it.
