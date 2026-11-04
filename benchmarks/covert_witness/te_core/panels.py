@@ -258,14 +258,16 @@ def rho_columns(m: formalism.Measured, w: float) -> dict:
     """A candidate's ρ columns at its checkpoint's quantities `m` from a start whose forward is `w` gates a token:
     te_core.algorithm_policy's `inputs`, with u_in through the dial's k (`K_LEVELS`), where a measured u_in's many
     points don't fit a cell; and in `rho_inputs` the fresh-products term over c at each k it is classified at
-    (`fresh_per_c`, te_core.formalism's: [without P-cell, with it] by k's integer, null where unmeasured, the whole
-    entry null with no product rows), so the dial's term at (c, k) is c times it."""
+    (`fresh_per_c`, te_core.formalism's: [without P-cell, with it] by k's integer, null where unmeasured, [null, null]
+    where the term is void with no subset figure, the whole entry null with no product rows), so the dial's term at
+    (c, k) is c times it."""
     v = dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(m, w)))
     v |= {"w_fit_gates": m.w_fit, "alpha_ratio": m.alpha_ratio}
     packed = ",".join(f'"{k}":' + ("null" if v[k] is None else algorithm_policy.num(v[k])) for k in PACKED)
     per_c = formalism.fresh_per_c(m)
     fresh = "null" if per_c is None else "{" + ",".join(
-        f'"{k}":' + ("null" if x is None else "[" + ",".join(algorithm_policy.num(y) for y in x) + "]")
+        f'"{k}":' + ("null" if x is None else "[" + ",".join(
+            "null" if y is None else algorithm_policy.num(y) for y in x) + "]")
         for k, x in per_c.items()) + "}"
     u_in = through(algorithm_policy.profile(v["u_in_points"]), K_LEVELS)
     return {"rho_inputs": "{" + packed + f',"{FRESH}":{fresh}' + "}", "u_points": v["u_points"],

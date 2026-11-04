@@ -522,8 +522,9 @@ def made_whole(m: formalism.Measured, *k_whole: float) -> formalism.Measured:
 def test_the_kinds_cell_names_the_products_a_best_subset_drops():
     """te_core 4.10 bounds the fresh-products term on the best subset of its products, so a short whole-making chain
     with a bound (K = 128) costs no step its term, and the kinds cell says beside the term what that subset dropped; a
-    term on every product, or an unmeasured one, names no subset. A chain with none (K = 64) is never dropped
-    (te_core 4.12.11, coordinator 19:30Z): the term is void, and the rest's figure is a sensitivity beside it."""
+    term on every product, or an unmeasured one, names no subset. A chain with none (K = 64) makes the term void, and
+    the term is then the best subset's figure, the rest's (coordinator 21:54Z), with the subset named and the void's
+    reason in the cell's why; with nothing left the void has no figure and names no subset."""
     m = info()["starts"][0].rows[0]["measured"]
     small = {"macs": 5e11, "outputs": 5e11 / 128, "k_dim": 128, "k_whole": 128} | BF16
     one = formalism.published(dataclasses.replace(made_whole(m, 512), products=made_whole(m, 512).products | {
@@ -535,9 +536,11 @@ def test_the_kinds_cell_names_the_products_a_best_subset_drops():
                                    "dropped_macs_share": pytest.approx(5e11 / (5e14 + 5e11), rel=10 ** -AP.DIGITS)}
     void = formalism.published(made_whole(m, 512, 64), reading="A")
     cell = json.loads(AP.kinds(void))
-    assert void["terms"]["fresh_products"] is None and "fresh_subset" not in cell
-    assert cell["sensitivity"]["fresh_converged"] == pytest.approx(
-        formalism.published(made_whole(m, 512), reading="A")["terms"]["fresh_products"], rel=10 ** -AP.DIGITS)
+    assert void["terms"]["fresh_products"] == formalism.published(made_whole(m, 512), reading="A")["terms"][
+        "fresh_products"] and void["binding_kind"] == "fresh_products"
+    assert cell["fresh_subset"] == {"dropped": 1, "of": 2, "k_whole_min": 512, "dropped_macs_share": 0.5}
+    assert cell["why"] == void["void"] == ("the products count diverges; best subset 1.88e+06, keeping 50% of the "
+                                           "step's fresh multiplications")
     ruled = one | {"fresh_subset": one["fresh_subset"] | {"rule": "fed", "threshold": 0.25, "dropped_fed": [3, 4]}}
     assert json.loads(AP.kinds(ruled))["fresh_subset"] == ruled["fresh_subset"] | {
         "dropped_macs_share": pytest.approx(ruled["fresh_subset"]["dropped_macs_share"], rel=10 ** -AP.DIGITS)}

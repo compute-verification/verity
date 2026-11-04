@@ -44,6 +44,16 @@ def by(built: dict, case: str, n: int, k: int) -> dict:
     return next(v for v in built["vectors"] if (v["case"], v["tokens_per_block"], v["k"]) == (case, n, k))
 
 
+def record(built: dict, case: str) -> formalism.Measured:
+    """A case's record as a port builds it from the JSON: its `measured`, or for the void case (`void_case`) the
+    dense case's with the products of the `fresh` vector it names."""
+    v = built["void_case"]
+    if case != v["case"]:
+        return formalism.from_json(built["measured"][case])
+    products = next(f for f in built["fresh"]["vectors"] if f["name"] == v["products"])["inputs"]["products"]
+    return formalism.from_json(built["measured"][v["measured"]] | {"products": products})
+
+
 def test_the_published_vectors_are_what_the_module_makes(built):
     have = json.loads(rho_vectors.OUT.read_text())
     diff = differences(have, json.loads(json.dumps(built)))
@@ -174,21 +184,22 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     assert formalism.published(m) == formalism.published(m, *policy.CONSOLE)
 
 
-def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_cell_figure_beside_it(built):
+def test_the_fresh_vectors_are_io_bounds_figure_with_p_cell_with_the_figure_without_it_beside_it(built):
     """The console's port of the fresh-products term tests against these: on each of io_bound's hand-written product
-    sets the term is io_bound's own vector's proved figure without P-cell and fresh_cell its figure with it, summed in
-    the reference circuit's chain whether the order is declared or not, with what its best subset dropped, and where no
-    subset has a proved Λ, or a product's chains have no bound, unmeasured (`FRESH_VOID`), never 0, with io_bound's
-    best subset of the rest beside it (`converged`); a circuit that declares a tree is unmeasured; the 45M start's
-    dense step's term reads its whole-making system, attention's 64-long chains below every counted operand: 163,341,
-    its fresh_cell 2,869,161, on all its products with G without each sequence's first position (163,708 and 2,870,251
-    before that trim; 4.11's one-class rule gave 165,021 and 3,041,057). The lowrank worker's DoRA rank-16 step on all
-    42 matrices and its LoRA rank-16 step on every block's MLP are void (coordinator 19:30Z), each with the products
-    no diverged cycle feeds beside it: DoRA's two, 0.1695 on 7.0e-5 of the counted MACs, and the MLP step's one,
-    31.65 on 5.6%; 4.12.9 published those as the terms."""
+    sets the term is io_bound's own vector's proved figure with P-cell (Daniel's whole-cell ruling) and fresh_no_cell
+    its figure without it, summed in the reference circuit's chain whether the order is declared or not, with what its
+    best subset dropped. Where a product's chains have no fixed point, or no subset has a proved Λ, the term is void
+    (coordinator 21:54Z): its figures are io_bound's best subset's among the products no diverged cycle feeds
+    (`converged`), a valid lower bound, or null with `FRESH_VOID` where no subset has one, and `void` has the row's
+    reason. A circuit that declares a tree is unmeasured. The 45M start's dense step's term reads its whole-making
+    system, attention's 64-long chains below every counted operand: 2,869,161 on the best subset, which drops the 4
+    products the 256-long chains feed, and 163,341 without P-cell on all 19, with G without each sequence's first
+    position. The lowrank worker's DoRA rank-16 step on all 42 matrices and its LoRA rank-16 step on every block's MLP
+    are void, each the figure of the products no diverged cycle feeds: DoRA's two, 4.485 (0.1695 without P-cell) on
+    7.0e-5 of the counted MACs, and the MLP step's one, 93.67 (31.65) on 5.6%."""
     f = built["fresh"]
-    assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
-    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and f"without assuming that {formalism.P_CELL_WORDS}" in f["rests_on"]
+    assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (True, "chain")
+    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and f"given that {formalism.P_CELL_WORDS}" in f["rests_on"]
     vs = {v["name"]: v for v in f["vectors"]}
     from te_core import io_bound
 
@@ -196,28 +207,30 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
         v = vs[want["name"]]
         assert v["inputs"]["c"] == want["inputs"]["c"] and v["inputs"]["products"]["products"] == want["inputs"][
             "products"]
-        void = want["term"]["proved_rho_no_cell"] is None
-        assert (v["term"], v["fresh_cell"], v["order"], v["why"]) == (
-            want["term"]["proved_rho_no_cell"], want["term"]["proved_rho"], "chain", formalism.FRESH_VOID if void else None)
-        sub = want["term"]["proved_subset_no_cell"]
+        t, conv = want["term"], want["term"]["converged"]
+        best = conv or {"rho": t["proved_rho"], "rho_no_cell": t["proved_rho_no_cell"], "subset": t["proved_subset"]}
+        assert (v["term"], v["fresh_cell"], v["fresh_no_cell"], v["order"], v["why"]) == (
+            best["rho"], best["rho"], best["rho_no_cell"], "chain", formalism.FRESH_VOID if best["rho"] is None else None)
+        sub = best["subset"]
         assert v["subset"] == (None if sub is None or not sub["dropped"] else {
             "dropped": sub["dropped"], "of": len(want["inputs"]["products"]),
             "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]})
-        conv = want["term"]["converged"]
-        assert (v["converged"] is None) == (conv is None)
-        if conv is not None:
-            assert (v["converged"]["term"], v["converged"]["fresh_cell"]) == (conv["rho_no_cell"], conv["rho"])
-            assert v["converged"]["diverged_fed"] == len(want["term"]["diverged_fed"])
-    assert sum(v["why"] == formalism.FRESH_VOID for v in vs.values()) == 4 and sum(bool(v["subset"]) for v in vs.values())
-    for name, (term, share, stuck, of) in {"DoRA rank-16": (0.16952, 6.98e-5, 28, 30),
-                                           "LoRA rank-16 step on every block's MLP": (31.645, 0.05641, 10, 11)}.items():
+        assert (v["void"] is None) == (conv is None and best["rho"] is not None)
+        if v["void"] is not None:
+            assert v["void"]["diverged_fed"] == len(t["diverged_fed"])
+            assert v["void"]["reason"] == formalism.void_reason(v["term"], v["void"]["kept_macs_share"])
+    assert sum(v["why"] == formalism.FRESH_VOID for v in vs.values()) == 1
+    assert sum(v["void"] is not None for v in vs.values()) == 4 and sum(bool(v["subset"]) for v in vs.values())
+    for name, (term, no_cell, share, stuck, of) in {
+            "DoRA rank-16": (4.48485, 0.16952, 6.98e-5, 28, 30),
+            "LoRA rank-16 step on every block's MLP": (93.6711, 31.645, 0.05641, 10, 11)}.items():
         v = next(v for n, v in vs.items() if name in n)
-        conv = v["converged"]
-        assert (v["term"], v["fresh_cell"], v["why"], v["subset"]) == (None, None, formalism.FRESH_VOID, None)
-        assert conv["term"] == pytest.approx(term, rel=1e-4) and conv["kept_macs_share"] == pytest.approx(share, rel=1e-3)
-        assert (conv["diverged_fed"], conv["subset"]["dropped"], conv["subset"]["of"]) == (stuck, stuck, of)
+        assert v["why"] is None and v["term"] == v["fresh_cell"] == pytest.approx(term, rel=1e-5)
+        assert v["fresh_no_cell"] == pytest.approx(no_cell, rel=1e-4)
+        assert v["void"]["kept_macs_share"] == pytest.approx(share, rel=1e-3)
+        assert (v["void"]["diverged_fed"], v["subset"]["dropped"], v["subset"]["of"]) == (stuck, stuck, of)
         assert v["inputs"]["products"]["capture"] == "4.12.9" and v["inputs"]["products"]["elementwise_products"] == []
-    assert f["fresh_converged"] == formalism.SENSITIVITIES["fresh_converged"]
+    assert (f["fresh_no_cell"], f["void"]) == (formalism.SENSITIVITIES["fresh_no_cell"], formalism.FRESH_VOID)
     square = vs["one product, square, console"]
     assert vs["one product, square, console, no order declared"]["term"] == square["term"] > 1
     tree = vs["one product, square, console, a circuit that declares a tree"]
@@ -225,16 +238,17 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     dense = vs["the 45M start's dense step, its trace's order unknown"]
     assert (dense["inputs"]["c"], dense["inputs"]["k"]) == policy.CONSOLE and dense["order"] == "chain"
     assert dense["inputs"]["products"]["trace_order"] == "unknown"
-    assert round(dense["term"]) == 163_341 and round(dense["fresh_cell"]) == 2_869_161 and dense["subset"] is None
+    assert round(dense["term"]) == round(dense["fresh_cell"]) == 2_869_161 and round(dense["fresh_no_cell"]) == 163_341
+    assert (dense["subset"]["dropped"], dense["subset"]["of"]) == (4, 19)
     assert dense["inputs"]["products"]["system"] is not None and dense["inputs"]["products"]["p_match"] == []
 
 
 def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_with_and_without_p_cell(built):
     """The console's dial ports the fresh-products term from a row's rho_inputs (te_core.panels' `rho_columns`, which
-    holds `formalism.fresh_per_c` to its digits): at each k of the dial the term is c times its entry's first number
-    and fresh_cell c times its second, null where the entry is null, each cell `formalism.fresh_products` there. The
-    45M dense step's term is measured at the dial's three least k and void above them; the tiny start's cases have no
-    fresh product at any k."""
+    holds `formalism.fresh_per_c` to its digits): at each k of the dial fresh_no_cell is c times its entry's first
+    number and fresh_cell, the term, c times its second, null where the entry is null or [null, null], each cell
+    `formalism.fresh_products` there. The 45M dense step's term is measured at the dial's three least k and void
+    above them with no subset's figure, [null, null]; the tiny start's cases have no fresh product at any k."""
     from dataclasses import replace
 
     from te_core import panels
@@ -255,30 +269,34 @@ def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_with_and_without_p_cell
         assert len(v["cells"]) == len(DIAL_K) * (1 + len(rho_vectors.DIAL_TOKENS))
         for cell in v["cells"]:
             entry = per[str(cell["k"])]
-            if entry is None:
-                assert (cell["term"], cell["fresh_cell"], cell["why"]) == (None, None, formalism.FRESH_VOID)
+            assert entry is not None
+            if entry == [None, None]:
+                assert (cell["term"], cell["fresh_cell"], cell["fresh_no_cell"], cell["why"]) == (
+                    None, None, None, formalism.FRESH_VOID)
             else:
-                assert cell["term"] == pytest.approx(cell["c"] * entry[0], rel=1e-12) and cell["why"] is None
-                assert cell["fresh_cell"] == pytest.approx(cell["c"] * entry[1], rel=1e-12)
+                assert cell["term"] == cell["fresh_cell"] == pytest.approx(cell["c"] * entry[1], rel=1e-12)
+                assert cell["fresh_no_cell"] == pytest.approx(cell["c"] * entry[0], rel=1e-12) and cell["why"] is None
         cols = json.loads(panels.rho_columns(ms[v["name"]], rho_vectors.W_FWD)["rho_inputs"])[panels.FRESH]
         assert cols.keys() == per.keys() and all(
-            (a is None) == (b is None) and (a is None or a == pytest.approx(b, rel=1e-5)) for a, b in
-            zip(cols.values(), per.values()))
+            len(a) == len(b) and all((x is None) == (y is None) and (x is None or x == pytest.approx(y, rel=1e-5))
+                                     for x, y in zip(a, b)) for a, b in zip(cols.values(), per.values()))
         if v["name"] in rho_vectors.CASES:
             assert all(e == [0.0, 0.0] for e in per.values())
     dense = d["vectors"][-1]["fresh_per_c"]
-    assert [dense[str(k)] is None for k in DIAL_K] == [False] * 3 + [True] * 4
+    assert [dense[str(k)] == [None, None] for k in DIAL_K] == [False] * 3 + [True] * 4
+    assert d["rule"] == rho_vectors.PER_C_RULE and "[null, null]" in d["rule"]
 
 
 def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_consoles_grid(built):
     """The console's dial moves k over its grid, a session's input ids at 16 bits for 1,024 to 32,768 input tokens,
-    with the serving block's 145,568 bits beside it: at each the term is c times the step's fresh_per_c entry, without
-    P-cell and with it, each cell `formalism.fresh_products` at the console's c and at the k's own (the 45M reference's
-    session of k/16 input tokens and 1,024 output, the serving block's c at its k). At the console's c the 45M start's
-    dense step falls from 709,375 at 16,384 bits to 64,340 at 145,568 and is void from 262,144 up; s-t20's at full size
-    falls from 1,083,180 to 56,556 at 262,144 and is void at 524,288, where a cycle of its whole-making system that
-    feeds a counted product has no fixed point. The 45M fixture's rows at the console's k and the serving block's are
-    its dial fixture's (`DENSE_45M`), one capture."""
+    with the serving block's 145,568 bits beside it: at each the term is c times the step's fresh_per_c entry, with
+    P-cell (the second) and without it beside it, each cell `formalism.fresh_products` at the console's c and at the
+    k's own (the 45M reference's session of k/16 input tokens and 1,024 output, the serving block's c at its k). At the
+    console's c the 45M start's dense step falls from 25,843,305 at 16,384 bits to 778,360 at 145,568 (709,375 to
+    64,340 without P-cell) and is void from 262,144 up with no subset's figure; s-t20's at full size falls from
+    39,795,651 to 483,259 at 262,144 (1,083,180 to 56,556) and is void at 524,288 with no subset's figure, where a
+    cycle of its whole-making system that feeds a counted product has no fixed point. The 45M fixture's rows at the
+    console's k and the serving block's are its dial fixture's (`DENSE_45M`), one capture."""
     from dataclasses import replace
 
     from te_core import panels
@@ -290,8 +308,10 @@ def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_c
     assert panels.SERVED[1] == 145_568 and policy.CONSOLE[1] in g["k"]
     own = {k: policy.session_gates(policy.REFERENCE_PARAMS, n, 1024)
            for n, k in zip(policy.DIAL_IN_TOKENS, policy.K_GRID)} | {panels.SERVED[1]: panels.SERVED[0]}
-    want = {"the 45M start's dense step": [709_375, 343_662, 163_341, 73_559, 64_340, None, None],
-            "s-t20's dense step at full size": [1_083_180, 530_550, 257_407, 122_897, 109_643, 56_556, None]}
+    want = {"the 45M start's dense step": [25_843_305, 8_790_057, 2_869_161, 931_231, 778_360, None, None],
+            "s-t20's dense step at full size": [39_795_651, 13_837_635, 4_749_660, 1_583_812, 1_334_785, 483_259, None]}
+    no_cell = {"the 45M start's dense step": [709_375, 343_662, 163_341, 73_559, 64_340, None, None],
+               "s-t20's dense step at full size": [1_083_180, 530_550, 257_407, 122_897, 109_643, 56_556, None]}
     assert [v["name"] for v in g["vectors"]] == list(rho_vectors.GRID_STEPS) == list(want)
     base = formalism.from_json(built["measured"]["dense"])
     for v in g["vectors"]:
@@ -307,15 +327,18 @@ def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_c
             (k, c) for k in g["k"] for c in dict.fromkeys((policy.CONSOLE[0], own[k]))]
         for cell in v["cells"]:
             term, why, got = formalism.fresh_products(m, cell["c"], cell["k"])
-            assert (cell["term"], cell["fresh_cell"], cell["why"]) == (term, got.get("fresh_cell"), why)
+            assert (cell["term"], cell["fresh_cell"], cell["fresh_no_cell"], cell["why"]) == (
+                term, got.get("fresh_cell"), got.get("fresh_no_cell"), why)
             entry = per[str(cell["k"])]
-            if entry is None:
-                assert (term, why) == (None, formalism.FRESH_VOID)
+            if entry == [None, None]:
+                assert (term, why) == (None, formalism.FRESH_VOID) and got["void"]["kept_macs_share"] is None
             else:
-                assert term == pytest.approx(cell["c"] * entry[0], rel=1e-12) and why is None
-                assert got["fresh_cell"] == pytest.approx(cell["c"] * entry[1], rel=1e-12)
-        at_console = [cell["term"] for cell in v["cells"] if cell["c"] == policy.CONSOLE[0]]
-        assert [None if t is None else round(t) for t in at_console] == want[v["name"]]
+                assert term == pytest.approx(cell["c"] * entry[1], rel=1e-12) and why is None
+                assert got["fresh_no_cell"] == pytest.approx(cell["c"] * entry[0], rel=1e-12)
+        at_console = [cell for cell in v["cells"] if cell["c"] == policy.CONSOLE[0]]
+        assert [None if x["term"] is None else round(x["term"]) for x in at_console] == want[v["name"]]
+        assert [None if x["fresh_no_cell"] is None else round(x["fresh_no_cell"]) for x in at_console] == no_cell[
+            v["name"]]
     dense = json.loads((rho_vectors.FIXTURES / rho_vectors.DENSE_45M).read_text())
     grid = json.loads((rho_vectors.GRID_FIXTURES / rho_vectors.GRID_STEPS["the 45M start's dense step"][0]).read_text())
     assert {x: v for x, v in grid.items() if x != "at"} == {x: v for x, v in dense.items() if x != "at"}
@@ -337,12 +360,15 @@ def test_the_grid_fixtures_are_each_steps_product_rows_at_every_k_of_the_grid():
 
 def test_the_published_vectors_take_each_case_of_the_rule(built):
     """The console's port of `published` tests against these: each vector is `published` under reading A on its
-    case's `measured`, and together they take every case of the rule: Fit; the measured max above 1, partial where a
-    kind is unmeasured and not where none is; None where a kind is unmeasured and no measured term exceeds 1; 1,
-    binding none, where every kind is measured and none exceeds 1."""
+    case's `measured`, and together they take every case of the rule: Fit; the max above 1, partial where a kind is
+    unmeasured and not where none is; None where a kind is unmeasured and no term exceeds 1; 1, binding none, where
+    every kind is computed and none exceeds 1. The void case (`VOID_CASE`, the dense case with the DoRA step's
+    products) binds on its best subset's 2,510 at the console's c and reads 1 at one token a block, its best subset's
+    0.023 below the floor, each with the void's reason (coordinator 21:54Z)."""
     seen = set()
+    assert record(built, rho_vectors.VOID_CASE[0]) == rho_vectors.void_case(record(built, "dense"))
     for v in built["published"]:
-        m = formalism.from_json(built["measured"][v["case"]])
+        m = record(built, v["case"])
         one = rho_vectors.finite(formalism.published(m, v["c"], v["k"], "A"))
         assert not differences({x: v[x] for x in one}, one)
         terms = {kind: num(t) for kind, t in v["terms"].items() if t is not None}
@@ -351,17 +377,25 @@ def test_the_published_vectors_take_each_case_of_the_rule(built):
             seen.add("fit")
         elif v["binding_kind"] in formalism.KINDS:
             assert v["rho"] == max(terms.values()) == terms[v["binding_kind"]] > 1 and v["partial"] == bool(off)
-            seen.add(("max", v["partial"]))
+            seen.add(("max", v["partial"], v["void"] is not None))
         elif v["binding_kind"] == "unmeasured":
             assert v["rho"] is None and off and max(terms.values()) <= 1 and v["why"]
             seen.add("unmeasured")
         else:
             assert (v["binding_kind"], v["rho"], v["rests_on"]) == ("none", 1.0, "no kind exceeds 1") and not off
             assert max(terms.values()) <= 1
-            seen.add("none")
+            seen.add(("none", v["void"] is not None))
+        assert (v["void"] is not None) == (v["case"] == rho_vectors.VOID_CASE[0])
+        if v["void"] is not None:
+            assert v["why"] == v["void"] and v["void"].startswith("the products count diverges; best subset ")
         assert v["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if v["rho"] is None else v["binding_kind"]]
         assert v["label"] == f"{formalism.THE_CODE} {VERSION}, reading A"
-    assert seen == {"fit", ("max", True), ("max", False), "unmeasured", "none"}
+    assert seen == {"fit", ("max", True, False), ("max", False, False), ("max", False, True), "unmeasured",
+                    ("none", False), ("none", True)}
+    void = [v for v in built["published"] if v["case"] == rho_vectors.VOID_CASE[0]]
+    assert [(round(v["rho"]), v["binding_kind"]) for v in void] == [(2510, "fresh_products"), (1, "none")]
+    assert void[1]["why"] == ("the products count diverges; best subset 0.023, keeping 0.00698% of the step's fresh "
+                              "multiplications")
 
 
 def test_the_session_vectors_are_their_rule_at_every_stated_size(built):
