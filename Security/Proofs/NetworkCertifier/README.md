@@ -146,6 +146,10 @@ WitnessToys.lean  the instances the count and period witnesses are stated at, ea
                                          sender that accept and leak everything, a sampled audit with a possible faulty
                                          unit, the accepting verifier `tapD`, the rows format of the Python fixture
                                          `fxQueue`)
+KsToy.lean      a deployment where `Claims.Sampling.KS` holds (`ksNotD_KS`): the negation under a commitment that
+                                         passes one value at each position, its one proof block checked on every run;
+                                         there, a registration that doesn't open breaks PeriodLeakRegistered's
+                                         per-window part (`not_windowLeakAtAnyOps`), which is why it reads `RegOpensAt`
 CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeqs`, one under a sampled
                                          audit, two through the wire) and six ingress. The honest run is
                                          accepted at the reference schedule (`fxRate`) or at `sampProg`, or has every
