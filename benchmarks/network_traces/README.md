@@ -104,7 +104,7 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's active-warden path on that fetch, which opens no endpoint
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's network certifier path on that fetch, which opens no endpoint
 records or advice, its run dir and quarantine private beside the fetch, and answers with `network-period check` on the
 rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted,
 every request of the audited Commit period is a certified one inside that execution phase and carries the network

@@ -1,5 +1,5 @@
 """kind-scan: each field the network certifier's piece releases to the verifier, by kind. A field is one of the four
-public kinds (`verity.core.wire.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and draws,
+public kinds (`verity.core.wire.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and samples,
 hiding commitments) or what the network certifier signed (`CERTIFICATE`: its certificates reach the verifier in the
 clear from the auditor's device, a provisional exception to the four kinds, not a fifth). A field of no declared kind is
 a finding.
@@ -22,8 +22,9 @@ check): an advice binding in a registration (``window.compiler``, ``window.advic
 length an audit opens, `records_audit.py audit --opening`), since no audit of record reads an advice (V3c's class
 window's circuit is the class's) and no registration of the record path binds one to be opened; and the chain's
 endpoint rebuild (the report's ``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in
-the clear), which the active-warden path refuses. The report's steps are the active-warden path's (`STEPS`). A text field (a verdict's reason, a
-step's account of what ran in the clear) is declared by its key, its text not read, and so is a text file (`TEXT`, a
+the clear), which the network certifier path refuses. The report's steps are the network certifier path's (`STEPS`). A
+text field (a verdict's reason, a step's account of what ran in the clear) is declared by its key, its text not read,
+and so is a text file (`TEXT`, a
 refusal). Any other file is a finding, a log included: the steps' logs stay on the node (`served_verdicts.sh`'s
 CERTIFIER_PRIVATE).
 
@@ -69,8 +70,8 @@ OPENING = Development("an advice binding, which an audit opens (records_audit.py
                       "no audit of record reads an advice or its length (V3c's class window's circuit is the class's), "
                       "and nothing opens one")
 ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
-                       "development check the active-warden path refuses")
-#: the chain's steps on the active-warden path (`chain_record.report`)
+                       "development check the network certifier path refuses")
+#: the chain's steps on the network certifier path (`chain_record.report`)
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 
 
@@ -105,7 +106,7 @@ REGISTRATION = {
     "window.compiler.**": OPENING, "window.advice.**": OPENING,
 }
 #: a one-stage answer (`served_integrity.answer`, `Answer.toJson`): its verdict and bound the protocol's outputs, its
-#: profile the integrity profile's structure, and the units drawn and proved the verifier's draws
+#: profile the integrity profile's structure, and the units sampled (``drawn``) and proved the verifier's samples
 ONE_STAGE = {
     "protocol": S, "verdict": O, "reason": O, "commitment": M,
     "profile": O, "profile.programs[]": S, "profile.prescribed[]": S, "profile.covered[]": S, "profile.linked": S,
@@ -151,7 +152,7 @@ ANSWER = {
        for k in ("delta", "drawn", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter", "units",
                  "wrong_units")},
 }
-#: a step of the chain's report: its verdict, the draw's law, population and size with its bound at each δ, and what
+#: a step of the chain's report: its verdict, the sample's law, population and size with its bound at each δ, and what
 #: it ran in the clear
 STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
@@ -184,7 +185,7 @@ HEX = {"case.json": ("commitment", "evidence")}
 TEXT = {"refused.txt": O}
 
 #: what `served_integrity.answer` reads of a records audit's ``summary.json`` (`served_integrity.SUMMARY`): its refusal,
-#: its checks before the draw and after it, and the audit's verdict, its coins' outcome and Lean's refusals, each the
+#: its checks before the sample and after it, and the audit's verdict, its coins' outcome and Lean's refusals, each the
 #: protocol's output. An audit that compiled the advice (``compile``) opened it: `OPENING`'s
 SUMMARY_DOC = {
     "refused.**": O, "checks_before_draw": O, "checks_before_draw.*": O,
@@ -193,7 +194,8 @@ SUMMARY_DOC = {
     "compile.**": OPENING,
 }
 #: what it reads of the audit record ``window/audit.json`` (`served_integrity.RECORD`): its verdict and each check's
-#: outcome, the units drawn and those the proved statement covers, the draw and the units proved (the verifier's draws),
+#: outcome, the units sampled and those the proved statement covers, the sample and the units proved (the verifier's
+#: samples),
 #: the registration it audited, and the bound on incorrect proof blocks over the population at δ
 AUDIT_RECORD = {
     "accepted": O, "checks.*": O, "checks.*.ok": O, "checks.*.codes[]": O,

@@ -6,7 +6,7 @@ lies: the window's own number in V3c's provenance, a count of requests in an ans
 parameters, and a file DIR doesn't declare, a log among them. What either development check would feed the record
 is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
 opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
-the active-warden path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
+the network certifier path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
 in its hold.
 
 What a verifier on another machine receives of a served run's OUT (``--received``: the certifier's piece, V3c's audit,
@@ -141,7 +141,7 @@ def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_le
 
 
 def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, period):
-    """The report's steps are the active-warden path's (`STEPS`, the five `chain_record.report` writes there, which
+    """The report's steps are the network certifier path's (`STEPS`, the five `chain_record.report` writes there, which
     test_certifier_piece holds a published report to): with them it is clean; the endpoint step (CR_ENDPOINT's rebuild,
     and its tie negatives beside it) is `ENDPOINT`'s finding, and a step of no other name is one of no declared kind."""
     def found(steps: dict, name: str) -> list[tuple[str, str, str]]:
