@@ -2157,6 +2157,27 @@ def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
         == [], "facts of an older audit tool, without `inline`"
 
 
+def test_update_keeps_a_held_guarantees_inline_entry_while_its_statement_prints_it():
+    """A guarantee a witness entry or an unfrozen property holds keeps through `--update` each `shape.inline` entry its
+    statement still prints, and drops the rest, so the check without `--update` passes on the updated lock, and still
+    does once a merge leaves the guarantee unheld (its witness entry gone, its property frozen). The lock `--update`
+    wrote used to lack them, and every records PR put them back by hand."""
+    why = "inline when the rule came"
+    pol, f = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))
+    inline = {"P.t": {"P.f n = 3": why, "P.k n = 6": why, "P.h n = 5": why}}
+    witness = {"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}}
+    prop = {"function": "P.f", "outcome": "none"}
+    for lock, unheld in ((pol | witness | {"shape": {"inline": inline}}, lambda p: p | {"witnesses": {}}),
+                         (pol | {"shape": {"properties": {"P.t": prop}, "inline": inline}},
+                          lambda p: p | {"shape": p["shape"] | {"frozen": {"P.t": "frozen: open"}}})):
+        fails, out = A.judge(lock, f, FILES, update=True)
+        assert [x for x in fails if "inline" in x.code] == []
+        assert out["shape"]["inline"] == {"P.t": {"P.f n = 3": why, "P.k n = 6": why}}
+        assert inline_codes(out, f) == [] and inline_codes(unheld(out), f) == []
+        assert inline_codes(unheld(lock | {"shape": lock["shape"] | {"inline": {}}}), f) == [
+            "guarantees.inline-hypothesis"]
+
+
 def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     """`shape.inline` lists the offenders when the rule came, keyed by their text with its whitespace as one space: they
     pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
@@ -2196,27 +2217,6 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
         ["guarantees.inline-hypothesis"]
     assert inline_codes(pol | {"shape": {"inline": {"P.t": {"P.f n = 3": " "}}}}, grown) == ["shape.inline-form"]
     assert inline_codes(pol | {"shape": {"inline": ["P.t"]}}, grown) == ["shape.inline-form"]
-
-
-def test_update_keeps_a_held_guarantees_inline_entry_while_its_statement_prints_it():
-    """A guarantee a witness entry or an unfrozen property holds keeps through `--update` each `shape.inline` entry its
-    statement still prints, and drops the rest, so the check without `--update` passes on the updated lock, and still
-    does once a merge leaves the guarantee unheld (its witness entry gone, its property frozen). The lock `--update`
-    wrote used to lack them, and every records PR put them back by hand."""
-    why = "inline when the rule came"
-    pol, f = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))
-    inline = {"P.t": {"P.f n = 3": why, "P.k n = 6": why, "P.h n = 5": why}}
-    witness = {"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}}
-    prop = {"function": "P.f", "outcome": "none"}
-    for lock, unheld in ((pol | witness | {"shape": {"inline": inline}}, lambda p: p | {"witnesses": {}}),
-                         (pol | {"shape": {"properties": {"P.t": prop}, "inline": inline}},
-                          lambda p: p | {"shape": p["shape"] | {"frozen": {"P.t": "frozen: open"}}})):
-        fails, out = A.judge(lock, f, FILES, update=True)
-        assert [x for x in fails if "inline" in x.code] == []
-        assert out["shape"]["inline"] == {"P.t": {"P.f n = 3": why, "P.k n = 6": why}}
-        assert inline_codes(out, f) == [] and inline_codes(unheld(out), f) == []
-        assert inline_codes(unheld(lock | {"shape": lock["shape"] | {"inline": {}}}), f) == [
-            "guarantees.inline-hypothesis"]
 
 
 INLINE_G = "import Control.Defs\n\ndef Control.Guarantees.G : Prop := ∀ n : Nat, 0 < n → Control.double n = 5 → True\n"
