@@ -681,6 +681,65 @@ def coinsRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let lines ← (linesOf e).toOption
   readLines label c.digest (← recordsOf s e) lines.tail [] none ξ
 
+/-- Whether release log line `l` opens a coin tree's round: an event whose `event` is
+`SampledProofs.Challenger.OPEN_EVENT`, the line `treeRelease` reads as an opening. -/
+def openLine (l : String) : Bool :=
+  match _root_.SampledProofs.Challenger.event l with
+  | .ok j => _root_.SampledProofs.jsonStrIs (_root_.SampledProofs.getD j "event")
+      _root_.SampledProofs.Challenger.OPEN_EVENT
+  | .error _ => false
+
+/-- Whether release log line `l` opens a round of a coin tree's stream `SampledProofs.Challenger.TREE_SESSION`, the
+stream a session's link points are opened from. -/
+def linkLine (l : String) : Bool :=
+  match _root_.SampledProofs.Challenger.event l with
+  | .ok j =>
+    _root_.SampledProofs.jsonStrIs (_root_.SampledProofs.getD j "event") _root_.SampledProofs.Challenger.OPEN_EVENT &&
+      _root_.SampledProofs.jsonStrIs (_root_.SampledProofs.getD j "stream")
+        _root_.SampledProofs.Challenger.TREE_SESSION
+  | .error _ => false
+
+/-- `sampleLinkFirst`'s scan, `opened` whether a line opening a coin tree's round came already and `pending` the root's
+line awaiting its coin's release. -/
+def sampleLinkFirstFrom (label : String) (after : ByteArray) : Bool → Option String → List String → Bool
+  | _, _, [] => true
+  | opened, pending, l :: ls =>
+    if _root_.SampledProofs.Challenger.treeLine l then
+      if opened = false ∧ openLine l = true ∧ linkLine l = false then false
+      else sampleLinkFirstFrom label after (opened || openLine l) pending ls
+    else match pending with
+      | none => sampleLinkFirstFrom label after opened (some l) ls
+      | some a =>
+        if opened = true ∧ rootOf a = some (label, after) then false
+        else sampleLinkFirstFrom label after opened none ls
+
+/-- **The sample, then the link, then the other rounds**, in the release log's lines `log` after its head. Read as
+`SampledProofs.Challenger.releasedRootsOf` reads them, a coin tree's line aside (`treeLine`) and the rest in pairs, a
+root's line and its coin's release: no coin of family `label` whose root's line names `after` (`rootOf`) is released
+after a line opening a coin tree's round (`openLine`), and the first such line opens the stream `TREE_SESSION`
+(`linkLine`), whose first round is the link points. A coin tree's own line (its `Hello`) may come anywhere. In v2's
+one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
+released are the sample's (`SampledProofs.Challenger.challengerStream` holds the sample to every one of them), and the
+rounds opened are the session's link and its streams' rounds, of the one tree the log shows
+(`SampledProofs.Challenger.sessionsTreeReason`). -/
+def sampleLinkFirst (label : String) (after : ByteArray) (log : List String) : Bool :=
+  sampleLinkFirstFrom label after false none log
+
+/-- The coin trees' specs the device's log `log` shows sampled, in the order sampled. -/
+def helloSpecs (log : List Verity.Release) : List Flock.CoinTree.Spec :=
+  log.filterMap fun r => match r.frame with
+    | .hello spec => some spec
+    | _ => none
+
+/-- **The sample, then the link, then the other rounds**, in the device's log `log`: no release of a coin of family
+`label` after `after` follows the opening of a coin tree's round, and the first round opened is of the stream
+`SampledProofs.Challenger.TREE_SESSION` of the tree it opens. -/
+def SampleLinkFirst (label : String) (after : ByteArray) (log : List Verity.Release) : Prop :=
+  ∀ pre r post, log = pre ++ r :: post → ∀ i s n, r.frame = .opening i s n →
+    (∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after)) ∧
+      ((∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
+        ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.SampledProofs.Challenger.TREE_SESSION)
+
 /-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
 session and the parameters name the one-stage form (`ParamsAt`), no strategy of the period's game makes the sampled
 verdict accept. Parameters naming the recursive form (`VStar.Recursive`) are not this leg's. -/
