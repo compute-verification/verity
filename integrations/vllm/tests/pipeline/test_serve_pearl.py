@@ -1,0 +1,285 @@
+"""serve-openai's Pearl+ arm (`serve_pearl`) on CPU, over test_serve_openai's stand-in engine and committer: one Pearl+
+epoch a Commit window, its composition Pearl-C beside sampled proofs cut at Pearl-C's sites, each engine step's forward
+one pass ended at the model runner the committer patched first (`pearl_c.passes.hook_steps`' ``runner``; the class's
+wrapper, under the committer's patch, never runs), and each window's ``pearl/w<k>/served.json`` and ``coins.json``, from
+which Pearl+'s window record W is written (`pearl_c.window.write`).
+
+The numbering is test_pearltie's toy's: the toy's class (1 slot, a prompt of 27, 2 outputs) served on one layer's 4
+linears (q/k/v, o, gate/up and down), so round s is step s, its call c the c-th linear at index s · 4 + c of the epoch,
+with `window_class.PearlTables`' m₁₆ A rows and real rows, and each call's A rows (its x widened to FP32, zero rows up to
+m₁₆) and y committed as Pearl+'s reference commits them (`audit.commit_rows`, `served_y.commit_y`) from the x the forward
+handed the linear and the y it served. The device run is a stand-in on the real pass numbering and ends (`EpochCalls`,
+`PassEnds`), its y the BF16 product. A window whose pass is short of a linear's call, or whose passes aren't its steps, is
+that window's visible failure, and serve-openai refuses what the arm can't serve before the model loads.
+"""
+from __future__ import annotations
+
+import json
+import random
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+from verity.core.protocols.pouw import verifier
+from verity.core.protocols.pouw.audit import HM96, Workload, activation_binding, commit_rows, weights_root
+from verity.core.protocols.pouw.coins import Challenger
+from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity_vllm.engine import hooks
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_pearl as SPL
+from verity_vllm.program.predict.window_class import PearlTables, WindowClass
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+
+from tests.pipeline import predicted
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
+
+CLASS, PEARL = WindowClass(1, 27, 2), PearlTables(SPL.SCHEME, words=64)
+#: a round's calls: the layer's q/k/v, o, gate/up and down
+CALLS = 4
+HIDDEN, INTER = 256, 1024
+#: each linear's (n, k), in Pearl-C's domain on the H100 kernels
+SHAPES = ((2 * HIDDEN, HIDDEN), (HIDDEN, HIDDEN), (2 * INTER, HIDDEN), (HIDDEN, INTER))
+CONFIG = {"pouw": {"device": "cuda", "kernel": "k"}}
+PROMPTS = ([(7 * i + 3) % 500 for i in range(CLASS.prompt)], [(5 * i + 11) % 500 for i in range(CLASS.prompt)])
+RUNS: list = []
+
+
+class Apply:
+    def apply(self, layer, x, bias=None):
+        return x @ layer.weight.T
+
+
+class Linear:
+    def __init__(self, n, k, rng):
+        self.weight = (0.05 * torch.from_numpy(rng.standard_normal((n, k), np.float32))).to(torch.bfloat16)
+        self.quant_method = Apply()
+
+
+class Model:
+    def __init__(self):
+        rng = np.random.default_rng(0)
+        self.layers = [Linear(n, k, rng) for n, k in SHAPES]
+
+    def modules(self):
+        return iter(self.layers)
+
+
+class Forward(Runner):
+    """Model Runner V2 as the committer and Pearl+ read it: ``execute_model`` runs the toy's forward on the step's rows,
+    each linear through its ``quant_method.apply`` (but the down projection at a step in ``skip``), recording each call's
+    x and the y it served."""
+
+    decode_query_len = 1
+
+    def __init__(self, model, skip=()):
+        super().__init__()
+        self.model, self.skip, self.calls, self.steps = model, set(skip), [], 0
+
+    def call(self, layer, x):
+        y = layer.quant_method.apply(layer, x)
+        self.calls.append((x, y))
+        return y
+
+    def execute_model(self, sched):
+        ids = torch.tensor(sched.ids)
+        x = (((ids[:, None] * 31 + torch.arange(HIDDEN) * 7) % 97 - 48) / 64).to(torch.bfloat16)
+        qkv, o, gate_up, down = self.model.layers
+        o_out = self.call(o, self.call(qkv, x)[:, :HIDDEN])
+        g = self.call(gate_up, x + o_out)
+        if self.steps not in self.skip:
+            self.call(down, g[:, :INTER] * g[:, INTER:])
+        self.steps += 1
+
+
+def _rows(x, y):
+    """A call's A rows and y as Pearl+ commits them: x widened to FP32 in u16 words, zero rows up to m₁₆, and y's BF16 words."""
+    m, k = x.shape
+    a = np.zeros((-(-m // PPD.ROW_ALIGN) * PPD.ROW_ALIGN, 2 * k), np.uint16)
+    a[:m] = x.float().numpy().view("<u2")
+    return a, np.ascontiguousarray(y.float().numpy().view("<u2")[:, 1::2])
+
+
+class Run(PP.EpochCalls, PassEnds):
+    """Pearl-C's device run with no device: the real pass numbering (`passes.call_index`, `passes.pass_dir`) and ends
+    (`PassEnds.end_pass`, `finish`); a call's y the BF16 product and its A rows and y committed as test_pearltie's toy
+    commits them, in a retained pass's manifest."""
+
+    lag_ends = False
+
+    def __init__(self, s, entry, kernel, weights, roots, coins, opening, schedule="serial", salt_key=None, pass_index=None):
+        workload = Workload(tuple(Matmul(w, Shape(16, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
+        self.epoch = PPD.epoch_of(workload, roots, coins, opening, pass_index)
+        self.scheme, self.entry, self.salt, self.salt_key, self.coins = s, entry, self.epoch.salt, salt_key, coins
+        self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
+                        "coins": coins.to_json(), "salt_opening": opening.to_json()}
+        self.details, self.retain_dir, self.retained, self.cur, self.finished = {"passes": []}, None, 0, None, False
+        RUNS.append(self)
+        self.begin()
+
+    def begin(self, retain=None, run=None, schedule=None, stepped=False, at=None):
+        retain = retain or PP.pass_dir(self)
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=self.pass_base(at))
+
+    def settle(self):
+        pass
+
+    def gemm(self, w, x, weight, bias):
+        (m, k), n = x.shape, weight.shape[0]
+        index = PP.call_index(self)
+        y = (x.float() @ weight.float().T).to(torch.bfloat16)
+        a, y16 = _rows(x, y)
+        root_a = commit_rows(activation_binding(self.salt, index), index, [r.tobytes() for r in a], HM96, self.salt_key,
+                             index).commitment.root
+        self.cur.matmuls.append(Matmul(index, Shape(len(a), k, n), w))
+        self.cur.records.append({"index": index, "m": len(a), "k": k, "n": n, "weight": w, "real_rows": m,
+                                 "root_a": root_a.hex(),
+                                 "y": {"root": SY.commit_y(y16.tobytes(), n, self.salt, index, self.salt_key)[0].hex()}})
+        return y
+
+    def end(self, lag=False, behind=False):
+        cur = self.cur
+        out = {"units": len(cur.matmuls), "tiles": len(cur.matmuls)} | ({"base": cur.base} if cur.matmuls else {})
+        if cur.retain is not None and cur.matmuls:
+            cur.retain.mkdir(mode=0o700)
+            (path := cur.retain / "manifest.json").write_text(json.dumps(
+                {"entry": self.entry, "scheme": self.scheme.name, "salt": self.salt.hex(),
+                 "hm96_salt_key": self.salt_key.hex(), "matmuls": cur.records}))
+            out["manifest"] = str(path)
+        self.details["passes"].append(out)
+        return out
+
+    def finish(self):
+        PassEnds.finish(self)
+        self.finished = True
+
+
+@pytest.fixture(autouse=True)
+def _device_run_is_the_stand_in(monkeypatch):
+    monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
+    monkeypatch.setattr(PP, "model_runners", lambda: (Forward,))
+    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
+    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
+        w: bytes([w + 1]) * 32 + salt_key for w in weights})
+    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "_SALT_KEYS", {})
+    monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
+    monkeypatch.setattr(verifier, "executable", lambda: Path("lean"))
+    RUNS.clear()
+
+
+def _serving(tmp_path, runner, coins=None):
+    """The server over ``runner``, its arm a `PearlWindows` over the committer `Serving` makes, ready."""
+    s = Serving(tmp_path, window_steps=CLASS.outputs, runner=runner,
+                arm=lambda r: SPL.PearlWindows(runner.model, r, None, out=tmp_path, config=CONFIG, run_id="t", coins=coins,
+                                               clock=lambda: 0.0))
+    s.windows.arm.com = s.windows.com
+    s.windows.arm.ready()
+    return s
+
+
+def _serve(s, prompts):
+    for prompt in prompts:
+        status, _ = s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=prompt, max_tokens=CLASS.outputs,
+                                                   min_tokens=CLASS.outputs))
+        assert status == 200
+
+
+def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_registers_what_it_served(tmp_path):
+    """Two requests of the toy's class, one a window: each window's epoch has its own salt and hm96 key, its passes are
+    its steps, each with every linear's call at the toy's index, m₁₆ and real rows, and its W's entries are the roots of the
+    x each linear was handed and the y it served; its line's ``pouw_pearl`` is its outcome, and every hook is off after."""
+    original = vars(Forward)["execute_model"]
+    runner = Forward(Model())
+    with _serving(tmp_path, runner) as srv:
+        _serve(srv, PROMPTS)
+    wins, salts = records(tmp_path, "windows.jsonl"), []
+    assert [w["window"] for w in wins] == [0, 1] and all("pouw_h1" not in w for w in wins)
+    for k, line in enumerate(wins):
+        d = tmp_path / SPL.DIR / f"w{k}"
+        served = json.loads((d / "served.json").read_text())
+        assert served["schema"] == PWR.SERVED_SCHEMA and served["ok"] and served["error"] is None
+        assert served["commit_steps"] == served["passes_with_calls"] == CLASS.outputs
+        assert [(p["pass"], p["units"], p["timed"], p["base"]) for p in served["passes"]] == [
+            (s, CALLS, True, s * CALLS) for s in range(CLASS.outputs)]
+        assert [Path(p["manifest"]).parent.name for p in served["passes"]] == ["pass-00000", "pass-00001"]
+        assert json.loads((d / "coins.json").read_text()) == RUNS[k].coins.to_json()
+        assert served["coins"]["source"] == "in-process" and served["coins"]["salt"] == RUNS[k].salt.hex()
+        W = PWR.write(tmp_path / f"W{k}.json", served["passes"], range(CLASS.outputs))
+        assert W["window"]["salt"] == RUNS[k].salt.hex() and W["window"]["entry"] == SPL.ENTRY
+        manifests = [json.loads(Path(p["manifest"]).read_text()) for p in served["passes"]]
+        key, entries = bytes.fromhex(manifests[0]["hm96_salt_key"]), iter(W["registered"])
+        for s in range(CLASS.outputs):
+            for c in range(CALLS):
+                u, i = manifests[s]["matmuls"][c], s * CALLS + c
+                assert (u["index"], u["weight"], u["m"], u["real_rows"], (u["n"], u["k"])) == (
+                    i, c, PEARL.a_rows(CLASS, s), PEARL.rows(CLASS, s), SHAPES[c])
+                a, y16 = _rows(*runner.calls[(k * CLASS.outputs + s) * CALLS + c])
+                ea, ey = next(entries), next(entries)
+                assert (ea["value"], ea["leaves"], ey["value"], ey["leaves"]) == (
+                    PEARL.a(s, c), PEARL.a_rows(CLASS, s), PEARL.y(s, c), PEARL.rows(CLASS, s))
+                assert ea["root"] == commit_rows(activation_binding(RUNS[k].salt, i), i, [r.tobytes() for r in a], HM96,
+                                                 key, i).commitment.root.hex()
+                assert ey["root"] == SY.commit_y(y16.tobytes(), u["n"], RUNS[k].salt, i, key)[0].hex()
+        salts.append((RUNS[k].salt, key))
+        roots = {w: bytes([w + 1]) * 32 + key for w in range(CALLS)}
+        assert RUNS[k].epoch.weights_root == weights_root(roots)
+        assert {**line["pouw_pearl"], "seconds": None} == {
+            "entry": SPL.ENTRY, "window": k, "steps": CLASS.outputs, "passes": CLASS.outputs, "calls": CLASS.outputs * CALLS,
+            "salt": RUNS[k].salt.hex(), "weights_root": weights_root(roots).hex(), "coin_source": "in-process",
+            "served": f"{SPL.DIR}/w{k}/served.json", "seconds": None}
+        assert d.stat().st_mode & 0o777 == 0o700 and RUNS[k].finished
+    assert salts[0][0] != salts[1][0] and salts[0][1] != salts[1][1]
+    assert srv.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 2, "passes": 4, "calls": 16, "failed": [],
+                                                   "closing": []}
+    assert hooks.live(SPL.ENTRY) == () and "execute_model" not in vars(runner) and vars(Forward)["execute_model"] is original
+    assert all("apply" not in vars(m.quant_method) for m in runner.model.layers)
+
+
+def test_a_window_short_of_a_linears_call_is_its_visible_failure(tmp_path):
+    """The forward skips the down projection at step 1 (window 0's second step): window 0's served.json names its pass
+    short of a call and isn't ok, and window 1, a fresh epoch, is served."""
+    runner = Forward(Model(), skip={1})
+    coins = lambda k: {"coins": Challenger(k, random.Random(k).randbytes)}  # noqa: E731
+    with _serving(tmp_path, runner, coins) as s:
+        _serve(s, PROMPTS)
+    bad = json.loads((tmp_path / SPL.DIR / "w0" / "served.json").read_text())
+    assert not bad["ok"] and bad["error"] == f"pass 1 has {CALLS - 1} calls, not one a linear ({CALLS})"
+    lines = records(tmp_path, "windows.jsonl")
+    assert lines[0]["pouw_pearl"]["error"] == bad["error"] and "error" not in lines[1]["pouw_pearl"]
+    assert json.loads((tmp_path / SPL.DIR / "w1" / "served.json").read_text())["ok"]
+    assert s.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 1, "passes": 2, "calls": 8, "failed": [0],
+                                                 "closing": []}
+    assert s.windows.arm.describe()["coins"] == "given"
+
+
+def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loads(tmp_path):
+    man = predicted.row(tmp_path)
+    base = ["--model", "m", "--revision", "r", "--required-manifest", str(man)]
+    arm = ("--protocols", SPL.ENTRY, "--precision", "bfloat16", "--protocols-config", json.dumps(CONFIG))
+
+    def refusal(*more: str) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", [*base, *more], environ={}), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert refusal(*arm) is None
+    opts = cli.parse("serve-openai", [*base, *arm], environ={})
+    assert so.engine_options(opts)["dtype"] == "bfloat16" and "quantization" not in so.engine_options(opts)
+    assert "it needs --precision bfloat16, not verity_int8" in refusal(*arm[:2], *arm[4:])
+    assert "--commit, --scheme rows-sha512 and the row's --required-manifest" in refusal(*arm, "--no-commit")
+    assert "--challenger-gate, --challenger-peer: PoUW H1's, not Pearl+'s" in refusal(
+        *arm, "--challenger-gate", "g", "--challenger-peer", "p")
+    assert "not Pearl+'s to give" in refusal(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
+    assert "are not Pearl+'s (pouw)" in refusal(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
+    after = cli.parse("serve-openai", [*base, *arm, "--release-after", SPL.DRAWER], environ={})
+    assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's draw")
+    assert SPL.refusal(cli.parse("serve-openai", base, environ={})) is None
