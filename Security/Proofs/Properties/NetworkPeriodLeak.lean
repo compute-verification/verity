@@ -32,7 +32,7 @@ acceptance gives `rowsWf` (`rowsWf_of_accept`), so the network certifier's frame
 (`cellRows_wf_of_rowsWf`), and `NetTiming.periodLeak_registered` bounds the leak at that format. -/
 theorem periodLeakRegistered : PeriodLeakRegistered := by
   intro p c e pub prof h s sd scan hform Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ
-    op β hplaced N hN Srv Dev Z arr link jitter status tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
+    op β hplaced N hN Srv Dev Sec arr link jitter status tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
   subst hN
   exact NetTiming.periodLeak_registered H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β hplaced arr _
     (Properties.NetworkPeriod.cellRows_wf_of_rowsWf (Properties.NetworkPeriod.rowsWf_of_accept h hform) link s.window
@@ -56,7 +56,7 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
     (sw : Fin p.windows → AuditStatement) (Pw : Fin p.windows → Partition)
     (ρ : Fin p.windows → ℕ → Bool) (op : Fin p.windows → ℕ → List (Obs L K S) → List Bool) (β : Fin p.windows → ℕ)
     (hplaced : WindowsPlaced D δ sw Pw β)
-    {N : ℕ} (hN : N = s.lanes * (p.windows * s.window)) {Srv Dev Z V : Type}
+    {N : ℕ} (hN : N = s.lanes * (p.windows * s.window)) {Srv Dev Sec V : Type}
     (arr : Srv → Fin N → Arrivals (FrameCell (s.cellBytes - 9))) (link : Fin L)
     (jitter : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → ℕ)
     (status : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → Fin K → Status)
@@ -66,13 +66,14 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
     (htrust : Verity.Assumptions.TrustedHost tap run fun q =>
       (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
         (wardenCode q.1 (arr q.2))))
-    (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (view : Z → V) (strategy : V → WardenSchedule (Fin N)) (srvOf : Z → Srv)
+    (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (view : Sec → V) (strategy : V → WardenSchedule (Fin N)) (srvOf : Sec → Srv)
     (hcov : SchedulesCovered
       {σ | (σ.r, σ.D) ∈ Θ ∧ (cellRows s.cellBytes N link s.window jitter status).Fits S p.windows σ} Zs
       fun z => strategy (view z))
-    (dec : (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) → Z)
+    (dec : (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) → Sec)
     (hdz : SenderDecodes run tap Zs (fun z => strategy (view z)) srvOf dec)
-    (x : Z → Fin p.windows → Claims.Msg) (wit : Z → Fin p.windows → Wit) (tops : AuditStatement → List (Opening Bool))
+    (x : Sec → Fin p.windows → Claims.Msg) (wit : Sec → Fin p.windows → Wit)
+    (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) :
     (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
