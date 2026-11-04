@@ -339,7 +339,8 @@ def missing(why: str, src: str | None = None) -> dict[str, Any]:
 
 def network_row(out: Path, rows: Mapping[str, Any], run: str | None) -> tuple[Any, str]:
     """The network certifier's row and where it is from: the window report's, or, where the report's product dropped it
-    and its period check answered under OUT, the row that answer gives (`served_verdicts.piece_row`)."""
+    and its period check answered under OUT, the row that answer gives (`served_verdicts.piece_row`): the one the report
+    composes under the onsite product, by the report's own composer, never a second one."""
     key, answer = ROWS["the network certifier"], CASE.parent / "answer.json"
     r = rows.get(key)
     if not (isinstance(r, Mapping) and r.get("verdict") == "dropped" and (out / answer).is_file()):
