@@ -1041,7 +1041,7 @@ def honest_pass(tmp_path, request):
 
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
-                live: int | None = None, spike: float | None = None, bad_b: int | None = None):
+                live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -1051,13 +1051,14 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
-    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  With `spike`,
-    credited row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them.
-    With `bad_b`, that row of the second call's weight fails liveness as the first call's row 5 does, and is excluded."""
+    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  `seed` draws
+    the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
+    row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them.  With
+    `bad_b`, that row of the second call's weight fails liveness as the first call's row 5 does, and is excluded."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
-    rng, k = np.random.default_rng(11), 128
+    rng, k = np.random.default_rng(seed), 128
     wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
     a0 = bf16_words(rng, 32, k)
     a0[20:] = 0
@@ -1167,9 +1168,10 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 
 def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
-    """``served_passes.py verify`` on serve dir `d` at 3 draws: its exit, its document and its core answer."""
+    """``served_passes.py verify`` on serve dir `d` at 3 draws, a test instance's (`proved_pass`'s): its exit, its document
+    and its core answer."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
-    rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", *more])
+    rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", "--test-instance", *more])
     answer = json.loads((out.parent / "answer.json").read_text())
     from verity.core.protocols.pouw import core_check as CC
     CC.answer_of(answer)
@@ -1180,7 +1182,8 @@ def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
 def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
     """``served_passes.py verify`` draws over the passes with calls that the serve's served.json names, skipping the empty
     one the run left open: it accepts an honest pass and credits its MACs at Pearl's assumption in a core answer, and the
-    same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run."""
+    same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run.  A
+    test instance's verdict credits nothing."""
     path, *_ = honest_pass
     served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
                                      {"pass": 1, "units": 0, "tiles": 0}]}
@@ -1188,7 +1191,8 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
     assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT verity/pouw/pearl-plus/v1"), doc["line"]
     work = answer["public"]["work"]
-    assert 0 < work["credited"] < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
+    assert work["credited"] == 0 < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
+    assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
     assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())
     assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]
@@ -1208,20 +1212,20 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     the pass published, the rows don't open."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
-    good = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4)
+    good = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert good["answer"]["verdict"] == "accept", good["line"]
     for u in man["matmuls"]:
         y = bytearray((path.parent / u["y"]["rows"]["path"]).read_bytes())
         y[0::2] = bytes(b ^ 0x01 for b in y[0::2])
         u["y"] = SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]))
     path.write_text(json.dumps(man))
-    lied = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4)
+    lied = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert lied["answer"]["verdict"] == "reject" and "is not the unscale of the tile's U" in lied["answer"]["reason"], lied["line"]
     assert lied["commitment"] != good["commitment"]
     for u, old in zip(man["matmuls"], good["answer"]["public"]["passes"][0]["y"]):
         u["y"]["root"] = old
     path.write_text(json.dumps(man))
-    moved = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4)
+    moved = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert moved["answer"]["verdict"] == "reject" and "y opening" in moved["answer"]["reason"], moved["line"]
 
 
@@ -1251,13 +1255,33 @@ def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_inde
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
     """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
-    both, each pass's exclusion tile opened, accepted and credited over both."""
+    both, each pass's exclusion tile opened, accepted, its MACs over both (a test instance's, credited nothing)."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
     assert rc == 0 and answer["verdict"] == "accept" and "refused" not in doc
     assert answer["profile"]["exclusion_tiles"] == 2 and len(answer["public"]["passes"]) == 2
     one = VR.credit_at_assumption([VR.load(a, published(a))], 3, Fraction(1, 100))
     assert answer["public"]["work"]["macs"] == 2 * one["macs"]
+
+
+@pytest.mark.slow
+def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_one_salt(tmp_path):
+    """A test instance's pass (16 x 16 tiles) is refused as a served run's, whose tile is 64 x 64, and accepted as a test
+    instance's, crediting nothing.  Passes of two salts (other weights under the one coin) are refused, though each holds
+    calls 0 and 1: `passes_distinct` holds call indices apart per salt."""
+    a = proved_pass(tmp_path / "a", PROMOTED[0])[0]
+    coins, source = published(a), b"verifier" * 4
+    served = VR.verify_passes([a], 3, 1, "test", coins, source)
+    assert served["answer"]["reason"] == ("ValueError: pass 0's tile is 16 x 16, not 64 x 64: a test instance is read only "
+                                          "as one, crediting nothing") and "verdicts" not in served
+    test = VR.verify_passes([a], 3, 1, "test", coins, source, test_instance=True)
+    work = test["answer"]["public"]["work"]
+    assert test["answer"]["verdict"] == "accept" and work["credited"] == 0 < work["macs"], test["line"]
+    b = proved_pass(tmp_path / "b", PROMOTED[0], seed=12)[0]
+    assert json.loads(a.read_text())["salt"] != json.loads(b.read_text())["salt"]
+    for kw in ({}, {"test_instance": True}):
+        two = VR.verify_passes([a, b], 3, 1, "test", coins, source, **kw)
+        assert two["answer"]["reason"] == "ValueError: the passes are not all of one salt" and "refused" not in two
 
 
 def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tmp_path):
@@ -1571,7 +1595,7 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)
     assert VP.volunteer(path, coins, 1)["ok"]
-    good = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4)
+    good = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, test_instance=True)
     assert good["answer"]["verdict"] == "accept", good["line"]
     p = VR.load(path, coins)
     assert any(r.voluntary_a or r.voluntary_b for r in p.records)
@@ -1579,14 +1603,14 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
                (r.matmul.shape.n - len(r.excluded_b) - len(r.voluntary_b)) for r in p.records)
     whole = sum(r.k_kept * (r.real_rows - len(r.excluded_a)) * (r.matmul.shape.n - len(r.excluded_b)) for r in p.records)
     assert good["answer"]["public"]["work"]["macs"] == kept < whole
-    assert good["answer"]["public"]["work"]["credited"] == VR.credit_at_assumption([p], 3, VR.DELTA)["credited"]
+    assert good["answer"]["public"]["work"] == {**VR.credit_at_assumption([p], 3, VR.DELTA), "credited": 0}
     man = json.loads(path.read_text())
     u = next(u for u in man["matmuls"] if u.get("voluntary_a"))
     for given, why in (([i for i in range(u["real_rows"]) if i not in u["excluded_a"]][:CW.voluntary_cap(u["m"]) + 1],
                         "more voluntary rows than V-EX allows"),
                        ([], "not the ones whose root the pass published")):
         path.write_text(json.dumps({**man, "matmuls": [{**x, "voluntary_a": given} if x is u else x for x in man["matmuls"]]}))
-        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4)
+        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, r["line"]
 
 
@@ -1638,7 +1662,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
              ({**w, "registered": [*w["registered"], w["registered"][0]]}, "W registers pearl-a/0/0 twice"),
              ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
     for bad, why in cases:
-        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad)
+        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
@@ -1663,7 +1687,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     assert got["rounds"] == [1, 2] and [(x["round"], x["why"]) for x in got["dropped"]] == [(0, SP.WARM_UP)]
     w = json.loads(wfile.read_text())
     assert sorted({e["value"].split("/")[1] for e in w["registered"]}) == ["1", "2"] and len(w["registered"]) == 8
-    r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w)
+    r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 8}, doc["line"]
@@ -1753,10 +1777,10 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     rc, doc, answer = served_verify(d, tmp_path / "verify.json")
     one = VR.credit_at_assumption([VR.load(b, published(b))], 3, Fraction(1, 100))
     work = answer["public"]["work"]
-    assert rc == 0 and (work["macs"], work["credited"]) == (one["macs"], one["credited"]), doc["line"]
+    assert rc == 0 and work == {**one, "credited": 0}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["dropped"]) == ([1], [0], [0])
     assert doc["passes"][0].split(" sha256:")[0].split(":", 1)[1] == str(b) and "1 passes dropped before the coin (rounds 0)" in doc["line"]
-    assert doc["timed"] == {"passes": 1, "macs": one["macs"], "credited": one["credited"]}
+    assert doc["timed"] == {"passes": 1, "macs": one["macs"], "credited": 0}
     coin = json.loads((d / SP.COIN).read_text())
     assert (coin["commitment"], coin["source"], coin["rounds"]) == (answer["commitment"], doc["source"], [1])
     again = served_verify(d, tmp_path / "again.json")[1]
@@ -1780,12 +1804,12 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, record = published(path), tmp_path / "coin.json"
-    first = VR.verify_passes([path], 3, 1, "test", coins, record=record)
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, test_instance=True)
     assert "source" in first and json.loads(record.read_text())["commitment"] == first["commitment"]
     assert VP.volunteer(path, coins, 1)["ok"]
-    late = VR.verify_passes([path], 3, 1, "test", coins, record=record)
+    late = VR.verify_passes([path], 3, 1, "test", coins, record=record, test_instance=True)
     assert late["answer"]["verdict"] == "reject" and late["refused"][0] == "after-coin" and "source" not in late, late["line"]
-    assert VR.verify_passes([path], 3, 1, "test", coins)["answer"]["verdict"] == "accept"
+    assert VR.verify_passes([path], 3, 1, "test", coins, test_instance=True)["answer"]["verdict"] == "accept"
 
 
 def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
@@ -1806,12 +1830,12 @@ def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_dr
         return b"\x5e" * 64, {"from": VR.DRAW_CHALLENGER, "session": {"session": "s20261104T090000Z-dr01"}}
 
     record = tmp_path / "coin.json"
-    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw, test_instance=True)
     held = json.loads(record.read_text())
     assert first["answer"]["verdict"] == "accept" and first["draw"] == "challenger" and calls == [root]
     assert (held["schema"], held["commitment"], held["source"], held["draw"]["from"]) == (
         VR.COIN_SCHEMA, root.hex(), "5e" * 64, "challenger")
-    again = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    again = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw, test_instance=True)
     assert again["answer"] == first["answer"] and calls == [root]
 
     def before(c, asking):
@@ -1822,15 +1846,15 @@ def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_dr
         raise Ch.CoinError("the gate's open timed out")
 
     other = tmp_path / "other" / "coin.json"
-    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=before)
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=before, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "p1 is open" in r["line"] and not other.exists()
     assert not other.with_name(other.name + VR.ASKED).exists()
-    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=after)
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=after, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "timed out" in r["line"] and not other.exists()
     assert json.loads(other.with_name(other.name + VR.ASKED).read_text())["commitment"] == root.hex()
-    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=draw)
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=draw, test_instance=True)
     assert r["refused"][0] == "asked-once" and r["answer"]["verdict"] == "reject" and calls == [root]
-    node = VR.verify_passes([path], 3, 1, "test", coins, record=tmp_path / "node" / "coin.json")
+    node = VR.verify_passes([path], 3, 1, "test", coins, record=tmp_path / "node" / "coin.json", test_instance=True)
     assert node["draw"] == "node" and json.loads((tmp_path / "node" / "coin.json").read_text())["draw"] == {
         "from": "node", "claim": VR.NODE_CLAIM}
 
@@ -1905,11 +1929,11 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
     misses its own."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     coins, w = published(b), window_record(a, b)
-    r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=[1], dropped=(0,))
+    r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=[1], dropped=(0,), test_instance=True)
     assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"]["tables"] == 4, r["line"]
     for rounds, dropped, why in (([1], (), "W registers pearl-a/0/0, no call of the run's"),
                                  ([0], (1,), "W's pearl-a/0/0: its root")):
-        r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped)
+        r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 

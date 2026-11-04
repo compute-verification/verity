@@ -13,13 +13,15 @@ import PouwPearlPlus.Credit
   coin it drew on this run's commitment (`CoinRecord`), which pins the source.
 * **The prover's openings** (`opener pass tile`): each opened tile's rows, leaf and y rows with their paths. The verifier
   asks only for the tiles its draw names.
-* **The verdict**: every pass loads (`load`), the run's commitment is the coin record's where there is one (`after-coin`),
+* **The verdict**: every pass loads (`load`), all of one salt and, unless the input is a test instance's
+  (`testInstance`), at `TILE × TILE` tiles; the run's commitment is the coin record's where there is one (`after-coin`),
   the draw over every pass's tickets names the drawn tiles, each pass adds one tile per excluded row, and the run accepts
   iff every one of them passes `checkTile`, or is over its inert-work bound with every other check passed under
   `over_cap` `uncredited` (the default; `reject` rejects such a run). A rejected tile's reason is `pass i tile t: why`,
   joined by `; `.
 * **The work** an accepted run publishes: its credit at Pearl's assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
-  the number of draws on tiles over their bound, which are credited nothing.
+  the number of draws on tiles over their bound, which are credited nothing. A test instance's credits nothing
+  (`credited` 0), as `--recorded`'s salt claims nothing.
 
 Out of scope, refused by name in `load`: sm_120's schemes, live coins, the window record's tie (`tie`, `rounds`, `dropped`).
 -/
@@ -44,6 +46,9 @@ def OverCap.ofName? : String → Option OverCap
   | "reject" => some .reject
   | _ => none
 
+/-- `pearl_c.TILE`: a served pass's tiles are `TILE × TILE`. -/
+def TILE : Nat := 64
+
 structure Input where
   coins : CoinCommitment
   manifests : List Json
@@ -51,6 +56,9 @@ structure Input where
   source : Option ByteArray := none
   held : Option CoinRecord := none
   overCap : OverCap := .uncredited
+  /-- The passes are a test instance's (`verify_passes`' ``test_instance``): their tile may be other than `TILE × TILE`,
+  and the verdict credits nothing. -/
+  testInstance : Bool := false
 
 /-- The tiles a verdict opens, once its passes load and its coin is fixed: `picks` the draw's, in its order. -/
 structure Plan where
@@ -100,6 +108,13 @@ def plan (i : Input) : Except Refusal Plan := do
   if i.manifests.isEmpty then throw { reason := "the run holds no pass with calls" }
   throwRefusal (passesDistinct i.manifests) fun _ => do
   let passes ← i.manifests.mapM (load i.coins)
+  if passes.any (·.salt != passes[0]!.salt) then throw { reason := "ValueError: the passes are not all of one salt" }
+  if !i.testInstance then
+    match (passes.zip (List.range passes.length)).find? fun (p, _) => p.scheme.tileM != TILE || p.scheme.tileN != TILE with
+    | some (p, j) =>
+      throw { reason := s!"ValueError: pass {j}'s tile is {p.scheme.tileM} x {p.scheme.tileN}, not {TILE} x {TILE}: " ++
+        "a test instance is read only as one, crediting nothing" }
+    | none => pure ()
   let root := runCommitment passes
   let source ← match i.held with
     | some h =>
@@ -142,6 +157,10 @@ def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : Li
       | .ok o => ⟨i, tid, checkTile p wn tid o⟩
   return tasks.toList.map Task.get
 
+/-- The credit a verdict publishes: `c`, or, on a test instance's passes, `c` crediting nothing. -/
+def testCredit (testInstance : Bool) (c : Credit) : Credit :=
+  if testInstance then { c with credited := 0 } else c
+
 /-- `verify_passes`: the run's verdict. -/
 def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : RunAnswer :=
   match plan i with
@@ -152,7 +171,7 @@ def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : Run
       if v.ok i.overCap then none else v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
     if bad.isEmpty then
       { accept := true, plan := some pl, verdicts := vs, overCap := i.overCap,
-        work := some (creditAtAssumption pl.passes i.draws (overCapDraws pl vs) DELTA) }
+        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overCapDraws pl vs) DELTA)) }
     else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overCap := i.overCap }
 
 end PouwCheck.PearlPlus

@@ -4,12 +4,13 @@ import PouwPearlPlus.Open
 # `pouw-pearlplus`: the run verdict from a served run's retained passes
 
     pouw-pearlplus --coins COINS.json --draws T (--source HEX | --record RECORD.json | both)
-      [--over-cap uncredited|reject] MANIFEST...
+      [--over-cap uncredited|reject] [--test-instance] MANIFEST...
 
 prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
 inert-work bound, `uncredited` unless `--over-cap` says otherwise), `verdicts` (each opened tile's pass, id, ok and
 reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), and `work`.
+`--test-instance` reads passes whose tile is other than 64 × 64 (a test instance's), and their work credits nothing.
 
 The prover's side is `Open.opening` over the pass's files. A record that exists pins the source (`after-coin`); one that
 doesn't is written with the run's commitment and the given source.
@@ -23,6 +24,7 @@ structure Args where
   source : Option String := none
   record : Option String := none
   overCap : OverCap := .uncredited
+  testInstance : Bool := false
   manifests : List String := []
 
 partial def parse : List String → Args → Except String Args
@@ -36,6 +38,7 @@ partial def parse : List String → Args → Except String Args
   | "--over-cap" :: v :: rest, a => match OverCap.ofName? v with
     | some m => parse rest { a with overCap := m }
     | none => throw s!"--over-cap {v}: uncredited or reject"
+  | "--test-instance" :: rest, a => parse rest { a with testInstance := true }
   | m :: rest, a => if m.startsWith "--" then throw s!"unknown option {m}" else parse rest { a with manifests := a.manifests ++ [m] }
 
 def readJson (path : String) : IO Json := do
@@ -64,7 +67,8 @@ def main (argv : List String) : IO UInt32 := do
         | _, _ => throw (IO.userError s!"{r}: a coin record has a commitment and a source")
       else pure none
     | none => pure none
-  let input : Input := { coins, manifests := mans, draws := a.draws, source, held, overCap := a.overCap }
+  let input : Input :=
+    { coins, manifests := mans, draws := a.draws, source, held, overCap := a.overCap, testInstance := a.testInstance }
   let mut cache : Std.HashMap String ByteArray := {}
   let mut checked : Std.HashMap (String × String) (Except String ByteArray) := {}
   if let .ok pl := plan input then

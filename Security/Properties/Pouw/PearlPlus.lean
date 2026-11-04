@@ -18,9 +18,9 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
 * `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every drawn and exclusion tile passes `checkTile`, or,
   under `over_cap` `uncredited` (CMP-311 option A, the default), is over its inert-work bound with every other check
   passed and is credited nothing.
-* `PlanMeans`: the plan's passes are the loaded passes, its commitment theirs, its source the coin record's when there is one
-  (retention and give-up fixed before the coin, `after-coin`), and its tiles the draw's over their tickets, keyed by the
-  source and the commitment.
+* `PlanMeans`: the plan's passes are the loaded passes, all of one salt and, but on a test instance's input, of the served
+  64 × 64 tile, its commitment theirs, its source the coin record's when there is one (retention and give-up fixed before
+  the coin, `after-coin`), and its tiles the draw's over their tickets, keyed by the source and the commitment.
 * `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
 * `TileAcceptMeans`: a tile that passes, or is only over its inert-work bound, opens against the pass's roots, its
   checked words are the committed leaf's, its rows keep the per-row rules, its credited cells' replayed inert work, P3's
@@ -29,7 +29,8 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
 * `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
   (`PearlCUnscale_v1` at `BIAS` off).
 * `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
-  the plan's passes, at the run's draws, the draws over the inert-work bound (X_O) and δ = 1/100.
+  the plan's passes, at the run's draws, the draws over the inert-work bound (X_O) and δ = 1/100; a test instance's
+  credits nothing.
 * `OpeningBinds`: two openings of one position of a tree both accepted open one value, or two different messages hashed
   in checking them (`rowsHashed`) collide under SHA-512.
 
@@ -66,13 +67,15 @@ def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
 
 /-! ## The run -/
 
-/-- **What `plan` establishes**: the run's passes are `load`'s of its manifests under the epoch's coins, its commitment is
-`runCommitment` of them, its source is the coin record's where the verifier holds one (whose commitment is this run's)
+/-- **What `plan` establishes**: the run's passes are `load`'s of its manifests under the epoch's coins, all of one salt
+and, unless the input is a test instance's, each at `TILE × TILE` tiles; its commitment is `runCommitment` of them, its source is the coin record's where the verifier holds one (whose commitment is this run's)
 and else the source given, and its tiles are the draw's, keyed by the source and the commitment, then each pass's
 exclusion tiles. -/
 def PlanMeans : Prop :=
   ∀ (i : Input) (pl : Plan), plan i = .ok pl →
     passesDistinct i.manifests = none ∧ i.manifests.mapM (load i.coins) = .ok pl.passes ∧
+    (∀ p ∈ pl.passes, p.salt = pl.passes[0]!.salt) ∧
+    (i.testInstance = false → ∀ p ∈ pl.passes, p.scheme.tileM = TILE ∧ p.scheme.tileN = TILE) ∧
     pl.root = runCommitment pl.passes ∧
     (∀ h, i.held = some h → h.commitment = pl.root ∧ pl.source = h.source ∧ (i.source = none ∨ i.source = some h.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
@@ -173,12 +176,13 @@ def YIsTheUnscale : Prop :=
   ∀ u alphaA alphaB y, Rule.yOf u alphaA alphaB = some y → y = Pouw.PearlC.unscale u alphaA alphaB
 
 /-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's draws,
-X_O (how many of them landed on a tile over its inert-work bound, `overCapDraws`) and δ = 1/100 (`creditAtAssumption`); a
-refused or rejected run publishes none. -/
+X_O (how many of them landed on a tile over its inert-work bound, `overCapDraws`) and δ = 1/100 (`creditAtAssumption`),
+crediting nothing on a test instance's input (`testCredit`); a refused or rejected run publishes none. -/
 def WorkIsTheCredit : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     ((check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
-      (check i opener).work = some (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA)) ∧
+      (check i opener).work =
+        some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA))) ∧
     ((check i opener).accept = false → (check i opener).work = none)
 
 /-! ## The trees -/
