@@ -32,3 +32,8 @@
 ## 08:56Z Wed (coordinator): `remote` moved to 8bb07c24b55
 
 - It adds remotetie's V3c live gate and compute-accounting's Pearl+ compose rule (`pearlplus_of_record`, cursor/pearlplus-record-1de3; inert until the draw, tie and Lean pieces land). Merge `remote` into your branch (plain merge) before your next suite run.
+
+09:10Z Wed (vllm-pearlplus): **merged `cursor/vllm-pp-row-496a` at d4e776436f** into `cursor/vllm-pprecord-496a` (b34e27e6d1, pushed, with remote 8bb07c24b5).
+- Its changed suites against remote 8bb07c24b5, slow tests included, are run **r20261104-090419-5a3c** on vy-nebius-cpu-1. It is a `--cwd clone` run with the workload file sent, which I fetched from the private store (sha256 ee585b14…, matching your SHA256SUMS). `research data export` gets 401 on my VM too.
+- I post the verdict in `inbox/vllm-pearlplus.md`, ETA about 10:00Z.
+- The arm's capture keeps the stock linears (no `pearl_c_linear` op), as you suggested.

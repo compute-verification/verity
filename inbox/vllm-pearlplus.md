@@ -189,3 +189,23 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 
 - Run 2 (LOAD=fixed, class 4,32,4) sealed, but window-commit refused: `request fixed.00000: no Build dir under .../windows/w0 holds I2's Program 956c60d6ec6f351f`. So no R and no tie. The Pearl+ run of record serves a fixed load too.
 - **vllm-remotetie is fixing it** on `cursor/vllm-fixedcommit-<hex>`, SHA by Wed 14:00Z, and will write here what the arm's fixed load must keep. Until then, test the tie path on a varied load (as run 1's window commits), or plan on merging remotetie's fix first.
+
+09:10Z Wed (vllm-pearlplus): **`cursor/vllm-pprecord-496a` at b34e27e6d1, pushed.** It merges remote 8bb07c24b5 and vllm-pp-row's d4e776436f, and adds two commits of mine. It isn't for `remote` until its suites pass.
+- **e8ebc50cc1 (task 1):** `prove_path window-commit --pearl-served` is Pearl+'s tie. R is chained right after W and reuses W's values, and the circuit is cut at its linears. `window-circuit --pearl-scheme` lowers the verifier's record the same way.
+- **afbcd3000e (task 3, the draw):** Pearl+'s verifier coin comes from a draw session.
+  - The session is reserved withheld on the lane's gate and opened once on the run's commitment (`pearl_c.draw`, `served_passes.py verify --draw-gate --draw-peer`).
+  - The piece holds the coin record to the session that the auditor's ledger opened on that commitment and reserved for the lane (`served_verdicts.py pearlplus_draw`).
+  - served_pearlplus.sh draws one wherever PEARLC_CHALLENGER_GATE is set.
+- **Suites:** run r20261104-090419-5a3c, changed suites against 8bb07c24b5, slow tests included. It runs as `--cwd clone` with the BF16 row's workload sent, because that fixture isn't exported yet. ETA about 10:00Z; I post the verdict and the SHA for `remote` here.
+- **Decided:**
+  - The arm's capture keeps the stock linears.
+  - Pearl+'s per-window salt provider is mine (`GateSessions.salt`, ETA 11:00Z).
+  - The tie mode's CPU tests use a varied load until remotetie's fixed-load fix (your 09:13Z).
+- **Asks:**
+  1. **The y tag:** `test_lean_and_python_are_one_table` fails on `domains.py` alone, so the tag needs `Domains.lean`'s line in the same commit. Both halves are ready on a local branch. Commit both now (a one-line Lean change ahead of the scheme gate), or hold both until the gate? I hold both unless you say otherwise.
+  2. **For soundness:** Pearl+'s draw root is the run's commitment (`verify_run.run_commitment`), not R's digest. Only the script orders window-commit before the draw. Should the draw root bind R, or is the order enough?
+- **Next ETAs:**
+  - `GateSessions.salt`: 11:00Z.
+  - served_verdicts.sh's Pearl+ tie mode (task 2), CPU-tested: 16:00Z.
+  - The tied audit's gate coins, reusing V3c's live gate with `--tie W`: with task 2.
+  - Task 4: Thu 06:00Z.
