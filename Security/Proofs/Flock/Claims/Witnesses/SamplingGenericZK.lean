@@ -15,7 +15,7 @@ fail at a toy instance.
 
 * `ZKOut` fails at a prover that talks (`talkP`) against a verifier that accepts everything, with a silent simulator and
   no error: the honest transcript is never empty and the simulator's always is (`talk_leaks`, through
-  `Claims.zkOutLeak`): `Claims.ZKOut_fails`.
+  `Claims.zkOutLeak`): `zkOut_talk_fails`. (`ZKOut`'s own `fails` witness is `Claims.ZKOut_fails`, beside `zkOutLeak`.)
 * `talkArg`, a proof system whose sessions run `talkP` and whose simulator is silent, is that instance:
   `ZkArg.ZK_fails`.
 * `talkL`, a masked compiled verifier of one session over `talkArg` under a commitment whose every opening passes, so
@@ -126,7 +126,7 @@ def talkL (Coin : Type) : ZkCompiled Coin (talkArg Coin) where
 
 section Talk
 
-variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+variable {Coin : Type}
 
 /-- `talkL` meets the zero-knowledge contract: its one session is the run, and every witness is in `talkArg`'s
 relation. -/
@@ -176,7 +176,8 @@ theorem talkL_err (H : Msg → Msg) (w : Claims.Sampling.Wit) (o : List Msg × L
 
 /-- **`ZkCompiled.ZK` fails at `talkL`**: at the toy witness, which no proof block faults, the talking prover's
 transcript is never empty, the composed simulator's always is, and the error is `0`. -/
-theorem zkCompiled_talk_fails (H : Msg → Msg) : ¬ (talkL Coin).ZK H := by
+theorem zkCompiled_talk_fails [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ¬ (talkL Coin).ZK H := by
   intro h
   have h1 := h (fun x => Claims.Sampling.leafLayer H (talkL Coin).commit (talkL Coin).parse x toyWit) [] toyWit
     ⟨talkL_rhon _, rfl⟩ Unit acceptAllVs () rfl
@@ -305,16 +306,6 @@ theorem zkFlock_meets : zkA.ZK FlockDeploy.sha512 ∧ zkL.ZkSessions FlockDeploy
 end Claims.Witness.SamplingGeneric
 
 /-! ## Stated over the spec -/
-
-namespace Claims
-
-/-- **`ZKOut` fails** at the talking prover against the verifier that accepts everything (`zkOut_talk_fails`). -/
-theorem ZKOut_fails (H : Msg → Msg) :
-    ¬ ZKOut (fun _ => Unit) (fun _ => Unit) H (fun _ => 1) (fun _ _ => Witness.SamplingGeneric.talkP)
-      (fun _ (_ : Unit) => True) (fun _ _ => ()) Witness.SamplingGeneric.silentSimOut (fun _ _ _ _ _ _ => 0) :=
-  Witness.SamplingGeneric.zkOut_talk_fails H
-
-end Claims
 
 namespace Claims.SamplingGeneric
 

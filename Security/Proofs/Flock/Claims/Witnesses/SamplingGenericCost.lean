@@ -263,10 +263,7 @@ theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) 
   rw [dite_eq_left h1, Compiled.unitExt, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
   dsimp only
   rw [dite_eq_left (show (findA Coin).shape x = (effL Coin).sh x 0 from rfl)]
-  first
-  | exact Nat.succ_pos _
-  | simp [findA, toyA, Arg.ext, ERep, Compiled.view, effL, firstWait, waitAcc, serve, viewing, RP.bind, ownLog,
-      Claims.Sampling.checkRevealed, flatMapRP, Claims.Sampling.ofOC, callCm]
+  exact Nat.succ_pos _
 
 /-- **`Compiled.Efficient` fails** at `effL`, at no reruns and no calls of the proof system's: every run is accepted,
 so the compiled extractor reaches its first inner run's extraction, whose opening check makes a SHA-512 call of its
