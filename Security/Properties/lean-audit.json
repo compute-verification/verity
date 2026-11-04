@@ -3003,13 +3003,44 @@
    "type_hash": "cd6d7ffbbbd9a636fb8133bf75bd00db1b34001e7d7a290948e1b6b2bc6b9ded"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.wrongBoundsDrawn : Properties.NetworkPeriod.WrongBoundsDrawn"],
+   "assumptions": [],
+   "type_hash": "a745d80ca365681c75d8cc09a3e38ee87fccc9c2aa10f58adecd25424d42e3db"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest :",
+    "  Claims.Sampling.StrataDrawn",
+    "    { rules := List.cons (Claims.Sampling.OneStage.subset 1) (List.cons Claims.Sampling.OneStage.all List.nil) }",
+    "    {",
+    "      classes :=",
+    "        List.cons (List.cons (List.cons (List.cons 0 List.nil) (List.cons (List.cons 1 List.nil) List.nil)) List.nil)",
+    "          (List.cons (List.cons (List.cons (List.cons 2 List.nil) List.nil) List.nil) List.nil) }",
+    "    (instHAppendOfAppend.hAppend",
+    "      (List.map (fun x => { fst := x.size, snd := x.k })",
+    "        ((SampledProofs.Bound.strataOf 2 (Core.SamplingDesign.subset 1)).getD List.nil.toArray).toList)",
+    "      (List.map (fun m => { fst := m, snd := m }) (List.cons 1 List.nil)))"
+   ],
+   "assumptions": [],
+   "type_hash": "476118aa91b234127676ae01d2c83cb2ead7bb2a70d90139e352232da26e061f"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial :",
+    "  Exists fun strata =>",
+    "    Exists fun x =>",
+    "      Exists fun s =>",
+    "        Exists fun P =>",
+    "          Not",
+    "            (Properties.NetworkPeriod.WrongBounds s P",
+    "              (instHDiv.hDiv { num := 1, den := 2 }.num.cast { num := 1, den := 2 }.den.cast)",
+    "              (SampledProofs.Bound.boundOf 0 (Core.SamplingDesign.stratified List.nil.toArray) { num := 1, den := 2 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "5996c1b8e8f9832cc6dd007d31c601ce8fe9b07777b7c285ae456b395d46be35"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -7238,6 +7269,9 @@
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -7573,6 +7607,9 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -9356,6 +9393,9 @@
    "guarantees": [
     "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkScan.scanFits",
     "Properties.NetworkScan.scanFits_nontrivial",
     "Properties.NetworkScan.scanScopeAcc",
@@ -9364,6 +9404,14 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
+  },
+  "Definitions.Claims.Sampling.Strata": {
+   "digest": "bd9158f5716271a7155bab4995abf6b1a9d1226762f67762845374bae46db1a4",
+   "definitions": {
+    "Claims.Sampling.OneStage.strata": "6884a0da6c3e6ec1157fc6e10af89018dad7cabb24b3330bd6cf067a89cc7ea4",
+    "Claims.Sampling.StrataDrawn": "6b0cc08e3eada10bdd4fac551a2f92419575874d4782685e3b61b6acedefc646"
+   },
+   "guarantees": ["Properties.NetworkPeriod.wrongBoundsDrawn", "Properties.NetworkPeriod.wrongBoundsDrawn_honest"]
   },
   "Definitions.Core.Blocks": {
    "digest": "54f267a3d33842ebc4b203b859b3253df82cbd7c0b54706eb4b16aba05afd4e0",
@@ -9792,6 +9840,8 @@
     "Pous.Period.SecurityProofs.periodHeldSha512At",
     "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkScan.scanScopeAcc",
     "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
@@ -9842,6 +9892,8 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
     "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkScan.scanScopeAcc",
     "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -10813,6 +10865,8 @@
    "guarantees": [
     "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkScan.scanFits",
     "Properties.NetworkScan.scanFits_nontrivial",
     "Properties.NetworkScan.scanScopeAcc",
@@ -10825,7 +10879,12 @@
     "NetTiming.faultyBits": "11626696611eb91d66ee3f2a5c453e27db0facb8f80ee3d83b1c5f75a1a1dc27",
     "NetTiming.faultySets": "cf08892338b4055889a2cb6fd6b503d7977e9a006937f0e3c224517ffef076ba"
    },
-   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
+   "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
+   ]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "f111025e1c4fd3b54ab0b3e233cd45ec6207e10ef6e40d1058c19954dc177694",
@@ -22930,16 +22989,22 @@
    ]
   },
   "Properties.NetworkPeriod.Placed": {
-   "digest": "dbddf622f38d7a8b8854f9c5c4f2b261d575a598fd0af0445aee5e1dd909d1fd",
+   "digest": "6c18708ef04cdc9e9c23f725c91ebfa56ba54fc2994482932f0c22ddede2db49",
    "definitions": {
     "Properties.NetworkPeriod.LaidOut": "f82e1be1df904134dfa3b90d588e13e98782e298643c2b7b7d6db1e3dbd0c242",
     "Properties.NetworkPeriod.ScanWindowsPlaced": "65e34930d98bb8a57a70dc0bbd6a4058ad2e2d12c2523045e5deaf42c4cd6a37",
     "Properties.NetworkPeriod.StmtBits": "a36896012d0776251754f9e643fb47571d92546d5b8ab4e4a28c233b713cd890",
     "Properties.NetworkPeriod.WrongBounds": "7668c33339b3695f33da552f2a32dbdb6012bb9ed0d849b60aec5bee204b7026",
+    "Properties.NetworkPeriod.WrongBoundsDrawn": "31233e6c9362dfa35fdd3d9e045b7f69b37c42a45a428f15bfe37fbed3081348",
     "Properties.NetworkPeriod.gateOf": "88aeffe3e26687076c61bd19322a62fa0be5c250139fe850cd3ffae238c5eacd",
     "Properties.NetworkPeriod.memberProg": "92a8c3b964c1bdcd1e78500dce3a0d5215a0dcf2dbe30a5166f7d6c6c80a9d75"
    },
-   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
+   "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
+   ]
   },
   "Properties.NetworkRecords": {
    "digest": "c2275d182bc1428c70bb8f4e78b5d552554db2089a104cb73b9d6e70b97ce449",
@@ -25822,6 +25887,9 @@
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.reduce": "63c5ef090c49de08468bfa27f6b97e3eb39200cde9286aca77609567ae980713"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.wrongBoundsDrawn",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
+    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
