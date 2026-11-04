@@ -49,17 +49,16 @@ def test_one_mathlib():
     assert revs and len(set(revs.values())) == 1, revs
 
 
-#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
-#: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
-#: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 615, "Security/Properties": 235, "verity/core/service/flock": 8}
+#: each lock's `unwitnessed` count: its guarantees of what an acceptance means, or of an exclusion's bound, that carry no
+#: `honest` and `nontrivial` witnesses (`check.py`'s `witness_failures`). The count only falls: a PR whose guarantee gets
+#: its witnesses lowers its lock's number here in the same change
+UNWITNESSED = {"Security": 365, "Security/Properties": 192, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
     """A lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
-    changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here may
-    come down with it."""
+    changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here comes
+    down with it."""
     got = {str(p.relative_to(ROOT)): len(json.loads((p / "lean-audit.json").read_text()).get("unwitnessed", {}))
            for p in lake_packages()}
     grown = {p: f"{n} > {UNWITNESSED.get(p, 0)}" for p, n in got.items() if n > UNWITNESSED.get(p, 0)}
