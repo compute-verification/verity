@@ -62,10 +62,14 @@ def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):
 
 
 def _windows(tmp_path: Path, windows: list[int], empty: list[int], advice: dict[int, WA.Advice]) -> Path:
+    """Each window's advice as `verity-vllm advice` leaves it: padded to its registration's ℓ (`advice_windows.pad`)."""
+    from verity_vllm.pipeline import advice_windows as AW
+
     (tmp_path / "windows.jsonl").write_text("".join(json.dumps({"window": k, "empty": k in empty}) + "\n" for k in windows))
     for k, a in advice.items():
         (tmp_path / "advice" / f"w{k}" / "private").mkdir(parents=True)
-        (tmp_path / "advice" / f"w{k}" / "private" / "advice.bin").write_bytes(WA.encode(a))
+        (tmp_path / "advice" / f"w{k}" / "registration.json").write_text(json.dumps({"compiler": {"cap_bits": AW.CAP_BITS}}))
+        (tmp_path / "advice" / f"w{k}" / "private" / "advice.bin").write_bytes(AW.pad(WA.encode(a), AW.CAP_BITS))
     return tmp_path
 
 
