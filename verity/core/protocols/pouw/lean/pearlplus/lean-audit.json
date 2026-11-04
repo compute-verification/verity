@@ -1,6 +1,8 @@
 {
  "roots": ["PouwPearlPlus"],
- "exempt": {},
+ "exempt": {
+  "PouwPearlPlus.Main": "the pouw-pearlplus executable's entry point: it parses its arguments, reads the run's pass files and coins and prints PouwCheck.PearlPlus.check's verdict, audited under PouwPearlPlus"
+ },
  "layers": {
   "PouwPearlPlus": {
    "imports": ["PouwPearlPlus", "PouwCommit", "Evaluate", "Randomness", "Identity", "Flock", "Lean", "CoreProtocol"],
