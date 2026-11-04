@@ -301,16 +301,19 @@ def listed(te: Path) -> set[str]:
 
 def refix(te: Path) -> set[str]:
     """The runs fix layer `te` traces: those its layer's traces list an elementwise product for (`listed`) or its layer
-    failed with an error te's capture code fixes (FIXED), less those an older fix layer over the same layer traced."""
+    failed with an error te's capture code fixes (FIXED), less those an older fix layer over the same layer traced;
+    none once a newer one over it is there, which traces them."""
     base, at = fixed(te), version(capture_version(te))
+    peers = [p for p in layers() if p.name.endswith(FIX) and p != te and fixed(p) == base]
+    if any(version(capture_version(p)) > at for p in peers):
+        return set()
     fixes = [re.compile(p) for v, ps in FIXED.items() if version(v) <= at for p in ps]
 
     def traced(t: Path) -> dict:
         f = trace40.cache(t) / "traced.json"
         return json.loads(f.read_text()) if f.exists() else {}
     failed = {k for k, v in traced(base).items() if v.get("error") and any(p.search(v["error"]) for p in fixes)}
-    older = {k for p in layers() if p.name.endswith(FIX) and version(capture_version(p)) < at and fixed(p) == base
-             for k, v in traced(p).items() if not v.get("error")}
+    older = {k for p in peers for k, v in traced(p).items() if not v.get("error")}
     return (listed(base) | failed) - older
 
 
