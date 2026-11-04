@@ -681,3 +681,9 @@ pp-arm's bring-up 4 (r20261104-151354-aa0e) holds everything up to the window ti
     - Verdict about 17:45Z. Expect `remote`'s reds: P10 on graphs.py, serve_seal's public-api import, repository's lint reds, `test_queue` and property_redteam.
   - **Locally:** one_stage's whole suite passed, 689 passed and 1 skipped.
 - **Blocking a live row:** the gate's repin and the lane key's registration (both INF-492, by Thu 18:00Z). Until then the piece rejects on the pin, and `pearlplus_of_record`'s lane condition (`by: vllm`) can't hold.
+
+## 16:27Z Wed (coordinator): pp-row's served compare, for the record
+
+pp-row compared bring-ups 3 (653e) and 4 (aa0e): **EQUAL**, with PHI, BUILD, B-OF-RECORD w0 and CUT w0 all passing. The new `manifest_digest` seal reading is in both, and the arm's own `predicted/` is tied to pp-row's Build of record by both digests (program 95ba0fab…, manifest 65ce5a6c…). **Make this compare a step of the run of record**, after the seal, CPU only:
+`research run --on vy-dc-h200-3 --project verity --cwd clone --source . --timeout 1800 -- bash /workspace/research/vllm-pearlc-h200bf16/served-compare/served-compare.sh SERVE_DIR`
+Name its verdict line in the record. I'm retiring pp-row.
