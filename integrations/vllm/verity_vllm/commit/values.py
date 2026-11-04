@@ -5,8 +5,8 @@ salt, reads the server's key, or runs the service.
 
 * `address`: the service's ``HOST:PORT`` (``FC_FIREWALL_VALUES``), or None: unset, every call site commits as it did before, under
   salts of its own.
-* `Session`: one commit session, a window's or a registration's: one `Session.commit` of every table (`Table`: domain id, schema and
-  the rows' digests, table-major in one request), then one `Session.register`. A stack commits once per registration: the service
+* `ValueSession`: one commit session, a window's or a registration's: one `ValueSession.commit` of every table (`Table`: domain id,
+  schema and the rows' digests, table-major in one request), then one `ValueSession.register`. A stack commits once per registration: the service
   opens one session an epoch and refuses a commit while that session is not yet registered, so every record's ``m`` is 1. This
   process holds at most one session committed and not registered (`pending`), and refuses a second commit before its register
   here, before anything is sent. A session commits once, whatever the outcome: a failed commit is its caller's visible failure,
@@ -16,7 +16,7 @@ salt, reads the server's key, or runs the service.
   269-byte table ref) and every leaf's ``b ‖ c``, the tree's levels rebuilt here from them (leaf ``row_leaf(D, i, tree_leaf(K, bc),
   schema)``, frame-v3-sha512) and refused unless their root is the service's: verity_vllm never registers a root of its own.
   `Committed.of` reads one back from its ref and ``b ‖ c`` (a window's, on a sample).
-* `Registration`: what the service appended to the ZK server's record for the session: its number ``n``, the epoch's session count
+* `ValueRegistration`: what the service appended to the ZK server's record for the session: its number ``n``, the epoch's session count
   ``m`` (1; a record counting more is refused), the table refs and the record itself (whose tag only the server can check).
 * `refs_file`: what `flock-circuit --zk --salt-refs` reads on a sample: the table refs of the tables a statement reads, then one row
   ref per salt of its inputs file, in that file's order (`instance_rows`, `table_rows`).
@@ -51,7 +51,7 @@ _INST = hm96.SHA512
 _CHUNK = 1 << 20
 _HEX = re.compile(r"[0-9a-f]*")
 _LOCK = threading.Lock()
-_pending: Session | None = None
+_pending: ValueSession | None = None
 
 
 def address() -> str | None:
@@ -59,12 +59,12 @@ def address() -> str | None:
     return settings.get(ENV) or None
 
 
-def pending() -> Session | None:
+def pending() -> ValueSession | None:
     """The session this process committed and has not registered, or None: while there is one, no other commits."""
     return _pending
 
 
-def _release(s: Session) -> None:
+def _release(s: ValueSession) -> None:
     global _pending
     with _LOCK:
         if _pending is s:
@@ -125,7 +125,7 @@ def tree(domain: bytes, schema: str, bcs: Sequence[bytes]) -> tuple[tuple[bytes,
 class Committed:
     """Table ``index`` of commit session ``session``, as the service committed it: ``root`` and ``tag`` its answer's, ``bcs`` every
     leaf's ``b ‖ c`` (public data) and ``levels`` the tree rebuilt from them, whose root is ``root``. A caller that streams a large
-    commit to disk (`Session.commit`'s ``sink``) gets it back without ``bcs`` and ``levels``."""
+    commit to disk (`ValueSession.commit`'s ``sink``) gets it back without ``bcs`` and ``levels``."""
 
     session: bytes
     index: int
@@ -174,7 +174,7 @@ def _held(c: Committed, bcs: Sequence[bytes], what: str) -> Committed:
 
 
 @dataclass(frozen=True)
-class Registration:
+class ValueRegistration:
     """The session's registration on the ZK server's record: its number, the count of sessions its epoch opened (public, and 1:
     the stack chooses no session), its table refs and the record ``be64 n ‖ be64 m ‖ be32 T ‖ refs ‖ tag``."""
 
@@ -222,7 +222,7 @@ def _hex(word: str, n: int, what: str) -> bytes:
     return bytes.fromhex(word)
 
 
-class Session:
+class ValueSession:
     """One commit session of the value service at ``address`` (default `address()`): `commit` once, then `register` once; while
     it is committed and not registered, no other session of this process commits."""
 
@@ -233,7 +233,7 @@ class Session:
         self.address = _split(at)
         self.id: bytes | None = None
         self.tables: tuple[Committed, ...] = ()
-        self.registration: Registration | None = None
+        self.registration: ValueRegistration | None = None
         self.tried = False
         self._sent, self._head = False, ""             # the last request: held whole by the service; its answer's first word
 
@@ -310,7 +310,7 @@ class Session:
         (`verity_flock.circuit.write`'s ``committed``)."""
         return [c.bcs for c in self.commit([Table(d, sc, xs) for d, sc, xs in tables])]
 
-    def register(self) -> Registration:
+    def register(self) -> ValueRegistration:
         """The session's registration on the ZK server's record, which closes its epoch: refused for a session that never
         committed, has registered, or belongs to an epoch an earlier registration closed."""
         if self.id is None:
@@ -337,7 +337,7 @@ class Session:
         if m != 1:
             raise Refused(f"the registration counts {m} sessions in its epoch: a stack commits once per registration, and the "
                           "value service of record opens one session an epoch")
-        self.registration = Registration(n, m, refs, record)
+        self.registration = ValueRegistration(n, m, refs, record)
         return self.registration
 
 
@@ -378,5 +378,5 @@ def refs_file(tables: Sequence[Committed], rows: Sequence[tuple[int, int]]) -> b
             + b"".join(struct.pack(">IQ", t, i) for t, i in rows))
 
 
-__all__ = ["ENV", "SCHEMAS", "Committed", "Refused", "Registration", "Session", "Table", "address", "instance_rows", "pending",
-           "refs_file", "refuse_own", "stored", "table_rows", "tree"]
+__all__ = ["ENV", "SCHEMAS", "Committed", "Refused", "Table", "ValueRegistration", "ValueSession", "address", "instance_rows",
+           "pending", "refs_file", "refuse_own", "stored", "table_rows", "tree"]

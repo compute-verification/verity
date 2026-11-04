@@ -21,7 +21,7 @@ class ServedValues:
     """The window's one table, as the service committed it (its root the record's), and the session's registration."""
 
     table: V.Committed
-    registration: V.Registration
+    registration: V.ValueRegistration
     binding: bytes
     n_bits: int
     G: int
@@ -45,6 +45,6 @@ def commit(S: Any, session: Sequence, run_root: bytes, service: str) -> ServedVa
     n_bits = rows[0][1]
     binding, digest = SRW.binding(run_root), BitRowLeaf(n_bits).layout().digest
     table = V.Table(ADV.domain(binding, len(rows)).domain_id, BitRowLeaf(n_bits).hiding_schema, b"".join(digest(r) for r, _n in rows))
-    s = V.Session(service)
+    s = V.ValueSession(service)
     (got,) = s.commit([table])
     return ServedValues(got, s.register(), binding, n_bits, S.P)

@@ -115,7 +115,7 @@ TABLE = V.Table(hashlib.sha512(b"values/domain").digest(), V.SCHEMAS[1], b"".joi
 @needs_service
 def test_a_stack_commits_and_registers_in_turn_one_session_an_epoch(service):
     t = TABLE
-    a, b = V.Session(), V.Session()
+    a, b = V.ValueSession(), V.ValueSession()
     with pytest.raises(V.Refused, match="commit first"):
         a.register()
     (ca,) = a.commit([t])
@@ -125,7 +125,7 @@ def test_a_stack_commits_and_registers_in_turn_one_session_an_epoch(service):
     with pytest.raises(V.Refused, match="not yet registered: a stack commits once per registration"):
         b.commit([t])
     with pytest.raises(V.Refused, match="the current epoch's session is not yet registered"):
-        V.Session()._request(f"commit 1 {t.domain.hex()} {t.n} {t.schema}", [t.digests], V._line)   # past this side's guard
+        V.ValueSession()._request(f"commit 1 {t.domain.hex()} {t.n} {t.schema}", [t.digests], V._line)   # past this side's guard
     ra = a.register()
     assert V.pending() is None and (ra.number, ra.sessions, ra.refs) == (0, 1, (ca.ref(),))
     with pytest.raises(V.Refused, match="registers once"):
@@ -214,14 +214,14 @@ def test_the_client_never_sends_a_second_commit_before_the_register(monkeypatch)
     wire = Wire()
     monkeypatch.setattr(V.socket, "create_connection", wire.connect)
     monkeypatch.setenv(V.ENV, "127.0.0.1:1")
-    a = V.Session()
+    a = V.ValueSession()
     a.commit([TABLE])
-    for again in (V.Session(), V.Session(), a):
+    for again in (V.ValueSession(), V.ValueSession(), a):
         with pytest.raises(V.Refused, match="not yet registered|commits once"):
             again.commit([TABLE])
     assert a.register().sessions == 1 and V.pending() is None
 
-    racers, gate = [V.Session() for _ in range(8)], threading.Barrier(8)
+    racers, gate = [V.ValueSession() for _ in range(8)], threading.Barrier(8)
 
     def race(s):
         gate.wait()
@@ -237,23 +237,23 @@ def test_the_client_never_sends_a_second_commit_before_the_register(monkeypatch)
     won.register()
 
     wire.refuse = True
-    refused = V.Session()
+    refused = V.ValueSession()
     with pytest.raises(V.Refused, match="the value service refused: a commit body"):
         refused.commit([TABLE])
     assert V.pending() is None
     with pytest.raises(V.Refused, match="commits once: a failed commit is its caller's failure"):
         refused.commit([TABLE])
-    nxt = V.Session()
+    nxt = V.ValueSession()
     nxt.commit([TABLE])
     nxt.register()
 
     wire.cut = True
-    cut = V.Session()
+    cut = V.ValueSession()
     with pytest.raises(V.Refused, match="ended"):
         cut.commit([TABLE])
     assert V.pending() is cut and cut.id is None
     with pytest.raises(V.Refused, match="not yet registered"):
-        V.Session().commit([TABLE])
+        V.ValueSession().commit([TABLE])
     with pytest.raises(V.Refused, match="commit first"):
         cut.register()
     assert wire.lines == ["commit", "register", "commit", "register", "commit", "commit", "register", "commit"]
@@ -263,12 +263,12 @@ def test_the_client_never_sends_a_second_commit_before_the_register(monkeypatch)
 @needs_service
 def test_a_windows_served_rows_commit_through_the_service_as_the_verifier_reads_them(service, tmp_path, monkeypatch):
     sent: list = []
-    commit_ = V.Session.commit
+    commit_ = V.ValueSession.commit
 
     def spy(self, tables, sink=None):
         sent.append(list(tables))
         return commit_(self, tables, sink)
-    monkeypatch.setattr(V.Session, "commit", spy)
+    monkeypatch.setattr(V.ValueSession, "commit", spy)
     statics = served_statics()
     wins, reqs, trace = served_run(tmp_path, statics)
     full = [w for w in wins if not w.get("empty")]
@@ -322,7 +322,7 @@ def test_a_sampled_block_proves_under_the_servers_salts_admitted_on_its_record(s
     st = CS.UnitStager(UNIT, "unit/values-sample", ROWS, [(V2, (0,))])
     rng = np.random.default_rng(3)
     rows = {"ab": rng.integers(0, 1 << 16, (N, 2), dtype=np.uint16), "w": rng.integers(0, 1 << 16, (N, 128), dtype=np.uint16)}
-    s = V.Session()
+    s = V.ValueSession()
     staged = st.stage(rows, tmp_path / "committed", None, committed=s.bcs)
     reg = s.register()
     assert staged["salts"] is None and (reg.number, reg.sessions, len(reg.refs)) == (0, 1, len(st.ports))

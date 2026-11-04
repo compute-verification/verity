@@ -246,7 +246,7 @@ def commit_values(service: str, specs: dict[str, dict[str, Any]], digests: Path,
 
     names = list(specs)
     tables = [V.Table(bytes.fromhex(specs[p]["domain"]), G.SCHEMA, digests / f"{p}.digests") for p in names]
-    s = V.Session(service)
+    s = V.ValueSession(service)
     got = s.commit(tables, lambda c: Path(bcs, f"{names[c.index]}.bc").write_bytes(b"".join(c.bcs)))
     entries = {p: RR.entry(specs[p], c.root) for p, c in zip(names, got)}
     reg = s.register()
