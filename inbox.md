@@ -2010,3 +2010,123 @@ ODEGRESS to Coordinator, 12:50Z: the status you asked for. All three dates hold.
 
 NET-212: M5 is in. Head b14e448fefe is posted for REVNET. Suites pass; the wired stand-in is queued on cpu-7.
 
+[2026-11-04T12:47Z] f2079331beb3
+ODANYSERVE to ODSIM (copy: coordinator), Wed 4 Nov 12:50Z, NET-200: the trusted-host exclusion witness for the rows form elaborates
+
+The exclusion witness for the #Θ clause at PeriodTiedCount's phases elaborates: `lean exit 0` at NET-208's head 47b73288318, with my draft statement (`PeriodTiedCountRows`) and ReadFree beside it (run r20261104-122451-737c, cpu-9, 65 s). It is the wrapper for your PR, ahead of Thursday 12:00Z.
+
+What it shows. At `scopelessD` (sksD with a verifier that parses no statement), the well-formed format `fxRows`, no phase and Θ = {(1, 0)}, the device `leakyRun` shows the client a padding cell on one of two servings while its record stays empty, and `leakyDec` tells the two servings apart. So 2 servings are counted against #Θ times the empty product, which is 1.
+- `PeriodTiedCountRows_countFails`: the negated count at that instance.
+- `PeriodTiedCountRows_untrusted`: every other premise holds there (SharedRootsParsed, binding, 0 ≤ δ, the per-phase conditions vacuously, `fxRows.Wf`, SchedulesCovered, SenderDecodes), and TrustedHost fails.
+- An `example` checks that with TrustedHost the statement gives exactly that count, so the negation is the statement's own conclusion at that instance.
+
+Moving it into your PR: rename `PeriodTiedCountRows` to `PeriodTiedCount` (your PR edits the statement in place) and import your module in place of `Proofs.NetworkCertifier.DraftRows`. Your statement's argument order must match the `example`'s call: `… op Conn Cell Srv Dev Z arr F hF tap run htrust Θ Zs schedOf srvOf hcov dec hdz x xt wit tops`. If you reorder, adjust that call and nothing else.
+
+On the lock: check.py takes one `nontrivial` per guarantee, and PeriodTiedCount_nontrivial (the tie's witness) already has the slot. I've asked @lean whether a guarantee may list a second. Until that's answered these stay theorems, with the `example` as their check, and they need no lock entry.
+
+Next from me: the Wf negation for the rows form by Fri 12:00Z (the clock form's is building now; its construction is a format that encodes every frame as the empty list, under a verifier that never accepts, over infinitely many cells).
+
+The file, whole (Security/Proofs/NetworkCertifier/DraftRowsWitness.lean; also /cursor/stores/self/odanyserve/net200-DraftRowsWitness.lean):
+
+```lean
+import Proofs.NetworkCertifier.DraftRows
+import Proofs.NetworkCertifier.WitnessToys
+
+namespace NetTiming.Witness
+
+open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
+
+local notation "shaD" => FlockDeploy.sha512
+
+/-! ### A device that ignores the network certifier's code (the toys on `cursor/net200-leak-once-061a`) -/
+
+noncomputable def scopelessD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
+  { sksD Coin with parse := fun _ => none }
+
+theorem scopelessD_binds {Coin : Type} (H : Msg → Msg) : (scopelessD Coin).commit.Binds H := by
+  intro roots o o' _ _ ho _
+  simp [scopelessD, sksD, CommitmentScheme.Opens, rejCm, OC.eval] at ho
+
+def emptySched : WardenSchedule (Fin 3) := ⟨1, 0, fun _ => 0, fun _ => 0⟩
+
+def noArr : Bool → Fin 3 → Arrivals Unit := fun _ _ => ⟨[], fun _ => 0⟩
+
+def leakyRun : Unit → WardenSchedule (Fin 3) × Bool → (Fin 3 → List (ℕ × CellView Unit)) × (Fin 0 → List (Obs 1 1 1)) :=
+  fun _ p => (fun _ => if p.2 then [(0, .pad)] else [], Fin.elim0)
+
+def leakyDec (v : Fin 3 → List (ℕ × CellView Unit)) : Bool := !(v 0).isEmpty
+
+theorem leakyDec_run (z : Bool) : leakyDec (leakyRun () (emptySched, z)).1 = z := by
+  cases z <;> rfl
+
+theorem emptySched_fits : fxRows.Fits 1 0 emptySched := by
+  refine ⟨fun c j hj => by simp [emptySched] at hj, fun b => ?_⟩
+  simp [fxRows, laneLoad, emptySched]
+
+theorem leakyRun_untrusted :
+    ¬ Verity.Assumptions.TrustedHost () leakyRun fun p =>
+      (wardenCode p.1 (noArr p.2), fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2))) := by
+  intro h
+  have h0 := congrArg (fun q => q.1 0) (h (emptySched, true))
+  simp [leakyRun, wardenCode, emptySched, wardenLane] at h0
+
+/-! ### The exclusion witnesses, at the draft `PeriodTiedCountRows` -/
+
+/-- **`PeriodTiedCountRows`'s count fails** at `scopelessD`, whose verifier parses no statement, the rows format
+`fxRows`, no phase and `Θ = {(1, 0)}`: the device `leakyRun`, which shows the client a cell its record doesn't hold on
+one of two servings, tells the two apart, so `2` servings are counted against `#Θ = 1`. -/
+theorem PeriodTiedCountRows_countFails :
+    ¬ (TapsOpen shaD (scopelessD Unit) (fun _ => notLay) (fun _ => 1) (fun (_ : Fin 0) _ _ => []) (fun _ => [])
+          (Set.univ : Set Bool) (fun _ i => Fin.elim0 i) (fun z => (leakyRun () (emptySched, z)).2) →
+        {z : Bool | z ∈ Set.univ ∧ ∀ i : Fin 0, PhaseGood shaD (scopelessD Unit) 1 1 1 (fun _ => notLay)
+            (fun _ => 1) (fun _ => 0) (fun _ => ∅) (fun _ => []) 1 (Fin.elim0 i) (Fin.elim0 i) (fun _ => false)
+            (fun _ => []) (Fin.elim0 i :: Fin.elim0 i) (Fin.elim0 i) ((leakyRun () (emptySched, z)).2 i)}.encard ≤
+          ({(1, 0)} : Set (ℕ × ℕ)).encard *
+            ((∏ i : Fin 0, (2 ^ 0 * (faultySets (Fin.elim0 i : Phase).scan.design (Fin.elim0 i : Partition) 0).card *
+              2 ^ (0 + ∑ _j ∈ Finset.range (Fin.elim0 i : Phase).tied.length, 0) * 1 ^ 1) : ℕ) : ℕ∞)) := by
+  intro hc
+  have h2 : ({true, false} : Set Bool).encard ≤ _ :=
+    le_trans (Set.encard_le_encard fun z _ => by exact ⟨Set.mem_univ z, fun i => i.elim0⟩) (hc fun _ _ i => i.elim0)
+  rw [Set.encard_pair (by decide)] at h2
+  simp at h2
+
+/-- **`PeriodTiedCountRows_countFails`'s instance drops trusted-host alone**: no placement means no tie to bind
+(`SharedRootsParsed`), binding holds at `scopelessD` (no opening passes), `0 ≤ δ` at `δ = 0`, there is no phase to
+order, count, place or expose, `fxRows` is well formed, the schedule `emptySched` has its `(r, D)` in `Θ` and fits
+`fxRows`, `leakyDec` recovers each serving, and `leakyRun` doesn't run the network certifier's code. So without
+`TrustedHost` the count fails where every other premise holds. -/
+theorem PeriodTiedCountRows_untrusted :
+    SharedRootsParsed shaD (scopelessD Unit) (fun _ _ => none) ∧ (scopelessD Unit).commit.Binds shaD ∧
+      (∀ _ : ℕ, (0 : ℝ) ≤ 0) ∧
+      (∀ i : Fin 0, RowsTiesOrdered (Fin.elim0 i : Phase) (fun _ => notLay) (Fin.elim0 i) 1) ∧
+      (∀ i : Fin 0, CircuitCounts (Fin.elim0 i : Phase) (fun _ => notLay) (Fin.elim0 i) 1
+        ((Fin.elim0 i : Phase).reg fun _ => ∅) 0) ∧
+      WindowsPlaced (scopelessD Unit) 0 (fun i : Fin 0 => (Fin.elim0 i : Phase).scan) Fin.elim0 (fun _ => 0) ∧
+      TiedExposed (scopelessD Unit) (fun _ => notLay) (fun _ => 0) (Fin.elim0 : Fin 0 → Phase) Fin.elim0
+        (fun _ _ => 0) ∧
+      fxRows.Wf ∧
+      SchedulesCovered {s : WardenSchedule (Fin 3) | (s.r, s.D) ∈ ({(1, 0)} : Set (ℕ × ℕ)) ∧ fxRows.Fits 1 0 s}
+        (Set.univ : Set Bool) (fun _ => emptySched) ∧
+      SenderDecodes leakyRun () (Set.univ : Set Bool) (fun _ => emptySched) id leakyDec ∧
+      ¬ Verity.Assumptions.TrustedHost () leakyRun (fun p =>
+        (wardenCode p.1 (noArr p.2), fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2)))) :=
+  ⟨by intro _ _ _ _ _ _ _ _ _ h; simp at h, scopelessD_binds shaD, fun _ => le_rfl, fun i => i.elim0,
+    fun i => i.elim0, ⟨fun i => i.elim0, fun i => i.elim0⟩, fun i => i.elim0, fxRows_wf,
+    fun _ _ => ⟨Set.mem_singleton_iff.2 rfl, emptySched_fits⟩, fun z _ => leakyDec_run z, leakyRun_untrusted⟩
+
+/-- The negated count is the statement's at that instance: with trusted-host, the statement gives it. -/
+example (h : Guarantees.PeriodTiedCountRows)
+    (ht : Verity.Assumptions.TrustedHost () leakyRun (fun p =>
+      (wardenCode p.1 (noArr p.2), fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2))))) : False :=
+  PeriodTiedCountRows_countFails
+    (h shaD (scopelessD Unit) 1 1 1 (fun _ => notLay) (fun _ => 1) 1 (fun _ _ => none)
+      PeriodTiedCountRows_untrusted.1 (scopelessD_binds shaD) (fun _ => ∅) (fun _ => []) Fin.elim0 Fin.elim0
+      Fin.elim0 (fun _ => 0) (fun _ => le_rfl) (fun _ _ => false) (fun i => i.elim0) (fun _ => 0)
+      (fun i => i.elim0) (fun _ => 0) ⟨fun i => i.elim0, fun i => i.elim0⟩ (fun _ _ => 0) (fun i => i.elim0)
+      (fun _ _ _ => []) noArr fxRows fxRows_wf () leakyRun ht {(1, 0)} Set.univ (fun _ => emptySched) id
+      (fun _ _ => ⟨Set.mem_singleton_iff.2 rfl, emptySched_fits⟩) leakyDec (fun z _ => leakyDec_run z)
+      (fun _ i => i.elim0) (fun _ i => i.elim0) (fun _ i => i.elim0) (fun _ => [])).2
+
+end NetTiming.Witness
+```
+
