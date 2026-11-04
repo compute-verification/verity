@@ -7,9 +7,13 @@ import Proofs.Flock.SamplingGeneric.Bits
 # The compiled extractor's costs
 
 `Compiled.Efficient`'s three bounds at a compiled sampled verifier that meets the contract (`Compiled.Sessions`), from
-the proof system's costs (`Arg.RerunsLe`, `Arg.RerunsExpLe`, `Arg.OwnLe`) and the opening checks' count
-(`Compiled.OpenCallsLe`): `Compiled.E` extracts slot by slot (`Compiled.runExt`), so it is the sampling extractor
-at the step `runExt` (`E_eq_Esamp`).
+the proof system's expected reruns (`Arg.RerunsExpLe`) and the opening checks' count (`Compiled.OpenCallsLe`):
+`Compiled.E` extracts slot by slot (`Compiled.runExt`), so it is the sampling extractor at the step `runExt`
+(`E_eq_Esamp`).
+
+* `Arg.reruns_le`, `Arg.own_le`: every proof system's extractor is `E^rep`, so it reruns at most `1 + m′·K` times
+  (`ERep_cost`) and makes no SHA-512 call of its own. The expected bound is not read off the strict one: `E^rep`'s
+  expected `1 + m′·k` reads `k`, a statement's, which a bound over shapes can't.
 
 * `Esamp`: the sampling extractor with what it does at each accepted inner run a parameter (`step`), and its three
   bounds from the step's (`Esamp_runs_le`, `Esamp_runs_exp`, `Esamp_own_le`): `Claims.Sampling`'s `E_runs_le`,
@@ -25,8 +29,8 @@ at the step `runExt` (`E_eq_Esamp`).
   (`fixed`, `Ex_resample`), so the session's coins and the block's coins are uniform beside one prover `P'`, where
   `A.RerunsExpLe` holds.
 * `slots_runs_le`, `slots_runs_exp`, `slots_own_le`: `Efficient`'s three bounds at `Esamp` of `slotStep`.
-* `compilerEfficient`, `expOwnOf`: **`CompilerEfficient`** and **`ExpOwnOf`**, the three bounds at `Compiled.E`
-  through `E_eq_Esamp`, so `compilerBits_of` gives `CompilerBits`.
+* `compilerEfficient`: **`CompilerEfficient`**, the three bounds at `Compiled.E` through `E_eq_Esamp`, so
+  `compilerBits_of` gives `CompilerBits`.
 -/
 
 namespace Claims.SamplingGeneric
@@ -115,6 +119,31 @@ theorem Ex_restrict_shape {Coin : Type} [Fintype Coin] [Nonempty Coin] {A : Arg 
   subst hs
   rw [Ex_prod, Ex_prod]
   exact Ex_comp_inj emb hemb fun a => Ex (F a)
+
+/-! ## Every proof system's extractor's strict reruns and own calls -/
+
+namespace Arg
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (H : Msg → Msg)
+
+/-- **A proof system's extractor reruns at most `1 + m′·K` times**: it is `E^rep` (`ERep_cost`). -/
+theorem reruns_le : ExtractRunsLe H A.E fun x => 1 + A.waits (A.shape x) * A.cap (A.shape x) := by
+  intro x Ω P ω r c
+  exact (ERep_cost H A.V (fun x => A.waits (A.shape x)) A.k (fun x => A.cap (A.shape x)) A.opens
+    (fun x os => (A.assemble x os).1) A.check).1 x Ω P ω r fun i j t => c i j (Fin.cast (A.wf x) t)
+
+/-- **A proof system's extractor makes no SHA-512 call of its own**: `E^rep`'s waits rerun, and its assemble step and
+check are pure. -/
+theorem own_le : ExtractOwnLe H A.E fun _ => 0 := by
+  intro x Ω P ω r₀ c
+  have hn : NoHash (A.E.ext x r₀ c) := by
+    refine NoHash.rerun _ _ fun v => ?_
+    split
+    · exact NoHash.firstWait _ _ _ _ _
+    · exact NoHash.ret _
+  exact (congrArg List.length (ownLog_of_noHash H _ hn)).le
+
+end Arg
 
 namespace Compiled
 
@@ -458,11 +487,11 @@ theorem E_eq_Esamp (L : Compiled Coin A) : L.E = L.Esamp L.SlotY L.slotStep := r
 
 variable {H : Msg → Msg} {L : Compiled Coin A}
 
-theorem runExt_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe H ρ) {x : Msg} {Ω : Type}
-    (P : Prover Ω) (ω : Ω) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
-    ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 ≤ L.nPU x * L.ρs ρ x := by
+theorem runExt_runs_le (hS : L.Sessions H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement)
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
+    ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 ≤ L.nPU x * L.ρs x := by
   unfold runExt
-  refine (flatMapRP_runs_le H _ _ (L.ρs ρ x) _ fun iu hiu => ?_).trans
+  refine (flatMapRP_runs_le H _ _ (L.ρs x) _ fun iu hiu => ?_).trans
     (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
   obtain ⟨i, u⟩ := iu
   dsimp only
@@ -470,31 +499,25 @@ theorem runExt_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe
   · rename_i hu
     obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.of_mem_zip hiu).2
     rw [L.unitExt_runs_eq H P ω P' r hshape hcard (fun r' h => (hview r' h).1) (fun _ _ => rfl) s _]
-    refine (hρ xS Unit P' () _ _).trans ?_
-    show ρ (A.shape xS) ≤ L.ρs ρ x
+    refine (A.reruns_le H xS Unit P' () _ _).trans ?_
+    show 1 + A.waits (A.shape xS) * A.cap (A.shape xS) ≤ L.ρs x
     rw [hshape]
-    exact le_maxBelowN (fun u => ρ (L.sh x u)) hu
+    exact le_maxBelowN (fun u => 1 + A.waits (L.sh x u) * A.cap (L.sh x u)) hu
   · exact Nat.zero_le _
 
-theorem runExt_own_le (hS : L.Sessions H) {h : A.Sh → ℕ} (hh : A.OwnLe H h) (hopen : L.OpenCallsLe H) {x : Msg}
-    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin)
-    (c : L.SlotEC x) :
-    (ownLog H (run H P L.V x ω) (L.runExt x s r (run H P L.V x ω r).seen c)).length ≤
-      L.nPU x * (L.openCalls x + L.hs h x) := by
+theorem runExt_own_le (hS : L.Sessions H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
+    (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
+    (ownLog H (run H P L.V x ω) (L.runExt x s r (run H P L.V x ω r).seen c)).length ≤ L.nPU x * L.openCalls x := by
   unfold runExt
-  refine (ownLog_flatMapRP_le H _ _ (L.openCalls x + L.hs h x) _ fun iu hiu => ?_).trans
+  refine (ownLog_flatMapRP_le H _ _ (L.openCalls x) _ fun iu hiu => ?_).trans
     (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
   obtain ⟨i, u⟩ := iu
   dsimp only
   split
-  · rename_i hu
-    obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.of_mem_zip hiu).2
+  · obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.of_mem_zip hiu).2
     refine (L.unitExt_own_le H P ω P' r hshape hcard (fun r' h => (hview r' h).1) (fun _ _ => rfl) hopen hs _).trans ?_
-    rw [Nat.add_comm (L.openCalls x)]
-    refine Nat.add_le_add_right ((hh xS Unit P' () _ _).trans ?_) _
-    show h (A.shape xS) ≤ L.hs h x
-    rw [hshape]
-    exact le_maxBelowN (fun u => h (L.sh x u)) hu
+    refine (Nat.add_le_add_right (A.own_le H xS Unit P' () _ _) _).trans ?_
+    exact (Nat.zero_add _).le
   · simp [ownLog]
 
 /-- Slot `i`'s extraction's reruns at the run `r` on the slot's coins `ρ`; `0` when fewer blocks are sampled. -/
@@ -640,11 +663,11 @@ theorem Ex_slotStep (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Audit
 /-! ## `Efficient` at the slot-by-slot extractor -/
 
 /-- **Strict reruns**: at most `1 + K + k·(K + k·n_PU·ρ_s)`. -/
-theorem slots_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe H ρ) :
+theorem slots_runs_le (hS : L.Sessions H) :
     ExtractRunsLe H (L.Esamp L.SlotY L.slotStep)
-      (fun x => 1 + L.cap x + L.k x * (L.cap x + L.k x * (L.nPU x * L.ρs ρ x))) :=
-  Esamp_runs_le H L L.SlotY L.slotStep (fun x => L.nPU x * L.ρs ρ x) fun _ s _ P ω _ _ _ _ r =>
-    runExt_runs_le hS hρ P ω s r _
+      (fun x => 1 + L.cap x + L.k x * (L.cap x + L.k x * (L.nPU x * L.ρs x))) :=
+  Esamp_runs_le H L L.SlotY L.slotStep (fun x => L.nPU x * L.ρs x) fun _ s _ P ω _ _ _ _ r =>
+    runExt_runs_le hS P ω s r _
 
 /-- **Expected reruns**: at most `1 + k + k²·(1 + n_PU·e_s)`. -/
 theorem slots_runs_exp (hS : L.Sessions H) {e : A.Sh → ℝ} (he : A.RerunsExpLe H e) :
@@ -665,13 +688,12 @@ theorem slots_runs_exp (hS : L.Sessions H) {e : A.Sh → ℝ} (he : A.RerunsExpL
       ≤ ∑ _i : Fin (L.nPU x), L.es e x := Finset.sum_le_sum fun i _ => slot_exp_le hS he s P ω i r
     _ = L.nPU x * L.es e x := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **Own SHA-512 calls**: at most `k²·n_PU·(openCalls + h_s)`. -/
-theorem slots_own_le (hS : L.Sessions H) {h : A.Sh → ℕ} (hh : A.OwnLe H h) (hopen : L.OpenCallsLe H) :
-    ExtractOwnLe H (L.Esamp L.SlotY L.slotStep)
-      (fun x => L.k x ^ 2 * L.nPU x * (L.openCalls x + L.hs h x)) := by
+/-- **Own SHA-512 calls**: at most `k²·n_PU·openCalls`. -/
+theorem slots_own_le (hS : L.Sessions H) (hopen : L.OpenCallsLe H) :
+    ExtractOwnLe H (L.Esamp L.SlotY L.slotStep) (fun x => L.k x ^ 2 * L.nPU x * L.openCalls x) := by
   intro x Ω P ω r₀ c
-  exact (Esamp_own_le H L L.SlotY L.slotStep (fun x => L.nPU x * (L.openCalls x + L.hs h x))
-    (fun _ _ _ P ω hs c j l r => runExt_own_le hS hh hopen hs P ω r _) x Ω P ω r₀ c).trans_eq (by ring)
+  exact (Esamp_own_le H L L.SlotY L.slotStep (fun x => L.nPU x * L.openCalls x)
+    (fun _ _ _ P ω hs c j l r => runExt_own_le hS hopen hs P ω r _) x Ω P ω r₀ c).trans_eq (by ring)
 
 end Compiled
 
@@ -680,15 +702,9 @@ end Compiled
 /-- **`CompilerEfficient`**: the compiled extractor's three bounds (`Compiled.E_eq_Esamp`, then `slots_runs_le`,
 `slots_runs_exp`, `slots_own_le`). -/
 theorem compilerEfficient : CompilerEfficient := by
-  intro Coin _ _ _ A L H ρ e h hS hρ he hh hopen
+  intro Coin _ _ _ A L H e hS he hopen
   unfold Compiled.Efficient
   rw [L.E_eq_Esamp]
-  exact ⟨Compiled.slots_runs_le hS hρ, Compiled.slots_runs_exp hS he, Compiled.slots_own_le hS hh hopen⟩
-
-/-- **`ExpOwnOf`**: `CompilerEfficient`'s expected-reruns and own-calls bounds. -/
-theorem expOwnOf : ExpOwnOf := by
-  intro Coin _ _ _ A L H e h hS he hh hopen
-  rw [L.E_eq_Esamp]
-  exact ⟨Compiled.slots_runs_exp hS he, Compiled.slots_own_le hS hh hopen⟩
+  exact ⟨Compiled.slots_runs_le hS, Compiled.slots_runs_exp hS he, Compiled.slots_own_le hS hopen⟩
 
 end Claims.SamplingGeneric

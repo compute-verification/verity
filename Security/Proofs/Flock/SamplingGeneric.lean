@@ -26,11 +26,13 @@ it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed b
 from the session transfer and the session's fork (`SamplingGeneric/Session.lean`: `sessionKSOf`), the first from
 `KSOf`'s deterministic half, a failed extraction giving the failure event or a `Bext` collision (`split`,
 `SamplingGeneric/Assemble.lean`: `ksOf`). So **`CompilerKS` is proved** (`compilerKS`), and with it Flock's instance
-(`flockKS`) and the count form (`compilerKSCount`, `SamplingGeneric/Count.lean`). `CompilerBits` follows from it and
-the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `ExpOwnOf`), so **`CompilerEfficient`,
-`ExpOwnOf` and `CompilerBits` are proved** (`compilerEfficient`, `expOwnOf`, `SamplingGeneric/Efficient.lean`;
-`compilerBits`). Their own-call bounds read the opening checks' count, `Compiled.OpenCallsLe`, without which they fail
-(`Counter.not_ownLe_openCalls`, `SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and
+(`flockKS`) and the count form (`compilerKSCount`, `SamplingGeneric/Count.lean`). **`CompilerEfficient` is proved**
+(`compilerEfficient`, `SamplingGeneric/Efficient.lean`): every proof system's extractor is `E^rep`, so its strict
+reruns and own calls are bounded at every proof system (`Arg.reruns_le`, `Arg.own_le`) and only its expected reruns
+are a premise. `CompilerBits` follows from `CompilerKS` and `CompilerEfficient`'s expected-reruns and own-calls bounds
+(`SamplingGeneric/Bits.lean`), so **`CompilerBits` is proved** (`compilerBits`). Their own-call bounds read the
+opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter.not_ownLe_openCalls`,
+`SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and
 `place`, invert each other (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the
 plurality trace the prover's tape fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so **`CompilerKSReg` is proved** (`compilerKSReg`),
 and with it Flock's (`flockKSReg`).
@@ -82,8 +84,8 @@ theorem compilerKSReg : CompilerKSReg := compilerKSReg_of sessionKSOf
 /-- **Flock's committed form**: the compiler's at `Arg.ofFlock`. -/
 theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSReg_of_compilerKSReg compilerKSReg
 
-/-- **Bits**: `CompilerKS` and `ExpOwnOf` (`compilerBits_of`). -/
-theorem compilerBits : CompilerBits := compilerBits_of compilerKS expOwnOf
+/-- **Bits**: `CompilerKS` and `CompilerEfficient` (`compilerBits_of`). -/
+theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEfficient
 
 end Claims.SamplingGeneric
 

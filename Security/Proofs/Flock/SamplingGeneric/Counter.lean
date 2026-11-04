@@ -4,17 +4,18 @@ import Proofs.Flock.SamplingGeneric.Bits
 /-!
 # Why the contract counts the opening checks
 
-`CompilerEfficient` bounds the compiled extractor's own SHA-512 calls by `k²·n_PU·(openCalls + h_s)`, and so does
-`ExpOwnOf` (`SamplingGeneric/Bits.lean`), which `compilerBits_of` reads. Both take `Compiled.OpenCallsLe`: without it
-`openCalls` bounds nothing, since no other part of the contract relates it to `commit` or `reveal`, and checking what
-one session's witness reveals can cost more SHA-512 calls than `openCalls` (`not_ownLe_openCalls`).
+`CompilerEfficient` bounds the compiled extractor's own SHA-512 calls by `k²·n_PU·openCalls`, the bound
+`compilerBits_of` reads. It takes `Compiled.OpenCallsLe`: without it `openCalls` bounds nothing, since no other part of
+the contract relates it to `commit` or `reveal`, and checking what one session's witness reveals can cost more SHA-512
+calls than `openCalls` (`not_ownLe_openCalls`).
 
 `L₀ n oc` is the compiled verifier it is read at: one proof block, a verifier of one round that accepts, a proof system
 of one round whose extractor replays the judged run and returns its witness, a sample of `n` copies of the block, a
 reveal of one opening whose check is one SHA-512 call, and `openCalls = oc`. `L₀ 1 oc` meets the contract (`sessions₀`)
-and the proof system costs its replay and no SHA-512 call of its own (`A₀_runs`, `A₀_runsExp`, `A₀_own`); its
-extractor's own calls are `k²` (`ownLog_E₀`), against the bound `k²·0` at `oc = 0`. They are counted at any compiled verifier: at an accepted run, the outer body's at the kept outer runs
-(`Compiled.length_ownLog_E`), `k` of them when every run accepts (`Compiled.length_outerList_all`).
+and the proof system's expected reruns are its replay (`A₀_runsExp`); its extractor's own calls are `k²` (`ownLog_E₀`),
+against the bound `k²·0` at `oc = 0`. They are counted at any compiled verifier: at an accepted run, the outer body's
+at the kept outer runs (`Compiled.length_ownLog_E`), `k` of them when every run accepts
+(`Compiled.length_outerList_all`).
 -/
 
 namespace Claims.SamplingGeneric
@@ -220,20 +221,12 @@ theorem A₀_eval_runs (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (
   rw [A₀_Eext]
   by_cases h : (run H P A₀.V x ω r₀).seen.out = .acc <;> simp [RP.eval, h]
 
-/-- **The proof system costs its replay**: one rerun, strict and expected, and no SHA-512 call of its own. -/
-theorem A₀_runs (H : Msg → Msg) : A₀.RerunsLe H (fun _ => 1) := fun x _ P ω r₀ c =>
-  (A₀_eval_runs H x P ω r₀ c).le
-
+/-- **The proof system's expected reruns are its replay**: one. -/
 theorem A₀_runsExp (H : Msg → Msg) : A₀.RerunsExpLe H (fun _ => 1) := by
   intro x Ω P ω
   have h1 : ∀ s : (Fin (A₀.V.k x) → Unit) × A₀.E.C x, ((A₀.E.eval H P x ω s.1 s.2).2.2 : ℝ) = 1 := fun s => by
     rw [A₀_eval_runs]; exact Nat.cast_one
   simp only [h1, Ex_const, le_refl]
-
-theorem A₀_own (H : Msg → Msg) : A₀.OwnLe H (fun _ => 0) := fun x _ P ω r₀ c => by
-  show (ownLog H (run H P A₀.V x ω) (A₀.E.ext x r₀ c)).length ≤ 0
-  rw [A₀_Eext]
-  by_cases h : (run H P A₀.V x ω r₀).seen.out = .acc <;> simp [ownLog, h]
 
 /-! ## Its extractor's own calls -/
 
@@ -296,21 +289,19 @@ def P₁ : Prover Unit := ⟨fun _ _ _ => .ret []⟩
 /-! ## The bound fails -/
 
 /-- **Without repeats, `openCalls` bounds nothing**: `L₀ 1 0` samples its one block once, and checking its reveal
-costs one SHA-512 call while `openCalls = 0`, so its extractor's `k²` own calls exceed the bound `k²·(0 + 0)`. -/
+costs one SHA-512 call while `openCalls = 0`, so its extractor's `k²` own calls exceed the bound `k²·0`. -/
 theorem not_ownLe_openCalls (H : Msg → Msg) :
-    ¬ ExtractOwnLe H (L₀ 1 0).E
-      (fun x => (L₀ 1 0).k x ^ 2 * (L₀ 1 0).nPU x * ((L₀ 1 0).openCalls x + (L₀ 1 0).hs (fun _ => 0) x)) := by
+    ¬ ExtractOwnLe H (L₀ 1 0).E (fun x => (L₀ 1 0).k x ^ 2 * (L₀ 1 0).nPU x * (L₀ 1 0).openCalls x) := by
   intro h
   obtain ⟨c⟩ : Nonempty ((L₀ 1 0).E.C []) := inferInstance
   have h3 := (ownLog_E₀ H 1 0 P₁ [] () (fun _ => ()) c).symm.trans_le (h [] Unit P₁ () (fun _ => ()) c)
-  have hb : (L₀ 1 0).openCalls [] + (L₀ 1 0).hs (fun _ => 0) [] = 0 := rfl
+  have hb : (L₀ 1 0).openCalls [] = 0 := rfl
   have hm : min ((L₀ 1 0).nPU []) 1 = 1 := rfl
   have hk := (L₀ 1 0).k_pos []
   simp only [hb, hm, mul_zero, mul_one] at h3
   exact absurd h3 (Nat.not_le.2 (Nat.mul_pos hk hk))
 
-theorem not_efficient_openCalls (H : Msg → Msg) :
-    ¬ (L₀ 1 0).Efficient H (fun _ => 0) (fun _ => 0) (fun _ => 0) :=
+theorem not_efficient_openCalls (H : Msg → Msg) : ¬ (L₀ 1 0).Efficient H (fun _ => 0) :=
   fun h => not_ownLe_openCalls H h.2.2
 
 /-- `L₀ 1 0`'s sample has no repeats. -/
