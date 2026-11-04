@@ -16,7 +16,8 @@
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under `--advice --advice-cap CAP`
-#     (`serve_advice`) the server registers the served compiler B, capped at CAP bits (ℓ_a), before its engine loop runs
+#     (`serve_advice`) the server registers the served compiler B, capped at CAP bits (ℓ_a; by default the least that pads
+#     every Commit period within the run's limits, `advice_cap`), before its engine loop runs
 #     ($D/advice_registration.json), with the day's declaration of B as its one program (SERVE_ARGS' `--advice-day`, default
 #     0; `--advice-log` extends an earlier day's log), and commits each closed window's advice as it serves under the weights registration
 #     (`--advice-weights`), each window's line ($D/advice.jsonl: its root and ℓ_a) out before any coin of the window.
@@ -229,12 +230,16 @@ esac
 # of window_advice.max_bits), at most SLOTS requests (--window-requests) and WINDOW_STEPS engine steps a period, positions
 # within MAX_MODEL_LEN, no prefix cache, and ids of at most ID_BYTES bytes, the loads' longest (varied's varied.<j:05d>, the
 # front's user-<i>, a warm-up's warmup-<8 hex>-<i>). A period past it is refused by name (advice.within_cap).
-case " ${SERVE_ARGS:-} " in
-  *" --prefix-caching "*) [ -n "${CAP:-}" ] || { say "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"; exit 3; } ;;
-esac
-CAP=${CAP:-$("$PY" -c 'import sys; from verity_vllm.pipeline import advice_windows as AW, window_advice as WA; print(AW.least_cap(WA.max_bits(*map(int, sys.argv[1:]))))' \
-  "$SLOTS" "$WINDOW_STEPS" "$MAX_MODEL_LEN" "$ID_BYTES")}
-[ -n "$CAP" ] || { say "PREFLIGHT: no ℓ_a from SLOTS $SLOTS, WINDOW_STEPS $WINDOW_STEPS, MAX_MODEL_LEN $MAX_MODEL_LEN and ID_BYTES $ID_BYTES (window_advice.max_bits): set CAP"; exit 3; }
+advice_cap() {
+  [ -n "${CAP:-}" ] && return 0
+  case " ${SERVE_ARGS:-} " in
+    *" --prefix-caching "*) say "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"; return 3 ;;
+  esac
+  CAP=$("$PY" -c 'import sys; from verity_vllm.pipeline import advice_windows as AW, window_advice as WA; print(AW.least_cap(WA.max_bits(*map(int, sys.argv[1:]))))' \
+    "$SLOTS" "$WINDOW_STEPS" "$MAX_MODEL_LEN" "$ID_BYTES") && [ -n "$CAP" ] \
+    || { CAP=; say "PREFLIGHT: no ℓ_a from SLOTS $SLOTS, WINDOW_STEPS $WINDOW_STEPS, MAX_MODEL_LEN $MAX_MODEL_LEN and ID_BYTES $ID_BYTES (window_advice.max_bits): set CAP"; return 3; }
+  export CAP
+}
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -295,6 +300,7 @@ EOF
 v3c_compiled() {  # V3c's circuit is B's output on the window's advice, opened at the root its line published before any coin
   local c=$VW/compile rc
   mkdir -p "$c"
+  advice_cap || return 1
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") > "$c/compiler.json" \
     || { say "V3C-COMPILED class $V3C: prove_path.py compiler refused"; return 1; }
   "$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' \
@@ -365,6 +371,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
   mkdir -p "$D" "$OUT/serve"
   cd "$TREE/integrations/vllm" || return 9
+  advice_cap || return 3
   local h1=() pc=()
   [ -n "${H1_PROTOCOLS_CONFIG:-}" ] && pc=(--protocols-config "$H1_PROTOCOLS_CONFIG")
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
@@ -542,6 +549,7 @@ stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
 front_ok || exit 3
+advice_cap || exit 3
 SPLIT=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }

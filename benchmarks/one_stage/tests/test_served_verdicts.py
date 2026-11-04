@@ -1039,7 +1039,7 @@ if a[0] == "compile":
     argv = entry["argv"]
     assert (b, entry["digest"]) == ("B", "bb" * 64) and argv[1].endswith("benchmarks/prove_path/prove_path.py")
     assert argv[2:] == ["window-circuit", "--serve-run", str(d), "--window", "7", "--row-dir", str(d / "windows" / "w7"),
-                        "--class", "8,32,4,4,16", "--cap-bits", "8388608"], argv
+                        "--class", "8,32,4,4,16", "--cap-bits", os.environ["WANT_CAP"]], argv
     failed = os.environ.get("FAIL_COMPILE")
     print("COMPILE " + json.dumps({"ok": not failed, "codes": ["circuit"] if failed else []}, sort_keys=True))
     sys.exit(1 if failed else 0)
@@ -1057,6 +1057,15 @@ print("PERIOD " + json.dumps({"verdict": "accept"}))
 '''
 CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.args"; echo "chain on window $2"'
 PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
+
+
+def _default_cap(requests: int = 4, steps: int = 256, max_model_len: int = 512, id_bytes: int = 24) -> str:
+    """ℓ_a's default in `served_verdicts.sh` at those limits (SLOTS, WINDOW_STEPS, MAX_MODEL_LEN, ID_BYTES; their defaults
+    with H1 off)."""
+    from verity_vllm.pipeline import advice_windows as AW
+    from verity_vllm.pipeline import window_advice as WA
+
+    return str(AW.least_cap(WA.max_bits(requests, steps, max_model_len, id_bytes)))
 
 
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
@@ -1088,7 +1097,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) 
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
-           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD}
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "WANT_CAP": _default_cap()}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -1121,7 +1130,7 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
                          f"WINDOW-CIRCUIT-HELD class {W63K4}", f"V3C-COMPILED class {W63K4}"] and heads[-1] == "CERTIFIER-PERIOD"
     assert sorted(heads[4:-1]) == ["CERTIFIER-CHAIN", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD"]
     assert lines[2].endswith("PASS") and lines[heads.index("V3C-PERIOD")].endswith('PERIOD {"verdict": "accept"}')
-    assert lines[3].endswith('COMPILE {"codes": [], "ok": true}') and "ℓ_a 8388608 bits" in lines[3]
+    assert lines[3].endswith('COMPILE {"codes": [], "ok": true}') and f"ℓ_a {_default_cap()} bits" in lines[3]
     assert {p.name for p in (vw / "compile").iterdir()} == {"compiler.json", "compilers.json", "compile.log"}
     private = tmp_path / "serve" / "private" / "pieces" / "certifier"
     assert (private / "chain.log").read_text().strip() == "chain on window 7"
@@ -1606,19 +1615,21 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
 
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
-    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
-    under a no-op `sleep`: the exit status and that argv."""
+    """`served_verdicts.sh serve` in a toy tree whose venv python runs a ``-c`` program (ℓ_a's default) and otherwise records
+    serve-openai's argv and exits before listening, under a no-op `sleep`: the exit status and that argv."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "integrations" / "vllm", bin_, venv):
         d.mkdir(parents=True)
-    for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
+    py = f'[ "$1" = -c ] && exec {sys.executable} "$@"\nprintf \'%s\\n\' "$@" > {tmp_path}/argv; exit 1'
+    for path, body in ((venv / "python", py), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), **env}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
-    return rc, (tmp_path / "argv").read_text().splitlines()
+    argv = tmp_path / "argv"
+    return rc, argv.read_text().splitlines() if argv.exists() else []
 
 
 @pytest.mark.parametrize("env, budget", [
@@ -1637,16 +1648,34 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     assert ("--protocols" in argv) == bool(env["H1_GATE"])
 
 
-@pytest.mark.parametrize("env, cap, composite", [({}, "8388608", "onsite"), ({"CAP": "65536", "PRODUCT": "remote"}, "65536", "remote")])
+@pytest.mark.parametrize("env, cap, composite", [
+    ({}, (4, 256, 512, 24), "onsite"),
+    ({"WINDOW_STEPS": "1"}, "1328", "onsite"),
+    ({"SLOTS": "8", "WINDOW_STEPS": "16", "MAX_MODEL_LEN": "2048", "ID_BYTES": "12"}, (8, 16, 2048, 12), "onsite"),
+    ({"CAP": "65536", "PRODUCT": "remote"}, "65536", "remote"),
+    ({"CAP": "65536", "SERVE_ARGS": "--prefix-caching"}, "65536", "onsite"),
+])
 def test_the_server_registers_b_at_cap_and_commits_each_windows_advice_under_the_weights_registration(tmp_path, env, cap,
                                                                                                       composite):
-    """serve-openai gets ``--advice`` once, B capped at CAP (ℓ_a), its registration log the run's PRODUCT's, and each window's
-    advice recording the serve dir's weights registration, which the run writes once the server listens."""
+    """serve-openai gets ``--advice`` once, B capped at CAP (ℓ_a), by default the least cap that pads every Commit period
+    within the run's limits (SLOTS requests and WINDOW_STEPS steps a period, MAX_MODEL_LEN, ID_BYTES), its registration log
+    the run's PRODUCT's, and each window's advice recording the serve dir's weights registration, which the run writes once
+    the server listens."""
+    cap = _default_cap(*cap) if isinstance(cap, tuple) else cap
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
     assert rc == 10 and argv.count("--advice") == 1, (rc, argv)
     got = {f: argv[argv.index(f) + 1] for f in ("--advice-cap", "--advice-composite", "--advice-weights")}
     assert got == {"--advice-cap": cap, "--advice-composite": composite,
                    "--advice-weights": str(tmp_path / "serve" / "weights_registration.json")}
+
+
+def test_a_server_with_the_prefix_cache_and_no_cap_is_refused_before_it_starts(tmp_path):
+    """ℓ_a's default leaves out the prefix cache's KV sources, so a server serving with it and no CAP is a PREFLIGHT refusal
+    before serve-openai runs, never a server whose every period past the default is refused."""
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", "SERVE_ARGS": "--prefix-caching"})
+    lines = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert rc == 3 and argv == [], (rc, argv)
+    assert lines == ["PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
 
 
 class _Response:
