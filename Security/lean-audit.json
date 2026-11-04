@@ -1658,6 +1658,10 @@
    "owner": "@compute-research",
    "digest": "b5e591ee106588c0a39051b7bb8ff598566ebfba0dfcba9771ec134bc0b7fde5"
   },
+  "Pouw.Assumptions.SaltDerivation": {
+   "owner": "@compute-research",
+   "digest": "c1c3a2350cfa344d40778b5e957d64ae59c6cddc753ee1026084a91388264e7a"
+  },
   "Pouw.Assumptions.ServiceSoundOverlap": {
    "owner": "@compute-accounting",
    "digest": "5ee992529ffdcc445072394ec6764a48bc9f9b5488fec27e983da1f6f8448ed1"
@@ -1693,6 +1697,10 @@
   "Pouw.Assumptions.ShaRealize": {
    "owner": "@compute-research",
    "digest": "8d8932ec8500c381c8a5b555dafd4af3e9fbf210f25577319d7cca7b5afe8d5f"
+  },
+  "Pouw.Assumptions.SubtreeLayout": {
+   "owner": "@compute-research",
+   "digest": "00ebbd6b50d9f4fe1c668d99120efa116b863d1ea49531f9ffe0508ae9e1312a"
   },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
@@ -2551,6 +2559,10 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Pouw.Salt.keyed_leaf_binds": {
+   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
+   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2979,9 +2991,16 @@
    "sealed": true
   },
   "Definitions.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Definitions.Pouw.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Claims",
+    "Definitions.Hash",
+    "Definitions.Pouw",
+    "Definitions.Pouw.Assumptions"
+   ],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's commitment premises read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)",
    "sealed": true
   },
   "Definitions.Pouw.Guarantees": {
@@ -2998,9 +3017,9 @@
    "sealed": true
   },
   "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Hash", "Definitions.Pouw"],
    "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)"
   },
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Pouw.Basic"],
@@ -10249,6 +10268,134 @@
    "assumptions": [],
    "type_hash": "e93bbee92713b5b69adc87eed0a21be26519fb98fd49c63e94869b34619db632"
   },
+  "Pouw.Salt.keyed_leaf_binds": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.Salt.keyed_leaf_binds : Pouw.Guarantees.KeyedLeaf.Binds"],
+   "assumptions": [],
+   "type_hash": "f734dbf1781cd0675eafa3674cda7f5ab1421c60c79c903e57e0c6159ab37f4d"
+  },
+  "Pouw.Salt.keyed_leaf_binds_honest": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.Salt.keyed_leaf_binds_honest :",
+    "  And",
+    "    (Pouw.Assumptions.SubtreeLayout",
+    "      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (fun x => 3)",
+    "      (fun x => { id := fun x => 4, count := 2, position := fun r => r }) \"row\"",
+    "      (fun x =>",
+    "        Hash.Keyed.digest (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "          (fun x => 1) (fun x => 3)",
+    "          (Hash.Keyed.Top.msg { id := fun x => 4, count := 2, position := fun r => r }",
+    "            (Hash.Keyed.Top.node 0",
+    "              ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
+    "                  (List.cons 5 List.nil)))",
+    "              ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
+    "                  (List.cons 6 List.nil))))))",
+    "      fun pos rank v ks y sibs =>",
+    "      And (Eq pos 0)",
+    "        (And (Eq ks fun x => 1)",
+    "          (And (Eq y (List.replicate 192 2))",
+    "            (Or",
+    "              (And (Eq rank 0)",
+    "                (And (Eq v (List.cons 5 List.nil))",
+    "                  (Eq sibs",
+    "                    (List.cons",
+    "                      ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
+    "                          (List.cons 6 List.nil)))",
+    "                      List.nil))))",
+    "              (And (Eq rank 1)",
+    "                (And (Eq v (List.cons 6 List.nil))",
+    "                  (Eq sibs",
+    "                    (List.cons",
+    "                      ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                        (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
+    "                          (List.cons 5 List.nil)))",
+    "                      List.nil))))))))",
+    "    (And",
+    "      (Pouw.Assumptions.SaltDerivation",
+    "        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (List.replicate 64 0)",
+    "        (Hash.Hm96.leaf (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "          (List.replicate 64 0) (fun x => 1) (List.replicate 192 2))",
+    "        fun pos rank v ks y sibs =>",
+    "        And (Eq pos 0)",
+    "          (And (Eq ks fun x => 1)",
+    "            (And (Eq y (List.replicate 192 2))",
+    "              (Or",
+    "                (And (Eq rank 0)",
+    "                  (And (Eq v (List.cons 5 List.nil))",
+    "                    (Eq sibs",
+    "                      (List.cons",
+    "                        ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                          (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
+    "                            (List.cons 6 List.nil)))",
+    "                        List.nil))))",
+    "                (And (Eq rank 1)",
+    "                  (And (Eq v (List.cons 6 List.nil))",
+    "                    (Eq sibs",
+    "                      (List.cons",
+    "                        ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                          (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
+    "                            (List.cons 5 List.nil)))",
+    "                        List.nil))))))))",
+    "      (Hash.Keyed.accepts (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "        (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r }",
+    "        ((fun x =>",
+    "            Hash.Keyed.digest (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (fun x => 1) (fun x => 3)",
+    "              (Hash.Keyed.Top.msg { id := fun x => 4, count := 2, position := fun r => r }",
+    "                (Hash.Keyed.Top.node 0",
+    "                  ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
+    "                      (List.cons 5 List.nil)))",
+    "                  ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                    (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
+    "                      (List.cons 6 List.nil))))))",
+    "          0)",
+    "        0 (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\" (List.cons 5 List.nil))",
+    "        (List.cons",
+    "          ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\" (List.cons 6 List.nil)))",
+    "          List.nil)))"
+   ],
+   "assumptions": [],
+   "type_hash": "4f330ccf8e8c5a8f710b588d272a5f6b9c4610aec5049ad4d3255df691316893"
+  },
+  "Pouw.Salt.keyed_leaf_binds_nontrivial": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.Salt.keyed_leaf_binds_nontrivial :",
+    "  Not",
+    "    (Or (Eq (List.cons 0 List.nil) (List.cons 1 List.nil))",
+    "      (Hash.CollisionIn (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "        (instHAppendOfAppend.hAppend",
+    "          (instHAppendOfAppend.hAppend",
+    "            (instHAppendOfAppend.hAppend",
+    "              (Hash.Hm96.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                List.nil (fun x => 1) List.nil)",
+    "              (Hash.Hm96.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                List.nil (fun x => 1) List.nil))",
+    "            (Hash.Keyed.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r } 0",
+    "              (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
+    "                (List.cons 0 List.nil))",
+    "              List.nil))",
+    "          (Hash.Keyed.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r } 0",
+    "            (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\" (List.cons 1 List.nil))",
+    "            List.nil))))"
+   ],
+   "assumptions": [],
+   "type_hash": "a8787fde9876c5e02b4089181424c8b10f87bf2f68024780c491298e25ba2430"
+  },
+  "Pouw.Salt.keyed_leaf_hides": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.Salt.keyed_leaf_hides : Pouw.Guarantees.KeyedLeaf.Hides"],
+   "assumptions": [],
+   "type_hash": "7d9ff460b3191531e0e4b5e53a4fabdf12460143d1283a8dafd0ce23ee5eb3ef"
+  },
   "Pouw.SecurityProofs.Barrier.Generic": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Barrier.Generic : Pouw.Guarantees.Barrier.Generic"],
@@ -12337,7 +12484,8 @@
    "Definitions.Accounting.Physical",
    "Definitions.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises",
-   "Definitions.Nci.Assumptions.Fit"
+   "Definitions.Nci.Assumptions.Fit",
+   "Definitions.Pouw.Assumptions.LeadCommit"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
@@ -12623,6 +12771,14 @@
    "Hash.SecurityProofs.EmbeddingReadBinding": {
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
+   },
+   "Pouw.Salt.keyed_leaf_hides": {
+    "function": "Hash.Keyed.digest",
+    "outcome": "none"
+   },
+   "Pouw.Salt.keyed_leaf_binds": {
+    "function": "Hash.Keyed.accepts",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -22562,6 +22718,10 @@
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
+    "Pouw.Salt.keyed_leaf_binds",
+    "Pouw.Salt.keyed_leaf_binds_honest",
+    "Pouw.Salt.keyed_leaf_binds_nontrivial",
+    "Pouw.Salt.keyed_leaf_hides",
     "Verity.SecurityProofs.CommittedMeets"
    ]
   },
@@ -23220,6 +23380,10 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "Pouw.Salt.keyed_leaf_binds",
+    "Pouw.Salt.keyed_leaf_binds_honest",
+    "Pouw.Salt.keyed_leaf_binds_nontrivial",
+    "Pouw.Salt.keyed_leaf_hides",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -26099,10 +26263,10 @@
    ]
   },
   "Definitions.Flock.ZK.Table": {
-   "digest": "4a1ff60c2ba720f8546aaac2c928ffdfa053025bb61ca2abfe1b46d77f9ea45b",
+   "digest": "00e051f076ede041c379d0f2571805e104b65959563df82d6aa1a3e8f4b0719a",
    "definitions": {
     "FlockSoundness.ZK.PadIdx": "44b47a037d5bb4710f8f332fae4b71a31c1085bc119ff36532f8f348186f1f34",
-    "FlockSoundness.ZK.Table": "f87ddfadbd0481db4962478a4eee6fd611c4d7f545bfa05765f3f528b76a5cbb",
+    "FlockSoundness.ZK.Table": "911b8587e62e4b52de0be0440ac45226a0d6b36317a345a4e1c878247a9ae373",
     "FlockSoundness.ZK.Table.Ch": "0be788bdb1f027f4ee5eebf3c08fd9aa1942794431501d97dabe415cffabb09c",
     "FlockSoundness.ZK.Table.Cp": "65b7b78d46c0a50d74b43a84013d207d0249893af89b23a6c433e5cc467b414b",
     "FlockSoundness.ZK.Table.E": "e84f3cf7d1ecaf4cdccc5411934a56d7d176584ac301a270f7561e41385122f6",
@@ -26150,6 +26314,7 @@
     "FlockSoundness.ZK.Table.View.y1": "da71555037f9233d832bcbd06718d84f9cca48c3f9d82ef34aaeab78cd6bf02a",
     "FlockSoundness.ZK.Table.View.ybar": "d22ceeea299f98332d7dcbb12314f133b3cc2d8a1faee984dc8a5e81fdefe837",
     "FlockSoundness.ZK.Table.View.ytau": "97530d846e4f1e8886aa3edd9e946b710ae36e8741e12156f380725d69714bbd",
+    "FlockSoundness.ZK.Table.Vis": "0b9611f60ff24b249a6989baa5b35f423ca47fd3f34133a49b41d07cc22c3ac9",
     "FlockSoundness.ZK.Table.Wr": "56f9301c3155d8397b7cee872e7f3d91d7a86b61e3bce6c91b4d003168dccc0c",
     "FlockSoundness.ZK.Table.XLanes": "521f79936bcf3b1fabf7cfc80ca7f27c5bb3a0bcf0531c8a5a769feaab123644",
     "FlockSoundness.ZK.Table.XPad": "84959c0bfa7817b1f191e46ed051423190e84b68adccf99ae404f616ab00825b",
@@ -26188,8 +26353,9 @@
     "FlockSoundness.ZK.Table.sim": "99b99d1538b0847de56e1edc284186042bdc37c82d0b4935146df4ba7a57be28",
     "FlockSoundness.ZK.Table.theta": "41867457fb87b2d67fdfcd9ac66c33296e49004736752f2153f49203ea6fc61a",
     "FlockSoundness.ZK.Table.tpad": "3cdc9ba79f06a070ab6ba0dc1cdfc83883fc5fcc0da010fc80af83e694153469",
-    "FlockSoundness.ZK.Table.vals": "f07d7ea3e6248367d83b31ca056785c79630414e86afd29eca50a18d65634275",
-    "FlockSoundness.ZK.Table.view": "4773003f996fb131c533bec724510110740bdd864fd0089e83f6c4a238b20e10",
+    "FlockSoundness.ZK.Table.vals": "dc4a25171c3b9dbc3fc9d805e4613b4995c1a5fde60c2fcf7c48735741d484c7",
+    "FlockSoundness.ZK.Table.view": "d7f32d2bf83ff8b86bd3907ab70e24cd1049c0db395da17344daa2951355bcce",
+    "FlockSoundness.ZK.Table.visOf": "4a34dfecaa6179cd71029547e6621850cdd2127e7303ceaa39cd830d313a0dc3",
     "FlockSoundness.ZK.Table.xrows": "8b36c545db96fd7eb72d8b35e0d7c781ef888151498bd06bee2a4b4649f26eeb",
     "FlockSoundness.ZK.Table.y1": "066f873c961a7ae938a25d24d73af410dc60b6df4fc1429289f411f11519a02a",
     "FlockSoundness.ZK.Table.y1'": "4494224789d9abea7b53db967f1e5c80fe7fe94e3921aa6c893ef345d504e6cd",
@@ -26253,7 +26419,33 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.EmbeddingReadBinding",
-    "Hash.SecurityProofs.RowBinding"
+    "Hash.SecurityProofs.RowBinding",
+    "Pouw.Salt.keyed_leaf_binds",
+    "Pouw.Salt.keyed_leaf_binds_honest",
+    "Pouw.Salt.keyed_leaf_binds_nontrivial",
+    "Pouw.Salt.keyed_leaf_hides"
+   ]
+  },
+  "Definitions.Hash.Keyed": {
+   "digest": "18c0a77ea3d02094c969ecfd2f60eb684d17ef96b0e14b347ad58b8b189eddd2",
+   "definitions": {
+    "Hash.Keyed.Top": "ac1bde5932c5731d053cebc1199b29e680b5b04d6d2242183adddb0ed1e536c0",
+    "Hash.Keyed.Top.casesOn": "e9c12c9bef484a645359f2cf4814ad0705954c030dd5d549446f1f1064513641",
+    "Hash.Keyed.Top.leaf": "5254b5519d7c958c62d5ee8353bb104934b4d01f16f306108e2bfcd0cf1f1213",
+    "Hash.Keyed.Top.msg": "79332d6bd44a21dcdd787825b72d690357cba7e3ba1e34839a22f76abfb87633",
+    "Hash.Keyed.Top.node": "6e6911fe1abed9ac5de6f97acd8a8e41b9ce4c955e17be988fa518b3d775e5b0",
+    "Hash.Keyed.Top.rec": "f2123265d63c106d77e8804eb3c79ba613fd13f2be276fae6d68c3144265a1a4",
+    "Hash.Keyed.accepts": "3d0dbd1db35f7b2d154b609a69593de0452349563efb64b345cebb92febaf19b",
+    "Hash.Keyed.climb": "b5f08f88b1c4cec3285fb83a5ef56640f2d264af26c5ea0555f4366349ea681b",
+    "Hash.Keyed.digest": "1e0eac0dcd086387f29f4eca90fae591033a7edcb6b9d1b0ed6ad6032d9a05fa",
+    "Hash.Keyed.hashed": "82f948b78264eb99fcf2bfd954de4f69989acb08548bfb3862f963864a8d1b83",
+    "Hash.Keyed.msg": "1845086769ae06d575d2986c75da7e157b0dfd16bb67eafc153b21bf575d9968"
+   },
+   "guarantees": [
+    "Pouw.Salt.keyed_leaf_binds",
+    "Pouw.Salt.keyed_leaf_binds_honest",
+    "Pouw.Salt.keyed_leaf_binds_nontrivial",
+    "Pouw.Salt.keyed_leaf_hides"
    ]
   },
   "Definitions.Hash.RowLeaf": {
@@ -26367,7 +26559,11 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
-    "Hash.SecurityProofs.TreeBinding"
+    "Hash.SecurityProofs.TreeBinding",
+    "Pouw.Salt.keyed_leaf_binds",
+    "Pouw.Salt.keyed_leaf_binds_honest",
+    "Pouw.Salt.keyed_leaf_binds_nontrivial",
+    "Pouw.Salt.keyed_leaf_hides"
    ]
   },
   "Definitions.Nci": {
@@ -29619,6 +29815,14 @@
     "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
    ]
   },
+  "Definitions.Pouw.Assumptions.LeadCommit": {
+   "digest": "b322a32f307a1f777e62bb0edcf060e9339418d09459df3e2d95c3a9e4da5aec",
+   "definitions": {
+    "Pouw.Assumptions.SaltDerivation": "c1c3a2350cfa344d40778b5e957d64ae59c6cddc753ee1026084a91388264e7a",
+    "Pouw.Assumptions.SubtreeLayout": "00ebbd6b50d9f4fe1c668d99120efa116b863d1ea49531f9ffe0508ae9e1312a"
+   },
+   "guarantees": ["Pouw.Salt.keyed_leaf_binds", "Pouw.Salt.keyed_leaf_binds_honest"]
+  },
   "Definitions.Pouw.Assumptions.NCP.Assumptions": {
    "digest": "1648a0e4552adfbe6da437464897c0093495e0d86088a6ebfc7c64bef73378bc",
    "definitions": {
@@ -30120,6 +30324,7 @@
     "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192",
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
+    "Pouw.Salt.keyed_leaf_hides",
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
@@ -31337,6 +31542,14 @@
     "Pouw.SecurityProofs.WorkWeightedSampling"
    ]
   },
+  "Definitions.Pouw.Guarantees.KeyedLeaf": {
+   "digest": "daf43cb66c8bd666db1123e1312ae819c02605d64166b0d098d2309cebaa07bc",
+   "definitions": {
+    "Pouw.Guarantees.KeyedLeaf.Binds": "0f9280b97fb642badd13e5022bb63633f32047b34fc356ceecc8789cf8e7605a",
+    "Pouw.Guarantees.KeyedLeaf.Hides": "de40b4c1efb928d98f955083d557140f9f53dcda0ce7bc16e4cd919f715af426"
+   },
+   "guarantees": ["Pouw.Salt.keyed_leaf_binds", "Pouw.Salt.keyed_leaf_hides"]
+  },
   "Definitions.Pouw.Guarantees.NCP": {
    "digest": "8f0b5867f75c2a8842ab1fafca36f61750f7ddf1a3aef907a5fde96da838a0c8",
    "definitions": {
@@ -31905,6 +32118,25 @@
     "Pouw.H1Zy.xWrap": "3e29d2d43392e51bad516f5a0e7218fff20c6bbb408530a9aba7b9d92e51188c"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound", "Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Definitions.Pouw.KeyedLeaf": {
+   "digest": "09f8f597ef2ad683d83436a39e01db247edb018d999a79ad319b659bcf496b9e",
+   "definitions": {
+    "Pouw.KeyedLeaf.KeySalt": "a8507127ff856385bf2d9e54eff7a7952fa4f1b3bffd0e361a36fbf2936f2472",
+    "Pouw.KeyedLeaf.advantage": "48028cf6bec8e2fc69b7f2d1b850dd9d32902b061b68312bf62ac053630fb8bb",
+    "Pouw.KeyedLeaf.hideAdvantage": "c7b056c1cfa944bfac1eabc37fb7ec8452f885d4d2e00303572b6929b847b94c",
+    "Pouw.KeyedLeaf.hideDistinguisher": "07745706e4679676a75b723475d819b78a62d08ae95379a6312e778227ede5f6",
+    "Pouw.KeyedLeaf.leafOf": "5ee99de1f872eb09fcb2ecace497a3038003d7a8552901c3dd09b01df570d1df",
+    "Pouw.KeyedLeaf.mask": "571e3896cb31352c3ddae7f61e76a3b58735e08915eb398cfd99d5a869a18c38",
+    "Pouw.KeyedLeaf.prfAdvantage": "ef4ebfa5a9bf1ccd7507e4627652ff0af4013d75b3d5458723930210828586d2",
+    "Pouw.KeyedLeaf.prfDistinguisher": "6bc2ebf58c57357deb9c310536c210ab9675bc93cca3e558376813909ce44fb4",
+    "Pouw.KeyedLeaf.real": "4f12a603af8b4967a1d1941a5a42e7eae7b16e9c7b5af265b4b2d9b99aabe5ee",
+    "Pouw.KeyedLeaf.rep": "0fc4f1d9eace27b90c4ec4130968ab5a668617ef87c509822417192f0d97b8df",
+    "Pouw.KeyedLeaf.saltDigest": "634254b8d699d611284606591d03b43f9a0f23b952c9b13ac8fb5b60c80eb8dc",
+    "Pouw.KeyedLeaf.tops": "cc7878660caacc57adbf258de35f9c4453a3d725e15a08688ff2f43700a4f7b2",
+    "Pouw.KeyedLeaf.view": "6955cf00fcda546f4d5c6f202af192f52d3a21a9f9e5e4a0e1896d70262d7908"
+   },
+   "guarantees": ["Pouw.Salt.keyed_leaf_hides"]
   },
   "Definitions.Pouw.MerkleExtract": {
    "digest": "355f097f63bb70c86f128edd1d4a4d8d9c6ea5eec9171777d3e70c643c517365",
@@ -34106,6 +34338,8 @@
     "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Pouw.Salt.keyed_leaf_binds_honest",
+    "Pouw.Salt.keyed_leaf_binds_nontrivial",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
@@ -55518,7 +55752,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.Coined": {
-   "digest": "185d9420bb90cb3445cfbf7b27e1d6f1d6a71c9afe790815aef694ce9dfa4c8a",
+   "digest": "dd076f58e832665e822114cbdbfff15b7c7d154a95403a713db7546840219554",
    "definitions": {
     "FlockSoundness.Discharge.Composed.CoinedBody": "adaa55c968735959f29df01f09a66c8315327be90f3672212d0fd6b02babd62e",
     "FlockSoundness.Discharge.Composed.CoinedBody.Hi": "dc2d8124324fa8bbfbcd892870046f6b693a93cb0b081cd2898d12b186467c9e",
@@ -55548,7 +55782,7 @@
     "FlockSoundness.Discharge.Composed.MaskRankOk": "41f4d0b86286b241f380db77d04e076e7c7345bd300b30830e4508b124c974b8",
     "FlockSoundness.Discharge.Composed.ZkViewAt": "e2d29695692918c98b3288e38157586d62e17ef7503fba529f1fb6c0b35f71b5",
     "FlockSoundness.Discharge.Composed.bodyOf": "7e2e2d0862c3a1e43a5cb7d4ac7afef733889dcc9179af44bc39b328f5147975",
-    "FlockSoundness.Discharge.Composed.coinedOf": "2d95f0abebd8571f6744eda44f6e9055b37cc60d6b26d75f4c5ae6605e93dfe9",
+    "FlockSoundness.Discharge.Composed.coinedOf": "3fea588e861bb44da66f34324eb8bd9e02e45cdcd40001960cbb3cf19acae7a0",
     "FlockSoundness.Discharge.Composed.eqLane": "7ee9909f4cc9370ab7024f3dcca5806aac18f8b3e299f6dc3774895213c88e51",
     "FlockSoundness.Discharge.Composed.padIdx": "37f77e1fd22c8d276ea224eb87e42c3ca4a239b63044fc9e89c4054c26a1c6cc",
     "FlockSoundness.Discharge.Composed.padPos": "efe0cf51f3b5d69fbf45dc4d3fff75195db48e3376756527f0b368e0c6e0b81e",
@@ -61031,11 +61265,11 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkView.Defs": {
-   "digest": "aac7893b7bd2034de8a02976c9803bba17732c4a99ffd472515758c5bbcc68fc",
+   "digest": "1592b2af62d6255d0ea9417036d711b2da481b7c23b24cb2c2117cfa36df60ed",
    "definitions": {
     "FlockSoundness.Discharge.ZkView.Base": "218b994153aaa284383b9fb9234aa5b04d0936d50dbb0b722be3c12c6b83e3f5",
     "FlockSoundness.Discharge.ZkView.Bits": "a4e41b9fe47fb5de86965dfc99fb848b726bd832c58bc705218978cbc657553c",
-    "FlockSoundness.Discharge.ZkView.Coined": "e970e356d9507dd561b7859caf19249651b1871683191d21ef8b64d473fdf23b",
+    "FlockSoundness.Discharge.ZkView.Coined": "ca085b08fc8131530f736dfb4c64b39155ef2bd20906f1dcded24322f78e8dee",
     "FlockSoundness.Discharge.ZkView.Coined.Ch": "293f3d32c188c3f09b1937874e30f477d436b984dfa7cd871a120d546a3a21e4",
     "FlockSoundness.Discharge.ZkView.Coined.ChU": "abbb8b0ce50c032634152d3b6c2c40dbed52437deb30eff2ce4c2c9de9108d74",
     "FlockSoundness.Discharge.ZkView.Coined.Cp": "bcb163d084b8b9c290d373e7458e63bcfdf4d19ff47c516791afaa818219b324",
@@ -61071,7 +61305,7 @@
     "FlockSoundness.Discharge.ZkView.Coined.simExe": "175f97083f1b4c234b708312f3b2d52d5803701d6ce25a25bea8b022a09360a2",
     "FlockSoundness.Discharge.ZkView.Coined.tab": "8b825bbc218c8eeb92928bb18b548924a966491df1ec0630045a5c9a57c16dcc",
     "FlockSoundness.Discharge.ZkView.Coined.theta": "c02ad3c91fe7ccdfab921ae6a5fa3936d6fcd7f36b3cdefed3087e618111db99",
-    "FlockSoundness.Discharge.ZkView.Coined.vals": "ba756be725389eb537efe383902951d61211526d5f8dca710554e88b081a3251",
+    "FlockSoundness.Discharge.ZkView.Coined.vals": "57ebd0050a7876eb60d384e9a3ba5eb6f5586b4849aaff900a8d713eec08cf10",
     "FlockSoundness.Discharge.ZkView.Coined.viewExe": "8a2c7ad846c1dbf514d7d2bc7cdfee38ffbc9a2b7cdd08d670efe4e4514b9564",
     "FlockSoundness.Discharge.ZkView.Coined.β": "3e386c2798bb3a0be4207044af90ec0817b0962f402a09bd35efdccf392d5c40",
     "FlockSoundness.Discharge.ZkView.Coined.ζ": "223e760bd30a4cf86bffc028e7bc483a04c146f8d8783af508af974d9c3c3869",

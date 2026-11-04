@@ -6,6 +6,7 @@ public import Proofs.Pouw.Barrier.Proofs
 public import Proofs.Pouw.BudgetAbort
 public import Proofs.Pouw.Copy
 public import Proofs.Pouw.Credit
+public import Proofs.Pouw.Credit.Witness
 public import Proofs.Pouw.Deadline
 public import Proofs.Pouw.EndToEndWindow.Statement
 public import Proofs.Pouw.Eps1
@@ -64,6 +65,8 @@ public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
 public import Proofs.Pouw.MerkleExtract
 public import Proofs.Pouw.OnsiteFreed
+public import Proofs.Pouw.Salt
+public import Proofs.Pouw.Salt.Witness
 public import Proofs.Pouw.ShaRealize
 public import Proofs.Pouw.ShaRealizeWitness
 public import Proofs.Pouw.Milestone
@@ -207,7 +210,9 @@ public import Proofs.Pouw.Witness
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+`Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
+(`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
+are in `Definitions.Pouw`.
 -/
 
 @[expose] public section

@@ -4,9 +4,9 @@
 The session loop (`Session`) holds each firewalled rep's frame itself (`Frame.step` at the frame's `Cfg` and `State`) and
 issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prover sends names a frame's request:
 
-* `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session and one of its
-  tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its draws from the operating
-  system, which never leave the loop: the prover gets the pads' root alone.
+* `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session whose level 0 the
+  loop drew and one of its tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its
+  draws from the operating system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
   (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
@@ -149,8 +149,9 @@ def Sessions.maskOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j m : Na
 
 /-- **Table `i`'s rep `r` of the session named `name` starts**, for the request line `line` on `ch`: `rep NAME I R` is
 answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's draws, drawn from the operating system at
-the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once. Anything else is
-answered `err WHY`. -/
+the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once, and only once
+the session's level 0 is drawn (`Level0.Slots.drawn`), so after every table's witness is in (`Session.level0`). Anything
+else is answered `err WHY`. -/
 def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slots) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
   let err := fun (why : String) => say s!"err {why.replace "\n" " "}"
@@ -163,6 +164,8 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slot
       | .error e => return (← err e)
     let sid := s.sid
     let some st := s.sts[i]? | err s!"table {i} of the session's {s.sts.size}"
+    unless (← l0s.get).drawn sid do
+      return (← err s!"table {i} rep {r} before the session's level 0: a rep's frame starts once every table's witness is in")
     let (lay, mask) ← match Drive.start st with
       | .ok x => pure x
       | .error e => return (← err s!"the rep's start: {e}")

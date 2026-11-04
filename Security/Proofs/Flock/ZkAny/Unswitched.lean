@@ -58,7 +58,7 @@ noncomputable def unPre {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [Ch
 /-- Where the rows hold, the switched pre-final view is the unswitched one. -/
 theorem swPre_of_rows {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand)
-    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) : T.swPre w v ω = T.unPre w v ω := by
+    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1) : T.swPre w v ω = T.unPre w v ω := by
   unfold swPre
   exact ite_eq_left hr
 
@@ -101,7 +101,8 @@ noncomputable def _root_.FlockSoundness.Discharge.ZkView.Coined.unPreWith {K W H
   { T.tab.unPre w v (T.randOf b 0) with
     leaves0 := (fun q => lv (.inl (T.s0 (.inl q))), fun q => lv (.inl (T.s0 (.inr q))))
     tauCom := fun r => lv (.inr (.inr r))
-    leavesP := fun r => (fun k => lv (.inr (.inl (r, T.sP r (.inl k)))), fun k => lv (.inr (.inl (r, T.sP r (.inr k))))) }
+    leavesP := fun r =>
+      (fun k => lv (.inr (.inl (r, T.sP r (.inl k)))), fun k => lv (.inr (.inl (r, T.sP r (.inr k))))) }
 
 /-- At ideal leaves `H(U, c(y))`, the unswitched pre-final view with its leaves given by position is `Table.unPre`. -/
 theorem _root_.FlockSoundness.Discharge.ZkView.Coined.unPreWith_ideal {K W Hi VL : Type} [Field K]
@@ -112,7 +113,7 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.unPreWith_ideal {K W Hi VL
 
 theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swPreWith_of_rows {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
-    (lv : ZkView.LeafPos z → ByteArray) (hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1) :
+    (lv : ZkView.LeafPos z → ByteArray) (hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1) :
     T.swPreWith w v b lv = T.unPreWith w v b lv := by
   unfold ZkView.Coined.swPreWith ZkView.Coined.unPreWith
   rw [T.tab.swPre_of_rows w v (T.randOf b 0) hr]
@@ -136,7 +137,7 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.unContent_size {K W Hi VL 
 
 theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_of_rows {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
-    (hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1) : T.swContent w v b = T.unContent w v b := by
+    (hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1) : T.swContent w v b = T.unContent w v b := by
   unfold ZkView.Coined.swContent
   exact ite_eq_left hr
 
@@ -181,11 +182,11 @@ theorem unExeOf_eq {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, C
     rfl
 
 /-- **The rows hold at every table's base**: each table's clear values `v j` pass its inner constraint at every pad, at
-the mask slot and extra lanes of `ω j` (`Table.RowsAt`). -/
+the mask slot and level 0's hiding of `ω j` (`Table.RowsAt`). -/
 def RowsAtAll {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
     (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) : Prop :=
-  ∀ j, ((C j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1.2.1
+  ∀ j, ((C j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1
 
 theorem swCutAt_of_rows {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
     (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
@@ -285,19 +286,21 @@ theorem card_unCutAt_ideal {J : ℕ} {V : Type} [DecidableEq V] (C : Fin J → C
 
 namespace RefSession
 
-/-- **The unswitched prover's cut pre-final view at coins `c`**, on table witnesses `wt`, values `v` and tape `t`, every
-pre-final leaf the executable's under its own salt (`swCutOf` without the switch). -/
+/-- **The unswitched prover's cut pre-final view at coins `c`**, on table witnesses `wt`, values `v` read from what the
+workers see at tape `t`, every pre-final leaf the executable's under its own salt (`swCutOf` without the switch). -/
 noncomputable def unCutOf (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
-    (t : S.Tape) : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Cut :=
-  unCutAt (S.C x) (S.cz x c) wt v (S.eP x t).1 (unExeOf (S.C x) (S.cz x c) wt v (S.eP x t).1 (S.eP x t).2)
+    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) :
+    ∀ j, ((S.C x j).T (S.cz x c j)).tab.Cut :=
+  unCutAt (S.C x) (S.cz x c) wt (v (S.seenOf x t)) (S.eP x t).1
+    (unExeOf (S.C x) (S.cz x c) wt (v (S.seenOf x t)) (S.eP x t).1 (S.eP x t).2)
 
 /-- **The unswitched prover's message after the coins `cs`** at the values `v`: before the last coin the round encoding
 of the unswitched cut, as the switched prover's (`swMsgAt`), and after it the refusal `off`, so it never sends a final
 message. -/
 noncomputable def unMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin) :
-    Msg :=
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) : Msg :=
   if cs.length < refK x then S.enc x (S.pad cs) cs.length (S.unCutOf x (S.pad cs) wt (v (S.pad cs)) t)
   else S.off x (S.pad cs) (S.unCutOf x (S.pad cs) wt (v (S.pad cs)) t)
 
@@ -306,42 +309,46 @@ noncomputable def unMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness
 noncomputable def unP (S : RefSession) (vs : S.SwVals) : Proto Flock.Wit :=
   { S.refP with msg := fun x w ν t cs => .ret (S.unMsgAt x (S.wt x w) (vs x w ν) t cs) }
 
-/-- **The unswitched round encoding reads the coins before `i` only**, whatever each pre-final leaf's pair, at every
-witness and nonce (`SwCausal` at the unswitched prover). -/
+/-- **The unswitched round encoding reads the coins before `i` only**, whatever the workers see and each pre-final
+leaf's pair, at every witness and nonce (`SwCausal` at the unswitched prover). -/
 def UnCausal (S : RefSession) (vs : S.SwVals) : Prop :=
   ∀ (x : Msg) (w : Flock.Wit) (ν : S.Nonce) (ω : ∀ j, ZkView.Base (S.C x j).z (S.C x j).Hi)
-    (p : ZkView.Leaves (fun j => (S.C x j).z) → ZkView.Bits × ByteArray) (c c' : Fin (refK x) → S.Coin) (i : ℕ),
-    (∀ j : Fin (refK x), j.val < i → c j = c' j) →
-    S.enc x c i (unCutAt (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c) ω fun l =>
-        ZkView.leafH (unDigOf (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c) ω l + (p l).1, (p l).2)) =
-      S.enc x c' i (unCutAt (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c') ω fun l =>
-        ZkView.leafH (unDigOf (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c') ω l + (p l).1, (p l).2))
+    (s : ∀ j, ZkView.Seen (S.C x j).z) (p : ZkView.Leaves (fun j => (S.C x j).z) → ZkView.Bits × ByteArray)
+    (c c' : Fin (refK x) → S.Coin) (i : ℕ), (∀ j : Fin (refK x), j.val < i → c j = c' j) →
+    S.enc x c i (unCutAt (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c s) ω fun l =>
+        ZkView.leafH (unDigOf (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c s) ω l + (p l).1, (p l).2)) =
+      S.enc x c' i (unCutAt (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c' s) ω fun l =>
+        ZkView.leafH (unDigOf (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c' s) ω l + (p l).1, (p l).2))
 
 /-- **Round `i`'s unswitched encoding reads the coins before `i` only** (`UnCausal` at the executable's leaves). -/
 theorem enc_unCutOf (S : RefSession) (vs : S.SwVals) (x : Msg) (w : Flock.Wit) (ν : S.Nonce) (hc : S.UnCausal vs)
     (t : S.Tape) (c c' : Fin (refK x) → S.Coin) (i : ℕ) (h : ∀ k : Fin (refK x), k.val < i → c k = c' k) :
-    S.enc x c i (S.unCutOf x c (S.wt x w) (vs x w ν c) t) = S.enc x c' i (S.unCutOf x c' (S.wt x w) (vs x w ν c') t) := by
-  have e := hc x w ν (S.eP x t).1 (fun l => (ZkView.My ((S.eP x t).2 l), ZkView.saltHash ((S.eP x t).2 l))) c c' i h
+    S.enc x c i (S.unCutOf x c (S.wt x w) (vs x w ν c) t) =
+      S.enc x c' i (S.unCutOf x c' (S.wt x w) (vs x w ν c') t) := by
+  have e := hc x w ν (S.eP x t).1 (S.seenOf x t)
+    (fun l => (ZkView.My ((S.eP x t).2 l), ZkView.saltHash ((S.eP x t).2 l))) c c' i h
   unfold unCutOf
   rw [unExeOf_eq, unExeOf_eq]
   convert e using 4
 
-/-- **The rows hold at the tape** at the coins `c`: `RowsAtAll` at the tables' bases the tape `t` draws. -/
+/-- **The rows hold at the tape** at the coins `c`: `RowsAtAll` at the tables' bases the tape `t` draws, at the values
+read from what the workers see there. -/
 def RowsAtTape (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
-    (t : S.Tape) : Prop :=
-  RowsAtAll (S.C x) (S.cz x c) wt v (S.eP x t).1
+    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) : Prop :=
+  RowsAtAll (S.C x) (S.cz x c) wt (v (S.seenOf x t)) (S.eP x t).1
 
 theorem swCutOf_of_rows (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
     (t : S.Tape) (hr : S.RowsAtTape x c wt v t) : S.swCutOf x c wt v t = S.unCutOf x c wt v t := by
   unfold swCutOf unCutOf
   rw [swExeOf_of_rows _ _ _ _ _ _ hr, swCutAt_of_rows _ _ _ _ _ _ hr]
 
 /-- **Before the last coin, where the rows hold at the tape, the switched prover's message is the unswitched one's.** -/
 theorem swMsgAt_of_rows (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
-    (hlt : cs.length < refK x) (hr : S.RowsAtTape x (S.pad cs) wt (v (S.pad cs)) t) :
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) (hlt : cs.length < refK x) (hr : S.RowsAtTape x (S.pad cs) wt (v (S.pad cs)) t) :
     S.swMsgAt x wt v t cs = S.unMsgAt x wt v t cs := by
   unfold swMsgAt unMsgAt
   rw [ite_eq_left hlt, ite_eq_left hlt, S.swCutOf_of_rows x _ wt _ t hr]
@@ -358,25 +365,26 @@ theorem unMsgAt_vals (S : RefSession) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
 
 /-- **At the honest values `UnCausal` is `Causal`.** -/
 theorem unCausal_vals (S : RefSession) (hc : S.Causal) : S.UnCausal S.honestVals := by
-  intro x w ν ω p c c' i h
+  intro x w ν ω _ p c c' i h
   unfold honestVals
   rw [unDigOf_vals, unDigOf_vals, unCutAt_vals, unCutAt_vals]
   exact hc x (S.wt x w) ω p c c' i h
 
 theorem withStops_unCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (hRf : S.StopsCausal Rf) (hc : S.UnCausal vs) : (S.withStops Rf stop).UnCausal vs := by
-  intro x w ν ω p c c' i h
+  intro x w ν ω s p c c' i h
   show (if Rf x c i = true then stop else if i = 0 then S.enc x c i _ else dropDom (S.enc x c i _)) =
     (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
   rw [hRf x c c' i h]
-  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω p c c' i h)
+  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω s p c c' i h)
 
 /-- **Where the rule stops the coins, the session's unswitched message is the stop**, before the last coin and after
 it. -/
 theorem unMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
-    (hR : Rf x (S.pad cs) (min cs.length (refK x)) = true) : (S.withStops Rf stop).unMsgAt x wt v t cs = stop := by
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) (hR : Rf x (S.pad cs) (min cs.length (refK x)) = true) :
+    (S.withStops Rf stop).unMsgAt x wt v t cs = stop := by
   by_cases h : cs.length < refK x
   · rw [Nat.min_eq_left h.le] at hR
     show (if cs.length < refK x then (if Rf x (S.pad cs) cs.length = true then stop else _) else _) = stop
@@ -388,8 +396,9 @@ theorem unMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
 /-- **Where the rule doesn't stop the coins, the session's unswitched link is `S`'s.** -/
 theorem unMsgAt_withStops_link (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
-    (hR : Rf x (S.pad cs) cs.length = false) (h0 : cs.length = 0) (h : cs.length < refK x) :
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) (hR : Rf x (S.pad cs) cs.length = false) (h0 : cs.length = 0)
+    (h : cs.length < refK x) :
     (S.withStops Rf stop).unMsgAt x wt v t cs = S.unMsgAt x wt v t cs := by
   show (if cs.length < refK x then
       (if Rf x (S.pad cs) cs.length = true then stop
@@ -402,8 +411,9 @@ theorem unMsgAt_withStops_link (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
 leading domain frame.** -/
 theorem unMsgAt_withStops_frame (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
-    (hR : Rf x (S.pad cs) cs.length = false) (h0 : 0 < cs.length) (h : cs.length < refK x) :
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) (hR : Rf x (S.pad cs) cs.length = false) (h0 : 0 < cs.length)
+    (h : cs.length < refK x) :
     (S.withStops Rf stop).unMsgAt x wt v t cs = dropDom (S.unMsgAt x wt v t cs) := by
   show (if cs.length < refK x then
       (if Rf x (S.pad cs) cs.length = true then stop
@@ -560,7 +570,8 @@ end ZkServer
 
 namespace LeanRelease
 
-/-- **Where the frame refuses the coins, the deferred frame past the `Hello` is the stop**, whatever the worker sends. -/
+/-- **Where the frame refuses the coins, the deferred frame past the `Hello` is the stop**, whatever the worker
+sends. -/
 theorem frameD_of_refusesCoins {W R : Type} (L : LeanRelease W R)
     (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → L.toSrv.Val) (wk : L.toSrv.Worker) (x : Msg) (w : W)
     (ρ : R) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length ≠ .own)
@@ -661,7 +672,8 @@ def LiveFramesStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
     L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops) →
     wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
-    L.RoundFrames x (ν, t) ((m₀, ρ₀) :: ops) false v (S.unMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+    L.RoundFrames x (ν, t) ((m₀, ρ₀) :: ops) false v
+      (S.unMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
 
 /-- **`LiveRoundEqStop` from the live frame rounds in frames at the unswitched prover.** -/
 theorem liveRoundEqStop_of_frames (S : RefSession) (vs : S.SwVals)

@@ -38,12 +38,12 @@ theorem swSrcE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin
     (hr : r < 2)
     (hrows : ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).tab.onVals.RowsAt (wtOf PE x w ⟨i, hi⟩, v ⟨i, hi⟩)
       (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).1
-      (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1.2.1)
+      (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1)
     (n : ℕ) (hn : n < ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).tab.nE) :
     ((swSrcE x c w v τ i).rep r).masked n =
       FlockLevel3.GF128.val (v ⟨i, hi⟩ ⟨r, hr⟩ (wtOf PE x w ⟨i, hi⟩)
           (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).1
-          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1.2.1 ⟨n, hn⟩) +
+          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1 ⟨n, hn⟩) +
         FlockLevel3.GF128.val
           (((((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.2.1
             ⟨r, hr⟩).1 ⟨n, hn⟩) := by
@@ -59,12 +59,12 @@ theorem swSrcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
     ((swSrcE x c w v τ j.val).rep r.val).masked k =
       FlockLevel3.GF128.val (v j r (wtOf PE x w j)
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩) +
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hk⟩) +
         (UE.tapeZk τ).h j.val r.val k := by
   obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
   have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
@@ -85,7 +85,7 @@ theorem swSrcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
   rw [dite_eq_left (show k < ((tabC PE x j).T (czExe PE x c j)).tab.nE from hk), swCutE_masked_of_rowsAt x c w v t j hrows]
   show FlockLevel3.GF128.val (v j r (wtOf PE x w j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1.2.1 ⟨k, hk⟩ +
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1 ⟨k, hk⟩ +
     (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨k, hk⟩))) = _
   rw [FlockLevel3.val_add]
   congr 1
@@ -104,12 +104,12 @@ theorem swSrcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     {k : ℕ} (hkE : k < (tabC PE x j).z.nE) :
     ((swSrcE x c w v τ j.val).rep r.val).masked k =
       FlockLevel3.GF128.val (v j r (wtOf PE x w j)
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hkE⟩) +
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hkE⟩) +
         (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   have hk : k < (layE x j).hab := by rw [← nE_eq_hab x j]; exact hkE
   have hlen : (layE x j).len = (layE x j).tw + 1 := rfl
@@ -119,7 +119,7 @@ theorem swSrcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
 
 /-- **The firewall's clear values by pad index**: table `j`'s rep `r` clear value `k` is, below `zp 64`, word `k` of
 `A j r`, as the firewall reads a rep's passed values (`Finish.RepIn.vals`, `zp 64` words), and from `zp 64` on `B j r k`,
-level 0's opening, which the firewall computes itself; at every witness, mask slot and extra lanes. -/
+level 0's opening, which the firewall computes itself; at every witness, mask slot and level 0's hiding. -/
 noncomputable def valsFw (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128) :
     ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals :=
@@ -137,7 +137,7 @@ theorem swSrcE_hmk (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ∀ k < (layE x j).zp 64, ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked k =
       (A j r)[k]! + (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   intro k hk
@@ -153,7 +153,7 @@ theorem swSrcE_l0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ∀ k, (layE x j).zp 64 ≤ k → k < (layE x j).hab → ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked k =
       B j r k + (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   intro k hk0 hk
