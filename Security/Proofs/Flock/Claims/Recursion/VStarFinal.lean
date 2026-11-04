@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarHonest
-import Proofs.Flock.Claims.Recursion.VStarFitHeld
-import Proofs.Flock.Claims.Recursion.VStarFitPin
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarHonest
+public import Proofs.Flock.Claims.Recursion.VStarFitHeld
+public import Proofs.Flock.Claims.Recursion.VStarFitPin
 
 /-!
 # What each V\* part's circuit accepts on the honest run, with hh's fitting discharged (`honest_partAccepts_final`)
@@ -21,6 +23,8 @@ each one piece:
 * the stager accepts at the honest source where the tape is off the exception (`hok`);
 * the parts holding one round's row agree on its port's words (`hW`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarHonest
 

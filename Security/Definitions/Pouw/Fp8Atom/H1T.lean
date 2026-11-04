@@ -1,4 +1,6 @@
-import Definitions.Pouw.Fp8Atom.Fp32
+module
+
+public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # H-1T: the forming map, the checked chain and its credited words (trusted definitions)
@@ -32,6 +34,8 @@ salt fields of the kernel `h1t_form_xq` (`h1_kernel.py`).
 * **Legal** (change 5): `k ≤ 32,768`, `n ≤ 88,412`, every code finite. There is no `|x| ≤ 416` clause, which is
   correctness and not security.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

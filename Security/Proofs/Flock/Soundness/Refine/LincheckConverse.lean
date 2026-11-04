@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Lincheck
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Proofs.Flock.Soundness.Refine.Frames
 
 /-!
 # The lincheck accepts when its checks hold (PROTOCOL.md §10)
@@ -17,6 +19,8 @@ import Proofs.Flock.Soundness.Refine.Frames
 `lincheck_plays_of_checks` feeds it to `lincheck_refines`: the model's lincheck plays the proof's messages on those
 coins and returns the executable's `ab` claim.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

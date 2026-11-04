@@ -1,5 +1,7 @@
-import Definitions.Nci
-import Definitions.Nci.Transfers
+module
+
+public import Definitions.Nci
+public import Definitions.Nci.Transfers
 
 /-!
 # NCI from the bits on the wire and the credited gates
@@ -25,6 +27,8 @@ less the constants `a` computes (`inner_inter_ins`), and `in(R_b)` is the union 
 gates with no predecessors that `b` reads (`into_eq_subcircuits`): the same decomposition, with the constants on the
 inputs' side.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Transfers
 

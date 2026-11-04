@@ -323,6 +323,26 @@ def test_layers_hold_on_direct_imports():
     assert A.judge(pol, facts(), FILES)[0] == ["layers: P.Model matches no audited module; remove the entry"]
 
 
+def test_a_layer_admits_a_toolchain_module_its_imports_already_reach():
+    """A proof's `import all Init.Data.Array.Basic` brings nothing in: `Init` reaches it. A toolchain module nothing admitted
+    reaches is still outside the layer, and so is a module this repository builds, however it is reached."""
+    lib, tc = "/r/Q/.lake/build/lib/lean/", "/elan/toolchains/v4/lib/lean/"
+    graph = {"P.Defs": {"imports": ["Init", "Q.Draw"], "olean": "/r/P/.lake/build/lib/lean/P/Defs.olean"},
+             "Q.Draw": {"imports": ["Init", "Q.Json"], "olean": lib + "Q/Draw.olean"},
+             "Q.Json": {"imports": ["Init"], "olean": lib + "Q/Json.olean"},
+             "Init": {"imports": ["Init.Data.Array.Basic"], "olean": tc + "Init.olean"},
+             "Init.Data.Array.Basic": {"imports": [], "olean": tc + "Init/Data/Array/Basic.olean"},
+             "Lean.Data.Json.Basic": {"imports": ["Init"], "olean": tc + "Lean/Data/Json/Basic.olean"}}
+    pol = recorded() | {"layers": {"P.Defs": {"imports": ["Q.Draw"]}}}
+    def fails(*imports):
+        f = facts(graph=graph)
+        return A.judge(pol, f | {"imports": f["imports"] | {"P.Defs": ["Init", "Q.Draw", *imports]}}, FILES)[0]
+    assert fails("Init.Data.Array.Basic") == []
+    assert fails("Lean.Data.Json.Basic") == [
+        "layers: P.Defs imports Lean.Data.Json.Basic, outside P.Defs's layer (Q.Draw)"]
+    assert fails("Q.Json") == ["layers: P.Defs imports Q.Json, outside P.Defs's layer (Q.Draw)"]
+
+
 def test_a_sealed_layer_answers_only_to_its_own_rule_and_is_reached_only_by_name():
     """A sealed layer under a vocabulary prefix (an area's `Guarantees` under the area): the vocabulary's rule doesn't hold
     its modules, and the vocabulary's own prefix doesn't admit them, so the vocabulary imports them only by listing them."""
@@ -2474,11 +2494,13 @@ def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     (tmp_path / "P" / "A.lean").write_text("import Lean\n@[simp] theorem t : True := trivial\nopen Lean in\nrun_cmd pure ()\n"
                                            "/-- #eval in prose -/\nlocal macro \"m\" : term => `(1)\n@[elab_as_elim] def e := 1\n")
     (tmp_path / "P" / "B.lean").write_text("initialize pure ()\n")
+    (tmp_path / "P" / "C.lean").write_text("module\n\npublic initialize pure ()\nmeta initialize pure ()\n")
     hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
     assert [h.split(" runs code")[0] for h in hits] == ["compile-time: P/A.lean:4", "compile-time: P/A.lean:6",
-                                                        "compile-time: P/B.lean:1"]
-    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why"}}) == []
-    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 3
+                                                        "compile-time: P/B.lean:1", "compile-time: P/C.lean:3",
+                                                        "compile-time: P/C.lean:4"]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why", "P.C": "why"}}) == []
+    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 5
     (tmp_path / "lakefile.lean").write_text("import Lake\n")
     assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
 
@@ -3277,6 +3299,39 @@ def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(
                         "--closure", "R.G", "--closure-reused", "R.M"], cwd=pkg, capture_output=True, text=True,
                        env=A.lake_env())
     assert r.returncode == 0, r.stderr + r.stdout
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(tmp_path):
+    """A `module`'s proofs are only in its `.olean.private`: without it the replay refuses the module, where the `.olean`
+    its importers read would replay each theorem as an axiom. A file outside the module system is its `.olean` alone, as
+    Lean imports it: the parts of its build as a `module`, put back beside it (Lake deletes them when it rebuilds the
+    file; a copied or restored build tree need not), are that build's, and the replay reads none of them."""
+    pkg = tmp_path / "pkg"
+    shutil.copytree(A.FIXTURES / "modules", pkg)
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+
+    def replay() -> subprocess.CompletedProcess:
+        return subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"),
+                               *sorted(A.lean_modules(pkg))], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    r = replay()
+    assert r.returncode == 0, r.stderr + r.stdout
+    axioms = json.loads((tmp_path / "replay.json").read_text())["axioms"]
+    parts = {p: p.read_bytes() for p in lib.rglob("*.olean.*") if p.suffix in (".server", ".private")}
+    (lib / "Modular" / "Hidden.olean.private").unlink()
+    r = replay()
+    assert r.returncode != 0 and "Modular.Hidden is a `module` and " in r.stderr and "Hidden.olean.private is missing" \
+        in r.stderr, r.stderr + r.stdout
+    for rel, text in json.loads((A.FIXTURES / "module-violations.json").read_text())["plain"]["write"].items():
+        (pkg / rel).write_text(text)
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    for p, b in parts.items():
+        p.write_bytes(b)
+    r = replay()
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert json.loads((tmp_path / "replay.json").read_text())["axioms"] == axioms
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

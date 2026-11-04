@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Recursion.RepFramesLig
+module
+
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Recursion.RepFramesLig
 
 /-!
 # An honest prover's rounds read back at `nextR`
@@ -29,6 +31,8 @@ that.
 
 `RepFits`, which matches `RecVStar.repRounds` with `repFrames`' chunks round by round, is `NextRFits`' `repFits`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Sampling.Leaf
-import Proofs.Flock.Claims.Sampling.Select.Scope
-import Proofs.Flock.Claims.Sampling.Runs
-import Proofs.Flock.Claims.Sampling.RunsExp
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Sampling.Universal
-import Proofs.Flock.SamplingBoundary
+module
+
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.Sampling.Leaf
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.RunsExp
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Claims.Sampling.Universal
+public import Proofs.Flock.SamplingBoundary
 
 /-!
 # The sampling block's claims, with what remains as hypotheses
@@ -78,6 +80,8 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
   honest prover's calls in two real runs on one nonce; `Sampling.ZK` reduces it to a committed-coin protocol's
   models (`SamplingDeploy.zk_deploy_of_models_gap`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

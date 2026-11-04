@@ -1,15 +1,20 @@
-import Proofs.Flock.Claims.DeploySetup
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Claims.ZkCols
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.NumbersGamma
-import Proofs.Flock.Claims.NumbersNMin
-import Proofs.Flock.Claims.NumbersTable
-import Proofs.Flock.Claims.GS.RadiusDeploy
-import Proofs.Flock.Claims.Complete.Honest
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Complete.Ready
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+module
+
+public import Proofs.Flock.Claims.DeploySetup
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Claims.ZkCols
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.NumbersGamma
+public import Proofs.Flock.Claims.NumbersNMin
+public import Proofs.Flock.Claims.NumbersTable
+public import Proofs.Flock.Claims.GS.RadiusDeploy
+public import Proofs.Flock.Claims.Complete.Honest
+public import Proofs.Flock.Claims.Complete.Zk.Honest
+public import Proofs.Flock.Claims.Complete.Ready
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
@@ -60,6 +65,8 @@ of trailing zeros (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`):
 One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

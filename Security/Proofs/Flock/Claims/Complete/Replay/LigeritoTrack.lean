@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 
 /-!
 # The honest prover's table and weight, step by step
@@ -16,6 +18,8 @@ step's says what it did to the table and weight and what it read, so a chain of 
   gains `β·eq(z, ·)` at the model's point and coin, the value is `mleF`, the message the claim's round polynomial) and a
   level's query (`HRuns.query`: the opening at the model's positions and the consistency weight at its coins).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

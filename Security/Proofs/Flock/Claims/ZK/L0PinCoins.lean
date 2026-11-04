@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishSwRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwRep
 
 /-!
 # The cut PIOP's end and basis at the deployed rep
@@ -14,6 +16,8 @@ the coins' (`piopFw_at`'s argument, at the source's switched vectors).
 * **`Masked.piopCut_lig`**: at the deployed rep's base and the opened coins, it ended at `ligP0`, before the cut's
   stop, and its basis is `ligBasis`.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

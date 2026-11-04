@@ -1,4 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictFramed
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
+import all Lean.Data.Json.Basic
 
 /-!
 # The decoded session's public words are empty, at every decision
@@ -8,6 +11,8 @@ writes its link's `publics` as the empty object (`linkObj_publics`), the substit
 (`jAt`) keep the link's `publics` (`fld_link_jAt`), and the decoder reads a table missing from `publics` as empty bytes
 (S7, `decodeJWithK_publics`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -41,7 +46,7 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
       simp only [pure, Except.pure, Except.ok.injEq] at h
       first | exact h.symm | exact h
 
-theorem isNull_mkObj_nil (t : String) : Record.isNull (Json.mkObj []) t = true := rfl
+theorem isNull_mkObj_nil (t : String) : Record.isNull (Json.mkObj []) t = true := (rfl)
 
 /-- **The verdict's record keeps the reader's link `publics`.** -/
 theorem fld_link_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}

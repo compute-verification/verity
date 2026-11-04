@@ -1,6 +1,8 @@
-import Flock.Firewall.Skeleton
-import Flock.Firewall.SessionPlan
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+module
+
+public import Flock.Firewall.Skeleton
+public import Flock.Firewall.SessionPlan
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # The algebraic phase's coin counts
@@ -17,6 +19,8 @@ lincheck squeeze `replayCoins`' counts in order.
 * `tally_squeezeP`, `zerocheckFw_tally`, `lincheckFw_tally`, `repPiop_tally`: the squeezes' counts, the zerocheck's
   and lincheck's, and the PIOP's.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

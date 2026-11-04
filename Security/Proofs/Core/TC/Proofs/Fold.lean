@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.Prod
+module
+
+public import Proofs.Core.TC.Proofs.Prod
 
 /-!
 # `group_sum`'s two folds, against the relation's terms
@@ -8,6 +10,8 @@ magnitudes, and equal exponents and signs where the magnitude is nonzero; a zero
 `group_sum`'s maximum exponent is the maximum of the rows' exponents and the floor (`maxExp_eq`), and its total is the
 sum of the rows' truncated, signed terms (`total_eq`).
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 
