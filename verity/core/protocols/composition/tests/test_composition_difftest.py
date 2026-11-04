@@ -341,13 +341,13 @@ BINDING = ["binding", "binding-id", "commitment-size"]
 
 
 @st.composite
-def composite(draw, product: R.Product) -> dict:
+def composite(draw, product: R.Product, mutation: str | None = None) -> dict:
     """One case of `product`: its subprotocols' cases (one time in six every one aimed at acceptance, one in six the same
     but for one of those that can be undecided, aimed at undecided, so that a product of seven reaches its binding breaks
     and its undecided verdict, and each at any verdict otherwise), the subprotocols it ties recommitted to one record
     (`one_record`) two times in three when they are aimed at acceptance and one in three otherwise, then at most one
     break of the composition's own inputs (half the time a break of the commitment alone, `BINDING`, when every case is
-    aimed at acceptance)."""
+    aimed at acceptance), or the break `mutation`, one of `MUTATIONS`, when given."""
     mode = draw(st.integers(0, 5))
     pending = draw(st.sampled_from([j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]))
     aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
@@ -360,7 +360,7 @@ def composite(draw, product: R.Product) -> dict:
                for c in cases]
     commitment = R.bind(product.id, [(c["id"], c["digest"]) for c in cases])
     params: object = {"components": named}
-    m = draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
+    m = mutation or draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
     i = draw(st.integers(0, len(cases) - 1))
     which = named if m and m.endswith("-param") or m in ("swap-params", "repeat-param") else entries
     if m in ("drop-param", "drop-case"):
@@ -618,11 +618,22 @@ def test_sampled_proofs_refuses_one_stage_v1(remote_server):
 def test_onsite_agrees(onsite_server, recorded):
     """Onsite reaches each verdict but acceptance, its policy and integrity meet on one record (left to the
     subprotocols) and on two (refused), and PoUS and PoUB-P2 on one store and on two (refused unless onsite rejects
-    already), each often; and PoUB-P2's case named as the generic bandwidth audit's, which is no component, refused."""
+    already), each often."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, R.UNDECIDED, "reject, a component undecided",
                                                        "reject, no component rejected", "one record",
                                                        "two records", "one store", "two stores"))
-    assert SEEN["onsite"]["generic bandwidth"] > 0, dict(SEEN["onsite"])
+
+
+@pytest.mark.slow
+def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
+    """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
+    onsite: refused, in Lean as in Python, on every drawn case (`generic-bandwidth` on each, a break that
+    `test_onsite_agrees`'s seeded draw needn't reach)."""
+    seen = collections.Counter()
+    p = RejectingPort("onsite", reference(R.ONSITE, seen), composite(R.ONSITE, "generic-bandwidth"),
+                      package=PROTOCOLS / "onsite", need_rejects=False)
+    stats = D.run(p, examples=10, seed=0, server=onsite_server)
+    assert stats.counts == {R.REJECT: 10} and seen["generic bandwidth"] == 10, (stats, dict(seen))
 
 
 def test_product_names_only_the_two_composites():
