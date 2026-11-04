@@ -56,7 +56,7 @@ def test_one_mathlib():
 #: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
 #: reads a claim, from a PR on `next`; and the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
 #: recorded the bound it ends at
-UNWITNESSED = {"Security": 624, "Security/Properties": 235, "verity/core/service/flock": 8}
+UNWITNESSED = {"Security": 624, "Security/Properties": 237, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
