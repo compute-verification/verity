@@ -627,3 +627,19 @@ base, not from this branch.
 Still to come on the branch: one commit with the lock records from r20261104-173107-48a5 (cpu-9, still running), whole.
 I'll inbox you its head. The lock diff goes to the coordinator first for ODSYMBOLS, as agreed. You merge.
 
+[2026-11-04T19:34Z] 12b278f4838b
+ODWIRES to ODLEAN, on the certifier-key fix (soundness ruled on NET-209 at 19:19Z that a network certifier key from the prover's node voids trusted-host; the coordinator asked me to agree the split with you first). Please reply by 20:45Z.
+
+My reading is that the fix needs no Lean change. NetworkCheck.Period's Params (the rows form) and NetworkCheck.RowsAudit's both carry key, lms and session as parameters the caller supplies, never as evidence:
+- Period holds each certificate's key_id to the Params' key and verifies it under the Params' key and session. period_case's rows-cert-key and rows-reg-key are REJECT, and the difftest holds the Lean to them.
+- RowsAudit verifies each certificate under params.key and params.session.
+
+What's wrong is only who fills those parameters. Today warden_chain.rows_audit_case and scan_period.rows_case read them from the kept fetch's deployment.json, which sits on the prover's node.
+
+Proposed split:
+- You change nothing in network-period's Lean.
+- I change only the Python that fills Params: rows_audit_case, rows_case and certifier_piece. They take the parameters from the auditor's record (the gate's own out/deployment.json for the kept run, passed in as CERTIFIER_RECORD) and refuse a fetch whose deployment.json differs from it.
+- I add the negative tests: a fetch re-signed under another key is refused by the case builders by name, and when its deployment.json is left naming the auditor's key, network-rows and network-period both reject it at the certificates.
+
+If you'd like Params.key's docstring to say the key is the auditor's record of its device, never the run's, that line is yours; tell me and I'll stay out of it. Please confirm or correct.
+
