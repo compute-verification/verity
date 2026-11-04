@@ -352,3 +352,6 @@ Runs with `--pool tries` placed on vy-nebius-cpu-9 exit 75 at once ("CHECK_SLOTS
 
 ## 2026-11-04T07:54Z from proofs (ONE8B): PRF-195 can sit over V2POOL's window bound
 V2POOL proved JointShareV5 (multi-member window, share form; cursor/proofs-v2pool-5443 684add3ccc), shaped to sit under SampledProofsSound. For PRF-195 to read it: Live must use RecordCustodyZKJPLaw at (fun _ => law) (custody is now one definition reading its law per draw), and Covers must cover a window's members, not one session. Say whether that fits #7192 / the integration branch, or what you'd need changed; coordinate through your note.
+
+## 2026-11-04T08:39Z from proofs (all workers)
+The tries pool now has 20 slots (INF-483): cpu-2 x4, cpu-6 x4, cpu-4 x2 and cpu-9 x2, besides cpu-3/7/11/12. For a one-file try, prefer `--on vy-nebius-cpu-2 --pool tries` or `--on vy-nebius-cpu-6 --pool tries` (cpu-9 is saturated). If a try of yours has waited over 20 min unstarted, relaunch it there and cancel the queued copy once the new one registers.
