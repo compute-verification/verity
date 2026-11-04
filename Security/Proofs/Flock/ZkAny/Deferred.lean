@@ -1,13 +1,14 @@
 module
 
 public import Definitions.Claims.ZKOut
+public import Proofs.Flock.Claims.ZK.GKOneSided
 public import Proofs.Flock.ZkAny.Unswitched
 
 /-!
 # The deferred release per outcome: the `Finish` verdict
 
 The server that defers every stop (`ZkServer.proverD`) releases, at its last round `n x - 1`, its frame or the stop.
-The verdict read off the release (`goesOn`: it reaches its last round and its message there is not the stop) is its
+The verdict read off the release (`goesOnAt`: it reaches its last round and its message there is not the stop) is its
 public outcome, and on each outcome the release is one prover's run:
 
 * `release_stopped`: where the release doesn't go on at its last round (it shows the stop there, or ended before it),
@@ -24,10 +25,6 @@ public outcome, and on each outcome the release is one prover's run:
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-
-/-- **The `Finish` verdict read off a transcript**: whether it reaches round `t` and its message there is not the
-stop. -/
-def goesOn (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) : Bool := (τ[t]?).any fun p => decide (p.1 ≠ stop)
 
 /-- **The simulator cut at round `t`**: `Sim`'s transcript, its messages from round `t` on the stop, replayed against
 the verifier. -/
@@ -85,7 +82,7 @@ whose message at round `n x - 1` is the stop, or that ended before it, is `P`'s 
 theorem release_stopped {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (x : Msg) (w : W) (wk : S.Worker)
     (hRef : S.RefDBelow H P fill n wk x w) (ask : List Msg → Out) (ρ : R) (κ : S.Chk)
-    (hs : goesOn S.stop (n x - 1) (interact ask (S.nextD fill n wk x w ρ κ) (n x) []) = false) :
+    (hs : goesOnAt S.stop (n x - 1) (interact ask (S.nextD fill n wk x w ρ κ) (n x) []) = false) :
     interact ask (S.nextD fill n wk x w ρ κ) (n x) [] =
       cutT ask S.stop (n x - 1) (n x) (interact ask (fun h => (((P w).next x h ρ).eval H).1) (n x) []) := by
   set pm : List (Msg × Msg) → Msg := fun h => (((P w).next x h ρ).eval H).1 with hpm
@@ -110,7 +107,7 @@ theorem release_stopped {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W
     rw [← hτ, List.nil_append, List.getElem?_eq_getElem hi] at hg
     have hg' : (τ[i]'hi).1 = S.nextD fill n wk x w ρ κ (histOf (τ.take i)) := Option.some.inj hg
     rw [← hiN] at hs
-    unfold goesOn at hs
+    unfold goesOnAt at hs
     rw [List.getElem?_eq_getElem hi] at hs
     have hs' : (τ[i]'hi).1 = S.stop := by simpa using hs
     rw [← hg', hs']
@@ -125,16 +122,16 @@ theorem zk_deferred_out {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
     (fill : Msg → ℕ → ℕ → W → N × Ω → List (Msg × Msg) → S.Val) (H : Msg → Msg)
     (n : Msg → ℕ) (wk : S.Worker) (Pg Ps : W → Prover (N × Ω)) (Rl : Rel W)
     (hg : ∀ x w, Rl x w → ∀ (ask : List Msg → Out) (ρ : N × Ω) (κ : S.Chk),
-      goesOn S.stop (n x - 1) (interact ask (S.nextD fill n wk x w ρ κ) (n x) []) = true →
+      goesOnAt S.stop (n x - 1) (interact ask (S.nextD fill n wk x w ρ κ) (n x) []) = true →
       interact ask (S.nextD fill n wk x w ρ κ) (n x) [] = interact ask (fun h => (((Pg w).next x h ρ).eval H).1) (n x) [])
     (hs : ∀ x w, Rl x w → S.RefDBelow H Ps fill n wk x w) (Simg Sims : Simulator)
     (εg : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → ℝ) (εs γs : Msg → ℝ)
     (hgo : ∀ x w, Rl x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = n x → ∀ Ev : List (Msg × Out) → Prop,
-      Pr (fun ρ : N × Ω => goesOn S.stop (n x - 1) (runStar H (Pg w) Vs x ρ θ).msgs = true ∧
+      Pr (fun ρ : N × Ω => goesOnAt S.stop (n x - 1) (runStar H (Pg w) Vs x ρ θ).msgs = true ∧
         Ev (runStar H (Pg w) Vs x ρ θ).msgs) ≤ Pr (fun c : Simg.C x => Ev (Simg.out H Vs θ x c)) + εg x w Θ Vs θ)
     (hZKs : ZKmalR H n Ps Rl Sims εs γs) :
     ZKOut (fun _ => N × Ω) (fun _ => S.Chk) H n (fun w _ => S.proverD fill n wk w) Rl
-      (fun x τ => goesOn S.stop (n x - 1) τ) (verdictSim Simg Sims n S.stop)
+      (fun x τ => goesOnAt S.stop (n x - 1) τ) (verdictSim Simg Sims n S.stop)
       (fun x w Θ Vs θ o => if o then εg x w Θ Vs θ else εs x + γs x * (Fork H (Ps w) Vs θ x).Pr H) := by
   intro x w hR Θ Vs θ hk o Ev
   beta_reduce
@@ -152,17 +149,17 @@ theorem zk_deferred_out {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
         Pr (fun c : Simg.C x => Ev (Simg.out H Vs θ x c)) :=
       Pr_fst (β := Sims.C x) fun c : Simg.C x => Ev (Simg.out H Vs θ x c)
     calc Pr (fun ω : (N × Ω) × S.Chk =>
-          goesOn S.stop (n x - 1) (runStar H (S.proverD fill n wk w) Vs x ω θ).msgs = true ∧
+          goesOnAt S.stop (n x - 1) (runStar H (S.proverD fill n wk w) Vs x ω θ).msgs = true ∧
             Ev (runStar H (S.proverD fill n wk w) Vs x ω θ).msgs)
-        ≤ Pr (fun ω : (N × Ω) × S.Chk => goesOn S.stop (n x - 1) (runStar H (Pg w) Vs x ω.1 θ).msgs = true ∧
+        ≤ Pr (fun ω : (N × Ω) × S.Chk => goesOnAt S.stop (n x - 1) (runStar H (Pg w) Vs x ω.1 θ).msgs = true ∧
             Ev (runStar H (Pg w) Vs x ω.1 θ).msgs) := by
           refine Pr_mono fun ω hω => ?_
           rw [hsrv] at hω
           rw [hP, ← hg x w hR ask ω.1 ω.2 hω.1]
           exact hω
-      _ = Pr (fun ρ : N × Ω => goesOn S.stop (n x - 1) (runStar H (Pg w) Vs x ρ θ).msgs = true ∧
+      _ = Pr (fun ρ : N × Ω => goesOnAt S.stop (n x - 1) (runStar H (Pg w) Vs x ρ θ).msgs = true ∧
             Ev (runStar H (Pg w) Vs x ρ θ).msgs) :=
-          Pr_fst (fun ρ : N × Ω => goesOn S.stop (n x - 1) (runStar H (Pg w) Vs x ρ θ).msgs = true ∧
+          Pr_fst (fun ρ : N × Ω => goesOnAt S.stop (n x - 1) (runStar H (Pg w) Vs x ρ θ).msgs = true ∧
             Ev (runStar H (Pg w) Vs x ρ θ).msgs)
       _ ≤ Pr (fun c : Simg.C x => Ev (Simg.out H Vs θ x c)) + εg x w Θ Vs θ := hgo x w hR Θ Vs θ hk Ev
       _ = _ := by
@@ -177,7 +174,7 @@ theorem zk_deferred_out {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
       exact Pr_congr fun c => iff_of_eq (congrArg Ev (cutSim_out H Sims (fun x => n x - 1) n S.stop Vs θ x c.2))
     have hA := hZKs x w hR _ Vs θ hk (fun τ => Ev (cutT ask S.stop (n x - 1) (n x) τ))
     calc Pr (fun ω : (N × Ω) × S.Chk =>
-          goesOn S.stop (n x - 1) (runStar H (S.proverD fill n wk w) Vs x ω θ).msgs = false ∧
+          goesOnAt S.stop (n x - 1) (runStar H (S.proverD fill n wk w) Vs x ω θ).msgs = false ∧
             Ev (runStar H (S.proverD fill n wk w) Vs x ω θ).msgs)
         ≤ Pr (fun ω : (N × Ω) × S.Chk =>
             Ev (cutT ask S.stop (n x - 1) (n x) (runStar H (Ps w) Vs x ω.1 θ).msgs)) := by
