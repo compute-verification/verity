@@ -231,8 +231,9 @@ and its parameters). What a run measured, what happened and who decided live out
 - **In the tree:** code, tests, Lean, circuits and their pins, the parameters and configuration code reads (with their
   public sources: a data sheet, the census), small fixtures beside their generators, and maintained current-truth docs
   (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, the root's `GLOSSARY.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`,
-  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). A protocol keeps its `PROTOCOL.md` only
-  while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
+  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). The root has no README: an agent starts at
+  this file and `ARCHITECTURE.md`, and a directory keeps a README only where an agent couldn't find its way without one.
+  A protocol keeps its `PROTOCOL.md` only while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
 - **Not in the tree, and not cited from it** (code, comments, docstrings, Lean, READMEs, docs): measured results
   (numbers, tables, plots, overheads), reports and drafts, and the process's ids and names: run, `art:` and `note:` ids,
   Notion pages, Linear issues, Slack threads, PR numbers, agent ids, lane and worker names, dates, and attributions such
