@@ -3770,7 +3770,7 @@ class Driver:
             return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
         else:
             tree = r.stdout.split()[0]
-        tree, _, _, why = ported(self.repo, tree)
+        tree, _, _, why = ported(self.repo, tree, base=tip)
         return tree, why
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
