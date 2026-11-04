@@ -4,13 +4,14 @@ its hiding leaf.  One input per round, k per audit.
     PousAnswerOpens_v1{N}           (block: Array<8N>, h: Array<512>, y: Array<1536>, bc: Array<1024>) -> Array<1>
     PousRowDigest_v1{N}             (row: Array<8N>) -> Array<512>                     sha512/row/v2 of an N-byte row
     PousRowDigestEnd_v1{N, END}     the digest's first block ("head"), last ("tail") or whole, when N < 128 ("short")
-    PousSha512Compress_v1           (cv: Array<512>, msg: Array<1024>) -> Array<512>   one SHA-512 compression
     PousHm96Commit_v1               (x: Array<512>, y: Array<1536>) -> Array<1024>     hm96-sha512's b ‖ c
     PousEqual_v1{N}                 (a: Array<N>, b: Array<N>) -> Array<1>             a = b
+    Sha512Compress_v1               `gates.sha512`'s, one compression of the row's blocks between its first and its last
 
 Every array is of `Value<1>`.  Byte strings (the block, digests, salts, commit strings) are bits in byte order, bit t
 being bit t mod 8 of byte ⌊t/8⌋ (hm96's order); a chaining value is SHA-512's eight words, each least significant bit
-first.  Every compression is core's `verity.ml.commitments.gates.sha512.compress_gadget`, 58,120 ANDs at most.
+first.  Every compression is `verity.ml.commitments.gates.sha512.compress_gadget`, 58,120 ANDs at most; a call of
+``Sha512Compress_v1`` (`compress_call`) takes the block's bytes as its big-endian words, which is wiring.
 
 **The statement.** For round j the memory challenger signs (i_j, send, receipt, h), where h is the digest of the 2,056
 bytes it received.  C's leaf i_j is ``hm96-sha512/row/v2``: the frame leaf over the commit string ``bc = b ‖ c`` of the
@@ -32,15 +33,14 @@ from __future__ import annotations
 from verity.ml.circuits.boolean.forms import and_reduce, const_bits
 from verity.ml.circuits.boolean.trace import part
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.sha512 import compress_gadget, midstate, pad_tail, words_be
+from verity.ml.commitments.gates.sha512 import BLOCK, DIGEST, Sha512Compress, compress_gadget, midstate, pad_tail, words_be
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
 from .circuit import _check, _traced_body, bits
 
-__all__ = ["PousAnswerOpens", "PousEqual", "PousHm96Commit", "PousRowDigest", "PousRowDigestEnd", "PousSha512Compress",
-           "word_bit"]
+__all__ = ["PousAnswerOpens", "PousEqual", "PousHm96Commit", "PousRowDigest", "PousRowDigestEnd", "compress_call", "word_bit"]
 
 
 def word_bit(t: int) -> int:
@@ -68,6 +68,13 @@ def _const_words(data: bytes):
 
 def compress(C, cv, msg):
     return [f for w in compress_gadget(C, [cv[64 * i:64 * i + 64] for i in range(8)], to_words(msg)) for f in w]
+
+
+def compress_call(B, cv: Coll, msg: Coll) -> Coll:
+    """One ``Sha512Compress_v1`` call in the body ``B`` on a chaining value (512 bits) and a 128-byte block in byte order,
+    whose word w's bit 8i + b is bit b of the block's byte 8w + 7 - i (`word_bit`)."""
+    words = concat([strided_view(msg, 64 * w + 56, 8, -8, 1, 64) for w in range(16)])
+    return B.call(Sha512Compress, cv.reshape(DIGEST), Coll(BLOCK, words)).reshape(bits(512))
 
 
 def digest_end(C, N: int, END: str, *args):
@@ -107,16 +114,6 @@ def equal(C, a, b):
 
 # --- the Definitions -------------------------------------------------------------------------------------------------------
 
-def _compress_sig(S):
-    return (("cv", bits(512)), ("msg", bits(1024))), bits(512)
-
-
-PousSha512Compress = part(
-    "PousSha512Compress", (), _compress_sig, lambda C, S, cv, msg: compress(C, cv, msg),
-    "One SHA-512 compression with the feed-forward (FIPS 180-4), core's compress_gadget: the chaining value as eight "
-    "words LSB first, the message block as 128 bytes", conformance="protocol-defined")
-
-
 def _end_sig(S):
     _check("PousRowDigestEnd", N=S.N)
     rest = S.N % 128
@@ -146,7 +143,7 @@ def _digest_body(B, S, row):
         return B.call(bind(PousRowDigestEnd, N=N, END="short"), row)
     cv = B.call(bind(PousRowDigestEnd, N=N, END="head"), row[0:1024])
     for i in range(1, N // 128):
-        cv = B.call(bind(PousSha512Compress), cv, row[1024 * i:1024 * (i + 1)])
+        cv = compress_call(B, cv, row[1024 * i:1024 * (i + 1)])
     rest = (row[1024 * (N // 128):8 * N],) if N % 128 else ()
     return B.call(bind(PousRowDigestEnd, N=N, END="tail"), cv, *rest)
 
