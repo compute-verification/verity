@@ -10,7 +10,8 @@ The H200's table, held to the sheet's dense peaks (`Accounting.TS.Sheets.H200`, 
 * `tensor_sheet`: the table's MACs a second in each format (`ρ tensor` over the format's `weight`) are at least the
   sheet's figure a second at the clock the sheet quotes it at (1830 MHz for s8, FP8, f16, bf16 and tf32, 1980 MHz for
   f64). So no format's rate in the table is under the sheet's (θ at or above the sheet).
-* `tensor_sheet_clock`: at the table's clock they are the sheet's per-SM-clock peaks times its SMs, both ways.
+* `tensor_sheet_clock`: off f64 they are the sheet's figures exactly, its per-SM-clock peaks times its SMs at the
+  1830 MHz tensor clock ceiling the table takes the tensor at; f64's weight is rounded down, so its rate is above the sheet's.
 -/
 
 open scoped NNRat
@@ -34,14 +35,16 @@ def sheetMHz : Ty → ℝ
   | .f64 => fp64MHz
   | _ => tensorMHz
 
-theorem tensor_sheet_clock (t : Ty) :
-    ((card.ρ .tensor / card.weight (ofTy t) : ℚ≥0) : ℝ) = smCount * t.peak * (fmaxMHz * 10 ^ 6) := by
-  cases t <;> norm_num [card, clock, ofTy, Ty.peak, smCount, fmaxMHz, peakS8, peakE4m3, peakE5m2, peakF16, peakBf16,
-    peakTf32, peakF64]
+theorem tensor_sheet_clock (t : Ty) (ht : t ≠ .f64) :
+    ((card.ρ .tensor / card.weight (ofTy t) : ℚ≥0) : ℝ) = smCount * t.peak * (sheetMHz t * 10 ^ 6) := by
+  cases t <;> first
+    | exact absurd rfl ht
+    | norm_num [card, tensorClock, ofTy, sheetMHz, Ty.peak, smCount, tensorMHz, peakS8, peakE4m3, peakE5m2, peakF16,
+        peakBf16, peakTf32]
 
 theorem tensor_sheet (t : Ty) :
     smCount * t.peak * (sheetMHz t * 10 ^ 6) ≤ ((card.ρ .tensor / card.weight (ofTy t) : ℚ≥0) : ℝ) := by
-  cases t <;> norm_num [card, clock, ofTy, sheetMHz, Ty.peak, smCount, tensorMHz, fp64MHz, peakS8, peakE4m3,
+  cases t <;> norm_num [card, tensorClock, ofTy, sheetMHz, Ty.peak, smCount, tensorMHz, fp64MHz, peakS8, peakE4m3,
     peakE5m2, peakF16, peakBf16, peakTf32, peakF64]
 
 end Verity.Accel.H200

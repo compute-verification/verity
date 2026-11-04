@@ -274,7 +274,7 @@ theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : De
     exact (f.2 i r).1
 
 theorem h200_rates_pos : ∀ r, 0 < Verity.Accel.H200.card.ρ r := by
-  intro r; cases r <;> norm_num [Verity.Accel.H200.card, Verity.Accel.H200.clock]
+  intro r; cases r <;> norm_num [Verity.Accel.H200.card, Verity.Accel.H200.clock, Verity.Accel.H200.tensorClock]
 
 theorem sm120_rates_pos : ∀ r, 0 < Verity.Accel.Sm120.card.ρ r := by
   intro r; cases r <;> norm_num [Verity.Accel.Sm120.card, Verity.Accel.Sm120.clock]
