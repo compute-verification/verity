@@ -1590,7 +1590,8 @@ def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmod
 
 def summary(r: dict) -> str:
     span = f"{r['base']}..{r['head']}"
-    counts = f"{len(r['renames'])} renames, {len(r['edits'])} path-only edits"
+    edits = f"edits by {r['words']}'s words" if r.get("words") else "path-only edits"
+    counts = f"{len(r['renames'])} renames, {len(r['edits'])} {edits}"
     if r["certified"]:
         return f"move-check: certified {span} is a pure move ({counts})"
     return f"move-check: refused {span}: {len(r['refusals'])} paths are not part of a pure move ({counts})"
