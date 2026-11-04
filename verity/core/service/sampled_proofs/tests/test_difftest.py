@@ -13,7 +13,9 @@ one, `coins.law_problem`), for the `select` piece the challenger's sample from a
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), for `registered_ports` the v2 audit's checks of the verifier's registered file
-(`registered.ports_twice`, `root_clash` and `entry_clash`) on files of changed and repeated ports, and for the `run` piece (a registration's whole run, `Run.run`) those references in a
+(`registered.ports_twice`, `root_clash` and `entry_clash`) on files of changed and repeated ports, for `statement_roots`
+the per-member form's hold of a statement's other ports to the registration's roots (`registered.roots_of` and
+`statement_clash`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
@@ -1196,6 +1198,23 @@ def registered_ports(j):
         raise D.Reject("a row format that is not a string")
     names, roots, entry = G.ports_twice([n for n, _ in ps]), G.root_clash(ps), G.entry_clash(ps, j.get("record"), schemas)
     return {"entry": entry and list(entry), "names": names, "ok": names is None, "roots": roots and list(roots)}
+
+
+def statement_roots(j):
+    """The per-member form's hold of a statement to the registration on `{"record", "member", "registered", "ports",
+    "header"}`: the record's port roots (`roots`, `registered.roots_of`, ``[port, root, domain]`` ascending by port) and
+    the first of the statement's `ports` that no `registered` name names whose `header` root and domain are not the
+    record's for ``<member>/<port>`` (`clash`, `registered.statement_clash`). Refused where the member is not a string or
+    the names not a list of strings."""
+    j = _json(j)
+    if not (isinstance(j, dict) and isinstance(j.get("member"), str)):
+        raise D.Reject("member is not a string")
+    names = [j.get(k) for k in ("registered", "ports")]
+    if not all(isinstance(ns, list) and all(isinstance(n, str) for n in ns) for ns in names):
+        raise D.Reject("registered or ports is not a list of names")
+    roots = G.roots_of(j.get("record"))
+    clash = G.statement_clash(roots, j["member"], names[0], j.get("header"), names[1])
+    return {"clash": clash and list(clash), "roots": [[p, r.hex(), d.hex()] for p, (r, d) in sorted(roots.items())]}
 
 
 def check_public(j):
@@ -3263,6 +3282,45 @@ def registered_ports_cases(draw) -> dict:
 REGISTERED_PORTS = D.Port(PIECES, "registered_ports", registered_ports,
                           st.one_of(*[registered_ports_cases()] * 5, JSON), package=PACKAGE)
 
+#: A per-member statement's ports, its member's names (a window key, a name the record doesn't use), and roots and
+#: domains: three of 64 bytes, then ones that aren't lowercase hex bytes, or no string.
+SR_PORTS = ["x", "w", "o0", "o1"]
+SR_MEMBERS = ["W/c0", "R/c0", 'Gemm_v2{K=16,N=16,DOT={"fn":"AmpereBF16TcDot16_v2"}}/c0', "m1"]
+SR_HEX = ["a1" * 64, "b2" * 64, "c3" * 64, "", "ab", "AB" * 64, "zz", "a", 5, None]
+
+
+@st.composite
+def statement_roots_cases(draw) -> dict:
+    """A `statement_roots` input: a member's statement of up to four ports (`SR_PORTS`), some registered; its header's
+    root and domain for each port, now and then left out or changed (`SR_HEX`); and a record registering each port's
+    root and domain under ``<member>/<port>`` (now and then under another member's name, left out, changed, or after an
+    earlier changed entry of its name, in any order), or a record or header of the wrong shape."""
+    def changed(x):
+        return draw(st.sampled_from(SR_HEX)) if draw(st.integers(0, 5)) == 0 else x
+
+    member = draw(st.sampled_from(SR_MEMBERS))
+    vals = {p: (draw(st.sampled_from(SR_HEX[:3])), draw(st.sampled_from(SR_HEX[:3]))) for p in SR_PORTS}
+    fv = {"roots": {p: changed(r) for p, (r, _) in vals.items() if draw(st.integers(0, 9))},
+          "domain_ids": {p: changed(d) for p, (_, d) in vals.items() if draw(st.integers(0, 9))}}
+    entries = []
+    for p, (r, d) in vals.items():
+        if draw(st.integers(0, 9)) == 0:
+            continue
+        name = f"{draw(st.sampled_from([member] * 4 + SR_MEMBERS))}/{p}"
+        if draw(st.integers(0, 6)) == 0:
+            entries.append({"port": name, "root": changed(r), "domain": changed(d)})
+        entries.append({"port": name, "root": changed(r), "domain": changed(d)})
+    entries = draw(st.permutations(entries))
+    record = draw(st.sampled_from([{"roots": entries}] * 6 + [{"roots": [5, {"port": 5}, *entries]}, None, {},
+                                                               {"roots": None}]))
+    header = draw(st.sampled_from([{"frame_v3": fv}] * 8 + [None, {}, {"frame_v3": None}]))
+    return {"header": header, "member": member, "ports": draw(st.lists(st.sampled_from(SR_PORTS), max_size=4)),
+            "record": record, "registered": draw(st.lists(st.sampled_from(SR_PORTS), max_size=2))}
+
+
+STATEMENT_ROOTS = D.Port(PIECES, "statement_roots", statement_roots,
+                         st.one_of(*[statement_roots_cases()] * 5, JSON), package=PACKAGE)
+
 
 def _record_case(a: dict, delta: str) -> dict:
     """`audit_record`'s arguments from an audit: the verifier's derived law (or the record's, when the parameters don't
@@ -3775,7 +3833,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (REGISTERED_PORTS, 400), (RECORD_PORT, 600),
+              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (REGISTERED_PORTS, 400), (STATEMENT_ROOTS, 400),
+              (RECORD_PORT, 600),
               (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500)]

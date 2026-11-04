@@ -37,6 +37,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   name repeated (`Flock.Registered.dupName?`, which `Flock.Registered.ofJson` refuses), two ports of one root registering
   it differently (`Flock.Registered.rootClash`) and a port differing from the record's entry for its value
   (`Registered.entryClash`);
+* `statement_roots`: the per-member form's hold of a statement's other ports to the registration (`OneStageZk.heldChecks`):
+  the record's port roots (`Registered.rootsOf`) and the first port of the statement that no registered port names whose
+  public header's frame-v3-sha512 root and domain are not the record's for `<member>/<port>` (`Registered.statementClash`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
@@ -639,6 +642,26 @@ def registeredPorts (j : Json) : V Json := do
     ("roots", ((Flock.Registered.rootClash own).map fun (a, b) => pair a.name b.name).getD .null),
     ("entry", ((Registered.entryClash schemas (getD j "record") own).map fun (q, k) => pair q.name k).getD .null)]
 
+/-- `{"record", "member", "registered", "ports", "header"}`: the registration record's port roots by name
+(`roots`, `Registered.rootsOf`: `[port, root, domain]` in hex, ascending by port), and, of a statement's `ports` (names)
+in the per-member form, the first that is none of the verifier's `registered` port names and whose root and domain in
+the public `header` are not the record's for `<member>/<port>` (`clash`, `[port, differs]`, `Registered.statementClash`),
+or null. -/
+def statementRoots (j : Json) : V Json := do
+  let names : String → V (Array String) := fun k => do
+    let .arr xs := getD j k | throw s!"{k} is not a list"
+    xs.mapM fun
+      | .str s => pure s
+      | _ => throw s!"{k} holds a name that is not a string"
+  let .str member := getD j "member" | throw "member is not a string"
+  let roots := Registered.rootsOf (getD j "record")
+  let pub : Flock.Public := { header := getD j "header", n := 0, digests := #[], outputs := #[], sha := .empty }
+  let clash := Registered.statementClash (roots[·]?) member (← names "registered") pub (← names "ports")
+  return Json.mkObj [
+    ("roots", Json.arr ((roots.toArray.qsort (·.1 < ·.1)).map fun (p, r, d) =>
+      Json.arr #[.str p, .str (Flock.hexOf r), .str (Flock.hexOf d)])),
+    ("clash", (clash.map fun (q, b) => Json.arr #[.str q, .bool b]).getD .null)]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
@@ -647,7 +670,8 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("registered_ports", registeredPorts), ("record", record),
+   ("session_registered", sessionRegistered), ("registered_ports", registeredPorts),
+   ("statement_roots", statementRoots), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
    ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
