@@ -69,25 +69,37 @@ def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, 
             ys[m.port(p)] = y.tobytes()
 
 
+def port_strings(m: Any, body: bytes, port: str) -> np.ndarray | None:
+    """The ``b || c`` of every leaf of member ``m``'s row ``port``'s tree, in rank order, from its public body ``body``
+    (`rows.Committed.public_body`): a shared-row member's port table, else each unit's row. None for a body that is not
+    the member's or a port it lacks."""
+    names = [q for q, _ in m.all_rows]
+    if port not in names:
+        return None
+    j = names.index(port)
+    if not m.tables:
+        if len(body) != m.n * len(names) * BC_BYTES:
+            return None
+        return np.frombuffer(body, dtype=np.uint8).reshape(m.n, len(names), BC_BYTES)[:, j]
+    counts = [dict(m.tables).get(q, m.n) for q in names]
+    if len(body) != BC_BYTES * sum(counts) + 4 * m.n * len(names):
+        return None
+    return np.frombuffer(body, dtype=np.uint8, count=counts[j] * BC_BYTES,
+                         offset=BC_BYTES * sum(counts[:j])).reshape(counts[j], BC_BYTES)
+
+
 def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
     """Each of member ``m``'s units' ``b || c`` of its row ``port``, from its public body (`rows.Committed.public_body`): a
     shared-row member's, the row of the port's table its ref names, the row its statement reads. None for a body that is
     not the member's or a port it lacks."""
-    names = [q for q, _ in m.all_rows]
     body = publics.get(m.key)
-    if body is None or port not in names:
-        return None
-    if not m.tables:
-        if len(body) != m.n * len(names) * BC_BYTES:
-            return None
-        return np.frombuffer(body, dtype=np.uint8).reshape(m.n, len(names), BC_BYTES)[:, names.index(port)]
-    counts = [dict(m.tables).get(q, m.n) for q in names]
-    j, at = names.index(port), BC_BYTES * sum(counts)
-    if len(body) != at + 4 * m.n * len(names):
-        return None
-    table = np.frombuffer(body, dtype=np.uint8, count=counts[j] * BC_BYTES, offset=BC_BYTES * sum(counts[:j]))
-    refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(m.n, len(names))[:, j]
-    return None if (refs >= counts[j]).any() else table.reshape(counts[j], BC_BYTES)[refs]
+    leaves = None if body is None else port_strings(m, body, port)
+    if leaves is None or not m.tables:
+        return leaves
+    names = [q for q, _ in m.all_rows]
+    refs = np.frombuffer(body, dtype="<u4", offset=len(body) - 4 * m.n * len(names)).reshape(m.n, len(names))
+    refs = refs[:, names.index(port)]
+    return None if (refs >= len(leaves)).any() else leaves[refs]
 
 
 def string_at(m: Any, body: bytes, port: str, unit: int) -> int | None:

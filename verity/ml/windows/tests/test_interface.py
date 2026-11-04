@@ -36,7 +36,7 @@ from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.gates import sha512_stream as SS
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
 from verity.ml.windows import flock_inputs as FI, interface as I, rows as CS, wiring as WI
 
@@ -1419,6 +1419,97 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
     mixed.record(GEMM, [ins[0][1:], ins[1][1:]], [outs[0][1:]])
     with pytest.raises(ValueError, match="by reference for some units"):
         mixed.close(salt_key=bytes(32))
+
+
+def _roots(c: CS.Committed) -> list[dict]:
+    """The registration's ``roots`` of ``c`` (`rows.registration`'s)."""
+    return [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()}
+            for p in c.roots]
+
+
+def _climbs(window: CS.Binding, m: CS.Member, row: str, pos: int, leaf: str, path: str, roots: list[dict]) -> bool:
+    """Whether ``leaf`` (a ``b || c``, hex) at ``pos`` of member ``m``'s row ``row`` climbs ``path`` (siblings, leaf level
+    first) to the root the registration's ``roots`` record for that port, in its domain and at its leaf count."""
+    (e,) = [e for e in roots if e["port"] == m.port(row)]
+    dom, sibs = window.domain(m.port(row), m.schema(row), e["leaves"]), bytes.fromhex(path)
+    node = dom.leaf(pos, pos, m.schema(row), CS.INST.tree_leaf(CS.INST.default_key, bytes.fromhex(leaf)))
+    for level in range(len(sibs) // 64):
+        s = sibs[64 * level:64 * (level + 1)]
+        node = dom.node(level, pos >> 1, *((node, s) if pos % 2 == 0 else (s, node)))
+        pos >>= 1
+    return (dom.domain_id.hex(), node.hex(), len(sibs)) == (e["domain"], e["root"], 64 * merkle_depth(e["leaves"]))
+
+
+def test_the_drawn_units_wired_rows_and_their_writers_are_opened_against_the_registered_roots():
+    """`openings`: for each drawn unit, each of its wired rows and its writer's output row, at the unit's position in its
+    member, each ``b || c`` with its path climbing to the root the registration records for its port, and a read's string
+    its writer's (`wiring`'s one string). Across templates, on shared-row members' wired ports and on a cut port's rows, each
+    from its own writer; reads and writes each once and sorted, an undrawn unit's rows not opened. Refused: a body not its
+    member's, a tree that isn't the registered root, a unit that reads another row of its table, a drawn index that is no
+    unit, and a record that lists its members."""
+    circuit, w, feed_ins, feed, ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, ins, outs)
+    c, ms = win.close(salt_key=bytes(32)), win.window.members
+    doc, roots = json.loads(I.circuit_bytes(win.circuit_record())), _roots(c)
+    mine = I.window_of_record(doc, LAW, {GID: GEMM, SID: SRC}.__getitem__)
+    assert mine.members == ms and all(m.tables and m.wired for m in ms if m.template == GID)
+    publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
+    got = I.openings(mine, doc, c.public_body, roots, list(range(10)))
+    first = {SID: 0, GID: REQUESTS}
+
+    def member(tid: str, u: int) -> tuple[CS.Member, int]:
+        m = next(m for m in ms if m.template == tid and m.base <= first[tid] + u < m.base + m.n)
+        return m, first[tid] + u - m.base
+
+    assert [r[:4] for r in got["reads"]] == [[GID, u, "x", 0] for u in range(8)]
+    assert [x[:3] for x in got["writes"]] == sorted([[SID, 0, "o0"], [SID, 1, "o0"], *([GID, u, "o0"] for u in range(6))])
+    wrote = {(t, u): leaf for t, u, _o, leaf, _p in got["writes"]}
+    for tid, u, port, _r, leaf, path in got["reads"]:
+        m, pos = member(tid, u)
+        g = dict((p, ws) for p, _o, ws in m.wired)[port][pos]
+        writer = SID if g < REQUESTS else GID
+        assert leaf == wrote[writer, g - first[writer]] == WI._strings(publics, m, port)[pos].tobytes().hex()
+        assert _climbs(mine, m, port, pos, leaf, path, roots)
+    for t, u, out, leaf, path in got["writes"]:
+        m, pos = member(t, u)
+        assert _climbs(mine, m, out, pos, leaf, path, roots)
+    assert I.openings(mine, doc, c.public_body, roots, [3]) == {
+        "reads": [r for r in got["reads"] if r[:2] == [GID, 1]], "writes": [x for x in got["writes"] if x[:2] == [SID, 1]]}
+    assert I.openings(mine, doc, c.public_body, roots, [0, 1]) == {"reads": [], "writes": []}
+
+    k, reader = (next(j for j, m in enumerate(ms) if m.template == t) for t in (SID, GID))
+    at = WI.string_at(ms[k], publics[ms[k].key], "o0", 0) + 5
+    flipped = publics[ms[k].key][:at] + bytes([publics[ms[k].key][at] ^ 1]) + publics[ms[k].key][at + 1:]
+    refs = len(publics[ms[reader].key]) - 4 * ms[reader].n * len(ms[reader].all_rows)
+    other = publics[ms[reader].key][:refs] + (1).to_bytes(4, "little") + publics[ms[reader].key][refs + 4:]
+    for body, rs, drawn, why in [
+            (lambda j: c.public_body(j)[:-1], roots, [2], "public body is not its"),
+            (lambda j: flipped if j == k else c.public_body(j), roots, [2], "is not the root, leaves and domain the "
+             "registration records"),
+            (c.public_body, [e for e in roots if e["port"] != ms[k].port("o0")], [2], "is not the root, leaves and domain"),
+            (lambda j: other if j == reader else c.public_body(j), roots, [2], "reads another row than its own"),
+            (c.public_body, roots, [10], r"drawn units \[10\] are no units of the record's 10"),
+            (c.public_body, roots, [True], "are no units")]:
+        with pytest.raises(ValueError, match=why):
+            I.openings(mine, doc, body, rs, drawn)
+    with pytest.raises(ValueError, match="a stated record"):
+        I.openings(mine, {f: v for f, v in doc.items() if f != "wires"}, c.public_body, roots, [3])
+
+    cut = I.Window(sliced(), RUN, LAW, 2)
+    ins8, outs8, ins, outs = sliced_values()
+    cut.record(G8, ins8, outs8)
+    cut.record(GEMM, ins, outs)
+    c = cut.close(salt_key=bytes(32))
+    doc, roots = json.loads(I.circuit_bytes(cut.circuit_record())), _roots(c)
+    got = I.openings(cut.window, doc, c.public_body, roots, [7])
+    assert [r[:4] for r in got["reads"]] == [[GID, 1, "x", 0], [GID, 1, "x", 1]]
+    assert [x[:3] for x in got["writes"]] == [[G8ID, 2, "o0"], [G8ID, 3, "o0"]]
+    assert [r[4] for r in got["reads"]] == [x[3] for x in got["writes"]]
+    reader, = [m for m in cut.window.members if m.template == GID and m.base <= 7 < m.base + m.n]
+    assert all(_climbs(cut.window, reader, I.row_name("x", r, 2), 7 - reader.base, leaf, path, roots)
+               for _t, _u, _p, r, leaf, path in got["reads"])
 
 
 def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:

@@ -37,7 +37,8 @@ past 111 bytes, or past a C-Flock block of 2^27 bits). A Boolean-profile port's 
 `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-the wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
+the wiring check holds on the drawn units (`wiring.check_drawn`; the network certifier's period, on each drawn wired
+row's and its writer's openings against their registered roots, `openings`). A wire reads a row whole: a row gathered from several
 writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
 form, the wire cut (``cuts``, `SampledProofs.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
 is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
@@ -102,9 +103,10 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import advice as AC
+from verity.ml.commitments.merkle import MerkleTree
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
-from . import rows as CS
+from . import rows as CS, wiring as WI
 
 #: the element widths a parameter's or return field's leaves may have: a row is their little-endian bytes
 PACKED = (8, 16, 32, 64)
@@ -1822,6 +1824,87 @@ def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable
                                                                         (rec.get("window") or {}).get("run")):
         raise ValueError("the circuit record names another program, partition or run than its registration")
     return window_of_record(doc, law, resolve), doc
+
+
+def openings(w: CS.Binding, doc: Mapping[str, Any], body: Callable[[int], bytes], roots: Sequence[Mapping[str, Any]],
+             drawn: Sequence[int]) -> dict[str, list[list[Any]]]:
+    """The drawn units' wired rows and their writers' output rows, each opened against its port's registered root, as the
+    network certifier's period check reads them: ``{"reads": [[template, unit, port, row, leaf, path], …], "writes":
+    [[template, unit, out, leaf, path], …]}``, each sorted and each once. For each drawn unit (``drawn``, global indices
+    in the record's template order), each wire of the stated record ``doc`` that covers it and each row ``row`` of the
+    wire's cut, the reader's leaf of port ``port`` row ``row`` (`row_name`) and its writer's of ``out`` (unit
+    `Wire.writers`, its own template's index), each at the unit's position in its member: ``leaf`` the row's
+    ``b || c`` and ``path`` its siblings to the root, leaf level first, both hex. ``w`` is the record's window
+    (`window_of_record`), ``body(k)`` member ``k``'s public body (`rows.Committed.public_body`) and ``roots`` the
+    registration's (``{port, root, leaves, domain}`` each); only the touched members' bodies are read and only their
+    touched ports' trees made. Refused (ValueError) for a record that states no wires, a drawn index that is no unit, a
+    window whose templates aren't the record's in its order, a body that isn't its member's, a port whose tree isn't the
+    root, leaves and domain the registration records, and a shared-row member's unit that reads another row."""
+    if "wires" not in doc:
+        raise ValueError("the period opens the wires of a stated record (its cap and wires), not one that lists its members")
+    wires, cuts, _reg, _ingress = declarations(doc)
+    names = [t for t, _ in doc["templates"]]
+    starts = dict(zip(names, np.cumsum([0] + [int(n) for _, n in doc["templates"]]).tolist()))
+    total = sum(int(n) for _, n in doc["templates"])
+    of: dict[str, tuple[list[int], list[int]]] = {}
+    for k, m in enumerate(w.members):
+        ks, bs = of.setdefault(m.template, ([], []))
+        ks.append(k)
+        bs.append(m.base)
+    if any(of[t][1][0] != starts[t] for t in names):
+        raise ValueError(f"the window's members don't start each template where the record's template order does {starts}")
+    readers: dict[str, list[Wire]] = {}
+    for x in wires:
+        readers.setdefault(x.reader, []).append(x)
+    registered = {str(e.get("port")): e for e in roots}
+    bodies: dict[int, bytes] = {}
+    trees: dict[str, tuple[np.ndarray, MerkleTree]] = {}
+
+    def at(tid: str, u: int) -> tuple[int, int]:
+        ks, bs = of[tid]
+        j = bisect.bisect_right(bs, starts[tid] + u) - 1
+        return ks[j], starts[tid] + u - bs[j]
+
+    def opening(k: int, row: str, pos: int) -> tuple[str, str]:
+        m = w.members[k]
+        port = m.port(row)
+        if port not in trees:
+            if k not in bodies:
+                bodies[k] = body(k)
+            leaves = WI.port_strings(m, bodies[k], row)
+            if leaves is None:
+                raise ValueError(f"{m.key}'s public body is not its {m.n} units' rows {[p for p, _ in m.all_rows]}")
+            dom, schema = w.domain(port, m.schema(row), len(leaves)), m.schema(row)
+            tree = MerkleTree(dom, {i: CS.INST.tree_leaf(CS.INST.default_key, s.tobytes()) for i, s in enumerate(leaves)},
+                              lambda _i: schema)
+            e = registered.get(port) or {}
+            if (str(e.get("root", "")).lower(), e.get("leaves"), str(e.get("domain", "")).lower()) != (
+                    tree.commitment.root.hex(), len(leaves), dom.domain_id.hex()):
+                raise ValueError(f"{port}: its public body's tree is not the root, leaves and domain the registration records")
+            trees[port] = (leaves, tree)
+        leaves, tree = trees[port]
+        s = leaves[pos].tobytes()
+        if m.tables and ((x := WI.string_at(m, bodies[k], row, pos)) is None or bodies[k][x:x + WI.BC_BYTES] != s):
+            raise ValueError(f"{port}: unit {pos} of {m.key} reads another row than its own")
+        return s.hex(), b"".join(tree.open(pos).path).hex()
+
+    if bad := [g for g in drawn if type(g) is not int or not 0 <= g < total]:
+        raise ValueError(f"drawn units {bad[:4]} are no units of the record's {total}")
+    firsts = [starts[t] for t in names]
+    reads, writes = set(), set()
+    for g in sorted(set(drawn)):
+        tid = names[bisect.bisect_right(firsts, g) - 1]
+        u = g - starts[tid]
+        for x in readers.get(tid, ()):
+            if not x.at <= u < x.at + x.reader_units:
+                continue
+            k, pos = at(tid, u)
+            for r in range(x.cut[0], x.cut[0] + x.cut[1]):
+                reads.add((tid, u, x.port, r, *opening(k, row_name(x.port, r, int(cuts.get(tid, {}).get(x.port, 1))), pos)))
+                wu = int(x.writers(u, 1, r)[0])
+                wk, wpos = at(x.writer, wu)
+                writes.add((x.writer, wu, x.out, *opening(wk, x.out, wpos)))
+    return {"reads": [list(e) for e in sorted(reads)], "writes": [list(e) for e in sorted(writes)]}
 
 
 @dataclass(frozen=True)
