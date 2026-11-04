@@ -28,6 +28,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
 * **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
   roots and their domains and its instance count the record's, else the check refuses, before any session is verified;
+* **draw** (`drawHeld`): each session's record held to the draw v2 drew: the evidence's drawn units must ascend within
+  the population, and its `unit_draw`, as `flock-verify` reads it (`Flock.Witness.recordDraw`), must print in canonical
+  UTF-8 as v1's law and population with those units (`recordDrawn`), else the check refuses, before any session is
+  verified. The session is set up at that `unit_draw`,
+  and without this nothing ties its law or population to the ones v1 holds the draw to;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
@@ -484,11 +489,57 @@ def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
   | none => throw "the record names no population"
   | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
 
+/-- **The record's draw is the draw `L` over `n` units drawing `units`** (`one_stage.proofs.record_drawn`): `units`
+are ascending, distinct units of the population, as `Flock.Draw.UnitDraw.ofJson` holds a draw's units, and the session
+record `record`'s `unit_draw`, as `flock-verify` reads it (`Flock.Witness.recordDraw`), prints in canonical UTF-8
+(`Flock.canonUtf8`) as `Flock.Draw.UnitDraw.toJson` prints that draw, with no closure. False where the record names no
+draw, or its draw holds a number that is not an integer. -/
+def recordDrawn (L : Flock.Draw.Law) (n : Nat) (units : Array Nat) (record : String) : Bool :=
+  (List.range units.size).all (fun i => units[i]! < n && (i == 0 || units[i - 1]! < units[i]!)) &&
+    match Flock.Witness.recordDraw record with
+    | some r => match Flock.canonUtf8 r, Flock.canonUtf8 (Flock.Draw.UnitDraw.toJson ⟨L, n, units, #[]⟩) with
+      | .ok a, .ok b => a == b
+      | _, _ => false
+    | none => false
+
+/-- **The law and population v1's check draws under** (`OneStage.drawnFrom`'s, at the record's `population`): the
+verifier's law as `Draw.derive` expands it, read as C-Flock's law over that population (`Draw.flockLaw`), or
+`Draw.deriveLaw`'s expansion where it gives one. None where any of them fails, where v1's check refuses. -/
+def drawLaw (v : Registration.Verifier) (record : Json) : Option (Flock.Draw.Law × Nat) :=
+  match Draw.derive v.program v.query v.law v.workTable, nat? (getD record "population") with
+  | .ok law, some n =>
+    match Draw.deriveLaw v.program v.query v.law v.workTable, Draw.flockLaw law n with
+    | .ok derived, .ok fl => some (derived.getD fl, n)
+    | _, _ => none
+  | _, _ => none
+
+/-- The refusal of a session whose record's `unit_draw` is not the draw v2 drew (`drawHeld`). -/
+def DRAW_HELD : String :=
+  "draw-held: the record's unit_draw is not the draw v2 drew (v1's law and population, with the evidence's units)"
+
+/-- One session's record held to the draw of `L` over `n` units drawing `units` (module docstring, **draw**): its record
+on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, then `recordDrawn`. -/
+def sessionDrawn (L : Flock.Draw.Law) (n : Nat) (units : Array Nat) (bs : Core.Blobs) (s : RunFiles) : V Unit := do
+  let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+    | throw s!"session {s.name}'s record is not UTF-8"
+  if recordDrawn L n units record then pure () else throw s!"session {s.name}: {DRAW_HELD}"
+
+/-- The evidence's sessions held to the draw v2 drew (module docstring, **draw**): under the law and population v1's
+check draws under (`drawLaw`), each session's record draws the evidence's units (`sessionDrawn`), read as v1's check
+reads them (`OneStage.coinsReason`). Where `drawLaw` gives none, v1's check refuses. -/
+def drawHeld (v : Registration.Verifier) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : V Unit :=
+  match drawLaw v c.record with
+  | none => pure ()
+  | some (L, n) =>
+    let units := match getD e.base.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
+    e.sessions.forM (sessionDrawn L n units bs)
+
 /-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
 to the trees the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program
-(`popHeld`), the parameters' public file held to the registration (`publicHeld`), then the session's verdict on the
-blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
-`all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
+(`popHeld`), the parameters' public file held to the registration (`publicHeld`), its record held to the draw
+(`drawHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that
+all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads the run rather than the
+verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
@@ -496,6 +547,7 @@ def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     treesHeld (← treesOf p e) e bs
     popHeld p.base.verifier c.record
     publicHeld c.record (← bs.get p.own.pub "public file")
+    drawHeld p.base.verifier c e bs
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
   | .error err => .reject s!"proofs: {err}"
@@ -592,5 +644,26 @@ private def refusal : V Unit → String
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"de\"},\"roots\":{\"x\":\"aa\",\"y\":\"bb\"}},\"instances\":3,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots, domains, population"
 #guard (refusal (publicHeld heldRecord "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+
+private def subsetDrawn (record : String) : Bool := recordDrawn (.subset 2) 4 #[0, 3] record
+
+#guard subsetDrawn "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,3]}}"
+#guard subsetDrawn "{\"x\": 1, \"unit_draw\": {\"units\": [0, 3], \"population\": 4, \"law\": \"subset\", \"k\": 2e0}}"
+#guard subsetDrawn "{\"unit_draw\":null,\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,3]}}"
+#guard !subsetDrawn "{\"unit_draw\":{\"k\":2.0,\"law\":\"subset\",\"population\":4,\"units\":[0,3]}}"
+#guard !subsetDrawn "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":5,\"units\":[0,3]}}"
+#guard !subsetDrawn "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,2]}}"
+#guard !subsetDrawn "{\"unit_draw\":{\"closure\":[],\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,3]}}"
+#guard !subsetDrawn "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,3]},\"unit_draw\":null}"
+#guard !subsetDrawn "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,3]}"
+#guard !subsetDrawn "not a record"
+#guard !recordDrawn (.subset 2) 4 #[3, 0] "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[3,0]}}"
+#guard !recordDrawn (.subset 2) 4 #[0, 0] "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,0]}}"
+#guard !recordDrawn (.subset 2) 4 #[0, 4] "{\"unit_draw\":{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[0,4]}}"
+#guard recordDrawn (.subset 0) 4 #[] "{\"unit_draw\":{\"k\":0,\"law\":\"subset\",\"population\":4,\"units\":[]}}"
+#guard recordDrawn (.stratified 2 #[{ template := "A", units := #[(0, 2)], k := 1 },
+    { template := "B", units := #[(2, 4)], k := 1 }]) 4 #[1, 2]
+  ("{\"unit_draw\":{\"k\":2,\"law\":\"stratified\",\"population\":4,\"strata\":[{\"k\":1,\"template\":\"A\"," ++
+    "\"units\":[[0,2]]},{\"k\":1,\"template\":\"\\u0042\",\"units\":[[2,4]]}],\"units\":[1,2]}}")
 
 end SampledProofs.OneStageZk

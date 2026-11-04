@@ -353,6 +353,7 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
+    obtain ⟨_, -, hr⟩ := ebind_ok hr
     refine ⟨r, ?_, hr, ?_⟩
     · unfold _root_.SampledProofs.OneStageZk.oneSession at h1
       split at h1

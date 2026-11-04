@@ -27,7 +27,7 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+`verify`'s. `record_drawn` is v2's hold of a session's record to the draw it drew (`OneStageZk.recordDrawn`).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -308,6 +308,96 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
                     tuple(v["units"])) for v in got["verdicts"]], None
 
 
+#: `OneStageZk.DRAW_HELD`: v2's refusal of a session whose record's ``unit_draw`` is not the draw v2 drew
+DRAW_HELD = ("draw-held: the record's unit_draw is not the draw v2 drew (v1's law and population, with the evidence's "
+             "units)")
+_SURROGATE = re.compile("[\ud800-\udfff]")
+_NUMBER = re.compile(r"-?([0-9]+)(?:\.([0-9]+))?(?:[eE]([-+]?)([0-9]+))?")
+#: a number no canonical printing takes (`Flock.canonUtf8` refuses a non-integer), or an integer of more digits than any
+#: draw's, which prints as no draw does
+_UNPRINTED = object()
+_DIGITS = 4000
+
+
+def _int_of(text: str) -> Any:
+    return int(text) if len(text) <= _DIGITS else _UNPRINTED
+
+
+def _number_of(text: str) -> Any:
+    """A number with a fraction or an exponent as `Flock.JsonParse.parse` reads it: d decimals and an exponent e leave
+    the exponent d + e under ``e-``, else max(0, d - e), an integer only where that is 0; an exponent past 2^64 refuses
+    the text."""
+    whole, frac, sign, exp = _NUMBER.fullmatch(text).groups(default="")
+    exp = exp.lstrip("0")
+    if sign != "-" and (len(exp) > 20 or int(exp or "0") > 1 << 64):
+        raise ValueError("exp too large")
+    digits = (whole + frac).lstrip("0")
+    if sign == "-" and (frac or exp):
+        return _UNPRINTED
+    shift = int(exp or "0") - len(frac)
+    if shift < 0 or len(digits) + shift > _DIGITS:
+        return _UNPRINTED if digits or shift < 0 else 0
+    return (-1 if text.startswith("-") else 1) * int(digits or "0") * 10 ** shift
+
+
+def _object_of(pairs: list[tuple[str, Any]]) -> dict:
+    return {_SURROGATE.sub("\ufffd", k): v for k, v in pairs}
+
+
+def _strings_of(x: Any) -> Any:
+    if isinstance(x, str):
+        return _SURROGATE.sub("\ufffd", x)
+    if isinstance(x, list):
+        return [_strings_of(y) for y in x]
+    if isinstance(x, dict):
+        return {k: _strings_of(v) for k, v in x.items()}
+    return x
+
+
+def _never_constant(text: str) -> Any:
+    raise ValueError(f"{text} is not JSON")
+
+
+def _naturals(units: Sequence[Any]) -> list[int]:
+    """Of `units`, the natural numbers (Lean's ``filterMap nat?``)."""
+    return [u for u in units if isinstance(u, int) and not isinstance(u, bool) and u >= 0]
+
+
+def printed_draw(law: Mapping[str, Any], population: int, units: Sequence[Any]) -> dict:
+    """The draw of `law` (a sampling design object as `draw.derive` expands it) over `population` proof blocks drawing
+    `units`, with no closure, as `Flock.Draw.UnitDraw.toJson` prints it: a Bernoulli ``p`` as its numerator and
+    denominator print, and of `units` the natural numbers (`_naturals`)."""
+    d = {**law, "population": population, "units": _naturals(units)}
+    if law.get("law") == "bernoulli":
+        num, _, den = law["p"].partition("/")
+        d["p"] = f"{int(num)}/{int(den)}"
+    return d
+
+
+def record_drawn(law: Mapping[str, Any], population: int, units: Sequence[Any], record: str) -> bool:
+    """`OneStageZk.recordDrawn`: of `units`, the natural numbers (`_naturals`) ascend within the population, as
+    `Flock.Draw.UnitDraw.ofJson` holds a draw's units, and the session record `record`'s ``unit_draw``, read as
+    `flock-verify` reads it (`Flock.Witness.recordDraw`: a key named twice keeps its last value, a lone surrogate is
+    U+FFFD, a number reads as `_number_of` reads it, and ``unit_draw`` absent or null is no draw), is `printed_draw`'s
+    in canonical JSON. False where they don't or it is not, the record isn't JSON or the draw holds a number that isn't
+    an integer. A record nested past Python's recursion limit is refused here, where Lean reads it."""
+    us = _naturals(units)
+    if not all(u < population for u in us) or any(a >= b for a, b in zip(us, us[1:])):
+        return False
+    try:
+        j = json.loads(record, object_pairs_hook=_object_of, parse_float=_number_of, parse_int=_int_of,
+                       parse_constant=_never_constant)
+    except (ValueError, RecursionError):
+        return False
+    d = j.get("unit_draw") if isinstance(j, dict) else None
+    if d is None:
+        return False
+    try:
+        return _canonical(_strings_of(d)) == _canonical(printed_draw(law, population, units))
+    except (TypeError, ValueError):
+        return False
+
+
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, public_sha512: str, registered: Mapping[str, Any] | None) -> dict:
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
@@ -317,8 +407,10 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the draw reads: v2 refuses
     parameters naming none. The evidence names one session (v2 refuses none or several), whose record must be on the one
     coin tree that release log shows the challenger sampled and opened (`challenger.sessions_tree_reason`), the
-    program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
-    must be `record`'s (`registration.matches_public`), before the session is verified."""
+    program's proof blocks must be `record`'s population in order (`partition.in_order`), the public file's header
+    must be `record`'s (`registration.matches_public`), and the session's record's ``unit_draw`` must be the draw v2
+    drew under v1's law and population, with the evidence's units, which must ascend within the population
+    (`record_drawn`), before the session is verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
@@ -334,6 +426,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["DRAW_HELD", "EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError",
+           "Proof", "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "printed_draw", "proved_units",
+           "reads_registered", "record_drawn", "v2_executable", "verdicts_v2", "verify"]

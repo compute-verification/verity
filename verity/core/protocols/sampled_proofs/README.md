@@ -136,14 +136,15 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
-  record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
+  record and rep files by SHA-512 in place of `verdicts`, the files as `Core.Blobs`. It refuses none or
   several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose population
   isn't the program's proof blocks in order (`Slots.popOk`), parameters naming no challenger coins or a key off
   `Lms.deployed`, and coins past `Challenger.LIMITS`. It reads the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
-  link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
+  link points and round coins that tree's openings after its link's roots and each round's message. Its `unit_draw`
+  must be v2's draw (`OneStageZk.drawHeld`, `proofs.record_drawn`, `DrawHeld`). Then it runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
   `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
@@ -484,7 +485,8 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 - `compute_bound(profile, work)` is `harm_bound(work)`. Policies and PoUW pass their own utility to `worst_case`.
 - A proof block's output bits or work is one number for every proof block, or per stratum a number or `(bits, units)` pairs.
 
-Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
+Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, which
+`test_the_lean_vectors_were_generated_from_this_tree` holds to its Lean sources.
 
 ### The proof system
 

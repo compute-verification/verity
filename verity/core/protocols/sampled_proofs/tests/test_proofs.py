@@ -143,9 +143,10 @@ def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-
 @lean
 @pytest.mark.slow
 def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
-    """The honest session's draw is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
-    the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
-    and it proves the drawn proof blocks."""
+    """The honest session's draw is `DRAWN` (the record's `unit_draw`), the draw of its subset law of 16 over its 32
+    proof blocks that v2 holds the record to (`record_drawn`), and its verdict names the partition's program and the
+    registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it and
+    it proves the drawn proof blocks."""
     got, why = _verify(fx, fx / "session")
     assert why is None, why
     (f,) = got
@@ -155,8 +156,10 @@ def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_
     assert f.program == partition["program"]
     assert f.registered == REGISTERED_ROOTS
     assert f.units == DRAWN
-    draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
+    record = (fx / "session" / "session.json").read_text()
+    draw = json.loads(record)["unit_draw"]
     assert tuple(draw["units"]) == DRAWN, draw
+    assert PF.record_drawn({"k": 16, "law": "subset"}, 32, DRAWN, record), draw
 
 
 def _unnamed(fx: Path) -> str:
