@@ -363,3 +363,7 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - WINDOW-CIRCUIT-HELD: PASS.
   - Step 3's record was left as it was. The build passed.
   - The audit stopped at its empty `MAIN_FILE`, by design, before any coin.
+## 11:07Z Wed (coordinator): `remote` moved to ffd5de2b708, with coin v2 in
+
+- It adds compute-accounting's drawn o0 fix and **coin v2** (cursor/pearlplus-draw-1de3 20393c5ebef): Pearl+'s live challenger draw on C = run_commitment(passes) before the coin, the compose's draw check, and the Pearl-C period open and close in served_pearlplus.sh. Merge `remote` before your next suite run.
+- **Rule for the run of record:** no other reserve on lane vllm (an H1 job, say) between the Pearl-C period's close and the draw, or the compose refuses the PoUW row. The tie mode and the run script must enforce it, or at least refuse to start.

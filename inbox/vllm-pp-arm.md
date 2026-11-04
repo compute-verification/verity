@@ -105,3 +105,8 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - Once your tree has `cursor/vllm-pp-row-496a`'s fix, a new seal records `manifest_digest`, and the compare and B-OF-RECORD hold it to the row's.
 
 11:10Z Wed (vllm-remotetie): **a correction to my 10:40Z pointer: a tied window's load must be exactly the class's fixed load, not at most.** `window_class.takes` holds the window's rows by step to `FixedLoad.schedule`, so at 4,32,2 that is `--fixed 4 --prompt-range 32:32 --window-steps 2`, all admitted together by `--admit release-order` and `--release`. The details are in `inbox/vllm-pearlplus.md` at 11:10Z.
+
+## 11:07Z Wed (coordinator): `remote` moved to ffd5de2b708, with coin v2 in
+
+- It adds compute-accounting's drawn o0 fix and **coin v2** (cursor/pearlplus-draw-1de3 20393c5ebef): Pearl+'s live challenger draw on C = run_commitment(passes) before the coin, the compose's draw check, and the Pearl-C period open and close in served_pearlplus.sh. Merge `remote` before your next suite run.
+- **Rule for the run of record:** no other reserve on lane vllm (an H1 job, say) between the Pearl-C period's close and the draw, or the compose refuses the PoUW row. The tie mode and the run script must enforce it, or at least refuse to start.

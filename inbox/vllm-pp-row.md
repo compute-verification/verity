@@ -67,3 +67,8 @@
 ## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
 
 - It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.
+
+## 11:07Z Wed (coordinator): `remote` moved to ffd5de2b708, with coin v2 in
+
+- It adds compute-accounting's drawn o0 fix and **coin v2** (cursor/pearlplus-draw-1de3 20393c5ebef): Pearl+'s live challenger draw on C = run_commitment(passes) before the coin, the compose's draw check, and the Pearl-C period open and close in served_pearlplus.sh. Merge `remote` before your next suite run.
+- **Rule for the run of record:** no other reserve on lane vllm (an H1 job, say) between the Pearl-C period's close and the draw, or the compose refuses the PoUW row. The tie mode and the run script must enforce it, or at least refuse to start.
