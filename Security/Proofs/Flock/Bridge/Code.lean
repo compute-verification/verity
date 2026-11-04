@@ -12,8 +12,9 @@ The bridge's theorems quantify over any `SamplingDeploy.Code` whose layout is `c
 three fields the sampled verifier computes from its registration, and what they establish:
 
 * `FileReg`: a registration (`SamplingDeploy.Reg`) over a circuit file the circuit parser accepts (its unit built, a
-  unit slot per VU: `facts_of_parse`), the descriptor bytes its program parses from, the claims' form of its query, and
-  how a statement's bytes carry its public file and roots (`read`).
+  unit slot per VU: `facts_of_parse`, and `facts_of_hmOut` for an untyped hidden-output file), the descriptor bytes its
+  program parses from, the claims' form of its query, and how a statement's bytes carry its public file and roots
+  (`read`).
 * `parseOf g`: a statement whose public file passes the circuit file's partition checks (`FilePart.checkFile`: the
   registration's population the public file's units in order, each unit in a public size class) and whose circuit is
   in the bridge's scope (`Layout.scopeOkH`) parses to `stmtOf` of the key program at the registration's strata's sum of
@@ -60,6 +61,29 @@ theorem facts_of_parse {tags : Flock.Tags} {cf : ByteArray} {tables : List (Stri
   have C := FlockSoundness.check_facts P.typed hls
   have hU := FlockSoundness.unit_built P C
   exact ⟨hU, FlockSoundness.Discharge.Hm.upv_pos C (FlockSoundness.Discharge.Layout.scopeOkH_spec hU hs).2.1⟩
+
+/-- At untyped tags, a hidden-output file's circuit (`HmOut.parse`) is `HmRow.parse`'s, its rows checked. -/
+theorem hmRow_of_hmOut {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : Flock.HmOut.parse tags cf tables = .ok c) (ht : tags.typed = false) :
+    Flock.HmRow.parse tags cf tables = .ok c := by
+  unfold Flock.HmOut.parse at h
+  cases hi : tags.isTmpl
+  · simp only [hi, ht, Bool.false_eq_true, ite_false, Bool.not_false, ite_true] at h
+    cases hp : Flock.HmRow.parse tags cf tables with
+    | error e => rw [hp] at h; cases h
+    | ok c' =>
+      rw [hp] at h
+      simp only [bind, Except.bind] at h
+      cases hc : Flock.HmOut.checkRows c' with
+      | error e => rw [hc] at h; cases h
+      | ok u => rw [hc] at h; cases h; rfl
+  · simp only [hi, ite_true] at h; cases h
+
+/-- **The hidden-output parser establishes `FileReg`'s facts** of an untyped circuit file in the bridge's scope. -/
+theorem facts_of_hmOut {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : Flock.HmOut.parse tags cf tables = .ok c) (ht : tags.typed = false)
+    (hs : FlockSoundness.Discharge.Layout.scopeOkH c = true) : FlockSoundness.Built c.unit ∧ 0 < c.upv :=
+  facts_of_parse (hmRow_of_hmOut h ht) hs
 
 namespace FileReg
 
