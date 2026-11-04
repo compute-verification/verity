@@ -2401,6 +2401,10 @@
      "Claims.Witness.Recursion.ZKPriv_meets"
     ]
    },
+   "Claims.ZKOut": {
+    "fails": "Claims.ZKOut_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
    "Claims.Recursion.KSBound": {
     "fails": "Claims.Witness.Recursion.KSBound_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
@@ -2485,6 +2489,7 @@
    "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
    "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
    "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost",
+   "Claims.ZKOutLeak": "proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment",
    "Claims.Out64": "a hypothesis `Complete` reads (the oracle's outputs are 64 bytes, SHA-512's whole output), no claim",
    "Claims.Recursion.Bound.Binds": "a premise of `Bridge` on the bound record (its row digest input is injective), a condition on the record like `decOK`, no claim",
    "Claims.Recursion.Bound.PlainKSAbort": "a premise of `KSBound`'s route on the bound record (P1: the element-level Flock's KS against aborting provers at plain leaves, `Inner.KSAbort` at `DE`), which `Bridge` takes at each decoder and Flock's table bound at `DE` is to give, no claim",
@@ -6484,6 +6489,9 @@
    ],
    "assumptions": [],
    "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
+  },
+  "Claims.ZKOut_fails": {
+   "owner": "@proofs"
   },
   "Flock.Guarantees.recursiveKS_nontrivial": {
    "owner": "@proofs",
