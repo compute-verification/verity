@@ -1,10 +1,12 @@
 """vLLM's scheduler as Boolean Definitions: the network audit's compiler for a vLLM server, which replays what the
 scheduler decided from the committed advice and the certified arrivals.
 
-The advice format and its decoder (advice v0, `verity.core.protocols.certifier.advice`) and the charge, the encoder and
-the network certifier's rows stay in `verity.core.protocols.certifier`; what is vLLM's scheduler is here. Each module
-takes the circuits and their evaluator from `verity`:
+What is vLLM's is here: its scheduler and the format its decisions are committed in. The charge, the encoder and the
+network certifier's rows are `verity.core.protocols.certifier`'s. Each module takes the circuits and their evaluator from
+`verity`:
 
+- `advice`: advice v0, what a vLLM server decided as one canonical bit string per certifier session, with its decoder,
+  which refuses every string that isn't an advice's one encoding;
 - `replay_step`: `ReplayStep_v1`, one vLLM v1 scheduler step, with `reference` its spec. It takes the committed queue
   state, the certified arrivals and the committed decision bits to the step's rows (request, kind, start, n) and the
   next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses what its size class or

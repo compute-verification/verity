@@ -1,4 +1,5 @@
-"""Advice v0: what serving decided, as one canonical bit string per certifier session (PROTOCOL.md, "Advice v0").
+"""Advice v0: what serving decided, as one canonical bit string per certifier session
+(`verity/core/protocols/certifier/PROTOCOL.md`, "Advice v0").
 
 The precommitted AOT compiler turns the advice into each executed engine step's circuit; the certifier certifies the
 I/O; sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is the committed
@@ -43,6 +44,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple
+
+__all__ = ["FINISHES", "KINDS", "LIMIT", "SCHEMA", "VERSION", "WIDTH_BITS", "Advice", "MalformedAdvice", "Output",
+           "RequestAdvice", "Row", "Source", "StepAdvice", "bits", "bits_by_window", "decode", "encode", "from_json",
+           "outputs", "to_json", "total_bits"]
 
 SCHEMA = "verity/advice/v0"
 VERSION = 0

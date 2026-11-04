@@ -15,8 +15,8 @@ import random
 
 import pytest
 
-from verity.core.protocols.certifier import advice as A
-from verity.core.protocols.certifier.advice import Advice, MalformedAdvice, RequestAdvice, Row, Source, StepAdvice
+from verity_vllm.scheduler import advice as A
+from verity_vllm.scheduler.advice import Advice, MalformedAdvice, RequestAdvice, Row, Source, StepAdvice
 
 
 def _kind(start: int, n: int, prompt_len: int) -> str:

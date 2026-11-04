@@ -456,8 +456,8 @@ clear.
 
 **The two ingress ties** between the advice's requests and the network certifier's certified ingress record:
 - **Each request's arrival ordinal is order[i]: read off the ingress cells, not the advice.** The advice numbers
-  requests in order of first row (`advice` validates it) and names request i's ordinal as order[i] + 1 ((c)), but no
-  check reads that number: the scan's state, which the egress tie carries, takes each request's q from the network
+  requests in order of first row (`verity_vllm.scheduler.advice` validates it) and names request i's ordinal as
+  order[i] + 1 ((c)), but no check reads that number: the scan's state, which the egress tie carries, takes each request's q from the network
   certifier's ingress cells. The premise is the network certifier's numbering: the proxy forwards whole requests, one
   connection each, in the order the network certifier numbers them.
 - **Each request's prompt_len is its certified ingress record's: checked by the scan.** The advice's prompt_len must
@@ -782,7 +782,7 @@ opens only on the network certifier's row, so a lane a cell longer or shorter, o
 On a served link N2 is to hold each execution phase's egress counts to the ingress counts and the advice; no N2 unit
 does yet. The advice is the leak, charged at its registered width ℓ_a,j in the network bound.
 
-This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
+This section attacks that claim through its parts: the advice codec (`verity_vllm.scheduler.advice`, with `encode`,
 `decode` and `bits`), the scan (its ingress units, `ingress_scan`, and the egress tie, `scan_service.EgressTie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.
@@ -917,7 +917,7 @@ part's tests carry.
 
 Moved to [protocol/calibration.md](protocol/calibration.md).
 
-## Advice v0 (`advice`)
+## Advice v0 (`verity_vllm.scheduler.advice`)
 
 Moved to [protocol/advice-v0.md](protocol/advice-v0.md).
 

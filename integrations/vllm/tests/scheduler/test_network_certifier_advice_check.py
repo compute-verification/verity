@@ -1,28 +1,21 @@
 """Advice v0's validity circuit (`advice_check`, `AdviceCheck_v1{L}`) against `advice.decode`: the circuit computes
 `reference`, `reference` takes what decode takes, and where they differ decode refuses with one of `DEFERRED`'s messages.
 
-The strings: the advice tests' fixture and simulated vLLM schedules (core's, beside `advice`), every bit flip of the
-fixture, random byte corruptions, unchecked mutations of the schedules (a row moved, its kind or resume flipped, a step
-dropped or repeated, a release or a request's lengths changed, a source retargeted) encoded field by field, non-minimal
-widths, trailing bytes, nonzero padding and random strings."""
+The strings: the advice tests' fixture and simulated vLLM schedules (`test_network_certifier_advice`'s), every bit flip
+of the fixture, random byte corruptions, unchecked mutations of the schedules (a row moved, its kind or resume flipped, a
+step dropped or repeated, a release or a request's lengths changed, a source retargeted) encoded field by field,
+non-minimal widths, trailing bytes, nonzero padding and random strings."""
 from __future__ import annotations
 
-import importlib.util
 import itertools
 import random
-from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import advice as V
-from verity_vllm.scheduler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes,
-                                                          evaluate, evaluate_bits, reference, size, unit)
-
-_CORE = Path(__file__).resolve().parents[4] / "verity/core/protocols/certifier/tests"
-_spec = importlib.util.spec_from_file_location("certifier_advice_tests", _CORE / "test_network_certifier_advice.py")
-_T = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_T)
-FIXTURE, RANDOM, packed, rebuild = _T.FIXTURE, _T.RANDOM, _T.packed, _T.rebuild
+from tests.scheduler.test_network_certifier_advice import FIXTURE, RANDOM, packed, rebuild
+from verity_vllm.scheduler import advice as V
+from verity_vllm.scheduler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes, evaluate,
+                                                evaluate_bits, reference, size, unit)
 
 P, D = "prefill", "decode"
 

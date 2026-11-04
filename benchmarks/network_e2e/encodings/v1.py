@@ -1,4 +1,4 @@
-"""Advice v1: I1 v0 (`verity.core.protocols.certifier.advice`) sent as only what the certified record, the scheduler
+"""Advice v1: I1 v0 (`verity_vllm.scheduler.advice`) sent as only what the certified record, the scheduler
 replay (`replay.py`) and the derived rules (`derived.py`) leave, in the advice code's prefix-free,
 self-delimiting code (`code_v1.py`) under the registered codebook.
 
@@ -85,7 +85,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple, TypeVar
 
-from verity.core.protocols.certifier import advice as I1
+from verity_vllm.scheduler import advice as I1
 
 HERE = Path(__file__).resolve().parent
 T = TypeVar("T")

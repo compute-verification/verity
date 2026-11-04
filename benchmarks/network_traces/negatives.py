@@ -10,7 +10,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
 
 **A run** is a certifier-serve run's directory (`certifier_serve.py rehearse`'s, one per strategy): its `plan.json`,
 `calibration.json`, `deployment.json` and `certified.jsonl`, and, as their interfaces land, the advice (I1:
-`verity.core.protocols.certifier.advice`, its `encode` bytes) and the Commit record (I3, serve-openai's).
+`verity_vllm.scheduler.advice`, its `encode` bytes) and the Commit record (I3, serve-openai's).
 
 **What is tampered, by whom** (`Negative.tampers`):
 - ``plan``: the shim's plan (`active_replay.adversary_plan`), served by `certifier_serve.py serve --tamper NAME`. The
@@ -77,7 +77,7 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
-ADVICE_MODULE = "verity.core.protocols.certifier.advice"
+ADVICE_MODULE = "verity_vllm.scheduler.advice"
 WARDEN_ROWS_MODULE = "verity.core.protocols.certifier.warden_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
@@ -221,7 +221,7 @@ def shim(strategy: str) -> Callable[[Path, Path], Path]:
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
-# On I1 v0 (`verity.core.protocols.certifier.advice`): Advice(requests, steps, release),
+# On I1 v0 (`verity_vllm.scheduler.advice`): Advice(requests, steps, release),
 # RequestAdvice(id, prompt_len, output_len, finish), StepAdvice(rows), Row(request, kind, start, n, cache_hit,
 # preempted, sources), Source(request, n), and `release` one egress bucket a kept output. Each tampering returns new advice and
 # leaves its argument, and keeps the advice valid under v0's schedule rules (a row continues at its request's computed

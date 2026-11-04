@@ -33,13 +33,6 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with no profile gets no verdict (`ValueError`, failing
   closed);
-- one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
-  committed queue state, the certified arrivals and the committed decision bits to the step's rows (request, kind,
-  start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
-  what its size class or the prefix layer's counts can't express. It is the compile slice's proof block's core, between
-  the committed decisions and `compile_steps`' Programs, and is held step for step to the replay
-  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-system Spec yet. It takes the circuits
-  and their evaluator from `verity`;
 - what the network certifier's ties share (`io_tie`, `PROTOCOL.md`, "The I/O tie"): the id form's cells and their one
   reading (`parse_cell`), a Commit's rows read as registered rows (`port_reads`) and the Beneš routing (`IoTieRoute`),
   on which the ingress tie, the ingress-ids tie and the egress tie build;
@@ -73,67 +66,8 @@ A spec-level reference for network accounting's timing channel:
   source that `network_verdict(egress=…)` reads. `benchmarks/network_traces/scan_tie.py` proves an execution phase
   through it on C-Flock's prover;
 - the calibration of honest runs;
-- advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
-  rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
-  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
-  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
-  compressed length of the advice;
-- advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile slice's proof block's first part as a Boolean
-  Definition, 1 exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode`
-  it defers (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`.
-  From `verity` it takes the circuits and their evaluator;
-- the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step proof block to the next as the
-  state rows of a produced value a window, with private heads into the window row every step reads: the certified
-  arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
-  each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
-  window and carries the decisions the last window left unread; `ReplayClose` ends the session with none unread. The
-  windows join by equal openings and the session starts from the empty rows under public salts (`check_chain`). Its
-  cost at a shape is `size`;
-- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
-  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, `CacheStep_v1`'s calls on the certified tokens
-  checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
-  carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
-  ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
-  (`protocol/compile-slice.md`), and
-  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
-  evaluator from `verity`;
-- the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
-  replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
-  each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
-  are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
-- the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
-  checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
-  lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
-  evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
-  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
-  (`free_width`), and the charge is ℓ_w;
-- the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
-  sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
-  the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
-  holds a proof block's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
-  and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
-  hiding commitments from `verity`;
-- the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a
-  window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
-  then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
-  proof block is proved, and its port, selection and cost are its docstring. It takes the circuits, their evaluator and
-  the hm96 leaves from `verity`;
-- the served rows held to their Programs (`served_statics`): `ServedStaticsTie_v1`, a Boolean Definition with `check`
-  its reference, holds each block's registered served rows, read through the Lean verifier's registered reads, to the
-  RoPE statics of the Programs its steps ran, with no row hashed but the block's
-  ([protocol/served-statics.md](protocol/served-statics.md)). It takes the circuits and their evaluator from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
-- the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
-  whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
-  row's hit (the longest cached prefix while no block can have been evicted, a
-  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
-  circuits and their evaluator from `verity`;
-- the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
-  hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
-  leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
-  cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
@@ -258,6 +192,9 @@ A spec-level reference for network accounting's timing channel:
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
   nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
+
+What is vLLM's is in its integration (`integrations/vllm/verity_vllm/scheduler/`): the advice format its decisions are
+committed in (advice v0) and its scheduler as Boolean Definitions, the compile slice among them.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's

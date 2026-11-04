@@ -1516,6 +1516,13 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/certifier/advice.py": "integrations/vllm/verity_vllm/scheduler/advice.py",
+        "verity/core/protocols/certifier/tests/test_network_certifier_advice.py": "integrations/vllm/tests/scheduler/test_network_certifier_advice.py",
+        "verity/core/protocols/certifier/tests/test_network_certifier_advice_adversarial.py": "integrations/vllm/tests/scheduler/test_network_certifier_advice_adversarial.py"
+      }
     }
   ]
 }

@@ -1,6 +1,6 @@
 Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
-## Advice v0 (`advice`)
+## Advice v0 (`verity_vllm.scheduler.advice`)
 
 Network accounting for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
 encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier

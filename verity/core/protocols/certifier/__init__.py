@@ -2,8 +2,6 @@
 
 Modules: `grid` (the certifier), `schedule` (the Program's logical schedule and clock-sync advice), `audit` (the exact
 check, record and reject), `capacity` (the counts the Lean package proves), `calibration` (sizing from honest runs),
-`online` (the honest prover's sync declared window by window), `advice` (advice v0: vLLM's serving decisions as one
-canonical bit string, the committed form of the content advice), `advice_check` (advice v0's validity as a
-Boolean Definition, the compile slice's proof block's first part) and `replay_chain` (the replay's state between its
-step proof blocks, under hiding commitments).
+and `online` (the honest prover's sync declared window by window). The advice format vLLM's decisions are committed in
+and its scheduler as Boolean Definitions are vLLM's (`integrations/vllm/verity_vllm/scheduler/`).
 """

@@ -35,7 +35,7 @@ def _load(name: str):
 
 
 V, R, C, CV = _load("v1"), _load("replay"), _load("code"), _load("code_v1")
-from verity.core.protocols.certifier import advice as I1  # noqa: E402
+from verity_vllm.scheduler import advice as I1  # noqa: E402
 from verity_vllm.scheduler import replay_chain as RC  # noqa: E402
 
 CASES = sorted(p.stem for p in FIXTURES.glob("*.jsonl"))

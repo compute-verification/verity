@@ -101,7 +101,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/scheduler/replay_step.circuit-check.json",
           "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
           "verity/core/protocols/certifier/served.circuit-check.json",
-          "verity/core/protocols/certifier/advice.py", "integrations/vllm/verity_vllm/scheduler/advice_check.py",
+          "integrations/vllm/verity_vllm/scheduler/advice.py", "integrations/vllm/verity_vllm/scheduler/advice_check.py",
           "integrations/vllm/verity_vllm/scheduler/advice_check.circuit-check.py",
           "integrations/vllm/verity_vllm/scheduler/advice_check.circuit-check.json",
           "integrations/vllm/verity_vllm/scheduler/replay_chain.py",

@@ -1,4 +1,4 @@
-"""Advice v0 (`advice`, PROTOCOL.md "Advice v0"): the round trip, the bit layout rebuilt field by field from the
+"""Advice v0 (`advice`, `verity/core/protocols/certifier/PROTOCOL.md`, "Advice v0"): the round trip, the bit layout rebuilt field by field from the
 documented one and pinned on a fixture, the split by window summing to the total, and the refusals of malformed advice
 and of every byte string that isn't a canonical encoding.
 
@@ -13,9 +13,9 @@ import random
 
 import pytest
 
-from verity.core.protocols.certifier.advice import (FINISHES, KINDS, SCHEMA, Advice, MalformedAdvice, Output, RequestAdvice,
-                                                    Row, Source, StepAdvice, bits, bits_by_window, decode, encode, from_json,
-                                                    outputs, to_json, total_bits)
+from verity_vllm.scheduler.advice import (FINISHES, KINDS, SCHEMA, Advice, MalformedAdvice, Output, RequestAdvice, Row,
+                                          Source, StepAdvice, bits, bits_by_window, decode, encode, from_json, outputs,
+                                          to_json, total_bits)
 
 P, D = "prefill", "decode"
 

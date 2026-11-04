@@ -55,6 +55,8 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.program.predict.served_compiler": "I7: B, a served run's registered compiler, by the one formula of its "
                                                    "serve.json that the server registers and the verifier recomputes",
+    "verity_vllm.scheduler.advice": "I7: advice v0, what a vLLM server decided in a session as one canonical bit string "
+                                    "(encode, decode), its length split by egress window (bits_by_window)",
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
