@@ -165,7 +165,7 @@
 # inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
 # front's tick), H1_GATE empty and so no H1 option in SERVE_ARGS (serve-openai refuses one without H1's --protocols),
 # then every closed window's advice: the server's own where it committed each as it served (`--advice`, whose
-# `--advice-tau` must be ADVICE_TAU), else `verity-vllm advice`'s under the prove path's registered compiler at ADVICE_T
+# `--advice-tau` must be ADVICE_TAU, a PREFLIGHT refusal otherwise), else `verity-vllm advice`'s under the prove path's registered compiler at ADVICE_T
 # buckets of ADVICE_TAU seconds (default 600 and 0.1; an execution phase is ADVICE_T buckets of the network certifier's
 # tick) in the serve dir; and `advice_charge.py`'s record of it, each window's unpadded length and their sum over each
 # execution phase, $OUT/advice-charge.json,
@@ -582,6 +582,14 @@ if [ "${1:-}" = advice-charge ]; then
     say "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai refuses SERVE_ARGS' --h1-receipts or" \
       "--h1-prover without H1's --protocols: drop them"; exit 3 ;;
   esac
+  tau=0.1 next=  # serve-openai's --advice-tau, the buckets the server commits each window's advice in (its default 0.1)
+  for w in ${SERVE_ARGS:-}; do
+    [ -n "$next" ] && tau=$w next=
+    case $w in --advice-tau) next=1 ;; --advice-tau=*) tau=${w#*=} ;; esac
+  done
+  awk -v a="$tau" -v b="${ADVICE_TAU:-0.1}" 'BEGIN { exit a != b }' \
+    || { say "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' --advice-tau ($tau s), and advice_charge.py" \
+      "charges it in buckets of ADVICE_TAU (${ADVICE_TAU:-0.1} s): make them equal"; exit 3; }
 fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is

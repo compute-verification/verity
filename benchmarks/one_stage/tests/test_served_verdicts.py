@@ -1267,11 +1267,20 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     ({"SERVE_ARGS": f"{IDS} --h1-prover"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
      "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
     ({"SERVE_ARGS": IDS}, None),
+    ({"SERVE_ARGS": f"{IDS} --advice-tau 4"}, "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' "
+     "--advice-tau (4 s), and advice_charge.py charges it in buckets of ADVICE_TAU (0.1 s): make them equal"),
+    ({"SERVE_ARGS": IDS, "ADVICE_TAU": "4"}, "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' "
+     "--advice-tau (0.1 s), and advice_charge.py charges it in buckets of ADVICE_TAU (4 s): make them equal"),
+    ({"SERVE_ARGS": f"{IDS} --advice-tau 4", "ADVICE_TAU": "4"}, None),
+    ({"SERVE_ARGS": f"--advice-tau=4.0 {IDS}", "ADVICE_TAU": "4"}, None),
 ])
-def test_the_advice_charge_run_serves_remote_with_no_h1_option_serve_openai_would_refuse(tmp_path, extra, line):
-    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, so its preflight
-    refuses an onsite product, an H1 gate, and an H1 option in SERVE_ARGS, which serve-openai refuses only once the node
-    is leased; a run it lets through goes on to the row's files (here absent)."""
+def test_the_advice_charge_runs_preflight_refuses_what_serve_openai_or_its_report_would_refuse_after_the_lease(
+        tmp_path, extra, line):
+    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, and charges the
+    server's advice in buckets of ADVICE_TAU. So its preflight refuses an onsite product, an H1 gate, an H1 option in
+    SERVE_ARGS, which serve-openai refuses only once the node is leased, and a server --advice-tau other than ADVICE_TAU,
+    which advice_charge.py refuses only once the run has served; a run it lets through goes on to the row's files (here
+    absent)."""
     tree, venv, row = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "row"
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
