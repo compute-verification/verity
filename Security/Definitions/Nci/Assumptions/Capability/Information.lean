@@ -86,7 +86,7 @@ not shorten the complement one coordinate each (for an exact linear map the rank
 bound on the candidates is not a decoder within `τ`, and inputs the recovery needs must be among what `SourceHard`'s
 decoder is given. -/
 def Recovers (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (e : List Bool)
-    (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.B → ℕ) : Prop :=
+    (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.d.n → ℕ) : Prop :=
   ∀ a, R.Honest a → ∀ u, ∃ s : List Bool, (s.length : ℝ) ≤ ℓz - βv * J u + amb ∧
     M.run r (blockProgram R e (R.d.D.eval a) u ++ s) τ = some (z (R.d.D.eval a))
 

@@ -115,7 +115,7 @@ theorem offC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Non
     (hdec : ∀ j, DecodesTable (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun _ o => ok o) pL
       opn dec one fin capOf (fun j => repsOf (D := D) A ([t].get j)) j)
     (rootB₀ : Array ByteArray) (Pr : Strategy (liveSession dg [t].length mPts N)) (hP : Pr.1 = rootB₀)
-    (sch : Accounting.Schedule) (r ℓ j : ℕ) :
+    (sch : FlockSoundness.Accounting.Schedule) (r ℓ j : ℕ) :
     offC (opCapL Hc E Lf sch r ℓ) j
         (sessAfterL A Hc E Lf t.S t.sch t.hm t.ptLocal mPts [] [] (capOf rootB₀ ⟨0, Nat.one_pos⟩))
         (simAt A Hc E Lf t ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP) ≤
