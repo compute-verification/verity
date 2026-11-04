@@ -56,8 +56,8 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
+                                                            partition as P, produced as PD, proofs as PF,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
@@ -2000,6 +2000,98 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
+def _tree_record(d: Drawn, *members: str) -> bytes:
+    """The session record on the coin tree `d`'s challenger sampled (`d.trees[0]`), with `members` after its own."""
+    own = D.canonical(d.trees[0].record)
+    assert own.startswith("{\"") and "unit_draw" not in d.trees[0].record, own
+    return (own[:-1] + "".join("," + m for m in members) + "}").encode()
+
+
+def _drawn_record(d: Drawn, draw: dict) -> bytes:
+    """`_tree_record` the draw `draw` as its ``unit_draw``, as a session set up at that draw records it."""
+    return _tree_record(d, f'"unit_draw":{D.canonical(draw)}')
+
+
+def _spellings(draw: dict) -> dict[str, tuple[bool, tuple[str, ...]]]:
+    """Record members to try against `draw`, each with whether Lean reads it as `draw`'s: its other spellings (keys
+    reordered and spaced, ``k`` as ``2e0``, ``0.2e1`` or ``2E-0``, a key or the law escaped, a key named twice whose last
+    is the draw's, a lone surrogate or a non-integer outside the draw), and draws it isn't (none, null or last named
+    null, another population, law, k or units, an extra key, a boolean, a non-integer ``2.0`` or ``20e-1``, the draw's
+    keys in the record itself)."""
+    canon, k = D.canonical(draw), draw["k"]
+    assert canon.startswith(f'{{"k":{k},"law":"{draw["law"]}",'), canon
+
+    def at_k(text: str) -> str:
+        return canon.replace(f'"k":{k},', f'"k":{text},', 1)
+
+    def unit(text: str) -> tuple[str, ...]:
+        return (f'"unit_draw":{text}',)
+    first = draw["law"][0]
+    other_units = sorted([u for u in range(draw["population"]) if u not in draw["units"]][:1] + draw["units"][1:])
+    return {
+        "the draw": (True, unit(canon)),
+        "reordered and spaced": (True, unit(json.dumps(dict(reversed(list(draw.items()))), indent=1))),
+        "k as 2e0": (True, unit(at_k(f"{k}e0"))),
+        "k as 0.2e1": (True, unit(at_k(f"0.{k}e{len(str(k))}"))),
+        "k as 2E-0": (True, unit(at_k(f"{k}E-0"))),
+        "a key escaped": (True, unit(canon.replace('"law":', '"\\u006caw":', 1))),
+        "the law escaped": (True, unit(canon.replace(f'"law":"{first}', f'"law":"\\u{ord(first):04x}', 1))),
+        "a key named twice, the draw's last": (True, unit(canon.replace(f'"k":{k},', f'"k":{k + 1},"k":{k},', 1))),
+        "the draw after null": (True, ('"unit_draw":null', f'"unit_draw":{canon}')),
+        "a lone surrogate outside the draw": (True, ('"\\ud800":1', f'"unit_draw":{canon}')),
+        "a non-integer outside the draw": (True, ('"x":1.5', f'"unit_draw":{canon}')),
+        "no draw": (False, ()),
+        "null": (False, unit("null")),
+        "null after the draw": (False, (f'"unit_draw":{canon}', '"unit_draw":null')),
+        "a key named twice, another's last": (False, unit(canon.replace(f'"k":{k},', f'"k":{k},"k":{k + 1},', 1))),
+        "another population": (False, unit(D.canonical({**draw, "population": draw["population"] + 1}))),
+        "another law": (False, unit(D.canonical({**draw, "law": "work" if draw["law"] == "stratified" else "stratified"}))),
+        "another k": (False, unit(D.canonical({**draw, "k": k + 1}))),
+        "other units": (False, unit(D.canonical({**draw, "units": other_units}))),
+        "a unit more": (False, unit(D.canonical({**draw, "units": [*draw["units"], True]}))),
+        "an empty closure": (False, unit(D.canonical({**draw, "closure": []}))),
+        "another key": (False, unit(D.canonical({**draw, "x": 1}))),
+        "k a boolean": (False, unit(D.canonical({**draw, "k": True}))),
+        "k as 2.0": (False, unit(at_k(f"{k}.0"))),
+        "k as 20e-1": (False, unit(at_k(f"{k}0e-1"))),
+        "the draw's keys in the record": (False, tuple(f'"{key}":{D.canonical(v)}' for key, v in draw.items())),
+    }
+
+
+def test_v2_holds_the_session_record_to_its_draw(server_v2):
+    """v2 refuses a session whose record's ``unit_draw``, as `flock-verify` reads it, doesn't print in canonical UTF-8 as
+    the draw v2 drew: v1's law and population with the evidence's drawn units (`OneStageZk.drawHeld`, `DrawHeld`), after
+    the session's coins and the public file are held and before it is verified, Lean's verdict Python's
+    `proofs.record_drawn`'s. Each record is the coin tree's with members after it (`_spellings`), on a subset and a
+    stratified audit: the draw in Lean's other spellings of it goes on to the session's verdict, and every other is refused
+    with `DRAW_HELD`. A record reaching the check is one `treesHeld` parsed, so this is every record it reads."""
+    for law in ({"k": 2, "law": "subset"}, {"k": 3, "law": "stratified"}):
+        s = SETUPS[3]
+        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                       WINDOW, leaf_layer=LEAF)
+        ch, d, coins = _challenger_draw(random.Random(f"v2-draw-held-{law['law']}"), s, law, rec)
+        mine = DR.derive(s.program, s.query, law, None)
+        circuit, public, proved = b"not a circuit file", _public_of(rec), DR.proved(d)
+        base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": ["s"], "statement": {}}
+        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "ports": s.ports, "program": s.desc,
+                  "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
+                  "query": s.query, "registered": None, "scheme": SCHEME, "window_root": ch.ledger.window["root"],
+                  "work_table": None}
+        for name, (drawn, members) in _spellings(d).items():
+            record = _tree_record(ch, *members)
+            assert PF.record_drawn(mine, s.population, d["units"], record.decode()) is drawn, (law, name)
+            evidence = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}}
+            case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                    "evidence": _hex(evidence), "params": params}
+            out = server_v2.exchange(_json(case))
+            want = "verdict flock-verify/s did not accept" if drawn else f"proofs: session s: {PF.DRAW_HELD}"
+            assert (out["verdict"], out["reason"]) == ("reject", want), (law, name, out)
+
+
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
@@ -2035,7 +2127,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
                                                         "registered": None}}
 
     ch, evidence, base, p2 = audit(1)
-    record, stand_in = D.canonical(ch.trees[0].record).encode(), b"{}"
+    record, stand_in = _drawn_record(ch, evidence["draw"]), b"{}"
     blobs = [circuit.hex(), public.hex(), record.hex(), stand_in.hex()]
 
     def run(e, blobs_=blobs, p=p2):
@@ -2096,7 +2188,7 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                        WINDOW, leaf_layer=LEAF)
         ch, d, coins = _challenger_draw(random.Random(f"v2-order-{s.templates}"), s, law, rec)
-        proved, public, record = DR.proved(d), _public_of(rec), D.canonical(ch.trees[0].record).encode()
+        proved, public, record = DR.proved(d), _public_of(rec), _drawn_record(ch, d)
         base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                 "statement": {}}
@@ -2138,7 +2230,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
-        record = D.canonical(d.trees[0].record).encode() if d.trees else b"{}"
+        record = _drawn_record(d, draw) if d.trees else b"{}"
         proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
         evidence = {"draw": draw, "instances": len(proved), "proved_units": proved, "proofs": proofs,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
