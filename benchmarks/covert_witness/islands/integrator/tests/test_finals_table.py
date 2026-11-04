@@ -107,6 +107,8 @@ def test_two_reruns_give_p_against_the_honest_h_with_the_search_runs_rho(tmp_pat
     assert rows["r-covert"]["rho_record"] == "r-covert@10" and rows["r-covert"]["S_reads"] == "rho_own"
     assert rows["r-covert"]["rho_label"].startswith(FT.RHO_LABEL + ", at its first checkpoint reaching it")
     assert rows["r-honest"]["flops"]["mean"] == 5e9 and rows["r-honest"]["C"]["n"] == 1
+    assert rows["r-honest"]["bpb"]["mean"] == 1.18
+    assert rows["r-honest"]["below_target"]["mean"] == pytest.approx(frontier_fit.target(LAW, L0, 1.1) - 1.18)
     assert one["H"]["C"]["mean"] == pytest.approx(2.5 * one["H_any"]["C"]["mean"])
     pts = {p["run"]: p for p in t["points"]}
     seed = pts["r-honest"]["at"]["1.1"]["seeds"]["own"]

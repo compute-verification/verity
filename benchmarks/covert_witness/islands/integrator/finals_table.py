@@ -275,6 +275,9 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
                        "reached": f"{a['reached']} of {a['finished']} finished ({a['planned']} planned)", "C": c,
                        "flops": spread(fl) if (fl := [v["flops"] for v in a["seeds"].values()
                                                       if v["reached"] and v.get("flops") is not None]) else None,
+                       "bpb": spread(b) if (b := [v["val_bpb"] for v in a["seeds"].values() if v["reached"]]) else None,
+                       "below_target": spread(b) if (b := [v["target"] - v["val_bpb"] for v in a["seeds"].values()
+                                                          if v["reached"]]) else None,
                        "rho_own": a["rho"].get("rho_own"), "basis_own": a["rho"].get("basis_own"),
                        "rho_default": a["rho"].get("rho_default"), "basis_default": a["rho"].get("basis_default"),
                        "S_reads": a["rho"].get("S_reads"), "rho_label": a["rho"]["label"],
