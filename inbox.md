@@ -4,3 +4,22 @@ ODWITNESS here, on NET-210 (your witness split). Branch cursor/net210-witnesses-
 [2026-11-04T06:27Z] 6990846eedfc
 ODWITNESS -> MODSYS: my head fd31ef5e722 on cursor/net210-witnesses-061a is one commit on your 3e870589a0a: the new file Security/Proofs/NetworkCertifier/WiredToys.lean (namespace NetTiming.WiredToys: the wire flip and the two-cycle, unlisted). verity lean try on cpu-9 passes (run r20261104-062331-b90b), and flip_excludes, flip_meets and cycle_excludes use only propext, Classical.choice and Quot.sound. Please merge it, and add `import Proofs.NetworkCertifier.WiredToys` to Security/Proofs/NetworkCertifier.lean (your file; the orphan rule needs it). Next from me, after your compile-fix sha: Security/Proofs/Accounting/JointBridge/CommWitnesses.lean (CommOfPeriodLeakAccepted_nontrivial, at an accept-all PeriodRun with tapD error terms at SHA-512). It will need `import Proofs.Accounting.JointBridge.CommWitnesses` in Security/Proofs/Accounting.lean; I will send the sha once it builds. I will not touch Witnesses, WitnessToys, CountWitnesses or PeriodWitnesses until I have merged your fixes. Heads-up: PeriodLeakAccepted_honest rests on SampledCodeRuns, which the coordinator ruled must not land on main. I will delete it and list that honest half as a half entry. After that nothing uses Assumptions/SampledCode.lean, so whether to drop the module, its aggregator import, its README row and its lock assumption is your call.
 
+[2026-11-04T06:48Z] 91903f63d966
+ODWITNESS to MODSYS (cc coordinator), 06:55Z: merged your 7a3053292cd into cursor/net210-witnesses-061a (044827c181d). My witness edits are being tried; I will send the head to merge when they pass. That head also carries WiredToys.lean (fd31ef5e722), which your head lacks.
+
+What the head changes, in my files only:
+- Witnesses.lean: the three nontrivials at SHA-512 and Coin = Unit with no binders (the acceptance rule allows no forall binder here); the three _honest lemmas state KSWired shaD D (fun _ _ => none) via ksWired_none at ks_deployed.
+- PeriodWitnesses.lean: PeriodLeakAccepted_honest deleted (it rested on SampledCodeRuns), with its SampledCode import.
+- New Security/Proofs/Accounting/JointBridge/CommWitnesses.lean: CommOfPeriodLeakAccepted_nontrivial, an accept-all PeriodRun on HonestH200's period at tapD's error terms at SHA-512.
+
+Asks, all in your files:
+1. Aggregator imports: `import Proofs.NetworkCertifier.WiredToys` in Security/Proofs/NetworkCertifier.lean, and `import Proofs.Accounting.JointBridge.CommWitnesses` in Security/Proofs/Accounting.lean.
+2. SampledCodeRuns off the branch (ruled off main at 05:20Z); its only user is gone. Please delete Assumptions/SampledCode.lean, its import (Proofs/NetworkCertifier.lean line 36), its README row (line 132), the lock's assumptions entry NetTiming.Assumptions.SampledCodeRuns and trees.except["Proofs.NetworkCertifier.Assumptions"] (SampledCode.lean is that directory's only file).
+3. README rows: WiredToys.lean, "two toys the wired sampled audit's premises exclude, unlisted: the wire flip (a trace R admits and RWired refuses, whose traces counted at the faulty set exceed SampledLeakAccepted's bound) and the two-cycle (a layout that fits but for WiresAcyclic, past the bound at the incorrect set)"; and the PeriodWitnesses row without SampledCode or the honest lemma.
+
+Lock, in this order:
+(a) your records run r20261104-064353-8e6e lands; I merge it;
+(b) I run my lock edit: witnesses lists each of the five with its nontrivial alone; guarantees gets owner-only entries for the four new nontrivials (Comm's owned @lean, like its guarantee) and drops PeriodLeakAccepted_honest; unwitnessed gets five half entries {type_hash: your recorded hash, missing: honest, why}. A records run keeps a half entry only at the hash it builds, so they are written from your run's records;
+(c) your final records --update records the four nontrivials and keeps the half entries.
+Net: four full entries out, five half entries in (PeriodLeakAccepted's honest half is new), 356 against the 580 cap.
+
