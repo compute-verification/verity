@@ -14,11 +14,12 @@ three different SHA-512 digests, neither open one value nor collide (`openingBin
 the kernel, one declaration each, once the hm96 mask of their zero salt is known to be zero (`Witness.mask_zero`), since
 the mask's tables are too large for it to build.
 
-`YIsTheUnscale`, `RefusedBeforeTheCoin` and `TileKeepsTheCap` have both witnesses. `PlanMeans`, `AcceptMeans`,
-`LoadedGivesUp` and `TileAcceptMeans` have their `nontrivial` ones. The first three's `honest` ones need a manifest that
-`load` provably accepts, and none does: `load` and `CoinCommitment.ofJson` compare JSON values with `Lean.Json`'s `BEq`, a
-`partial def` the kernel can't reduce (`PouwCheck.jsonStrIs` compares by a match instead). `TileAcceptMeans`'s needs a tile
-the kernel replays whole: its openings, its noise lines and its forming.
+`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans` and `AcceptMeans` have both
+witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest` ones are at one honest pass of the deployed scheme
+(`honestPass`, loaded from `honestManifest`): `load` reads it, `plan` draws its one tile, and `check` accepts its run at no
+draws, since a drawn tile is replayed on the noise `check` derives itself (`fixedNoise`), past what one kernel computation
+reaches. `TileAcceptMeans` has its `nontrivial` one; its `honest` one needs a tile the kernel replays whole: its openings,
+its noise lines and its forming.
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -331,7 +332,54 @@ theorem refusedBeforeTheCoin_nontrivial :
   intro h
   cases h
 
-/-! ## The nontrivial witnesses of `PlanMeans`, `AcceptMeans`, `LoadedGivesUp` and `TileAcceptMeans` -/
+/-! ## `LoadedGivesUp`, `PlanMeans` and `AcceptMeans`
+
+The honest pass loads in the kernel once `load` is unfolded down to the salt coin's hm96 leaf, whose mask at its zero salt
+is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`): the kernel computes the rest, the
+coin's opening, the salt, the weights' and records' roots, and `plan`'s commitment and draw on that pass. -/
+
+namespace Witness
+
+/-- `Hm96.Default512.mask`, with its value at a zero salt given (`mask_zero`): the kernel reads this in its place, since it
+can't build the mask's tables. -/
+def maskOr (salt : ByteArray) : ByteArray :=
+  if salt = ⟨Array.replicate 192 0⟩ then ⟨Array.replicate 64 0⟩ else Flock.Hm96.Default512.mask salt
+
+theorem mask_eq_maskOr (salt : ByteArray) : Flock.Hm96.Default512.mask salt = maskOr salt := by
+  unfold maskOr
+  split
+  · next h => subst h; exact mask_zero _ (zeros_get 192)
+  · rfl
+
+theorem eq_ok_of_toOption {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
+  cases e <;> simp_all [Except.toOption]
+
+deriving instance DecidableEq for Matmul, UnitRecord, Scheme, Pass, Plan
+
+end Witness
+
+open Witness
+
+/-- `load` reads the honest pass from its manifest under the epoch's coins: its salt coin opens against them after the
+weights' root, the salt is the coin's, and its records keep the caps and are the ones whose root it published. -/
+theorem loadedGivesUp_honest : load honestCoins honestManifest = .ok honestPass := by
+  apply eq_ok_of_toOption
+  simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
+    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+  decide +kernel
+
+/-- A `load` that accepts every manifest takes a record of one 1 × 1 × 1 call with two voluntary A rows, over V-EX's cap
+⌈1/64⌉ = 1. -/
+theorem loadedGivesUp_nontrivial :
+    ¬ (acceptAllRecord.voluntaryA.length ≤ voluntaryCap acceptAllRecord.matmul.m) := by
+  decide
+
+/-- `plan` takes the honest pass's run at one draw: the draw names its one tile. -/
+theorem planMeans_honest :
+    plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1⟩ := by
+  apply eq_ok_of_toOption
+  simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
+  decide +kernel
 
 /-- A `plan` that accepts every run with `acceptAllPlan` gives a root that is not the run commitment of its passes, a
 64-byte digest. -/
@@ -341,16 +389,23 @@ theorem planMeans_nontrivial : ¬ (acceptAllPlan.root = runCommitment acceptAllP
   rw [runCommitment, Commit.taggedSize] at this
   exact absurd this (by decide)
 
+/-- `check` accepts the honest pass's run at no draws: its pass loads, and it excludes no row, so no tile is opened. A
+drawn tile is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k noise lines and R²
+FP32 chains of k = 1,024), past what one kernel computation reaches. -/
+theorem acceptMeans_honest : (check (honestRun 0) noOpening).accept = true := by
+  have h : plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0⟩ := by
+    apply eq_ok_of_toOption
+    simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
+    decide +kernel
+  simp only [check, h]
+  decide +kernel
+
 /-- A verdict that accepts every run (`acceptAllCheck`) holds no plan, so none whose tiles it opened. -/
 theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening).plan = some pl) := by
   intro pl h
   cases h
 
-/-- A `load` that accepts every manifest takes a record of one 1 × 1 × 1 call with two voluntary A rows, over V-EX's cap
-⌈1/64⌉ = 1. -/
-theorem loadedGivesUp_nontrivial :
-    ¬ (acceptAllRecord.voluntaryA.length ≤ voluntaryCap acceptAllRecord.matmul.m) := by
-  decide
+/-! ## A tile: `TileAcceptMeans` and `TileKeepsTheCap` -/
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
