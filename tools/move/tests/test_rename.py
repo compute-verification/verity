@@ -44,6 +44,23 @@ def test_phrases_come_first_and_start_at_a_word():
     assert s("no 2-GPU worker") == "no 2-GPU worker"
 
 
+def test_a_phrase_a_line_break_splits_keeps_the_break():
+    s = WORDS.sub
+    assert s("reads the warden's\n    records whole") == "reads the network\n    certificates whole"
+    assert s("# reads the\n# warden's records") == "# reads the\n# network certificates"
+    assert s("/-- the warden's records\n  -- and the prover\n  -- gateway -/") == \
+        "/-- the network certificates\n  -- and the firewall -/"
+    assert s("the prover\n\ngateway") == "the prover\n\nfirewall"
+    assert s('f"{n}: the warden\'s "\n        f"records {x}"') == 'f"{n}: the network "\n        f"certificates {x}"'
+    assert s('"a prover "\n    f"gateway {x}"') == '"a prover "\n    f"gateway {x}"'
+
+
+def test_a_phrase_that_starts_with_an_apostrophe_follows_a_possessive():
+    words = M.Words({"words": {"'s firewall": "'s ZK server", "firewall": "zk_server"}})
+    assert words.sub("Rust's firewall sends; the audit's\n    firewall; a firewall_state") == \
+        "Rust's ZK server sends; the audit's\n    ZK server; a zk_server_state"
+
+
 def test_what_is_kept_stands():
     s = WORDS.sub
     tags = 'ROW_TAG = b"verity-network-warden/row/v1"; RECORD_TAG = b"verity-network-warden/record/v1"'
@@ -55,6 +72,35 @@ def test_what_is_kept_stands():
     assert s("node.gateway.id", "tools/check/guard/x.py") == "node.gateway.id"
     assert s("node.gateway.id", "verity/x.py") == "node.firewall.id"
     assert s("the prover gateway", "tools/check/x.py") == "the firewall"
+
+
+def test_keep_paths_holds_a_path_and_not_the_files_text():
+    words = M.Words({"words": {"firewall": "zk_server"}, "keep_paths": {"pkg/firewall/**": ["firewall"]}})
+    assert words.path("pkg/firewall/tests/test_firewall.py") == "pkg/firewall/tests/test_firewall.py"
+    assert words.path("pkg/other/firewall.py") == "pkg/other/zk_server.py"
+    assert words.sub("the firewall serves", "pkg/firewall/tests/test_firewall.py") == "the zk_server serves"
+
+
+def test_a_held_file_is_named_where_it_stands():
+    words = M.Words({"words": {"firewall": "zk_server", "draw": "sample"},
+                     "keep_paths": {"pkg/firewall/**": ["firewall"]}, "keep_in": {"a/draw.py": ["draw"]}})
+    files = ["pkg/firewall/tests/test_firewall.py", "pkg/firewall/README.md", "a/draw.py", "b/draw.py", "doc.md"]
+    assert words.hold(files) == ["pkg/firewall/tests/test_firewall.py", "pkg/firewall/README.md", "a/draw.py"]
+    assert words.sub("see pkg/firewall/tests/test_firewall.py, test_firewall.py, a/draw.py and b/draw.py", "doc.md") == \
+        "see pkg/firewall/tests/test_firewall.py, test_firewall.py, a/draw.py and b/sample.py"
+
+
+def test_a_name_in_all_follows_what_it_exports_where_a_quoted_key_stands():
+    words = M.Words({"words": {"draw": "sample"}, "keep": {"patterns": ['"draw"']}})
+    module = '__all__ = ["draw",\n           "other"]\n\n\ndef draw():\n    return {"draw": 1}\n'
+    assert words.sub(module, "m.py") == '__all__ = ["sample",\n           "other"]\n\n\ndef sample():\n    return {"draw": 1}\n'
+    assert words.sub(module, "m.md") == module.replace("def draw", "def sample")
+    kept = M.Words({"words": {"draw": "sample"}, "keep": {"patterns": ['"draw"', r"\bdraw_salt\b"]}})
+    module = '__all__ = ["draw_salt", "draw"]\n\n\ndef draw_salt():\n    pass\n\n\ndef draw():\n    pass\n'
+    assert kept.sub(module, "m.py") == '__all__ = ["draw_salt", "sample"]\n\n\ndef draw_salt():\n    pass\n\n\ndef sample():\n    pass\n'
+    tag = M.Words({"words": {"DRAW": "SAMPLE"}, "keep": {"patterns": [r"(?<=[\x22])DRAW(?=[\x22 ])"]}})
+    module = '__all__ = ["DRAW"]\nDRAW = "pouw/draw"\nlines(p, "DRAW")\n'
+    assert tag.sub(module, "m.py") == '__all__ = ["SAMPLE"]\nSAMPLE = "pouw/draw"\nlines(p, "DRAW")\n'
 
 
 def test_paths_and_names_are_renamed_part_by_part():

@@ -11,8 +11,11 @@
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/rename.py` carries a
 branch across it):
 1. renames each [words] entry in every tracked text file the map doesn't exclude, except inside what [keep] keeps (a domain
-   tag, a format id, an id) and, in the files a [keep_in] glob matches, the words it lists;
-2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`); a module's
+   tag, a format id, an id; a name in a Python module's `__all__` only as it keeps the name, never as a quoted string,
+   since `__all__` names what the module exports; the name of a file the second step leaves in place, `Words.hold`) and,
+   in the files a [keep_in] glob matches, the words it lists;
+2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`), but for the
+   words a [keep_in] or [keep_paths] glob lists for it ([keep_paths] holds a path and not the file's text); a module's
    name is its path's, so the first step has already renamed every import of it;
 3. in a `lean-audit.json`, renames module names and prose but not the records the Lean check's `--update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
@@ -52,6 +55,9 @@ PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
 MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
+EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
+# a space of a phrase: one, a line break and what starts the next line, or a break between two string literals Python joins
+GAP = r"""(?: ["']\n[ \t]*[rbfRBF]{0,2}["']|["']\n[ \t]*[rbfRBF]{0,2}["'] | |\n[ \t]*(?:(?:///?|--|#|\*) )?)"""
 
 
 def _match(path: str, glob: str) -> bool:
@@ -65,14 +71,34 @@ def _word(w: str, whole: bool = False) -> str:
         left = (r"(?<![\w.])" if w.endswith(".") else r"(?<!\w)") if re.match(r"\w", w[0]) else ""
         right = r"(?!\w)" if re.match(r"\w", w[-1]) else ""
     else:
-        if re.search(r"[ ./]", w):
+        if w[0] == "'":
+            left = ""
+        elif re.search(r"[ ./]", w):
             left = r"(?<![\w-])"
         elif w[0].islower():
             left = r"(?<![A-Za-z0-9])"
         else:
             left = r"(?<![A-Z])"
         right = r"(?![a-z])" if w[-1].islower() else r"(?![A-Za-z])"
-    return left + re.escape(w) + right
+    return left + re.escape(w).replace(r"\ ", GAP) + right
+
+
+def _suffixes(p: str) -> list[str]:
+    parts = p.split("/")
+    return ["/".join(parts[i:]) for i in range(len(parts))]
+
+
+def _rewrapped(old: str, new: str) -> str:
+    """`new` for a phrase `old` that a line break splits: the break, and what starts the next line, at the same space of
+    `new`, or at its last; a one-word `new` joins the lines, but where they are two string literals `old` stands, since
+    joining them could move words into a literal of another kind (an f-string's)."""
+    gaps = re.findall(GAP, old)
+    k = next(i for i, g in enumerate(gaps) if "\n" in g)
+    parts = new.split(" ")
+    if len(parts) == 1:
+        return old if re.search("[\"']", gaps[k]) else new
+    j = min(k, len(parts) - 2)
+    return " ".join(parts[:j + 1]) + gaps[k] + " ".join(parts[j + 1:])
 
 
 class Words:
@@ -88,58 +114,88 @@ class Words:
         self.keep = [re.compile(p) for p in keep.get("patterns", [])]
         self.keep += [re.compile(re.escape(s)) for s in keep.get("strings", [])]
         self.keep_in: dict[str, list[str]] = data.get("keep_in", {})
-        self._rules: dict[tuple[int, ...], tuple[re.Pattern, list[str], list[str]]] = {}
+        self.keep_paths: dict[str, list[str]] = data.get("keep_paths", {})
+        self._rules: dict[tuple[int, ...], list[tuple[list[str], str, str]]] = {}
+        self._patterns: dict[tuple[tuple[int, ...], tuple[int, ...]], tuple[re.Pattern, list[str]]] = {}
 
     def excluded(self, path: str) -> bool:
         return any(_match(path, g) for g in self.exclude)
 
-    def rules(self, path: str = "") -> tuple[re.Pattern, list[str], list[str]]:
-        """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words].
-        The pattern has one group per rule, and the first list holds each group's new word."""
+    def rules(self, path: str, text: str) -> tuple[re.Pattern, list[str]]:
+        """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words],
+        each only if `text` holds every one of its parts (no other can match). The pattern has one group per rule, and the
+        list holds each group's new word."""
         which = tuple(i for i, (globs, _) in enumerate(self.scoped) if path and any(_match(path, g) for g in globs))
         if which not in self._rules:
             scoped: dict[str, str] = {}
             for i in which:
                 for k, v in self.scoped[i][1].items():
                     scoped.setdefault(k, v)
-            rules = [(_word(w, whole=True), n) for w, n in scoped.items()] + [(_word(w), n) for w, n in self.words.items()]
-            first = "".join(sorted({re.escape(w[0]) for w in {**scoped, **self.words}}))
-            pattern = f"(?=[{first}])(?:" + "|".join(f"({r})" for r, _ in rules) + ")" if rules else "(?!)"
-            self._rules[which] = (re.compile(pattern),
-                                  [n for _, n in rules], [w.lower() for w in {**scoped, **self.words}])
-        return self._rules[which]
+            self._rules[which] = ([(w.split(" "), _word(w, whole=True), n) for w, n in scoped.items()] +
+                                  [(w.split(" "), _word(w), n) for w, n in self.words.items()])
+        rules = self._rules[which]
+        live = tuple(i for i, (parts, _, _) in enumerate(rules) if all(p in text for p in parts))
+        if (which, live) not in self._patterns:
+            first = "".join(sorted({re.escape(rules[i][0][0][0]) for i in live}))
+            pattern = f"(?=[{first}])(?:" + "|".join(f"({rules[i][1]})" for i in live) + ")" if live else "(?!)"
+            self._patterns[which, live] = (re.compile(pattern), [rules[i][2] for i in live])
+        return self._patterns[which, live]
 
     def sub(self, text: str, path: str = "", keep: list[tuple[int, int]] = (), counts: Counter | None = None,
             kept: Counter | None = None, protect: bool = True) -> str:
         """`text` (of file `path`) with every word renamed, except inside the spans [keep] (and `keep`) cover and the words
         [keep_in] lists for `path`. ``counts`` and ``kept`` count the words renamed (by old and new) and the words left
-        standing; without ``protect``, [keep] keeps nothing (a path)."""
-        pattern, new, lower = self.rules(path)
-        low = text.lower()
-        if not any(w in low for w in lower) or pattern.search(text) is None:
+        standing; without ``protect`` (a path), [keep] keeps nothing and [keep_paths] holds its words as [keep_in] does."""
+        pattern, new = self.rules(path, text)
+        if pattern.search(text) is None:
             return text
-        spans = sorted([*keep, *((m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text))])
+        held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
+        if held and path.endswith(".py") and (names := [(m.start(), m.end()) for m in EXPORTS.finditer(text)]):
+            exported = [any(a <= s and e <= b for a, b in names) for s, e in held]
+            rest = [h for h, x in zip(held, exported) if not x]
+
+            def free(name: str) -> bool:                            # the name stands somewhere outside every kept span
+                return any(not any(s <= m.start() and m.end() <= e for s, e in rest)
+                           for m in re.finditer(rf"(?<![\w'\"]){re.escape(name)}(?![\w'\"])", text))
+
+            held = [(s, e) for (s, e), x in zip(held, exported)
+                    if not (x and (text[e - 1] in "\"'" or free(text[s:e])))]
+        spans = sorted([*keep, *held])
         starts, reach, far = [], [], 0
         for s, e in spans:                                          # reach[i]: the furthest end of spans[:i + 1]
             starts.append(s)
             far = max(far, e)
             reach.append(far)
-        skip = {w for g, ws in self.keep_in.items() if path and _match(path, g) for w in ws}
+        held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
+        skip = {w for g, ws in held_in if path and _match(path, g) for w in ws}
 
         def one(m: re.Match) -> str:
             w = m.group(0)
             i = bisect.bisect_left(starts, m.end()) - 1               # the last span starting before the match ends
-            if w in skip or (i >= 0 and reach[i] > m.start()):
+            to = _rewrapped(w, new[m.lastindex - 1]) if "\n" in w else new[m.lastindex - 1]
+            if to == w or w in skip or (i >= 0 and reach[i] > m.start()):
                 if kept is not None:
-                    kept[w] += 1
+                    kept[re.sub(GAP, " ", w)] += 1
                 return w
             if counts is not None:
-                counts[w, new[m.lastindex - 1]] += 1
-            return new[m.lastindex - 1]
+                counts[re.sub(GAP, " ", w), new[m.lastindex - 1]] += 1
+            return to
         return pattern.sub(one, text)
 
     def path(self, p: str) -> str:
         return self.sub(p, p, protect=False)
+
+    def hold(self, files: list[str]) -> list[str]:
+        """Keep, in every file, the names of the files among `files` that [keep_in] or [keep_paths] hold where they are
+        and the words would otherwise move: each one's path, and each shorter suffix of it (its name included) that
+        names no other file. Returns those paths."""
+        held = [p for p in files if not self.excluded(p) and self.path(p) == p and self.sub(p, protect=False) != p]
+        named = Counter(s for p in files for s in _suffixes(p))
+        names = [s for p in held for s in _suffixes(p) if s == p or named[s] == 1 and self.sub(s, protect=False) != s]
+        if names:
+            self.keep.append(re.compile(r"(?<![\w./-])(?:" + "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
+                                        + r")(?![\w/-])"))
+        return held
 
     def name(self, n: str, path: str = "") -> str:
         """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
@@ -321,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
     files = [p for p in L.git(root, "ls-files", "-z").split("\0") if p]
+    words.hold(files)
     if a.moves:
         print(json.dumps(lock_moves(root, words, files), indent=1))
         return 0
