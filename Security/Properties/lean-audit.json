@@ -14,6 +14,7 @@
   "Properties.Pouw.Credit",
   "Properties.Pouw.Lead.Commit",
   "Properties.Pouw.Lead.V2",
+  "Properties.Pouw.PearlPlus",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
@@ -874,9 +875,15 @@
     "Properties.Pouw.ServedFreed",
     "Properties.Pouw.ServedWork",
     "Properties.Pouw.ServedValues",
-    "Properties.Pouw.Lead.V2"
+    "Properties.Pouw.Lead.V2",
+    "Properties.Pouw.PearlPlus"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Pouw.PearlPlus": {
+   "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32"],
+   "except": [],
+   "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -5983,6 +5990,15 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.PlanMeans": "unstated: what Pearl+'s run verdict's plan establishes (distinct calls, loaded passes, the run commitment, the coin record, the draw), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.AcceptMeans": "unstated: Pearl+'s run verdict accepts only when every drawn tile's opening passes checkTile, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "unstated: a pass refused before the coin opens no tile, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.LoadedGivesUp": "unstated: a loaded pass's give-up keeps V-EX's caps and the published records root, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.TileAcceptMeans": "unstated: what a passed tile establishes (its openings, its words and leaf, the per-row rules and cap, the y as the unscale of U), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.TileKeepsTheCap": "unstated: a passed tile's replayed debit is within rho = 1/400 of its credit, as a tile and on each credited row, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two accepted openings of one position name one value or SHA-512 collides, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.YIsTheUnscale": "unstated: the unscale Pearl+'s check holds the served y to is the Definition Pouw.PearlC.unscale (PearlCUnscale_v1 at BIAS off), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted Pearl+ run publishes is its credit at Pearl's assumption over the plan's passes at its draws and delta = 1/100, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkPeriod's claims; RegisteredBeforeDraw, DrawIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkPeriod (Proofs.Pouw.Period).",
