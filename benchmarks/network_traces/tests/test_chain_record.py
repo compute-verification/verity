@@ -12,9 +12,9 @@ window was drawn; the draw's bound at δ is the integrity profile's count bound,
 Lean's does; leak counts the scan's widths and terms on a network certifier run's files, and refuses a sample and a
 network certifier the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
-names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
-let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
-inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
+names what it stubs, counts the rehearsal's refused runs as negatives and refuses an endpoint whose advice isn't
+rebuilt from the certified I/O; d1's K is all_protocols' monitoring-period count over the compute audits' samples and
+free inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
 (exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
@@ -229,6 +229,27 @@ def test_job_keeps_no_gate_runs_witness(tmp_path):
     assert kept == ["end.json", "out/deployment.json"]
 
 
+@pytest.mark.parametrize("delta", [None, "5.421010862427522e-20"])
+def test_the_scan_proves_at_cr_scan_delta(tmp_path, delta):
+    """chain_record.sh hands CR_SCAN_DELTA to scan_zk.py prove as --delta, ahead of CR_SCAN_ARGS, and no --delta
+    without it; served_verdicts.sh's 2^-64 reaches scan_zk.py's float --delta as the double that is 2^-64 exactly."""
+    lines = (HERE / "chain_record.sh").read_text().splitlines()
+    i = next(k for k, line in enumerate(lines) if line.lstrip().startswith('if [ -n "${CR_SCAN_CMD:-}" ]'))
+    py = tmp_path / "py"
+    py.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV"\n')
+    py.chmod(0o755)
+    env = {"PY": str(py), "ARGV": str(tmp_path / "argv"), "OUT": str(tmp_path), "BIN": "b", "LEAN": "l",
+           "SCANOUT": "s", "CR_SCAN_ARGS": "--draw 8", "PATH": os.environ["PATH"]}
+    subprocess.run(["bash", "-c", "\n".join(lines[i:i + 3])], check=True,
+                   env=env | ({"CR_SCAN_DELTA": delta} if delta else {}))
+    argv = (tmp_path / "argv").read_text().splitlines()
+    assert argv[:2] == ["benchmarks/network_traces/scan_zk.py", "prove"] and argv[-2:] == ["--draw", "8"]
+    if delta is None:
+        assert "--delta" not in argv
+    else:
+        assert argv[argv.index("--delta") + 1] == delta and Fraction(float(delta)) == Fraction(1, 2 ** 64)
+
+
 def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
@@ -239,8 +260,8 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
         custody=put("custody.json", {"verdict": "accepted"}),
         certs=put("certs.json", {"verdict": "accepted", "rows": [{"window": 0, "certified": True}]}),
         endpoint=put("endpoint.json", {"chain": {
-            "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]},
-            "tie": {"ran": True, "runs": {"honest": {"verdict": "accepted"}}}}}) if endpoint else None,
+            "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]}}})
+        if endpoint else None,
         n2=put("n2.json", {"ok": True, "members": {
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
@@ -566,20 +587,17 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
          "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
-    ep = json.loads(Path(steps.endpoint).read_text())
-    ep["chain"]["tie"]["runs"] |= {"token": {"verdict": "refused", "ok": True}, "extra": {"verdict": "n/a"},
-                                   "late": {"verdict": "refused", "ok": None}}
-    ep["negatives"] = {"late": {"own_code": "audit.status:coverage-never-established"}, "token": {"own_code": None}}
-    Path(steps.endpoint).write_text(json.dumps(ep))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
-    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
-                                        "n2/tampered": True}
+    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "n2/tampered": True}
     assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
-    ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
+    ep = json.loads(Path(steps.endpoint).read_text())
+    ep["chain"]["bits"]["rebuilt"] = False
     Path(steps.endpoint).write_text(json.dumps(ep))
-    assert cr.report(steps)["negatives_refused"]["tie/token"] is False
+    assert cr.report(steps)["steps"]["endpoint"]["verdict"] == "refused"
+    ep["chain"]["bits"]["rebuilt"] = True
+    Path(steps.endpoint).write_text(json.dumps(ep))
     Path(steps.job).write_text(json.dumps(job | {"path": None}))
     off = cr.report(steps)
     assert off["verdict"] == "refused" and off["stubbed"] == []

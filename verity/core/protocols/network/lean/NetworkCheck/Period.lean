@@ -156,10 +156,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
   audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
-  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
-  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
-  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
-  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  row t and its `o1` as row t + 1, but for its last unit, whose `o1` no row holds (the egress tie's is the prover's
+  one-leaf `scan/last`, registered before any coin), so each row past row 0 is the state the scan's transition computed
+  from the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the
+  Programs anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has
+  none occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
@@ -1062,8 +1063,8 @@ def stateEntries (reg : Json) : Array Json :=
 
 /-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
 every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
-The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
-audit's Programs read is the chain of the scan's transitions. -/
+The scan's units read their states at that root (`sin` row t, `o1` row t + 1, but the last unit's `o1`, which no row
+holds), so the `SCAN_STATE` that audit's Programs read is the chain of the scan's transitions. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   match (stateEntries reg)[0]? with
