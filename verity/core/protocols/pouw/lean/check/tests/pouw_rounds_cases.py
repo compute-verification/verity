@@ -55,7 +55,7 @@ PARAMS = lms.Params(64, 4, 6)
 RECORD_LEAF = 8
 DRAW_LEAF = 40
 HOST = "challenger-test"
-LANE = "pouw"
+PROVER = "pouw"
 #: the verifier's copy of main's first-parent history, newest first
 MAIN = [hashlib.sha1(b"main %d" % i).hexdigest() for i in range(6)]
 #: the host's pins log: each line pins a commit of `MAIN`
@@ -142,8 +142,8 @@ def _open(rng: random.Random, window: dict, public: bytes) -> dict:
     """An open of `window` on `HOST` under `public`'s hash, sealing a prefix of `PINS` and naming a commit it pins."""
     n = rng.randint(1, len(PINS))
     return {"window": window, "host": HOST, "pinned": json.loads(rng.choice(PINS[:n]))["commit"],
-            "pins": Ch.pins_seal(PINS[:n]), "key_sha512": hashlib.sha512(public).hexdigest(), "port": 7811, "by": LANE,
-            **({"for": LANE} if rng.random() < 0.3 else {})}
+            "pins": Ch.pins_seal(PINS[:n]), "key_sha512": hashlib.sha512(public).hexdigest(), "port": 7811, "by": PROVER,
+            **({"for": PROVER} if rng.random() < 0.3 else {})}
 
 
 def leaves_of(events: list[tuple[str, str | None, dict]], sid: str = "s-1") -> list[int]:
@@ -190,7 +190,7 @@ def _reserved(rng: random.Random, sid: str, body: dict) -> list[tuple[str, str |
     asked = {**{k: body[k] for k in Ch.RESERVED if k in body}, "minutes": minutes}
     opened = Ch.later(start, rng.randint(0, minutes))
     return [("reserve", sid, {**asked, "started_utc": start, "expires_utc": Ch.later(start, minutes)}),
-            ("open", sid, {**body, **asked, "opened_by": LANE, "started_utc": opened})]
+            ("open", sid, {**body, **asked, "opened_by": PROVER, "started_utc": opened})]
 
 
 def _bind(events: list) -> list:
@@ -203,7 +203,7 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
                   period: dict | None = None, **end) -> list[tuple[str, str | None, dict]]:
     """The window's session `s` opened (its open's body changed by `opened`, a None dropping its field) and ended closed
     (its end's body changed by `end`), sealing the log and hellos its challenger left, among up to two others, sometimes
-    inside a period of lane `LANE` that a close ends, always when `period` (the further fields its open commits) is
+    inside a period of prover `PROVER` that a close ends, always when `period` (the further fields its open commits) is
     given.  `reserved` reserves every session first, as the gate's two-step open does (`_reserved`), among up to one
     other: the period counts its windows at their reserves."""
     o = {k: v for k, v in {**_open(rng, window, s.pub), **(opened or {})}.items() if v is not None}
@@ -224,7 +224,7 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
         events.append(rng.choice([q for q in queues if q]).pop(0))
     if period is not None or rng.random() < 0.5:
         name = rng.choice(PERIODS)
-        events.insert(0, ("period-open", None, {"period": name, "lane": LANE, "by": LANE, "cap": 4,
+        events.insert(0, ("period-open", None, {"period": name, "prover": PROVER, "by": PROVER, "cap": 4,
                                                 "circuit": rng.choice(CIRCUITS), "pinned": "ab" * 20,
                                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), **(period or {})}))
         if rng.random() < 0.5:
@@ -232,7 +232,7 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
             ended = {sid: b.get("complete") is True for kind, sid, b in events if kind == "end"}
             windows = [{"root": roots[sid], "session": sid, "complete": ended[sid]}
                        for kind, sid, b in events if kind == ("reserve" if reserved else "open")]
-            events.append(("period-close", None, {"period": name, "lane": LANE, "by": LANE, "windows": windows,
+            events.append(("period-close", None, {"period": name, "prover": PROVER, "by": PROVER, "windows": windows,
                                                   "complete": all(w["complete"] for w in windows)}))
     return _bind(events)
 

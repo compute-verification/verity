@@ -130,10 +130,10 @@ def signedBy (dev : History) (pk : ByteArray) : List ByteArray :=
 /-- The device signed `m` under the key `pk` (`signedBy`). -/
 def Signed (dev : History) (pk m : ByteArray) : Prop := m ∈ signedBy dev pk
 
-/-- The device's own ledger under `pk` opens window `w` (its open root) for the run `id`, under the ledger's v2
-schema, as a withheld run (`withheld: true`). -/
+/-- The device's own ledger under `pk` opens window `w` (its open root) for the run `id`, under the ledger's v2 schema
+or a later one, as a withheld run (`withheld: true`). -/
 def OpensOn (dev : History) (pk : ByteArray) (w id : String) : Prop :=
-  ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.schema = LEDGER_SCHEMA ∧
+  ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.schema ≠ LEDGER_SCHEMA_V1 ∧
     e.session = id ∧ getD (getD e.body "window") "root" = .str w ∧ getD e.body "withheld" = .bool true
 
 /-! ## What the reader checks and hashes -/

@@ -2,12 +2,12 @@
 challenger's signed close, sealed under its ledger.
 
 * a window is held to the one challenge phase the challenger gate opened for its Commit's root, in the gate's
-  signed v2 ledger (`pouw_h1_challenger.session_reason`, `Ledger`, core's check), ended closed and complete under the
+  signed ledger (`pouw_h1_challenger.session_reason`, `Ledger`, core's check), ended closed and complete under the
   coin commitment the gate's answer gave it, which the serving side checked before its first coin; its tree is read
   through the gate's ``fetch`` and sealed by its end entry. Two challenge phases for one root, a reused challenge phase, a key off the ledger's pin, leaves
   out of order, a record leaf outside its challenge phase, a two-step open off its reserve and two published heads that don't
   extend one another are refused, and so is a tampered byte of the gate's own v2 head. A period (`period_reason`) is its
-  lane's windows between its signed period-open and period-close: one with no close, an incomplete one, an accepted
+  prover's windows between its signed period-open and period-close: one with no close, an incomplete one, an accepted
   window outside it and a window of it abandoned after its coins are refused.
 * the window's sampling coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early draw, a sample from another family and a challenge phase closed with no sample are refused.
@@ -17,7 +17,7 @@ challenger's signed close, sealed under its ledger.
 * a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * the release log is the only evidence that a round's coin followed its root, so an unsigned log would pass roots chosen
   after every coin once it was rewritten to name them. The challenger's signed close signs it and the auditor's ledger
-  seals the close, and the gate's v2 end entry seals the log itself: a rewritten log is refused either way.
+  seals the close, and the gate's end entry (v2's or later) seals the log itself: a rewritten log is refused either way.
 """
 from __future__ import annotations
 
@@ -401,8 +401,9 @@ def test_the_ledger_refuses_two_sessions_for_one_root_a_reused_session_another_k
     """`Ledger.of` (core's ``ledger_head``, ``verify_ledger`` and ``verify_periods``) refuses a whole ledger
     with a second challenge phase for one root, one challenge phase for two roots, an open of no root or under another key's pin, an
     end with no open or a second end, an entry signed under another key, edited after signing or at a leaf not after
-    the last one's, a v1 entry after a v2, a record leaf outside its challenge phase's open and end, used twice, off form or
-    also an entry's, a line dropped, and an entry of another kind; v1 entries before v2 ones are one chain. It reads the
+    the last one's, a v1 entry after a later one, a record leaf outside its challenge phase's open and end, used twice,
+    off form or also an entry's, a line dropped, and an entry of another kind; v1 entries before later ones are one chain.
+    It reads the
     longest of every published head and refuses two that don't extend one another."""
     families = Wd.live_families(3)
     ended = {"closed": True, "files": {}}
@@ -428,7 +429,7 @@ def test_the_ledger_refuses_two_sessions_for_one_root_a_reused_session_another_k
     refused(lambda g: (g.open("s-a", COMMIT_A, families, leaf=5), g.open("s-b", COMMIT_B, families, leaf=5)),
             "entry 1: signed at leaf 5, not after the last entry's 5")
     refused(lambda g: (g.open("s-a", COMMIT_A, families), g.open("s-b", COMMIT_B, families, v1=True)),
-            "entry 1: not entry 1 of a verity/challenger-auditor/v2 ledger chained to its predecessor")
+            f"entry 1: not entry 1 of a {LC.LEDGER_SCHEMA} ledger chained to its predecessor")
     refused(lambda g: (g.open("s-a", COMMIT_A, families), g.append("end", "s-a", {**ended, "record_leaf": 0})),
             "entry 1: record leaf 0 isn't between its open's and its end's, once")
     refused(lambda g: (g.open("s-a", COMMIT_A, families), g.append("end", "s-a", {**ended, "record_leaf": "2"}, leaf=3)),
@@ -451,7 +452,7 @@ def test_the_ledger_refuses_two_sessions_for_one_root_a_reused_session_another_k
     edited = g.lines[1].replace('"port":7811', '"port":7812')
     with pytest.raises(LC.CoinError, match="entry 1: its signature doesn't verify under the challenger key"):
         PHC.Ledger.of([[g.lines[0], edited, g.lines[2]]], KEY)
-    with pytest.raises(LC.CoinError, match="entry 0: not entry 0 of a verity/challenger-auditor/v2 ledger"):
+    with pytest.raises(LC.CoinError, match=f"entry 0: not entry 0 of a {LC.LEDGER_SCHEMA} ledger"):
         PHC.Ledger.of([g.lines[1:]], KEY)
     with pytest.raises(LC.CoinError, match="the auditor's ledger entry 0 is malformed"):
         PHC.Ledger.of([["not json"]], KEY)
@@ -469,10 +470,10 @@ def test_the_ledger_refuses_two_sessions_for_one_root_a_reused_session_another_k
         PHC.Ledger.of([], KEY)
 
 
-def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_credits_only_if_complete(tmp_path,
-                                                                                                    monkeypatch):
-    """A period is its lane's windows between its period-open and period-close entries (a window of another
-    lane's isn't one); it credits only when the ledger closes it complete and every window of it was accepted. Refused: a
+def test_a_period_is_its_provers_windows_between_its_signed_open_and_close_and_credits_only_if_complete(tmp_path,
+                                                                                                      monkeypatch):
+    """A period is its prover's windows between its period-open and period-close entries (a window of another
+    prover's isn't one); it credits only when the ledger closes it complete and every window of it was accepted. Refused: a
     period the ledger doesn't have or doesn't close, one closed with no window, an incomplete window (one that ended
     short of its coins, or never ended), an accepted window that isn't the period's, and a window of it abandoned after
     its coins. Each window's draw session is one of its period's sessions, listed after it, and counts as accepted only
@@ -517,7 +518,7 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
         f"period p1's window {da} (Commit {kept['draw']['root']}) ended complete and has no accepted window: a window "
         "abandoned after its coins"]
     assert PHC.period_reason(ledger, "p1", [SA, da, SB, db, sk]) == [
-        f"session {sk}, an accepted window, is not one of period p1's windows ({[SA, da, SB, db]}, lane vllm's between "
+        f"session {sk}, an accepted window, is not one of period p1's windows ({[SA, da, SB, db]}, prover vllm's between "
         "its period-open and its period-close)"]
     released = ledger.window("cc" * 64)["end"]["body"]["released"]
     assert set(released.values()) == {0} and PHC.period_reason(ledger, "p2", [si]) == [
@@ -534,8 +535,9 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
 
 def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
     """Core's ``verify_periods`` and two-step windows: `Ledger.of` refuses a period entry with a challenge phase, a
-    period-open under another key's pin, a period off its name and lane, a period name used twice, a lane's second open
-    period, a cap or circuit off form, a window past its cap, a close of a period that isn't its lane's open one or that
+    period-open under another key's pin, a period off its name and prover, a period name used twice, a prover's second
+    open period, a cap or circuit off form, a window past its cap, a close of a period that isn't its prover's open one or
+    that
     doesn't list exactly its windows and their outcomes; a reserve that isn't first in its challenge phase or whose expiry isn't
     its start plus its minutes; and an open that binds no reserve of its challenge phase, doesn't carry its request, isn't by its
     prover, falls outside its minutes or after its period's close, or is one-step after the first reserve. A two-step
@@ -548,18 +550,18 @@ def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
         build(g)
         with pytest.raises(LC.CoinError, match=match):
             g.ledger()
-    refused(lambda g: g.append("period-open", "s-a", {"period": "p", "lane": "vllm", "key_sha512": g.pin}),
+    refused(lambda g: g.append("period-open", "s-a", {"period": "p", "prover": "vllm", "key_sha512": g.pin}),
             "the auditor's ledger entry 0 is malformed")
     refused(lambda g: g.period_open("p", key_sha512="00" * 64),
             r"entry 0 is signed under challenger key 0+\.\.\., not the window's pinned key")
     refused(lambda g: g.period_open("p/1"), "the auditor's ledger entry 0 is malformed")
     refused(lambda g: (g.period_open("p"), g.period_close("p"), g.period_open("p")),
-            "entry 2: period p is named twice, or lane vllm has a period open")
-    refused(lambda g: (g.period_open("p"), g.period_open("q")), "entry 1: period q is named twice, or lane vllm has a")
-    refused(lambda g: g.append("period-close", None, {"period": "p", "lane": "vllm", "windows": [], "complete": False}),
-            "entry 0: a period-close for p, which isn't lane vllm's open period")
-    refused(lambda g: (g.period_open("p"), g.period_close("p", lane="kernels")),
-            "entry 1: a period-close for p, which isn't lane kernels's open period")
+            "entry 2: period p is named twice, or prover vllm has a period open")
+    refused(lambda g: (g.period_open("p"), g.period_open("q")), "entry 1: period q is named twice, or prover vllm has a")
+    refused(lambda g: g.append("period-close", None, {"period": "p", "prover": "vllm", "windows": [], "complete": False}),
+            "entry 0: a period-close for p, which isn't prover vllm's open period")
+    refused(lambda g: (g.period_open("p"), g.period_close("p", prover="kernels")),
+            "entry 1: a period-close for p, which isn't prover kernels's open period")
     refused(lambda g: (g.period_open("p"), g.open("s-a", COMMIT_A, families), g.period_close("p", windows=[])),
             "entry 2: period p's close doesn't list exactly its windows and their outcomes")
     refused(lambda g: (g.period_open("p"), g.period_close("p", complete=True)), "entry 1: period p's close doesn't list")
@@ -568,11 +570,11 @@ def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
                 "entry 0: period p's cap is a positive integer and its circuit a SHA-512 in lowercase")
     refused(lambda g: (g.period_open("p", cap=1, circuit=circuit), g.open("s-a", COMMIT_A, families),
                        g.open("s-b", COMMIT_B, families)), "entry 2: period p's window 1 is past its cap 1")
-    refused(lambda g: g.reserve("s-a", families), "entry 0: a reserve is v2 and the first entry of its session s-a")
-    refused(lambda g: (g.reserve(s, families), g.reserve(s, families)), f"entry 1: a reserve is v2 and the first entry of "
-                                                                         f"its session {s}")
-    refused(lambda g: (g.open(s, COMMIT_A, families), g.reserve(s, families)), f"entry 1: a reserve is v2 and the first "
-                                                                                 f"entry of its session {s}")
+    refused(lambda g: g.reserve("s-a", families), "entry 0: a reserve is v2 or later and the first entry of its session s-a")
+    refused(lambda g: (g.reserve(s, families), g.reserve(s, families)), "entry 1: a reserve is v2 or later and the first "
+                                                                         f"entry of its session {s}")
+    refused(lambda g: (g.open(s, COMMIT_A, families), g.reserve(s, families)), "entry 1: a reserve is v2 or later and "
+                                                                                 f"the first entry of its session {s}")
     refused(lambda g: g.reserve(s, families, expires_utc="2026-10-20T11:09:00Z"),
             r"entry 0: a reserve names its prover, its minutes, its start and its expiry \(start \+ minutes\)")
     refused(lambda g: g.reserve(s, families, minutes=0), "entry 0: a reserve names its prover")
@@ -587,7 +589,7 @@ def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
     refused(lambda g: (g.period_open("p"), g.reserve(s, families), g.period_close("p"), g.open(s, COMMIT_A)),
             f"entry 3: session {s} was opened after its period p closed")
     refused(lambda g: (g.reserve(s, families), g.open(t, COMMIT_B, families)),
-            "entry 1: a v2 open without a reserve after the ledger's first reserve")
+            "entry 1: an open without a reserve after the ledger's first reserve")
     g = _gate()
     g.open("s-0", COMMIT_A, families)
     g.period_open("p", cap=2, circuit=circuit)
@@ -667,7 +669,7 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     head = R.ledger_lines(SMOKE / "ledger" / "windows.jsonl")
     ledger = PHC.Ledger.of([head[:4], head, head[:9], head[:23]], key)
     assert len(head) == 31 and len(ledger.windows) == 10 and list(ledger.lines) == head
-    assert [json.loads(line)["schema"] for line in head] == [LC.LEDGER_SCHEMA_V1] * 4 + [LC.LEDGER_SCHEMA] * 27
+    assert [json.loads(line)["schema"] for line in head] == [LC.LEDGER_SCHEMA_V1] * 4 + [LC.LEDGER_SCHEMA_V2] * 27
     window = ledger.window(root)
     assert window["open"]["session"] == sid and window["open"]["seq"] == 8
     assert window["open"]["body"]["host"] == f"vy-challenger-1.{sid}" and window["end"]["body"]["complete"] is True

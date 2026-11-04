@@ -1,6 +1,6 @@
 """`record`: the record entry's form, its message and its chain, and the auditor's ledger written and read through it.
 
-The pinned digests are the auditor's ledger's bytes (`verity/challenger-auditor/v2`): a change to the form, the message's
+The pinned digests are the auditor's ledger's bytes (`verity/challenger-auditor/v3`): a change to the form, the message's
 framing or a line's text moves them."""
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ def _sign(m: bytes) -> bytes:
 
 def _ledger() -> list[str]:
     lines: list[str] = []
-    body = {"by": "lane-a", "epoch": 3, "families": [["salt", 1]], "minutes": 5, "peer": "p", "scheme": "s",
+    body = {"by": "prover-a", "epoch": 3, "families": [["salt", 1]], "minutes": 5, "peer": "p", "scheme": "s",
             "started_utc": "2000-01-01T00:00:00Z", "expires_utc": "2000-01-01T00:05:00Z", "note": "é"}
     lines.append(Ch.ledger_line(lines, "reserve", "s20000101T000000Z-abcd", body, I, _sign))
-    lines.append(Ch.ledger_line(lines, "period-open", None, {"lane": "lane-a", "period": "p0"}, I, _sign))
+    lines.append(Ch.ledger_line(lines, "period-open", None, {"prover": "prover-a", "period": "p0"}, I, _sign))
     return lines
 
 
@@ -57,8 +57,8 @@ def test_the_ledgers_bytes_are_pinned():
     assert Ch.ledger_message(I, json.loads(lines[1])).hex()[:32] == PINNED_MESSAGE
 
 
-PINNED_LEDGER = "d5f300dcf07445940f0ed6d8f2d88916"
-PINNED_MESSAGE = "abbc31ccb0c9cb297811fbaf3d79845c"
+PINNED_LEDGER = "d3a9298492e9252452977726e9d6c883"
+PINNED_MESSAGE = "ea3f1949f259127cacfeb795f8735c76"
 
 
 def _entry() -> dict:

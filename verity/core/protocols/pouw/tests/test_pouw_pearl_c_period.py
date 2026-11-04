@@ -55,8 +55,9 @@ class Lane:
 
     def open(self, name: str, circuit: str = CIRCUIT, **fields: Any) -> None:
         """Period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
-        self._push(("period-open", None, {"period": name, "lane": rc.LANE, "by": rc.LANE, "cap": 4, "circuit": circuit,
-                                          "key_sha512": hashlib.sha512(self.pub).hexdigest(), **fields}))
+        self._push(("period-open", None, {"period": name, "prover": rc.PROVER, "by": rc.PROVER, "cap": 4,
+                                          "circuit": circuit, "key_sha512": hashlib.sha512(self.pub).hexdigest(),
+                                          **fields}))
         self.name, self.members = name, []
 
     def epoch(self, w: bytes, k: int, h1: bool = False, pinned: str | None = None) -> str:
@@ -87,8 +88,8 @@ class Lane:
         roots = {sid: b["window"]["root"] for kind, sid, b in self.events if kind == "open"}
         ended = {sid: b["complete"] is True for kind, sid, b in self.events if kind == "end"}
         windows = [{"root": roots[sid], "session": sid, "complete": ended[sid]} for sid in self.members]
-        self._push(("period-close", None, {"period": self.name, "lane": rc.LANE, "by": rc.LANE, "windows": windows,
-                                           "complete": all(w["complete"] for w in windows)}))
+        self._push(("period-close", None, {"period": self.name, "prover": rc.PROVER, "by": rc.PROVER,
+                                           "windows": windows, "complete": all(w["complete"] for w in windows)}))
         self.members = None
 
     def ledger(self) -> list[str]:

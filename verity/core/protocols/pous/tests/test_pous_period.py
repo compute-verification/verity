@@ -157,46 +157,48 @@ def test_an_audit_at_the_certified_point_checks_its_run():
         R.check_at(*_run_of(zeros.case))
 
 
-LANE, OTHER = "compute-accounting", "memory-accounting"
+PROVER, OTHER = "compute-accounting", "memory-accounting"
 
 
-def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_bytes: int) -> str:
-    """The auditor's next ledger line in its form (`sampled_proofs.challenger.ledger_line`), under a stand-in signature of
-    `sig_bytes` bytes at leaf `seq`: `cite` reads the form, never the signature."""
+def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_bytes: int, schema: str) -> str:
+    """The auditor's next ledger line in its form (`sampled_proofs.challenger.ledger_line`) under `schema`, with a
+    stand-in signature of `sig_bytes` bytes at leaf `seq`: `cite` reads the form, never the signature."""
     e = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else "0" * 128,
-         "schema": period.LEDGER_SCHEMAS[1], "seq": len(lines), "session": session}
+         "schema": schema, "seq": len(lines), "session": session}
     return json.dumps({**e, "sig": (len(lines).to_bytes(4, "big") + bytes(sig_bytes - 4)).hex()}, sort_keys=True,
                       separators=(",", ":"))
 
 
-def _ledger(n: int, sig_bytes: int = 2048) -> tuple[list[str], str, list[int]]:
-    """A ledger of `n` sessions in each of two lanes' periods, then a second period of `LANE`'s with `n` more: the ledger,
-    the session a window cites (`LANE`'s middle one in its first period) and the indices of the entries it cites."""
+def _ledger(n: int, sig_bytes: int = 2048, schema: str = period.LEDGER_SCHEMAS[-1]) -> tuple[list[str], str, list[int]]:
+    """A ledger of `n` sessions in each of two provers' periods, then a second period of `PROVER`'s with `n` more, its
+    entries under `schema` (v2 names a period entry's prover `lane`): the ledger, the session a window cites
+    (`PROVER`'s middle one in its first period) and the indices of the entries it cites."""
     lines: list[str] = []
     at: dict[str, int] = {}
+    named = "lane" if schema == period.LEDGER_SCHEMAS[1] else "prover"
 
     def add(kind: str, session: str | None, body: dict) -> None:
         at[f"{kind} {session or body['period']}"] = len(lines)
-        lines.append(_line(lines, kind, session, body, sig_bytes))
+        lines.append(_line(lines, kind, session, body, sig_bytes, schema))
 
-    for name, lanes, first in (("p-1", (LANE, OTHER), 0), ("p-2", (LANE,), n)):
-        for lane in lanes:
-            add("period-open", None, {"period": f"{name}-{lane}", "lane": lane, "key_sha512": "ab" * 64, "cap": 2 * n,
-                                      "circuit": "cd" * 64})
-        held: dict[str, list[str]] = {lane: [] for lane in lanes}
+    for name, provers, first in (("p-1", (PROVER, OTHER), 0), ("p-2", (PROVER,), n)):
+        for prover in provers:
+            add("period-open", None, {"period": f"{name}-{prover}", named: prover, "key_sha512": "ab" * 64,
+                                      "cap": 2 * n, "circuit": "cd" * 64})
+        held: dict[str, list[str]] = {prover: [] for prover in provers}
         for i in range(first, first + n):
-            for j, lane in enumerate(lanes):
+            for j, prover in enumerate(provers):
                 s = f"s20261026T{i:06d}Z-{j:04x}"
-                held[lane].append(s)
-                add("reserve", s, {"by": lane, "minutes": 30})
-                add("open", s, {"by": lane, "reserve": at[f"reserve {s}"], "window": {"root": f"{i:0128x}"}})
+                held[prover].append(s)
+                add("reserve", s, {"by": prover, "minutes": 30})
+                add("open", s, {"by": prover, "reserve": at[f"reserve {s}"], "window": {"root": f"{i:0128x}"}})
                 add("end", s, {"closed": True, "complete": True, "files": {}})
-        for lane in lanes:
-            add("period-close", None, {"period": f"{name}-{lane}", "lane": lane, "complete": True,
-                                       "windows": [{"root": None, "session": s, "complete": True} for s in held[lane]]})
+        for prover in provers:
+            add("period-close", None, {"period": f"{name}-{prover}", named: prover, "complete": True,
+                                       "windows": [{"root": None, "session": s, "complete": True} for s in held[prover]]})
     s = f"s20261026T{n // 2:06d}Z-0000"
-    return lines, s, [at[k] for k in (f"period-open p-1-{LANE}", f"reserve {s}", f"open {s}", f"end {s}",
-                                      f"period-close p-1-{LANE}")]
+    return lines, s, [at[k] for k in (f"period-open p-1-{PROVER}", f"reserve {s}", f"open {s}", f"end {s}",
+                                      f"period-close p-1-{PROVER}")]
 
 
 def _window(d, lines: list[str], s: str):
@@ -272,6 +274,13 @@ def test_a_ledger_that_opens_no_cited_session_is_refused(tmp_path):
     assert period.cited([json.loads(x) for x in lines], {s}) == kept
     with pytest.raises(ValueError, match="^no challenger session is cited beside the auditor's ledger"):
         period.cited([json.loads(x) for x in lines], set())
+
+
+def test_a_v2_ledger_cites_its_periods_by_the_prover_it_names_lane():
+    """A v2 ledger names a period entry's prover `lane`: it cites the entries a ledger of the current schema of the same
+    sessions does."""
+    lines, s, kept = _ledger(8, schema=period.LEDGER_SCHEMAS[1])
+    assert period.cited([json.loads(x) for x in lines], {s}) == kept == _ledger(8)[2]
 
 
 def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):

@@ -1880,7 +1880,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         period_pin = rc.MAIN[2] if name == "stale-pin" else rc.MAIN[-1]
     if pin_floor is None and name == "stale-pin":
         pin_floor = 1
-    open_body = {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, Cr.PERIOD_PIN_FIELD: period_pin,
+    open_body = {"period": pname, "prover": rc.PROVER, "by": rc.PROVER, **committed, Cr.PERIOD_PIN_FIELD: period_pin,
                  "key_sha512": hashlib.sha512(pub).hexdigest()}
     if pin_floor is not None:
         open_body[Cr.STALE_FIELD] = pin_floor
@@ -1902,7 +1902,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     outcomes = [x for (d, s), end in zip(wins, ends)
                 for x in ({"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)},
                           {"root": s.drawn.on, "session": s.drawn.sid, "complete": True})]
-    events.append(("period-close", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, "windows": outcomes,
+    events.append(("period-close", None, {"period": pname, "prover": rc.PROVER, "by": rc.PROVER, "windows": outcomes,
                                           "complete": all(w["complete"] for w in outcomes)}))
     fd, fs = foreign
     fo = rc._open(rng, fd["window"], pub)

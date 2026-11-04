@@ -28,8 +28,8 @@ What the check accepts (`Accepted`) is a pass of `MANIFEST_SCHEMA` that names it
 
 * The check reads the pass's coins only through the challenger's own records, never the manifest's word. It computes the
   epoch's root `R` from the manifest's weights and `pass_index` (`EpochRoot`). The session is the one that the auditor's
-  signed v2 ledger opens on `{root: R}` under the window's pinned challenger key and ends closed, run from a commit the
-  host's pins log records on main's first-parent line (`pinnedSession`).
+  signed ledger opens under v2 or later on `{root: R}` under the window's pinned challenger key and ends closed, run
+  from a commit the host's pins log records on main's first-parent line (`pinnedSession`).
 * The session's files are that session's (`sessionNamed`), under the commitment the session signed.
 * The session counts (`Counts`): the commitment is Pearl-C's salt-only layout, and the session's log shows `R`, alone, as
   the one root it received, each received root followed by its coin's release.
@@ -141,24 +141,24 @@ def Counts (c : LiveCommitment) (received : Roots) (r : ByteArray) : Prop :=
 def entries (ledger : Json) : List LedgerEntry :=
   (match ledger with | .arr ls => ls.toList | _ => []).filterMap ledgerEntry?
 
-/-- The root an open entry names for its window, as `verifyLedger` reads it: `window.root` under v2, `window.commit`
-under v1. -/
+/-- The root an open entry names for its window, as `verifyLedger` reads it: `window.commit` under v1, `window.root`
+after it. -/
 def openRoot (e : LedgerEntry) : Json :=
   SampledProofs.getD (SampledProofs.getD e.body "window")
-    (if e.schema == SampledProofs.Challenger.LEDGER_SCHEMA then "root" else "commit")
+    (if e.schema == SampledProofs.Challenger.LEDGER_SCHEMA_V1 then "commit" else "root")
 
 /-- What the auditor's ledger shows of session `s` and the epoch's root `r`, in its signed order:
-* a v2 reserve of `s`, of the salt-only layout;
-* after it, a v2 open of `s` on `{root: r}`, at `openSeq`, that binds that reserve;
+* a reserve of `s` under v2 or later, of the salt-only layout;
+* after it, an open of `s` under v2 or later on `{root: r}`, at `openSeq`, that binds that reserve;
 * after the open, an end of `s`, closed and complete, which released one salt coin and nothing else and names
   `recordLeaf`, the leaf of the session's record, strictly between the open's leaf and its own;
-* no other open, v1 or v2, on `r` or of `s`. -/
+* no other open, under any schema, on `r` or of `s`. -/
 def LedgerShows (ledger : Json) (s : String) (r : ByteArray) (recordLeaf openSeq : Nat) : Prop :=
   ∃ rv o e : LedgerEntry, rv ∈ entries ledger ∧ o ∈ entries ledger ∧ e ∈ entries ledger ∧
-    (rv.kind = "reserve" ∧ rv.session = s ∧ rv.schema = SampledProofs.Challenger.LEDGER_SCHEMA ∧
+    (rv.kind = "reserve" ∧ rv.session = s ∧ rv.schema ≠ SampledProofs.Challenger.LEDGER_SCHEMA_V1 ∧
       SampledProofs.jeq (SampledProofs.getD rv.body "families")
         (SampledProofs.Challenger.familiesJson SALT_FAMILIES) = true) ∧
-    (o.kind = "open" ∧ o.session = s ∧ o.schema = SampledProofs.Challenger.LEDGER_SCHEMA ∧ rv.seq < o.seq ∧
+    (o.kind = "open" ∧ o.session = s ∧ o.schema ≠ SampledProofs.Challenger.LEDGER_SCHEMA_V1 ∧ rv.seq < o.seq ∧
       o.seq = openSeq ∧ SampledProofs.int? (SampledProofs.getD o.body "reserve") = some (rv.seq : Int) ∧
       openRoot o = .str (Flock.hexOf r)) ∧
     (e.kind = "end" ∧ e.session = s ∧ o.seq < e.seq ∧

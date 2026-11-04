@@ -19,13 +19,14 @@ client closed, and the roots it received (`releasedRootsOf`), which reads past t
 
 The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): infra's
 `windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
-`PyJson.canonical`), schema v1 or v2 and no v1 after a v2. A reserve records a window's request, its start and its expiry
-(`later`); an open names the window `{root}` (v1's `{commit, period}`), the challenger's host, the SHA-512 of its key's
-public key and in v2 its prover (`for`, else `by`), and after the ledger's first reserve binds its session's reserve
-(its seq), carries its request (`RESERVED`), is opened by its prover and inside its minutes; an end whether the
-session closed, the SHA-512 of each file it left, and in v2 the leaf its record was signed at, its commitment's root and
-how many hellos it refused; a lane's period is a `period-open` (its cap and circuit) and a `period-close` listing its
-windows with their outcomes. Each entry is signed under the challenger's key:
+`PyJson.canonical`), schema v1, v2 or v3 and no v1 after a later one. A reserve records a window's request, its start and
+its expiry (`later`); an open names the window `{root}` (v1's `{commit, period}`), the challenger's host, the SHA-512 of
+its key's public key and after v1 its prover (`for`, else `by`), and after the ledger's first reserve binds its
+session's reserve (its seq), carries its request (`RESERVED`), is opened by its prover and inside its minutes; an end
+whether the session closed, the SHA-512 of each file it left, and after v1 the leaf its record was signed at, its
+commitment's root and how many hellos it refused; a prover's period is a `period-open` (its cap and circuit) and a
+`period-close` listing its windows with their outcomes, each naming its prover (`prover`, which v2 names `lane`). Each
+entry is signed under the challenger's key:
 
     message = SHA-512([LEDGER_ROLE] ‖ I ‖ [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
@@ -34,8 +35,8 @@ SHA-512 is refused before any signature is read, so a ledger signed under its ow
 is infra's `_verify` (`verifyLedger`): each entry chained (`seq` from 0, `prev` the SHA-512 of the previous line) and
 signed at strictly increasing leaves (`u32(q)`, the signature's first four bytes), a root and a session opened once, a
 session ended once after its open with its record's leaf between the two and no entry's, and each period's close
-listing exactly its lane's windows, counted at their reserves and at most its cap, a reserve never opened with root
-null. The window's session must be opened under v2 and ended closed,
+listing exactly its prover's windows, counted at their reserves and at most its cap, a reserve never opened with root
+null. The window's session must be opened under v2 or later and ended closed,
 naming its record's leaf, commitment and refused hellos and sealing `SEALED_FILES`, so a ledger older than its end is
 refused. The session's files must be that session's (`sessionNamed`): its signed close names the ledger's session id,
 its record the open's host and was signed at that leaf over that commitment, and its release log and refused hellos are
@@ -94,12 +95,15 @@ def HELLOS_FILE : String := "hellos.jsonl"
 /-- The files of a session the verifier reads, each of which the ledger's end must seal. -/
 def SEALED_FILES : List String := [RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE]
 def LEDGER_SCHEMA_V1 : String := "verity/challenger-auditor/v1"
-def LEDGER_SCHEMA : String := "verity/challenger-auditor/v2"
+/-- v3 with a period entry's prover named `lane`. -/
+def LEDGER_SCHEMA_V2 : String := "verity/challenger-auditor/v2"
+def LEDGER_SCHEMA : String := "verity/challenger-auditor/v3"
 def LEDGER_ROLE : String := "verity/challenger-auditor-record/v1"
-/-- `LEDGER_TAGS`: each schema's entry tag. -/
+/-- `LEDGER_TAGS`: each schema's entry tag; v1 and v2 stay only while a recorded ledger holds entries of them. -/
 def ledgerTag? : String → Option String
   | "verity/challenger-auditor/v1" => some "verity/challenger-auditor/entry/v1"
   | "verity/challenger-auditor/v2" => some "verity/challenger-auditor/entry/v2"
+  | "verity/challenger-auditor/v3" => some "verity/challenger-auditor/entry/v3"
   | _ => none
 /-- An auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits. -/
 def MAX_LEDGER_LINE : Nat := 262144
@@ -115,11 +119,12 @@ def LEDGER_FORM : String :=
   "an auditor's ledger line is an entry {body, kind, prev, schema, seq, session, sig} as the auditor writes it " ++
   "(sorted keys, no whitespace, ASCII, no number but an integer): kind open, its body naming the window, the " ++
   "challenger's host, the pinned source commit (40 lowercase hex), the SHA-512 of the challenger key's public " ++
-  "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind reserve, its body the " ++
-  "window's request; kind end, its body whether its client closed the session (closed), the SHA-512 of each " ++
-  "file the session left (files) and in v2 the leaf its record was signed at, if any; kind period-open, its " ++
-  "period, lane and key_sha512; or kind period-close, its period, lane, windows ({complete, root, session} " ++
-  "each, root null for a reserve never opened) and whether all are complete"
+  "key (key_sha512) and after v1 its opener (by, and for when opened on a prover's behalf); kind reserve, " ++
+  "its body the window's request; kind end, its body whether its client closed the session (closed), the " ++
+  "SHA-512 of each file the session left (files) and after v1 the leaf its record was signed at, if " ++
+  "any; kind period-open, its period, prover (lane in v2) and key_sha512; or kind period-close, its " ++
+  "period, prover (lane in v2), windows ({complete, root, session} each, root null for a reserve never " ++
+  "opened) and whether all are complete"
 def END_FORM : String :=
   "a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how " ++
   "many hellos it refused (refused_hellos) and seals " ++ ", ".intercalate SEALED_FILES
@@ -271,7 +276,7 @@ private def isDigest (j : Json) (n : Nat := 128) : Bool :=
   | .str s => s.length == n && (Flock.unhex s).toOption.isSome
   | _ => false
 
-/-- `_LEDGER_NAME`: a period or a lane, 1 to 64 ASCII letters, digits, '.', '_', ':' and '-', the first a letter or
+/-- `_LEDGER_NAME`: a period or a prover, 1 to 64 ASCII letters, digits, '.', '_', ':' and '-', the first a letter or
 digit. -/
 private def isLedgerName (s : String) : Bool :=
   s.length ≤ 64 && (match s.toList with | c :: _ => !"._:-".contains c | [] => false) &&
@@ -387,7 +392,12 @@ private def isOutcome (w : Json) : Bool :=
     (match getD w "session" with | .str s => isSessionId s | _ => false) &&
     (match getD w "complete" with | .bool _ => true | _ => false)
 
-private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
+/-- `period_prover`: a period entry's prover, its body's `prover`, which v2 names `lane`. -/
+def periodProver (schema : String) (body : Json) : Json :=
+  getD body (if schema == LEDGER_SCHEMA_V2 then "lane" else "prover")
+
+private def isBodyOf (kind schema : String) (b : Json) : Bool :=
+  let v2 := schema != LEDGER_SCHEMA_V1
   match kind with
   | "open" =>
     (if v2 then isWindow (getD b "window") else isV1Window (getD b "window")) &&
@@ -399,9 +409,9 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
     (match getD b "closed" with | .bool _ => true | _ => false) &&
       (match getD b "files" with | .obj _ => (entries (getD b "files")).all (isDigest ·.2) | _ => false) &&
       (!v2 || getD b "record_leaf" == Json.null || (nat? (getD b "record_leaf")).isSome)
-  | "period-open" => nameAt (getD b "period") && nameAt (getD b "lane") && isDigest (getD b "key_sha512")
+  | "period-open" => nameAt (getD b "period") && nameAt (periodProver schema b) && isDigest (getD b "key_sha512")
   | "period-close" =>
-    nameAt (getD b "period") && nameAt (getD b "lane") &&
+    nameAt (getD b "period") && nameAt (periodProver schema b) &&
       (match getD b "windows" with | .arr ws => ws.all isOutcome | _ => false) &&
       (match getD b "complete" with | .bool _ => true | _ => false)
   | _ => false
@@ -421,7 +431,7 @@ def ledgerEntry? (line : Json) : Option LedgerEntry := do
     | "reserve", some s | "open", some s | "end", some s => if isSessionId s then some s else none
     | "period-open", none | "period-close", none => some ""
     | _, _ => none
-  guard (isBodyOf r.kind (r.schema == LEDGER_SCHEMA) r.body)
+  guard (isBodyOf r.kind r.schema r.body)
   pure ⟨e, text, r.schema, r.seq, r.prev, r.kind, session, r.sig, r.body⟩
 
 /-- `verify`'s at LMS over the key's parameters, false for a signature that doesn't decode. -/
@@ -438,12 +448,12 @@ structure Win where
   ended : Option LedgerEntry := none
   deriving Inhabited
 
-/-- A monitoring period `verifyLedger` read: its name and lane, its windows' sessions, counted at their reserves (or
+/-- A monitoring period `verifyLedger` read: its name and prover, its windows' sessions, counted at their reserves (or
 one-step opens), whether it closed, and the cap and circuit its open committed (`null` both for a period opened before
 they were required). -/
 structure MonitoringPeriod where
   name : String
-  lane : String
+  prover : String
   windows : Array String := #[]
   closed : Bool := false
   cap : Json
@@ -457,14 +467,15 @@ structure Reserve where
   period : Option String
   deriving Inhabited
 
-/-- `lane_of`: a reserve's or a v2 open's prover, its `for` when nonempty, else its `by`. -/
-def laneOf (body : Json) : String := if truthy (getD body "for") then strOf (getD body "for") else strOf (getD body "by")
+/-- `prover_of`: a reserve's or a later-than-v1 open's prover, its `for` when nonempty, else its `by`. -/
+def proverOf (body : Json) : String :=
+  if truthy (getD body "for") then strOf (getD body "for") else strOf (getD body "by")
 
-/-- `_verify`'s `join`: lane `lane`'s open period, if any, takes window `session` at entry `i`, refused past its cap;
-the periods after it, and the period's name. -/
-private def join (periods : Array MonitoringPeriod) (current : Array (String × String)) (i : Nat) (lane session : String) :
-    V (Array MonitoringPeriod × Option String) := do
-  let some (_, name) := current.find? (·.1 == lane) | return (periods, none)
+/-- `_verify`'s `join`: prover `prover`'s open period, if any, takes window `session` at entry `i`, refused past its
+cap; the periods after it, and the period's name. -/
+private def join (periods : Array MonitoringPeriod) (current : Array (String × String)) (i : Nat)
+    (prover session : String) : V (Array MonitoringPeriod × Option String) := do
+  let some (_, name) := current.find? (·.1 == prover) | return (periods, none)
   let some k := periods.findIdx? (·.name == name) | return (periods, none)
   let p := periods[k]!
   if let some cap := int? p.cap then
@@ -505,7 +516,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
   for (e, i) in es.zipIdx do
     unless !(v2 && e.schema == LEDGER_SCHEMA_V1) && e.seq == i && e.prev == prev do
       throw s!"entry {i}: not entry {i} of a {LEDGER_SCHEMA} ledger chained to its predecessor"
-    v2 := v2 || e.schema == LEDGER_SCHEMA
+    v2 := v2 || e.schema != LEDGER_SCHEMA_V1
     let q := leafOf e.sig
     unless verifies key (← ledgerMessage I e.entry) e.sig do
       throw s!"entry {i}: its signature doesn't verify under the challenger key"
@@ -513,22 +524,22 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
     let s := e.session
     match e.kind with
     | "reserve" =>
-      unless e.schema == LEDGER_SCHEMA && isReservedSession s && !reserves.any (·.session == s) &&
+      unless e.schema != LEDGER_SCHEMA_V1 && isReservedSession s && !reserves.any (·.session == s) &&
           !wins.any (·.opened.session == s) do
-        throw s!"entry {i}: a reserve is v2 and the first entry of its session {s}"
+        throw s!"entry {i}: a reserve is v2 or later and the first entry of its session {s}"
       unless isReserve e.body do
         throw s!"entry {i}: a reserve names its prover, its minutes, its start and its expiry (start + minutes)"
       twoStep := true
-      let (ps, period) ← join periods current i (laneOf e.body) s
+      let (ps, period) ← join periods current i (proverOf e.body) s
       periods := ps
       reserves := reserves.push { session := s, entry := e, period }
     | "open" =>
       let w := getD e.body "window"
-      let root := strOf (getD w (if e.schema == LEDGER_SCHEMA then "root" else "commit"))
+      let root := strOf (getD w (if e.schema == LEDGER_SCHEMA_V1 then "commit" else "root"))
       if wins.any (·.root == root) || wins.any (·.opened.session == s) then
         throw s!"entry {i}: a second open for root {root.take 16}… or session {s}"
       let b := e.body
-      if e.schema == LEDGER_SCHEMA && (field? b "reserve").isSome then
+      if e.schema != LEDGER_SCHEMA_V1 && (field? b "reserve").isSome then
         let some r := reserves.find? (·.session == s)
           | throw s!"entry {i}: an open for session {s} binds no reserve of it"
         unless int? (getD b "reserve") == some (Int.ofNat r.entry.seq) do
@@ -537,19 +548,19 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
         unless RESERVED.all (fun k => jeq (getD b k) (getD rb k)) do
           throw s!"entry {i}: session {s}'s open doesn't carry its reserve's request"
         let who := getD b "opened_by"
-        let lane := if let .str w := who then some w else none
-        let shown := (lane.map pyRepr).getD "no lane"
-        unless lane.any (fun w => w == strOf (getD rb "by") || field? rb "for" == some (Json.str w)) do
+        let prover := if let .str w := who then some w else none
+        let shown := (prover.map pyRepr).getD "no prover"
+        unless prover.any (fun w => w == strOf (getD rb "by") || field? rb "for" == some (Json.str w)) do
           throw s!"entry {i}: session {s} was opened by {shown}, not its reserve's prover"
         unless inReserve (getD b "started_utc") (strOf (getD rb "started_utc")) (strOf (getD rb "expires_utc")) do
           throw s!"entry {i}: session {s} was opened outside its reserve's minutes"
         if let some name := r.period then
           if periods.any (fun p => p.name == name && p.closed) then
             throw s!"entry {i}: session {s} was opened after its period {name} closed"
-      else if e.schema == LEDGER_SCHEMA && twoStep then
-        throw s!"entry {i}: a v2 open without a reserve after the ledger's first reserve"
-      else if e.schema == LEDGER_SCHEMA then
-        let (ps, _) ← join periods current i (laneOf b) s
+      else if e.schema != LEDGER_SCHEMA_V1 && twoStep then
+        throw s!"entry {i}: an open without a reserve after the ledger's first reserve"
+      else if e.schema != LEDGER_SCHEMA_V1 then
+        let (ps, _) ← join periods current i (proverOf b) s
         periods := ps
       wins := wins.push { root, opened := e, leaf := q }
     | "end" =>
@@ -558,7 +569,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
       let w := wins[k]!
       if w.ended.isSome then throw s!"entry {i}: an end for session {s}, which has no open or has ended"
       let r := getD e.body "record_leaf"
-      if e.schema == LEDGER_SCHEMA && !r.isNull then
+      if e.schema != LEDGER_SCHEMA_V1 && !r.isNull then
         let some r := nat? r | throw s!"entry {i}: record leaf {r.compress} isn't between its open's and its end's, once"
         unless w.leaf < r && r < q && !records.any (·.1 == r) do
           throw s!"entry {i}: record leaf {r} isn't between its open's and its end's, once"
@@ -566,23 +577,24 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
       wins := wins.modify k fun w => { w with ended := some e }
     | "period-open" | "period-close" =>
       let name := strOf (getD e.body "period")
-      let lane := strOf (getD e.body "lane")
-      unless e.schema == LEDGER_SCHEMA do throw s!"entry {i}: a {e.kind} is v2 and names its period and its lane"
+      let prover := strOf (periodProver e.schema e.body)
+      unless e.schema != LEDGER_SCHEMA_V1 do
+        throw s!"entry {i}: a {e.kind} is v2 or later and names its period and its prover"
       if e.kind == "period-open" then
-        if periods.any (·.name == name) || current.any (·.1 == lane) then
-          throw s!"entry {i}: period {name} is named twice, or lane {lane} has a period open"
+        if periods.any (·.name == name) || current.any (·.1 == prover) then
+          throw s!"entry {i}: period {name} is named twice, or prover {prover} has a period open"
         let cap := getD e.body "cap"
         let circuit := getD e.body "circuit"
         if (cap != Json.null || circuit != Json.null) && !(isCap cap && isCircuit circuit) then
           throw s!"entry {i}: period {name}'s cap is a positive integer and its circuit a SHA-512 in lowercase"
-        periods := periods.push { name, lane, cap, circuit }
-        current := current.push (lane, name)
+        periods := periods.push { name, prover, cap, circuit }
+        current := current.push (prover, name)
       else
         let some k := periods.findIdx? (·.name == name)
-          | throw s!"entry {i}: a period-close for {name}, which isn't lane {lane}'s open period"
+          | throw s!"entry {i}: a period-close for {name}, which isn't prover {prover}'s open period"
         let p := periods[k]!
-        if p.closed || p.lane != lane then
-          throw s!"entry {i}: a period-close for {name}, which isn't lane {lane}'s open period"
+        if p.closed || p.prover != prover then
+          throw s!"entry {i}: a period-close for {name}, which isn't prover {prover}'s open period"
         let outcomes := p.windows.map fun ses =>
           let w := wins.find? (·.opened.session == ses)
           let complete := match w.bind (·.ended) with
@@ -594,7 +606,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
         unless jeq (getD e.body "windows") (Json.arr outcomes) && getD e.body "complete" == Json.bool complete do
           throw s!"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes"
         periods := periods.modify k fun p => { p with closed := true }
-        current := current.filter (·.1 != lane)
+        current := current.filter (·.1 != prover)
     | kind => throw s!"entry {i}: kind {pyRepr kind}"
     leaves := leaves.push q
     prev := Flock.hexOf (Flock.Sha512.hash e.text.toUTF8)
@@ -642,9 +654,9 @@ structure Audited where
   circuit : Json
 
 /-- `audited_session` (module docstring): the one challenger session the auditor's ledger `ledger` (its lines, `null`
-when the verifier has none) opens under v2 for `window` (`{root}`) under the window's pinned key `key`, and ends closed,
-its end naming its record's leaf, its commitment and its refused hellos and sealing `SEALED_FILES`, in a period, if any,
-that committed its cap and circuit; and the body of the window's open (`_audited`). -/
+when the verifier has none) opens under v2 or later for `window` (`{root}`) under the window's pinned key `key`, and
+ends closed, its end naming its record's leaf, its commitment and its refused hellos and sealing `SEALED_FILES`, in a
+period, if any, that committed its cap and circuit; and the body of the window's open (`_audited`). -/
 def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Json) := do
   unless isWindow window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
   let (wins, periods) ← checked ledger key
@@ -652,7 +664,7 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
   let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
   let o := w.opened
   let s := o.session
-  unless o.schema == LEDGER_SCHEMA do
+  unless o.schema != LEDGER_SCHEMA_V1 do
     throw s!"the auditor's ledger opens this window's session {s} under {o.schema}, which names no prover and seals no refused hellos"
   let some e := w.ended
     | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
@@ -668,7 +680,7 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
   if let some p := p then
     if p.cap == Json.null || p.circuit == Json.null then
       throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
-  return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
+  return ({ session := s, host := strOf (getD o.body "host"), prover := proverOf o.body, files, recordLeaf,
             commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
             period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
             circuit := (p.map (·.circuit)).getD Json.null }, o.body)
@@ -735,7 +747,7 @@ is that circuit. One hash over the descriptor, never a walk over the circuit it 
 def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteArray) : Option String :=
   match period with
   | none => some ("the auditor's ledger holds the window's session in no period, so it counts toward none: open the " ++
-      "lane's period (period-open --cap N --circuit SHA512) before reserving the window")
+      "prover's period (period-open --cap N --circuit SHA512) before reserving the window")
   | some p =>
     if !isCircuit circuit then
       some s!"period {p} commits no circuit, so no window counts toward it: open a period whose --circuit is the declared circuit's SHA-512"

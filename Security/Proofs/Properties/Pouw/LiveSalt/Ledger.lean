@@ -7,16 +7,16 @@ import Std.Tactic.Do
 
 `verifyLedger` folds the ledger's entries into its windows, one per `open`. `LedgerInv` is what the fold has established
 once it has read a prefix of the entries: each window is an `open` of the prefix, named by its open's root; no two
-windows share a root or a session; a window's `end` is in the prefix, in its session and after its open, and a v2 `end`
-that records a leaf records one inside the window; every `open` and every `end` has its window; and a `reserve` is v2
-and comes before every `open` of its session. Each kind of entry keeps it (`inv_open`, `inv_end`, `inv_keep`), so it
-holds of the whole ledger (`verifyLedger_inv`).
+windows share a root or a session; a window's `end` is in the prefix, in its session and after its open, and an `end`
+after v1 that records a leaf records one inside the window; every `open` and every `end` has its window; and a
+`reserve` is v2 or later and comes before every `open` of its session. Each kind of entry keeps it (`inv_open`,
+`inv_end`, `inv_keep`), so it holds of the whole ledger (`verifyLedger_inv`).
 
 `checked` parses the ledger's lines into the entries `LiveSalt.entries` reads (`checked_ok`); `auditedOpen` and
-`pinnedSession` take the window whose root the caller names, closed by its v2 `end` (`auditedOpen_ok`,
-`pinnedSession_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end
-(`ledgerShows_of`). `sessionNamed` returns the commitment whose root's hex the ledger's `end` recorded
-(`sessionNamed_root`).
+`pinnedSession` take the window whose root the caller names, opened under v2 or later and closed by its `end`
+(`auditedOpen_ok`, `pinnedSession_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open
+on `R` and its end (`ledgerShows_of`). `sessionNamed` returns the commitment whose root's hex the ledger's `end`
+recorded (`sessionNamed_root`).
 
 The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
 it back at an `.ok` result.
@@ -67,7 +67,7 @@ theorem forIn_array_zipIdx_ok {α σ ε : Type} (xs : Array α) (init : σ) (f :
 /-- What `verifyLedger` has established once it has read the entries `pre`, of its windows `wins` and its flag `v2`. -/
 structure LedgerInv (pre : List LedgerEntry) (wins : Array Win) (v2 : Bool) : Prop where
   seq : ∀ x ∈ pre, x.seq < pre.length
-  v2 : ∀ x ∈ pre, x.schema = LEDGER_SCHEMA → v2 = true
+  v2 : ∀ x ∈ pre, x.schema ≠ LEDGER_SCHEMA_V1 → v2 = true
   win : ∀ i (h : i < wins.size), wins[i].opened ∈ pre ∧ wins[i].opened.kind = "open" ∧
     wins[i].root = strOf (openRoot wins[i].opened) ∧ wins[i].leaf = leafOf wins[i].opened.sig
   opens : ∀ o ∈ pre, o.kind = "open" → ∃ i, ∃ h : i < wins.size, wins[i].opened = o
@@ -75,13 +75,13 @@ structure LedgerInv (pre : List LedgerEntry) (wins : Array Win) (v2 : Bool) : Pr
     wins[i].root ≠ wins[j].root ∧ wins[i].opened.session ≠ wins[j].opened.session
   ended : ∀ i (h : i < wins.size) e, wins[i].ended = some e → e ∈ pre ∧ e.kind = "end" ∧
     e.session = wins[i].opened.session ∧ wins[i].opened.seq < e.seq ∧
-    (wins[i].opened.schema = LEDGER_SCHEMA → e.schema ≠ LEDGER_SCHEMA_V1) ∧
-    (e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
+    (wins[i].opened.schema ≠ LEDGER_SCHEMA_V1 → e.schema ≠ LEDGER_SCHEMA_V1) ∧
+    (e.schema ≠ LEDGER_SCHEMA_V1 → (SampledProofs.getD e.body "record_leaf").isNull = false →
       ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ wins[i].leaf < r ∧
         r < leafOf e.sig)
   ends : ∀ e ∈ pre, e.kind = "end" → ∃ i, ∃ h : i < wins.size, wins[i].opened.session = e.session ∧
     wins[i].ended = some e
-  reserves : ∀ rv ∈ pre, rv.kind = "reserve" → rv.schema = LEDGER_SCHEMA ∧
+  reserves : ∀ rv ∈ pre, rv.kind = "reserve" → rv.schema ≠ LEDGER_SCHEMA_V1 ∧
     ∀ o ∈ pre, o.kind = "open" → o.session = rv.session → rv.seq < o.seq
 
 /-- A triple whose postcondition is `Q` gives `Q` of an `.ok` result. -/
@@ -106,8 +106,8 @@ theorem wp_ite {ε α : Type} {c : Prop} [Decidable c] {x y : Except ε α} {Q :
 
 theorem ledgerMessage_spec (I : ByteArray) (m : Json) : ⦃⌜True⌝⦄ ledgerMessage I m ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-theorem join_spec (ps : Array MonitoringPeriod) (cur : Array (String × String)) (i : Nat) (lane s : String) :
-    ⦃⌜True⌝⦄ join ps cur i lane s ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+theorem join_spec (ps : Array MonitoringPeriod) (cur : Array (String × String)) (i : Nat) (prover s : String) :
+    ⦃⌜True⌝⦄ join ps cur i prover s ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem inv_nil : LedgerInv [] #[] false where
   seq := by simp
@@ -130,10 +130,10 @@ theorem chain {v2 : Bool} {e : LedgerEntry} {n : Nat} {prev : String}
   · exact h1
 
 theorem reserve_facts {e : LedgerEntry} {wins : Array Win} {reserves : Array Reserve}
-    (h : ((e.schema == LEDGER_SCHEMA && isReservedSession e.session && !reserves.any fun x => x.session == e.session) &&
+    (h : ((e.schema != LEDGER_SCHEMA_V1 && isReservedSession e.session && !reserves.any fun x => x.session == e.session) &&
       !wins.any fun x => x.opened.session == e.session) = true) :
-    e.schema = LEDGER_SCHEMA ∧ ∀ i (hi : i < wins.size), wins[i].opened.session ≠ e.session := by
-  simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq] at h
+    e.schema ≠ LEDGER_SCHEMA_V1 ∧ ∀ i (hi : i < wins.size), wins[i].opened.session ≠ e.session := by
+  simp only [Bool.and_eq_true, Bool.not_eq_true', bne_iff_ne] at h
   obtain ⟨⟨⟨h1, -⟩, -⟩, h2⟩ := h
   refine ⟨h1, fun i hi he => ?_⟩
   have : (wins.any fun x => x.opened.session == e.session) = true := Array.any_eq_true.2 ⟨i, hi, by simp [he]⟩
@@ -150,12 +150,12 @@ theorem seq_snoc {pre : List LedgerEntry} {e : LedgerEntry} (hI : ∀ x ∈ pre,
   · omega
 
 theorem v2_snoc {pre : List LedgerEntry} {e : LedgerEntry} {v2 : Bool}
-    (hI : ∀ x ∈ pre, x.schema = LEDGER_SCHEMA → v2 = true) :
-    ∀ x ∈ pre ++ [e], x.schema = LEDGER_SCHEMA → (v2 || e.schema == LEDGER_SCHEMA) = true := by
+    (hI : ∀ x ∈ pre, x.schema ≠ LEDGER_SCHEMA_V1 → v2 = true) :
+    ∀ x ∈ pre ++ [e], x.schema ≠ LEDGER_SCHEMA_V1 → (v2 || e.schema != LEDGER_SCHEMA_V1) = true := by
   intro x hx hs
   rcases mem_snoc.1 hx with hx | rfl
   · simp [hI x hx hs]
-  · simp [hs]
+  · simp [bne_iff_ne, hs]
 
 theorem kind_ne {e : LedgerEntry} {k k' : String} (h : e.kind = k) (hne : k ≠ k') : e.kind ≠ k' :=
   fun h' => hne (h.symm.trans h')
@@ -167,8 +167,9 @@ theorem not_reserve {e : LedgerEntry} {P : Prop} (h : e.kind ≠ "reserve") : e.
 theorem inv_keep {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : LedgerEntry}
     (hI : LedgerInv pre wins v2) (hseq : e.seq = pre.length)
     (hko : e.kind ≠ "open") (hke : e.kind ≠ "end")
-    (hkr : e.kind = "reserve" → e.schema = LEDGER_SCHEMA ∧ ∀ i (h : i < wins.size), wins[i].opened.session ≠ e.session) :
-    LedgerInv (pre ++ [e]) wins (v2 || e.schema == LEDGER_SCHEMA) where
+    (hkr : e.kind = "reserve" →
+      e.schema ≠ LEDGER_SCHEMA_V1 ∧ ∀ i (h : i < wins.size), wins[i].opened.session ≠ e.session) :
+    LedgerInv (pre ++ [e]) wins (v2 || e.schema != LEDGER_SCHEMA_V1) where
   seq := seq_snoc hI.seq hseq
   v2 := v2_snoc hI.v2
   win := fun i h => by
@@ -208,7 +209,7 @@ theorem inv_open {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Le
     (hI : LedgerInv pre wins v2) (hseq : e.seq = pre.length) (hk : e.kind = "open")
     (hn : ¬(((wins.any fun x => x.root == strOf (openRoot e)) || wins.any fun x => x.opened.session == e.session) = true)) :
     LedgerInv (pre ++ [e]) (wins.push { root := strOf (openRoot e), opened := e, leaf := leafOf e.sig })
-      (v2 || e.schema == LEDGER_SCHEMA) := by
+      (v2 || e.schema != LEDGER_SCHEMA_V1) := by
   simp only [Bool.or_eq_true, not_or, Array.any_eq_true, not_exists, beq_iff_eq] at hn
   obtain ⟨hnr, hns⟩ := hn
   have last : ∀ i (h : i < (wins.push { root := strOf (openRoot e), opened := e, leaf := leafOf e.sig }).size),
@@ -259,17 +260,17 @@ theorem inv_open {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Le
 theorem end_rec_some {e : LedgerEntry} {w : Win} {r : Nat} {records : Array (Nat × Nat)}
     (hn : SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r)
     (hb : (decide (w.leaf < r) && decide (r < leafOf e.sig) && !records.any fun x => x.1 == r) = true) :
-    e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
+    e.schema ≠ LEDGER_SCHEMA_V1 → (SampledProofs.getD e.body "record_leaf").isNull = false →
       ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ w.leaf < r ∧ r < leafOf e.sig := by
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hb
   exact fun _ _ => ⟨r, hn, hb.1.1, hb.1.2⟩
 
 theorem end_rec_none {e : LedgerEntry} {w : Win}
-    (h : ¬((e.schema == LEDGER_SCHEMA && !(SampledProofs.getD e.body "record_leaf").isNull) = true)) :
-    e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
+    (h : ¬((e.schema != LEDGER_SCHEMA_V1 && !(SampledProofs.getD e.body "record_leaf").isNull) = true)) :
+    e.schema ≠ LEDGER_SCHEMA_V1 → (SampledProofs.getD e.body "record_leaf").isNull = false →
       ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ w.leaf < r ∧ r < leafOf e.sig := by
   intro hs hn
-  exact absurd (by simp [hs, hn]) h
+  exact absurd (by simp [bne_iff_ne, hs, hn]) h
 
 /-- An `end` of an open window that hasn't ended closes it. -/
 theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : LedgerEntry} {k : Nat}
@@ -277,10 +278,10 @@ theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Led
     (hk : e.kind = "end")
     (hf : Array.findIdx? (fun x => x.opened.session == e.session) wins = some k)
     (hn : ¬(wins[k]!.ended.isSome = true))
-    (hr : e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
+    (hr : e.schema ≠ LEDGER_SCHEMA_V1 → (SampledProofs.getD e.body "record_leaf").isNull = false →
       ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ wins[k]!.leaf < r ∧
         r < leafOf e.sig) :
-    LedgerInv (pre ++ [e]) (wins.modify k fun w => { w with ended := some e }) (v2 || e.schema == LEDGER_SCHEMA) := by
+    LedgerInv (pre ++ [e]) (wins.modify k fun w => { w with ended := some e }) (v2 || e.schema != LEDGER_SCHEMA_V1) := by
   obtain ⟨hk', hks, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hf
   rw [getElem!_pos wins k hk'] at hn hr
   simp only [beq_iff_eq] at hks
@@ -388,48 +389,6 @@ theorem checked_spec (ledger : Json) (key : ChallengerKey) :
 theorem auditedOpen_spec (ledger window : Json) (key : ChallengerKey) :
     ⦃⌜True⌝⦄ auditedOpen ledger window key ⦃⇓? a => ⌜auditedOpen ledger window key = .ok a⌝⦄ := ok_spec _
 
-theorem of_triple_opt {α : Type} {x : Option α} {Q : α → Prop} {r : α}
-    (hT : ⦃⌜True⌝⦄ x ⦃⇓? a => ⌜Q a⌝⦄) (h : x = some r) : Q r := by
-  subst h; exact hT True.intro
-
-theorem none_spec {α : Type} (Q : PostCond α (.except PUnit .pure)) : ⦃Q.2.1 ⟨⟩⦄ (none : Option α) ⦃Q⦄ := fun h => h
-
-theorem failure_spec {α : Type} (Q : PostCond α (.except PUnit .pure)) : ⦃Q.2.1 ⟨⟩⦄ (failure : Option α) ⦃Q⦄ :=
-  fun h => h
-
-theorem some_pure_spec {α : Type} (a : α) (Q : PostCond α (.except PUnit .pure)) :
-    ⦃Q.1 a⦄ (some a : Option α) ⦃Q⦄ := fun h => h
-
-theorem some_spec {α : Type} (x : Option α) : ⦃⌜True⌝⦄ x ⦃⇓? a => ⌜x = some a⌝⦄ := by
-  cases x
-  · exact fun _ => True.intro
-  · exact fun _ => rfl
-
-theorem toOption_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x.toOption ⦃⇓? a => ⌜x.toOption = some a⌝⦄ :=
-  some_spec _
-
-theorem ledgerTag_spec (s : String) : ⦃⌜True⌝⦄ ledgerTag? s ⦃⇓? a => ⌜ledgerTag? s = some a⌝⦄ := some_spec _
-
-theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ SampledProofs.nat? j ⦃⇓? a => ⌜SampledProofs.nat? j = some a⌝⦄ := some_spec _
-
-theorem ledgerTag_some {s t : String} (h : ledgerTag? s = some t) : s = LEDGER_SCHEMA_V1 ∨ s = LEDGER_SCHEMA := by
-  unfold ledgerTag? at h
-  split at h
-  · exact .inl rfl
-  · exact .inr rfl
-  · cases h
-
--- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
-set_option maxHeartbeats 1000000 in
-/-- A parsed entry is v1 or v2. -/
-theorem ledgerEntry_schema {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
-    e.schema = LEDGER_SCHEMA_V1 ∨ e.schema = LEDGER_SCHEMA := by
-  refine of_triple_opt (Q := fun e => e.schema = LEDGER_SCHEMA_V1 ∨ e.schema = LEDGER_SCHEMA) ?_ h
-  clear h
-  mvcgen [ledgerEntry?, guard, -Spec.throw_Option, none_spec, failure_spec, toOption_spec, ledgerTag_spec, nat_spec,
-    some_pure_spec]
-  all_goals exact ledgerTag_some ‹_›
-
 theorem step_push {b : Array LedgerEntry} {pre : List (Json × Nat)} {cur : Json × Nat} {e : LedgerEntry}
     (h : b.toList = (pre.map Prod.fst).filterMap ledgerEntry?) (he : ledgerEntry? cur.1 = some e) :
     (b.push e).toList = ((pre ++ [cur]).map Prod.fst).filterMap ledgerEntry? := by
@@ -465,19 +424,19 @@ theorem pinnedSession_ok {ledger window : Json} {key : ChallengerKey} {pins main
 
 -- `mvcgen` splits `auditedOpen` into one goal per check it makes of the window and its `end`
 set_option maxHeartbeats 4000000 in
-/-- `auditedOpen` takes the v2 window named by the caller's root, closed by its `end`. -/
+/-- `auditedOpen` takes the window opened under v2 or later and named by the caller's root, closed by its `end`. -/
 theorem auditedOpen_ok {ledger window : Json} {key : ChallengerKey} {r : Audited × Json}
     (h : auditedOpen ledger window key = .ok r) :
     ∃ (wp : Array Win × Array MonitoringPeriod) (win : Win) (e : LedgerEntry), checked ledger key = .ok wp ∧
       wp.1.find? (fun w => w.root == strOf (SampledProofs.getD window "root")) = some win ∧
-      (win.opened.schema == LEDGER_SCHEMA) = true ∧ win.ended = some e ∧
+      (win.opened.schema != LEDGER_SCHEMA_V1) = true ∧ win.ended = some e ∧
       jsonTrue (SampledProofs.getD e.body "closed") = true ∧
       SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r.1.recordLeaf ∧
       r.1.session = win.opened.session ∧ r.1.commitment = strOf (SampledProofs.getD e.body "commitment") := by
   refine of_triple (Q := fun r => ∃ (wp : Array Win × Array MonitoringPeriod) (win : Win) (e : LedgerEntry),
       checked ledger key = .ok wp ∧
       wp.1.find? (fun w => w.root == strOf (SampledProofs.getD window "root")) = some win ∧
-      (win.opened.schema == LEDGER_SCHEMA) = true ∧ win.ended = some e ∧
+      (win.opened.schema != LEDGER_SCHEMA_V1) = true ∧ win.ended = some e ∧
       jsonTrue (SampledProofs.getD e.body "closed") = true ∧
       SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r.1.recordLeaf ∧
       r.1.session = win.opened.session ∧ r.1.commitment = strOf (SampledProofs.getD e.body "commitment")) ?_ h
@@ -543,7 +502,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
     have := Array.find?_some hfw
     rw [getD_root] at this
     exact beq_iff_eq.1 this
-  have hsch' : win.opened.schema = LEDGER_SCHEMA := beq_iff_eq.1 hsch
+  have hsch' : win.opened.schema ≠ LEDGER_SCHEMA_V1 := bne_iff_ne.1 hsch
   simp only [Prod.mk.injEq] at hfind
   obtain ⟨hfr, hfo, hfe⟩ := hfind
   obtain ⟨rvE, rvS, rvK⟩ := find_mem hfr
@@ -567,12 +526,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
   obtain ⟨-, -, -, hlt, hv1, hrec⟩ := hI.ended iw hiw en (by rw [hwin]; exact hen)
   obtain ⟨-, -, hwr, hwl⟩ := hI.win iw hiw
   rw [hwin] at hlt hv1 hrec hwr hwl
-  obtain ⟨line, -, hline⟩ := List.mem_filterMap.1 enE
-  have hes2 : en.schema = LEDGER_SCHEMA := by
-    rcases ledgerEntry_schema hline with h1 | h1
-    · exact absurd h1 (hv1 hsch')
-    · exact h1
-  obtain ⟨r', hr', hl1, hl2⟩ := hrec hes2 (nat_nonnull hrl)
+  obtain ⟨r', hr', hl1, hl2⟩ := hrec (hv1 hsch') (nat_nonnull hrl)
   obtain rfl : r' = a.recordLeaf := Option.some.inj (hr'.symm.trans hrl)
   have hor : openRoot win.opened = .str (Flock.hexOf R) := strOf_eq (hwr.symm.trans hroot) hR
   obtain ⟨rvSch, rvLt⟩ := hI.reserves rv (mem rvE) rvK

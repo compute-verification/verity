@@ -100,7 +100,7 @@ def checked(host, ledger=None):
 def test_a_lanes_period_holds_exactly_its_windows_between_open_and_close_each_with_its_outcome(host, signer):
     before = window(host, signer, "01" * 64, "hash", token="0001")["session"]
     opened = ok(ssh(host, signer, f"period-open --name hash-p1 --cap 8 --circuit {CIRCUIT}", "hash"))
-    assert opened["kind"] == "period-open" and opened["body"]["lane"] == "hash" and opened["body"]["by"] == "hash"
+    assert opened["kind"] == "period-open" and opened["body"]["prover"] == "hash" and opened["body"]["by"] == "hash"
     done = window(host, signer, "02" * 64, "hash", token="0002")["session"]
     other = window(host, signer, "03" * 64, "vllm", token="0003")["session"]
     short = window(host, signer, "04" * 64, "hash", token="0004")["session"]
@@ -186,7 +186,7 @@ def test_vy_admins_window_for_a_lane_counts_in_that_lanes_period_and_no_lane_key
     end(host, signer, dev["session"], True)
     closed = ok(admin(host, signer, "period-close --name k1"))
     assert closed["body"]["windows"] == [{"root": "01" * 64, "session": dev["session"], "complete": True}]
-    assert closed["body"]["complete"] is True and closed["body"]["lane"] == "kernels"
+    assert closed["body"]["complete"] is True and closed["body"]["prover"] == "kernels"
     assert checked(host)["k1"]["windows"] == [dev["session"]]
 
 
@@ -209,9 +209,9 @@ def forge(host, signer, kind, session, body):
 
 
 LISTS = "doesn't list exactly its windows and their outcomes"
-WHY = {"drops a window": LISTS, "claims complete": LISTS, "lists another lane's": LISTS, "empty but complete": LISTS,
+WHY = {"drops a window": LISTS, "claims complete": LISTS, "lists another prover's": LISTS, "empty but complete": LISTS,
        "omits an expired reserve": LISTS, "gives an unopened reserve a root": LISTS,
-       "overlaps": "lane hash has a period open", "name reused": "p1 is named twice", "closes nothing": "for p9, which isn't",
+       "overlaps": "prover hash has a period open", "name reused": "p1 is named twice", "closes nothing": "for p9, which isn't",
        "has a session": "a period's none"}
 
 
@@ -222,12 +222,12 @@ def test_the_check_refuses_a_signed_period_entry_the_gate_would_not_write(host, 
     o = window(host, signer, "02" * 64, "vllm", token="0002")["session"]
     end(host, signer, s, False)
     w = {"root": "01" * 64, "session": s, "complete": False}
-    close = {"period": "p1", "lane": "hash", "by": "hash"}
+    close = {"period": "p1", "prover": "hash", "by": "hash"}
     if case == "drops a window":
         forge(host, signer, "period-close", None, {**close, "windows": [], "complete": False})
     elif case == "claims complete":
         forge(host, signer, "period-close", None, {**close, "windows": [{**w, "complete": True}], "complete": True})
-    elif case == "lists another lane's":
+    elif case == "lists another prover's":
         forge(host, signer, "period-close", None,
               {**close, "windows": [w, {"root": "02" * 64, "session": o, "complete": False}], "complete": False})
     elif case in ("omits an expired reserve", "gives an unopened reserve a root"):
@@ -239,9 +239,9 @@ def test_the_check_refuses_a_signed_period_entry_the_gate_would_not_write(host, 
         ok(ssh(host, signer, f"period-open --name p2 --cap 8 --circuit {CIRCUIT}", "hash"))
         forge(host, signer, "period-close", None, {**close, "period": "p2", "windows": [], "complete": True})
     elif case == "overlaps":
-        forge(host, signer, "period-open", None, {"period": "p2", "lane": "hash", "by": "hash"})
+        forge(host, signer, "period-open", None, {"period": "p2", "prover": "hash", "by": "hash"})
     elif case == "name reused":
-        forge(host, signer, "period-open", None, {"period": "p1", "lane": "vllm", "by": "vllm"})
+        forge(host, signer, "period-open", None, {"period": "p1", "prover": "vllm", "by": "vllm"})
     elif case == "closes nothing":
         forge(host, signer, "period-close", None, {**close, "period": "p9", "windows": [], "complete": False})
     elif case == "has a session":
@@ -469,7 +469,7 @@ def test_a_period_open_without_a_valid_cap_and_circuit_is_refused(host, signer, 
 ])
 def test_the_check_reads_a_periods_cap_and_keeps_one_step_opens_before_the_first_reserve_verifiable(host, signer, body,
                                                                                                     why):
-    forge(host, signer, "period-open", None, {"period": "p1", "lane": "hash", "by": "hash", **body})
+    forge(host, signer, "period-open", None, {"period": "p1", "prover": "hash", "by": "hash", **body})
     for i in (1, 2):
         forge(host, signer, "open", f"s20261020T093000Z-000{i}", {"window": {"root": f"0{i}" * 64}, "by": "hash"})
     if why is None:
@@ -539,7 +539,7 @@ def test_the_check_refuses_a_reserve_open_or_end_out_of_order(host, signer, case
 def test_the_check_refuses_an_open_after_its_periods_close_and_a_reserve_past_the_cap(host, signer):
     ok(ssh(host, signer, f"period-open --name p1 --cap 1 --circuit {CIRCUIT}", "hash"))
     forge(host, signer, "reserve", S1, reserve_body())
-    forge(host, signer, "period-close", None, {"period": "p1", "lane": "hash", "by": "hash",
+    forge(host, signer, "period-close", None, {"period": "p1", "prover": "hash", "by": "hash",
                                                "windows": [{"root": None, "session": S1, "complete": False}],
                                                "complete": False})
     checked(host)

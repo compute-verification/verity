@@ -418,7 +418,7 @@ def _host_key():
 
 class _Host:
     """The challenger on its auditor host over loopback, as the gate runs a window's session (`auditor.py`): the
-    lane's period opened and the session reserved and opened on `root` in the auditor's signed ledger (`ledger`, v2), a
+    prover's period opened and the session reserved and opened on `root` in the auditor's signed ledger (`ledger`), a
     live window's coins (`coins.layout`, or `rounds` rounds at `epoch`) with its record signed and written to
     `directory` (`remote.open_session`) beside an empty hellos.jsonl, serving one session (`remote.serve`, its hello
     carrying `secret`) on its own clock, and once it has ended (`ended`) its end entry sealing out/'s files.  The
@@ -445,7 +445,7 @@ class _Host:
         lay, pin = CO.layout(epoch, rounds), hashlib.sha512(self.public).hexdigest()
         req = {"by": LANE, "peer": "vy-nebius-2", **lay, "minutes": 5}
         if parent is None:
-            self.append("period-open", None, {"period": PERIOD, "lane": LANE, "by": LANE, "cap": 2, "circuit": CIRCUIT,
+            self.append("period-open", None, {"period": PERIOD, "prover": LANE, "by": LANE, "cap": 2, "circuit": CIRCUIT,
                                               "pinned": PIN, "key_sha512": pin, "opened_utc": "2026-10-20T11:59:00Z"})
         reserve = self.append("reserve", sid, {**req, "pinned": PIN, "key_sha512": pin, "host": f"{host}.{sid}",
                                                "started_utc": "2026-10-20T12:00:00Z", "expires_utc": "2026-10-20T12:05:00Z",

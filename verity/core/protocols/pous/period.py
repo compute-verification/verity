@@ -406,7 +406,7 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
     return mc.LmsSigner(key, state)
 
 
-LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
+LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2", "verity/challenger-auditor/v3")
 """The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
 _ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]
@@ -433,10 +433,15 @@ def _ledger(lines: Sequence[Any]) -> list[dict] | None:
     return entries if entries and all(e is not None for e in entries) else None
 
 
+def _prover(e: dict) -> Any:
+    """A period entry's prover (`challenger.period_prover`): its body's `prover`, which v2 names `lane`."""
+    return e["body"].get("lane" if e["schema"] == LEDGER_SCHEMAS[1] else "prover")
+
+
 def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
     """The indices of a ledger's `entries` its window cites: every entry of `sessions` and the open and close of each
-    period holding one of them (a period holds the sessions whose reserve, or one-step v2 open, falls in its lane between
-    its open and its close, as `challenger.verify_periods` counts them). Raises `ValueError` naming a session of
+    period holding one of them (a period holds the sessions whose reserve, or one-step open after v1, names its prover
+    between its open and its close, as `challenger.verify_periods` counts them). Raises `ValueError` naming a session of
     `sessions` the ledger doesn't open, or when `sessions` is empty: a reader of what's kept would find no entry of it."""
     if not sessions:
         raise ValueError("no challenger session is cited beside the auditor's ledger, so none of its entries would be kept")
@@ -446,13 +451,13 @@ def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
     for i, e in enumerate(entries):
         b, kind = e["body"], e["kind"]
         if kind == "period-open":
-            current[b.get("lane")] = i
+            current[_prover(e)] = i
         elif kind == "period-close":
-            if current.pop(b.get("lane"), None) in held:
+            if current.pop(_prover(e), None) in held:
                 keep.add(i)
         elif e["session"] in sessions:
             keep.add(i)
-            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
+            if kind == "reserve" or (kind == "open" and e["schema"] != LEDGER_SCHEMAS[0] and "reserve" not in b):
                 if (o := current.get(b.get("for") or b.get("by"))) is not None:
                     keep.add(o)
                     held.add(o)

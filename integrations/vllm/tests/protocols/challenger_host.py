@@ -147,7 +147,7 @@ class Gate:
     (two-step after its reserve, else one-step) and returns the gate's open answer (``commitment`` null, as before
     serve.py has signed its record; a withheld session's says ``withheld`` and ``signed``), `take` the next leaf
     for a session's record, `end` a session's end entry over its ``out/`` as the gate's ``run`` computes it,
-    `period_open` and `period_close` a lane's period entries (the close listing its windows' outcomes as the gate
+    `period_open` and `period_close` a prover's period entries (the close listing its windows' outcomes as the gate
     counts them), `model_register` and `model_key` the model registry's verbs (`registry`), and `lines` is the ledger as
     infra publishes it. Unlike the gate it appends whatever it is asked, so a test writes the ledgers the verifier must
     refuse, except that a period-open naming a model or a weights' root signs what the registry resolves it to, and is
@@ -167,8 +167,8 @@ class Gate:
     def pin(self) -> str:
         return hashlib.sha512(self.key.public).hexdigest()
 
-    def _join(self, lane: str, session: str) -> None:
-        if (name := self._current.get(lane)) is not None:
+    def _join(self, prover: str, session: str) -> None:
+        if (name := self._current.get(prover)) is not None:
             self._periods[name]["windows"].append(session)
 
     def reserve(self, session: str, families, *, scheme: str = Wd.LIVE_SCHEME, epoch: int = 0, by: str = "vllm",
@@ -200,7 +200,7 @@ class Gate:
         except models().Refused as e:
             return {"refused": str(e)}
 
-    def period_open(self, name: str, lane: str = "vllm", *, by: str = "vllm", cap: int | None = None,
+    def period_open(self, name: str, prover: str = "vllm", *, by: str = "vllm", cap: int | None = None,
                     circuit: str | None = None, draw_k: int | None = None, rows: int | None = None,
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
@@ -211,13 +211,13 @@ class Gate:
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused
         (`models.Refused`) for a root it has no entry of."""
         signed = self.registry.opened(circuit, model, weights_root)
-        body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
+        body = {"period": name, "prover": prover, "by": by, **({"cap": cap} if cap is not None else {}),
                 **({"circuit": circuit} if circuit is not None else {}),
                 **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
                 **({CR.ROWS_FIELD: rows} if rows is not None else {}),
                 **({CR.LENGTH_FIELD: length} if length is not None else {}), **signed, "pinned": PINNED,
                 "key_sha512": self.pin, "opened_utc": "2026-10-20T11:00:00Z", **override}
-        self._periods[name], self._current[lane] = {"lane": lane, "windows": []}, name
+        self._periods[name], self._current[prover] = {"prover": prover, "windows": []}, name
         return self.append("period-open", None, body)
 
     def period_close(self, name: str, **override) -> dict:
@@ -226,11 +226,11 @@ class Gate:
         p = self._periods[name]
         windows = [{"root": self._opens[s]["window"]["root"] if s in self._opens else None, "session": s,
                     "complete": self._complete.get(s, False)} for s in p["windows"]]
-        body = {"period": name, "lane": p["lane"], "by": "vllm", "windows": windows,
+        body = {"period": name, "prover": p["prover"], "by": "vllm", "windows": windows,
                 "complete": bool(windows) and all(w["complete"] for w in windows), "closed_utc": "2026-10-20T12:00:00Z",
                 **override}
-        if self._current.get(p["lane"]) == name:
-            del self._current[p["lane"]]
+        if self._current.get(p["prover"]) == name:
+            del self._current[p["prover"]]
         return self.append("period-close", None, body)
 
     def take(self) -> int:
@@ -345,7 +345,7 @@ class Ledger:
     def period_open(self, name: str, *, circuit: str, cap: int = 1, draw_k: int | None = None, rows: int | None = None,
                     model: str | None = None, weights_root: str | None = None, circuit_files: dict | None = None,
                     length: dict | None = None, leaf: int | None = None) -> None:
-        """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
+        """Prover vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
         with ``draw_k`` (`credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`), ``model`` (the gate's
         ``--model``: `registry`'s registration's weights' root,
         signed with its ``model``) or ``weights_root`` (``--weights-root``, Refused unless a registration's),
@@ -353,7 +353,7 @@ class Ledger:
         `credit.LENGTH_FIELD`) when given."""
         signed = self.registry.opened(circuit, model, weights_root)
         self._period, self._windows = name, []
-        self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
+        self.append("period-open", None, {"period": name, "prover": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
                                           **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
                                           **({CR.ROWS_FIELD: rows} if rows is not None else {}), **signed,
                                           **({"circuit_files": circuit_files} if circuit_files is not None else {}),
@@ -363,7 +363,7 @@ class Ledger:
     def period_close(self, name: str, leaf: int | None = None) -> None:
         """The close of period `name`, listing its windows as core's check counts them."""
         ws = [{"root": self._roots.get(s), "session": s, "complete": self._complete.get(s, False)} for s in self._windows]
-        self.append("period-close", None, {"period": name, "lane": "vllm", "by": "vllm", "windows": ws,
+        self.append("period-close", None, {"period": name, "prover": "vllm", "by": "vllm", "windows": ws,
                                            "complete": bool(ws) and all(w["complete"] for w in ws)}, leaf)
         self._period = None
 

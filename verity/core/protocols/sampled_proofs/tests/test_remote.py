@@ -1103,9 +1103,9 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
 
 
 def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
-    """RT4-INT-24: a v1 open names its window by Commit and a period label; a v2 open of the same root later would give
-    it a second draw of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no prover and
-    seals no refused hellos. And no v1 entry follows a v2 one."""
+    """RT4-INT-24: a v1 open names its window by Commit and a period label; a later schema's open of the same root would
+    give it a second draw of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no
+    prover and seals no refused hellos. And no v1 entry follows a later one."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer, schema=C.LEDGER_SCHEMA_V1)
     first = Host(tmp_path, signer, "s-1", "one", ledger=ledger)
     honest(first)
@@ -1247,7 +1247,7 @@ def test_the_refused_hellos_are_the_ones_the_end_sealed_and_counted(tmp_path, si
         host.trusted_of()
 
 
-def test_a_windows_prover_is_the_lane_its_open_names_it_for_else_its_opener(tmp_path, signer):
+def test_a_windows_prover_is_the_one_its_open_names_it_for_else_its_opener(tmp_path, signer):
     host = Host(tmp_path, signer)
     honest(host)
     assert C.audited_session(R.ledger_lines(host.ledger.path), WINDOW, pinned_key(), lms_verify).prover == "proofs"
@@ -1262,22 +1262,29 @@ def test_a_windows_prover_is_the_lane_its_open_names_it_for_else_its_opener(tmp_
         C.audited_session(unnamed.lines, WINDOW, pinned_key(), lms_verify)
 
 
-def _period_open(ledger: Ledger, name: str = "p-0", lane: str = "proofs", **changes) -> None:
-    body = {"period": name, "lane": lane, "by": lane, "cap": 4, "circuit": "cd" * 64, "pinned": "ab" * 20,
-            "key_sha512": ledger.key_sha512, "opened_utc": "2026-10-20T12:00:00Z", **changes}
+def _prover_field(ledger: Ledger) -> str:
+    """The key a period entry of `ledger`'s schema names its prover under (`challenger.period_prover`)."""
+    return "lane" if ledger.schema == C.LEDGER_SCHEMA_V2 else "prover"
+
+
+def _period_open(ledger: Ledger, name: str = "p-0", prover: str = "proofs", **changes) -> None:
+    body = {"period": name, _prover_field(ledger): prover, "by": prover, "cap": 4, "circuit": "cd" * 64,
+            "pinned": "ab" * 20, "key_sha512": ledger.key_sha512, "opened_utc": "2026-10-20T12:00:00Z", **changes}
     ledger.append("period-open", None, {k: v for k, v in body.items() if v is not DROP})
 
 
-def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-0", lane: str = "proofs") -> None:
-    ledger.append("period-close", None, {"period": name, "lane": lane, "by": lane, "windows": windows,
-                                         "complete": complete, "closed_utc": "2026-10-20T13:00:00Z"})
+def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-0", prover: str = "proofs") -> None:
+    ledger.append("period-close", None, {"period": name, _prover_field(ledger): prover, "by": prover,
+                                         "windows": windows, "complete": complete,
+                                         "closed_utc": "2026-10-20T13:00:00Z"})
 
 
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
     """The operator's signed `period-open` and `period-close` entries pass through the ledger's check
     (`verify_periods`): a
-    period's windows are the opens of its lane between them, and a close that lists other windows or outcomes is
-    refused, as is a period entry under another key or under v1."""
+    period's windows are the opens of its prover between them, and a close that lists other windows or outcomes is
+    refused, as is a period entry under another key or under v1. A v2 period entry names its prover `lane`, and one
+    that names it under the other schema's key names none."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     _period_open(ledger)
     host = Host(tmp_path, signer, ledger=ledger)
@@ -1302,8 +1309,18 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
         C.audited_session(other.lines, WINDOW, pinned_key(), lms_verify)
     v1 = Ledger(tmp_path / "v1.jsonl", at(0), schema=C.LEDGER_SCHEMA_V1)
     _period_open(v1)
-    with pytest.raises(C.CoinError, match="entry 0: a period-open is v2 and names its period and its lane"):
+    with pytest.raises(C.CoinError, match="entry 0: a period-open is v2 or later and names its period and its prover"):
         C.audited_session(v1.lines, WINDOW, pinned_key(), lms_verify)
+    v2 = Ledger(tmp_path / "v2.jsonl", at(0, 1), schema=C.LEDGER_SCHEMA_V2)
+    _period_open(v2)
+    _period_close(v2, [], False)
+    got = C.verify_periods([line.encode() for line in v2.lines], v2.I, verify)["p-0"]
+    assert (got["prover"], got["windows"], got["close"]["body"]["lane"]) == ("proofs", [], "proofs")
+    for schema, named in ((C.LEDGER_SCHEMA_V2, "prover"), (C.LEDGER_SCHEMA, "lane")):
+        crossed = Ledger(tmp_path / f"crossed-{named}.jsonl", at(0), schema=schema)
+        _period_open(crossed, **{_prover_field(crossed): DROP, named: "proofs"})
+        with pytest.raises(ValueError, match="entry 0: a period-open is v2 or later and names its period and its prover"):
+            C.verify_periods([line.encode() for line in crossed.lines], crossed.I, verify)
 
 
 def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, signer):
@@ -1329,7 +1346,7 @@ def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, sig
     assert periods["p-0"]["windows"] == [RESERVED_SESSION, unopened]
     for i, (reserve, opened, refusal) in enumerate((
             ({}, {"opened_by": "vllm"}, "was opened by 'vllm', not its reserve's prover"),
-            ({}, {"opened_by": ["proofs"]}, "was opened by no lane, not its reserve's prover"),
+            ({}, {"opened_by": ["proofs"]}, "was opened by no prover, not its reserve's prover"),
             ({}, {"epoch": True}, "open doesn't carry its reserve's request"),
             ({}, {"minutes": 31}, "open doesn't carry its reserve's request"),
             ({}, {"reserve": True}, "binds no reserve of it"),
@@ -1349,11 +1366,11 @@ def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, sig
     unbound = Ledger(tmp_path / "unbound.jsonl", at(0, 1))
     unbound.reserve(RESERVED_SESSION)
     unbound.open("s-1")
-    with pytest.raises(C.CoinError, match="entry 1: a v2 open without a reserve after the ledger's first reserve"):
+    with pytest.raises(C.CoinError, match="entry 1: an open without a reserve after the ledger's first reserve"):
         C.audited_session(unbound.lines, WINDOW, pinned_key(), lms_verify)
     loose = Ledger(tmp_path / "loose.jsonl", at(0))
     loose.reserve("s-1")
-    with pytest.raises(C.CoinError, match="entry 0: a reserve is v2 and the first entry of its session s-1"):
+    with pytest.raises(C.CoinError, match="entry 0: a reserve is v2 or later and the first entry of its session s-1"):
         C.audited_session(loose.lines, WINDOW, pinned_key(), lms_verify)
 
 
@@ -1413,12 +1430,13 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
     tmp_path.mkdir()
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     if period:
-        _period_open(ledger, lane="vllm", by="vllm", cap=1, circuit=circuit)
+        _period_open(ledger, prover="vllm", by="vllm", cap=1, circuit=circuit)
     ledger.reserve(RESERVED_SESSION, by="vllm")
     host = Host(tmp_path, signer, RESERVED_SESSION, ledger=ledger)
     honest(host)
     if period:
-        _period_close(ledger, [{"root": WINDOW["root"], "session": RESERVED_SESSION, "complete": True}], True, lane="vllm")
+        _period_close(ledger, [{"root": WINDOW["root"], "session": RESERVED_SESSION, "complete": True}], True,
+                      prover="vllm")
     return host
 
 

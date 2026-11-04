@@ -331,7 +331,7 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
     assert f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's " \
         "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none" in refused(session=reserved)
     assert f"{SCHEME}: pouw setting 'period' is the lane's open period, its period-open body" in refused(
-        session=reserved, period={"lane": "vllm"})
+        session=reserved, period={"prover": "vllm"})
     assert _kinds(gate) == ["period-open", "reserve"] and RUNS == []
 
     late = CH.Gate(PRIVATE, KEY)                          # the period opened between the ledger's read and the reserve
@@ -343,8 +343,8 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
 
     for opens in ((), (("p-pc", "vllm", {"cap": 2, "circuit": "c1" * 64}),), (("k-h1", "kernels", H1_OPEN),)):
         g = CH.Gate(PRIVATE, KEY)
-        for name, lane, fields in opens:
-            g.period_open(name, lane, by=lane, **fields)
+        for name, prover, fields in opens:
+            g.period_open(name, prover, by=prover, **fields)
         answer, period = PHW.reserve_salt(_reserving(g), lambda: g.lines, "vllm", "vy-nebius-1", 0)
         joined = "p-pc" if opens and opens[0][1] == "vllm" else None
         assert answer["period"] == (period and period["period"]) == joined and _kinds(g)[-1] == "reserve"

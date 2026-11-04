@@ -39,6 +39,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 from verity.core.protocols.pous import wipe_period as W
+from verity.core.protocols.sampled_proofs.challenger import LEDGER_SCHEMA
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -710,7 +711,8 @@ def test_a_development_pouw_piece_rejects_what_its_checks_refuse(tmp_path, monke
 def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypatch):
     """``gate``: a reserve joins the lane's open period, so a lane with one open is refused before serving; the line
     names the gate's latest pin and whether it is on the verifier's first-parent line of main."""
-    ledger = [{"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}}]
+    ledger = [{"kind": "period-open", "schema": LEDGER_SCHEMA, "session": None,
+               "body": {"period": "p1", "prover": "vllm"}}]
     answers = {"ledger": ledger, "pins": [{"commit": "aa" * 20, "main": "bb" * 20, "pinned_utc": "2026-10-26T21:35:00Z"}]}
     monkeypatch.setattr(S, "_gate_out", lambda gate, verb: "".join(json.dumps(e) + "\n" for e in answers[verb]).encode())
     (main := tmp_path / "main.txt").write_text("cc" * 20 + "\n" + "aa" * 20 + "\n")

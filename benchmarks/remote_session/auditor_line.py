@@ -36,9 +36,9 @@ auditor replay offline (PoUB's `lean/tests/replay.py transcript`). The verifier'
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
 
 The ledger check: its longest head verified under the pinned key (`ledger_head`, `verify_ledger`, `verify_periods`);
-the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
-the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
-after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
+the period's prover (`--lane`), cap and circuit, and that it closed; each session reserved and opened by it for the
+peer under the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period;
+σ_0 asked after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
 host, as the run's own record gives it (`peer_of`): the node's own name for a verifier on a node, the verifier host's
 for a host run. `--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
@@ -784,13 +784,13 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
     doc = {"entries": len(lines), "sha512": hashlib.sha512("".join(x + "\n" for x in lines).encode()).hexdigest(),
            "verify_ledger": "passed", "heads": len(heads)}
     doc["period"] = None if p is None else {
-        "name": period, "lane": p["lane"], "cap": p["cap"], "circuit": p["circuit"], "windows": len(p["windows"]),
+        "name": period, "prover": p["prover"], "cap": p["cap"], "circuit": p["circuit"], "windows": len(p["windows"]),
         "opened_by": p["open"]["body"].get("by") if p.get("open") else None,
         "opened_utc": p["open"]["body"].get("opened_utc") if p.get("open") else None,
         "closed": p.get("close") is not None,
         "closed_utc": p["close"]["body"].get("closed_utc") if p.get("close") else None,
         "complete": p["close"]["body"].get("complete") if p.get("close") else None,
-        "ok": p["lane"] == lane and p.get("close") is not None}
+        "ok": p["prover"] == lane and p.get("close") is not None}
     return lines, windows, periods, doc
 
 
@@ -863,8 +863,8 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
 
 def session_check(s: dict, k: int, R: str, windows: dict, periods: dict, *, period: str, lane: str, peer: str,
                   pin: str) -> dict:
-    """Session k's entries on the ledger: its reserve, open and end, held to the lane, the peer, the pin, its epoch and
-    the period."""
+    """Session k's entries on the ledger: its reserve, open and end, held to the prover `lane`, the peer, the pin, its
+    epoch and the period."""
     sid = (s.get("challenger") or {}).get("session")
     w = windows.get(R)
     if w is None:
@@ -873,13 +873,13 @@ def session_check(s: dict, k: int, R: str, windows: dict, periods: dict, *, peri
     b, ob = (rs or {}).get("body", {}), op["body"]
     chk = {"window_root": R, "session": op["session"], "is_the_verifiers": op["session"] == sid,
            "reserve_seq": (rs or {}).get("seq"), "open_seq": op["seq"], "end_seq": (end or {}).get("seq"),
-           "lane": Ch.lane_of(op), "reserve_by": b.get("by"), "open_by": ob.get("by"), "peer": b.get("peer"),
+           "prover": Ch.prover_of(op), "reserve_by": b.get("by"), "open_by": ob.get("by"), "peer": b.get("peer"),
            "open_peer": ob.get("peer"), "key_is_pin": ob.get("key_sha512") == pin and b.get("key_sha512") == pin,
            "scheme": b.get("scheme"), "epoch": b.get("epoch"), "families": b.get("families"),
            "in_period": op["session"] in ((periods.get(period) or {}).get("windows") or []),
            "end": None if end is None else {f: end["body"].get(f) for f in
                                             ("closed", "complete", "rc", "refused_hellos", "released", "ended_utc")}}
-    chk["ok"] = bool(chk["is_the_verifiers"] and chk["lane"] == lane and chk["open_by"] == lane and chk["peer"] == peer
+    chk["ok"] = bool(chk["is_the_verifiers"] and chk["prover"] == lane and chk["open_by"] == lane and chk["peer"] == peer
                      and chk["open_peer"] == peer and chk["key_is_pin"] and chk["scheme"] == coins.SCHEME
                      and chk["epoch"] == k and chk["in_period"] and end is not None
                      and end["body"].get("closed") is True and end["body"].get("refused_hellos") == 0)

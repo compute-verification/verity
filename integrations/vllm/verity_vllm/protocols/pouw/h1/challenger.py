@@ -52,12 +52,12 @@ verifier's check that a served window's coins are that challenger's.
   ``git rev-list --first-parent origin/main``, `remote.main_lines`; `Ledger.main`), not only in main's history. Its
   heads are read as core reads a ledger's (`pins_head`, `pins_of`: the longest, any two extending one another). No pins
   log, a cut one, a tree it doesn't record, no copy of main, or a pin off main's first-parent line, credits nothing.
-* **Periods**: a lane's period is its windows between its ``period-open`` and ``period-close`` entries (session null),
-  each window counted at its reserve (or a one-step v2 open) whose prover (``for``, else ``by``) is the lane, as core's
-  check lists them (`Ledger.periods`). `period_reason`, a reading of that table, refuses a period the ledger doesn't
-  close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
-  coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
-  after its coins).
+* **Periods**: a prover's period is its windows between its ``period-open`` and ``period-close`` entries (session
+  null, naming it ``prover``), each window counted at its reserve (or a one-step open after v1) whose prover (``for``,
+  else ``by``) is the period's, as core's check lists them (`Ledger.periods`). `period_reason`, a reading of that
+  table, refuses a period the ledger doesn't close, one whose close isn't complete (an empty one, or a window never
+  opened, never ended, unclosed or short of its coins), an accepted window that isn't one of its windows, and a window
+  of it that has no accepted window (abandoned after its coins).
 * **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
   Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `draw_k`: the proof system's selection
@@ -284,7 +284,7 @@ class Ledger:
     longest of every head infra published, each checked and any two extending one another (`challenger.ledger_head`),
     and that check's tables (`challenger.verify_ledger`, `challenger.verify_periods`): each window root to its one
     session's ``reserve`` (None for a one-step open), ``open`` and ``end`` (None while it hasn't ended) entries, and each
-    period's name to its ``lane``, ``open`` and ``close`` (None while it is open) entries, its ``windows`` (session ids,
+    period's name to its ``prover``, ``open`` and ``close`` (None while it is open) entries, its ``windows`` (session ids,
     in order), its ``cap`` and its ``circuit``. `pins` is the host's pins log as infra published it (`pins_of`; None
     without one) and `main` the verifier's own first-parent history of main (``git rev-list --first-parent
     origin/main``; None without one): every session read from it must be run from a commit the log records and main's
@@ -495,11 +495,11 @@ def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:
 
 def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presented: Sequence[str] | None = None,
                   verify: Any = lms_verify) -> list[str]:
-    """Why the auditor's `ledger` doesn't credit the lane's period `period`, given `accepted` (the session ids of its
+    """Why the auditor's `ledger` doesn't credit the prover's period `period`, given `accepted` (the session ids of its
     windows that `session_reason` accepted, each with its draw session's, which the close lists after it: a draw session
     no accepted window drew from is one opened for a coin the prover then dropped), one reason each; [] when it does.
     Refused: a period the ledger has no period-open for, or no period-close (its windows aren't all known); an accepted
-    window that isn't one of the period's (its lane's reserves and one-step opens between its period-open and its
+    window that isn't one of the period's (its prover's reserves and one-step opens between its period-open and its
     period-close); a close that isn't complete (no window, or a window never opened, never ended, unclosed or short of
     its coins: every window counts); and
     a window of it with no accepted window, which ended complete, so released every coin: a window abandoned after its
@@ -519,8 +519,8 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presente
 
 
 def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted: Sequence[str]) -> list[str]:
-    out = [f"session {s}, an accepted window, is not one of period {period}'s windows ({p['windows']}, lane {p['lane']}'s "
-           "between its period-open and its period-close)" for s in accepted if s not in p["windows"]]
+    out = [f"session {s}, an accepted window, is not one of period {period}'s windows ({p['windows']}, prover "
+           f"{p['prover']}'s between its period-open and its period-close)" for s in accepted if s not in p["windows"]]
     if p["close"] is None:
         return out + [f"period {period} has no period-close in the auditor's ledger, so its windows aren't all known: an "
                       "open period credits nothing"]

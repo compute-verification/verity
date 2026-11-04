@@ -17,7 +17,7 @@ from verity.core.protocols.remote_bandwidth import period as P
 from verity.core.protocols.sampled_proofs import challenger as C
 
 KEY = C.ChallengerKey(4, 10, hashlib.sha512(b"the challenger key").digest() + bytes(16))
-LANE = "compute-accounting"
+PROVER = "compute-accounting"
 T = "2026-10-26T21:44:45Z"
 
 
@@ -42,22 +42,23 @@ class Ledger:
         return len(self.lines) - 1
 
     def period(self, name: str, sessions: list[str]) -> dict[str, int]:
-        """Period `name` of `LANE`'s with a window a session, each reserved, opened, its record signed and ended: each
+        """Period `name` of `PROVER`'s with a window a session, each reserved, opened, its record signed and ended: each
         entry's index."""
-        at = {"period-open": self.add("period-open", None, {"period": name, "lane": LANE, "key_sha512": self.key_sha512,
-                                                            "cap": len(sessions), "circuit": "cd" * 64})}
+        at = {"period-open": self.add("period-open", None, {"period": name, "prover": PROVER,
+                                                            "key_sha512": self.key_sha512, "cap": len(sessions),
+                                                            "circuit": "cd" * 64})}
         for s in sessions:
-            reserve = {"by": LANE, "minutes": 30, "started_utc": T, "expires_utc": C.later(T, 30)}
+            reserve = {"by": PROVER, "minutes": 30, "started_utc": T, "expires_utc": C.later(T, 30)}
             at[f"reserve {s}"] = self.add("reserve", s, reserve)
             at[f"open {s}"] = self.add("open", s, {
-                **reserve, "reserve": at[f"reserve {s}"], "opened_by": LANE, "window": {"root": root(s)},
+                **reserve, "reserve": at[f"reserve {s}"], "opened_by": PROVER, "window": {"root": root(s)},
                 "host": "challenger-host", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
             self.leaf += 1
             at[f"end {s}"] = self.add("end", s, {
                 "closed": True, "complete": True, "files": {f: "00" * 64 for f in C.SEALED_FILES},
                 "record_leaf": self.leaf, "commitment": "ee" * 64, "refused_hellos": 0})
         at["period-close"] = self.add("period-close", None, {
-            "period": name, "lane": LANE, "complete": True,
+            "period": name, "prover": PROVER, "complete": True,
             "windows": [{"root": root(s), "session": s, "complete": True} for s in sessions]})
         return at
 

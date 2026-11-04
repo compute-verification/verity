@@ -38,7 +38,8 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
+from verity.core.protocols.sampled_proofs.challenger import (CoinError, LiveCommitment, LiveOpening, LiveRecord,
+                                                             period_prover)
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
@@ -119,12 +120,12 @@ def reserved_of(raw: Any, name: str = "session") -> dict[str, Any] | None:
     return dict(raw)
 
 
-def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
-    """The ``period-open`` body of lane `lane`'s open period in the auditor's ledger `lines` (the gate's ``ledger``, one
-    entry a line), None when the lane has none open."""
+def open_period(lines: Iterable[str], prover: str) -> dict[str, Any] | None:
+    """The ``period-open`` body of `prover`'s open period in the auditor's ledger `lines` (the gate's ``ledger``, one
+    entry a line, each period entry naming its prover: `period_prover`), None when it has none open."""
     opened = None
     for e in map(json.loads, lines):
-        if e["kind"] == "period-open" and e["body"].get("lane") == lane:
+        if e["kind"] == "period-open" and period_prover(e) == prover:
             opened = e["body"]
         elif e["kind"] == "period-close" and opened is not None and e["body"]["period"] == opened["period"]:
             opened = None
@@ -136,7 +137,8 @@ def period_setting(raw: Any) -> dict[str, Any] | None:
     (`open_period`); ValueError otherwise."""
     if raw is not None and not (isinstance(raw, Mapping) and isinstance(raw.get("period"), str)):
         raise ValueError("pouw setting 'period' is the lane's open period, its period-open body in the auditor's ledger "
-                         f"({{'period', 'lane', ...}}, pouw_h1_window.open_period), or None when none is open, not {raw!r}")
+                         f"({{'period', 'prover', ...}}, pouw_h1_window.open_period), or None when none is open, "
+                         f"not {raw!r}")
     return None if raw is None else dict(raw)
 
 

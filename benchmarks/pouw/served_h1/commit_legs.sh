@@ -34,7 +34,8 @@ import json, sys
 o = {}
 for l in open(sys.argv[1]):
     e = json.loads(l); b = e.get("body") or {}
-    if e.get("kind") == "period-open" and b.get("lane") == sys.argv[2]: o[b.get("period")] = b.get("lane")
+    prover = b.get("lane" if e.get("schema") == "verity/challenger-auditor/v2" else "prover")
+    if e.get("kind") == "period-open" and prover == sys.argv[2]: o[b.get("period")] = prover
     if e.get("kind") == "period-close": o.pop(b.get("period"), None)
 print("[legs] lane", sys.argv[2], "open periods:", json.dumps(o)); sys.exit(1 if o else 0)
 PY

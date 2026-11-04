@@ -29,7 +29,7 @@ from verity.ml.crypto import lms
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""
 HOST = "test-challenger"
-LANE = "memory-accounting"
+PROVER = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "tests" / "fixtures" /
@@ -110,14 +110,14 @@ class Ledger:
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
     def period(self, name: str = "p-1") -> None:
-        self.append("period-open", None, {"period": name, "lane": LANE, "key_sha512": self.key_sha512, "cap": 4,
-                                          "circuit": CIRCUIT})
+        self.append("period-open", None, {"period": name, "prover": PROVER, "key_sha512": self.key_sha512,
+                                          "cap": 4, "circuit": CIRCUIT})
 
     def open(self, sid: str, root: bytes, pinned: str = PIN, pins: list[str] | None = PINS) -> None:
         """Session `sid`'s open for window `root` on a host pinned to `pinned`, sealing its pins log `pins` (None: no
         seal, as an older gate's open has)."""
         body = {"window": {"root": root.hex()}, "host": f"{HOST}.{sid}", "pinned": pinned,
-                "key_sha512": self.key_sha512, "port": 7811, "by": LANE}
+                "key_sha512": self.key_sha512, "port": 7811, "by": PROVER}
         self.append("open", sid, body if pins is None else {**body, "pins": C.pins_seal(pins)})
 
     def end(self, service: Service) -> None:
@@ -183,7 +183,7 @@ def test_a_coin_layout_is_challenge_and_openings_with_an_append_family_only_for_
 
 
 def test_coins_from_a_second_session_for_the_registration_are_refused(store, tmp_path, sign):
-    """The ledger opens one challenger session for R, the session's window over its registration, inside the lane's
+    """The ledger opens one challenger session for R, the session's window over its registration, inside the prover's
     period: a session whose coins came from another challenger session (opened in the same period for another root)
     is refused against R's, and a ledger that opens a second session for R is refused whole."""
     r = coins.window_root(store.registration.digest, 0)

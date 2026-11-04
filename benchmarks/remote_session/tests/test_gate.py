@@ -15,19 +15,23 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.sampled_proofs.challenger import LEDGER_SCHEMA, LEDGER_SCHEMA_V2
+
 GATE = Path(__file__).resolve().parents[1] / "gate.sh"
 FP = "SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs"
 PUBLIC = bytes(range(80))
 PIN = hashlib.sha512(PUBLIC).hexdigest()
 
 
-def entry(seq: int, kind: str, period: str, lane: str) -> dict:
-    return {"seq": seq, "kind": kind, "body": {"period": period, "lane": lane, "by": lane}}
+def entry(seq: int, kind: str, period: str, prover: str, schema: str = LEDGER_SCHEMA) -> dict:
+    """A period entry as the ledger holds it: its prover under `prover`, which v2 names `lane`."""
+    named = "lane" if schema == LEDGER_SCHEMA_V2 else "prover"
+    return {"seq": seq, "kind": kind, "schema": schema, "body": {"period": period, named: prover, "by": prover}}
 
 
-CLOSED_7 = [entry(1, "period-open", "ma-remote-coins-7", "memory-accounting"),
-            entry(2, "period-open", "kernels-dev-1", "kernels"),
-            entry(3, "period-close", "ma-remote-coins-7", "memory-accounting")]
+CLOSED_7 = [entry(1, "period-open", "ma-remote-coins-7", "memory-accounting", LEDGER_SCHEMA_V2),
+            entry(2, "period-open", "kernels-dev-1", "kernels", LEDGER_SCHEMA_V2),
+            entry(3, "period-close", "ma-remote-coins-7", "memory-accounting", LEDGER_SCHEMA_V2)]
 
 
 GIT = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",

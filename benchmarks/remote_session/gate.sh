@@ -109,7 +109,7 @@ if used:
 opened = {}
 for e in entries:
     if e["kind"] == "period-open":
-        opened[e["body"]["lane"]] = e["body"]["period"]
+        opened[e["body"]["lane" if e["schema"] == "verity/challenger-auditor/v2" else "prover"]] = e["body"]["period"]
     elif e["kind"] == "period-close":
         opened = {k: v for k, v in opened.items() if v != e["body"]["period"]}
 if lane in opened:

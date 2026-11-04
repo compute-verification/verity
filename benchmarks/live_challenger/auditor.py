@@ -88,7 +88,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`run.sh`), and it refuses a window's session (`--root`).
 - **A period** is a lane's span of windows between two signed entries, `period-open` and `period-close` (session null),
   which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
-  LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
+  LANE`, `period-close --name P`), both naming the lane as the period's `prover` (`lane` in v2's entries). A period's
+  name is used once, and a lane has one period open at a time. Its open
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
   (`--circuit`: the registered circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
   against), and with `--draw-k K` the sample K the proof system selects each window's units with (`draw_k`, a positive
@@ -116,8 +117,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
   the challenger key over `entry_message(I, entry)`. Its entries' LMS leaves strictly increase (`append` refuses an entry
   whose leaf isn't after the last one, as a restored key state would sign), and each record's leaf lies between its
-  session's open and end and is no entry's. v2 entries follow the host's v1 entries in one chain, and `verify_ledger`, the
-  reference check, reads both, and checks each window's reserve, open and end in that order, its expiry, and the periods
+  session's open and end and is no entry's. v2's and then v3's entries follow the host's v1 entries in one chain, and
+  `verify_ledger`, the reference check, reads all three, and checks each window's reserve, open and end in that order,
+  its expiry, and the periods
   (`verify_periods` returns them). Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
   pod's watchers loop `challenger-publish`), each put an extension of the last   (`publish.sh` refuses any other head, and
   `extends` is the check), labelled `challenger-ledger head` by infra, and the pins log the same way (`challenger-pins head`).
@@ -282,9 +284,10 @@ from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE
                                                              LEDGER_SCHEMA_V1 as SCHEMA_V1,
                                                              LEDGER_TAGS as TAGS, PERIOD_KINDS, RESERVED,
                                                              SESSION_KINDS, cap_of as _cap_of,
-                                                             circuit_of as _circuit_of, extends, lane_of, leaf_of,
-                                                             ledger_message as entry_message, ledger_text, pin_line,
-                                                             pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
+                                                             circuit_of as _circuit_of, extends, leaf_of,
+                                                             ledger_message as entry_message, ledger_text,
+                                                             period_prover, pin_line, pins_reason, pins_seal, prover_of,
+                                                             root_of, verify_ledger, verify_periods)
 from verity.ml.crypto import lms  # noqa: E402
 
 ZERO = "0" * 128
@@ -649,26 +652,27 @@ def field_text(v: Any) -> str:
 
 
 def counts_at(e: dict) -> bool:
-    """Whether a window joins its lane's open period at this entry: at its reserve, or at a v2 open with no reserve (a
-    one-step open, before the first reserve)."""
-    return e["kind"] == "reserve" or (e["kind"] == "open" and e["schema"] == SCHEMA and "reserve" not in e["body"])
+    """Whether a window joins its prover's open period at this entry: at its reserve, or at an open after v1 with no
+    reserve (a one-step open, before the first reserve)."""
+    return e["kind"] == "reserve" or (e["kind"] == "open" and e["schema"] != SCHEMA_V1 and "reserve" not in e["body"])
 
 
 def periods_of(lines: list[bytes]) -> dict[str, dict]:
-    """period -> {"lane", "open", "close" (None while open), "windows": [session, ...], "cap", "circuit"}: a period's
-    windows are exactly its lane's reserves (and one-step v2 opens) between its period-open and its period-close."""
+    """period -> {"prover", "open", "close" (None while open), "windows": [session, ...], "cap", "circuit"}: a period's
+    windows are exactly its prover's reserves (and one-step opens after v1) between its period-open and its
+    period-close."""
     periods: dict[str, dict] = {}
     current: dict[str, dict] = {}
     for e in entries(lines):
         if e["kind"] == "period-open":
-            p = current[e["body"]["lane"]] = periods[e["body"]["period"]] = {
-                "lane": e["body"]["lane"], "open": e, "close": None, "windows": [], "cap": e["body"].get("cap"),
+            p = current[period_prover(e)] = periods[e["body"]["period"]] = {
+                "prover": period_prover(e), "open": e, "close": None, "windows": [], "cap": e["body"].get("cap"),
                 "circuit": e["body"].get("circuit")}
         elif e["kind"] == "period-close":
             p = periods[e["body"]["period"]]
             p["close"] = e
-            current.pop(p["lane"], None)
-        elif counts_at(e) and (p := current.get(lane_of(e))) is not None:
+            current.pop(p["prover"], None)
+        elif counts_at(e) and (p := current.get(prover_of(e))) is not None:
             p["windows"].append(e["session"])
     return periods
 
@@ -941,10 +945,10 @@ def period_holding(lines: list[bytes], session: str) -> tuple[str, dict] | None:
     return next(((n, p) for n, p in periods_of(lines).items() if session in p["windows"]), None)
 
 
-def cap_refusal(lines: list[bytes], lane: str) -> str | None:
-    """Why the lane's next window would be past its open period's cap, or None."""
+def cap_refusal(lines: list[bytes], prover: str) -> str | None:
+    """Why the prover's next window would be past its open period's cap, or None."""
     for name, p in periods_of(lines).items():
-        if p["lane"] == lane and p["close"] is None and p["cap"] is not None and len(p["windows"]) >= p["cap"]:
+        if p["prover"] == prover and p["close"] is None and p["cap"] is not None and len(p["windows"]) >= p["cap"]:
             return (f"period {name} holds its cap of {p['cap']} windows: close it (period-close --name {name}) and open "
                     "another for more")
     return None
@@ -960,7 +964,7 @@ def open_refusal(lines: list[bytes], session: str, opener: str, root: str, now: 
         return f"session {session} is opened already: a reserve opens once"
     rb = s["reserve"]["body"]
     if opener not in {rb["by"], rb.get("for")} - {None}:
-        return f"session {session} is {lane_of(s['reserve'])}'s reserve, not {opener}'s"
+        return f"session {session} is {prover_of(s['reserve'])}'s reserve, not {opener}'s"
     if utc(now) > rb["expires_utc"]:
         return f"session {session}'s reserve expired at {rb['expires_utc']}: it is a refused window of its period"
     if (held := period_holding(lines, session)) is not None and held[1]["close"] is not None:
@@ -1848,15 +1852,15 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
         if verb == "period-open":
             if name in periods:
                 raise Refused(f"period {name} is in the ledger already: a period's name is used once")
-            if (o := next((n for n, p in periods.items() if p["lane"] == lane and p["close"] is None), None)) is not None:
+            if (o := next((n for n, p in periods.items() if p["prover"] == lane and p["close"] is None), None)) is not None:
                 raise Refused(f"lane {lane} has period {o} open: close it first (periods of a lane never overlap)")
-            return {"period": name, "lane": lane, "by": by, "cap": cap, "circuit": circuit, **given, "pinned": pinned,
+            return {"period": name, "prover": lane, "by": by, "cap": cap, "circuit": circuit, **given, "pinned": pinned,
                     "key_sha512": key_sha512, "opened_utc": utc(now)}
         p = periods.get(name)
         if p is None or p["close"] is not None:
             raise Refused(f"no open period {name}")
-        if lane != READ_ONLY and p["lane"] != lane:
-            raise Refused(f"period {name} is lane {p['lane']}'s: only its lane's key or vy-admin closes it")
+        if lane != READ_ONLY and p["prover"] != lane:
+            raise Refused(f"period {name} is lane {p['prover']}'s: only its lane's key or vy-admin closes it")
         sessions = sessions_of(lines)
         for w in p["windows"]:
             s = sessions[w]
@@ -1867,7 +1871,7 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
                 raise Refused(f"period {name}'s window {w} still runs: a period closes once each of its windows has "
                               "ended or expired")
         outcomes = window_outcomes(lines, p["windows"])
-        return {"period": name, "lane": p["lane"], "by": by, "windows": outcomes,
+        return {"period": name, "prover": p["prover"], "by": by, "windows": outcomes,
                 "complete": bool(outcomes) and all(w["complete"] for w in outcomes), "closed_utc": utc(now)}
 
     if verb not in PERIOD_KINDS or not NAME.fullmatch(name) or not (lane == READ_ONLY or NAME.fullmatch(lane)):
