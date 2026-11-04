@@ -80,6 +80,20 @@ def test_remote_case_orders_by_id_and_binds_the_digests(tmp_path):
     assert (out / "blobs.txt").read_text() == "/c.txt\n/p.bin\n"
 
 
+def test_a_development_composite_says_so_first_and_in_its_public_record(tmp_path, capsys):
+    """``--development WHY`` (a composite on the served node, which claims no record) leads the verdict lines with
+    ``DEVELOPMENT WHY`` and puts WHY in composite.json; without it neither says development."""
+    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
+    why = "composed on the served node, which the prover controls"
+    assert C.main(["remote", "--cases", str(v1), *outs(tmp_path), "--development", why]) == 0
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[0] == f"DEVELOPMENT {why}"
+    assert json.loads((tmp_path / "public" / "composite.json").read_text())["development"] == why
+    assert f"DEVELOPMENT {why}" in capsys.readouterr().out
+    assert C.main(["remote", "--cases", str(v1), *outs(tmp_path, "2")]) == 0
+    assert "DEVELOPMENT" not in (tmp_path / "public2" / "verdicts.txt").read_text()
+    assert "development" not in json.loads((tmp_path / "public2" / "composite.json").read_text())
+
+
 def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     put(tmp_path / "cases" / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
     put(tmp_path / "cases" / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)

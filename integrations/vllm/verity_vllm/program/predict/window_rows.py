@@ -43,6 +43,8 @@ by its hiding leaf under `index_salt`.
 from __future__ import annotations
 
 import bisect
+import re
+from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -272,6 +274,35 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
+#: a call boundary's op path: its module, then its fx node, its op counted over the request (`naming`: ``row_quant``,
+#: ``row_quant_1``, ...)
+_NODE = re.compile(r"(.+)/(.+?)(?:_\d+)?")
+
+
+def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: int) -> dict[tuple[int, str], str]:
+    """Each (step, op path) of request ``rid``'s served rows, arrived at engine step ``arrive`` -> the op path the record
+    binds it under at engine step ``arrive`` plus its step: its own where the record binds each of its members there; else,
+    for a call boundary alone at its module under its op at its step, the record's one op path of that module and op for
+    the request there, where that binds each of its members. The serve commits a batch's call boundary under one fx node,
+    counted over its earliest arrival's steps, so a later arrival's is another count than its Program's; any other op path
+    keeps its own, and its read is refused by name."""
+    want: dict[tuple[int, str], set[str]] = {}
+    for d in rows:
+        want.setdefault((int(d["step"]), str(d["op_path"])), set()).update(str(m[0]) for m in d["members"])
+    node = {key: x.groups() for key in want if (x := _NODE.fullmatch(key[1]))}
+    alone = Counter((s, g) for (s, _op), g in node.items())
+    out = {}
+    for (s, op), members in want.items():
+        out[(s, op)] = op
+        e, g = arrive + s, node.get((s, op))
+        if g is None or alone[(s, g)] != 1 or store.resolve(op) != (op, 0) or all(store.has(rid, e, op, m) for m in members):
+            continue
+        same = [o for o in store.ops(rid, e) if (x := _NODE.fullmatch(o)) and x.groups() == g]
+        if len(same) == 1 and store.resolve(same[0]) == (same[0], 0) and all(store.has(rid, e, same[0], m) for m in members):
+            out[(s, op)] = same[0]
+    return out
+
+
 def _sites(ops: Sequence[tuple[str, tuple[str, ...]]]) -> dict[tuple[str, tuple[str, ...]], tuple[str, tuple[str, ...], int]]:
     """Each of a step's ops, in Program order, -> its site: its op path less its last ``/`` part (a call boundary's fx node,
     which counts on over the request's steps, `query.manifest.bind`), its members' names, and its ordinal among the step's
@@ -342,19 +373,21 @@ class Served:
     @classmethod
     def of_record(cls, pi: Any, store: Any, rid: str, arrive: int) -> Served:
         """Request ``rid``'s served values from its `ProgramIndex` and the record's `CommittedStore`, arrived at engine step
-        ``arrive``."""
+        ``arrive``, each op read under the op path the record binds it under (`_respelt`)."""
         rows = []
         for r in pi.rows:
             d = pi.describe(r)
             if d is None or not d["members"]:
                 raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
             rows.append({**d, "spec": r["spec"]})
+        at = _respelt(rows, store, rid, arrive)
 
         def bound(s: int, op: str, m: str) -> int:
-            ends = [e["identity"].get("element_range", (0, None))[1] for e in store.entries(rid, arrive + s, op, m)[0]]
+            es = store.entries(rid, arrive + s, at.get((s, op), op), m)[0]
+            ends = [e["identity"].get("element_range", (0, None))[1] for e in es]
             return max((int(x) for x in ends if x is not None), default=0)
 
-        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, op, m, lo, hi), bound)
+        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound)
 
     def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
