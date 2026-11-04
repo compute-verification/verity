@@ -1373,16 +1373,17 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
 
 
 def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
-    """`served_passes.macs` is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells `clear_work`
-    credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over the pass
-    alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    """`pearl_c.window.macs` (served.json's) is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells
+    `clear_work` credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over
+    the pass alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
+    from verity_vllm.protocols.pouw.pearl_c.window import macs
+
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
     p = VR.load(path, published(path))
-    assert SP.macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and SP.macs(None) is None
+    assert macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and macs(None) is None
     assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
-    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < SP.macs(str(path))
+    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < macs(str(path))
     r = p.records[0]
     b = min(set(range(r.matmul.shape.n)) - set(r.excluded_b))
     more = dataclasses.replace(p, records=[dataclasses.replace(r, excluded_b=(*r.excluded_b, b)), *p.records[1:]])

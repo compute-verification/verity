@@ -17,7 +17,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 salt coin is a live session's on the auditor host instead (`bench_arm.live_coins`: a salt-only session reserved under
 ``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes at
 ``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
-``coins`` says which (`served_step.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
+``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
 ``generate`` of one short request takes the first calls' one-time
 costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
 O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
@@ -90,6 +90,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
+from verity_vllm.protocols.pouw.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -100,8 +101,6 @@ ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted draws leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
 DRAWS = 459
-KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
-        "activation_roots", "schedule", "manifest")
 #: what `volunteer` keeps of each pass's `volunteer_pass.volunteer` (``device`` on the device alone)
 VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root",
                   "credit_kept", "device")
@@ -126,13 +125,6 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
     """`requests` prompts of `tokens` token ids each, seeded by their index (the harness's `_requests` form)."""
     seed = int.from_bytes(hashlib.sha256(b"served-passes").digest()[:8], "big")
     return [[3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4) for j in range(tokens)] for i in range(requests)]
-
-
-def macs(manifest: str | None) -> int | None:
-    """A retained pass's linear MACs, its calls' real rows × n × k from its manifest; None without one."""
-    if not manifest:
-        return None
-    return sum(u["real_rows"] * u["n"] * u["k"] for u in json.loads(Path(manifest).read_text())["matmuls"])
 
 
 def pearl_c_arm(spec, name: str | None = None):
@@ -195,7 +187,6 @@ def serve(args: argparse.Namespace) -> int:
         config["pouw"]["transcript_dir"] = str(passes)
     sys.path.insert(0, str(HERE))
     import bench_arm as BA
-    import served_step as SS
 
     config["pouw"], reserved = BA.live_coins(config["pouw"], settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
                                              settings.PEARLC_BENCH_EPOCH, settings.PEARLC_CHALLENGER_LANE)
@@ -235,11 +226,10 @@ def serve(args: argparse.Namespace) -> int:
     llm.close()
     close = time.perf_counter() - t0 - wall
     caps = {"tiles": run.capacity, "units": PPD.CALL_CAPACITY, "screened_rows": len(run.flag_buf)}
-    got = [{"pass": i, "timed": i >= warm, **{k: p.get(k) for k in KEEP if k in p}, "macs": macs(p.get("manifest"))}
-           for i, p in enumerate(run.details["passes"])]
+    got = passes_of(run.details["passes"], warm)
     held = [p for p in got if p["units"]]
     over = [p["pass"] for p in got if any((p.get(k) or 0) > cap for k, cap in caps.items())]
-    doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
+    doc = {"schema": SERVED_SCHEMA, "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))}, "retained": args.retain,
            "seeded": args.seeded, "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "generate_s": wall, "engine_steps": len(walls),
@@ -247,7 +237,7 @@ def serve(args: argparse.Namespace) -> int:
            "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over,
            "ok": sum(p["timed"] for p in held) >= 3 and not over and (not args.retain or all(p.get("manifest") for p in held))}
-    doc["coins"] = {**SS.coins_of(option, reserved), **({"source": "seeded"} if args.seeded else {})}
+    doc["coins"] = {**coins_of(option, reserved), **({"source": "seeded"} if args.seeded else {})}
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, indent=1) + "\n")
