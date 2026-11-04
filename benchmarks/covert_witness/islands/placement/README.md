@@ -1,11 +1,9 @@
-# Direction `placement` (classes `e1mb`, `e100kb`, `shallow`)
+# Direction `placement`
 
-Where an update sits sets its deep share φ and its depth: norm gains only (the lf model has no biases, and its gains are
-its per-channel scales, IA3 on the q/k/v, gate/up and head inputs), the tied embedding (the lookup and the head move
-together), the EOT row (every document starts with EOT, so it is the per-document soft prefix), early blocks only, or
-one stage of one block. The search looks for placements that lower search bpb at small witnessed φ and |E|, and records
-each one's (φ, |E|, bpb gain, training FLOPs).
+Where an update sits sets how much of a training step's matmul work has two update-dependent operands, and its deep share
+φ: one stage of one block with its input frozen, that stage with its lower-edge norm gain, LoRA factors at one stage, or
+the input stage of every MLP. The search looks for placements that reach a gain target at small p while little of the
+step's work multiplies two fresh operands, and records each one's (φ, |E|, bpb gain, training FLOPs).
 
-`train.py` is the one trainer; on this branch each class island's `train.py` runs it with that class, so a candidate is
-`python benchmarks/covert_witness/launch.py CLASS START --note TEXT -- ARGS` as usual. Its arguments pick the placement
-by regexes over θ's tensor names (its docstring).
+`train.py` is the one trainer (harness v3, no classes); its arguments pick the set (its docstring), and a candidate is
+`python benchmarks/covert_witness/launch.py START --island placement --note TEXT -- ARGS`.
