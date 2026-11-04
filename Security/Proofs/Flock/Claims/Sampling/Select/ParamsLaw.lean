@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Refine.Walk
+import Proofs.Flock.Claims.Sampling.Select.RetWalk
 import SampledProofs.OneStage
 
 /-!
@@ -38,15 +38,14 @@ end SameLaw
 
 open SameLaw
 
-/-- **The verifier's law, as `OneStage.paramsParsed` keeps it, is one `OneStage.rule` accepts as it stands.** The body's
-`let`s are inlined first (`dsimp only`), so the record it returns names the law `rule` returned. -/
+/-- **The verifier's law, as `OneStage.paramsParsed` keeps it, is one `OneStage.rule` accepts as it stands.** The record
+it returns is built in a `let`, which `ret_walk_ret` substitutes, so it names the law `rule` returned. -/
 theorem paramsParsed_rule {j : Json} {p : OneStage.Params} (h : OneStage.paramsParsed j = .ok p) :
     OneStage.rule p.verifier.law = .ok p.verifier.law := by
   revert p
   show FlockSoundness.Refine.Ret (OneStage.paramsParsed j) fun p => OneStage.rule p.verifier.law = .ok p.verifier.law
   rw [OneStage.paramsParsed.eq_def]
-  dsimp only
-  ret_walk [OneStage.rule]
+  ret_walk_ret [OneStage.rule]
   all_goals exact rule_self (by assumption)
 
 /-- **The verifier's law, as `OneStage.paramsOfJson` keeps it, is one `OneStage.rule` accepts as it stands**:
