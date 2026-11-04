@@ -43,6 +43,8 @@ RUNS = [("s1", "ref", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 0.05,
 DOMINATED = [("s1", f"lora{i}", "lowrank/lora", "adapter", 8e6, 2e7, None, 0.3, [(1, 0.2 + 0.1 * i, 1.196)])
              for i in range(6)]
 L0 = {"s1": 1.2, "s2": 1.3, "t1": 1.5}
+#: t1's own ladder run, at its C0 and l0: a registered v3 start is a ladder run, so ladder runs without it are refused
+T1_RUN = {"branch": "t1", "macs": C0 / per_mac("gemm/bf16"), "bpb": L0["t1"]}
 
 
 def law(c: float, f: dict = LAW) -> float:
@@ -697,7 +699,8 @@ def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path,
     v3_law = LAW | {"E": 1.2}
     ladder = tmp_path / "F.json"
     ladder.write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": [
-        {"branch": f"x{f}", "macs": f * C0 / per_mac("gemm/bf16"), "bpb": law(f * C0, v3_law)} for f in (2, 4, 8, 16, 32)]}))
+        {"branch": f"x{f}", "macs": f * C0 / per_mac("gemm/bf16"), "bpb": law(f * C0, v3_law)} for f in (2, 4, 8, 16, 32)]
+        + [T1_RUN]}))
     v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start": "t1", "start_bpb": 1.5,
                "val_bpb": r["val_bpb"] + 0.3} for r in ledger_rows() if r["start"] == "s1"]
     code, got = run(tmp_path, monkeypatch, "--ladder-points", str(ladder), index=ledger_rows() + v3)
@@ -811,7 +814,8 @@ def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scr
     annealed = [{"branch": f"x{f:g}", "macs": f * C0 / per_mac("gemm/bf16"), "bpb": law(f * C0, v3_law)}
                 for f in (2, 4, 16)]
     annealed += [{"branch": "over", "macs": 8 * C0 / per_mac("gemm/bf16"), "bpb": law(4 * C0, v3_law) + 0.01},
-                 {"branch": "binned", "macs": near * C0 / per_mac("gemm/bf16"), "bpb": law(16 * C0, v3_law) + 0.01}]
+                 {"branch": "binned", "macs": near * C0 / per_mac("gemm/bf16"), "bpb": law(16 * C0, v3_law) + 0.01},
+                 T1_RUN]
     (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": annealed}))
     v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start": "t1", "start_bpb": 1.5,
                "val_bpb": 1.5 + 0.001 * r["checkpoint_step"]} for r in ledger_rows() if r["start"] == "s1"]
@@ -824,7 +828,7 @@ def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scr
     fits = {d["data"]: d for d in plots.frame(fp) if d["row"] == "fit"}
     assert fits["v3"]["status"].startswith("provisional fit: 4 of its points from scratch, under 5; ")
     assert fits["v2.3-pilot"]["status"].startswith("fit; ")
-    assert fp["source"].endswith(f"; 5 ladder points ({FF.LADDER[:16]}))")
+    assert fp["source"].endswith(f"; 6 ladder points ({FF.LADDER[:16]}))")
     assert p["source"] == fp["source"].replace("te_core.frontier_fit", "te_core.algorithm_policy", 1)
     assert fp["note"].startswith(FF.note() + " ") and len(fp["note"]) <= console.NOTE_MAX
     f, gates = fitted(fp, "v3"), per_mac("gemm/bf16")

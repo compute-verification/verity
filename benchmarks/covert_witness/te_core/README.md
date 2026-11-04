@@ -158,7 +158,9 @@ loading (`rescore.arguments`, `rescore.load`), so they score the measured quanti
 pilot's unless `--pin` names the commits. `training/frontier-fit` is `frontier_fit`'s: per data (`v3` or
 `v2.3-pilot`), L(C) = E + A·C^(−γ) fitted to its unconstrained frontier, the least held-out bits per byte at each total
 training compute in gates (from scratch: the pilot's pretraining runs, or the v3 ladder's from `--ladder-points` and
-`--ladder-fit`, else `frontier_fit.LADDER`'s, each start of the ladder's manifest at its counted C0 and held-out bpb;
+`--ladder-fit`, else `frontier_fit.LADDER`'s, each start of the ladder's manifest at its counted C0 and held-out bpb,
+which `frontier_fit.ladder_file` builds, each start.json sha256-checked; ladder runs that leave out a registered v3
+start are refused, `frontier_fit.uncovered`;
 each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their residuals; v3's
 fit reads its frontier from scratch alone (`FROM_SCRATCH`), its starts' checkpoints setting only H. A data with
 neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then converts its

@@ -11,8 +11,9 @@ pretraining runs, their loss converted as te_core.panels converts it (`panels.sc
 runs: `--ladder-points` reads the ladder report's annealed runs (its F.json or report.json, each at its counted MACs)
 and the compute-optimal points of its FIT.json, which `--ladder-fit` names as well once the ladder has three sizes
 (`ladder_points`); without `--ladder-points` it reads `LADDER`'s, each start of the ladder's manifest at its counted
-C0 and held-out bpb. Every C is in te_core's gates: a start's C0 is te_core.panels' `c0`, a ladder point's MACs are at
-the bf16 GEMM price, as a v3 start's counted C0 is.
+C0 and held-out bpb (`ladder_file` builds it). Ladder runs that leave out a start the starts manifest registers on
+v3 are refused, since every such start is a ladder run (`uncovered`). Every C is in te_core's gates: a start's C0 is
+te_core.panels' `c0`, a ladder point's MACs are at the bf16 GEMM price, as a v3 start's counted C0 is.
 
 The fit (`fit`) reads the frontier from the least C0 of the data's starts in the manifest up: gains are read at no
 less compute, and the from-scratch runs' first evaluations below it are warm-up, not a frontier. On v3
@@ -73,11 +74,14 @@ FIT_TARGET = 5
 FROM_SCRATCH = ("v3",)
 #: the fit's parameters, E, A and γ: on no more points than these its residuals bound none of its uncertainty
 PARAMS = 3
-#: the v3 ladder's points read when no `--ladder-points` names any: each start of its manifest
-#: (islands/ladder-v3/ladder_store.json) at its counted C0 MACs and held-out bpb on the v3 search pool, built from the
-#: manifest and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1); None reads none
-LADDER = "art:b5d21639ddaa436e761f5571fb7810555a62ed80b26926b1521579c10525cd82"
+#: the v3 ladder's points read when no `--ladder-points` names any: each start of its manifest (`LADDER_MANIFEST`,
+#: batch 5, xl-t20 among them) at its counted C0 MACs and held-out bpb on the v3 search pool, built from the manifest
+#: and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1; `ladder_file`); None reads
+#: none. A fit refuses ladder runs that leave out a registered v3 start (`uncovered`)
+LADDER = "art:971de925ed69b181ed27910ac30d230322c6f749141756d352dff746910b8602"
 LADDER_FILE = "ladder-points.json"
+#: the v3 ladder's manifest: each start's shape, with its counted C0 MACs, and its start.json's sha256 in the store
+LADDER_MANIFEST = Path(__file__).resolve().parents[1] / "islands" / "ladder-v3" / "ladder_store.json"
 #: the schema of the scoring cap's own fit (te_core.policy's `ladder_fit`; the integrator's CAP.json, coordinator
 #: 20:11Z): a `--ladder-fit` of it caps the score and holds no from-scratch point
 CAP_SCHEMA = "te-ladder/cap/"
@@ -144,6 +148,43 @@ def ladder_points(path: Path) -> list[tuple[float, float, dict]]:
     if not out:
         raise SystemExit(f"frontier_fit: {path} holds no ladder point (te-ladder/F/*, a report's F or te-ladder/fit/*)")
     return out
+
+
+def ladder_file(store: Path, manifest: Path = LADDER_MANIFEST) -> dict:
+    """`LADDER`'s ladder-points.json (te-ladder/F/v1) from the ladder's `manifest` and each start's start.json under
+    `store` (the manifest's `path` in its starts store): each start at its counted C0 MACs (provenance.c0.macs, the
+    manifest's c0_macs) and its held-out bpb on the v3 search pool (provenance.search_pool.bpb), each start.json
+    checked against the manifest's sha256."""
+    import hashlib
+
+    man = json.loads(manifest.read_text())
+    annealed = []
+    for name, s in man["starts"].items():
+        raw = (store / name / "start.json").read_bytes()
+        if hashlib.sha256(raw).hexdigest() != s["files"]["start.json"]:
+            raise SystemExit(f"frontier_fit: {store / name / 'start.json'} isn't the manifest's start.json for {name}")
+        p = json.loads(raw)["provenance"]
+        if p["c0"]["macs"] != s["shape"]["c0_macs"]:
+            raise SystemExit(f"frontier_fit: {name}'s start.json counts C0 {p['c0']['macs']} MACs, its manifest "
+                             f"{s['shape']['c0_macs']}")
+        annealed.append({"branch": name, "macs": p["c0"]["macs"], "bpb": p["search_pool"]["bpb"],
+                         "parameters": s["shape"]["parameters"], "tokens": s["shape"]["tokens"],
+                         "start_json_sha256": s["files"]["start.json"]})
+    return {"schema": "te-ladder/F/v1", "source": f"built by te_core {VERSION}'s frontier_fit.ladder_file from the v3 "
+            f"ladder's manifest ({manifest.relative_to(manifest.parents[2])}, starts store {man['art']}): each start's "
+            "C0 in counted MACs (start.json provenance.c0.macs, the manifest's c0_macs) and its held-out bits per "
+            "byte on the v3 search pool (provenance.search_pool.bpb), each start.json checked against the manifest's "
+            "sha256", "manifest": {"path": str(manifest.relative_to(manifest.parents[2])), "starts_store": man["art"]},
+            "annealed": annealed}
+
+
+def uncovered(shapes: dict[str, dict], extra: list[tuple]) -> list[str]:
+    """The registered v3 starts (`shapes`, the starts manifest's) that no annealed ladder run in `extra` is: each start
+    is a ladder run, so ladder runs that leave one out are an older ladder's. None where `extra` has no annealed run
+    (no ladder read, or only a FIT.json's compute-optimal models)."""
+    runs = {r["ladder"] for _, _, r in extra if str(r.get("source", "")).endswith(", annealed")}
+    return sorted(s for s, shape in shapes.items()
+                  if runs and shape.get("tokenizer") == policy.V3_TOKENIZER and s not in runs)
 
 
 def points(sts: list[Start], runs: list[dict], shapes: dict[str, dict], rate: float,
@@ -430,7 +471,8 @@ def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str
            ) -> tuple[list[dict], list[tuple], str]:
     """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json,
     not a CAP_SCHEMA one) and the source of `command`'s panels for a loaded ledger `d` (te_core.rescore's `load`): its
-    pins at 12 characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`."""
+    pins at 12 characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`. Ladder runs that leave out
+    a registered v3 start of `shapes` are refused (`uncovered`)."""
     runs = panels.pretraining(a.pretraining or panels.fetch(panels.PRETRAINING))
     fit = [a.ladder_fit] if a.ladder_fit and not str(
         json.loads(a.ladder_fit.read_text()).get("schema", "")).startswith(CAP_SCHEMA) else []
@@ -438,6 +480,11 @@ def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str
     built = not a.ladder_points and LADDER
     if built:
         extra += [(x, y, r | {"manifest": LADDER}) for x, y, r in ladder_points(panels.fetch(LADDER) / LADDER_FILE)]
+    missing = uncovered(shapes, extra)
+    if missing:
+        raise SystemExit(f"{command}: the ladder's runs leave out the registered v3 start(s) {', '.join(missing)} "
+                         f"(the starts manifest's); read a ladder report or ladder-points.json that has each of them "
+                         f"(`frontier_fit.ladder_file` builds one from the ladder's manifest)")
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
     tail = (f"{len(scored)} valid checkpoints, quantities {d['quantities']}; {len(d.get('refused', {}))} refused; "
             f"{len(extra)} ladder points" + (f" ({LADDER[:16]})" if built else "") + ")")
