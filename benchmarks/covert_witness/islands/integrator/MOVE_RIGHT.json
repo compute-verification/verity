@@ -1,13 +1,12 @@
 {
- "what": "the move-right round (coordinator 16:17Z): each candidate relaunched from its record on the search split at the long tier, one seed, its budget k x the record's",
+ "what": "the move-right round (coordinator 16:17Z; vy-nebius-2's runs, coordinator 17:30Z): each candidate relaunched from its record on the search split at the long tier, one seed, its budget k x the record's, sized to end by target_end at speed x the record's step rate",
  "table": "art:d902a762579b498df6ec8be7cd16763204c60678d2adbcf387f9ddb2f5257971",
- "harness": "c3ff9e70872d11316de7f281ac98e1de54f399e1",
+ "harness": "8a8afaf58e5926f6a773f3f50839e7613038b784",
  "long_by": "16:17Z coordinator",
  "target_end": "22:20Z",
  "node_end": "22:45Z",
- "speed": 0.92,
  "p_cap": 100,
- "skipped": "19e1 and ca83, s-t20 sparse/bitfit (ca83, the same args, already ran to p 121 at gain 1.0095, past what either reaches by 22:20Z); 77b4 and ce78, m-t20 quant/qlora (by 22:20Z p 11 at most, which 77b4 reached at gain 1.0525); decade 1e1 has no attempt at either start, nor m-t20's 1e2; the 2x-lr variants of 07e3, 0eec, 9394, 0538, 77b4 and 6509 (vy-nebius-2's agent admits no lease past 20:45Z, its 22:45Z deadline less a 2 h drain, and a long-tier lease is 1187 min, so they waited for a GPU until cancelled at 17:14Z; vy-nebius-1 and -3 run no agent)",
+ "skipped": "ca83, s-t20 1e0 sparse/bitfit (by 22:20Z k 0.47, short of the p 121 it ran to at gain 1.0095); plain 19e1 (ca83's args, so a replay of ca83 to p 48: it runs at 2x lr instead); plain 77b4, m-t20 1e3 quant/qlora (by 22:20Z p 9.2, short of the 10.2 it reached at gain 1.0525; its 2x-lr variant runs, and ce78 runs its args with the default decay); decade 1e1 has no attempt at either start, nor m-t20's 1e2. The 2x-lr variants of 07e3, 0eec, 9394, 0538, 77b4 and 6509, first launched on vy-nebius-2 at 16:51Z, waited for a GPU until cancelled at 17:14Z (its agent admitted no lease past 20:45Z, its 22:45Z deadline less a 2 h drain, and a long-tier lease is 1187 min); infra stopped that agent at 17:31Z and they run there now, beside 19e1 at 2x lr and ce78, each sized to end by 22:20Z at 1.1x its record's step time",
  "jobs": [
   {
    "key": "MR r20261103-075334-0538",
@@ -26,6 +25,8 @@
    },
    "kind": "tier",
    "k_full": 72.66452844574322,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -119,6 +120,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 151.75134698945442,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -199,6 +202,8 @@
    "edits": {},
    "kind": "fixed",
    "k_full": 2100.5663383750625,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -296,6 +301,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 227.603213326867,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -378,6 +385,8 @@
    },
    "kind": "tier",
    "k_full": 280.1128768015943,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -462,6 +471,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 398.232900577019,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -547,6 +558,8 @@
    "edits": {},
    "kind": "fixed",
    "k_full": 1342.1282435796654,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -639,6 +652,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 149.35352109102098,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -727,6 +742,8 @@
    "edits": {},
    "kind": "fixed",
    "k_full": 73.00178281909521,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -821,6 +838,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 60.30848286100769,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -912,6 +931,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 78.50499403229539,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -997,6 +1018,8 @@
    "edits": {},
    "kind": "mezo",
    "k_full": 624.8069835700062,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -1093,6 +1116,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 137.58529257123985,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -1181,6 +1206,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 8.780877855544873,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -1264,6 +1291,8 @@
    "edits": {},
    "kind": "tier",
    "k_full": 4.7393905612541385,
+   "speed": 0.92,
+   "k_min": 1.2,
    "groups": [
     {
      "gain": 1.1,
@@ -1348,6 +1377,8 @@
    },
    "kind": "tier",
    "k_full": 398.232900577019,
+   "speed": 0.92,
+   "k_min": 1.0,
    "groups": [
     {
      "gain": 1.1,
@@ -1368,7 +1399,7 @@
      }
     }
    ],
-   "tree": "69b1df34395c138019eb87866a3e3d4b6c494b31",
+   "tree": null,
    "node": "vy-nebius-3",
    "k": 8.640982428134869,
    "binds": "time",
@@ -1416,6 +1447,736 @@
     "32",
     "--budget-fraction",
     "0.0206711"
+   ]
+  },
+  {
+   "key": "MR r20261103-203800-07e3 2x lr",
+   "run": "r20261104-174846-c920",
+   "variant": true,
+   "start": "s-t20",
+   "decade": 0,
+   "method_key": "wildcard/prefix",
+   "category": "low-rank/adapter",
+   "rho_default": 1.0,
+   "island": "wildcard",
+   "program": "train.py",
+   "commit": "dc65ea271cf828e586ef0cb6ed8f48b11f660577",
+   "edits": {
+    "--snaps": "19",
+    "--lr": "6e-2"
+   },
+   "kind": "tier",
+   "k_full": 280.1128768015943,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 8.676795877636777e+18,
+     "got": {
+      "reached": "no",
+      "gain": 1.005466231598355,
+      "p": 3.7467073352844413
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 9.106305691982086e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.005466231598355,
+      "p": 0.3569989396482855
+     }
+    }
+   ],
+   "tree": "00413ea42e20743b41576a9ce233df98d9aee95e",
+   "node": "vy-nebius-2",
+   "k": 20.235716576539396,
+   "binds": "time",
+   "steps": 74164,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 75.81730773205712,
+    "2.0": 7.224129360847798
+   },
+   "f_new": 0.08068024978314824,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "s-t20",
+    "--island",
+    "wildcard",
+    "--direction",
+    "wildcard",
+    "--mechanism",
+    "prefix",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-203800-07e3 2x lr k 20.2",
+    "--no-wait",
+    "--",
+    "--mechanism",
+    "prefix",
+    "--set",
+    "blocks\\..*\\.prefix_(k|v)\\.weight|blocks\\..*\\.prefix_gate",
+    "--method",
+    "adamw",
+    "--lr",
+    "6e-2",
+    "--prefix",
+    "64",
+    "--warmup",
+    "50",
+    "--batch",
+    "64",
+    "--snaps",
+    "19",
+    "--budget-fraction",
+    "0.0806802"
+   ]
+  },
+  {
+   "key": "MR r20261103-065726-0eec 2x lr",
+   "run": "r20261104-174853-8eec",
+   "variant": true,
+   "start": "s-t20",
+   "decade": 3,
+   "method_key": "lowrank/lora-all",
+   "category": "low-rank/adapter",
+   "rho_default": 8316.292405546314,
+   "island": "e1mb",
+   "program": "train.py",
+   "commit": "be152ac8bbab9cd8b6793ae975eadda3ded13ce7",
+   "edits": {
+    "--lr": "2e-3"
+   },
+   "kind": "tier",
+   "k_full": 149.35352109102098,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 8.676795877636777e+18,
+     "got": {
+      "reached": "no",
+      "gain": 1.0575406317811709,
+      "p": 7.026958337196214
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 9.106305691982086e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.0575406317811709,
+      "p": 0.6695523431219053
+     }
+    }
+   ],
+   "tree": "2c3b6e6352346810f40b7a68774b030cd49a50a5",
+   "node": "vy-nebius-2",
+   "k": 9.145782689320537,
+   "binds": "time",
+   "steps": 60097,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 64.26703391890575,
+    "2.0": 6.123580229318327
+   },
+   "f_new": 0.05834310074828796,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "s-t20",
+    "--island",
+    "e1mb",
+    "--direction",
+    "lowrank",
+    "--mechanism",
+    "lora-all",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-065726-0eec 2x lr k 9.15",
+    "--no-wait",
+    "--",
+    "--targets",
+    "all",
+    "--layers",
+    "all",
+    "--rank",
+    "16",
+    "--norms",
+    "none",
+    "--format",
+    "lora",
+    "--dtype",
+    "bf16",
+    "--e-bytes",
+    "64000000",
+    "--lr",
+    "2e-3",
+    "--batch",
+    "64",
+    "--micro",
+    "64",
+    "--budget-fraction",
+    "0.0583431"
+   ]
+  },
+  {
+   "key": "MR r20261104-012219-9394 2x lr",
+   "run": "r20261104-174900-2635",
+   "variant": true,
+   "start": "s-t20",
+   "decade": 4,
+   "method_key": "shallow/depthshare",
+   "category": "shallow",
+   "rho_default": 18863.849818991544,
+   "island": "shallow",
+   "program": "train.py",
+   "commit": "318d735aeef31f6bc5ea98a063e6aa0cd97ed77a",
+   "edits": {
+    "--muon-lr": "1e-2",
+    "--lr": "2e-3"
+   },
+   "kind": "tier",
+   "k_full": 151.75134698945442,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 8.676795877636777e+18,
+     "got": {
+      "reached": "no",
+      "gain": 1.0810458224170867,
+      "p": 6.915925235860298
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 9.106305691982086e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.0810458224170867,
+      "p": 0.6589727339089073
+     }
+    }
+   ],
+   "tree": "775529d7f3f601b0ff8388accf4aae198422bb8b",
+   "node": "vy-nebius-2",
+   "k": 11.967522990289913,
+   "binds": "time",
+   "steps": 117665,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 82.7664942592843,
+    "2.0": 7.886271343029045
+   },
+   "f_new": 0.08588660218095949,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "s-t20",
+    "--island",
+    "shallow",
+    "--direction",
+    "shallow",
+    "--mechanism",
+    "depthshare",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261104-012219-9394 2x lr k 12",
+    "--no-wait",
+    "--",
+    "--full",
+    "t0.mlp_norm,t0.w_gate,t0.w_up,t0.w_down",
+    "--opt",
+    "muon",
+    "--muon-lr",
+    "1e-2",
+    "--lr",
+    "2e-3",
+    "--warmup",
+    "50",
+    "--store",
+    "q8",
+    "--budget-fraction",
+    "0.0858866"
+   ]
+  },
+  {
+   "key": "MR r20261103-075334-0538 2x lr",
+   "run": "r20261104-174906-dd03",
+   "variant": true,
+   "start": "m-t20",
+   "decade": 0,
+   "method_key": "wildcard/ia3",
+   "category": "norm-only/BitFit-like",
+   "rho_default": 1.0,
+   "island": "wildcard",
+   "program": "train.py",
+   "commit": "3b8dc043d118589737cab904c2f3c0b9aaf8a2e9",
+   "edits": {
+    "--snaps": "19",
+    "--lr": "6e-3",
+    "--norm-lr": "2e-3"
+   },
+   "kind": "tier",
+   "k_full": 72.66452844574322,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 4.650430911869632e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.005497112349938,
+      "p": 1.376187283382256
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 5.724389876206273e+20,
+     "got": {
+      "reached": "no",
+      "gain": 1.005497112349938,
+      "p": 0.11179993015088133
+     }
+    }
+   ],
+   "tree": "3a750f5f2035246f9c3f1be075ab6f144284f1e0",
+   "node": "vy-nebius-2",
+   "k": 13.887299102541357,
+   "binds": "time",
+   "steps": 44662,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 19.111524425443232,
+    "2.0": 1.5525990696485208
+   },
+   "f_new": 0.014878588246804209,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "m-t20",
+    "--island",
+    "wildcard",
+    "--direction",
+    "wildcard",
+    "--mechanism",
+    "ia3",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-075334-0538 2x lr k 13.9",
+    "--no-wait",
+    "--",
+    "--start",
+    "m-t20",
+    "--mechanism",
+    "ia3",
+    "--ia3",
+    "--set",
+    "blocks\\.\\d+\\.(wk|wv|w_up)\\.weight",
+    "--method",
+    "adamw",
+    "--lr",
+    "6e-3",
+    "--norm-lr",
+    "2e-3",
+    "--wd",
+    "0",
+    "--batch",
+    "64",
+    "--micro",
+    "32",
+    "--warmup",
+    "50",
+    "--schedule",
+    "linear",
+    "--snaps",
+    "19",
+    "--budget-fraction",
+    "0.0148786"
+   ]
+  },
+  {
+   "key": "MR r20261103-105636-77b4 2x lr",
+   "run": "r20261104-174913-0d85",
+   "variant": true,
+   "start": "m-t20",
+   "decade": 3,
+   "method_key": "quant/qlora",
+   "category": "quantized",
+   "rho_default": 7546.153583828893,
+   "island": "quant",
+   "program": "train.py",
+   "commit": "1d65c863309ac74ebdbb9270a29c045c883efec0",
+   "edits": {
+    "--lr": "6e-4"
+   },
+   "kind": "tier",
+   "k_full": 9.759057500825069,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 4.650430911869632e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.052518881767758,
+      "p": 10.246891156399643
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 5.724389876206273e+20,
+     "got": {
+      "reached": "no",
+      "gain": 1.052518881767758,
+      "p": 0.8324460844701442
+     }
+    }
+   ],
+   "tree": "3f4ff94adbcb9027a16f9a41de6ddc0e0efeaa3a",
+   "node": "vy-nebius-2",
+   "k": 0.8784332845411721,
+   "binds": "time",
+   "steps": 20467,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 9.001210254852028,
+    "2.0": 0.7312483481845468
+   },
+   "f_new": 0.0070274662763293765,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "m-t20",
+    "--island",
+    "quant",
+    "--direction",
+    "quant",
+    "--mechanism",
+    "qlora",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-105636-77b4 2x lr k 0.878",
+    "--no-wait",
+    "--",
+    "--mode",
+    "qlora",
+    "--targets",
+    "all",
+    "--rank",
+    "16",
+    "--qbits",
+    "4",
+    "--no-norms",
+    "--lr",
+    "6e-4",
+    "--decay-frac",
+    "0.4",
+    "--emit",
+    "quan",
+    "--batch",
+    "64",
+    "--micro",
+    "64",
+    "--budget-fraction",
+    "0.00702747"
+   ]
+  },
+  {
+   "key": "MR r20261103-075715-6509 2x lr",
+   "run": "r20261104-174920-35cf",
+   "variant": true,
+   "start": "m-t20",
+   "decade": 4,
+   "method_key": "wildcard/adapter",
+   "category": "low-rank/adapter",
+   "rho_default": 49533.50646632677,
+   "island": "wildcard",
+   "program": "train.py",
+   "commit": "e0170632c87f3e86deaf430b1a14f86a7184493f",
+   "edits": {
+    "--lr": "2e-3",
+    "--norm-lr": "2e-3"
+   },
+   "kind": "fixed",
+   "k_full": 73.00178281909521,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 4.650430911869632e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.0183184581097506,
+      "p": 1.3698295594753997
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 5.724389876206273e+20,
+     "got": {
+      "reached": "no",
+      "gain": 1.0183184581097506,
+      "p": 0.11128343570474883
+     }
+    }
+   ],
+   "tree": "dd35946414a6dfea24e360daae23e1b05d558dea",
+   "node": "vy-nebius-2",
+   "k": 17.458222487738375,
+   "binds": "time",
+   "steps": 83939,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 23.914789219602177,
+    "2.0": 1.9428109797334336
+   },
+   "f_new": 16.585311363351455,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "m-t20",
+    "--island",
+    "wildcard",
+    "--direction",
+    "wildcard",
+    "--mechanism",
+    "adapter",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-075715-6509 2x lr k 17.5",
+    "--no-wait",
+    "--",
+    "--start",
+    "m-t20",
+    "--mechanism",
+    "adapter",
+    "--grow",
+    "1",
+    "--adapter",
+    "512",
+    "--set",
+    "blocks\\.8\\.(mlp_norm|w_gate\\.weight|w_up\\.weight|w_down\\.weight)",
+    "--method",
+    "adamw",
+    "--lr",
+    "2e-3",
+    "--norm-lr",
+    "2e-3",
+    "--wd",
+    "0",
+    "--batch",
+    "64",
+    "--micro",
+    "32",
+    "--warmup",
+    "50",
+    "--schedule",
+    "linear",
+    "--budget-fraction",
+    "16.5853"
+   ]
+  },
+  {
+   "key": "MR r20261103-122330-19e1 2x lr",
+   "run": "r20261104-174927-e8ca",
+   "variant": true,
+   "start": "s-t20",
+   "decade": 0,
+   "method_key": "sparse/bitfit",
+   "category": "norm-only/BitFit-like",
+   "rho_default": 1.0,
+   "island": "sparse",
+   "program": "train.py",
+   "commit": "c20e0cc9b3a3940ddcad1f28f7733a18161c7849",
+   "edits": {
+    "--lr": "2e-3",
+    "--norm-lr": "6e-4"
+   },
+   "kind": "tier",
+   "k_full": 236.03787532024907,
+   "speed": 0.9090909090909091,
+   "k_min": 0.8,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 8.676795877636777e+18,
+     "got": {
+      "reached": "no",
+      "gain": 1.0078073594269727,
+      "p": 4.446324424824741
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 9.106305691982086e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.0078073594269727,
+      "p": 0.4236608208081987
+     }
+    }
+   ],
+   "tree": "e09de5b2b562ba97df122a5d4bc50b12ffa30b85",
+   "node": "vy-nebius-2",
+   "k": 10.91762434665689,
+   "binds": "time",
+   "steps": 46411,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 48.54329979360178,
+    "2.0": 4.625369691980232
+   },
+   "f_new": 0.043528809864241264,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "s-t20",
+    "--island",
+    "sparse",
+    "--direction",
+    "sparse",
+    "--mechanism",
+    "bitfit",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-122330-19e1 2x lr k 10.9",
+    "--no-wait",
+    "--",
+    "--mech",
+    "bitfit",
+    "--bias",
+    "all",
+    "--norms",
+    "all",
+    "--cap",
+    "99000",
+    "--probe",
+    "0",
+    "--no-analyse",
+    "--lr",
+    "2e-3",
+    "--norm-lr",
+    "6e-4",
+    "--budget-fraction",
+    "0.0435288"
+   ]
+  },
+  {
+   "key": "MR r20261103-100105-ce78",
+   "run": "r20261104-174935-591e",
+   "variant": false,
+   "start": "m-t20",
+   "decade": 3,
+   "method_key": "quant/qlora",
+   "category": "quantized",
+   "rho_default": 7546.153037797003,
+   "island": "quant",
+   "program": "train.py",
+   "commit": "be9b01530e86d4c9590706977fc5f575f36e4367",
+   "edits": {},
+   "kind": "tier",
+   "k_full": 68.9048555502439,
+   "speed": 0.9090909090909091,
+   "k_min": 1.2,
+   "groups": [
+    {
+     "gain": 1.1,
+     "H": 4.650430911869632e+19,
+     "got": {
+      "reached": "no",
+      "gain": 1.0226680535968449,
+      "p": 1.4512765348892172
+     }
+    },
+    {
+     "gain": 2.0,
+     "H": 5.724389876206273e+20,
+     "got": {
+      "reached": "no",
+      "gain": 1.0226680535968449,
+      "p": 0.11790009774793099
+     }
+    }
+   ],
+   "tree": "8422c815c09de37f6970a4045ffc4a2d40e1450b",
+   "node": "vy-nebius-2",
+   "k": 6.183373535348044,
+   "binds": "time",
+   "steps": 20405,
+   "end": "22:20Z",
+   "p_cap": {
+    "1.1": 8.973784918305597,
+    "2.0": 0.7290203442295039
+   },
+   "f_new": 0.007014439962594765,
+   "launch": [
+    "python",
+    "benchmarks/covert_witness/launch.py",
+    "m-t20",
+    "--island",
+    "quant",
+    "--direction",
+    "quant",
+    "--mechanism",
+    "qlora",
+    "--node",
+    "vy-nebius-2",
+    "--long",
+    "17:30Z coordinator",
+    "--note",
+    "MOVE-RIGHT r20261103-100105-ce78 k 6.18",
+    "--no-wait",
+    "--",
+    "--mode",
+    "qlora",
+    "--targets",
+    "all",
+    "--rank",
+    "16",
+    "--qbits",
+    "4",
+    "--no-norms",
+    "--lr",
+    "3e-4",
+    "--emit",
+    "quan",
+    "--batch",
+    "64",
+    "--micro",
+    "64",
+    "--budget-fraction",
+    "0.00701444"
    ]
   }
  ]
