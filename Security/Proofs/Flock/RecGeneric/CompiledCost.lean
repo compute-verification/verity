@@ -165,7 +165,7 @@ statement `r`'s staging rounds fix. -/
 noncomputable def waitsAt (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ)
     (r : Fin (L.V.k x) → Coin) : ℝ :=
   (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) *
-    waitExp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
+    waitExp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (A.shape (L.stmtAt H P x ω s r)))
       (A.cap (A.shape (L.stmtAt H P x ω s r))) 0
 
 theorem replayAt_fork (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) {Ω : Type} (P : Prover Ω) (x : Msg)
@@ -189,14 +189,15 @@ theorem sessionProg_runs_le (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} 
     (((L.sessionProg x r s xO c).eval H (run H P L.V x ω)).2.2 : ℝ) ≤
       (if (L.sessRunAt H P x ω s r (A.V.k xO) (sessCoins (L.off x s) r (A.V.k xO))).out = .acc then (1 : ℝ)
         else 0) *
-        ∑ i, (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO)
+        ∑ i, (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k (A.shape xO))
           ((List.finRange (A.cap (A.shape xO))).map
             fun j t => (cast (congrArg A.EC h.symm) c) i j (Fin.cast (A.wf xO) t)) 0 : ℝ) + 1 := by
   unfold sessionProg
   rw [dif_pos h, RP.eval_bind_ret]
   dsimp only
   rw [serve_viewingAt_runs]
-  exact ERep_ext_runs_le H A.V (fun x => A.waits (A.shape x)) A.k (fun x => A.cap (A.shape x)) A.opens
+  exact ERep_ext_runs_le H A.V (fun x => A.waits (A.shape x)) (fun x => A.k (A.shape x))
+    (fun x => A.cap (A.shape x)) A.opens
     (fun x os => (A.assemble x os).1) A.check xO (L.sessRunAt H P x ω s r (A.V.k xO))
     (sessCoins (L.off x s) r (A.V.k xO)) fun i j t => (cast (congrArg A.EC h.symm) c) i j (Fin.cast (A.wf xO) t)
 
@@ -209,14 +210,15 @@ theorem Ex_sessionProg_le (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P
       (if (L.sessRunAt H P x ω s r (A.V.k xO) (sessCoins (L.off x s) r (A.V.k xO))).out = .acc then (1 : ℝ)
         else 0) *
         ((A.waits (A.shape xO) : ℝ) *
-          waitExp (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO) (A.cap (A.shape xO)) 0) + 1 := by
+          waitExp (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k (A.shape xO)) (A.cap (A.shape xO)) 0) + 1 := by
   refine (Ex_mono fun c => L.sessionProg_runs_le H P x ω s r xO h c).trans (le_of_eq ?_)
   rw [Ex_add, Ex_const, Ex_mul_left]
   congr 2
-  exact (Ex_EC_cast A xO h fun ρ => ∑ i, (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO)
+  exact (Ex_EC_cast A xO h fun ρ => ∑ i, (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k (A.shape xO))
       ((List.finRange (A.cap (A.shape xO))).map (ρ i)) 0 : ℝ)).trans
     (Ex_sum_pi (fun σ : Fin (A.cap (A.shape xO)) → Fin (A.V.k xO) → Coin =>
-      (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO) ((List.finRange (A.cap (A.shape xO))).map σ) 0 : ℝ))
+      (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k (A.shape xO))
+        ((List.finRange (A.cap (A.shape xO))).map σ) 0 : ℝ))
       (A.waits (A.shape xO)))
 
 /-- Session `s`'s waits read the judged coins only before the session's first round. -/
@@ -257,18 +259,18 @@ theorem Pr_replayAt_fork (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages
 `ε·N ≤ k` (`waitRuns_exp`). -/
 theorem replay_waits_le (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) {Ω : Type} (P : Prover Ω)
     (x : Msg) (ω : Ω) (s : Fin (L.nS x)) (kk : ℕ) (r : Fin (L.V.k x) → Coin)
-    (hSh : A.shape (L.stmtAt H P x ω s r) = L.sh x s) (hk : A.k (L.stmtAt H P x ω s r) ≤ kk) :
+    (hSh : A.shape (L.stmtAt H P x ω s r) = L.sh x s) (hk : A.k (A.shape (L.stmtAt H P x ω s r)) ≤ kk) :
     Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) *
       L.waitsAt H P x ω s r ≤ (A.waits (L.sh x s) : ℝ) * kk := by
   rw [L.Pr_replayAt_fork H hSt P x ω s r]
-  have hw := waitRuns_exp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
-    (A.cap (A.shape (L.stmtAt H P x ω s r))) 0 (Nat.zero_le _)
+  have hw := waitRuns_exp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)))
+    (A.k (A.shape (L.stmtAt H P x ω s r))) (A.cap (A.shape (L.stmtAt H P x ω s r))) 0 (Nat.zero_le _)
   simp only [Nat.cast_zero, sub_zero] at hw
-  have hkr : (A.k (L.stmtAt H P x ω s r) : ℝ) ≤ kk := by exact_mod_cast hk
+  have hkr : (A.k (A.shape (L.stmtAt H P x ω s r)) : ℝ) ≤ kk := by exact_mod_cast hk
   unfold waitsAt
   calc _ = (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) *
         (Pr (fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc) *
-          waitExp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
+          waitExp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (A.shape (L.stmtAt H P x ω s r)))
             (A.cap (A.shape (L.stmtAt H P x ω s r))) 0) := by ring
     _ ≤ (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) * kk :=
         mul_le_mul_of_nonneg_left (hw.trans hkr) (Nat.cast_nonneg _)
@@ -280,7 +282,7 @@ shape and `A`'s `k` there is at most `k`: the replay accepts at each prefix with
 (`Ex_replayAt_waits`, `Pr_replayAt_fork`), and one wait's `ε·N ≤ k` (`replay_waits_le`). -/
 theorem sess_runs_exp (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) (x : Msg) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (s : Fin (L.nS x)) (kk : ℕ) (hSh : ∀ r, A.shape (L.stmtAt H P x ω s r) = L.sh x s)
-    (hk : ∀ r, A.k (L.stmtAt H P x ω s r) ≤ kk) :
+    (hk : ∀ r, A.k (A.shape (L.stmtAt H P x ω s r)) ≤ kk) :
     Ex (fun p : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) =>
       (((L.sessionProg x p.1 s (L.stmtAt H P x ω s p.1) p.2).eval H (run H P L.V x ω)).2.2 : ℝ)) ≤
       ((1 + A.waits (L.sh x s) * kk : ℕ) : ℝ) := by
@@ -303,7 +305,7 @@ the staged statements read only the rounds before the sessions (`Stages`), each 
 `A`'s `k` there is at most `k_s`: the judged run, then at each session its replay and its waits (`sess_runs_exp`). -/
 theorem EO_runs_exp_of (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) (kk : Msg → ℕ → ℕ)
     (hSh : ∀ x (s : Fin (L.nS x)) ms, A.shape ((L.stmts x ms).getD s []) = L.sh x s)
-    (hk : ∀ x (s : Fin (L.nS x)) ms, A.k ((L.stmts x ms).getD s []) ≤ kk x s) :
+    (hk : ∀ x (s : Fin (L.nS x)) ms, A.k (A.shape ((L.stmts x ms).getD s [])) ≤ kk x s) :
     ExtractRunsExpLe H L.EO fun x => 1 + ∑ s : Fin (L.nS x), ((1 + A.waits (L.sh x s) * kk x s : ℕ) : ℝ) := by
   intro x Ω P ω
   have hpt : ∀ p : (Fin (L.V.k x) → Coin) × L.EO.C x, ((L.EO.eval H P x ω p.1 p.2).2.2 : ℝ) ≤
