@@ -144,7 +144,9 @@ charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifi
 declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
 head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
 digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
-records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
+records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records. Each
+connection's egress cell count, n + 1 for its request Program's n outputs, is the scan's to hold
+(`egress.EgressBucket`, whose proof opens only on the network certifier's row), not this proof block's.
 
 A link whose egress end has no occupancy profile and is neither served nor a warden's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.

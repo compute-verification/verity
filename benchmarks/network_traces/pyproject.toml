@@ -32,7 +32,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and network-e2e's chain. certifier_piece is the network certifier's piece of
 # one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
 # leak_bounds counts K over the census's reference datacenter and the adversary resource model's world, one link a
-# machine.
+# machine. attacks' registry names one_stage's A5 warden tests as the refusal of record of the reads it lists, and
+# prove_path's tests as the advice cap's, which test_attacks checks are there.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "integrations/vllm/workloads",
           "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
@@ -44,6 +45,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "integrations/vllm/verity_vllm/records/__init__.py", "integrations/vllm/verity_vllm/records/fields.py",
           "integrations/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
           "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py",
+          "benchmarks/one_stage/tests/test_a5_warden.py", "benchmarks/prove_path/tests/test_prove_path.py",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures",

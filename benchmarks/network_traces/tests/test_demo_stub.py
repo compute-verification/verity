@@ -229,9 +229,9 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     assert sorted(by_user) == sorted(f"user-{j}" for j in range(7))
     for j in range(7):
         r = by_user[f"user-{j}"]
-        assert (r["prompt_ids"], r["streamed_ids"], r["release"]) == (prompts[j], S.outputs(prompts[j]), [j, RUN.hex()])
+        assert (r["prompt_ids"], r["streamed_ids"], r["release"]) == (prompts[j], S.outputs(prompts[j]), [RUN.hex(), j])
         assert r["finish"] == {"reason": "length", "stop_reason": None}
-        assert r["times"]["arrived"] < r["times"]["first_token"] < r["times"]["finished"]
+        assert r["times"]["received"] < r["times"]["first_token"] < r["times"]["finished"]
     serve = json.loads((tmp_path / "serve.json").read_text())
     assert serve["engine"]["engine_kwargs"]["max_model_len"] == 32 and serve["eos_token_ids"] == [S.VOCAB]
 

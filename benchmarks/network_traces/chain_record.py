@@ -590,24 +590,37 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
 SCOPES = ("link", "datacenter", "world")
 
 
+def run_class(params):
+    """The scan class of an active warden run's schedule ``params``: the `scan_zk.SETUPS` class whose schedule has its
+    egress cells, which the gate's ``--scan-class`` sets (`auditor.SCAN_CLASSES`); `ingress_scan.Class.serves` checks
+    the rest."""
+    import scan_zk as SZ
+    found = [s.cls for s in SZ.SETUPS.values() if s.params.egress_cells == params.egress_cells]
+    if len(found) != 1:
+        raise SystemExit(f"leak: {len(found)} of scan_zk's classes have a schedule of {params.egress_cells} egress "
+                         f"cells ({', '.join(f'{s.name}: {s.params.egress_cells}' for s in SZ.SETUPS.values())}), "
+                         "not one")
+    return found[0]
+
+
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
     the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
-    (`scan_zk.CLASS`) and its draw of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
+    (`run_class`) and its draw of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
     (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
     pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
-    import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
     if not dep or not v.get("windows") or not v.get("requests"):
         raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
-    params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
+    params = W.WardenParams(**dep["params"])
+    cls = run_class(params)
     cls.serves(params)
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
@@ -640,8 +653,6 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                              "pooled_share": {d: b.share for d, b in pooled.items()},
                              "per_period": per.bits, "per_period_share": per.share, "eps": str(per.eps),
                              "per_link_window": link.bits(link.block_s, reading)})
-    free = {reading: {"link_window": f["block"], "request": f["request"]}
-            for reading, f in ((r, link.free(r)) for r in LB.READINGS)}
     split = "; ".join(f"the {scope}'s F = {LB.fmax(d / links[scope])} at δ = {float(d):g}"
                       for scope in SCOPES[1:] for d in LB.DELTAS)
     return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
@@ -650,8 +661,11 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
-            "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
-                      "cap_per_request": link.cap, "free": free, "faulty": 0,
+            "terms": {"connections_per_block": link.connections, "cell": link.cell,
+                      "schedules_per_block": link.connections * link.cell,
+                      "cells_per_block": link.connections * link.cell, "cap_per_block": link.cap,
+                      "free_per_block": {r: link.free(r) for r in LB.READINGS},
+                      "faulty": 0,
                       "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
@@ -659,12 +673,14 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
-                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
-                "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
-                "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
+                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to "
+                "(trusted-host); NetworkCheck.Period takes the registered schedule's caps (Schedule.caps), "
+                "egress_cells for each of the lanes·T connections a sampling block's schedule can carry, and "
+                "charges the schedules and the fail cells ⌈log2(cap + 1)⌉ for each of them, whatever the requests "
+                "served, as its rows form does",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
-                "per-sampling-block and per-request terms at the run's request rate",
+                "per-sampling-block terms times the period's sampling blocks, whatever the requests served",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
                 f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "

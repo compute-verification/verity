@@ -175,8 +175,9 @@ class Endpoint:
             writer.close()
 
     async def read(self, reader: asyncio.StreamReader) -> tuple[dict | None, list | None, bytes | None]:
-        """The connection's one request: a class request's fields and the network certifier's release headers on it ([N,
-        run hex], `release.release_of`), or the whole answer to anything else."""
+        """The connection's one request: a class request's fields and the network certifier's release headers on it ([run
+        hex, N], as serve-openai's ``--admit release-order`` records them, "" for no run; `release.release_of`), or the
+        whole answer to anything else."""
         head = await reader.readuntil(b"\r\n\r\n")
         if head.startswith(b"GET /v1/models "):
             return None, None, http(200, {"object": "list", "data": [{"id": self.shape.name, "object": "model"}]})
@@ -189,7 +190,7 @@ class Endpoint:
             self.refused += 1
             return None, None, http(400, {"error": why})
         released = REL.release_of(head)
-        return fields, None if released is None else [released[0], released[1] and released[1].hex()], None
+        return fields, None if released is None else [released[1].hex() if released[1] else "", released[0]], None
 
     async def stream(self, fields: dict, release: list | None, writer: asyncio.StreamWriter) -> None:
         queue: asyncio.Queue = asyncio.Queue()
