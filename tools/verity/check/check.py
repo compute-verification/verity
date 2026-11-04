@@ -1,6 +1,7 @@
-"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs ci.toml takes off
-the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after landing, in drive's after-landing run on
-`checked`'s tip.
+"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
+takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which run after landing, in drive's
+after-landing run on `checked`'s tip.  It reports each step's real verdict; what gates and what may stay red is drive's
+(`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -23,7 +24,7 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            ci.toml's `gate = false`: circuit-check, ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
                                                             upstream build and inputs when the commit changes verity/ml/flock/
@@ -103,8 +104,7 @@ after judging its shards again the same way and finding its steps theirs, so a m
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
 (`circuit_join`: each shard's `CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless
-that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked, and a known failure
-that no longer fails, are judged only there.
+that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked is judged only there.
 An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
 `lean-suites:SUITE`) is a part of its own, packed by measured cost, and one measured past `shards.SPLIT_S` (`--split-s`) is
 M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
@@ -1374,12 +1374,16 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
     """`--cc-records-from ART@SHA256`: the records step's tarball (`cc_records`), from the run record ART, unpacked into
     circuit-check's cache ``cache`` once its bytes have that sha256 and the tree it was built from is this one; else why it is
     refused, and nothing unpacked.  Each record goes in by rename, so a circuit-check reading the cache meanwhile sees it whole
-    or not at all, and one counts only while its own reads still match (`circuit_check.units`)."""
+    or not at all, and one counts only while its own reads still match (`circuit_check.units`).  The tarball is fetched and
+    unpacked in a hidden directory inside the cache as its path resolves, so no rename crosses a filesystem when that path is a
+    link or mount onto another disk; circuit-check lists records only in their key's directory and `verdicts` walks no hidden
+    directory, so neither reads it."""
     art, _, sha = spec.partition("@")
     if not art.startswith("art:") or not re.fullmatch(r"[0-9a-f]{64}", sha):
         return f"{spec} is not ART@SHA256"
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    d = Path(tempfile.mkdtemp(prefix="cc-records-", dir=cache.parent))
+    cache.mkdir(parents=True, exist_ok=True)
+    root = cache.resolve()
+    d = Path(tempfile.mkdtemp(prefix=".cc-records-", dir=root))
     try:
         try:
             tar = fetch(art, d)
@@ -1397,7 +1401,7 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
             t.extractall(d / "x", filter="data")
         n = 0
         for p in sorted((d / "x" / "cache").rglob("*.json")):
-            (to := cache / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
+            (to := root / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
             os.replace(p, to)
             n += 1
         print(f"check: circuit-check: {n} binding record(s) from {art} ({sha[:12]}) into {cache}", flush=True)
@@ -1846,7 +1850,7 @@ def shard_parts() -> list[str]:
     return DECLARATION.all_parts(JOBS, _parts_of())
 
 
-#: the jobs off the merge gate (ci.toml's `gate = false`), which a recorded check leaves to drive's after-landing run
+#: the jobs off the merge gate (drive's policy, policy.toml's `off_gate`), which a recorded check leaves to drive's after-landing run
 OFF_GATE = tuple(j.name for j in JOBS if not j.gate)
 
 
@@ -1953,7 +1957,7 @@ def suite_join(store, steps: list[dict], into: Path) -> str | None:
     split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
     joined = {r["name"]: r for r in SUITES.combine_parts(rows)}
     bad = [f"{n}: {'; '.join(joined[n]['why'])}" if n in joined else f"{n}: no shard reported its parts" for n in sorted(split)
-           if n not in joined or joined[n]["status"] not in ("passed", "known-red")]
+           if n not in joined or joined[n]["status"] != "passed"]
     return f"suites split by file don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
 
 
