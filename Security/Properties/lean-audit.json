@@ -614,6 +614,7 @@
    "nontrivial": "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "honest": ["Properties.NetworkPeriod.wrongBoundsDrawn_honest"],
    "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
   },
   "Properties.RemoteAudit.codeLayoutTiles": {
@@ -1108,11 +1109,13 @@
     "NetworkCheck.Period",
     "Mathlib.Algebra.BigOperators.Fin",
     "SampledProofs.Bits",
+    "SampledProofs.Bound",
+    "Definitions.Claims.Sampling.Strata",
     "Definitions.NetworkCertifier.PeriodConditions",
     "Definitions.NetworkCertifier.Tied"
    ],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`) and the period's premise it meets (`NetTiming.WindowsPlaced`), never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
@@ -3000,6 +3003,9 @@
    "type_hash": "cd6d7ffbbbd9a636fb8133bf75bd00db1b34001e7d7a290948e1b6b2bc6b9ded"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn_honest": {
    "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial": {

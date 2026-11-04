@@ -1,4 +1,5 @@
 import Definitions.Claims.Sampling
+import Definitions.Claims.Sampling.Strata
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Claims.Sampling.Wait
 

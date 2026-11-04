@@ -12,9 +12,9 @@ claims' `Design.miss` (`Definitions.Claims.Sampling`):
 
 * `countBound_miss`: **`miss(countBound + 1) < δ`** for every design that is a strata draw over the partition's proof
   blocks whose strata have the code's sizes and counts, every `0 < δ` (`countBound_strataPa`, through `strataPa_eq_V`
-  and `sum_card_window`); `countBound_miss_design`: the same for every well-formed design whose rules are strata draws
-  (`Design.Pa_eq_strataPa`; every one-stage design but Bernoulli's, `OneStage.strata`), `strataOf_subset` the uniform
-  `k`-subset's one stratum.
+  and `sum_card_window`); `countBound_miss_design`: the same for every design whose strata draw, in order, is the
+  code's strata (`StrataDrawn`, through `Design.Pa_eq_strataPa`; every one-stage design but Bernoulli's,
+  `OneStage.strata`), `strataOf_subset` the uniform `k`-subset's one stratum.
 * `choose_div_eq_gr`: a stratum's escape `C(n − m, k)/C(n, k)` is the product of its first `m` factors, each in
   `[0, 1]` and falling with `j` (`fac_anti`).
 * `V_le_of_sep`: an exchange: when a threshold `τ` separates the factors a choice of counts takes from those it
@@ -583,18 +583,18 @@ theorem sum_strata_eq_length {d : Design} {P : Partition} (hw : d.WellFormed P) 
     (sss.flatten.map Prod.fst).sum = P.blocks.length :=
   sum_flatten_strata d.rules P.classes sss hw.1 hs (strata_cover hw hss)
 
-/-- **The deployed count bound is sound at every design that draws strata**: `miss(countBound strata δ + 1) < δ` for
-the classes' strata in order, given as the code's. -/
-theorem countBound_miss_design {d : Design} {P : Partition} (hw : d.WellFormed P)
-    {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
-    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2)
-    (strata : Array Core.Stratum) (hlen : strata.size = sss.flatten.length)
-    (hst : ∀ i (h₁ : i < strata.size) (h₂ : i < sss.flatten.length),
-      strata[i].size = sss.flatten[i].1 ∧ strata[i].k = sss.flatten[i].2)
+/-- **The deployed count bound is sound at every design that draws strata**: `miss(countBound strata δ + 1) < δ` when
+the code's strata, in order, are the design's strata draw (`StrataDrawn`). -/
+theorem countBound_miss_design {d : Design} {P : Partition} (strata : Array Core.Stratum)
+    (h : StrataDrawn d P (strata.toList.map fun s => (s.size, s.k)))
     (δ : Core.Ratio) (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
     d.miss P (countBound strata δ + 1) < (δ.num : ℝ) / δ.den := by
+  obtain ⟨hw, sss, hs, hss, heq⟩ := h
   refine countBound_miss (fun B _ => Design.Pa_eq_strataPa hw hs hss B) (sum_strata_eq_length hw hs hss)
-    (fun p hp => ?_) strata hlen hst δ hδ hδd
+    (fun p hp => ?_) strata (by rw [heq]; simp) (fun i _ h₂ => ?_) δ hδ hδd
+  rotate_left
+  · rw [List.getElem_of_eq heq h₂]
+    simp
   obtain ⟨ss, hss', hp'⟩ := List.mem_flatten.1 hp
   obtain ⟨q, hq, rfl⟩ : ∃ q ∈ (d.rules.zip P.classes).zip sss, q.2 = ss := by
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hss'

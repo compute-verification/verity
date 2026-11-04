@@ -15,9 +15,9 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
 
-`ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at a design whose rules are strata draws
-(`wrongBounds_of_countBound`, and `wrongBoundsDrawn` at `StrataDrawn`): a set of more blocks is accepted with
-probability at most `miss(countBound + 1) < δ`.
+`ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at strata that are the design's strata draw
+(`wrongBoundsDrawn`, at `StrataDrawn`): a set of more blocks is accepted with probability at most
+`miss(countBound + 1) < δ`.
 -/
 
 namespace Properties.NetworkPeriod
@@ -270,23 +270,11 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   rw [stateWindow_skipped] at hs
   cases hs
 
-/-- **`WrongBounds` at the bound the audit publishes**: at a well-formed design whose rules are strata draws, with the
-code's strata, every possible incorrect set at `δ` holds at most `countBound strata δ` proof blocks, since
-`miss(countBound strata δ + 1) < δ` (`countBound_miss_design`). -/
-theorem wrongBounds_of_countBound {s : Claims.Sampling.AuditStatement} {P : Claims.Sampling.Partition}
-    (hw : s.design.WellFormed P) {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
-    (hss : ∀ p ∈ (s.design.rules.zip P.classes).zip sss, p.1.1.strata (Claims.Sampling.strataSizes p.1.2) = some p.2)
-    (strata : Array Core.Stratum) (hlen : strata.size = sss.flatten.length)
-    (hst : ∀ i (h₁ : i < strata.size) (h₂ : i < sss.flatten.length),
-      strata[i].size = sss.flatten[i].1 ∧ strata[i].k = sss.flatten[i].2)
-    (δ : Core.Ratio) (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
-    WrongBounds s P ((δ.num : ℝ) / δ.den) (SampledProofs.Bound.countBound strata δ) := fun _ hF =>
+/-- **`WrongBoundsDrawn`**: at strata that are the design's strata draw, every possible incorrect set at `δ` holds at
+most `countBound strata δ` proof blocks, since `miss(countBound strata δ + 1) < δ` (`countBound_miss_design`). -/
+theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata δ h hδ hδd _ hF =>
   NetTiming.card_le_of_mem_faultySets _ _
-    (Claims.Sampling.Count.countBound_miss_design hw hs hss strata hlen hst δ hδ hδd).le hF
-
-/-- **`WrongBoundsDrawn`**: `wrongBounds_of_countBound` at the strata draw `StrataDrawn` gives. -/
-theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata δ ⟨hw, _, hs, hss, hlen, hst⟩ hδ hδd =>
-  wrongBounds_of_countBound hw hs hss strata hlen hst δ hδ hδd
+    (Claims.Sampling.Count.countBound_miss_design strata h δ hδ hδd).le hF
 
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
   sorry
@@ -347,11 +335,39 @@ theorem scanWindowsPlaced_nontrivial :
     have h0 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} ≤ 0 := h.2 0 {0} oneInput_faulty
     omega
 
+/-- **`WrongBoundsDrawn`'s premise holds at a deployed law** (the two-lemma rule's `_honest`): the code's strata of a
+`subset:1` draw over two units (`SampledProofs.Bound.strataOf`) are the strata draw of the claims' `subset 1` on a
+partition of one class of two proof blocks. -/
+theorem wrongBoundsDrawn_honest :
+    Claims.Sampling.StrataDrawn ⟨[.subset 1]⟩ ⟨[[[[0], [1]]]]⟩
+      (((SampledProofs.Bound.strataOf 2 (.subset 1)).getD #[]).toList.map fun x => (x.size, x.k)) := by
+  refine ⟨⟨rfl, fun p hp => ?_⟩, [[(2, 1)]], rfl, fun p hp => ?_, rfl⟩
+  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_singleton] at hp
+    subst hp
+    show 1 ≤ 1 ∧ 1 ≤ ([2] : List ℕ).sum
+    decide
+  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_singleton] at hp
+    subst hp
+    rfl
+
+/-- The code's strata of no stratum are not `oneInputStmt`'s strata draw on `oneInputPart`: its design of no rule is not
+well formed on a partition of one class. -/
+theorem oneInput_not_strataDrawn :
+    ¬ Claims.Sampling.StrataDrawn oneInputStmt.design oneInputPart
+      ((#[] : Array Core.Stratum).toList.map fun x => (x.size, x.k)) := fun h => by
+  obtain ⟨⟨hl, _⟩, _⟩ := h
+  exact absurd hl (by decide)
+
 /-- **`WrongBoundsDrawn`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at `oneInputStmt`, whose
 design of no rule draws nothing, its one proof block is a possible incorrect set at `δ = 1/2` (`oneInput_faulty`), so
-`0` is no `WrongBounds` bound there. The conclusion fails where the draw is not the design's strata draw
-(`StrataDrawn`: a design of no rule is not well formed on a partition of one class). -/
-theorem wrongBoundsDrawn_nontrivial : ¬ WrongBounds oneInputStmt oneInputPart (1 / 2) 0 := fun h => by
+the code's count bound over no strata, `0`, is no `WrongBounds` bound there. Every other premise holds at
+`δ = ⟨1, 2⟩`, and the strata draw (`StrataDrawn`) fails (`oneInput_not_strataDrawn`). -/
+theorem wrongBoundsDrawn_nontrivial :
+    ¬ WrongBounds oneInputStmt oneInputPart (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den)
+      (SampledProofs.Bound.countBound #[] ⟨1, 2⟩) := fun h => by
+  have h0 : SampledProofs.Bound.countBound #[] ⟨1, 2⟩ = 0 := by simp [SampledProofs.Bound.countBound]
+  have hδ : (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den) = 1 / 2 := by norm_num
+  rw [h0, hδ] at h
   simpa using h {0} oneInput_faulty
 
 end Properties.NetworkPeriod

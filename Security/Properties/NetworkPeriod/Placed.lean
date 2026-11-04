@@ -1,5 +1,7 @@
 import NetworkCheck.Period
 import SampledProofs.Bits
+import SampledProofs.Bound
+import Definitions.Claims.Sampling.Strata
 import Definitions.NetworkCertifier.PeriodConditions
 import Definitions.NetworkCertifier.Tied
 
@@ -24,10 +26,8 @@ bound holds (`WrongBounds`).
 * `WrongBounds s P δ b`: each possible incorrect set of `s` at `δ` holds at most `b` proof blocks. It is the sampled
   leg's: the audit's answer publishes `b` (`SampledProofs.Bound.boundOf`), and `WrongBoundsDrawn` gives it at a strata
   draw. The period check reads the answer's `bound` and not the draw, so `ScanWindowsPlaced` takes it as it stands.
-* `StrataDrawn s P strata`: `s`'s design is well formed on `P`, and its classes' strata (`OneStage.strata`), in order,
-  are `strata`'s sizes and draws, the strata the code reads the bound over (`SampledProofs.Bound.strataOf`).
-* `WrongBoundsDrawn`: at a strata draw (`StrataDrawn`), the code's count bound at `δ` (`SampledProofs.Bound.countBound`)
-  is a `WrongBounds` bound at `δ`.
+* `WrongBoundsDrawn`: at strata whose sizes and draws are the design's strata draw (`StrataDrawn`, beside
+  `OneStage.strata`), the code's count bound at `δ` (`SampledProofs.Bound.countBound`) is a `WrongBounds` bound at `δ`.
 
 `Proofs.Properties.NetworkPeriod` proves `ScanWindowsPlaced` (`scanWindowsPlaced`) and `WrongBoundsDrawn`
 (`wrongBoundsDrawn`).
@@ -77,22 +77,13 @@ def StmtBits {Coin Col T : Type} (D : Deploy Coin Col T) : Prop :=
 def WrongBounds (s : AuditStatement) (P : Partition) (δ : ℝ) (b : ℕ) : Prop :=
   ∀ F ∈ NetTiming.faultySets s.design P δ, F.card ≤ b
 
-/-- **The draw is its design's strata draw at `strata`**: `s`'s design is well formed on its partition `P`, and its
-classes' strata (`OneStage.strata` of each rule at its class's sizes), flattened in order, are `strata`'s sizes and
-draws. At the deployment `strata` is the code's (`SampledProofs.Bound.strataOf`), so it is the sampled leg's premise. -/
-def StrataDrawn (s : AuditStatement) (P : Partition) (strata : Array Core.Stratum) : Prop :=
-  s.design.WellFormed P ∧ ∃ sss : List (List (ℕ × ℕ)), sss.length = P.classes.length ∧
-    (∀ p ∈ (s.design.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2) ∧
-    strata.size = sss.flatten.length ∧
-    ∀ i (h₁ : i < strata.size) (h₂ : i < sss.flatten.length),
-      strata[i].size = sss.flatten[i].1 ∧ strata[i].k = sss.flatten[i].2
-
 /-- **The code's count bound is the audit's bound at a strata draw.** At every statement `s`, partition `P` and strata
-`strata` that are its design's strata draw (`StrataDrawn`), and every `δ = num/den` with `0 < num` and `0 < den`, each
-possible incorrect set at `δ` holds at most `SampledProofs.Bound.countBound strata δ` proof blocks (`WrongBounds`). -/
+`strata` whose sizes and draws, in order, are `s`'s design's strata draw on `P` (`StrataDrawn`), and every
+`δ = num/den` with `0 < num` and `0 < den`, each possible incorrect set at `δ` holds at most
+`SampledProofs.Bound.countBound strata δ` proof blocks (`WrongBounds`). -/
 def WrongBoundsDrawn : Prop :=
   ∀ (s : AuditStatement) (P : Partition) (strata : Array Core.Stratum) (δ : Core.Ratio),
-    StrataDrawn s P strata → 0 < δ.num → 0 < δ.den →
+    StrataDrawn s.design P (strata.toList.map fun x => (x.size, x.k)) → 0 < δ.num → 0 < δ.den →
       WrongBounds s P ((δ.num : ℝ) / δ.den) (SampledProofs.Bound.countBound strata δ)
 
 /-- **An accepted scan's incorrect sets commit at most the check's `faulty_bits`.** If `scanOf` accepts the scan `j` at

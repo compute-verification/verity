@@ -29,7 +29,7 @@ the code side's.
 5. **Named pieces**: the commitment scheme (`CommitmentScheme`, `CommitmentScheme.Binds`, and its published leaf layer
    `CommitmentScheme.layer`); the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal
    unit (`PrivateCircuit`, `Universal`), a fact about the programs private circuits run as; the acceptance probabilities
-   (`OneStage.Pa`, `Design.Pa`) and the strata a design draws (`OneStage.strata`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second
+   (`OneStage.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second
    stage, in each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the
    parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment
    `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
@@ -278,17 +278,6 @@ noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
   | .work K w f, B =>
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     strataPa ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W)))) 0 B
-
-/-- The strata `(n_s, k_s)` a one-stage design draws uniform subsets of, all but Bernoulli's: the stratified and work
-laws' own, and one stratum of every slot for `all` (drawing all of it) and `subset`. -/
-def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
-  | .all => some [(ns.sum, ns.sum)]
-  | .subset K => some [(ns.sum, K)]
-  | .bernoulli _ _ => none
-  | .stratified K => some (ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum))))
-  | .work K w f =>
-    let W := ((ns.zip w).map fun p => p.1 * p.2).sum
-    some ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W))))
 
 /-- A class's strata sizes, in proof units. -/
 def strataSizes (c : List (List (List ℕ))) : List ℕ := c.map List.length
