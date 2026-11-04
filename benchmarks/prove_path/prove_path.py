@@ -49,8 +49,8 @@ Two kinds of committed run:
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...]
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
-        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] [--pearl-tables SCHEME] \\
-        [--hf-config F] [--target F] [--cap-bits L]
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] \\
+        [--pearl-tables SCHEME | --window-registration W] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py serve-phi --model REPO --revision SHA --out FILE [--async-scheduling]
     prove_path.py class-circuit --serve FILE --out FILE [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pearl-tables SCHEME] \\
         [--cap N] [--description] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] [--cap-bits L]
@@ -109,7 +109,8 @@ Two kinds of committed run:
   values}``, never a root computed from a checkpoint; a registered read counts registered only where the window's
   registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
-  unit's rows as the record's members.
+  unit's rows as the record's members. With ``--window-registration W`` (H1's registration of the window), the class's
+  circuit reads H1's tables (`window_class.Tables` of W's Program, no key), the circuit an H1-tied window-commit commits.
 * **class-circuit**: that Circuit from φ alone (`class_circuit_of_serve`), no advice, row dir or window: ``window-circuit``'s
   record of any window of the class served under ``--serve``'s φ (a run's ``serve.json``, or **serve-phi**'s statement
   of what it will record, read on the serving device before the run serves), since the circuit is the class's whatever the
@@ -133,7 +134,9 @@ Two kinds of committed run:
   the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
   the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
-  verifier's own ``window-circuit`` record is the circuit it holds it to. With ``--window-registration W`` (H1's
+  verifier's own ``window-circuit`` record is the circuit it holds it to. Each Program's Build is its own, from its
+  compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
+  any (``advice_compile.py`` writes those once the serve is done). With ``--window-registration W`` (H1's
   registration of the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds
   H1's steps, the class's outputs), and the window's registration ``--out``/registration.json is chained right after W
   and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
@@ -225,14 +228,14 @@ class I2Compiler:
     recomputed from its descriptor, its rows held to the descriptor's): the Build's files are the bodies' cache, I2's digests
     are the Programs. What no digest covers (the rows' names, the parameters' names and types, ``supplied``, the
     correspondence and ``prefix_cache.json``) is the Build's word, so the verifier's I2 reads only Builds it wrote itself
-    (``own``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
-    transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest, a single-GPU
-    window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
-    `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the verifier's
-    `interface.compiler_digest` over the integration's import closure as git lists it), everything ``registered`` holds
-    that I2 reads (φ: the model, its revision and config, the target and the execution; the default seed; ℓ; the served
-    model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
-    from the one its advice was registered under names another compiler."""
+    (``own``, `own_builds`), as window-commit's does, and ``commit``'s reads its row dir's. ``transfer_gates`` are the
+    templates it lists as holding transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own.
+    Its digest, a single-GPU window's and a served one's alike, names its name, its code (``code``: a single-GPU window's
+    I2 runs this tree's, `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the
+    verifier's `interface.compiler_digest` over the integration's import closure as git lists it), everything
+    ``registered`` holds that I2 reads (φ: the model, its revision and config, the target and the execution; the default
+    seed; ℓ; the served model name, where it names one) and that list. So a served window's ``serve.json`` is bound before
+    the draw with the code: one that differs from the one its advice was registered under names another compiler."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -599,8 +602,9 @@ def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, trans
 
 
 def compiler_of_args(a: argparse.Namespace) -> Capped:
-    """The run's compiler. The verifier's (``a.builds``, `own_builds`: ``audit``'s and ``circuit``'s) reads I2's Programs from
-    Builds it writes itself into ``a.builds`` from its compile; the prover's from its row dir."""
+    """The run's compiler. With ``a.builds`` (`own_builds`: ``audit``'s and ``circuit``'s, the verifier's, and
+    ``window-commit``'s) it reads I2's Programs from Builds it writes itself into ``a.builds`` from its compile; without,
+    from the row dir (``commit``'s)."""
     gates, own = getattr(a, "transfer_gate", None) or (), getattr(a, "builds", None)
     if served(a):
         return Capped(i2_of_serve(a.serve_run, a.window, own or a.row_dir, a.hf_config, a.target, a.cap_bits, gates, bool(own)), a.cap_bits)
@@ -1247,7 +1251,8 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
     each held to the root the window's registration (``advice/w<K>/registration.json``) records for its parameter
-    (`registration_roots`)."""
+    (`registration_roots`). With ``--window-registration`` (H1's W of the window, `h1_tie` with no key), the class's
+    circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
     from verity_vllm.program.predict.window_circuit import PearlTables, window_circuit
@@ -1255,7 +1260,10 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     compiler, data, pins = compiler_of_args(a), Path(a.advice).read_bytes(), pins_of(a.pin, a.pins)
     compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
-    tables = PearlTables(a.pearl_tables) if a.pearl_tables else None
+    tie = h1_tie(a, cls, key=False)
+    if tie is not None and a.pearl_tables:
+        raise ValueError("--pearl-tables or --window-registration: the circuit reads Pearl+'s tables or H1's, not both")
+    tables = PearlTables(a.pearl_tables) if a.pearl_tables else None if tie is None else tie[2]
     t0 = time.time()
     try:
         circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls, tables=tables)
@@ -1465,17 +1473,18 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
     return out
 
 
-def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
+def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
     """With ``--window-registration``: H1's registration W of the window, its window Program's meta (the serve dir's
     ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
-    without. ValueError where there's no ``--h1-key``, W is under another Program, or H1's rounds aren't the class's
-    outputs, a table a round the circuit reads."""
+    without. The tables are W's Program's alone, so the verifier's ``window-circuit`` reads them with no key (not
+    ``key``). ValueError where there's no ``--h1-key`` (``key``: window-commit's, whose registration reuses W's salts), W
+    is under another Program, or H1's rounds aren't the class's outputs, a table a round the circuit reads."""
     if not a.window_registration or getattr(a, "pearl_passes", None):
         return None
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import commit as CT
-    if not a.h1_key:
+    if key and not a.h1_key:
         raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
     w = json.loads(Path(a.window_registration).read_text())
     meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META).read_text())
@@ -1532,6 +1541,19 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     linears and the registration reuses Pearl+'s W's values (`pearl_c.window.reuse`). -> the window's run root, its circuit record's SHA-512, its
     population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered weights whose root the
     window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took."""
+    import tempfile
+
+    out = Path(a.out).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="builds-", dir=out.parent) as builds:
+        a.builds = builds
+        return window_commit_of_builds(a)
+
+
+def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
+    """`window_commit_of_advice` over its own Build of each Program, from its compile (`own_builds`, into ``a.builds``
+    beside ``--out``, as ``circuit``'s), never its row dir's: those are `advice_compile`'s, written once the serve is done,
+    and a window tied to W is committed at its close, before its sample coin (`serve_tie`)."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1795,6 +1817,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
                    "registration of values {program, values}, the committer's weights registration "
                    "(window_weights.weights_registration), as `records_audit.py count --pins` takes them (repeatable)")
+    p.add_argument("--window-registration", help="H1's registration W of the window: the class's circuit reads H1's tables "
+                   "(`window_class.Tables` of W's Program, from the serve dir's h1/window-program.meta.json; no key), the "
+                   "circuit window-commit --window-registration W commits")
     p = sub.add_parser("serve-phi", help="what a serve-openai run's serve.json will record of φ, read on this device before "
                        "it serves (class-circuit's --serve)")
     for flag in ("--model", "--revision", "--out"):
