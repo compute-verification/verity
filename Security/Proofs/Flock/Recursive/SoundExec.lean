@@ -19,7 +19,7 @@ guarantees at the inner protocol the verifier of record runs, with that hypothes
   binding `Flock.SecurityProofs.regRowCommit_binding` proves, so it takes no `_hbind`.
 
 Each still takes V*'s bridge in full (`Flock.Assumptions.VBridge`), which a protocol whose last round isn't committed
-(candidate 3 today) doesn't give; `RecursiveAuditC3` is the audit at candidate 3, at the committed rounds. Their
+(candidate 3 today) doesn't give; `RecursiveAuditHolo` is the audit at candidate 3, at the committed rounds. Their
 proofs, `Flock.SecurityProofs.RecursiveSoundExec` and `Flock.SecurityProofs.RecursiveRanRegisteredExec`, are gap 2
 (`Recursion.zk_sessions_recursive_fork_inner`) at the compile premise of an accepted statement's class
 (`Recursion.compiledForkSound_execClassAt`, `Recursion.classOk_of_accepts`).
