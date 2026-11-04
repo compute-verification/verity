@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
+import Proofs.Flock.Claims.Witnesses.SamplingGenericComplete
 import Proofs.Flock.Claims.Witnesses.ZKOutLeak
 import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
@@ -31,5 +32,5 @@ sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). 
 `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at the deployed record
 (`RecursionMeets`). A closed statement proved of every instance (the generic sampled compiler's, and `ZKOutLeak`) is
 under `claims.generic` with the guarantee that states it, which the lock's `witnesses` holds to an honest and a
-nontrivial lemma (`SamplingGenericCompiler`, `ZKOutLeak`).
+nontrivial lemma (`SamplingGenericCompiler`, `SamplingGenericComplete`, `ZKOutLeak`).
 -/
