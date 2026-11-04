@@ -496,6 +496,7 @@
 "F32GtZeroFtz_v2",
 "F32IsFinite_v1",
 "F32IsFinite_v2",
+"F32LogRn_v1",
 "F32LtFtz_v1",
 "F32LtFtz_v2",
 "F32MaxRef_v1",
