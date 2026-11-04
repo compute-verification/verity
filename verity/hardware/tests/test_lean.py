@@ -1,7 +1,8 @@
 """The Lean card tables agree with the card files, number by number.
 
-A GPU card file names its Lean table (``lean``). Its ``clock`` and ``card`` definitions are evaluated as exact rationals
-(``^`` a power, ``/`` exact, and a natural-number field refused where Lean's division would truncate) and each arm is
+A GPU card file names its Lean table (``lean``). Its ``clock``, ``tensorClock`` (``clock`` where the table has none) and
+``card`` definitions are evaluated as exact rationals (``^`` a power, ``/`` exact, and a natural-number field refused
+where Lean's division would truncate) and each arm is
 compared with what the card file gives, for every store, resource and format the ACCEL ops are priced in
 (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
 The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card file instead.
@@ -10,6 +11,7 @@ The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200`
 from __future__ import annotations
 
 import ast
+import copy
 import operator
 import re
 from fractions import Fraction
@@ -17,13 +19,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.hardware import load, skus
+from verity.hardware import WORD, load, number, rate, skus
 
 ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
 SHEET = ROOT / "Security/Definitions/Accounting/Sheets/B200.lean"
 LEAN = [sku for sku in skus("gpu") if "lean" in load(sku)]
-WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
 
@@ -34,14 +35,14 @@ def constructors(name: str) -> list[str]:
     return re.findall(r"\|\s*(\w+)", found.group(1))
 
 
-def evaluate(expr: str, clock: Fraction | None = None, nat: bool = False) -> Fraction:
-    """A Lean arithmetic literal (numerals, ``+ - * / ^``, parentheses, ``clock``) as an exact rational. With ``nat``,
-    a division that doesn't divide exactly is refused, since Lean's ℕ division truncates."""
+def evaluate(expr: str, clocks: dict[str, Fraction] | None = None, nat: bool = False) -> Fraction:
+    """A Lean arithmetic literal (numerals, ``+ - * / ^``, parentheses, the names in ``clocks``) as an exact rational.
+    With ``nat``, a division that doesn't divide exactly is refused, since Lean's ℕ division truncates."""
     def go(node: ast.AST) -> Fraction:
         if isinstance(node, ast.Constant) and isinstance(node.value, int):
             return Fraction(node.value)
-        if isinstance(node, ast.Name) and node.id == "clock" and clock is not None:
-            return clock
+        if isinstance(node, ast.Name) and node.id in (clocks or {}):
+            return clocks[node.id]
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
             base, exp = go(node.left), go(node.right)
             assert exp.denominator == 1, f"{expr}: a non-integer exponent"
@@ -56,10 +57,11 @@ def evaluate(expr: str, clock: Fraction | None = None, nat: bool = False) -> Fra
     return go(ast.parse(expr.replace("^", "**"), mode="eval").body)
 
 
-def card_table(text: str) -> tuple[Fraction, dict[str, dict[str, str] | str]]:
-    """The Lean table's ``clock`` and its ``card``'s fields: a matched field's arms (pattern to expression, ``_`` the
-    default) or a plain field's expression."""
+def card_table(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, str] | str]]:
+    """The Lean table's clocks (``clock``, and ``tensorClock``, ``clock`` where it has none) and its ``card``'s fields:
+    a matched field's arms (pattern to expression, ``_`` the default) or a plain field's expression."""
     clock = re.search(r"^def clock : ℚ≥0 := (.+)$", text, re.M)
+    tensor = re.search(r"^def tensorClock : ℚ≥0 := (.+)$", text, re.M)
     body = re.search(r"^def card : Card where\n(.*?)\n\nend ", text, re.M | re.S)
     assert clock and body, "the Lean table has no `def clock : ℚ≥0 := …` and `def card : Card where …`"
     fields: dict[str, dict[str, str] | str] = {}
@@ -74,32 +76,32 @@ def card_table(text: str) -> tuple[Fraction, dict[str, dict[str, str] | str]]:
                 current[pattern.strip().lstrip(".")] = m.group(2)
         else:
             raise AssertionError(f"a line of `card` this test doesn't read: {line!r}")
-    return evaluate(clock.group(1)), fields
+    hz = evaluate(clock.group(1))
+    return {"clock": hz, "tensorClock": evaluate(tensor.group(1)) if tensor else hz}, fields
 
 
-def number(entry: dict) -> Fraction:
-    return Fraction(str(entry["value"]))
-
-
-def expected(card: dict) -> tuple[Fraction, dict[str, dict[str, Fraction] | Fraction]]:
-    """The Lean table the card file gives: its clock in Hz, each store's words, each resource's units a second, each
-    format's weight, and the model's ranges."""
-    sms, clock = number(card["sm"]["count"]), number(card["clock"]["sm"]) * 10 ** 6
-    store, rate = card["store"], card["rate"]
+def expected(card: dict) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
+    """The Lean table the card file gives: its clocks in Hz (``tensorClock`` the card's ``clock.tensor``, its
+    ``clock.sm`` where it has none), each store's words, each resource's units a second (``verity.hardware.rate``, so
+    the arms hold the one calculator), each format's weight, and the model's ranges."""
+    sms, clock = number(card["sm"]["count"]), card["clock"]
+    clocks = {"clock": number(clock["sm"]) * 10 ** 6, "tensorClock": number(clock.get("tensor", clock["sm"])) * 10 ** 6}
+    store = card["store"]
     size = {"reg": sms * (number(store["reg"]) + number(store["reg_extra"])),
             "smem": sms * number(store["smem"]) / WORD, "l2": number(store["l2"]) / WORD,
             "dram": number(store["dram"]) / WORD}
-    rho = {r: sms * number(rate[r]) * clock for r in rate} | {"dram": number(card["memory"]["bandwidth"]) / WORD}
-    return clock, {"size": size, "ρ": rho, "weight": {f: number(e) for f, e in card["weight"].items()},
-                   "exact": number(card["model"]["exact"]),
-                   "text": number(store["dram"]) / number(card["model"]["instruction_bytes"])}
+    rho = {r: rate(card, r) for r in [*card["rate"], "dram"]}
+    return clocks, {"size": size, "ρ": rho, "weight": {f: number(e) for f, e in card["weight"].items()},
+                    "exact": number(card["model"]["exact"]),
+                    "text": number(store["dram"]) / number(card["model"]["instruction_bytes"])}
 
 
 def disagreements(card: dict, text: str) -> list[str]:
     """Every number on which the Lean table ``text`` and the card file differ, and every constructor either lacks."""
     clock, fields = card_table(text)
     want_clock, want = expected(card)
-    out = [] if clock == want_clock else [f"clock: Lean {clock}, card file {want_clock}"]
+    out = [f"{name}: Lean {clock[name]}, card file {want_clock[name]}" for name in want_clock
+           if clock[name] != want_clock[name]]
     for field, kinds, nat in (("size", "Store", True), ("ρ", "Res", False), ("weight", "Fmt", False)):
         arms, names = fields.get(field, {}), constructors(kinds)
         unknown = sorted(set(arms) - set(names) - {"_"})
@@ -151,14 +153,34 @@ def test_a_changed_number_is_a_disagreement() -> None:
     card = load("rtx-pro-6000-server")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert disagreements(card, text) == []
-    rate = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
-    assert disagreements(card, rate) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
+    faster = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
+    assert disagreements(card, faster) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
                                          f"card file {188 * 1024 * 2430 * 10 ** 6}"]
     default = text.replace("    | _ => 1\n", "    | _ => 2\n")
     assert sorted(m.split(":")[0] for m in disagreements(card, default)) == [
         f"weight {f}" for f in ("b1", "e2m1", "e4m3", "e5m2", "s8", "u8")]
     dropped = text.replace("    | .l2 => 188 * 5 * clock\n", "")
     assert disagreements(card, dropped) == ["ρ l2: Lean has no arm"]
+
+
+def test_the_tensor_runs_at_its_own_clock_where_the_card_has_one() -> None:
+    """A card without ``clock.tensor`` (the H200's) prices the tensor at the 1980 MHz SM clock, as its Lean table does.
+    The same card with a 1830 MHz ``clock.tensor`` disagrees with that table on the clock and the tensor arm, and agrees
+    with the table that defines ``tensorClock`` at 1830 MHz and prices the tensor at it."""
+    card = load("h200-sxm-141gb")
+    text = (ROOT / card["lean"]).read_text(encoding="utf-8")
+    assert "tensor" not in card["clock"] and "tensorClock" not in text
+    assert card_table(text)[0] == expected(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1980 * 10 ** 6}
+    assert expected(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1980 * 10 ** 6
+    slower = copy.deepcopy(card)
+    slower["clock"]["tensor"] = {"value": 1830, "unit": "MHz", "mark": "ceiling", "source": "a test's tensor clock"}
+    assert disagreements(slower, text) == [
+        f"tensorClock: Lean {1980 * 10 ** 6}, card file {1830 * 10 ** 6}",
+        f"ρ tensor: Lean 132 * 4096 * clock = {132 * 4096 * 1980 * 10 ** 6}, card file {132 * 4096 * 1830 * 10 ** 6}"]
+    clock = re.search(r"^def clock : ℚ≥0 := .+\n", text, re.M).group(0)
+    own = text.replace(clock, clock + "def tensorClock : ℚ≥0 := 1830 * 10 ^ 6\n").replace(
+        "132 * 4096 * clock", "132 * 4096 * tensorClock")
+    assert disagreements(slower, own) == []
 
 
 def test_a_truncating_nat_division_is_refused() -> None:
