@@ -2,22 +2,20 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.SamplingGeneric.Split
 
 /-!
 # The sampled compiler: the extraction's failure event and its probability
 
 `Claims.Sampling`'s failure event and its bound (`Proofs.Flock.Claims.Sampling.KS`), for a compiled sampled verifier `L`
 over any proof system for proof blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted
-inner run are `A`'s extractor's at each proof block's shape (`BlockEC`), indexed by proof block.
+inner run are `A`'s extractor's at each proof block's shape (`BlockEC`), indexed by proof block. The found event is
+`Compiled.UnitOk` and the sessions' knowledge soundness `Compiled.SessionKS` (`SamplingGeneric/Split.lean`).
 
-* `Found`: a sampled proof block's extraction finds a witness in `A`'s relation at its session's statement, as
-  `Compiled.unitExt` runs it before its openings. `GoodAt`: the block is in the sample and below `n_PU`, and is found.
+* `GoodAt`: the block is in the sample and below `n_PU`, and is found.
 * `BadOuter`, `Fails`: an outer run is bad for a set `B` of proof blocks when its inner wait comes up short or keeps only
   runs at which no block of `B` is good; the extraction fails when the outer wait comes up short or, for some `B` of
   acceptance probability at most `δ` (`S₁`), keeps only runs bad for `B`. Both read the found event as a parameter.
-* `SessionKS`: the sessions' knowledge soundness at the found event, the form `A.KS` gives at the proof block a
-  selection picks: a weight `β` of each tape and first-stage coins, averaging at most `Pr[B]`, bounds the probability
-  that the run accepts and the picked sampled block is not found by `κ_s + √(k(x)·γ_s·β)`.
 * `inner_bad_le`: at first-stage coins where the sample misses `B` with probability at most `esc`, the union bound at
   the picked block gives `Pr[acc]·Pr[bad for B] ≤ 2k/K + e^{−k/8} + c·(esc + κ)`.
 * `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, against the waits' slack), with the draw law's weights
@@ -34,7 +32,6 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScope forkOn forkOn_forkOn' accList AllBad wait_bad_le S₁ card_S₁_le
   card_rpow_le_slack Pr_or_le slack slack_pos Pr_acc_forkOn)
-open Claims.Recursion (serve viewing)
 
 theorem foldr_max_nonneg (l : List ℝ) : 0 ≤ l.foldr max 0 := by
   induction l with
@@ -68,15 +65,6 @@ def ecoinsEquiv (L : Compiled Coin A) (x : Msg) :
 
 /-! ## The failure event -/
 
-/-- **Proof block `u`'s extraction finds a witness** at the run `r'`, on the prover's runs `run'`: `r'` shows `u`'s
-session `(xS, vS)` at the block's shape, and `A`'s extractor at the session, as `unitExt` serves it, returns a witness
-in `A`'s relation at `xS`. -/
-def Found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (u : Fin (L.nPU x)) (r' : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) : Prop :=
-  ∃ xS vS, L.session x u (run' r').seen = some (xS, vS) ∧ ∃ h : A.shape xS = L.sh x u, ∃ w,
-    ((serve (fun r'' => viewing (L.view x u) (L.place x u xS r' r''))
-        (A.ext xS (L.coinsOf x u xS r') (cast (congrArg A.EC h.symm) c))).eval H run').1 = some w ∧ A.R xS w
-
 /-- Proof block `v` is in the sample at `r'` and below `n_PU`, and `found` holds of it at `A`'s coins in `uc`. -/
 def GoodAt (L : Compiled Coin A) (x : Msg)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (r' : Fin (L.V.k x) → Coin)
@@ -101,23 +89,6 @@ def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → 
       ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.k x)
         (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) ((List.finRange (L.cap x)).map c.1)
         (L.toE1 x c))
-
-/-- **The sessions' knowledge soundness** at the sampled proof blocks: on every prover, a nonnegative weight `β` of
-each tape and first-stage coins `(ω, r)`, averaging at most `Pr[B]`, such that at `(ω, r)`, over fresh second-stage
-coins and `A`'s extractor's coins at each proof block, the run accepts and the sampled proof block a selection rule
-`sel` picks is not found with probability at most `κ_s + √(k(x)·γ_s·β(ω, r))`. It is what `A.KS` gives at the session
-of the block a selection picks, the sampled run up to it as `A`'s prover. -/
-def SessionKS (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
-  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-    ∃ β : Ω → (Fin (L.V.k x) → Coin) → ℝ, (∀ ω r, 0 ≤ β ω r) ∧
-      Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x ∧
-      ∀ ω r (sel : List ℕ → Option (Fin (L.nPU x))),
-        Pr (fun p : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
-          (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-            ∃ u, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some u ∧
-              u.val ∈ L.checked x (forkOn (L.stage2 x) r p.1) ∧
-              ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 u)) ≤
-          L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)
 
 /-! ## The numbers -/
 
@@ -357,10 +328,10 @@ theorem pr_fails_le (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ : 0 
     (hS : L.Sessions H) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x =>
       (run H P L.V x s.1 s.2.1).out = .acc ∧
-        L.Fails δ x (run H P L.V x s.1) (L.Found H x (run H P L.V x s.1)) s.2.2) ≤
+        L.Fails δ x (run H P L.V x s.1) (fun u => L.UnitOk H x (run H P L.V x s.1) u) s.2.2) ≤
       L.κ δ x + Real.sqrt (L.γ x * PrB H L.V P x) := by
   obtain ⟨β, hβ0, hβ, hκ⟩ := hsess x Ω P
-  exact L.pr_fails_le_of H hδ hS x Ω P (fun ω => L.Found H x (run H P L.V x ω)) β hβ0 hβ hκ
+  exact L.pr_fails_le_of H hδ hS x Ω P (fun ω u => L.UnitOk H x (run H P L.V x ω) u) β hβ0 hβ hκ
 
 end Compiled
 
