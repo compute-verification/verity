@@ -4,14 +4,14 @@ import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Claims.Complete.Json.Spec
 
 /-!
-# `JsonSpec`'s two fields on `canon`, proved
+# What completeness reads of `canon`, proved
 
-`Flock.canon` is total, so the two fields of `JsonSpec` about it are theorems: `canon` is the same
-on alike values (`canon_same`: alike values are equivalent, `same_jsonEquiv`, and `canon` prints equivalent values
-alike, `FlockDeploy.canon_jsonEquiv`), and returns on printable ones a text of ASCII without DEL (`canon_ok`: every
-number an integer, so the one refusal never fires, and `canon_ascii`: `canonStr` writes every character outside printable
-ASCII as a `\u` escape, `escU`). The fields left are the ones about `Json.parse` (the printer's and `canon`'s round trips, and
-well-formed trees) and `Json`'s `==` (`beq_same`), both `partial` in Lean's core.
+`Flock.canon` is total, so what completeness reads of it alone is proved, not assumed: `canon` is the same on alike
+values (`canon_same`: alike values are equivalent, `same_jsonEquiv`, and `canon` prints equivalent values alike,
+`FlockDeploy.canon_jsonEquiv`), and returns on printable ones a text of ASCII without DEL (`canon_ok`: every number an
+integer, so the one refusal never fires, and `canon_ascii`: `canonStr` writes every character outside printable ASCII
+as a `\u` escape, `escU`). The round trips through the verifier's parser `Flock.JsonParse.parse` (the printer's and
+`canon`'s) are proved too (`RoundTrip.lean`), and the parser's trees are well formed (`Parse.lean`).
 -/
 
 namespace FlockComplete.JsonRT
@@ -265,7 +265,7 @@ theorem same_jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a 
   | _, _, .obj hm hn hk hv =>
     (FlockDeploy.jsonEquiv_obj_iff hm hn).2 ⟨hk, fun k a b ha hb => same_jsonEquiv (hv k a b ha hb)⟩
 
-/-- **`canon` is the same on alike values** (`JsonSpec.canon_same`). -/
+/-- **`canon` is the same on alike values**. -/
 theorem canon_same (a b : Json) (h : Same a b) : canon a = canon b :=
   FlockDeploy.canon_jsonEquiv (same_jsonEquiv h)
 
@@ -291,7 +291,7 @@ theorem canon_ok_some : ∀ j : Json, Good j → ∃ s, canon j = .ok s
         exact ⟨_, by rw [hs]; rfl⟩
     exact ⟨_, by rw [canon, hr]; rfl⟩
 
-/-- **`canon` returns on printable values a text of ASCII without DEL** (`JsonSpec.canon_ok`). -/
+/-- **`canon` returns on printable values a text of ASCII without DEL**. -/
 theorem canon_ok (j : Json) (h : Good j) : ∃ s, canon j = .ok s ∧ Claims.Json.Ascii s :=
   let ⟨s, hs⟩ := canon_ok_some j h
   ⟨s, hs, canon_ascii j hs⟩

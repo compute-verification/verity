@@ -141,7 +141,10 @@ coins.
     SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
     its answer to the prover's round-`r` message. That ordering takes the place of "sampled after the prover's message"
     in the statement above. As with A6 itself, the record can't establish it: the Lean verifier checks each opening against
-    the root, not when it was sampled or opened.
+    the root, not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger is the coin
+    server: it samples each session's tree and opens each round after its message digest, logging both under its signed
+    close, and the audit holds each session's record to those lines, one tree per session
+    (`verity/core/service/sampled_proofs/SampledProofs/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
     nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
     consistently); each leaf moves it by at most
@@ -267,9 +270,9 @@ which guarantees take it.
 ## Other named assumptions
 
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
-prove. Completeness's is `JsonSpec` (`Claims.JsonSpec`, `Definitions/Claims/Json.lean`): `Json.parse` reads back what
-the honest prover's printer (`printJ`, the bytes `Json.compress` prints) and `canon` print, which no proof can show, as
-`parse` and `canon` are `partial`; only the completeness proofs read it (`Proofs/Flock/Claims/Complete/Json/`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
+prove. Completeness takes none on the record's JSON: that the verifier's total parser (`Flock.JsonParse.parse`) reads
+back what the honest prover's printer (`printJ`) and `canon` print is proved
+(`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
 where the claims list it as a named assumption) and read in `Assumptions.lean` (`hm96Hiding_apply`), and
 `PadNonvanishing`, in `Assumptions.lean`; both are in `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
 hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at
