@@ -7,10 +7,9 @@
 (``case.json``), the verifier's partition (``partition.json``), ``m0/`` with the public file, ``compose.log`` and the
 circuit file, ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``, and the challenger's release
 of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
-`case_v2` of those: v1's params with
-the partition, ``proofs: {circuit, registered: null}`` and the release's challenger and window root, v1's commitment, the
-evidence with the sessions' proofs and the release's coins, and the blobs' paths. A window with no release names no
-challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`).
+`case_v2` of those: v1's params with the partition, ``proofs: {circuit, registered: null}`` and the release's challenger
+and window root, v1's commitment, the evidence with the sessions' proofs and the release's coins, and the blobs' paths. A
+window with no release names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`).
 
 A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the command its ``m0/compose.log`` records
 (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4 --seed
@@ -20,9 +19,9 @@ anyway. The case goes to ``--out`` private as `composite.py` reads it (0700, its
 ``answer.json``. A blob with no file leaves only ``missing.json`` saying why, so `composite.py` leaves the protocol out.
 
 Prints one ``V2CASE`` line (the pin, where the circuit file came from, whether it names a challenger, the sessions and
-blobs) and, with ``--exe``, one
-``V2`` line with the answer's verdict only: the whole answer is witness-adjacent (its query is the partition's digest) and
-stays in ``--out``. Exits as the check does (0 accept, 1 reject, 2 undecided), 2 for a missing case, 0 without ``--exe``.
+blobs) and, with ``--exe``, one ``V2`` line with the answer's verdict only: the whole answer is witness-adjacent (its
+query is the partition's digest) and stays in ``--out``. Exits as the check does (0 accept, 1 reject, 2 undecided), 2 for
+a missing case, 0 without ``--exe``.
 """
 from __future__ import annotations
 

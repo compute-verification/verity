@@ -92,10 +92,10 @@ unit reads then proved inside its session: the committed values and their openin
 that write what it reads, the registration, the live draw, its receipt and the challenger's release of its coins, and the
 public files, each by where it is (the serve dir's by their paths there, naming no window) and what it holds, with whether
 the run wrote each of OUT's and how each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off
-OUT and custody in a copy off the
-served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
-and path, and each serve-dir input says whether the listing holds each file its path names and at least one file under
-each directory it names, never their bytes or digests; with no copy given, ``copy`` is missing with why.
+OUT and custody in a copy off the served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept
+off OUT): ``copy`` names its node and path, and each serve-dir input says whether the listing holds each file its path
+names and at least one file under each directory it names, never their bytes or digests; with no copy given, ``copy`` is
+missing with why.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
