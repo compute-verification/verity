@@ -13,6 +13,7 @@ import Proofs.Flock.SamplingGeneric.Deployed
 import Proofs.Flock.SamplingGeneric.Instance
 import Proofs.Flock.SamplingGeneric.ZK
 import Proofs.Flock.SamplingGeneric.FlockZk
+import Proofs.Flock.SamplingGeneric.Complete
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -60,6 +61,10 @@ with the sessions' runs, numbers and openings (`SamplingDeploy.samplingKS_deploy
 knowledge at the session's statement against `V*` after the run's messages before it (`residual`). Flock's ZK server is
 zero knowledge per outcome (`FlockZk.server_zkOut`, `SamplingGeneric/FlockZk.lean`), at the simulator given the outcome
 and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean_loop` takes.
+
+**`CompilerComplete` is proved** (`compilerComplete`, `SamplingGeneric/Complete.lean`): each sampled slot rejects with
+at most its session's error, the session's coins being uniform once the coins off its rounds are fixed, and a union
+bound over the first `K` slots gives the compiled error.
 -/
 
 namespace Claims.SamplingGeneric
