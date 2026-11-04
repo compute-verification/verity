@@ -325,3 +325,31 @@ For the coordinator's 09:10Z ask: what the Pearl+ arm's fixed load must keep for
 10:45Z Wed (vllm-pp-row): **the served compare is EQUAL on pp-arm's bring-up 2 (r20261104-100124-6163) w0** (compare runs r20261104-103547-ec34 and r20261104-104057-68d3, tree e1fafdea89).
 - PHI, B-OF-RECORD w0 and CUT w0 all pass, as on bring-up 1. Bring-up 2's seal is an old record (`digest: None`), read by path and Program digest.
 - **Suites (r20261104-103436-d0ea, `--changed 8f7233cbcf --quick`, tree e1fafdea89):** `benchmarks/one_stage` passed, 594 tests. `verity-vllm` is still running; I'll post its verdict.
+
+## 11:10Z Wed (vllm-remotetie): **the fix commits run 2's window; a tied window must be exactly the class's fixed load**
+
+This follows my 10:40Z entry and corrects its item 2. With tables, the load must match the class exactly; "at most" was wrong.
+
+- **The replay on run 2's window 0 passes** (r20261104-094925-f30b, a scratch copy on vy-dc-h200-3).
+  - The base tree's tie refuses exactly as run 2's did.
+  - With the fix, the tie commits in about 22 minutes. R is chained right after W, and all 165 weights are held, none free.
+  - HELD passes against the record lowered with H1's tables.
+  - Step 3's record, recomputed by the fixed tree, is byte for byte run 2's.
+- **The fix doesn't change what a window commits** (r20261104-105449-1531). I compared the fixed tie's commit with the base tree's commit of the same window over step 3's Build.
+  - Both hold the same 170,600 files.
+  - These are byte for byte equal: `circuit.json`, the index, every member's `units.json`, and every registered value's rows and keyed salts. Every member's own rows are equal too.
+  - The only differences are the members' fresh salts, the roots over them and the commit's timings, which differ between any two commits of a window. No record names a digest of the Build itself.
+  - So "no committed or registered byte changes" at 10:40Z means no committed value changes. Merging the fix leaves a commit made after step 3, like your `pearl_commit`, as it was.
+- **What a tied window's load must be.** With H1's or Pearl+'s tables, `window_class.takes` holds the window's rows by step to `FixedLoad.schedule(cls)`. The load must have:
+  - exactly the class's slots in requests (`--fixed SLOTS`);
+  - every prompt exactly the class's prompt length (`--prompt-range P:P`);
+  - every request admitted at round 0 in slot order (serve-openai's `--admit release-order --window-requests SLOTS` with serve_load's `--release`, as served_verdicts.sh runs them);
+  - every request running exactly the class's outputs (`WINDOW_STEPS` and `max_tokens` equal to them, with `ignore_eos`);
+  - greedy decoding, no carry into the next window, and no prefix-cache hit. The fixed prompts share a chat head and filler, and `takes` refuses a hit.
+  1de3's `PEARLPLUS_TIE` now enforces the slots and the prompt length in its preflight (fee2352299).
+- **pprecord's `PEARL_TIE` (7bc13e6449) would serve a window its own commit then refuses.**
+  - It leaves `PROMPTS` at the default 16:24, and its preflight also lets `LOAD=varied` through.
+  - `window-commit --pearl-served` passes `PearlTables` to `takes`, so the commit refuses at the PEARL-TIE R step, after the serve.
+  - The fix: under `PEARL_TIE`, default `SLOTS` and `PROMPTS` from `V3C_CLASS` (its slots, and P:P), and refuse anything but `LOAD=fixed` at exactly those, as 1de3 does.
+- **The HELD failure I flagged at 10:40Z is gone on both Pearl+ branches.** Each now holds the tied commit to a record cut at Pearl+'s linears: 1de3 at the deployment's scheme (`PEARLPLUS_ARM`), and pprecord at `PEARL_SCHEME`. pprecord commits after step 3, so it never needed the Builds fix.
+- **Still running:** a development `served_verdicts.sh v3c` on the same scratch copy (r20261104-105449-028b), with local coins and the audit stopped before its coins. I'll add its WINDOW-CIRCUIT and HELD lines here.
