@@ -11,7 +11,8 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
   probability at most `Σ_m (ε_ks,m + ε_bind,m)`: an incorrect sampled proof block is member `m`'s, in its part of the
   sample, and an accepted run accepted the session of member `m`, which has that proof block in its part
   (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
-  `JointAuditV5.member_accepted_drawnWrong_le` bounds it;
+  `JointAuditV5.member_accepted_drawnWrong_le` bounds it; a run whose draw runs out records no transcript, so it accepts
+  no member's session;
 * `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most the law's own miss `P_a(B)`, under
   A3 (`Bridge.execSel_escape_le`);
 * `Flock.SecurityProofs.JointSampledV5`: an accepted run with every proof block of `W` incorrect either has a sampled
@@ -80,7 +81,7 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
 /-- **The window's sample misses a set `B`** with the escape probability of its live sampling design. -/
 theorem prob_drawMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
-  show avg (fun ω => prob _ ((w.sessions (w.L.draw ω) τ.1).map fun ts => (τ.1, w.L.draw ω, ts)) (τ.2 ω)) =
+  show avg (fun ω => prob _ ((w.sessions (w.L.draw ω) τ.1).map (w.out τ.1 ω)) (τ.2 ω)) =
     prCoin fun ω => Disjoint (w.L.draw ω) B
   unfold prCoin
   refine congrArg avg (funext fun ω => ?_)
