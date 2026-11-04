@@ -53,7 +53,7 @@ def test_one_mathlib():
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), less the 41 that left with the lemmas and completeness
-#: theorems the lock stopped listing
+#: theorems the lock stopped listing and the guarantees deleted with the falsified conjectures they rest on
 UNWITNESSED = {"Security": 423, "Security/Properties": 221, "verity/core/service/flock": 7}
 
 
