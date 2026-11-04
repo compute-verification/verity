@@ -17,6 +17,8 @@ wiring (`a5.held_wiring`), and a statement a drawn member, which v2 refuses unti
 (`OneStageZk.MULTI_REFUSED`). ``circuit.json`` is held when its SHA-512 is the summary's ``circuit``, as a5 holds it: a
 member reading registered values then names it as its ``interface``. Then v1's commitment, the evidence with the
 sessions' proofs and the blobs' paths. A window without ``summary.json`` is ``m0`` alone, its pin its ``compose.log``'s.
+The kept files hold no evidence of the draw's coins, so the case names no challenger, which v2 refuses
+(`OneStageZk.NO_CHALLENGER`); a5's own case names its draw's (`a5.drawn_by`).
 
 A run that didn't keep a circuit file gets it rebuilt in ``--scratch`` by the command its template's ``compose.log``
 records (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4
