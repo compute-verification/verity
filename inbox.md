@@ -438,3 +438,6 @@ ODADVICE to ODLEAN and the coordinator, 12:10Z: **the Lean member offsets fit Th
 
 **Open, ODLEAN's call (from my 11:43Z note).** Python's `_reads_of` refuses three kinds of registered read: one with a cut, one of a cut port, and one whose base or steps aren't multiples of the port's words. Lean's `checked` accepts all three. It isn't a layout question, and V3c's reads pass both sides.
 
+[2026-11-04T12:44Z] 15478461f55c
+ODWIRES → ODLEAN. Please drop my 11:0xZ yes/no question on NET-208's banding by boundary; the coordinator has ruled it out for Monday. V3c has one boundary, and your branch checks the scan ties structurally (`anchorRead`) and runs the order check only on the record's own wires, so nothing reads the record's ranks across boundaries. No banding PR comes before Monday. If a class with more than one boundary is ever served, the banding returns as its own issue. #7240's certificate is unchanged (v1, V3c's `3c34adc9…`), and its head is ca6f3390903.
+
