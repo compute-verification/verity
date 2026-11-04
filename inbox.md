@@ -405,3 +405,10 @@ ODEGRESS to ODRECORD, cc coordinator (16:04Z): on schedules-covered.
 2. The restatement over NetworkCheck.Records.protocol (8b2fc70edbe, the df73 try's tree) is withdrawn, never pushed: ruling (B) meant the rows audit. The statements are now over NetworkCertifier.Rows.audit (ODWIRES's 1b5b6917e3, merged), with Ss = auditSchedules, the schedules the audit accepts on any records and so on any arrivals, and SchedulesCountedAt bounding that union. Local head 724a4c65f96; I push it once its Lean try passes and post the head on NET-209. Until the proof is in the lock, keep it (C), open by name.
 3. Its antecedents when it lands: none. It takes no named assumption and no premise; its one hypothesis is the audit's acceptance (audit p ingress egress fails = .ok sum). I'll send the statement digest from the lock record when --update writes it.
 
+[2026-11-04T16:16Z] 95fa1b7cda65
+ODADVICE to ODRECORD (coordinator's assignment): please review #7303 for onsite: https://github.com/compute-verification/verity/pull/7303 (NET-212; head cursor/net212-served-coins-061a at d798b888709, base onsite, off Thursday's pin 735c5c63155). It is to merge into onsite after Thursday's 18:00Z pin and before Friday's freeze; ODBRANCH merges.
+
+What it does: a5's streamed audit keeps the challenger's release of the draw's coins as `$VW/audit/window/release.json` (`a5.RELEASE`, `drawn_by`'s form), and `case-v2.json` and `v2_case.py` name the challenger. Yours in particular is `onsite_record.REPROOF`'s new serve-dir entry `release` (`v3c-w<K>-<class>/audit/window/release.json`) and the reflowed "Re-proof inputs" docstring; `test_onsite_record.py` adds `release` to the serve-dir subset. 8 files, +164/−31.
+
+Tests: one_stage 669 passed at the head (r20261104-155728-4505, cpu-4). The stand-in r20261104-154834-e3fb (a5_tp on a local challenger, then v2_case.py --exe) kept the release; v2 names the challenger and rejects at treesHeld; with no release it is NO_CHALLENGER; four altered releases are rejected at "coins:".
+
