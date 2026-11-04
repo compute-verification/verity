@@ -95,8 +95,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   split at `∧`, each conjunct is headed by a constant other than `C`, applies a definition under `meaning` (the
   deployed record or a field of it; not `True` or Init or Mathlib alone), is no reflexivity nor one of its hypotheses,
   and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
-  `claims.generic` with its guarantee: it states `C`, has both `witnesses`, reads nothing deployed, and skips `shape`
-  and the inline rule;
+  `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
 - a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses, or an `unwitnessed` entry, which
   only shrinks (`witness_failures`);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;

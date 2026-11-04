@@ -1728,13 +1728,19 @@ def generic_fixture():
 
     reads = [{"name": "P.Compiler", "module": "P.Claims", "kind": "def", "hash": "4" * 32},
              {"name": "P.Arg.KS", "module": "P.Claims", "kind": "def", "hash": "5" * 32},
-             {"name": "P.Hash.Msg", "module": "P.Core.Hash", "kind": "def", "hash": "6" * 32}]
+             {"name": "Hash.Msg", "module": "Definitions.Core.Hash", "kind": "def", "hash": "6" * 32},
+             {"name": "List.length", "module": "Init.Prelude", "kind": "def", "hash": "7" * 32}]
     g = fact(signature="P.compiler : P.Compiler", hyps=[], reads=reads, h="00000000000000cc") | {
         "body": {"head": "P.Compiler", "negated": False, "binders": [], "conclusion": [], "absurd": False},
         "inline": [premise("P.Arg.KS H A", "P.Arg.KS", binder="a"), premise("P.Compiled.Sessions H L",
                                                                         "P.Compiled.Sessions", binder="a")],
         "premises": []}
-    f = facts(pins={"P.t": fact(), "P.compiler": g}, spec_definitions=[spec("P.Compiler", True), spec("P.KS", False)])
+    built = {m: {"olean": f"/r/Security/.lake/build/lib/lean/{m}.olean"}
+             for m in ("P.Claims", "Definitions.Core.Hash", "Definitions.Pouw", "PouwCheck.Check", "P.Guarantees")}
+    graph = built | {"Init.Prelude": {"olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
+                     "Mathlib.Data": {"olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Data.olean"}}
+    f = facts(pins={"P.t": fact(), "P.compiler": g}, spec_definitions=[spec("P.Compiler", True), spec("P.KS", False)],
+              graph=graph)
     policy = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}, "P.compiler": {"owner": "@proofs"}},
               "claims": {"modules": ["P.Claims"], "generic": {"P.Compiler": "P.compiler"},
                          "not": {"P.KS": "a helper the claims read"}},
@@ -1797,19 +1803,30 @@ def test_a_generic_statement_is_refused_without_both_witnesses_or_under_unwitnes
     assert generic_codes(exempt, f) == [("claims.generic-unwitnessed", "P.Compiler")]
 
 
-def test_a_generic_statement_is_refused_when_it_reads_the_deployment():
-    """A read under `meaning` of code, a proof's record (outside the definitions tree) or a `Guarantees` or `Assumptions`
-    module makes the statement one about the deployment; the claims and the hash vocabulary don't."""
+def test_a_generic_statement_reads_only_the_claims_vocabulary_core_and_what_no_package_here_builds():
+    """A generic statement may read `claims.modules`, `Definitions.Core` and modules the import graph places outside this
+    repository (Init, Mathlib); a read of any other in-tree module (code, a `Guarantees` module), or of one the graph
+    doesn't place, fails, naming the module."""
     policy, f = generic_fixture()
-    policy = {**policy, "meaning": ["P", "Q"]}
     reads = f["pins"]["P.compiler"]["reads"]
-    for module in ("Q.Deploy", "P.Guarantees", "P.Assumptions"):
+    for module in ("PouwCheck.Check", "P.Guarantees", "Unplaced.Module"):
         f["pins"]["P.compiler"]["reads"] = reads + [{"name": "Q.deployed", "module": module, "kind": "def"}]
-        assert generic_codes(policy, f) == [("claims.generic-deployed", "P.Compiler")], module
-    assert A.claim_failures(policy, f)[0].startswith("claims: claims.generic[P.Compiler]: P.Compiler reads Q.deployed, of "
-                                                     "the deployment")
+        assert generic_codes(policy, f) == [("claims.generic-reads", "P.Compiler")], module
+    assert A.claim_failures(policy, f) == [
+        "claims: claims.generic[P.Compiler]: P.compiler reads Unplaced.Module: a generic statement reads only the claims "
+        "vocabulary and Core; a statement that reads Unplaced.Module is about a deployment and belongs under the "
+        "guarantee rules"]
     f["pins"]["P.compiler"]["reads"] = reads + [{"name": "Mathlib.thing", "module": "Mathlib.Data", "kind": "def"}]
     assert generic_codes(policy, f) == []
+
+
+def test_a_generic_statement_reading_another_area_s_deployed_numbers_is_refused():
+    """A deployed number in a definitions module outside the claims and Core (`Definitions.Pouw`'s) makes the statement
+    one about the deployment, though it is spec text like the claims."""
+    policy, f = generic_fixture()
+    f["pins"]["P.compiler"]["reads"] += [{"name": "Pouw.tileRows", "module": "Definitions.Pouw", "kind": "def"}]
+    assert generic_codes(policy, f) == [("claims.generic-reads", "P.Compiler")]
+    assert "P.compiler reads Definitions.Pouw:" in A.claim_failures(policy, f)[0]
 
 
 def test_a_generic_entry_is_one_claim_s_only_entry_and_names_a_claim():

@@ -1491,14 +1491,20 @@ def generic_claims(policy: dict) -> dict[str, str]:
     return {c: g for c, g in gen.items() if isinstance(g, str)} if isinstance(gen, dict) else {}
 
 
-def deployment_read(module: str, policy: dict) -> bool:
-    """Whether a definition of ``module`` that a statement reads makes it a statement about the deployment: one under
-    `meaning` outside the trusted vocabulary, of a module outside the definitions tree (`trees.definitions`, else
-    `roots`: the code that runs, a proof's or a property's record) or of a `Guarantees` or `Assumptions` module (what a
-    deployment is held to or rests on)."""
-    trees = (policy.get("trees") or {}).get("definitions") or policy["roots"]
-    return under(policy.get("meaning", policy["roots"]), module) and (
-        not under(trees, module) or bool({"Guarantees", "Assumptions"} & set(module.split("."))))
+#: what a generic statement (`claims.generic`) may read beside `claims.modules` and the modules no package of this
+#: repository builds (Init, Std, Mathlib)
+GENERIC_VOCABULARY = ("Definitions.Core",)
+
+
+def generic_reads(modules: set[str], policy: dict, facts: dict) -> list[str]:
+    """The ``modules`` a generic statement reads outside what it may (`GENERIC_VOCABULARY`): an in-tree module, or one
+    the import graph doesn't place outside this repository, under neither `claims.modules` nor Core. Anything else (code,
+    a proof's or a property's record, a `Guarantees` or `Assumptions` module, another area's deployed numbers) is the
+    deployment's."""
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
+    outside = set(facts.get("graph") or {}) - own
+    vocabulary = [*((policy.get("claims") or {}).get("modules") or []), *GENERIC_VOCABULARY]
+    return sorted(m for m in modules if not under(vocabulary, m) and m not in outside)
 
 
 def witness_pin(rule: str, n: str, of: str, role: str, policy: dict, facts: dict) -> tuple[dict | None, list[str]]:
@@ -1535,8 +1541,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     A closed statement proved of every instance (a compiler over every proof system) is no claim a deployment meets, so it
     goes under `claims.generic` ({claim: guarantee}) instead, eligible when the claim is a closed `def C : Prop` (no
     parameters), its guarantee is listed under `guarantees` and states `C` itself (its pin's `body.head`, or its lift's),
-    `witnesses` holds that guarantee to its honest and nontrivial lemmas with no `unwitnessed` entry, and nothing it reads
-    is about the deployment (`deployment_read`). Its guarantee is then exempt from `inline_failures` and `shape`
+    `witnesses` holds that guarantee to its honest and nontrivial lemmas with no `unwitnessed` entry, and its statement
+    reads only `claims.modules`, Core and what no package of this repository builds (`generic_reads`). Its guarantee is then exempt from `inline_failures` and `shape`
     (`generic_claims`), and held to every other rule."""
     rule = policy.get("claims")
     if not rule:
@@ -1638,13 +1644,10 @@ def generic_failures(c: str, g: str, policy: dict, facts: dict, spec: dict, in_w
         fails.append(Failure("claims.generic-witnesses", c, f"claims: {entry} is {g}, which `witnesses` doesn't hold to "
                              f"both witnesses: list `witnesses[{g}]` = {{honest: [{g}_honest], nontrivial: "
                              f"{g}_nontrivial}}, {GENERIC_WITNESSES}"))
-    if deployed := sorted({r["name"] for r in pin.get("reads") or []
-                           if r.get("name") != c and deployment_read(r.get("module") or "", policy)}):
-        fails.append(Failure("claims.generic-deployed", c, f"claims: {entry}: {c} reads {', '.join(deployed[:3])}"
-                             f"{f' and {len(deployed) - 3} more' if len(deployed) > 3 else ''}, of the deployment (code, "
-                             f"a proof's record, or a `Guarantees` or `Assumptions` module under `meaning`), so it states "
-                             f"something about the deployment: take it off `claims.generic` and hold its guarantee to "
-                             f"the guarantee rules, or state it over every instance"))
+    for m in generic_reads({r.get("module") or "" for r in pin.get("reads") or []}, policy, facts):
+        fails.append(Failure("claims.generic-reads", c, f"claims: {entry}: {g} reads {m}: a generic statement reads "
+                             f"only the claims vocabulary and Core; a statement that reads {m} is about a deployment "
+                             f"and belongs under the guarantee rules"))
     return fails
 
 
