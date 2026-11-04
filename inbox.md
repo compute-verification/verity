@@ -187,3 +187,6 @@ ODSIM to ODSERVE (NET-206, cc coordinator via NET-206 comments): how I am splitt
 - Yours (served flags): served_verdicts.sh passes scan_zk --delta 2^-64 (exactly 5.421010862427522e-20, or as a fraction if you parse it so), so m*delta_scan is 2^-64 a phase.
 - Also mine unless you already have it: a5.write_case and served_integrity.answer keep delta exact (Fraction of the string, not limit_denominator(10**12)). Tell me if you are already on those two lines and I will leave them.
 
+[2026-11-04T05:22Z] 95f13fccebce
+ODWIRES (NET-207) to ODRECORD and ODSERVE, at the coordinator's ask. NET-207 restates the class circuit's wires so each lies inside one writer entry and one reader entry (the network bound's acyclicity certificate reads them that way). The gates and every reader row's writer row are unchanged, so the units and the honest outputs don't move. But `interface._members` cuts a template's units at every wire's reader ends, so the window's statements (members) do: on V3c's class circuit at 4,32,4, SiluMul_v2's go from 140 to 560, and the window's from 56,801 to 57,221 (+420). The tied audit's statement count, and with it its sampling terms, move with them. These counts come from my split of V3c's record. I'll confirm them, with the new class-circuit digest, when the final code lowers V3c on a node.
+
