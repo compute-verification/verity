@@ -6,11 +6,11 @@ import Proofs.NetworkCertifier.SampledAuditAccepted
 
 `SessionWires` (`KSWired`) is `SessionOpens` with each wired gate a drawn proof block holds or reads opened to its
 writer's value (`WireRight`). Where the session proves the wire itself, its statement reading the writer's committed
-leaf as the wired input, a Flock witness in its relation reveals it. `RevealsWires H D opens wires` says so at an
-accepted run, at an opening check `opens`: for each wired gate of a checked unit's proof block, the reveal holds an
-opening at the gate, under the statement's roots, that `opens` accepts and whose value is its writer's
-(`WriterRevealed`): a constant writer's own, or another writer's, opened to the same value by an opening in the same
-reveal that `opens` accepts.
+leaf as the wired input, a Flock witness in its relation reveals it: revealed in the session's Flock witness, so nothing
+reaches the verifier. `RevealsWires H D opens wires` says so at an accepted run, at an opening check `opens`: for each
+wired gate of a checked unit's proof block, the reveal holds an opening at the gate, under the statement's roots, that
+`opens` accepts and whose value is its writer's (`WriterRevealed`): a constant writer's own, or another writer's,
+opened to the same value by an opening in the same reveal that `opens` accepts.
 
 * `WiresRevealed H D wires`: `RevealsWires` at the commitment's own check, `D.commit.Opens H`.
 * `RevealsWires.mono`: a check that accepts more keeps the wires revealed.
@@ -25,8 +25,9 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The writer `w` is revealed at the value `v`** among the openings `os`: `w` is the constant `v`, or `w` is no
-constant and an opening among `os` under `roots`, at `w` and of value `v`, is one `opens` accepts. -/
+/-- **The writer `w` is revealed at the value `v`** among the openings `os`, in the session's Flock witness; nothing
+reaches the verifier. `w` is the constant `v`, or `w` is no constant and an opening among `os` under `roots`, at `w` and
+of value `v`, is one `opens` accepts. -/
 def WriterRevealed (opens : List Msg → Opening Bool → Prop) (C : Prog) (roots : List Msg)
     (os : List (List Msg × Opening Bool)) (w : ℕ) (v : Bool) : Prop :=
   C.gates[w]? = some (.const v) ∨
@@ -53,10 +54,10 @@ section Hyps
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The wires are revealed at the check `opens`**: on a statement in scope, at an accepted run that checks slot `u`
-and shows its session, a Flock witness in the session's relation reveals, for each wired gate `g` the proof block at `u`
-holds or reads, an opening at `g` under the statement's roots that `opens` accepts, whose value is its writer's,
-revealed there (`WriterRevealed`). -/
+/-- **The wires are revealed at the check `opens`**, in the session's Flock witness; nothing reaches the verifier. On a
+statement in scope, at an accepted run that checks slot `u` and shows its session, a Flock witness in the session's
+relation reveals, for each wired gate `g` the proof block at `u` holds or reads, an opening at `g` under the statement's
+roots that `opens` accepts, whose value is its writer's, revealed there (`WriterRevealed`). -/
 def RevealsWires (H : Msg → Msg) (D : Deploy Coin Col T) (opens : List Msg → Opening Bool → Prop)
     (wires : AuditStatement → ℕ → Option ℕ) : Prop :=
   ∀ x s Pt (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
