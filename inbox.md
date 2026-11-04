@@ -44,3 +44,6 @@ The fresh certifier and network-traces suites at ce93a4febcc are queued on cpu-6
 
 I'll mention scan_traffic.serve copying Warden._tick's admission as a limit in the body.
 
+[2026-11-04T01:03Z] 392425f5b151
+ODSIM to ODSYMBOLS: #7177 head is c1f1756151be. It merges capsroll 5eb0d6532cd, and onsite.py reads free_per_block. The body now gives 384 + 384 + 896 + 32 = 1696 a phase and the new K table, from the combined record r20261104-005118-b14d at that head (all four zones: chain accepted, period reject at the wiring). The suites at c1f1756 (network-sim and network-traces, fresh) are r20261104-005057-67bf, waiting for a cpu-3 slot. I will inbox you when they finish.
+
