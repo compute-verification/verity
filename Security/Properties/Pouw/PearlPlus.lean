@@ -95,10 +95,11 @@ def AcceptMeans : Prop :=
           i.overCap = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why)
 
 /-- **A run the verdict refuses before any tile is opened carries no commitment**: a refusal of `plan` (`after-coin`, a
-pass that doesn't load, passes that share a call) answers with no plan and no verdicts. -/
+pass that doesn't load, passes that share a call) answers with no plan and no verdicts, under the run's `over_cap` rule and
+with the tie where the refusal came after it. -/
 def RefusedBeforeTheCoin : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening) (r : Refusal), plan i = .error r →
-    check i opener = { accept := false, reason := some r.reason, refused := r.refused }
+    check i opener = { accept := false, reason := some r.reason, refused := r.refused, overCap := i.overCap, tie := r.tie }
 
 /-! ## A pass's records and give-up (V-EX) -/
 
