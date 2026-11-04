@@ -66,13 +66,15 @@ def _fold(B, bits):
 
 
 def _zeros(B, *colls):
-    """0, read by an AND row per 16 bits of `colls`: AND(t, NOT t) of each 16 bits' XOR t, XORed together. XOR and NOT
-    are linear in the proof system, so only an AND row reads its inputs' columns, and a XOR alone could cancel."""
+    """0, read by two AND rows per 16 bits of `colls`: with u and v the XORs of the 16 bits' halves, AND(u, v) ^
+    AND(u, NOT v) ^ u, all XORed together. XOR and NOT are linear in the proof system, so only an AND row reads its
+    inputs' columns, and the form compiler folds AND(t, NOT t) and a XOR of a form with itself away (`forms.Circuit`)."""
     bits = [_bit(c, i) for c in colls for i in range(c.type.leaves)]
+    assert len(bits) % 16 == 0, len(bits)
     zs = []
     for i in range(0, len(bits), 16):
-        t = _fold(B, bits[i:i + 16])
-        zs.append(B.call(AND, operands(t, B.call(NOT, t))))
+        u, v = _fold(B, bits[i:i + 8]), _fold(B, bits[i + 8:i + 16])
+        zs += [B.call(AND, operands(u, v)), B.call(AND, operands(u, B.call(NOT, v))), u]
     return _fold(B, zs)
 
 
