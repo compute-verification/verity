@@ -234,7 +234,7 @@ def main(argv=None) -> int:
         assert args.tokens == 0, "--device-map evaluates only"
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, attn_implementation="sdpa",
                                                      device_map=args.device_map)
-        res["device_map"] = {k: str(v) for k, v in model.hf_device_map.items()}
+        res["device_map"] = {k: str(v) for k, v in getattr(model, "hf_device_map", {}).items()}
     else:
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32,
                                                      attn_implementation="sdpa").cuda()
