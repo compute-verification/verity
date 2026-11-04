@@ -387,7 +387,7 @@ theorem ins_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
   case hi =>
     unfold FlockDeploy.Raw.ins
     simp only [baseRaw, hf, hpl, hdm, hpm, hreg, Option.mapM_none, Bool.true_and, Bool.false_eq_true, ↓reduceIte]
-    first | rfl | (simp only [bind, Except.bind, pure, Except.pure]; rfl)
+    rfl
   · exact
       { zk := rfl
         stmtTags := rfl
