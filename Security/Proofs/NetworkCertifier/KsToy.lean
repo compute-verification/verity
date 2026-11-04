@@ -80,10 +80,11 @@ theorem notCm_binds (H : Msg → Msg) : notCm.Binds H := by
 def notReveal : List (List Msg × Opening Bool) := [([], ⟨0, false, []⟩), ([], ⟨1, true, []⟩)]
 
 /-- Step `t`'s egress slot's presence gate is the negation, and no step has an ingress, so the input is free. -/
-def freeLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => []⟩
+def freeLay : BoundaryGates 1 1 := { egress := fun _ _ _ => (1, []), ingress := fun _ => [] }
 
 theorem freeLay_fits : freeLay.Fits notProg 1 := by
-  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
+  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega),
+    wiresFit_none rfl _ _⟩
   · simp [freeLay, slotGates] at hg
     subst hg
     decide
@@ -304,7 +305,7 @@ theorem obs1_covered : Covered 1 [obs1] := by
   rfl
 
 theorem zero_free : 0 ∈ freeInputs notProg freeLay 1 := by
-  decide
+  first | decide | simp [freeInputs, freeLay, notProg]
 
 /-- With nothing held and the input `true`, the circuit computes the negation `false`. -/
 theorem notProg_val_true (inp : ℕ → Bool) (h0 : inp 0 = true) : valOver notProg inp (fun _ => none) 1 = false := by
@@ -336,8 +337,12 @@ theorem obs1_notAcc_bad (δ : ℝ) :
   obtain ⟨_, hrows, -⟩ := hacc 0 Nat.one_pos
   have hin : freeLay.inputOf 1 [[]] a 0 = true := ha0
   have h1 : (some [] : Option (List Bool)) =
-      rowOf (valOver notProg (freeLay.inputOf 1 [[]] a) (fun _ => none)) (freeLay.egress 0 0) 0 :=
-    congrFun (congrFun hrows 0) 0
+      rowOf (valOver notProg (freeLay.inputOf 1 [[]] a) (fun _ => none)) (freeLay.egress 0 0) 0 := by
+    refine (congrFun (congrFun hrows 0) 0).trans ?_
+    show rowOf (valOver notProg (resolveWires notProg freeLay.wires _ (fun _ => none) notProg.gates.length)
+      (fun _ => none)) (freeLay.egress 0 0) 0 = _
+    rw [resolveWires_nil (wires := freeLay.wires) rfl]
+    rfl
   have hrow : rowOf (valOver notProg (freeLay.inputOf 1 [[]] a) (fun _ => none)) (freeLay.egress 0 0) 0 =
       if valOver notProg (freeLay.inputOf 1 [[]] a) (fun _ => none) 1 then
         some (([] : List ℕ).map (valOver notProg (freeLay.inputOf 1 [[]] a) (fun _ => none)))
@@ -557,19 +562,12 @@ theorem obs_eq_obs1 {o : Obs 1 1 1} (hr : ∀ ℓ σ, o.rows ℓ σ = some []) (
 list. -/
 theorem blindRun_obs (z : Bool) (i : Fin 1) : (blindRun () (oneSched, z)).2 i = [obs1] := by
   fin_cases i
-  first
-    | show [_] = [obs1]
-      congr 1
-      exact obs_eq_obs1 (fun ℓ σ => by
-        fin_cases ℓ
-        fin_cases σ
-        first | rfl | (cases z <;> rfl)) rfl fun _ => rfl
-    | simp only [blindRun, RowsFormat.record, show blindRows.T = 1 from rfl, List.range_one, List.map_cons,
-        List.map_nil, List.cons.injEq, eq_self_iff_true, and_true]
-      exact obs_eq_obs1 (fun ℓ σ => by
-        fin_cases ℓ
-        fin_cases σ
-        first | rfl | (cases z <;> rfl)) rfl fun _ => rfl
+  show [_] = [obs1]
+  congr 1
+  exact obs_eq_obs1 (fun ℓ σ => by
+    fin_cases ℓ
+    fin_cases σ
+    first | rfl | (cases z <;> rfl)) rfl fun _ => rfl
 
 theorem empty_mem_notFaulty : (∅ : Finset ℕ) ∈ faultySets notStmt.design notPart 0 := by
   classical
