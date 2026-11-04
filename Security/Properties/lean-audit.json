@@ -492,7 +492,8 @@
   "Properties.Core",
   "CoreProtocol.Site",
   "Definitions.Pouw.Dither",
-  "Definitions.Pouw.Assumptions.ServedWork"
+  "Definitions.Pouw.Assumptions.ServedWork",
+  "PouwPearlPlus"
  ],
  "claims": {
   "modules": ["Properties.RemoteAudit.Component"],
