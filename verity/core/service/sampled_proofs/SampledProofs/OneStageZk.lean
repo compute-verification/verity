@@ -25,10 +25,13 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a draw other than the one they give before v1's `check`;
-* **trees** (`treesOf`, `treesHeld`): the coin trees that same session's signed release log shows the challenger sampled
-  and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
-  record's `coin_tree`, link points and every round's coins as the challenger logged them, and every tree logged must be
-  a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
+* **trees** (`treesOf`, `orderHeld`, `treesHeld`): the coin trees that same session's signed release log shows the
+  challenger sampled and opened (`Challenger.trustedTreesOf`). The log must release the sample, then the link, then the
+  other rounds: no coin of the parameters' challenger family after the registration's digest released after a round is
+  opened, and the first round opened a tree's `session` stream (`Challenger.sampleLinkFirst`, `SAMPLE_LINK_FIRST`). Each
+  session's coins must be one tree's, a tree no other session's, its record's `coin_tree`, link points and every
+  round's coins as the challenger logged them, and every tree logged must be a session's
+  (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
@@ -613,15 +616,29 @@ def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs
     named := named.push (s.name, (Json.parse record).toOption.getD Json.null)
   if let some why := Challenger.sessionsTreeReason ts named then throw why
 
+/-- The challenger session's release log in the evidence's `coins`, a line each, as `Challenger.trustedTreesOf` reads
+it. -/
+def linesOf (e : Evidence) : V (List String) := do
+  let .arr ls := getD (getD e.base.coins "session") "log" | throw "the session's log is not a list of lines"
+  ls.toList.mapM fun | .str l => pure l | _ => throw "a line of the session's log is not a string"
+
+/-- The order the window's challenger session released in (module docstring, **trees**): the sample, then the link,
+then the other rounds (`Challenger.sampleLinkFirst`) over its release log's lines after the head, at the parameters'
+challenger family and the registration's digest. -/
+def orderHeld (p : Params) (c : OneStage.Commitment) (e : Evidence) : V Unit := do
+  let some (_, label) := p.base.challenger | throw s!"coins: {NO_CHALLENGER}"
+  let lines ← linesOf e
+  unless Challenger.sampleLinkFirst label c.digest lines.tail do throw s!"coins: {Challenger.SAMPLE_LINK_FIRST}"
+
 /-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
-logged (`treesOf`, `treesHeld`), then the sessions' verdicts on the blobs (`runAll`), then v1's `checkAt` at `ξ` on
-them. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance
-reads the run rather than the verdicts' JSON. In the per-member form a draw that runs out of `ξ` fails the window first
-(`RAN_OUT`), and what would accept is refused (`MULTI_REFUSED`). -/
+logged in the order it must release them (`treesOf`, `orderHeld`, `treesHeld`), then the sessions' verdicts on the blobs
+(`runAll`), then v1's `checkAt` at `ξ` on them. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's
+own `all` says it again, so an acceptance reads the run rather than the verdicts' JSON. In the per-member form a draw
+that runs out of `ξ` fails the window first (`RAN_OUT`), and what would accept is refused (`MULTI_REFUSED`). -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   if p.form.perMember && OneStage.ranOut p.base c ξ then .reject s!"draw: {RAN_OUT}" else
-  match treesOf p e >>= (treesHeld · e bs) >>= fun () => runAll p e bs with
+  match treesOf p e >>= (fun ts => orderHeld p c e >>= fun () => treesHeld ts e bs) >>= fun () => runAll p e bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
