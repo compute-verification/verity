@@ -1,7 +1,6 @@
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.Period
 import Definitions.NetworkCertifier.Tap
-import Definitions.NetworkCertifier.RecordRows
 import Definitions.Core.Assumptions
 import Mathlib.Data.Set.Card
 import Mathlib.Algebra.BigOperators.Fin
@@ -50,14 +49,13 @@ its committed gates, each held at one bit: those it returns or another proof blo
 first copy of an input bit that later copies in other proof blocks read through their wires. A free input that writes a
 wire stays a free input.
 
-`PeriodLeakRegistered` removes that condition. Its first part bounds the leak relation with the registered inputs at
-the values the registration opens under the statement's roots (`RegOpens`), adding `Pr[B_reg]`, and its count is over
-`WindowGoodReg`, which holds the registration's values, not the trace's, at the registered inputs. Every condition its
-good event holds is then one the first part bounds or one the registration and the network certifier's record fix.
-Its network certifier records in the rows format (`RowsFormat`), which reads the client's view back from the record
-and the schedule's `(r, D)` alone, so its count charges the schedule only for its `(r, D)` among the registered set `Θ`:
-`log2 #Θ` bits in place of `log2 #Ss + Σ_c log2 (cap_c + 1)`. A cell count or a failed cell is in the observations,
-so the windows' content term charges it, and nothing else does.
+`Properties.NetworkPeriodLeak.PeriodLeakRegistered` removes that condition. Its first part bounds the leak relation with
+the registered inputs at the values the registration opens under the statement's roots (`RegOpens`), adding
+`Pr[B_reg]`, and its count is over `WindowGoodReg`, which holds the registration's values, not the trace's, at the
+registered inputs. Its network certifier records in its own rows format (`cellRows`), which reads the client's view back
+from the record and the schedule's `(r, D)` alone, so its count charges the schedule only for its `(r, D)` among the
+registered set `Θ`: `log2 #Θ` bits in place of `log2 #Ss + Σ_c log2 (cap_c + 1)`. It is stated on the period check's
+acceptance, which refuses a schedule whose frames don't read back (`NetworkCheck.Period.rowsWf`).
 -/
 
 namespace NetTiming.Guarantees
@@ -120,62 +118,6 @@ def PeriodLeakAccepted : Prop :=
         {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
             ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
           Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-            reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
-
-/-- **The leak through the network certifier over a monitoring period, at the registration's values.** As
-`PeriodLeakAccepted`, with the registered inputs pinned at the values the registration opens under each statement's
-roots (`regVal (ops s)`, `RegOpens`) rather than at the trace's, so no window's good event reads the trace at a
-registered input (`WindowGoodReg`), and with a network certifier whose code records in a well-formed rows format `F`
-(`RowsFormat.Wf`), on schedules whose `(r, D)` is in the registered set `Θ` and which fit `F`:
-
-* each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
-  `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` with the registered inputs at the registration's
-  values, `B_reg` the collisions between the extracted trace's openings and the registration's (`Breg`);
-* where at every window's statement the network certifier registers its observations at that window's operator
-  (`TapsOpen`), a covert sender's secrets whose every window meets `WindowGoodReg`, its registration opening `ρ i` at
-  the registered inputs, number at most
-  `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
-  `log2 #Θ + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 Dj)` bits through the network
-  certifier in the monitoring period.
-
-Its other conditions are named too: the windows' registrations (`WindowsPlaced`), the sender's schedules among those
-at `Θ` that fit `F` (`SchedulesCovered`, a property of the compiled Lean audit over the network certifier's signed
-records) and the sender's secrets recovered from the client's view (`SenderDecodes`, the count's own terms).
-`RegOpensAt` restricts which openings `ops` the first part speaks of, those that open the registered roots: a choice of
-`ops`, not a claim about the prover's honesty. Two different openings of one registered input are a collision `B_reg`
-covers. -/
-def PeriodLeakRegistered : Prop :=
-  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires))
-    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
-    (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ)
-    {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
-    (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D δ sw Pw β)
-    {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (hF : F.Wf)
-    (tap : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p =>
-      (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2))))
-    (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
-    (hcov : SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : SenderDecodes run tap Zs schedOf srvOf dec)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
-    (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
-      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
-      Claims.PrBad H D.V
-          (RLeakTap H D.commit D.parse D.partition L K S lay k δ
-            (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) Dj tops)
-          (E D decode) m P ≤
-        κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
-          (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H +
-          (Breg H D.V (E D decode) D.commit D.parse ops Ω P m).Pr H) ∧
-      (TapsOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
-        {z | z ∈ Zs ∧ ∀ i, WindowGoodReg H D L K S lay k δ reg ops Dj (sw i) (ρ i) tops (x z i) (wit z i)
-            ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-          Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
 
 end NetTiming.Guarantees

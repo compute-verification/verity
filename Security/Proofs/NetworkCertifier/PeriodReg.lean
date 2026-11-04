@@ -1,4 +1,5 @@
 import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.RecordRows
 import Proofs.NetworkCertifier.Period
 import Proofs.NetworkCertifier.SampledLeakReg
 import Proofs.NetworkCertifier.ReadFree
@@ -18,6 +19,10 @@ observations among the sequences `AccSeqsSampled` counts at its registration's v
 (`mem_accSeqsSampled_of_windowGoodReg`), and the rows format's read-back from the record and `(r, D)` counts the
 secrets (`RowsFormat.encard_periodRead_le`). Like `periodLeak`, the first part goes through `RWired` and `KSWired`
 directly, as `TapProof.sampledLeak_tap` does, not through `SampledAuditAccepted`.
+
+`PeriodLeakRegisteredWf` states it at every rows format that reads back, taking `RowsFormat.Wf` as a hypothesis: the
+listed guarantee, `Properties.NetworkPeriodLeak.PeriodLeakRegistered`, is it at the network certifier's own format,
+where the period check's acceptance gives `Wf` (`Proofs.Properties.NetworkPeriodLeak`).
 -/
 
 namespace NetTiming
@@ -171,10 +176,57 @@ theorem sampledLeak_tapReg (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.com
 
 end Deploy
 
+set_option linter.unusedVariables false in
+/-- **The leak through the network certifier over a monitoring period, at the registration's values, at every
+well-formed rows format.** As `Guarantees.PeriodLeakAccepted`, with the registered inputs pinned at the values the
+registration opens under each statement's roots (`regVal (ops s)`, `RegOpens`) rather than at the trace's, so no
+window's good event reads the trace at a registered input (`WindowGoodReg`), and with a network certifier whose code
+records in a rows format `F` that reads back (`RowsFormat.Wf`), on schedules whose `(r, D)` is in the registered set `Θ`
+and which fit `F`: each window's audit, at a statement in its scope whose registration opens its registered inputs
+(`RegOpensAt`), has `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]`, and where the network
+certifier registers its observations (`TapsOpen`), a covert sender's secrets whose every window meets `WindowGoodReg`
+number at most `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. The rows format reads the
+client's view back from the record and the schedule's `(r, D)` alone, so the count charges the schedule only for its
+`(r, D)` among `Θ`. `Properties.NetworkPeriodLeak.PeriodLeakRegistered` is this at the network certifier's own format
+(`cellRows`), whose `Wf` the period check's acceptance gives. -/
+def PeriodLeakRegisteredWf : Prop :=
+  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires))
+    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
+    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
+    (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ)
+    {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
+    (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
+    (hplaced : WindowsPlaced D δ sw Pw β)
+    {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (hF : F.Wf)
+    (tap : Dev)
+    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p =>
+      (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2))))
+    (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
+    (hcov : SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf)
+    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : SenderDecodes run tap Zs schedOf srvOf dec)
+    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
+    (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
+      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
+      Claims.PrBad H D.V
+          (RLeakTap H D.commit D.parse D.partition L K S lay k δ
+            (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) Dj tops)
+          (E D decode) m P ≤
+        κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
+          (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H +
+          (Breg H D.V (E D decode) D.commit D.parse ops Ω P m).Pr H) ∧
+      (TapsOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
+        {z | z ∈ Zs ∧ ∀ i, WindowGoodReg H D L K S lay k δ reg ops Dj (sw i) (ρ i) tops (x z i) (wit z i)
+            ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
+          Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
+            reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
+
 /-- **The leak through the network certifier over a monitoring period, at the registration's values**:
-`Guarantees.PeriodLeakRegistered`, from `sampledLeak_tapReg` and the rows format's count from the read-back
+`PeriodLeakRegisteredWf`, from `sampledLeak_tapReg` and the rows format's count from the read-back
 (`RowsFormat.encard_periodRead_le`) at each window's `AccSeqsSampled` (`encard_accSeqsSampled_le`). -/
-theorem periodLeak_registered : Guarantees.PeriodLeakRegistered := by
+theorem periodLeak_registered : PeriodLeakRegisteredWf := by
   intro Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj n sw Pw ρ op β ⟨hPw, hβ⟩ Conn Cell Srv
     Dev Sec arr F hF tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
   refine ⟨fun m hm hreg Ω _ _ P =>

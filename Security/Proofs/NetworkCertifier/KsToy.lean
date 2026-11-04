@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ERep
 import Definitions.NetworkCertifier.Period
 
 /-!
-# A deployment where `Claims.Sampling.KS` holds, and why `PeriodLeakRegistered` reads `RegOpensAt` and `RowsFormat.Wf`
+# A deployment where `Claims.Sampling.KS` holds, and why `PeriodLeakRegisteredWf` reads `RegOpensAt` and `RowsFormat.Wf`
 
 `ksNotD` is `leakD` (the negation `notStmt`, its verifier accepting) with a commitment that passes one value at each
 position, `false` at gate `0` and `true` at gate `1` (`notCm`), one proof block checked on every run, and a session whose
@@ -14,7 +14,7 @@ the commitment binds with no call, every decoder within Flock's radius lists the
 `Claims.Witness.Flock.inStmt` holds, so every session's extraction finds a witness, whose openings make the block
 correct; the block is checked on every run, so the only possible faulty set is empty.
 
-Without `RegOpensAt`, the first part of `PeriodLeakRegistered` is false (`not_windowLeakAtAnyOps`): at the layout
+Without `RegOpensAt`, the first part of `PeriodLeakRegisteredWf` is false (`not_windowLeakAtAnyOps`): at the layout
 `freeLay`, where the input is free and the negation is the egress slot's presence gate, a registration `badReg` that
 opens the input `true`, which `notCm` refuses, pins the input at `true`, so the circuit holds no frame, while the
 network certifier's openings `frameTops`, which pass, register a frame (`obs1`). No witness is then in `RLeakTap`, the

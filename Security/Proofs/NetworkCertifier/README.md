@@ -52,8 +52,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                at the registration's values) and the registration's openings at a statement
                                (RegOpensAt)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
-                               monitoring period of sampled audits (PeriodLeakAccepted; PeriodLeakRegistered at the
-                               registration's values)
+                               monitoring period of sampled audits (PeriodLeakAccepted; the registered form,
+                               Properties.NetworkPeriodLeak.PeriodLeakRegistered, is at the period check's acceptance)
 ../../Definitions/NetworkCertifier/Guarantees/Pooled.lean  trusted: the incorrect proof blocks over a monitoring period
                                of sampled audits on independent live coins (PooledIncorrectBlocksLe)
 ../../Definitions/NetworkCertifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
@@ -148,7 +148,7 @@ WitnessToys.lean  the instances the count and period witnesses are stated at, ea
                                          `fxQueue`)
 KsToy.lean      a deployment where `Claims.Sampling.KS` holds (`ksNotD_KS`): the negation under a commitment that
                                          passes one value at each position, its one proof block checked on every run;
-                                         there, a registration that doesn't open breaks PeriodLeakRegistered's
+                                         there, a registration that doesn't open breaks PeriodLeakRegisteredWf's
                                          per-window part (`not_windowLeakAtAnyOps`), which is why it reads `RegOpensAt`;
                                          and there WitnessToys' `blindRows`, which encodes every frame as the empty
                                          list, records every serving as one window the circuit accepts
@@ -159,10 +159,11 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
                                          everything (`acceptAll`); the per-execution-block forms at `e₀ = 0`, from
                                          the empty prefix. In the lock's `witnesses`
 PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, none with a binder over the
-                                         instance: PooledLeakAccepted's pair and PeriodLeakAccepted's and
-                                         PeriodLeakRegistered's nontrivial, whose honest halves `unwitnessed` exempts,
-                                         and, unlisted, PeriodLeakRegistered's exclusion of trusted-host
-                                         (not_periodLeakRegisteredUntrusted) and why it reads RowsFormat.Wf
+                                         instance: PooledLeakAccepted's pair and PeriodLeakAccepted's nontrivial,
+                                         whose honest half `unwitnessed` exempts, and, unlisted, the general
+                                         registered form's (PeriodReg's PeriodLeakRegisteredWf) exclusion of
+                                         trusted-host (not_periodLeakRegisteredUntrusted) and why it reads
+                                         RowsFormat.Wf, which the period check refuses without
                                          (not_periodLeakRegisteredAnyFormat, at blindRows)
 WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
                                          (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,

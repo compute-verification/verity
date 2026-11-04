@@ -7,21 +7,19 @@ import Definitions.NetworkCertifier.Period
 /-!
 # The monitoring period's honest and nontrivial lemmas
 
-`PooledLeakAccepted` has an `honest` and a `nontrivial` lemma, and `PeriodLeakAccepted` and `PeriodLeakRegistered`
-a `nontrivial` one each, listed in the lock's `witnesses`, and none takes a binder over its instance; the lock's
-`unwitnessed` exempts `PeriodLeakAccepted`'s and `PeriodLeakRegistered`'s `honest` halves.
+`PooledLeakAccepted` has an `honest` and a `nontrivial` lemma, and `PeriodLeakAccepted` a `nontrivial` one, listed in
+the lock's `witnesses`, and none takes a binder over its instance; the lock's `unwitnessed` exempts
+`PeriodLeakAccepted`'s `honest` half. `Properties.NetworkPeriodLeak.PeriodLeakRegistered`'s are in
+`Proofs.Properties.NetworkPeriodLeak`; its general form `PeriodLeakRegisteredWf` has two unlisted ones here.
 
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512, at
   `δ = 1/8` (`tapD_bound_fails`).
-* `PeriodLeakRegistered_nontrivial`: its per-window bound fails at `tapD` likewise, with a registration with no
-  openings, which opens every registered input when none is registered (`tapD_reg_bound_fails`). Its `honest` half is
-  the sampled leg's guarantee at the honest deployment (`Verity.Vocab.SampledProofsSound`), which the lock exempts until
-  sampled-audits-sound proves it.
 * `not_periodLeakRegisteredUntrusted`, unlisted, its exclusion of `trusted-host`: the statement with `TrustedHost`
   dropped and every other premise kept (`PeriodLeakRegisteredUntrusted`) is false, at `scopelessD` (no statement in
   its scope, so `KS` holds), the well-formed rows format `fxRows`, no window and `Θ = {(1, 0)}`, where the device
   `leakyRun` tells two servings apart against `#Θ = 1`.
-* `not_periodLeakRegisteredAnyFormat`, unlisted, why it reads `RowsFormat.Wf`: the statement with `hF` dropped and
+* `not_periodLeakRegisteredAnyFormat`, unlisted, why it reads `RowsFormat.Wf`, and so why the period check refuses a
+  schedule whose frames don't read back (`NetworkCheck.Period.rowsWf`): the statement with `hF` dropped and
   every other premise kept, `TrustedHost` included (`PeriodLeakRegisteredAnyFormat`), is false, at `ksNotD` (where
   `KS` holds, `KsToy`), `WitnessToys`' rows format `blindRows`, which encodes every frame as the empty list, one
   window and `Θ = {(1, 0)}`, where the network certifier's code, recorded in `blindRows`, registers one record on
@@ -54,24 +52,7 @@ theorem PeriodLeakAccepted_nontrivial :
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
 
-/-- **`PeriodLeakRegistered`'s per-window bound fails at the accepting verifier** `tapD`, at SHA-512, at one step at
-`δ = 1/8` with no input registered and a registration with no openings, which opens every registered input
-(`tapD_reg_bound_fails`). -/
-theorem PeriodLeakRegistered_nontrivial :
-    ¬ PrBad shaD (tapD Unit).V
-        (RLeakTap shaD (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay)
-          (fun _ => 1) (1 / 8) (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1 (fun _ => tapOps))
-        (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP ≤
-      Claims.Sampling.κ (tapD Unit) (1 / 8) [] +
-          Real.sqrt (Claims.Sampling.γ (tapD Unit) [] * PrB shaD (tapD Unit).V silentP []) +
-        (Bext shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) Unit silentP []).Pr shaD +
-        (Btap shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
-          (fun _ => tapOps) Unit silentP []).Pr shaD +
-        (Breg shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
-          (fun _ => []) Unit silentP []).Pr shaD :=
-  tapD_reg_bound_fails shaD
-
-/-- **`PeriodLeakRegistered` without `TrustedHost`**: its statement with the device's run any function of the
+/-- **`PeriodLeakRegisteredWf` without `TrustedHost`**: its statement with the device's run any function of the
 schedule and the server, every other hypothesis kept. -/
 def PeriodLeakRegisteredUntrusted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
@@ -108,7 +89,7 @@ def PeriodLeakRegisteredUntrusted : Prop :=
           Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
 
-/-- **Without `TrustedHost`, `PeriodLeakRegistered` is false**: at `scopelessD`, where `KS` holds (no statement is in
+/-- **Without `TrustedHost`, `PeriodLeakRegisteredWf` is false**: at `scopelessD`, where `KS` holds (no statement is in
 its scope, `scopelessD_ks`) and so sampling at the incorrect set (`notLay` has no wires), the rows format `fxRows`
 (well formed), no window, `Θ = {(1, 0)}` and the schedule `emptySched` (which fits), the device `leakyRun`, which
 shows the client a cell its record doesn't hold on one of two servings (`leakyRun_untrusted`), tells the two apart,
@@ -125,7 +106,7 @@ theorem not_periodLeakRegisteredUntrusted : ¬ PeriodLeakRegisteredUntrusted := 
       Set.mem_ofPred.2 ⟨Set.mem_univ z, fun i => i.elim0⟩).trans hc)
   simp at h2
 
-/-- **`PeriodLeakRegistered` at any rows format**: its statement without `F.Wf`, every other hypothesis kept,
+/-- **`PeriodLeakRegisteredWf` at any rows format**: its statement without `F.Wf`, every other hypothesis kept,
 `TrustedHost` included. -/
 def PeriodLeakRegisteredAnyFormat : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
@@ -163,7 +144,7 @@ def PeriodLeakRegisteredAnyFormat : Prop :=
           Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
 
-/-- **Without `RowsFormat.Wf`, `PeriodLeakRegistered` is false**: at `ksNotD`, where `KS` holds (`ksNotD_KS`) and so
+/-- **Without `RowsFormat.Wf`, `PeriodLeakRegisteredWf` is false**: at `ksNotD`, where `KS` holds (`ksNotD_KS`) and so
 `KSWired` (`freeLay` has no wires), the registration `goodReg`, which opens (`ksNotD_regOpens`), one window at
 `δ = 0` and `Θ = {(1, 0)}`, the network certifier's code recorded in `blindRows` (which doesn't read back,
 `blindRows_not_wf`) on the schedule `oneSched` (which fits) registers `obs1` on every serving `z`, the client's cell
