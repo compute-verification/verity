@@ -11,7 +11,6 @@ import Proofs.Flock.Claims.Bridge.DecodePlain
 import Proofs.Flock.Claims.Bridge.Dead
 import Proofs.Flock.Claims.Bridge.Returns
 import Proofs.Flock.Claims.Bridge.Hm96Tree
-import Proofs.Flock.Claims.Bridge.ErrorTerms
 import Proofs.Flock.Claims.Bridge.WrongSet
 import Proofs.Flock.Claims.Bridge.BindsColl
 import Proofs.Flock.Claims.Bridge.Transports

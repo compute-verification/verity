@@ -10,8 +10,6 @@ import Proofs.Flock.C3.Compose.RsFacts
 import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
-import Proofs.Flock.C3.Compose.LaterHeldW
-import Proofs.Flock.C3.Compose.LaterHolo
 import Batteries.Recycling.MonadSatisfying.Array
 import Proofs.Flock.Recursive.HoloSchedCheck
 import Proofs.Flock.Recursive.ValueChecked
@@ -19,8 +17,6 @@ import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.RowsReg
 import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.C3.Compose.HoloSparseRounds
-import Proofs.Flock.C3.Compose.HoloSparseWords
 import Proofs.Flock.VBridge.Family.PartKeys
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
@@ -29,12 +25,6 @@ import Proofs.Flock.C3.Sparse.SrcTie
 import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.Sparse.MsgsRead
-import Proofs.Flock.C3.Sparse.SrcSessions
-import Proofs.Flock.C3.Sparse.MsgsLayers
-import Proofs.Flock.C3.Sparse.PubTie
-import Proofs.Flock.C3.Sparse.PubLift
-import Proofs.Flock.C3.Sparse.HeldStages
-import Proofs.Flock.C3.Sparse.PubChecked
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -65,8 +55,6 @@ import Proofs.Flock.C3.Reps.ResRead
 import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Reps.WRead
 import Proofs.Flock.C3.Reps.ReadWhole
-import Proofs.Flock.C3.Reps.RoundReads
-import Proofs.Flock.C3.Reps.RoundSel
 import Proofs.Flock.C3.Reps.RoundOfHolo
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Reps.KeysInW
@@ -75,7 +63,6 @@ import Proofs.Flock.C3.Opening.SessionPartsL
 import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.C3.Opening.ClaimTie
 import Proofs.Flock.C3.Opening.SrcLayer
 import Proofs.Flock.C3.Opening.SrcCover
 import Proofs.Flock.C3.RegLevels.SrcTie
@@ -101,13 +88,7 @@ import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.TopRead
-import Proofs.Flock.C3.RegLevels.SrcMaps
-import Proofs.Flock.C3.Sparse.SessionReg
-import Proofs.Flock.C3.Sparse.SessionZero
-import Proofs.Flock.C3.Sparse.HCols
-import Proofs.Flock.C3.RegLevels.LgCoins
-import Proofs.Flock.C3.RegLevels.RRounds
-import Proofs.Flock.C3.RegLevels.LgHeld
+import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.C3.Reps.HAlgRows
 
 /-!

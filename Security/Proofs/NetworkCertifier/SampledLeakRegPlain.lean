@@ -1,5 +1,8 @@
 import Proofs.NetworkCertifier.SampledLeakReg
-import Proofs.Flock.Claims.Sampling.DeployedSha512
+import Proofs.Flock.Claims.Sampling.Committed
+import Proofs.Flock.Claims.ZK.Deployed
+import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.KS.PlainLeafKS
 
 /-!
 # The leak bound at the registration's values, at the deployed plain record

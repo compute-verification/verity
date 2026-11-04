@@ -20,7 +20,6 @@ import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
 import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.CoinOpen
-import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Session
 import Proofs.Flock.Claims.ZK.MaskedTables
@@ -55,8 +54,6 @@ import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Round1Pads
 import Proofs.Flock.Claims.ZK.Round1Root
-import Proofs.Flock.Claims.ZK.Round1Enc
-import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.SimPiopGo
@@ -91,7 +88,6 @@ import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.FramePhase
 import Proofs.Flock.Claims.ZK.FrameState
-import Proofs.Flock.Claims.ZK.FrameRun
 import Proofs.Flock.Claims.ZK.FrameShape
 import Proofs.Flock.Claims.ZK.FrameOwn
 import Proofs.Flock.Claims.ZK.FramePass
@@ -103,7 +99,6 @@ import Proofs.Flock.Claims.ZK.FrameAsks
 import Proofs.Flock.Claims.ZK.FramePlan
 import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.FrameInner
 import Proofs.Flock.Claims.ZK.FrameZK
 import Proofs.Flock.Claims.ZK.FrameLive
@@ -113,7 +108,6 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
 import Proofs.Flock.Claims.ZK.Layout
 import Proofs.Flock.Claims.ZK.Cut
-import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound

@@ -1,7 +1,7 @@
 import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.KS.Fork
 import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.KS.Game
+import Proofs.Flock.Claims.Bridge
 import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.Joint
@@ -23,7 +23,6 @@ import Proofs.Flock.Claims.KS.OffAlign
 import Proofs.Flock.Claims.KS.PlainOff
 import Proofs.Flock.Claims.KS.OffSim
 import Proofs.Flock.Claims.KS.PlainOffLive
-import Proofs.Flock.Claims.KS.PlainOffRd
 import Proofs.Flock.Claims.KS.CapChunk
 import Proofs.Flock.Claims.KS.PlainCapPrefix
 import Proofs.Flock.Claims.KS.PlainQueried
@@ -168,7 +167,6 @@ import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.KS.ZkUntrim
 import Proofs.Flock.Claims.KS.Extend
 import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Claims.KS.PlainUntrim
 import Proofs.Flock.Claims.KS.ZkOuter
 import Proofs.Flock.Claims.KS.PlainAccPrR
 

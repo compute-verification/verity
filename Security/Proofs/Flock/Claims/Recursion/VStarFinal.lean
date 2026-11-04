@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VStarHonest
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
-import Proofs.Flock.Claims.Recursion.VStarFitPin
+import Proofs.Flock.Claims.Recursion.VStarNets
 
 /-!
 # What each V\* part's circuit accepts on the honest run, with hh's fitting discharged (`honest_partAccepts_final`)

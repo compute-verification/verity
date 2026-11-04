@@ -8,7 +8,8 @@ import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 import Proofs.Flock.Claims.Sampling.Select.Design
 import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.Claims.Sampling.Select.Refusals
-import Proofs.Flock.Claims.Sampling.Select.Code
+import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+import SampledProofs.Run
 import Proofs.Flock.Claims.Sampling.Select.OS
 
 /-! The deployed sampled verifier's draw (`SampledProofs.Slots.select`) against the claims' `P_a`: a sequential draw's
