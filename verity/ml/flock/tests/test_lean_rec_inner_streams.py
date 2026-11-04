@@ -1,14 +1,14 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
-`flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the coin server's
-record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-081440-2d61`
-(`pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
+`flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the challenger's
+record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of one run of
+`pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
 Hello, R's top registered at staging, R's shape in META and each sparse phase's claim its last round): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (34 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
 the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
 verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing, a top another stream
 committed, or its table named as a sparse phase's or R's stream (`sparse`, `stacked`). R has no root at `Commit`, so
-its salted top is registered at staging (#1798: the entry `stacked` of the
+its salted top is registered at staging (the entry `stacked` of the
 statement's `verity/registration/v2` circuit registration, `circuit-registration.json`), whose digest the inner circuit's
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
 `--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
@@ -422,7 +422,7 @@ def test_the_reps_coins_are_the_prover_records_across_z_partials_split(tmp_path,
      "the prover's record, check 5's)"),
 ], ids=["relay-record", "relay-reps"])
 def test_the_relays_record_is_not_the_inner_sessions(tmp_path, record, why):
-    """The relay's record holds the transcript's rounds as the firewall split them, and the sparse streams and R's: it is not
+    """The relay's record holds the transcript's rounds as the ZK server split them, and the sparse streams and R's: it is not
     the record check 5 reads, and `innerCommits` reads that one."""
     rc, line, err = _read(C3, record=record(tmp_path))
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
@@ -525,7 +525,7 @@ RANGE = {"count": 64, "net": "unit", "pos0": 256, "slot_log": 13, "type": "unit"
 @pytest.fixture(scope="module")
 def sparse(tmp_path_factory) -> Path:
     """2d61's sparse phase staged as its RecSparse statement over both reps, as `rec_vstage stage --sparse` stages it: its
-    message ports read as the firewall committed them (`rec_vstage.sparse_messages`), h as the algebra's h round."""
+    message ports read as the ZK server committed them (`rec_vstage.sparse_messages`), h as the algebra's h round."""
     from verity_flock import rec_sparse as SP
     from verity_flock import rec_vstage as VS
 
@@ -586,7 +586,7 @@ def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE, holo=True) -> list[st
     """`rec-inner`'s line at 2d61's table shape (m 25, k_log 22, claims 8 over 3 regions), its circuits private (`holo`,
     `rec-inner --hide`: its reps split z_partial's round), with the bucket's RecSparse shape and R's when given (`rec-inner
     --sparse`, META's `stacked`)."""
-    j = {"format": "verity/rec-inner/v1", "m": 25, "k_log": 22, "claims": 8, "regions": 3, **({"holo": True} if holo else {}),
+    j = {"format": "verity/rec-inner/v2", "m": 25, "k_log": 22, "claims": 8, "regions": 3, **({"holo": True} if holo else {}),
          **({"sparse": list(sparse)} if sparse else {}), **({"stacked": stacked} if stacked else {})}
     return ["--rec-inner", str(_write(tmp_path / "rec-inner.json", j))]
 
@@ -735,7 +735,7 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
     d = _fixture(PLAIN)
     run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(_own(tmp_path, d)),
                                         "--rec-inner-session", str(d / "session"), *shape], capture_output=True, text=True)
-    p = run(["--rec-inner", str(_write(tmp_path / "plain.json", {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22,
+    p = run(["--rec-inner", str(_write(tmp_path / "plain.json", {"format": "verity/rec-inner/v2", "m": 27, "k_log": 22,
                                                                  "claims": 8, "regions": 3}))])
     assert p.returncode == 0 and p.stdout.startswith('RECTRANSCRIPT {"reps":[78,78],"streams":[]}'), p
     p = run(_shape(tmp_path, stacked=None))
@@ -745,8 +745,24 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
 
 
 #: the verifier's inner shapes of the plain session (`rec-coins`' inner statement, public circuits) and of 2d61's
-PLAIN_SHAPE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3}
+PLAIN_SHAPE = {"format": "verity/rec-inner/v2", "m": 27, "k_log": 22, "claims": 8, "regions": 3}
 C3_SHAPE = {**PLAIN_SHAPE, "m": 25, "holo": True, "sparse": list(SPARSE), "stacked": R_SHAPE}
+
+
+def test_the_recursions_statement_version_before_sha512_salts_is_refused(tmp_path):
+    """The recursion's statement version is the verifier's inner shape's, `verity/rec-inner/v2`, whose V* statements'
+    verifier-registered values are under SHA-512 salts (`rec_residuals.salt_of`). `v1`'s, under SHAKE256, is refused by
+    name where the verifier reads its inner shape; the same shape at `v2` is read."""
+    def run(fmt: str) -> subprocess.CompletedProcess:
+        f = _write(tmp_path / f"{fmt.rsplit('/', 1)[1]}.json", {**PLAIN_SHAPE, "format": fmt})
+        return subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(f)], capture_output=True, text=True)
+
+    p = run("verity/rec-inner/v1")
+    assert p.returncode == 2 and p.stderr.strip() == (
+        "rec-inner: verity/rec-inner/v1 is refused: its V* statements' verifier-registered values are under SHAKE256 salts, "
+        "verity/rec-inner/v2's under SHA-512"), p
+    p = run("verity/rec-inner/v2")
+    assert p.returncode == 0 and p.stdout.startswith("RECVSTAR "), p
 OFF = ("rec inner transcript: the coin server's record is off the schedule of the verifier's inner shape (m {m}, k_log "
        "{k_log}, claims {claims}): ")
 
@@ -870,7 +886,7 @@ STAGE = PLAIN.parent / "u" / "stage"
 
 #: candidate 3's inner shape at `STAGE` (m 27, k_log 22, claims 8 over 3 regions), with a RecSparse shape whose sparse
 #: range check 5 passes on it (`RecCoins.checkAtC3`), and R's
-AT_STAGE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3, "sparse": [1, 12, 1, 0],
+AT_STAGE = {"format": "verity/rec-inner/v2", "m": 27, "k_log": 22, "claims": 8, "regions": 3, "sparse": [1, 12, 1, 0],
             "stacked": R_SHAPE}
 
 
@@ -948,7 +964,7 @@ def test_a_stopped_sessions_record_is_refused(tmp_path, d):
 
 
 def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
-    """A session `rec_live`'s firewall stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
+    """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
     server's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
     proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
     something else."""

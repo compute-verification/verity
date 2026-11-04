@@ -282,13 +282,12 @@ theorem cutsFromRows_of_single {tags : Tags} {bytes : ByteArray} {tables : List 
     (h : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) : CutsFromRows c :=
   cutsFromRows_of_singlePre h h1
 
-/-- **`KeysRow` from the parse, for a unit reading any number of input groups**: in an untyped circuit `HmRow.parse`
-accepted with nets `pre` first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`, every
-input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is a port bit
-(`PortReads`). -/
-theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+/-- **Every port-bit input of a unit slot has a row key**, in an untyped circuit `HmRow.parse` accepted with nets `pre`
+first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`. -/
+theorem rowKey_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
-    (hpr : PortReads c hU) : KeysRow c hU (portRowW c) := by
+    (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ} (hm : x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups)
+    (hu : x / (c.unit.inWords * WORD) < c.upv) : RowKey c (portRowW c) x := by
   obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_factsPre_nets h
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
@@ -304,32 +303,13 @@ theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (Str
   have hhm : c.unitNet ≠ c.hmNet := fun he => by
     rw [← he, hname] at hhn
     exact absurd hhn (by unfold HmRow.HM_NET; decide)
-  intro i x hx hxn
-  set R := Rows.ofNet hU with hR
-  have hxn' : x.val < c.upv * R.nIn := hxn
-  have hx' : x ∈ R.stackRow c.upv R.a i ++ R.stackRow c.upv R.b i := hx
-  obtain ⟨j, y, hy, hyn, hu, hxy⟩ : ∃ (j : Fin R.nComp) (y : Fin R.w), y ∈ R.a j ++ R.b j ∧ y.val < R.nIn ∧
-      i.val / (R.nComp + 1) < c.upv ∧ x.val = i.val / (R.nComp + 1) * R.nIn + y.val := by
-    rcases List.mem_append.1 hx' with hx' | hx'
-    · obtain ⟨j, y, hy, h2, h3, h4⟩ := stackRow_input hx' hxn'
-      exact ⟨j, y, List.mem_append_left _ hy, h2, h3, h4⟩
-    · obtain ⟨j, y, hy, h2, h3, h4⟩ := stackRow_input hx' hxn'
-      exact ⟨j, y, List.mem_append_right _ hy, h2, h3, h4⟩
-  have hm := hpr j y hy hyn
-  set u := i.val / (R.nComp + 1)
-  have hW : R.nIn = c.unit.inWords * WORD := ofNet_nIn_eq
-  rw [hW] at hyn hxy
-  have hmod : x.val % (c.unit.inWords * WORD) = y.val := by
-    rw [hxy, Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hyn]
-  have hdiv : x.val / (c.unit.inWords * WORD) = u := by
-    rw [hxy, Nat.mul_comm, Nat.mul_add_div (by omega), Nat.div_eq_of_lt hyn, Nat.add_zero]
   obtain ⟨p, t, hp, ht, hpt⟩ := Aliased.mem_portBits hm
-  have hnd := Aliased.portBits_nodup hU
-  have hkey : Aliased.srcKey c x.val = Aliased.srcAt c u p t := by
+  have hkey : Aliased.srcKey c x = Aliased.srcAt c (x / (c.unit.inWords * WORD)) p t := by
     unfold Aliased.srcKey
-    rw [hmod, ite_eq_left hm, hdiv, hpt, portOf_eq hnd hp ht, Nat.add_sub_cancel_left]
+    rw [ite_eq_left hm, hpt, portOf_eq hnd hp ht, Nat.add_sub_cancel_left]
   unfold RowKey
   rw [hkey]
+  generalize x / (c.unit.inWords * WORD) = u at hu ⊢
   unfold Aliased.srcAt
   by_cases hp' : p < (c.unit.inGroups.getD 0 default).bits.size
   swap
@@ -389,6 +369,41 @@ theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (Str
     unfold portRowW
     simp only [Fin.getElem_fin]
     omega
+
+/-- **`KeysRow` from each port-bit input's row key**: every input a computed row reads is, when every input a unit row
+reads is a port bit (`PortReads`), a port bit of a unit slot. -/
+theorem keysRow_of_rowKey (hpr : PortReads c hU)
+    (hk : ∀ x, x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups → x / (c.unit.inWords * WORD) < c.upv →
+      RowKey c (portRowW c) x) : KeysRow c hU (portRowW c) := by
+  intro i x hx hxn
+  set R := Rows.ofNet hU with hR
+  have hxn' : x.val < c.upv * R.nIn := hxn
+  have hx' : x ∈ R.stackRow c.upv R.a i ++ R.stackRow c.upv R.b i := hx
+  obtain ⟨j, y, hy, hyn, hu, hxy⟩ : ∃ (j : Fin R.nComp) (y : Fin R.w), y ∈ R.a j ++ R.b j ∧ y.val < R.nIn ∧
+      i.val / (R.nComp + 1) < c.upv ∧ x.val = i.val / (R.nComp + 1) * R.nIn + y.val := by
+    rcases List.mem_append.1 hx' with hx' | hx'
+    · obtain ⟨j, y, hy, h2, h3, h4⟩ := stackRow_input hx' hxn'
+      exact ⟨j, y, List.mem_append_left _ hy, h2, h3, h4⟩
+    · obtain ⟨j, y, hy, h2, h3, h4⟩ := stackRow_input hx' hxn'
+      exact ⟨j, y, List.mem_append_right _ hy, h2, h3, h4⟩
+  have hm := hpr j y hy hyn
+  set u := i.val / (R.nComp + 1)
+  have hW : R.nIn = c.unit.inWords * WORD := ofNet_nIn_eq
+  rw [hW] at hyn hxy
+  have hmod : x.val % (c.unit.inWords * WORD) = y.val := by
+    rw [hxy, Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hyn]
+  have hdiv : x.val / (c.unit.inWords * WORD) = u := by
+    rw [hxy, Nat.mul_comm, Nat.mul_add_div (by omega), Nat.div_eq_of_lt hyn, Nat.add_zero]
+  exact hk x.val (by rw [hmod]; exact hm) (by rw [hdiv]; exact hu)
+
+/-- **`KeysRow` from the parse, for a unit reading any number of input groups**: in an untyped circuit `HmRow.parse`
+accepted with nets `pre` first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`, every
+input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is a port bit
+(`PortReads`). -/
+theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
+    (hpr : PortReads c hU) : KeysRow c hU (portRowW c) :=
+  keysRow_of_rowKey hpr fun _ hm hu => rowKey_of_cutsPre h hcr (Aliased.portBits_nodup hU) hm hu
 
 /-- **`KeysRow` from the parse, for a unit reading any number of input groups** (`keysRow_of_cutsPre` with no net ahead
 of the file). -/

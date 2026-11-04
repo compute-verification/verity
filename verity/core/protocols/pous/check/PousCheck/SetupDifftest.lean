@@ -14,10 +14,10 @@ import PousCheck.Setup
 * `decode`: `Setup.decodeSegment` (`decode_segment`): the payload, or the kind of refusal;
 * `commit`: `Commit.commit` and `Commit.manifest` (`setup.commit`, `canonical_json_bytes(params.manifest())`), the
   commitment over `Identity.taggedState` (the identity hash itself is `core_identity`'s, difftested there);
-* `vector` and `sigma`: an entry of the spec's §7 file (`benchmarks/pous/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
-  its own `sha512` (of its canonical JSON without it) and whether §7 pins it, its K, t, rejection index and `D(c)` under the
+* `vector` and `sigma`: an entry of the vectors file (`benchmarks/pous/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
+  its own `sha512` (of its canonical JSON without it) and whether `ENTRY_SHA512` pins it, its K, t, rejection index and `D(c)` under the
   spec's prefix (`Keys.specPrefix`); a σ rejection case's `p`, `r ⊕ K` and `σ_K(r)`. The test holds these to the file's
-  recorded values, and the file to §7's SHA-512.
+  recorded values, and the file to `reference.VECTORS_SHA512`.
 
 The setup check itself is the protocol `pous-setup` serves (`SetupProtocol`), which the harness drives as a protocol.
 -/
@@ -73,14 +73,14 @@ def without (keys : List String) : Json → Json
   | .obj kvs => .obj (keys.foldl (fun m k => m.erase k) kvs)
   | j => j
 
-/-- §7's entry hashes, by width. -/
+/-- The vectors' entry hashes, by width (`reference.ENTRY_SHA512`). -/
 def ENTRY_SHA512 : List (Nat × String) := [
   (64, "c34350fa0e0b8ae7c521cd7df833c160df1498adc938a99feb6166c2f37b3e6a2ca07239b9ab71fdd979b02efc8c8951d68f32d108abbde5cc44bac3137241e1"),
   (96, "df8941e52d73848baa7862cd3f20ea6f7adc1da79149db154b0be9e0d28be8905b95aac079cd98e14b56f8077ba6cfb173e0472df7e83b40138c6f16a871ff1f"),
   (128, "adf7cd300e2d4ea93643e94d563b02c80e29d88d65a34a55269f9e37da6b71bde6dce1c9e4c04c561dd103a8dc4c3955ee83ecabef20ad717de4672e8014fcae"),
   (16448, "2a227a512683d67624bca51ba087ec05a4dda85c5e93b67c50c03349a7823f50f84b98f4f2f9e92d9c87ddc41ab0e5fd8d2211472709a05093e7c0121a86811c")]
 
-/-- One §7 vector: its entry's hash and whether §7 pins it, and its K, t, rejection index and `D(c)` under the spec's
+/-- One vector of `vectors.json`: its entry's hash and whether `ENTRY_SHA512` pins it, and its K, t, rejection index and `D(c)` under the spec's
 prefix, with `c < p` and the payload's bound. -/
 def vector (v : Json) : V Json := do
   let q : P2.Params := ⟨← nat v "w", ← nat v "c0", 2 ^ 16, 8⟩

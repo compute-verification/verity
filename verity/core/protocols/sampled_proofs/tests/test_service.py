@@ -1,5 +1,6 @@
-"""The proof service: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
-the one-stage audit, with a stub verifier, injected coins and an injected clock."""
+"""The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
+the one-stage audit, with a stub verifier, a challenger of the test's own (`fake_challenger`) and an injected clock. A
+stream asked to draw from coins other than a challenger's refuses: the verifier draws no coins of its own."""
 
 from __future__ import annotations
 
@@ -13,7 +14,9 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import coins as T, service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
+
+import fake_challenger as FC
 
 XOR8 = PrimitiveDefinition("ServiceTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -49,10 +52,22 @@ class Clock:
         return self.now
 
 
-def _stream(spec=None, budget=2, clock=None, coins=b"\x07", sampler=None) -> S.Stream:
-    return S.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test",
-                    coins=(lambda n: coins * n) if isinstance(coins, bytes) else coins, clock=clock or Clock(),
-                    sampler=sampler)
+class _Bytes(T.ChallengerCoins):
+    """A select-only test's bytes, read as a challenger's coins: no session opens them, so a run of the verifier on a
+    draw from them has no evidence and refuses it."""
+
+    def __init__(self, source) -> None:
+        super().__init__(None)
+        self._source = source
+
+    def __call__(self, n: int) -> bytes:
+        return self._source(n)
+
+
+def _stream(spec=None, budget=2, clock=None, coins=None, sampler=None) -> S.Stream:
+    coins = coins if coins is None or isinstance(coins, T.ChallengerCoins) else _Bytes(coins)
+    return FC.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test", coins=coins,
+                     clock=clock or Clock(), sampler=sampler)
 
 
 def _ports(n: int) -> dict:
@@ -101,18 +116,18 @@ def test_round_trip_register_select_deliver_outcome():
 def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
     """A stream given the identity its challenger registered the prover under names it in its digest and binds every
     registration to the stream and the prover (`Stream.binding`, `registration.check`'s): a record whose window names
-    both runs round to an accepted outcome, by both verifiers of record, while the same record in another prover's
+    both runs round to an accepted outcome, by both verifiers, while the same record in another prover's
     stream, in the same window, is refused (`R6-stream`, `R6-prover`), as is one whose window names neither. A prover
     identity that is not lowercase hex bytes makes no stream."""
     def stream(prover):
-        return S.Stream(_spec(), PAIR, budget=2, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
-                        clock=Clock(), prover=prover)
+        return FC.Stream(_spec(), PAIR, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
+                         prover=prover)
 
     a, b, plain = stream("a0" * 32), stream("b0" * 32), _stream()
     assert len({a.digest, b.digest, plain.digest}) == 3 and plain.binding is None
     assert a.binding == {"stream": a.digest, "prover": "a0" * 32}
     assert a.digest == S._sha512({"format": S.STREAM, "spec": _spec().digest(), "budget": 2, "delta": DELTA,
-                                  "challenger": "challenger-test", "prover": "a0" * 32})
+                                  "challenger": "challenger-test", "prover": "a0" * 32, "coins": "challenger"})
     rec = _record()
     mine = {**rec, "window": {**rec["window"], **a.binding}}
     assert _refused(lambda: b.register(mine, _ports(6))) == ("R6-stream", "R6-prover")
@@ -127,12 +142,31 @@ def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
 
 
 def test_the_draw_is_the_challengers_coins_and_nothing_else():
-    def drawn(coins):
-        stream = _stream(coins=coins)
+    def drawn(seed):
+        stream = _stream(coins=FC.Challenger(seed))
         return stream.select(stream.register(_record(), _ports(6))).units
 
-    assert drawn(b"\x07") == drawn(b"\x07")
-    assert len({tuple(drawn(bytes([b]))) for b in range(16)}) > 1
+    assert drawn("a") == drawn("a")
+    assert len({tuple(drawn(str(b))) for b in range(16)}) > 1
+
+
+def test_a_stream_draws_no_coins_of_its_own():
+    """A stream whose selection reads coins takes only the auditor's challenger's (`coins.ChallengerCoins`): asked for
+    none, the operating system's bytes as the Lean reads them (`verifier.coins`), or any other source of bytes, it
+    refuses (`NO_OWN_COINS`), and a salt from any coins but a challenger's is refused the same way before a byte is read.
+    A stream that reads no coins (`All`, or one a sampler draws for) needs none."""
+    for coins in (None, V.coins, lambda n: b"\x07" * n, random.Random(0).randbytes):
+        for spec in (_spec(), _spec(S.Law("bernoulli:1/2"))):
+            with pytest.raises(ValueError) as e:
+                S.Stream(spec, PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+            assert str(e.value) == S.NO_OWN_COINS
+    reads: list[int] = []
+    every = S.Stream(_spec(S.All()), PAIR, budget=1, delta=DELTA, challenger="c", coins=lambda n: reads.append(n) or bytes(n))
+    with pytest.raises(ValueError) as e:
+        every.salt()
+    assert str(e.value) == S.NO_OWN_COINS and reads == [] and every.epoch_log == ()
+    assert S.Stream(_spec(S.All()), PAIR, budget=1, delta=DELTA, challenger="c").digest
+    assert S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", sampler=lambda law, n: [0, 1]).digest
 
 
 def test_all_proves_every_unit_and_gives_the_exhaustive_fact():
@@ -309,7 +343,7 @@ def test_a_law_whose_count_varies_is_refused_at_register():
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
     """`rate:1/3:2` draws `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
     a registration padded tenfold (N = 60 for 6) draws K = 20 and every proof block is still drawn with probability K/N ≥ 1/3,
-    where `subset:2` falls to 2/60. The draw, the Lean verifier's draw of record and the outcome's run (`verifier.run`,
+    where `subset:2` falls to 2/60. The sample, the Lean verifier's sample of record and the outcome's run (`verifier.run`,
     which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
         stream = _stream(_spec(S.Law("rate:1/3:2")))
@@ -418,8 +452,8 @@ def test_a_late_proof_is_a_reject():
 
 
 def test_a_proof_that_never_arrives_ends_late():
-    """A drawn proof block whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
-    no draw stays pending forever, and the stream receives the next registration only once it ends."""
+    """A sampled proof block whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
+    no sample stays pending forever, and the stream receives the next registration only once it ends."""
     clock = Clock()
     stream = _stream(clock=clock)
     draw = stream.select(stream.register(_record(), _ports(6)))
@@ -443,20 +477,21 @@ def test_a_late_registration_is_refused_and_ends_the_epoch():
     clock = Clock()
     stream = _stream(_spec(registration_deadline=30.0), budget=3, clock=clock)
     clock.now = 5.0
-    salt = stream.salt()
+    salt = b"\x5a" * 64
+    stream.salt_released(salt, 5.0)
     clock.now = 35.5
     readings = {"salted_at": 5.0, "received_at": 35.5, "registration_deadline": 30.0}
     with pytest.raises(S.Refused) as e:
         stream.register({"not": "a record"}, _ports(6))
     assert e.value.verdict.codes == ("late-registration",) and e.value.verdict.detail == {"late-registration": readings}
     assert stream.ended and stream.log == () and stream._entries == [] and stream.symbols == () and not stream.stopped
-    assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 5.0},
+    assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 5.0, "external": True},
                                 {"event": "late-registration", "salted_at": 5.0, "received_at": 35.5})
     for call in (lambda: stream.register(_record(), _ports(6)), stream.ready):
         with pytest.raises(S.Refused) as e:
             call()
         assert e.value.verdict.codes == ("epoch-ended",) and e.value.verdict.detail == {"epoch-ended": readings}
-    assert _refused(stream.salt) == ("salted",)
+    assert _refused(lambda: stream.salt_released(salt, 5.0)) == ("salted",)
     assert len(stream.epoch_log) == 2 and stream.log == ()
 
 
@@ -464,7 +499,8 @@ def test_an_on_time_registration_carries_both_readings():
     clock = Clock()
     stream = _stream(_spec(registration_deadline=30.0), clock=clock)
     clock.now = 5.0
-    salt = stream.salt()
+    salt = b"\x5a" * 64
+    stream.salt_released(salt, 5.0)
     clock.now = 20.0
     assert "R3-leaves" in _refused(lambda: stream.register(_record(), {**_ports(6), "x": {**_ports(6)["x"], "leaves": 7}}))
     assert not stream.ended and len(stream.epoch_log) == 1
@@ -472,7 +508,7 @@ def test_an_on_time_registration_carries_both_readings():
     reg = stream.register(_record(), _ports(6))
     assert (reg.salted_at, reg.received_at) == (5.0, 21.0) and reg.order == 0
     assert reg.receipt == R.receipt(_record(), "challenger-test", received="0")
-    assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 5.0},
+    assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 5.0, "external": True},
                                 {"event": "registration", "order": 0, "registration": reg.digest, "salted_at": 5.0,
                                  "received_at": 21.0})
     draw = stream.select(reg)
@@ -494,33 +530,9 @@ def test_a_registration_before_the_salt_is_late():
     assert stream.ended and stream.log == ()
     assert stream.epoch_log == ({"event": "late-registration", "salted_at": None, "received_at": 0.0},)
     with pytest.raises(S.Refused) as e:
-        stream.salt()
+        stream.salt_released(b"\x01", 0.0)
     assert e.value.verdict.codes == ("epoch-ended",) and e.value.verdict.detail == {"epoch-ended": readings}
     assert _refused(lambda: stream.register(_record(), _ports(6))) == ("epoch-ended",) and len(stream.epoch_log) == 1
-
-
-def test_the_salt_is_issued_once_from_the_challengers_coins():
-    """The salt is the challenger's next `n` bytes, read before the draw's, and a second salt reads nothing."""
-    reads: list[int] = []
-    source = random.Random(3).randbytes
-    clock = Clock()
-    clock.now = 3.0
-    stream = _stream(coins=lambda n: reads.append(n) or source(n), clock=clock)
-    salt = stream.salt()
-    expected = random.Random(3)
-    assert salt == expected.randbytes(64) and reads == [64]
-    assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 3.0},)
-    clock.now = 4.0
-    with pytest.raises(S.Refused) as e:
-        stream.salt()
-    assert e.value.verdict.codes == ("salted",) and e.value.verdict.detail == {"salted": {"salted_at": 3.0}}
-    assert reads == [64] and len(stream.epoch_log) == 1
-    draw = stream.select(stream.register(_record(), _ports(6)))
-    assert dict(draw.draw) == T.draw_first(T.OwnRandomness(expected.randbytes), draw.law, 6)
-    assert _stream().salt(32) == b"\x07" * 32
-    for bad in (0, -1, 1.5, True, "64"):
-        with pytest.raises(ValueError, match="positive"):
-            _stream().salt(bad)
 
 
 def test_no_registration_deadline_changes_nothing():
@@ -534,7 +546,7 @@ def test_no_registration_deadline_changes_nothing():
     assert stream.outcome(draw, _lean(), {}).accepted
     clock = Clock()
     salted = _stream(clock=clock)
-    salted.salt()
+    salted.salt_released(b"\x01", 0.0)
     clock.now = 1e6
     reg = salted.register(_record(), _ports(6))
     assert (reg.salted_at, reg.received_at) == (None, None) and not salted.ended and len(salted.epoch_log) == 1
@@ -548,12 +560,11 @@ def test_no_registration_deadline_changes_nothing():
 
 def test_a_salt_released_elsewhere_counts_the_deadline_from_its_release():
     """A level's stream created after the epoch's salt was released measures from that release, and reads no coins."""
-    reads: list[int] = []
     clock = Clock()
     clock.now = 50.0
-    stream = _stream(_spec(registration_deadline=30.0), clock=clock, coins=lambda n: reads.append(n) or b"\x07" * n)
+    stream = _stream(_spec(registration_deadline=30.0), clock=clock)
     salt = b"\x5a" * 64
-    assert stream.salt_released(salt, 20.0) is None and reads == []
+    assert stream.salt_released(salt, 20.0) is None and stream.fake.segments == []
     assert stream.epoch_log == ({"event": "salt", "salt": salt.hex(), "salted_at": 20.0, "external": True},)
     reg = stream.register(_record(), _ports(6))
     assert (reg.salted_at, reg.received_at) == (20.0, 50.0)
@@ -581,14 +592,10 @@ def test_a_released_salt_is_never_in_the_future_and_is_the_epochs_one_salt():
     assert e.value.verdict.detail == {"released-later": {"released_at": 10.5, "now": 10.0}}
     assert stream.epoch_log == () and not stream.ended
     stream.salt_released(b"\x01", 10.0)
-    for call in (stream.salt, lambda: stream.salt_released(b"\x02", 10.0)):
-        with pytest.raises(S.Refused) as e:
-            call()
-        assert e.value.verdict.codes == ("salted",) and e.value.verdict.detail == {"salted": {"salted_at": 10.0}}
+    with pytest.raises(S.Refused) as e:
+        stream.salt_released(b"\x02", 10.0)
+    assert e.value.verdict.codes == ("salted",) and e.value.verdict.detail == {"salted": {"salted_at": 10.0}}
     assert len(stream.epoch_log) == 1
-    issued = _stream(clock=clock)
-    issued.salt()
-    assert _refused(lambda: issued.salt_released(b"\x02", 5.0)) == ("salted",) and len(issued.epoch_log) == 1
     ended = _stream(_spec(registration_deadline=30.0), clock=clock)
     assert _refused(lambda: ended.register(_record(), _ports(6))) == ("late-registration",)
     assert _refused(lambda: ended.salt_released(b"\x01", 5.0)) == ("epoch-ended",) and len(ended.epoch_log) == 1
@@ -622,7 +629,7 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
 
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
-    """A one-stage outcome on a draw from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
+    """A one-stage outcome on a draw from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
     from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
     accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
     the round, its audit record failing `run`; a sampler's draw isn't run."""
@@ -679,50 +686,39 @@ def _refused(call) -> tuple[str, ...]:
 
 WORK = {PAIR.id: 10}
 STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
-#: The challenger's closure map: each proof block is proved with the next.
+#: A closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 
 
-def test_a_work_draw_carries_its_closure_and_the_proof_proves_it():
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    draw = stream.select(reg, closure=NEXT)
-    assert draw.draw["closure"] == T.closure_of(NEXT, draw.units) and draw.draw["closure"]
-    assert D.check_draw(draw.draw, reg.record, draw.law).ok
-    assert draw.proved == sorted({*draw.units, *((u + 1) % 6 for u in draw.units)})
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {}, proved_units=draw.units)
-    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["proved"]
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    draw = stream.select(stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
-                                         work_table=WORK), closure=NEXT)
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {})
-    assert out.accepted and stream.records[0]["audit"]["proved_units"] == draw.proved
-
-
-def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
+def test_a_closure_map_is_refused_before_any_coin_is_read():
+    """A closure map widens a work sample to a set whose size varies with the sample, which the sampled audit's soundness
+    statement doesn't cover: `select` refuses any, empty or not, under any sampling design (`closure`), before any coin
+    is read, so the sample drawn after the refusals is the one a fresh stream on the same challenger draws, and it is
+    accepted."""
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
-    reads: list[int] = []
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)), coins=lambda n: reads.append(n) or b"\x07" * n)
+    work = _spec(S.Law("work:2"), public=(*STEP0, STRATUM))
+    stream = _stream(work)
     reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    for bad in ({u: [6] for u in range(6)}, {6: [0]}, {u: [-1] for u in range(6)}, {u: ["1"] for u in range(6)},
-                [[1]] * 6):
+    for bad in (NEXT, {}, {u: [6] for u in range(6)}, {6: [0]}, [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
-    assert reads == []
-    assert "closure" not in stream.select(reg, closure={}).draw and reads
+    draw = stream.select(reg)
+    fresh = _stream(work)
+    assert draw.draw == fresh.select(fresh.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
+                                                    work_table=WORK)).draw
+    assert "closure" not in draw.draw and draw.proved == draw.units
+    stream.deliver(draw, [SESSION])
+    assert stream.outcome(draw, _lean(), {}).accepted
 
 
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
-    """The draw is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same proof blocks; a work draw's closure is the same too."""
+    """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
+    draws the same proof blocks."""
     table = WORK if text.startswith("work") else None
-    closure = NEXT if table else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*STEP0, STRATUM)), coins=random.Random(seed).randbytes)
         reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
-        draw = stream.select(reg, closure=closure)
-        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6, closure)
+        draw = stream.select(reg)
+        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

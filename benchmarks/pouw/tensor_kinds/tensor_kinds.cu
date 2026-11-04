@@ -1,9 +1,9 @@
-// M1 of EPS1 TENSOR (note:20261017T0321Z-draft-eps1-tensor §5): the joint issue cost of every native sm_120 MMA form.
+// The joint issue cost of every native sm_120 MMA form.
 //
 // JI3e's MMA coefficient (8.115 SMSP-cycles a MMA beside other vector-pipe instructions) was fitted beside IMMA s8
 // m16n8k32 only. The issue form of the tensor theorem is tight only if no other form writes its output slots for less
 // issue. Each form here is timed alone and beside IADD3+FFMA at 4, 8, 12 and 16 ops a MMA, in the two schedules of
-// ISSUE's round 2 (note:20261016T0300Z-draft-issue-ceiling-r2): warp-specialized (k_spec: 2 MMA warps + 2 lane warps a SMSP)
+// ISSUE's round 2: warp-specialized (k_spec: 2 MMA warps + 2 lane warps a SMSP)
 // and interleaved (k_mixu: one warp issues both, body unrolled x8). tensor_kinds.py reads the loops' SASS and fits the
 // coefficient a in a·#MMA + #other <= cycles for each form.
 #include <cuda_runtime.h>
@@ -577,9 +577,9 @@ __device__ __forceinline__ void init_ops(uint32_t lane, int iters, uint32_t* a, 
 }
 
 // ---- lane ops -------------------------------------------------------------------------------------------------------
-// One pipe alone issues at ~0.5 a SMSP-cycle on sm_120 (IADD3: r20261017-040022-5e4d; ISSUE r1 the same for LOP3, IMAD,
-// HFMA2), so a one-pipe lane stream binds on its pipe beside an MMA and the fit overstates a. The mixed points use
-// LANE_MIX, IADD3 and FFMA alternating (integer ALU and FMA pipes), which can reach one issue a SMSP-cycle.
+// One pipe alone issues at ~0.5 a SMSP-cycle on sm_120 (IADD3, and the issue ceiling's probes find the same for LOP3,
+// IMAD and HFMA2), so a one-pipe lane stream binds on its pipe beside an MMA and the fit overstates a. The mixed points
+// use LANE_MIX, IADD3 and FFMA alternating (integer ALU and FMA pipes), which can reach one issue a SMSP-cycle.
 enum { LANE_IADD3, LANE_FFMA, LANE_MIX };
 struct Lane {
   uint32_t r[8];
@@ -678,7 +678,7 @@ __global__ void __launch_bounds__(512) k_alone4(int iters, uint32_t* sink, Block
 
 // Warp-specialized: with 16 warps a SM, SMSP r hosts warps {r, r+4} (MMA) and {r+8, r+12} (lane); R/8 ops a MMA.
 // Each warp also records its own cycles, so each role's rate is its work over its own time, not over the block's
-// (the faster role's rate over the block time is only a lower bound: RT-BLACKWELL-17).
+// (the faster role's rate over the block time is only a lower bound).
 template <class F, int R, int X>
 __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
@@ -885,7 +885,7 @@ int main() {
   form<ImmaS8k32>();
 #endif
 #elif TK_SM == 100
-  // B200: the legacy mma.sync forms, premise (M′) of SLOT-LEMMA (note:20261019T0745Z-draft-fp-joint): a shallow shape
+  // B200: the legacy mma.sync forms, premise (M′) of the slot lemma: a shallow shape
   // holds no less of the tensor pipe a slot than its kind's full-depth step. Group 0 is int8 and its 2:4 shapes, the
   // reference first and last; group 1 the other shallow shapes.
 #if TK_IN(0)
