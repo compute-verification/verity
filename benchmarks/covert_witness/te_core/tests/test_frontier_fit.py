@@ -1,9 +1,11 @@
 """te_core.frontier_fit builds `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) by least squares in relative
 loss over its unconstrained frontier from the least start's C0 up, one point per 1/20 decade of C; a data with too few
 points, or too short a span, has no fit, and so has one with no scored start and no ladder point; effective compute
-inverts the fit, so a point on it has gain 1; the ladder's three files give v3's from-scratch points; each row carries
-its record's family whichever quantities score it; a checkpoint is on its start's data whether or not its record says
-so; and the panel has a fit row per data, its points with their residuals and the starts with their own gains."""
+inverts the fit, so a point on it has gain 1; the ladder's three files give v3's from-scratch points, and its manifest
+builds the default ones; ladder runs that leave out a registered v3 start are refused; each row carries its record's
+family whichever quantities score it; a checkpoint is on its start's data whether or not its record says so; and the
+panel has a fit row per data, its points with their residuals and the starts with their own gains."""
+import hashlib
 import json
 import math
 
@@ -12,7 +14,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import console, frontier, panels, plots, rescore
+from te_core import console, frontier, panels, plots, policy, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
 from test_algorithm_policy import C0, LAW, RATE, SCRATCH, SHAPE2, V3_SHAPE, args, law, ledger_rows
@@ -218,6 +220,27 @@ def test_a_data_with_no_scored_start_has_no_fit(tmp_path, monkeypatch):
     assert f"; {len(rows)} refused; " in p["source"]
 
 
+def test_a_ladder_fit_that_is_the_caps_adds_no_point(tmp_path, monkeypatch):
+    """The scoring cap's CAP.json (te-ladder/cap/v1) as --ladder-fit caps the score and adds no ladder point, where it
+    stopped te_core.algorithm_policy at 22:25Z; a FIT.json there still adds its compute-optimal models."""
+    tree = tmp_path / "ladder"
+    tree.mkdir()
+    (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1",
+                                                   "annealed": [{"branch": "s", "macs": 1e18, "bpb": 1.4}]}))
+    monkeypatch.setattr(FF, "LADDER", "art:" + "b" * 64)
+    monkeypatch.setattr(panels, "fetch", lambda art: tree)
+    monkeypatch.setattr(panels, "pretraining", lambda path: [])
+    (tmp_path / "CAP.json").write_text(json.dumps({"schema": "te-ladder/cap/v1", "points": [
+        {"loss": 1.0, "forward_gates_per_token": 1e12}, {"loss": 1.1, "forward_gates_per_token": 9e11}]}))
+    (tmp_path / "FIT.json").write_text(json.dumps({"schema": "te-ladder/fit/v1", "points": [
+        {"train_macs": 5e18, "loss": 1.25, "non_embedding_params": 4e7}]}))
+    d = {"pin": ["0" * 40], "quantities": "measured, t literal", "refused": {}}
+    for name, n in (("CAP.json", 1), ("FIT.json", 2)):
+        a = type("A", (), {"pretraining": tmp_path, "ladder_points": [], "ladder_fit": tmp_path / name,
+                           "source": None, "pin": True})()
+        assert len(FF.inputs(a, [], {}, d)[1]) == n
+
+
 def test_the_source_fits_the_route_its_pins_at_7_characters_where_12_dont(tmp_path, monkeypatch):
     """The panels route answers 400 to a source over 300 characters, as it did at 09:30Z to the scorer's eight pins
     beside the ladder's manifest: each command's source names its pins at 12 characters where that fits, else at 7."""
@@ -236,3 +259,66 @@ def test_the_source_fits_the_route_its_pins_at_7_characters_where_12_dont(tmp_pa
             source = FF.inputs(a, [{}] * 2958, {}, d, command)[2]
             assert len(source) <= console.SOURCE_MAX and f"; pin {'0' * width} + {'1' * width} + " in source
             assert source.endswith("; 3956 refused; 5 ladder points (art:bbbbbbbbbbbb))")
+
+
+def test_the_ladders_points_are_its_manifests_starts_each_start_json_checked(tmp_path):
+    """`ladder_file` gives each start of the manifest at its start.json's counted C0 and search-pool bpb, which
+    `ladder_points` reads as annealed ladder runs; a start.json that isn't the manifest's, or that counts another C0,
+    is refused. The committed manifest has every registered v3 start, xl-t20 among them."""
+    store, manifest = tmp_path / "store", tmp_path / "islands" / "ladder-v3" / "ladder_store.json"
+    starts = {}
+    for name, macs, bpb in (("s-t20", 5.6e16, 1.41), ("xl-t20", 2.2e18, 1.12)):
+        (store / name).mkdir(parents=True)
+        raw = json.dumps({"provenance": {"c0": {"macs": macs}, "search_pool": {"bpb": bpb}}}).encode()
+        (store / name / "start.json").write_bytes(raw)
+        starts[name] = {"files": {"start.json": hashlib.sha256(raw).hexdigest()},
+                        "shape": {"c0_macs": macs, "parameters": 3e7, "tokens": 4e8}}
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"art": "art:" + "c" * 64, "starts": starts}))
+    got = FF.ladder_file(store, manifest)
+    assert got["schema"] == "te-ladder/F/v1" and got["manifest"] == {"path": "islands/ladder-v3/ladder_store.json",
+                                                                     "starts_store": "art:" + "c" * 64}
+    assert [(p["branch"], p["macs"], p["bpb"]) for p in got["annealed"]] == [("s-t20", 5.6e16, 1.41),
+                                                                             ("xl-t20", 2.2e18, 1.12)]
+    (tmp_path / FF.LADDER_FILE).write_text(json.dumps(got))
+    pts = FF.ladder_points(tmp_path / FF.LADDER_FILE)
+    assert [(x, r["ladder"], r["source"]) for x, _, r in pts] == [
+        (5.6e16 * per_mac("gemm/bf16"), "s-t20", "ladder s-t20, annealed"),
+        (2.2e18 * per_mac("gemm/bf16"), "xl-t20", "ladder xl-t20, annealed")]
+    manifest.write_text(json.dumps({"art": "art:x", "starts": starts | {
+        "xl-t20": starts["xl-t20"] | {"shape": starts["xl-t20"]["shape"] | {"c0_macs": 2.3e18}}}}))
+    with pytest.raises(SystemExit, match="xl-t20's start.json counts C0 2.2e"):
+        FF.ladder_file(store, manifest)
+    (store / "s-t20" / "start.json").write_text("{}")
+    with pytest.raises(SystemExit, match="isn't the manifest's start.json for s-t20"):
+        FF.ladder_file(store, manifest)
+    v3 = {s for s, shape in policy.starts().items() if shape.get("tokenizer") == policy.V3_TOKENIZER}
+    assert "xl-t20" in v3 and set(json.loads(FF.LADDER_MANIFEST.read_text())["starts"]) == v3
+
+
+def test_ladder_runs_that_leave_out_a_registered_v3_start_are_refused(tmp_path, monkeypatch):
+    """Every registered v3 start is a ladder run, so annealed ladder runs without one are an older ladder's: the fit
+    refuses them naming the start. A FIT.json's compute-optimal models alone, or no ladder, leave nothing to check,
+    and a start on another tokenizer is no ladder run."""
+    shapes = {"s-t20": {"tokenizer": policy.V3_TOKENIZER}, "xl-t20": {"tokenizer": policy.V3_TOKENIZER},
+              "pilot": {"tokenizer": "gpt2"}}
+    run = lambda name: (1e18, 1.4, {"ladder": name, "source": f"ladder {name}, annealed"})  # noqa: E731
+    optimal = (5e18, 1.25, {"ladder": "N 4e+07", "source": "ladder fit, N 4e+07 optimal"})
+    assert FF.uncovered(shapes, [run("s-t20")]) == ["xl-t20"]
+    assert FF.uncovered(shapes, [run("s-t20"), run("xl-t20"), optimal]) == []
+    assert FF.uncovered(shapes, [optimal]) == [] and FF.uncovered(shapes, []) == []
+    tree = tmp_path / "ladder"
+    tree.mkdir()
+    monkeypatch.setattr(FF, "LADDER", "art:" + "b" * 64)
+    monkeypatch.setattr(panels, "fetch", lambda art: tree)
+    monkeypatch.setattr(panels, "pretraining", lambda path: [])
+    a = type("A", (), {"pretraining": tmp_path, "ladder_points": [], "ladder_fit": None, "source": None, "pin": True})()
+    d = {"pin": ["0" * 40], "quantities": "measured, t literal", "refused": {}}
+    for names in (["s-t20"], ["s-t20", "xl-t20"]):
+        (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": [
+            {"branch": n, "macs": 1e18, "bpb": 1.4} for n in names]}))
+        if len(names) == 1:
+            with pytest.raises(SystemExit, match="leave out the registered v3 start.s. xl-t20 "):
+                FF.inputs(a, [], shapes, d)
+        else:
+            assert len(FF.inputs(a, [], shapes, d)[1]) == 2

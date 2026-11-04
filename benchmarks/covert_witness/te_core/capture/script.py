@@ -78,6 +78,7 @@ from torch.overrides import TorchFunctionMode
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils.weak import WeakTensorKeyDictionary
 
+from te_core import VERSION
 from te_core.capture import products
 from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
@@ -875,6 +876,8 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
 
     def flagged(g: StepGraph) -> StepGraph:
         rows = products.rows_on_dial(g) if g.formalism is not None else None
+        if rows is not None:
+            rows = rows | {"capture_code": VERSION}
         if g.circuit is not None:
             g.circuit.read_backs = {k: list(v) for k, v in listed.items()}
             g.circuit.products = rows
