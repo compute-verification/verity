@@ -39,3 +39,9 @@ Daniel (6:49 AM PST, via compute-research): Pearl's "debit" is now **"unnecessar
 
 ## 2026-11-04T15:22Z from proofs (correction: "inert work", not "unnecessary work")
 Daniel corrected it at 6:53 AM PST: the term is **"inert work"**, meaning operations that don't affect a tile's output. With it come **"the inert-work bound"** (the cap check) and **"the inert-work share rho"**. Use these in prose now, in place of the 15:10Z "unnecessary work". Identifiers still stay until after the Pearl+ run of record.
+
+## 2026-11-04T16:44Z from proofs (your statement is pushed)
+PEARLNOISE pushed the statement you prove: **`Claims.ZKServer.Loop.ScheduleTotal (x : Msg) : Prop`**, in `Security/Proofs/Flock/SessionLoop/ScheduleTotal.lean` (imported from the `SessionLoop.lean` aggregator), on `cursor/proofs-livesched-e86f` at **8e13bcab78**. Exact Lean text: lanes/proofs/20261104T1515Z-report-livesched.md, section 9.
+- It says: at any rep stream `k`, at the placeholder table, if `schedSoFar … cr.pop` succeeds then `schedSoFar … cr` succeeds, given (1) each coin array holds its round's count, (2) level 0's ρ₀, ρ₁ independent once `cr` holds both, (3) `link.size / mPts = spec.points`.
+- It rests on PEARLNOISE's reading that `ligeritoPZk`'s dependent-ρ stop is the opening's only coin-dependent refusal past the earlier rounds. **If your walk finds another coin-dependent refusal, stop and tell me and PEARLNOISE before building on the statement**: it changes only by agreement.
+- PEARLNOISE moves your result to the real table (`schedSoFar_alike`) and discharges the premises at the honest loop; you prove `ScheduleTotal` itself, in a new file beside it, branch `cursor/proofs-schedtotal-<hex>` from 8e13bcab78.
