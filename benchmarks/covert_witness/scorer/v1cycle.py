@@ -861,11 +861,15 @@ sys.exit(v1labels.run(algorithm_policy, Path(sys.argv.pop(1))))
 def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None = None, extra: list[str] = ()) -> str:
     """te_core.rescore into `out` (module docstring, 2) on the ledger at `root` with `extra` options, or with
     FINAL_DIR's values for `final` through v1final.py and v1runs.py's per-run P4 (final, and the search's prefixed
-    search-runs-); returns its last line."""
+    search-runs-), each capped by LADDER_FIT's CAP.json (`--ladder-fit`); returns its last line."""
     out.mkdir(parents=True, exist_ok=True)
     if gates.exists() and not (out / "analysis-gates.json").exists():
         (out / "analysis-gates.json").write_bytes(gates.read_bytes())
-    args = [*ledger_args(out, root), *extra]
+    if not (cap := ladder_fit()):
+        # without it te_core caps every checkpoint at twice its start's forward (coordinator 06:40Z)
+        raise SystemExit(f"v1cycle: no CAP.json from `research data fetch {LADDER_FIT}`, which every score reads as "
+                         "--ladder-fit: fetch it (TE_LADDER_FIT names another art) and rerun")
+    args = [*ledger_args(out, root), *cap, *extra]
     runs = [sys.executable, str(HERE / "v1runs.py"), *args]
     cmds = ([[sys.executable, str(HERE / "v1final.py"), str(final), *args], [*runs, "--final", str(final)],
              [*runs, "--prefix", "search-runs-"]] if final else [[sys.executable, "-c", LEAN, "te_core.rescore", *args]])
@@ -1307,7 +1311,7 @@ def main() -> int:
                 trees["fb"], "evidence/v1", {"what": f"te formalism v2 {what} {FB}", "put": put, **meta})
     fb_rows = {"uncut": len(fb["rows"]), "console": len(json.loads(cut)["rows"])} if fb else None
     summary = meta | {"art": ids, "frontier_branches": {"put": put, "rows": fb_rows}, "rescore": last,
-                      "out": str(out)}
+                      "rescore_ladder_fit": LADDER_FIT, "out": str(out)}
     (out / "cycle.json").write_text(json.dumps(summary, indent=1) + "\n")
     line = digest(json.loads((rs / "p2-slowdown-vs-gain.json").read_text()),
                   meta | {"version_cell": bool(fb and "te_core_version" in fb["columns"])}, ids, put, fb_rows)

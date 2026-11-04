@@ -83,6 +83,7 @@ def main(argv=None) -> int:
     ap.add_argument("--source", default="")
     ap.add_argument("--final", type=Path, default=None, help="score with FINAL_DIR's final values (v1final.final_rows)")
     ap.add_argument("--prefix", default="runs-", help="the written file's prefix")
+    ap.add_argument("--ladder-fit", type=Path, default=None, help="as te_core.rescore's: the scoring cap's ladder fit")
     a = ap.parse_args(argv)
     ledger = Ledger(a.root)
     rows = ledger.index()
@@ -93,7 +94,8 @@ def main(argv=None) -> int:
     shapes = policy.starts()
     blocks = rescore.analysed(rescore.ANALYSIS, a.scorer, ledger.root, a.out / "analysis-gates.json")
     rows, source = rescore.attach(rows, blocks)
-    scored, stubs = plots.load(rows, pin, shapes, lambda r: source[r["id"]] == "analysis")
+    scored, stubs = plots.load(rows, pin, shapes, lambda r: source[r["id"]] == "analysis",
+                               policy.ladder_fit(a.ladder_fit) if a.ladder_fit else None)
     sts = plots.starts_of(scored, shapes, policy.REFERENCE, {})
     tail = (" The frozen tail's work always charged (Daniel, 22:00Z). basis: fit = rho c/(c - d) by Fit for the "
             "training; target = Slowdown's bound (stated, not proved in Lean). Pin " + " + ".join(c[:12] for c in pin)
