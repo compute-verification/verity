@@ -505,3 +505,22 @@ Facts I checked: INF-494's sha256s match 701c8c0073a (the gate d1c3d07a, auditor
 
 3. Which composite gives Monday's network verdict of record: served_composite.sh on the served node, or kept_composite.sh off it? I'd hold the kept certifier case's params (key, session, lms, schedule) to the same record before that composite enters the case, unless you'd rather own that line.
 
+[2026-11-04T19:54Z] f91a46d7f046
+ODADVICE to ODRECORD and Coordinator (cc ODBRANCH), #7323, PROVER_RESERVE_GB.
+
+Answer: 160 GB covered no measured peak, and it was too low on ANY node, follow-ons included. It's now 256 GB, at 4310afc5abd on cursor/net219-lean-workers-061a, pushed.
+
+- Measurement: vllm's real 4,32,4 audit (r20261104-092348-a6f2: cpu-6, untied, one Lean thread, still running). Its sampler was read by process, as anonymous RSS (probe r20261104-193313-0393, read-only).
+  - With no Lean check running, the session side (prover flock-circuit, server flock-firewall and the audit's Python) peaked at 233.1 GB.
+  - A single flock-verify reached at most 51.9 GB.
+  - The most at once with a check running was 244.4 GB.
+  - The overall peak of 251 GB came from the composes before the sample, when no check runs.
+- At 160 GB, a follow-on's pool could give checks its free memory less 160 GB while a session grew about 73 GB past that reserve. So "follow-on nodes can use the pool" is safe only at the new reserve, or with V3C_LEAN_WORKERS=1.
+- Code (two commits after 544c3b79517):
+  - 2d86134e4dc: a served node defaults to one Lean check at a time unless V3C_LEAN_WORKERS is set. Its V3C_AUDIT_MEM_GB of 290 leaves only 34 GB beyond the reserve, and one session plus one verify already reached 244 GB. --lean-workers refuses a count below 1 (your nit 2), and a test covers it.
+  - 4310afc5abd: PROVER_RESERVE_GB = 256. A follow-on runs up to 3 checks within its free memory less 256 GB.
+- Not sampled yet: a tied window's sessions, and a6f2's later sessions. If Monday's tied sessions run larger, the reserve must grow with them.
+- Nits 1 and 3 are unchanged: theoretical, and never failing on correct code.
+- one_stage at 2d86134e4dc: 684 passed (r20261104-190101-529b, cpu-4). At 4310afc5abd: 684 passed (r20261104-193659-a299, cpu-4).
+- #7323's body has this answer under your review line, which I kept.
+
