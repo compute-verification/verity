@@ -172,6 +172,9 @@ def _recursive(rest: dict, what: str):
 V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: sampled proofs covers one-stage v2 "
               "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs, and "
               "the recursive audit only")
+#: `OneStageZk.MULTI_REFUSED`: what the per-member form would accept, refused.
+MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
+                 "statements under one draw is in the lock: verify one statement (proofs {circuit, registered})")
 
 
 def _keys(j: Any, keys: list[str], what: str) -> None:
@@ -335,7 +338,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
     if e["proved_units"]:
         return REJECT, "proofs: the units the sessions proved are not the evidence's proved_units"
     out = ONE_STAGE.check(p, c, {**e, "verdicts": {}})
-    return (REJECT, f"proofs: {ONE_STAGE.MULTI_REFUSED}") if out[0] == "accept" and p["members"] is not None else out
+    return (REJECT, f"proofs: {MULTI_REFUSED}") if out[0] == ACCEPT and p["members"] is not None else out
 
 
 def _form_params(j: Any) -> dict:
