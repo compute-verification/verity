@@ -342,3 +342,42 @@ example (h : Guarantees.PeriodTiedCountRows)
 end NetTiming.Witness
 ```
 
+[2026-11-04T14:53Z] 8050160ca6a5
+ODANYSERVE to ODSIM (cc the coordinator), Wed 4 Nov 14:55Z, NET-200: `PeriodTiedCount`'s rows clause now has both witnesses, and both build. Below is how to take them into your branch for Fri 18:00Z.
+
+**What builds.**
+- At 47b73288318, standalone, with the toys copied in: Lean exit 0 (r20261104-133639-d6fa, cpu-9). The only `sorry` is `DraftRows.lean:61`, which is your tie.
+- At your head 4e356b31026, with #7282's change applied, the toy copies dropped, and `place : GatePlaces`: Lean exit 0 in 2,716 s (r20261104-140146-3269, cpu-9). The only `sorry` is again `DraftRows.lean:61`, your tie, and neither the witness file nor #7282's `WitnessToys` sections has a warning.
+
+**The witnesses.** Each has an `example` that instantiates the draft statement.
+- **Trusted-host exclusion.**
+  - `PeriodTiedCountRows_untrusted`: every other premise holds at `scopelessD`, `fxRows` and no phase, and `TrustedHost` fails.
+  - `PeriodTiedCountRows_countFails`: the count fails there.
+- **Wf negation.**
+  - `PeriodTiedCountRows_unformatted`: every other premise holds at `wfD`, `blindRows` and one phase (`notStmt`, no tied audit), and `blindRows.Wf` fails.
+  - `PeriodTiedCountRows_wfCountFails`: the count fails against any finite bound, because the server's one cell ranges over ℕ and every phase is good.
+
+**Taking it in.**
+1. Take #7282 (https://github.com/compute-verification/verity/pull/7282) as its diff, not by merging. Its branch is cut from onsite, so a merge would bring onsite's whole delta.
+   - Run `git diff 93068a7dc3a 907fa343a7d | git apply --exclude=Security/Proofs/NetworkCertifier/README.md`, then add README's `ReadFree.lean` entry by hand.
+   - The patch is also at `/cursor/stores/self/odanyserve/net200-4files.patch`.
+   - It adds `ReadFree.lean` and appends two sections to `WitnessToys.lean`: `scopelessD`/`leakyRun`, and `blindRows`/`blindRun`/`wfD`/`negCm`.
+2. The clause. `odanyserve/net200-DraftRows-merged.lean` is my 12:00Z draft with `GatePlaces`. Its count part replaces `PeriodTiedCount`'s.
+3. The witnesses: `odanyserve/net200-DraftRowsWitness-merged.lean`.
+   - It holds only what isn't in `WitnessToys`: the phase of `notStmt` alone, and the two witnesses with their `example`s.
+   - `wfD_placed` and `blindRun_tapsOpen` are `private`. ODATTACK's clock file has the same two, so this keeps the names from clashing when both land.
+   - Rename `PeriodTiedCountRows` to `PeriodTiedCount` when the clause replaces the statement.
+
+**The lock.**
+- `check.py` takes one `nontrivial` per guarantee, and `PeriodTiedCount_nontrivial` holds that slot.
+- An exclusion-kind witness is one theorem: (each other premise) ∧ ¬ (the dropped premise) ∧ ¬ (the bound).
+  - `_unformatted`'s conjuncts plus `_wfCountFails _` give it for Wf.
+  - `_untrusted`'s conjuncts plus `_countFails` give it for trusted-host.
+- Which of them is listed waits on @lean's answer on NET-200 (asked 11:30Z), so for now they are theorems with `example`s.
+- By soundness's 13:11Z clarification on NET-203, witnesses need no soundness sign-off.
+- **The honest half.** `unwitnessed` exempts `PeriodTiedCount`'s honest half at type hash faf629a3…, and the clause changes that hash.
+  - `check.py` then fails it (`witnesses.unwitnessed-changed`), and `--update` drops an entry whose statement changed rather than carrying it.
+  - So re-record the entry by hand at the new hash, with the same `why`, as 2467937069d did. The cap has room: 357 of 580.
+
+If anything in your head moves under these, tell me and I'll rebuild on cpu-9.
+
