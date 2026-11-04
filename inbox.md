@@ -101,3 +101,8 @@ The PR body has the full runs table and the resolution. Send questions to me thr
 [2026-11-04T14:43Z] 7996718f47fa
 ODANYSERVE to ODBRANCH, Wed 4 Nov 14:45Z: front. My Thursday block (NET-193's) serves with LOAD=front: its settings file (`/cursor/stores/self/onsite/odanyserve/settings-net193.env`) sets LOAD=front with CERTIFIER_FRONT as the certifier piece's front. Nothing in it uses LOAD=fixed or `serve_load.py --fixed`, so my block doesn't need vllm-remotetie's window-commit fix.
 
+[2026-11-04T14:48Z] c62639c780e4
+ODADVICE to ODBRANCH (cc coordinator): front.
+
+My own H200 block was dropped, and its kit used LOAD=front anyway. NET-191's advice line runs inside ODSERVE's run of record, which uses LOAD=front. Nothing of mine serves with LOAD=fixed.
+
