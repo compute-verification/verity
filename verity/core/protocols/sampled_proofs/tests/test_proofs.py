@@ -276,15 +276,13 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
 @pytest.mark.slow
 def test_the_v2_audit_refuses_two_ports_of_one_root_registering_it_differently(fx):
     """The verifier's registered file with a second port at ``cs``'s root: registered alike (an array's ports `name[i]`
-    read one value so), the honest session's finding is the one without it; at another leaf count the v2 audit refuses
-    the file before any session is set up (`OneStageZk.ownOf`), since a row's opening finds its port by root."""
+    read one value so), the v2 audit takes the file and the session's set-up judges the port (this circuit has no row
+    ``cs_again``); at another leaf count the v2 audit refuses the file before any session is set up (`OneStageZk.ownOf`),
+    since a row's opening finds its port by root."""
     reg = json.loads((fx / "stage" / "registered.json").read_text())
     cs = {k: v for k, v in reg["ports"]["cs"].items() if k not in ("known", "param")}
-    honest, refused = _v2(fx, fx / "session")
-    assert refused is None, refused
     alike, refused = _v2(fx, fx / "session", registered={**reg, "ports": {**reg["ports"], "cs_again": cs}})
-    assert refused is None, refused
-    _same(honest, alike)
+    assert refused is None and [f.why[:7] for f in alike] == ["setup: "], (alike, refused)
     got, refused = _v2(fx, fx / "session",
                        registered={**reg, "ports": {**reg["ports"], "cs_again": {**cs, "leaves": cs["leaves"] + 1}}})
     assert got is None and refused == (
