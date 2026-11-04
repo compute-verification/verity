@@ -27,7 +27,7 @@ At fine-tuning's measured costs, one shared `c` is capped by the weights' entrop
 costs give about 45 (`Definitions.Nci.Assumptions.CoveringTwoCosts`). The count is stated multiplied out, with no division by
 `(k / c_w)(k / c_a) + k`, so it says something when `k = 0`; in the slowdown form a division by zero is zero. -/
 def CoveringBoundTwoCosts : Prop :=
-  ∀ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+  ∀ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
     (k : ℝ) < cw * D → 0 < ca → Assumptions.ParameterHardAt d B s cw → Covers d s k I →
       ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) ≤ n * (k / cw * (k / ca) + k) ∧
       ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) / d.D.N * s / (k / cw * (k / ca) + k) ≤ s * n / d.D.N
