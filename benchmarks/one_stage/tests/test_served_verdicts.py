@@ -1697,6 +1697,7 @@ else:
     if os.environ.get("FAIL_COMMIT"):
         print("prove_path.py window-commit: the row dir holds no window 7", file=sys.stderr)
         sys.exit(2)
+    open(os.environ["ORDER"] + ".cap", "w").write(a[a.index("--cap-bits") + 1])
     out.mkdir(parents=True)
     (out / "circuit.json").write_text(json.dumps({{"run": "ab", **tables}}))
     if "--window-registration" in a:
@@ -1926,7 +1927,8 @@ def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subproce
     """The ``--h1-window-commit`` that `served_verdicts.sh serve` gives serve-openai under H1_TIE, run as `serve_tie` runs
     it at window 7's close (``bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR``, from elsewhere), in a toy tree whose
     prove_path.py notes each step it runs, on a serve dir where the server committed window 7's advice (unless not
-    ``committed``; ``extra`` adds to the environment): the run and the steps in order."""
+    ``committed``) padded to the ℓ_a the run exports (CAP, 1,008 bits; ``extra`` adds to the environment): the run and the
+    steps in order."""
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": GATE, "H1_CIRCUITS": str(tmp_path / "circuits"), "H1_TIE": "1"})
     assert rc == 10 and "--h1-prover" in argv and argv.count("--h1-window-commit") == 1, (rc, argv)
     cmd = argv[argv.index("--h1-window-commit") + 1]
@@ -1944,7 +1946,7 @@ def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subproce
     (d / "weights_registration.json").write_text("{}")
     (d / "h1" / "w7" / "registration.json").write_text(json.dumps(W_OF_7))
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
-           "ORDER": str(tmp_path / "order"), "H1_TIE": "1", "V3C_CLASS": W63K4, **extra}
+           "ORDER": str(tmp_path / "order"), "H1_TIE": "1", "V3C_CLASS": W63K4, "CAP": "1008", **extra}
     run = subprocess.run(["bash", "-c", cmd, "_", str(d), "7", str(d / "h1" / "w7" / "registration.json"),
                           str(d / "h1" / "w7" / "record.json"), str(d / "private" / "h1" / "w7")],
                          cwd=tmp_path, env=env, check=False, capture_output=True, text=True)
@@ -1953,12 +1955,14 @@ def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subproce
 
 def test_under_h1_tie_each_h1_windows_close_commits_it_on_the_servers_advice_chained_after_its_w_as_its_record_r(tmp_path):
     """serve-openai's tie command, from any directory, runs window-commit on the window's advice as the server committed
-    it, at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R. It commits
-    no advice of its own, so the window's advice has one commitment, and says nothing in $OUT (its window is H1's, which no
-    published line names); its commit's answer stays in the serve dir."""
+    it, read at the ℓ_a the server padded it to (CAP), at V3C_CLASS on W, the window's H1 prover key and V3c's law, and
+    copies the registration it wrote to R. It commits no advice of its own, so the window's advice has one commitment, and
+    says nothing in $OUT (its window is H1's, which no published line names); its commit's answer stays in the serve
+    dir."""
     run, order = _tie(tmp_path)
     d = tmp_path / "serve"
     assert run.returncode == 0 and order == ["window-commit"], (run.stdout, run.stderr, order)
+    assert (tmp_path / "order.cap").read_text() == "1008"
     assert run.stdout.splitlines()[-1] == f"TIE: window-commit class {W63K4}: its registration is the window's record R"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
