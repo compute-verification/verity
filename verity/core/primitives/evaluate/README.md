@@ -44,7 +44,10 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   function: its words in leaf order, or `{"table": "gelu_tanh_bf16" | "tanh_rn"}` for a registered table, which the evaluator
   computes where a gate reads it (`tanh_rn`'s 2^28 words never enter the request). `library_table` and `registered_table`
   (`{"name": ...}`) give a MUFU table's SHA-512 and a registered table's SHA-256 (over its entries as little-endian u32), which
-  the suite holds to the library's and to C-Flock's pins.
+  the suite holds to the library's and to C-Flock's pins. `gate` (`{"program", "gate"}`) gives a gate of the canonical layout
+  (`Flock.Program.Gate`: index, primitive, operands, activation) and `partition` (`{"program", "X"}`) the Program's `Q_word{X}`
+  evaluation (`Flock.Extract.Partition`: per Call its Definition, units and owners); the suite holds their Python mirrors,
+  `layout.Gate` and `partition_object.Partition`, to them.
 
 ~~~sh
 cd verity/core/primitives/evaluate && lake build      # .lake/build/bin/verity-evaluate
