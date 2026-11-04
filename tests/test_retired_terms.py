@@ -5,7 +5,8 @@ proof block (Glossary, "Incorrect proof block"). The proof service is the proof 
 
 Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`)
 and the lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires,
-in the whole text of each file, to the file's count, while this one holds its terms at zero in prose). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
+in the whole text of each file, to the file's count, while this one holds its terms at zero in prose), and the word maps
+of `tools/move/`, which name the words they retire. A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
@@ -203,12 +204,14 @@ PENDING: dict[str, str] = {
 
 #: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
 LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
+#: the word maps a move renames by, which name the words they retire
+MAPS = "tools/move/"
 
 
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean, PENDING and the LINTS."""
+    """Every file but the Lean, PENDING, the LINTS and the word maps."""
     return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json", "lakefile.toml"))
-                  and f not in PENDING and f not in LINTS)
+                  and f not in PENDING and f not in LINTS and not f.startswith(MAPS))
 
 
 def _read(f: str) -> str | None:
