@@ -2,6 +2,8 @@ import Proofs.Flock.Claims.Witnesses.Shared
 import Proofs.Flock.Claims.Witnesses.Flock
 import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
+import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
 import Proofs.Flock.Claims.Witnesses.RecursionLin
@@ -16,7 +18,8 @@ import Proofs.Flock.Claims.Witnesses.BindingMeets
 Every claim definition in `Definitions.Core.Interaction` and `Definitions.Claims*` carries a theorem `<Claim>_fails`: a
 concrete toy instance at which the claim is false, so its definition constrains something. `Shared` has the shared
 forms' witnesses and the toys they use, `Flock` Flock's, `Sampling` the sampling compiler's, `SamplingGeneric` the
-generic sampled compiler's (with their statements over the spec) and `Recursion` the ZK-recursion compiler's. A claim still met
+generic sampled compiler's (with their statements over the spec; `SamplingGenericCost` its cost claims', and
+`SamplingGenericZK` its zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met
 by a trivial instance has a theorem `<Claim>_vacuous` that exhibits it.
 
 The lock's `claims` section (`Security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
