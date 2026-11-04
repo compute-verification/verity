@@ -7,7 +7,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   (lowercase hex of 64 bytes), the verifier's own registered file (`flock-verify --registered`'s object, or null for a
   program that reads no registered value) and the SHA-512 of the window's registered circuit record (`flock-verify
   --interface`'s, a blob; null or absent for none, when a registered file that binds ports is refused). The per-member
-  form is exactly `{"members"}`, an object from each member's name (a statement's units of the population) to exactly
+  form is exactly `{"members"}`, an object from each member's name (a statement's units of the population, its ports'
+  roots the registration's `<member>/<port>`) to exactly
   `{"units", "vus_per_block", "circuit", "registered"}`, or with `interface`: its units as `[lo, hi)` ranges, no unit
   in two members' ranges, its circuit's units a proof block (META `vus_per_block`, positive), and its statement's
   circuit digest, registered file and registered circuit record, as the one-statement form's. The members go to v1's
@@ -51,9 +52,13 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   verified as the one statement is, on its member's circuit and registered file, after the statements before it, so no
   coin tree serves two statements, and its public file's units (`units.indices`) must be exactly its member's units,
   ascending (`PublicUnits.exactly`), so every unit its sessions prove is its member's, and its circuit's units a proof
-  block must be the ones the parameters name, which the link points were checked at. Its proofs in the other form than
-  the parameters', a public file of other units, or a circuit of other units a proof block, rejects; the evidence's
-  `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
+  block must be the ones the parameters name, which the link points were checked at. Each session's setup holds every
+  port of its statement that no port of the member's registered reads names to the registration: the public header's
+  frame-v3-sha512 root and domain for it are the record's for `<member>/<port>` (`Registered.statementHeld`, beside
+  `Flock.RegBound.check`), so a writer's statement is proved about the rows its readers open, drawn or not (a drawn
+  header keeps the population's roots); one that isn't is that session's reject, naming the port. Its proofs in the
+  other form than the parameters', a public file of other units, or a circuit of other units a proof block, rejects; the
+  evidence's `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
   drawn count may be zero and it has no statement. Only a stratum's `k` is not read here: a statement is one table
   (`inputsOf`'s `count`), so no stratum's draw is split over a statement's tables. Every acceptance in this form is
   then refused (`MULTI_REFUSED`) until the guarantee for a sample over several members' statements is in the lock.
@@ -340,13 +345,15 @@ def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Cor
 /-- The verifier's registered reads, as `verifyCmd` derives them from its registered file and its registered interface:
 its own ports (`ownOf`, which beyond `verifyCmd` refuses two ports of one root registering it differently), the reads it
 knows, the registered parameters, the ports it binds to the window's committed values, and the ports the window's
-interface declares registered (`RegBound.declaredOf`). -/
+interface declares registered (`RegBound.declaredOf`); and in the per-member form the member whose statement the
+session proves and the registration's roots (`Registered.rootsOf`), which its other ports are held to (`heldChecks`). -/
 structure Reads where
   registered : Option (Array Flock.Registered.Port)
   known : Array (String × Array (Array Nat × ByteArray))
   params : Array String
   bound : Array Flock.RegBound.Bound := #[]
   declared : Option (Array (String × String)) := none
+  held : Option (String × Std.HashMap String (ByteArray × ByteArray)) := none
 
 /-- The verifier's own ports, from its registered file `j` (without `RegBound.KEY`): `Registered.ofJson`'s, each name
 naming one port, and no two ports of one root registering it differently (`Registered.rootClash`): a row's opening finds
@@ -408,14 +415,41 @@ def declaredOf (p : Own) (bs : Core.Blobs) : V (Option (Array (String × String)
   let program := match getD p.partition "program" with | .str s => some s | _ => none
   some <$> Flock.RegBound.declaredOfBytes (← bs.get d "interface") program
 
-/-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
+/-- In the per-member form (`Reads.held`: the member and the registration's roots), every table's statement held to the
+registration (`Registered.statementHeld`); nothing in the one-statement form. -/
+def heldChecks (rd : Reads) (sts : Array Flock.Stmt) : V Unit :=
+  match rd.held with
+  | some (m, roots) => sts.toList.forM fun st => Registered.statementHeld (roots[·]?) m rd.registered st.c st.pub
+  | none => pure ()
+
+/-- What `heldChecks` accepts in the per-member form: each table's statement held to the registration's roots
+(`Registered.statementHeld`, so `Registered.statementHeld_ok`). -/
+theorem heldChecks_ok {rd : Reads} {sts : Array Flock.Stmt} (h : heldChecks rd sts = .ok ()) {m : String}
+    {roots : Std.HashMap String (ByteArray × ByteArray)} (hh : rd.held = some (m, roots)) :
+    ∀ st ∈ sts, Registered.statementHeld (roots[·]?) m rd.registered st.c st.pub = .ok () := by
+  intro st hst
+  unfold heldChecks at h
+  rw [hh] at h
+  exact Flock.RecCompose.forM_ok h st (Array.mem_toList_iff.2 hst)
+
+/-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`, after the per-member
+form's (`heldChecks`), which `verifyCmd` doesn't make. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
+  heldChecks rd sts
   if let some own := rd.registered then
     sts.forM fun (st : Flock.Stmt) => Flock.RegBound.check st.c st.pub I.program own rd.bound rd.declared
   sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c I.program I.partition rd.registered rd.params
   sts.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c rd.known
   Flock.RecSetup.checks none none I.tags I.tables sts I.circuitFile I.partition I.program rd.registered none none none
   Flock.RecSetup.oneFull none sts
+
+/-- A session's set-up checks passing passed the per-member form's (`heldChecks`). -/
+theorem setupChecks_held {I : Flock.Witness.Inputs} {rd : Reads} {sts : Array Flock.Stmt}
+    (h : setupChecks I rd sts = .ok ()) : heldChecks rd sts = .ok () := by
+  unfold setupChecks at h
+  obtain ⟨u, h1, -⟩ := Flock.HmNets.bind_ok h
+  cases u
+  exact h1
 
 /-- The checks `verifyCmd` makes on a session's tables after `Zk.shapeOk`. -/
 def recChecks (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
@@ -542,9 +576,12 @@ ones proved and whether all accepted. A refusal for what `proofs.verify` refuses
 verifier's registered file, a file no blob holds, or an accepted session naming another program than the partition
 object's; and, given a member's units and units a proof block `member?`, a public file whose `units.indices` are not
 exactly them, ascending (`PublicUnits.exactly`), or a circuit of other units a proof block than the parameters name,
-which the registration's `link-points` read (`Registration.linkRefused`), before any session. -/
+which the registration's `link-points` read (`Registration.linkRefused`), before any session; and, given the member's
+name and the registration's roots `held?`, each session's set-up holds the statement's other ports to them
+(`heldChecks`). -/
 def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blobs)
-    (member? : Option (Array (Nat × Nat) × Nat)) (r : Run) : V Run := do
+    (member? : Option (Array (Nat × Nat) × Nat)) (r : Run)
+    (held? : Option (String × Std.HashMap String (ByteArray × ByteArray)) := none) : V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
     else pure () : V Unit)
@@ -559,7 +596,7 @@ def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blob
       throw ("units: the public file's units.indices are not exactly the member's units, ascending: slot i of its " ++
         "table is the member's i-th unit")
   let I := inputsOf tags0 p circuitB pubB bs
-  let rd := { (← readsOf p.registered) with declared := ← declaredOf p bs }
+  let rd := { (← readsOf p.registered) with declared := ← declaredOf p bs, held := held? }
   let tags := Flock.Witness.zkTags I
   let parsed := Flock.ProvedScope.circuitOf tags I.circuitFile I.tables
   if let (some (_, g), .ok c) := (member?, parsed) then
@@ -613,22 +650,26 @@ def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Memb
 /-- The per-member form's run (module docstring, **per member**): the statements' structure held (`membersHeld`), then
 each statement on its member's own inputs and units (`runFrom`) after the statements before it, so `step`'s coin-tree
 keys are fresh across statements and each statement's public file is exactly its member's units, which every unit its
-sessions prove is then (`provedUnits` reads them off that file); a refusal for what `runFrom` refuses; then the union
-of the statements' proved units held to the evidence's (`provedHeld`). -/
-def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs) : V Run := do
+sessions prove is then (`provedUnits` reads them off that file), and each session's statement's other ports are held to
+the registration's roots `roots` for its member (`heldChecks`); a refusal for what `runFrom` refuses; then the union of
+the statements' proved units held to the evidence's (`provedHeld`). -/
+def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs)
+    (roots : Std.HashMap String (ByteArray × ByteArray)) : V Run := do
   let held ← membersHeld ms sts
   let mut r : Run := ⟨#[], #[], #[], true⟩
   for (st, m) in sts.zip held do
-    r ← (runFrom m.own st.pub st.sessions bs (some (m.units, m.g)) r).mapError (s!"member {m.name}: {·}")
+    r ← (runFrom m.own st.pub st.sessions bs (some (m.units, m.g)) r (some (m.name, roots))).mapError
+      (s!"member {m.name}: {·}")
   provedHeld (some want) r
 
 /-- The evidence's statements run in the parameters' form: the one statement's (`run`), or each member's
-(`runMembers`); a refusal when the evidence's proofs are in the other form. -/
-def runAll (p : Params) (e : Evidence) (bs : Core.Blobs) : V Run :=
+(`runMembers`, at the registration record's roots, `Registered.rootsOf`); a refusal when the evidence's proofs are in
+the other form. -/
+def runAll (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : V Run :=
   match p.form, e.statements.toList with
   | .one own, [{ member := none, pub, sessions }] => run own pub sessions (some e.base.provedUnits) bs
   | .one _, _ => throw "the evidence's proofs are per member (statements) and the parameters' one statement's (circuit, registered)"
-  | .members ms, _ => runMembers ms e.statements e.base.provedUnits bs
+  | .members ms, _ => runMembers ms e.statements e.base.provedUnits bs (Registered.rootsOf c.record)
 
 /-- The sessions' verdicts in order (`run`'s). -/
 def verdicts (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
@@ -718,7 +759,7 @@ refused (`MULTI_REFUSED`). -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   if p.form.perMember && OneStage.ranOut p.base c ξ then .reject s!"draw: {RAN_OUT}" else
-  match treesOf p e >>= (treesHeld · e bs) >>= (fun () => portsHeld p c) >>= fun () => runAll p e bs with
+  match treesOf p e >>= (treesHeld · e bs) >>= (fun () => portsHeld p c) >>= fun () => runAll p c e bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
