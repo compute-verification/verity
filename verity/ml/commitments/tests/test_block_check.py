@@ -31,7 +31,6 @@ TOY = SimpleNamespace(N=32, C=5, K=2, MASKED=0, BYTES=64, ROWS=2, LEAF=3, P=20, 
 TOY_MASKED = SimpleNamespace(**{**vars(TOY), "MASKED": 1})
 #: (part, its statics) -> (And, Xor, Not) gates of its traced circuit
 PARTS = {
-    ("RowCompress", ()): (57947, 286724, 4948),
     ("CodecBinding", (512, 569)): (112569, 545189, 11366),
     ("CodecModAdd", (512, 569)): (1534, 4091, 4),
     ("CodecLess", (512, 569)): (511, 1022, 5),

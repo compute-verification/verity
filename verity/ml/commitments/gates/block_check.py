@@ -59,7 +59,6 @@ rows' ``b || c`` are hiding and nothing reads them.
 **The parts**, each its own traced Definition lowered by its builder (``build``), so a Flock unit gets the builder's
 commits and the Definition the trace's ANDs:
 
-    RowCompress_v1                  (cv: Array<8, Word>, block: Array<16, Word>) -> Array<8, Word>, one SHA-512 compression
     CodecBinding_v1{N, C}           (bound, seed: Array<256>, j: Array<64>, d: Array<8, Word>, coin: Array<256>) -> Array<N>
     CodecModAdd_v1{N, C}            (a, b) -> a + b mod p
     CodecLess_v1{N, C}              (y) -> y < p
@@ -69,7 +68,8 @@ commits and the Definition the trace's ANDs:
     SketchRow_v1{BYTES}             (block: Array<8 BYTES>, signs: Array<BYTES>) -> Array<32>, one row of sigma
     LeafMatch_v1{LEAF, P}           (y: Array<8, Word>, leaf, k: U16, plan, pos: U16, j: Array<64>) -> Array<2>
     BlockVerdict_v1{W}              (oks: Array<W>, match: Array<2>, reads: Array<3>, bound) -> U16
-    Hm96Sha512Leaf_v1, FrameV3ReadAt_v1{D, 4, hm96-sha512/row/v2}   `gates.hm96`, `gates.frame_v3`
+    Sha512Compress_v1, Hm96Sha512Leaf_v1, FrameV3ReadAt_v1{D, 4, hm96-sha512/row/v2}   `gates.sha512`, `gates.hm96`,
+                                    `gates.frame_v3`
     Word = Array<64, Value<1>>, a SHA-512 word LSB first; Array<n> = Array<n, Value<1>>
 
 **Cost.** A squaring mod p is a Karatsuba square down to 32-bit schoolbook squares (about 96,000 ANDs at N = 512) and two
@@ -102,15 +102,14 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, sha51
 
 from .frame_v3 import opens_at, read_at
 from .hm96 import Hm96Sha512Leaf, reference as hm96_leaf
-from .sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
+from .sha512 import (BLOCK, DIGEST, IV, WORD, Sha512Compress, commit as _commit, compress_gadget, compress_ref, midstate,
+                     pad_tail, words_be)
 
 __all__ = ["BlockOpeningCheck", "FIELDS", "TOY", "VERDICT", "key", "opening_args", "opening_check", "opening_public",
            "opening_rows", "receipt", "row_words", "sketch", "verdict"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
-WORD = Array(64, BIT)
-DIGEST = Array(8, WORD)
 H = Array(32, U16)
 #: (N, C) -> the field's name in the codec's derivations (`codec.Field.name`)
 FIELDS = {(1024, 105): "p1024", (512, 569): "p512", (32, 5): "toy32"}
@@ -345,13 +344,6 @@ def _f(S):
     return Array(S.N, BIT)
 
 
-RowCompress = _part(
-    "RowCompress", (), lambda S: ((("cv", DIGEST), ("block", Array(16, WORD))), DIGEST),
-    lambda C, S, *e: compress_gadget(C, list(e[:8]), list(e[8:24])),
-    "One SHA-512 compression (FIPS 180-4 §6.4.2) with its feed-forward, on 64-bit words LSB first, lowered with its schedule "
-    "and state words committed")
-
-
 def _sig_binding(S):
     _check_field(S)
     return ((("bound", BIT), ("seed", Array(8 * SEED_BYTES, BIT)), ("j", Array(64, BIT)), ("d", DIGEST),
@@ -551,7 +543,7 @@ def _opening_signature(S):
 def _compress(B, X: _Wires, cv: Coll, data: list[list]) -> Coll:
     words = _words(data)
     for i in range(0, len(words), 16):
-        cv = B.call(RowCompress, cv, X.coll(Array(16, WORD), _join(words[i:i + 16])))
+        cv = B.call(Sha512Compress, cv, X.coll(BLOCK, _join(words[i:i + 16])))
     return cv
 
 
