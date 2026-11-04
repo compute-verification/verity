@@ -164,3 +164,20 @@ PEARLLEAN: item 1 is done. #7221 is at 6da3df271cb (pushed), one commit on 3464b
 [2026-11-04T21:58Z] 2580f877c2be
 PEARLCAP: pushed df3b87fcfa1 (on #7221 6da3df271cb). New: the partially-flagged-row difftest (46983091b29), test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_some_flag: zero key, row 11 flags blocks 0-3 all in one column; at 16x16 some of its 16 credited words flag each block (not inert, debit 160 with or without E), at 16x1 its one credited word flags all four (inert, tile debit 672; 160 without E); Lean == Python under each over_cap rule (prototyped on the Python side; the Lean run is in py12). Earlier fails on cpu-5 were STORAGE_EXHAUSTED / no space (lean10 c96a, py11 a31a). Reruns pinned to vy-nebius-cpu-1: suites py12 r20261104-215704-2d43, pearlplus Lean r20261104-215734-3a6f; Security/Properties at f8b7bc0 r20261104-211014-f1df (cpu-1). Properties at 5f28527 built clean (my TileKeepsTheCap fix elaborates); its audit flags only non-PearlPlus lock records. I will name the final sha once these pass.
 
+[2026-11-04T23:27Z] 4f470daed737
+PEARLCAP final report. Branch cursor/pearlplus-forming-1de3, head df3b87fcfa1 (pushed; nothing more will be pushed).
+
+ONE FIX FOR PEARLLEAN TO FOLD INTO #7221 FINAL HEAD: py13 (r20261104-222847-eff0, cpu-3, df3b87) fails benchmarks/pouw/pearlplus_lean::test_a_salt_dead_element_over_the_row_cap (16 passed, 1 failed). Cause: my test (fb59139) predates the CMP-328 test-instance rule; its direct call at tests/test_pearlplus_lean.py:210 lacks test_instance=True, so the 16x16 pass is rejected for its tile. Fix, one line: `without = answer(VR.verify_passes([path], 16, 1, "test", T.published(path), SOURCE, test_instance=True))`. Every other direct verify_passes call in that file already passes it. py13 is still running benchmarks/pouw and one_stage.
+
+Shas: 00eb2d1aa54 forming term; b68acb3526c Python band rule; 22bfa6c2755 Lean credited and difftest; 4032672836b C4 tests; 72777b00df5 merge #7221@dd9f749; 790fbaf5b57 benchmark band-rule fixes; 5f285271917 TileKeepsTheCap fix; a3f8a7d1f2b proofs counterexample test (64xKx64, realRows 64, voluntaryA [5], in core test_pouw_pearl_c_work); f8b7bc0c4cc merge #7221@3464b8ec887; 46983091b29 partial-flag difftest; df3b87fcfa1 merge #7221@6da3df271cb.
+
+Honest runs credit:
+- Forming term: removes nothing on either run. Run 1 (r20261103-225039-run1): 11 forming elements over 7 tiles, credit unchanged (r20261104-145940-0690). ca34 (f592 passes): 0 elements, unchanged (r20261104-155225-53c9).
+- Band rule as served (prover still volunteers): Run 1 7,812,084,949,428 -> 4,667,340,670,145 (-40.25%, r20261104-171856-1a35); ca34 63,313,897,699 -> 39,777,003,483 (-37.17%, r20261104-172816-ec72). Each V-EX give-up now zeroes a whole 64-band or block.
+- Band rule, prover gives up nothing, over-cap tiles credited 0 (option A): Run 1 7,902,836,811,341 -> 7,870,512,158,675 (-0.409%, r20261104-180344-acdc); ca34 63,899,730,031 -> 63,642,936,785 (-0.402%, r20261104-182257-5688). Under the 0.5% expected.
+Recommendation: under the band rule the honest prover should stop volunteering and take option A; volunteering costs ~38-40%.
+
+Verification: core pouw 2075 passed at df3b87 (r20261104-215704-2d43, cpu-1). Benchmarks at 790fbaf: only #7221 failures (r20261104-181948-75e6). pearlplus Lean audit at df3b87 (r20261104-215734-3a6f): fails only on #7221 items (orphan PouwPearlPlus/Main.lean, unnamed instance at Coins.lean:51). Security/Properties built and audited at 5f28527 (r20261104-191856-abfd) and f8b7bc0 (r20261104-211014-f1df), failing only on non-PearlPlus lock records. Earlier #7221-side items: pearlplus_lean read guard, test_pearl_c_vllm_lean.py:92, one_stage test_served_pearlplus_lean needs --test-instance.
+
+Cap.lean: band rule = bandCredited, forming test = formingCapOK (lean CKFORM3b). Open bridge assumptions: semH3 alpha/beta/x vs the FP32 s5 words; atomMixP hopper = FormChain.atomMix. Gap: the prover words-only remedy (volunteer_words) does not see the forming term, so a salt-dead element can still leave a tile over cap; option A covers it.
+
