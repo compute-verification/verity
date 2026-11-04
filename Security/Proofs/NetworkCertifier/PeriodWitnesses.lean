@@ -84,7 +84,7 @@ def PeriodLeakRegisteredUntrusted : Prop :=
       {n : ℕ} (sw : Fin n → Claims.Sampling.AuditStatement) (Pw : Fin n → Claims.Sampling.Partition)
       (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ),
     WindowsPlaced D δ sw Pw β →
-    ∀ {Conn Cell Srv Dev Sec : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K), F.Wf →
+    ∀ {Conn Cell Srv Dev Sec : Type} (_arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K), F.Wf →
     ∀ (tap : Dev)
       (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
       (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (schedOf : Sec → WardenSchedule Conn) (srvOf : Sec → Srv),
@@ -122,9 +122,8 @@ theorem not_periodLeakRegisteredUntrusted : ¬ PeriodLeakRegisteredUntrusted := 
     fun _ _ i => i.elim0
   have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
     ((Set.encard_le_encard (s := ({true, false} : Set Bool)) fun z _ =>
-      Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => i.elim0⟩).trans hc)
+      Set.mem_ofPred.2 ⟨Set.mem_univ z, fun i => i.elim0⟩).trans hc)
   simp at h2
-  all_goals exact absurd h2 (not_le.2 Nat.one_lt_ofNat)
 
 /-- **`PeriodLeakRegistered` at any rows format**: its statement without `F.Wf`, every other hypothesis kept,
 `TrustedHost` included. -/
@@ -193,14 +192,13 @@ theorem not_periodLeakRegisteredAnyFormat : ¬ PeriodLeakRegisteredAnyFormat := 
       exact hopens _ (blindRun_obs z i)
   have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
     ((Set.encard_le_encard (s := ({true, false} : Set Bool)) fun z _ =>
-      Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => hgood _ (blindRun_obs z i)⟩).trans hc)
+      Set.mem_ofPred.2 ⟨Set.mem_univ z, fun i => hgood _ (blindRun_obs z i)⟩).trans hc)
   have hF1 : faultySets notStmt.design notPart 0 = {∅} :=
     Finset.eq_singleton_iff_unique_mem.2 ⟨empty_mem_notFaulty, fun _ hF => notFaulty_empty hF⟩
   have hfree : (freeInputs notStmt.prog freeLay 1 \ {0}).card = 0 := by
-    first | decide | rfl | simp [freeInputs, notStmt, notProg, freeLay]
+    decide
   simp only [hF1, hfree, Finset.card_singleton] at h2
   simp at h2
-  all_goals exact absurd h2 (not_le.2 Nat.one_lt_ofNat)
 
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/

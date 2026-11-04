@@ -305,7 +305,7 @@ theorem obs1_covered : Covered 1 [obs1] := by
   rfl
 
 theorem zero_free : 0 ∈ freeInputs notProg freeLay 1 := by
-  first | decide | simp [freeInputs, freeLay, notProg]
+  decide
 
 /-- With nothing held and the input `true`, the circuit computes the negation `false`. -/
 theorem notProg_val_true (inp : ℕ → Bool) (h0 : inp 0 = true) : valOver notProg inp (fun _ => none) 1 = false := by
@@ -604,6 +604,6 @@ theorem frameTops_acc (H : Msg → Msg) (op : ℕ → List (Obs 1 1 1) → List 
       some (([] : List ℕ).map (valOver notProg (freeLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) fun _ => none))
     else none
   rw [hv]
-  all_goals first | rfl | simp [tapVal, frameTops]
+  rfl
 
 end NetTiming.Witness
