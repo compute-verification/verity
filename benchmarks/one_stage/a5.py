@@ -791,6 +791,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     else:
         stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
         read = bytes(coins.read)
+        summary["draw_ran_out"] = draw_ran_out(drawn_law, n_all, read)
         (out / "segment.json").write_text(json.dumps({"source": "challenger",
                                                       "segment": segment, "read": read.hex(), "need": need}, sort_keys=True))
         if draw is None:
@@ -1092,11 +1093,21 @@ def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
                         for k, base, n, g, own in members}}
 
 
+def draw_ran_out(law: dict, population: int, read: bytes) -> bool | None:
+    """Whether the draw under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), which
+    fails the window in v2's per-member form (`OneStageZk.RAN_OUT`, `coins.ran_out`); None where the law refuses
+    otherwise."""
+    try:
+        return CC.ran_out(law, population, read)
+    except ValueError:
+        return None
+
+
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The per-member registration's `link-points` (`link_points.refused`) over the window's staged members, each its
     units ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest
-    and most drawn units under the drawn law over the draws that end (one that runs out of coins draws every unit, the
-    member's whole file, its own case), or why it refuses them all. Recorded here; v2's per-member registration refuses
+    and most drawn units under the drawn law over the draws that end (one that runs out of coins fails the window:
+    `draw_ran_out`), or why it refuses them all. Recorded here; v2's per-member registration refuses
     (`Registration.check`)."""
     from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
 

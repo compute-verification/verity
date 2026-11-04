@@ -199,8 +199,8 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
     over 40 units a draw that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
     so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a draw
-    that ends holds at most 2 of it, and one that runs out of coins all 28, its own case, so it is not refused. A law
-    that doesn't apply refuses every member, recorded with why."""
+    that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
+    `a5.draw_ran_out`). A law that doesn't apply refuses every member, recorded with why."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
@@ -211,3 +211,13 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
+
+
+def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
+    """`a5.draw_ran_out`, which fails the window in v2's per-member form: `subset:9` over 10 units first reads a stream
+    of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
+    no word; a law that doesn't apply is None."""
+    law = {"k": 9, "law": "subset"}
+    assert a5.draw_ran_out(law, 10, bytes(64)) is True
+    assert a5.draw_ran_out(law, 10, bytes(256)) is False
+    assert a5.draw_ran_out({"k": 11, "law": "subset"}, 10, bytes(256)) is None
