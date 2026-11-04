@@ -234,7 +234,7 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
 
 
 def _sampled_proofs_challenger(cfg, params, bound):
-    """The live challenger's bindings; with no gate bound the draws are a local development session's, which
+    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's, which
     served_verdicts.sh takes only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
     return hooks if "gate" in bound else {**hooks, "DEVELOPMENT": "1"}
