@@ -1006,9 +1006,13 @@ real EOS. The registered thing is a precommitted ahead-of-time compiler. After s
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
 certifier certifies the I/O. Sampled proofs check two things: that the committed values pass the compiled circuits (the
-step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
-the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
-accepted-runs bound.
+step units), and that they agree with the certified I/O (the tie units). On the network certifier's path the egress
+counts read no advice: the step-indexed scan (`ingress_scan`, `egress`, which `benchmarks/network_traces/scan_zk.py`
+proves, outside this protocol) renders each connection's egress as n + 1 cells, n its request Program's outputs
+(`SlotEntry_v1`: up to `max_tokens` and the first registered stop id, that one included), and an egress bucket's proof
+opens only on the network certifier's row, so a lane a cell longer or shorter, or a `FAIL`, is refused at its bucket.
+On a served link N2 is to hold each execution phase's egress counts to the ingress counts and the advice; no N2 unit
+does yet. The advice is the leak, charged at its registered width ℓ_a,j in the network bound.
 
 This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
 `decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler
@@ -1275,8 +1279,8 @@ which the compile slice's proof block holds as witness.
   connection's last ingress cell: the server holds the whole body from a on.
 - Each output's id, the `token_id` of the id event that carries it (`active.id_event`, tagged by its request's
   ordinal). These give `output_len`, and through the registered stop ids, `finish`.
-- Each output's release bucket, that of the egress cell carrying its event. Cell i of the connection released at a
-  is in bucket a + D + ⌊i/r⌋, a function of a alone. v1 doesn't read the `fails` record: a failed connection has no
+- Each output's release bucket, that of the egress cell carrying its event. Cell i of the connection admitted at s is
+  in bucket s + Δ_nc + ⌊i/r⌋, a function of s alone. v1 doesn't read the `fails` record: a failed connection has no
   advice.
 - *The reference order* is the network certifier's release order: the requests by (a, ordinal) (`v1.release_order`), each
   request's last ingress cell landing, which the network certifier's signed record holds. The admission order (by s) is the
