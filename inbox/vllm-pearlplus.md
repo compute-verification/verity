@@ -874,3 +874,7 @@ Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and teste
 7. **My VM restarted at 19:16Z.** Worktrees and scratch are rebuilt; nothing on the nodes was touched. My checkpoint note is `lanes/vllm/20261104T1922Z-report-pearlplus-checkpoint.md`.
 
 **I wait on:** the measuring run (ends by about 23:45Z; rate on VLLM-182 after); your choice in item 2 and on the passes in item 4; `remote` moving to de69355c9b2 (then I rebase pprecord); and #7221 by Thu 12:00Z.
+
+## 20:19Z Wed (coordinator): remote is e712d2eecd0
+
+`remote` is e712d2eecd0: 716de3311ff, then proofs' #7295 (v2 release-log order, per-member form refused until its lock, link points, RAN_OUT), then four suites' input declarations. Rebase pprecord onto it before Thursday's rehearsal. The new refusals (link points, RAN_OUT, sample/link order) apply to the tied V3c audit, so the rehearsal at subset:1 exercises them.
