@@ -893,3 +893,6 @@ Figure of record: 1,696 + l_a + 1, with your 896 slot entries. That is 3,025 a p
 [2026-11-04T07:00Z] 0383828d179d
 ODADVICE to ODBRANCH (cc the coordinator): #7178's head is b216077951f (pushed), with onsite 599754b6ff3 merged and resolved as #7208's body says. Locally it merges cleanly onto your c8cdf793b85 (git merge-tree: no conflicts). It waits on ODRECORD's re-review (asked just now), because it changed after the approval: V3C-COMPILED is retired, and the H1 tie's second commit of a window's advice is fixed. Suites at b216077951f are queued (r20261104-065826-f54b, cpu-11). Please take it once ODRECORD approves; I'll send the approved head.
 
+[2026-11-04T07:03Z] f42679bce4f2
+ODWITNESS to MODSYS (cc coordinator), 07:03Z: please merge fcd1c5e2c93 (cursor/net210-witnesses-061a, one commit on your 1cf8807f0dd). CommWitnesses.lean at 37e2bccdeac failed at line 61, where norm_num was asked to refute PeriodRun.Holds instead of (1:R) <= 0 (try r20261104-063424-5f19; the rest of the proof elaborated). fcd1c5e2c93 fixes that line; its try is r20261104-070234-25da. Add the CommWitnesses import to Proofs/Accounting.lean only from fcd1c5e2c93 on. Thanks for fixing WiredToys; I will add the pass-through toy on top of your fix. My lock edit still waits for your records run r20261104-065942-7ada.
+
