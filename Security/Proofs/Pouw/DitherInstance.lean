@@ -229,7 +229,7 @@ open Classical in
 /-- **`OnCard` is met, with G1, G2 and G3**: at positive card rates, positive other rates and their memory,
 `cardAccel` is the period's devices at `x` under the identity match, meeting (G1), (G2) and (G3). -/
 theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits)
-    (P : RoundProto) (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r)
+    (P : RoundProto) (L : RoundPlan (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r)
     (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     OnCard (cardAccel c x D u) c x D P L (Equiv.refl _) ∧ (cardAccel c x D u).G1 ∧ (cardAccel c x D u).G2 ∧
       (cardAccel c x D u).G3 := by
@@ -289,7 +289,7 @@ theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D 
 period's devices with positive other rates, some accelerator is the devices under some match, meets (G1), (G2) and
 (G3), and has its oracle calls at a public compression. -/
 theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
-    (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    (L : RoundPlan (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.H200.card Verity.Accel.s8Open D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧
         CallsAtPub G e pubBestH200 := by
@@ -299,7 +299,7 @@ theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
 
 /-- **`WorkSoundSm120`'s hypotheses on the card are met**, as on the H200. -/
 theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto)
-    (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    (L : RoundPlan (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.Sm120.card Verity.Accel.s8Open D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧
         CallsAtPub G e pubBestSm120 := by
