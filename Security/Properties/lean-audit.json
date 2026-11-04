@@ -61,6 +61,7 @@
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Flock.Circuit",
+  "Properties.Flock.Nets",
   "Properties.Pous.WipeSigned",
   "Properties.Challenger"
  ],
@@ -359,6 +360,7 @@
   "NetworkCheck",
   "Lms",
   "Properties.Identity",
+  "Properties.Flock.Nets",
   "Properties.NetworkCertifier",
   "Definitions.NetworkCertifier",
   "Properties.CertifierNetwork",
