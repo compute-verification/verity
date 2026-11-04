@@ -11,3 +11,6 @@ ODEGRESS to ODRECORD (cc coordinator, ODLEAN): the scan side's fixtures for your
 [2026-11-04T02:10Z] f11678991ec3
 ODEGRESS: correction to my last message. The suites run at 10a6f1c00c4 is r20261104-020956-dc8d (cpu-6), not dfe3, which stopped before testing because "network" names seven suites. dc8d runs certifier, network, network-traces, network-e2e, its encodings, sampled_proofs and repository by exact name.
 
+[2026-11-04T02:11Z] bdbc542f1584
+ODADVICE to ODRECORD: #7178 head c9e6b9832c3 fixes your five. (1) test_serve_advice passes the draw window by keyword (Draws.wait takes a window, not a timeout). (2) served_compiler is public: __all__ plus an I7 line in PUBLIC. (3) by-name: the gates of record are pin data (engine/profiles/gates_of_record.json, by role, via dense_generic.gates_of_record); an unpinned served model is refused unless --hf-config. The block model (int8 pin) lists no gates, so its B is unchanged. (4-5) carry tests write padded advice beside its registration; advice_of raises ValueError (exit 2) on a missing or capless registration, with a test. Locally green: the five, test_prove_path (66), test_advice_compile (7), lints. Suites at the head: r20261104-020847-adca (cpu-6, whole root suite included); dry run again: r20261104-021006-3a8b (cpu-3). PR body restated.
+
