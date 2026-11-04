@@ -950,8 +950,8 @@ theorem wordDebit_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
     exact (hcond (by simp [h])).elim
 
 /-- `semH3`'s noisy codes are `pc8Sem`'s `quant8A` and `quant8B` at its noise. -/
-theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S) (U : Workload)
-    (u : ℕ) (act : Codes) :
+theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
+    (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes) :
     ((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 =
         WholeCircuit.quant8A RowCircuit.coreOps hopperE4m3K32
           ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) act ∧
