@@ -209,9 +209,10 @@ def same_capture(a: str, b: str) -> bool:
     return a == b or any({a, b} <= set(g) for g in CAPTURES) or (final(a) and final(b))
 
 
-#: a later commit of a layer's capture that traces only runs the layer's capture failed on (NEXT_WT-VERSION-fix, its
-#: runs named when it is made): scored over that layer, never the layer that traces (te_core 4.11's bf16 mv, the
-#: toolsmith's 14:37Z line)
+#: a later commit of a layer's capture that traces only runs the layer's capture failed on or listed falsely
+#: (NEXT_WT-VERSION-fix, its runs named when it is made): scored over that layer, never the layer that traces (te_core
+#: 4.11's bf16 mv, the toolsmith's 14:37Z line; 4.12.13's elementwise listings, whose traces read 4.12.9 as their
+#: capture, so the cache's traced.json names the capture code, coordinator 23:59Z)
 FIX = "-fix"
 
 
