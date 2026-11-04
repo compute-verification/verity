@@ -41,8 +41,9 @@ k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in 
 incorrect proof block (`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
-caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
-verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
+caps aren't those; ``circuits`` lists each tied audit's circuit files, public, by the digests the period's params pin
+(`CIRCUITS`), and whether the run wrote each; and ``verdict_line`` is the run's published line of the network
+certifier's verdict (`LINE` in verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
 `PREMISES` discharged by theorems in Security's locks, each at the statement `DISCHARGES` pins, taking no named
@@ -420,7 +421,16 @@ REPROOF = {
     "case": ("OUT", str(CASE), "the network certifier's period case, whose commitment holds the tied audits' "
                                "registrations"),
     "record": ("OUT", "record/verdicts.json", "the window report of every verdict"),
+    "circuits": ("OUT", "v3c-audit/circuits/",
+                 "C-Flock's circuit file of each template the tied audits' Programs batch, public, each named by the "
+                 "SHA-512 the period's params pin it to (`CIRCUITS`)"),
 }
+#: the circuit files the period check reads, public: C-Flock's flock-ir-unit/v2 file of each template a tied audit's
+#: Program batches, in OUT by its SHA-512, which the period's params pin (``params.audits[i].circuits``) and the check
+#: holds it to; never the registration's window.circuit, the window-circuit record's
+CIRCUITS = "v3c-audit/circuits"
+NO_CIRCUITS = ("the period's params pin no circuit file (params.audits[i].circuits), so its check held no tied audit's "
+               "circuit to a file")
 REPROOF_KEPT = ("each retained past the week after the run, never only on the served node: OUT's in custody with the "
                 "run's public files; the serve dir's, witness, never in OUT or custody, which are public, but copied off "
                 "the served node to a private path keeping the serve dir's layout (`copy`: its node and path, and of "
@@ -691,6 +701,22 @@ def caps(case: Mapping[str, Any], cap: int) -> list[int]:
     return [cap] * len(audits)
 
 
+def circuits(out: Path, case: Mapping[str, Any]) -> dict[str, Any]:
+    """Each tied audit's circuit files (`CIRCUITS`) by the digests the period's params pin, public, in the Program's
+    template order, each with its file in OUT and whether the run wrote it; ``missing`` where the params pin none
+    (`NO_CIRCUITS`). ValueError where a pin isn't a SHA-512."""
+    pinned = []
+    for a in case["params"]["audits"]:
+        files = []
+        for c in a.get("circuits") or ():
+            if not re.fullmatch(r"[0-9a-f]{128}", h := c["sha512"]):
+                raise ValueError(f"template {c['template']!r}'s pin {h!r} isn't a SHA-512")
+            f = f"{CIRCUITS}/{h}.txt"
+            files.append({"template": c["template"], "sha512": h, "file": f, "present": (out / f).is_file()})
+        pinned.append(files)
+    return {"public": True, "audits": pinned} if any(pinned) else {"missing": NO_CIRCUITS}
+
+
 def statement(lock: Mapping[str, Any], g: str) -> str | None:
     """The digest ``lock`` gives the statement of its guarantee ``g``: its signature's type, a definition among the
     lock's reads. None where the lock lists no such definition."""
@@ -877,10 +903,15 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     except FileNotFoundError:
         b["connections"] = {"missing": f"no {CASE}: they are its params' caps"}
         b["of_record"] = advice["cap"] = {"missing": f"no {CASE}: its commitment holds the tied audits' registrations"}
+        b["circuits"] = {"missing": f"no {CASE}: its params pin the circuit files"}
         return rec | {"periods": {"missing": f"no {CASE}: the execution phase's length is its params' schedule"}}
     except ValueError as e:
-        b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
+        b["connections"] = b["of_record"] = advice["cap"] = b["circuits"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
+    try:
+        b["circuits"] = circuits(out, case)
+    except (KeyError, TypeError, ValueError) as e:
+        b["circuits"] = {"error": f"{CASE} params: {type(e).__name__}: {e}"}
     b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], premises(LOCKS))
     try:
         phase_s, connections, capacity = schedule(case, b["phases"])
