@@ -376,22 +376,24 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
 @pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
 def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
     """Monday's defaults: w63k4 at a 4 s tick over three execution phases, each phase's tied V3c audit drawn subset:1
-    (charged), so k_{skip,j} is its E_w = 896 slot-entry bits beside the schedule's and the jitter's 800: with
-    ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of record, of the schedule's egress capacity
-    of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase. Drawn whole, its 16 proof blocks proved, the entries
-    and its δ leave the bound."""
+    (charged), its draw read at δ_i = 2^-64 with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its
+    E_w = 896 slot-entry bits beside the schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no
+    open premise, 1,696 bits a phase of record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of
+    512-byte cells a phase. eps is each phase's scan's 2^-64 and its charged audit's δ_i, never the answer's 1/2. Drawn
+    whole, its 16 proof blocks proved, the entries and its δ_i leave the bound."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
-    audit = {"delta": f"1/{2 ** 64}", "drawn": drawn, "units": 16, "wrong_units": 0}
-    charged = 3 if drawn < 16 else 0
+    audit = {"delta": "1/2", "drawn": drawn, "units": 16, "wrong_units": 8 if drawn < 16 else 0}
+    charged = [dict(audit, delta=f"1/{2 ** 64}", wrong_units=15)] * 3 if drawn < 16 else []
     public = dict(PUBLIC, K=3 * (800 + entries), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
-                  audits=[audit] * 3, eps=str(Fraction(3 + charged, 2 ** 64)), held=["free", "circuit"])
+                  audits=[audit] * 3, charged=charged, eps=str(Fraction(3 + len(charged), 2 ** 64)),
+                  held=["free", "circuit"])
     rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule, audits=(SERVED,)))
     b, run = rec["bound"], rec["periods"]["run"]
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [entries] * 3, "entries_per_phase": [entries] * 3}
-    assert b["delta"]["charged"] == str(Fraction(charged, 2 ** 64))
+    assert b["delta"]["charged"] == str(Fraction(len(charged), 2 ** 64)) and b["delta"]["charged_audits"] == charged
     assert (b["of_record"]["K"], b["of_record"]["open"], "periods_tight" in rec) == (3 * (800 + entries), [], False)
     capacity = 4 * 4 * 32 * 512 * 8
     assert run["per_phase"]["bits"] == 800 + entries and run["share_of_capacity"] == (800 + entries) / capacity
@@ -460,7 +462,7 @@ def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_ce
     public = dict(PUBLIC, eps="524289/1048576", audits=[{"delta": "1/2", "drawn": 1, "units": 16, "wrong_units": 8}])
     rec = OR.record(accepted(tmp_path, public))
     assert rec["bound"]["delta"] == {"scan": "1/1048576", "charged": "1/2", "eps_per_phase": "524289/1048576",
-                                     "is": OR.DELTA}
+                                     "is": OR.DELTA, "charged_audits": {"missing": OR.NO_READINGS}}
     run, year = rec["periods"]["run"], rec["periods"]["year"]["datacenter"]
     assert (run["vacuous"], run["eps_per_phase_below"]) == (False, "1")
     assert year["vacuous"] and Fraction(year["eps_per_phase_below"]) < Fraction(public["eps"])
@@ -472,6 +474,18 @@ def test_scans_at_two_deltas_are_the_bounds_error(tmp_path):
                scans=[SCAN, dict(SCAN, delta="1/524288")])
     rec = OR.record(accepted(tmp_path, two, windows=2))
     assert rec["bound"]["error"].startswith("eps 3/1048576 isn't m · δ_scan plus the charged audits' δ")
+
+
+def test_an_eps_that_isnt_the_scans_delta_plus_each_charged_readings_delta_i_is_the_bounds_error(tmp_path):
+    """Where the public lists each charged audit's reading at δ_i, eps is m · δ_scan plus those δ_i exactly: one that
+    counts the audit's answer's δ = 1/2 in their place is the bound's error, so the record never reports it."""
+    audit = {"delta": "1/2", "drawn": 1, "units": 16, "wrong_units": 8}
+    public = dict(PUBLIC, eps="524289/1048576", audits=[audit],
+                  charged=[dict(audit, delta=f"1/{2 ** 64}", wrong_units=15)])
+    rec = OR.record(accepted(tmp_path, public))
+    assert rec["bound"]["error"] == ("eps 524289/1048576 isn't m · δ_scan plus each charged reading's δ_i: m · δ_scan "
+                                     f"is 1/1048576, and the readings' δ_i are ['1/{2 ** 64}']")
+    assert "of_record" not in rec["bound"]
 
 
 def with_deltas(out: Path, **deltas: object) -> Path:

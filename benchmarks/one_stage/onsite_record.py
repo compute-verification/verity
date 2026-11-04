@@ -35,9 +35,10 @@ sends past its committed program except with δ_net over ``period_s`` seconds, t
 of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
 collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
-``delta`` splits eps into the scans' δ and the charged audits', with eps a phase (`DELTA`: what sets each, and what a
-smaller one costs); ``skip`` is k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part
-(`SKIP`, and what drawing it whole costs).
+``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's reading at
+δ_i where the public lists it (``charged_audits``; `DELTA`: what sets each, and what a smaller one costs); ``skip`` is
+k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part with a bound of at least one
+incorrect proof block (`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
@@ -148,14 +149,19 @@ COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its fin
                       "network certifier's m(ε_ks + ε_bind + ε_tap) (`ERRORS`): no check computes them, so the composite's "
                       "error has no number here, and ``stated`` is the sum of the δs the run states, a lower bound on it")
 NO_NCI_DELTA = "no published file states it: remote's composite publishes each case's params by their SHA-512 alone"
-DELTA = ("what sets eps: each one-stage answer's stated δ, its integrity profile's, a sampling-design parameter in "
-         "(0, 1) and not C-Flock's soundness error, which is in ε_ks. eps is m · δ_scan, every phase's scan at one δ, "
-         "plus the δ of each tied audit drawn in part (`charged`, NetworkCheck.Period's chargedOf). A scan with every "
-         "proof block drawn holds no incorrect proof block at any δ, so a smaller δ_scan costs neither proving nor bits; drawn in "
-         "part, its bound grows as δ falls (faulty_sets, faulty_bits). A tied audit drawn in part charges every slot "
-         "entry bit of its phase (faulty_entries) whatever its bound, so a smaller δ costs K nothing either, but the "
-         "δ is also that audit's own answer's, whose bound grows as δ falls at a fixed draw; drawn whole, its δ leaves "
-         "eps and its entries leave K, at the cost of proving each of its proof blocks")
+DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-stage answer's stated δ (its integrity "
+         "profile's, a sampling-design parameter in (0, 1) and not C-Flock's soundness error, which is in ε_ks), plus "
+         "δ_i for each tied audit drawn in part (NetworkCheck.Period's chargedOf). Where the public lists those "
+         "readings (`charged`: each audit's draw read at δ_i, with its bound b there), δ_i is the period check's own "
+         "constant, fixed before any coin, and the same draw read at its answer's δ stays sampled proofs' term of the "
+         "composite's error; where it lists none, δ_i is the audit's answer's δ, and the charged part is what eps holds "
+         "beyond m · δ_scan. A scan with every proof block drawn holds no incorrect proof block at any δ, so a smaller "
+         "δ_scan costs neither proving nor bits; drawn in part, its bound grows as δ falls (faulty_sets, faulty_bits). "
+         "A tied audit drawn in part charges every slot-entry bit of its phase (faulty_entries) once its bound at δ_i "
+         "is at least one incorrect proof block, as at any small δ_i it is, so a smaller δ_i costs K nothing; drawn "
+         "whole, it leaves eps and its entries leave K, at the cost of proving each of its proof blocks")
+NO_READINGS = ("the period's public lists no reading at δ_i (`charged`): its check reads each charged audit at its "
+               "answer's δ, and the charged part is eps − m · δ_scan")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
 CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
@@ -168,8 +174,8 @@ CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audi
 SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
         "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
         "``faulty_entries``, every slot-entry bit E_w of each audit tied to j's scan that is drawn in part (charged, "
-        "NetworkCheck.Period's chargedOf), whatever its bound. Drawn whole, a tied audit adds no entries and its δ "
-        "leaves eps, at the cost of proving every one of its proof blocks")
+        "NetworkCheck.Period's chargedOf) with a bound of at least one incorrect proof block. Drawn whole, a tied "
+        "audit adds no entries and its δ leaves eps, at the cost of proving every one of its proof blocks")
 #: the checks the tight ℓ_{a,j} rests on, each by the name the period's public lists it under in ``held`` once its Lean
 #: check performs it
 CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
@@ -322,6 +328,8 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
                        "lean": [f"scans[{i}].{f}" for f in fs]} for s, fs in PHASE_TERMS.items()]
         K, eps = int(public["K"]), Fraction(public["eps"])
         deltas = {Fraction(s["delta"]) for s in public["scans"]}
+        readings = [{"delta": str(Fraction(c["delta"])), **{f: int(c[f]) for f in ("drawn", "units", "wrong_units")}}
+                    for c in public["charged"]] if "charged" in public else None
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the rows form's public lacks a term: {type(e).__name__}: {e}") from None
     if sum(t["bits"] for t in terms) != K:
@@ -335,12 +343,16 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError(f"eps {eps} isn't m · δ_scan plus the charged audits' δ: the scans' δ are "
                          f"{sorted(map(str, deltas))}, and the period's check holds them to one")
     (scan,) = deltas
+    if readings is not None and eps != m * scan + sum((Fraction(r["delta"]) for r in readings), Fraction(0)):
+        raise ValueError(f"eps {eps} isn't m · δ_scan plus each charged reading's δ_i: m · δ_scan is {m * scan}, and "
+                         f"the readings' δ_i are {[r['delta'] for r in readings]}")
     sources = [EPS, *ERRORS.values()]
     skip = {"is": SKIP, "bits_per_phase": [t["bits"] for t in terms if t["symbol"] == "k_{skip,j}"],
             "entries_per_phase": [int(s["faulty_entries"]) for s in public["scans"]]}
     return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
             "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
-            "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA},
+            "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA,
+                      "charged_audits": {"missing": NO_READINGS} if readings is None else readings},
             "skip": skip}
 
 
