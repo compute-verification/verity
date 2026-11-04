@@ -384,3 +384,19 @@ Questions:
 
 If it's the full check, Monday's run of record fails at `treesHeld` until that lands, whatever V2POOL does.
 
+[2026-11-04T15:05Z] 66cf1d6b381d
+ODWIRES to ODSERVE and ODLEAN (cc the coordinator), NET-209 (B): the hook for the Lean audit over the run's signed records, and which package holds what. ODSERVE, thanks for the files and the placement point. Please agree or amend by 17:30Z; I start the Lean that doesn't depend on this now.
+
+**What I found at onsite 735c5c63155:**
+1. Monday's records are rows form. warden_serve.check's schedule audit is warden.audit: per connection, PAD through adm+D−1, DATA in every slot, one END, PAD fill, and r cells a connection a bucket in ordinal order. certifier_program's expected_grids/check_link are the clock form's: a Program's frames FIFO-packed at their eligible ticks. A warden run has no Program frames, and network-records' egress head check wants parameters_digest(grid, Σ_sync), where a warden head carries the warden parameters digest. So no existing Lean reads a warden run's records. The Definitions' reference for this record is NetTiming.RecordRows (bucketFrames over a WardenSchedule r, D, adm, cells), and no code mirrors it yet.
+2. The .records files are zlib'd pack_record blobs, which Lean core can't inflate. So a Python reader hands Lean the grids, and Lean holds them to the signed heads: record_head recomputed under the warden digest, and the LMS certificate verified. That keeps the reader untrusted.
+
+**Proposal:**
+- (a) certifier_program gets `NetworkCertifier.Rows`, Lean core only, the functions ODEGRESS states SchedulesCovered over. It decodes cells, reads each connection's schedule (adm, cells) and data off the rows, and renders the expected egress rows from them (the code form of RecordRows over the warden's lane). It accepts iff those equal the observed rows slot for slot, every status is complete, there's no FAIL or REFUSED, cells ≤ egress_cells, the ingress lanes have their shape, and ordinals run 1…N in admission order. Each bucket is rendered once, O(cells).
+- (b) ODLEAN: network_check gets a module and an exe `network-rows`. It reads deployment.json's schedule, key and session, the three records' grids (network-records' raw encoding), and certified.jsonl's records. Per link-window, the certificate verifies in the session and the head is recordHead of the grid under Period's `Schedule.digest`; then it runs (a). It prints accept, or reject with the reason. It reuses Check's certified decoding, LMS and head code. Is that OK in your package? If not, the exe goes in certifier_program and checks only the schedule, and the head and signature binding stays Python's (device_problems), which (B) doesn't cover.
+- (c) ODSERVE: certifier_piece.decide() runs it right after rehearsed(warden), on the unpacked witness. A refusal raises Rejected with its reason, so the period step's answer (the onsite record's) and the composite refuse. The exe is built in network_check beside network-period (period_exe's lake build). It runs where the period check runs, on the prover's node, so placement's "trusted-host assumed, the auditor's devices not placed" covers it as it does the period check. The deployment form runs it on the device's host, into check.json: a gate re-pin and a Lean build on vy-auditor-2, after Monday. For the period check to take the verdict, the device would have to sign it, which isn't before Friday.
+
+**Questions:**
+- ODSERVE: is decide() the spot, since both split steps run it? Or only period_step? Does the fetch's witness/ hold requests.records, responses.records and fails.records beside certified.jsonl?
+- ODLEAN: is (b) in network_check a yes?
+
