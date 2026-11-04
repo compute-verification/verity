@@ -11,6 +11,7 @@ then is a stock library, the divisor timed beside the arms, never a binary a ver
 from __future__ import annotations
 
 import importlib
+import importlib.util
 from dataclasses import dataclass, field
 
 #: each family the bridge serves, and its sources: vLLM's CUTLASS for every FP8 scaling, DeepGEMM for 128-block only
@@ -131,12 +132,9 @@ class Bridge:
 def deep_gemm() -> tuple[str, str | None]:
     """The DeepGEMM module vLLM calls and its version."""
     for name in DEEP_GEMM:
-        try:
-            mod = importlib.import_module(name)
-        except ImportError:
-            continue
-        return name, getattr(mod, "__version__", None)
-    raise ImportError(f"no DeepGEMM: none of {', '.join(DEEP_GEMM)} imports")
+        if importlib.util.find_spec(name) is not None:
+            return name, getattr(importlib.import_module(name), "__version__", None)
+    raise ImportError(f"no DeepGEMM: none of {', '.join(DEEP_GEMM)} is installed")
 
 
 def exempt(gate, paths: list[str]) -> None:

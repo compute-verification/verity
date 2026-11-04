@@ -285,8 +285,8 @@ def test_sweep_times_takes_each_linears_fastest_kernel_of_every_scaling_and_refu
 def test_the_interval_is_the_medians_95_percent_order_statistics():
     assert O.interval(20) == (6, 15)
     assert O.interval(6) == (1, 6)
-    with pytest.raises(ValueError, match="can't bound"):
-        O.interval(5)
+    assert O.interval(5) is None and O.interval(0) is None
+    assert O.paired([1.5] * 5, [1.0] * 5)["ci95"] is None
     g = O.paired([1.5 + 0.001 * i for i in range(20)], [1.0] * 20)
     assert g["gamma"] == pytest.approx(0.5095) and g["ci95"] == pytest.approx([0.505, 0.514]) and g["n"] == 20
     assert O.of_record_why(g) is None

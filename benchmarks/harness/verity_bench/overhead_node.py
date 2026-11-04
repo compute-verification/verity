@@ -58,7 +58,7 @@ def _run(argv: list[str], log: Path) -> int:
         return subprocess.run(argv, stdout=f, stderr=subprocess.STDOUT).returncode
 
 
-def bench_argv(card: O.Card, uuid: str, shapes: Sequence[str], families: Sequence[str], out: Path,
+def bench_argv(card: O.Gpu, uuid: str, shapes: Sequence[str], families: Sequence[str], out: Path,
                extra: Sequence[str] = ()) -> list[str]:
     return [sys.executable, str(HARNESS / "bench.py"), "--gpu", "lease", "--expect-uuid", uuid, "--shapes", *shapes,
             "--families", *families, *(["--bridge"] if card.bridge else []), *extra, "--out", str(out)]
@@ -68,7 +68,7 @@ def model_shapes(model: str, ms: Sequence[int]) -> list[str]:
     return list(dict.fromkeys(O.label(m, n, k) for m in ms for n, k in O.MODELS[model].values()))
 
 
-def _card_why(card: O.Card, result: dict) -> str | None:
+def _card_why(card: O.Gpu, result: dict) -> str | None:
     got = ((result.get("identity") or {}).get("card") or {}).get("name")
     if got is None or card.name not in got:
         return f"the run's card is {got!r}, not the {card.name} the door was asked to measure"
@@ -155,7 +155,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
 # ---- run ---------------------------------------------------------------------------------------------------------------------
 
 
-def epsilon_at(sch: O.Scheme, card: O.Card, m: int, model: str) -> dict:
+def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
     """The scheme's ε at each linear of the layer at m on the card, from its own function; or why there is none."""
 
     if sch.epsilon is None:

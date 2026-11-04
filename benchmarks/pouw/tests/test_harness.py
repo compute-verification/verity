@@ -5,6 +5,7 @@ consistency gate rejects a hash-free call faster than the plain GEMM allows, and
 from __future__ import annotations
 
 import argparse
+import importlib.machinery
 import random
 import re
 import sys
@@ -1509,7 +1510,7 @@ def test_a_transcript_buffer_over_an_operand_is_refused_before_anything_is_poiso
 def test_the_bridge_finds_deepgemm_where_vllm_does_an_installed_package_first_then_the_wheels_copy(monkeypatch):
     def module(name: str, version: str) -> types.ModuleType:
         m = types.ModuleType(name)
-        m.__version__ = version
+        m.__version__, m.__spec__ = version, importlib.machinery.ModuleSpec(name, None)
         return m
 
     monkeypatch.setitem(sys.modules, "deep_gemm", None)

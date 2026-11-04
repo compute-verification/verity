@@ -3,8 +3,8 @@
 (`overhead_records`) both read it.
 
 **The operating points** belong to a card, a model and a precision. Over one layer of the model's linears (`MODELS`), the
-fastest stock kernel at each m is the fastest of every library and scaling the card runs (`Card.families`, by wall time), per
-linear, and t(m) is the layer's sum. Throughput is the layer's FLOP over t(m).
+fastest stock kernel at each m is the fastest of every library and scaling the card runs (`Gpu.libraries`, the precision's
+scalings in `Gpu.precisions`, by wall time), per linear, and t(m) is the layer's sum. Throughput is the layer's FLOP over t(m).
 
 - **C**, compute-bound: the smallest m at which throughput reaches `C_SHARE` of the best throughput sampled, and every m
   sampled above it does too.
@@ -45,8 +45,8 @@ POINTS = ("C", "L")
 
 
 @dataclass(frozen=True)
-class Card:
-    """A card the door measures on: what its device reports (`name` within the device's name, `capability`, `sms`), the
+class Gpu:
+    """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`, `sms`), the
     harness's build target, the L2 the operand sets must pass twice, the occupancy limits the SM-time cross-check reads, host
     CPU core-seconds' weight in SM-seconds (the node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
@@ -73,9 +73,9 @@ class Card:
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 CARDS = {card.gpu: card for card in (
-    Card("h200", "H200", "9.0", 132, "sm_90a", 50 << 20, 64, 32, 65536, 233472, 0.48, {"fp8": FP8},
+    Gpu("h200", "H200", "9.0", 132, "sm_90a", 50 << 20, 64, 32, 65536, 233472, 0.48, {"fp8": FP8},
          ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
-    Card("rtx-pro-6000", "RTX PRO 6000", "12.0", 188, "sm_120a", 128 << 20, 48, 24, 65536, 102400, 1.64,
+    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", 188, "sm_120a", 128 << 20, 48, 24, 65536, 102400, 1.64,
          {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
 )}
 
@@ -115,7 +115,7 @@ def scheme(name: str) -> Scheme:
         raise ValueError(f"no scheme {name!r}: the door times {', '.join(SCHEMES)} (verity_bench.overhead.SCHEMES)") from None
 
 
-def card(gpu: str) -> Card:
+def card(gpu: str) -> Gpu:
     try:
         return CARDS[gpu]
     except KeyError:
@@ -126,7 +126,7 @@ def card(gpu: str) -> Card:
 BRIDGED = {"cutlass": "cutlass-vllm", "deepgemm": "deepgemm"}
 
 
-def libraries_why(c: Card, result: Mapping) -> str | None:
+def libraries_why(c: Gpu, result: Mapping) -> str | None:
     """Why a `bench.py` result didn't time every library the card's stock kernel is chosen among (a bridged library that
     didn't load), or None."""
 
@@ -289,21 +289,18 @@ def sweep_times(results: Sequence[Mapping], model: str = KERNEL_MODEL,
 # ---- γ ------------------------------------------------------------------------------------------------------------------------
 
 
-def interval(n: int, confidence: float = 0.95) -> tuple[int, int]:
+def interval(n: int, confidence: float = 0.95) -> tuple[int, int] | None:
     """The 1-based order statistics (l, u) whose span covers the median with at least `confidence`: the largest l with
-    P(Binomial(n, 1/2) < l) at most (1 - confidence) / 2, and u = n + 1 - l (the 6th and 15th of 20)."""
+    P(Binomial(n, 1/2) < l) at most (1 - confidence) / 2, and u = n + 1 - l (the 6th and 15th of 20); None when n reps
+    can't bound the median at `confidence`."""
 
-    if n < 1:
-        raise ValueError("no reps")
     tail, l, cdf = (1 - confidence) / 2, 0, 0.0
     while l < n:
         nxt = cdf + math.comb(n, l) / 2**n
         if nxt > tail:
             break
         cdf, l = nxt, l + 1
-    if l == 0:
-        raise ValueError(f"{n} reps can't bound the median at {confidence:.0%}")
-    return l, n + 1 - l
+    return (l, n + 1 - l) if l else None
 
 
 def paired(scheme: Sequence[float], stock: Sequence[float]) -> dict:
@@ -317,10 +314,9 @@ def paired(scheme: Sequence[float], stock: Sequence[float]) -> dict:
     ratios = sorted(a / b for a, b in zip(scheme, stock, strict=True))
     median = statistics.median(ratios)
     out: dict = {"gamma": median - 1, "ratio": median, "n": len(ratios), "ratios": ratios, "ci95": None, "half_width": None}
-    try:
-        lo, hi = interval(len(ratios))
-    except ValueError:
+    if (bounds := interval(len(ratios))) is None:
         return out
+    lo, hi = bounds
     out["ci95"] = [ratios[lo - 1] - 1, ratios[hi - 1] - 1]
     out["half_width"] = max(median - ratios[lo - 1], ratios[hi - 1] - median) / median
     return out
@@ -347,7 +343,7 @@ def traced_cost(item: Mapping, busy: Mapping | None) -> dict | None:
             "sm_ns": busy["sm_ns"], "occupied_sm_ns": busy["occupied_sm_ns"]}
 
 
-def host_cost(item: Mapping, card: Card) -> float:
+def host_cost(item: Mapping, card: Gpu) -> float:
     """One timed burst item's host CPU a call, in SM-seconds: the core-seconds the host spent enqueueing it at the card's
     weight."""
 
@@ -358,7 +354,7 @@ def _median(xs: Sequence[float]) -> float | None:
     return statistics.median(xs) if xs else None
 
 
-def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Card, m: int, sch: Scheme,
+def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Gpu, m: int, sch: Scheme,
                 model: str = KERNEL_MODEL) -> dict:
     """γ of one summed layer at `m` from a `bench.py --traced --twins` result and each traced item's busy SM-time
     (`nsys.busy`, by range text "item <index in traced_items>"). Each linear's stock arm is the fastest of `sch.family`'s

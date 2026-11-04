@@ -196,7 +196,7 @@ def _overhead_parser(commands: Any) -> None:
         p.add_argument("--card", default="h200", choices=list(overhead.CARDS))
         p.add_argument("--on", metavar="NODE", help="the GPU node (default: the card's, overhead_records.NODES)")
         p.add_argument("--minutes", type=float, help="the run's bound, which its GPU lease enforces")
-        p.add_argument("--by", default=overhead_records.BY, help="who labels the store")
+        p.add_argument("--as", dest="by", default=overhead_records.BY, help="who labels the store")
         p.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
 
     points = sub.add_parser("points", help="sweep m on the card for C and L (a research run), or --store a finished sweep")

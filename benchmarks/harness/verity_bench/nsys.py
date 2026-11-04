@@ -6,7 +6,7 @@ A range's work is the kernels the CUDA calls made inside it launched (CUPTI's ru
 thread, joined to its kernel records by correlation id, a graph's nodes included with `--cuda-graph-trace=node`); its busy
 SM-time is the metric integrated over those kernels' span on the GPU, times the card's SMs. Its cross-check is each kernel's
 duration times the SMs its blocks occupy, min(SMs, ⌈blocks ÷ blocks an SM holds⌉), the blocks an SM holds from the
-kernel's threads, registers and shared memory under the card's limits (`overhead.Card`).
+kernel's threads, registers and shared memory under the card's limits (`overhead.Gpu`).
 
     nsys profile --trace=cuda,nvtx --cuda-graph-trace=node --gpu-metrics-devices=cuda-visible \\
         --gpu-metrics-frequency=10000 --capture-range=cudaProfilerApi --capture-range-end=repeat -o PROF CMD...
