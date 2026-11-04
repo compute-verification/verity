@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Floor
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Floor
 
 /-!
 # A citation with no measurement at `tc` (trusted statements; draft semantics)
@@ -18,6 +20,8 @@ registers per thread (128 per warp, at one warp instruction per SMSP per clock).
 at all. A smaller `K` needs a statement of what legacy `mma.sync` can compute, such as the k8 lemma's for
 multiplicands that meet `FragLanes`. The bound is additive-W1 work, not time (`H32`'s docstring).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

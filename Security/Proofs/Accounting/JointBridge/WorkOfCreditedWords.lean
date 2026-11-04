@@ -1,5 +1,7 @@
-import Properties.Accounting.JointBridge.WorkOfCreditedWords
-import Mathlib.Tactic.Linarith
+module
+
+public import Properties.Accounting.JointBridge.WorkOfCreditedWords
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Proof of the joint period's PoUW guarantee from a credit in words
@@ -10,6 +12,8 @@ the verdict is the source's acceptance (`accepts_iff`), and on an accepted perio
 `W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit ≤ m·p(tc)·fixed − u·p(tc)·help ≤ work` (`cert_le`, `HelpWithinCertifier`,
 `WordCostsMacs`), since `m·p(tc) ≥ 0` and `u·p(tc) ≥ 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

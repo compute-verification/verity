@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Family
+module
+
+public import Proofs.Flock.C3.Compose.Family
 
 /-!
 # Piece (e): RecOpening's algebra at opening-only shape
@@ -7,6 +9,8 @@ import Proofs.Flock.C3.Compose.Family
 (`STACKED_CLAIMS`, in rep order) to the output Ligerito on R takes. The `rec-opening` units are opening-only: no
 zerocheck or lincheck, so their algebra is O1–O6 at `m = mReg`, with `7 ≤ mReg` from the shape.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

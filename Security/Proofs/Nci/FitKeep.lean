@@ -1,4 +1,6 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # The fit bound with counted multiplications left out
@@ -18,11 +20,13 @@ the bound: a citation that leaves work out charges it.
   and `FitsSlots` at `keep T s`.
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs.Fit
 
 open Verity Finset
 
-variable {c : Declaration}
+variable {c : RegisteredCircuit}
 
 /-- `T` with its counted multiplications cut to the gates in `s`. -/
 abbrev keep (T : Threading c) (s : Finset (Fin c.D.N)) : Threading c where

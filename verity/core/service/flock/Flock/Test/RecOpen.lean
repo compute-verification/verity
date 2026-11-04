@@ -4,7 +4,12 @@ before any net is built, for its bits (this unit has none) at heights `RecOpen_v
 not; refused by name in any other form; a unit of another name passes. The honest unit and one a row off are read by the
 built verifier (`test_rec_outer.py`).
 -/
-import Flock.RecOpen
+module
+
+public import Flock.RecOpen
+meta import Flock.RecOpen
+
+@[expose] public section
 
 namespace Flock.Test.RecOpen
 

@@ -1,4 +1,6 @@
-import Definitions.Core.Expand
+module
+
+public import Definitions.Core.Expand
 
 /-!
 # The bit-level expansion's guarantees
@@ -8,6 +10,8 @@ Boolean model through `Circuit.expand`: the expansion computes the circuit bit f
 every computed gate of positive width reads a gate of positive width, has as many gates as the circuit has bits, and a
 partition's proof blocks keep their sizes in bits and read at most the bits they read before.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 
@@ -32,7 +36,7 @@ def ExpandBoolean : Prop :=
 partition has as many gates as its proof block has bits, and reads at most as many unregistered bits as its proof block
 did. -/
 def ExpandSize : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B),
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B),
     d.D.expand.size d.D.expand.computed = d.D.width d.D.computed ∧
       ∀ u, d.D.expand.size (P.expand.gates u) = d.D.width (P.gates u) ∧
         (d.expand.unregistered (P.expand.gates u)).card ≤ d.D.width (d.unregistered (P.gates u))
@@ -40,7 +44,7 @@ def ExpandSize : Prop :=
 /-- **AND counts in bits.** The expansion has at most as many AND gates as the circuit's computed gates have bits, and
 an expanded proof block at most as many as its proof block has bits. -/
 def ExpandAndSize : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B),
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B),
     d.D.expand.andSize d.D.expand.computed ≤ d.D.width d.D.computed ∧
       ∀ u, d.D.expand.andSize (P.expand.gates u) ≤ d.D.width (P.gates u)
 

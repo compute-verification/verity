@@ -1,5 +1,7 @@
-import Definitions.Accounting.Gates.Declared
-import Definitions.Accounting.Gates.Registry
+module
+
+public import Definitions.Accounting.Gates.Declared
+public import Definitions.Accounting.Gates.Registry
 
 /-!
 # The circuit model against the running Python, row by row
@@ -23,6 +25,8 @@ Rows the kernel evaluates the model on, each set recomputed from the Python by
 * `unitsRows`, `tableUnitsRows`: `units` by class on small circuits of primitive ids (`dagOf`: each gate an operation of
   its id's `classOf` class), against property/v1's units of the same Program.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Gates.Rows
 

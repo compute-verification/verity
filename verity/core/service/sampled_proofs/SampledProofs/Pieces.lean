@@ -21,6 +21,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
   (`Slots.select`);
+* `file_population`: why the registration's population over a program and query is not a public file's units in order
+  (`FilePart.why`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -32,10 +34,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
-* `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
-* `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
+* `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
+* `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
-* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 * `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
@@ -45,12 +47,13 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
   `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
   reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
-  `ledger_head`, infra's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
+  `ledger_head`, the ledger's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
-* `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
-  `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
-  auditor's ledger opens for the verifier's window (`trusted_session_of`).
+* `challenger_read`, `challenger_draw_coins`, `challenger_within`: a draw's coins from one challenger family
+  (`ChallengerCoins`): `read_reason`, the bytes a draw read against its segment, `coins_reason`, against the segment
+  and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
+  sizes the evidence holds against v2's limits.
 * `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
   release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
   one tree a session (`sessions_tree_reason`).
@@ -64,21 +67,28 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
-import SampledProofs.OneStage
-import SampledProofs.Slots
-import SampledProofs.Service
-import SampledProofs.Run
-import SampledProofs.Stream
-import SampledProofs.Fleet
-import SampledProofs.Hello
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerTrees
-import SampledProofs.Produced
-import SampledProofs.HiddenDraw
-import SampledProofs.PartitionRef
-import SampledProofs.WiresDrawn
+module
+
+public import SampledProofs.OneStage
+public import SampledProofs.Slots
+public import SampledProofs.FilePart
+public import SampledProofs.Service
+public import SampledProofs.Run
+public import SampledProofs.Stream
+public import SampledProofs.Fleet
+public import SampledProofs.Hello
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.Produced
+public import SampledProofs.HiddenDraw
+public import SampledProofs.PartitionRef
+public import SampledProofs.WiresDrawn
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Pieces
 
@@ -570,6 +580,7 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("file_population", FilePart.piece),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
@@ -584,7 +595,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
-   ("challenger_draw_coins", Challenger.drawCoinsPiece),
+   ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]

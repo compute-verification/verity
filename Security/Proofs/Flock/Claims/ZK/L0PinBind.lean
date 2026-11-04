@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.L0PinSwitch
-import Proofs.Flock.Claims.ZK.L0PinRec
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinSwitch
+public import Proofs.Flock.Claims.ZK.L0PinRec
 
 /-!
 # The frame at a rep's binding
@@ -21,6 +23,8 @@ rep's schedule so far:
 * **Level 0's rounds** (`sched_binding`, `sched_l0`): fed level 0's first `j` coins as well, the schedule's next
   rounds are level 0's first `j + 1` bodies at zero pads (`openStep_l0`), the binding first, with the opening's counts.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Bind
 
@@ -178,7 +182,7 @@ theorem sched_count {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : By
 /-- **The cut ring switch, cut at `γ`'s squeeze**: from `l`, cut at its last ask, it stops having sent `rsBody` after
 `t`'s pending bytes, `γ`'s squeeze its last body. -/
 theorem ringSwitchCut_gamma (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
-    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Transcript) (l : Array Claims.Msg)
+    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Claims.Msg)
     (hl : n = l.size + claims.size) :
     ∃ L', ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.error "past the openings", L') ∧
       L'.toList = l.toList ++ (List.range (claims.size + 1)).map (rsBody sv claims.size t.pending.data.toList) := by

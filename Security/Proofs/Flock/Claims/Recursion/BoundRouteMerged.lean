@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteCols
-import Proofs.Flock.Claims.Recursion.BoundMerged
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
+public import Proofs.Flock.Claims.Recursion.BoundMerged
 
 /-!
 # `KSBoundRouteCols` with no bridge and no `WeightCovers` (route 2B)
@@ -13,6 +15,8 @@ neither: `γ`'s weight at `IVStar` need only be at least `DE`'s.
 `RecDeploy.ksBoundRoute_merged` proves it outright, with every other premise `ksBoundRoute_of_bridge_cols`'s.
 `RecDeploy.ksBoundDeployed_merged_wE` is the route at `w := wE`, where that premise holds.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

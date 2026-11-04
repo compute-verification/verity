@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Definitions.Flock.Sparse
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Definitions.Flock.Sparse
 
 /-!
 # The stages' shapes that the guarantee's coin types read
@@ -11,6 +13,8 @@ read (`Flock.Guarantees.holoCTs`, `Recursive/HoloCoins.lean`):
   (`C3/HoloValues/Shape.lean`) proves a rep takes;
 * `sparseKinds`: a rep's sparse phase, which `sparsePhase_exact` (`C3/Sparse/Read.lean`) proves the phase takes.
 -/
+
+@[expose] public section
 
 namespace FlockC3.HoloValues
 

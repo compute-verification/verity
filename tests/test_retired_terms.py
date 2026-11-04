@@ -3,7 +3,10 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
-Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
+Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`)
+and the lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires,
+in the whole text of each file, to the file's count, while this one holds its terms at zero in prose), and the word maps
+of `tools/move/`, which name the words they retire. A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
@@ -119,12 +122,9 @@ PENDING: dict[str, str] = {
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/verity_vllm/program/predict/weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/tests/program/predict/test_weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
     "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
@@ -136,19 +136,13 @@ PENDING: dict[str, str] = {
     "benchmarks/torch_gpu/p2_stage/README.md": "#4761 adds lines",
     "integrations/vllm/README.md": "#4773 adds lines",
     "verity/README.md": "#4502 rewrites its lines",
-    "verity/core/protocols/certifier/boundary.py": "#4721 rewrites its lines",
-    "verity/core/protocols/certifier/egress.py": "#4721 rewrites its lines",
-    "verity/core/protocols/certifier/tests/test_network_certifier_egress.py": "#4721 rewrites its lines",
     "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#6383 rewrites its docstrings and the rows "
                                                                            "form's refusals",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
-    "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
-    "benchmarks/pouw/accel_v31/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "Security/Definitions/Nci/Capability/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/hash/lib/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/multi_unit/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
@@ -156,17 +150,13 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/commit_gpu/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/pouw/machine_model/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/sampling_plan/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/devices/certifier/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/interface/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/protocols/network/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/ml/circuits/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/rho/README.md": "queued PRs on next rewrite it",
-    "benchmarks/verifier_cost/README.md": "queued PRs add the term here; the training vocabulary's rename follows them",
     "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite lines the training vocabulary's rename touches; it follows them",
     "Security/Proofs/Flock/Soundness/Audit/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/bandwidth/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -174,7 +164,6 @@ PENDING: dict[str, str] = {
     "benchmarks/network_sim/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/pouw/fp_exact/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/pouw/opcode_probe/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/torch_gpu/sha512_rows/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -189,7 +178,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/composition/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/pous/DISCREPANCIES.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/pous/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pous/p2/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/remote/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/sampled_proofs/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/commitments/hm96/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -200,10 +188,16 @@ PENDING: dict[str, str] = {
 }
 
 
+#: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
+LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
+#: the word maps a move renames by, which name the words they retire
+MAPS = "tools/move/"
+
+
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean, PENDING and this one, which names the terms to find them."""
+    """Every file but the Lean, PENDING, the LINTS and the word maps."""
     return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json", "lakefile.toml"))
-                  and f not in PENDING and f != "tests/test_retired_terms.py")
+                  and f not in PENDING and f not in LINTS and not f.startswith(MAPS))
 
 
 def _read(f: str) -> str | None:

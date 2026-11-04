@@ -1,3 +1,7 @@
-import Identity.Domains
-import Identity.Sha512
-import Identity.Tagged
+module
+
+public import Identity.Domains
+public import Identity.Sha512
+public import Identity.Tagged
+
+@[expose] public section

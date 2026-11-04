@@ -15,7 +15,7 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
+or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
@@ -369,12 +369,42 @@ PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
 #: those for a key that signs a ledger too: 32 leaves, room for a ledger's entries at increasing leaves on either side of
 #: its session's record
 LEDGER_PARAMS = [(1, 6), (2, 6), (4, 6)]
-HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
+HOSTS = ["host-a", "auditor.example", "h", "A_1"]
+
+
+#: (W, H) of the deployed LMS parameters (`lms.DEPLOYED`), the only ones v2 reads a challenger's signatures under
+DEPLOYED = (lms.DEPLOYED.W, lms.DEPLOYED.H)
+#: the most leaves a test key signs at: all of a small key's, and the first of a taller one's
+LEAVES = 64
+
+
+def _signable(h: int) -> int:
+    """The leaves a test key of height h signs at (`_key`)."""
+    return min(2 ** h, LEAVES)
 
 
 @functools.cache
 def _key(w: int, h: int, seed: int) -> lms.PrivateKey:
-    return lms.keygen(lms.Params(64, w, h), bytes([seed]) * 64)
+    """The key of `seed` at (64, w, h), signing at its first `_signable(h)` leaves: the whole key when those are all of
+    them; else, as a whole key at the deployed parameters takes a core about a quarter of an hour to make, one whose tree
+    holds the real one-time keys there and, in place of each subtree's root beside them, a digest standing in for keys
+    never made, which a verifier can't tell from a whole key."""
+    p, s = lms.Params(64, w, h), bytes([seed]) * 64
+    if 2 ** h <= LEAVES:
+        return lms.keygen(p, s)
+    I = hashlib.sha512(b"verity/lms/v0/I" + s).digest()[:16]
+    top = 2 ** h
+    tree = [b""] * (2 * top)
+    tree[top:top + LEAVES] = lms._leaves(p, I, s, 0, LEAVES)
+    lo, hi = top, top + LEAVES
+    while lo > 1:
+        if hi % 2:
+            tree[hi] = hashlib.sha512(b"stand-in" + I + hi.to_bytes(4, "big")).digest()
+            hi += 1
+        for r in range(lo // 2, hi // 2):
+            tree[r] = lms._interior(p, I, r, tree[2 * r], tree[2 * r + 1])
+        lo, hi = lo // 2, hi // 2
+    return lms.PrivateKey(p, I, s, tuple(tree))
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -619,15 +649,16 @@ HELLOS = ['{"error":"a client\'s frames are hello","peer":"10.0.0.7"}', "x", "",
 
 
 class Session:
-    """A challenger's session as its host leaves it: a record signed at leaf q of a small key (drawn, or `q`), a release
-    log over drawn roots in canonical JSON on an integer clock, the close signed at leaf q + 1 (None: its client closed
-    it), under a key of one of `params`, and the lines of the hellos it refused."""
+    """A challenger's session as its host leaves it: a record signed at leaf q of a key (drawn, or `q`), a release log
+    over drawn roots in canonical JSON on an integer clock, the close signed at leaf q + 1 (None: its client closed it),
+    under the key of `seed` at one of `params`, and the lines of the hellos it refused."""
 
-    def __init__(self, rng: random.Random, ended: str | None = None, params=PARAMS, q: int | None = None) -> None:
+    def __init__(self, rng: random.Random, ended: str | None = None, params=PARAMS, q: int | None = None,
+                 seed: int = 0) -> None:
         self.w, self.h = rng.choice(params)
-        self.k = _key(self.w, self.h, 0)
+        self.k = _key(self.w, self.h, seed)
         self.pub = lms.public_key(self.k)
-        self.q = rng.randrange(2 ** self.h - 1) if q is None else q
+        self.q = rng.randrange(_signable(self.h) - 1) if q is None else q
         self.ch = _challenger(rng)
         self.host = rng.choice(HOSTS)
         self.ch.sign_record(self.host, self.pub, lambda m: lms.sign_at(self.k, self.q, m).encode())
@@ -720,7 +751,7 @@ class Ledger:
         queues = [named]
         for tag in ("o-1", "o-2")[:rng.randint(0, 2)]:
             sid, done = self.sid(tag), rng.random() < 0.8
-            events, _ = self.session_events(sid, _window(rng), f"vy-challenger-1.{sid}", rng.choice(LANES))
+            events, _ = self.session_events(sid, _window(rng), f"challenger-host.{sid}", rng.choice(LANES))
             queues.append(events + [("end", sid, {"closed": done, "complete": done and rng.random() < 0.8,
                                                   "files": {}, "rc": 0})])
         if self.two_step and rng.random() < 0.5:
@@ -731,7 +762,7 @@ class Ledger:
             self.events.append(q.pop(0))
         self.period_open = None
         if period is not None or rng.random() < 0.5:
-            self.period_open = {"by": "vy-admin", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
+            self.period_open = {"by": "operator", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), "lane": self.lane,
                                 "period": rng.choice(PERIODS)}
             first = self.index("reserve" if self.two_step else "open", s.id)
@@ -742,7 +773,7 @@ class Ledger:
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
         if rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
-            self.v1 = [{"host": "vy-challenger-1", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
+            self.v1 = [{"host": "challenger-host", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
                         "pinned": rng.randbytes(20).hex(), "port": 7811, "window": old},
                        {"closed": True, "files": {}, "rc": 0}]
             self.events = [("open", "v1-0", self.v1[0]), ("end", "v1-0", self.v1[1])] + self.events
@@ -751,7 +782,7 @@ class Ledger:
         body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
                 "key_sha512": hashlib.sha512(self.s.pub if public is None else public).hexdigest(),
                 "port": self.rng.choice([7811, 7812])}
-        body.update(self.rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}, {"by": lane, "for": ""}]))
+        body.update(self.rng.choice([{"by": lane}, {"by": "operator", "for": lane}, {"by": lane, "for": ""}]))
         if self.rng.random() < 0.3:
             body["started_utc"] = "2026-10-20T09:45:48Z"
         if self.rng.random() < 0.2:
@@ -765,7 +796,7 @@ class Ledger:
     def reserve_body(self, lane: str) -> dict:
         rng = self.rng
         start, minutes = rng.choice(STARTS), rng.choice([1, 30, 720, rng.randint(1, 720)])
-        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body = rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
         body.update(peer=rng.choice(PEERS), scheme=rng.choice(SCHEMES), epoch=rng.choice([0, 1, 7]),
                     families=[[rng.choice(LABELS), rng.randint(1, 4)]], minutes=minutes, started_utc=start,
                     expires_utc=Ch.later(start, minutes))
@@ -815,7 +846,7 @@ class Ledger:
         e = next((i for i, (_, _, b) in enumerate(events) if b is self.ended), n)
         lo, hi = sorted((min(o + 1, n), min(e, n)))
         r = self.rng.randint(lo, hi)
-        return (sorted(self.rng.sample(range(q), r)) + sorted(self.rng.sample(range(q + 1, 2 ** self.s.h), n - r)))
+        return (sorted(self.rng.sample(range(q), r)) + sorted(self.rng.sample(range(q + 1, _signable(self.s.h)), n - r)))
 
     def lines(self, events=None, edit=None, signer: lms.PrivateKey | None = None, leaves: list[int] | None = None
               ) -> list[str]:
@@ -835,10 +866,10 @@ class Ledger:
         return out
 
 
-def _ledger_session(rng: random.Random, reserved: bool | None = None) -> Session:
-    """A session whose record's leaf leaves room on either side for a ledger's entries, its id a reserved one (drawn,
-    unless `reserved` says)."""
-    s = Session(rng, params=LEDGER_PARAMS, q=rng.randrange(20, 40))
+def _ledger_session(rng: random.Random, reserved: bool | None = None, params=LEDGER_PARAMS, seed: int = 0) -> Session:
+    """A session under the key of `seed` at one of `params`, whose record's leaf leaves room on either side for a
+    ledger's entries, its id a reserved one (drawn, unless `reserved` says)."""
+    s = Session(rng, params=params, q=rng.randrange(20, 40), seed=seed)
     if reserved or reserved is None and rng.random() < 0.5:
         s.id = f"s20261019T{rng.randrange(10 ** 6):06d}Z-{rng.randbytes(2).hex()}"
         s.close = s.signed(None)
@@ -1086,7 +1117,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                               {"files": _body(files, **{rng.choice(Ch.SEALED_FILES): DROP})}])
             j["ledger"] = lg.lines(edit=_body_edit(end, **bad))
         case "second-open":
-            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "vy-challenger-1.x",
+            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "challenger-host.x",
                                                                                        "other")))
             j["ledger"] = lg.lines(events)
         case "reused-leaf":
@@ -1230,7 +1261,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                     other = {0: False, 1: True}.get(v, v + 1)
             j["ledger"] = lg.lines(edit=_body_edit(o, **{k: other}))
         case "opened-by":
-            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "vy-Admin", None, 5, ["x"],
+            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "Operator", None, 5, ["x"],
                                                                             DROP])))
         case "open-late":
             start, expiry = reserve["started_utc"], reserve["expires_utc"]
@@ -1334,7 +1365,7 @@ def session_case(rng: random.Random, name: str) -> Any:
             j["window"] = _window(rng)
         case "other-host":
             o = lg.index("open", s.id)
-            host = rng.choice([h for h in HOSTS if h != s.host] + [f"vy-challenger-1.{s.id}"])
+            host = rng.choice([h for h in HOSTS if h != s.host] + [f"challenger-host.{s.id}"])
             j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e["body"].update(host=host)))
         case "unsealed-log":
             j["ledger"] = lg.lines(edit=_entry_edit(end, lambda e: e["body"]["files"].update(
@@ -1552,12 +1583,13 @@ class Drawn:
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
-    samples and opens `trees` coin trees too (`TreeSession`; sampled, by default), their lines among the others."""
+    samples and opens `trees` coin trees too (`TreeSession`; sampled, by default), their lines among the others.  Its
+    key is the key of `seed` at one of `params`."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
-                 trees: int | None = None) -> None:
-        s = self.s = _ledger_session(rng)
+                 trees: int | None = None, params=LEDGER_PARAMS, seed: int = 0) -> None:
+        s = self.s = _ledger_session(rng, params=params, seed=seed)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
         c = s.ch.commitment
@@ -1726,6 +1758,69 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
             else:
                 k = rng.choice(["after", "read", "window"])
                 j[k] = rng.choice(["AB", "0", 5]) if k != "window" else rng.choice([5, None, {"root": j["window"]}])
+    return j
+
+
+def within(j: Any) -> Any:
+    _request(j, ["coins", "limits"])
+    if j["limits"] is None:
+        limits = T.LIMITS
+    else:
+        _request(j["limits"], ["hellos", "ledger", "log", "openings", "path", "pins"])
+        if not all(type(v) is int and v >= 0 for v in j["limits"].values()):
+            raise D.Reject("limits: not a natural number")
+        limits = T.Limits(**j["limits"])
+    return {"limits": limits._asdict(), "reason": None if T.coins_within(j["coins"], limits) else limits.form()}
+
+
+#: each a size of the evidence one past its limit
+WITHIN_NAMES = ["honest", "log", "hellos", "ledger", "pins", "openings", "path", "request"]
+
+
+def within_case(rng: random.Random, name: str) -> Any:
+    """A sample's coin evidence (`Drawn`, with or without its key) and limits each at or past what it holds: at null,
+    v2's (`LIMITS`), sometimes with a list replaced by what isn't one or the evidence by what isn't an object, either
+    holding none; then one size one past its limit, or a malformed request."""
+    rng = _seeded(rng)
+    d = Drawn(rng)
+    coins = d.evidence(d.segment.to_json())
+    if rng.random() < 0.5:
+        del coins["key"]
+    session, openings = coins["session"], coins["segment"]["openings"]
+    if name == "hellos" and not session["hellos"]:
+        session["hellos"] = [rng.choice(HELLOS)]
+    lists = {"log": session["log"], "hellos": session["hellos"], "ledger": coins["ledger"], "pins": coins["pins"],
+             "openings": openings}
+    sizes = {k: len(v) for k, v in lists.items()} | {"path": max(len(o["path"]) for o in openings)}
+    limits = {k: n + rng.choice([0, 0, 1, 7]) for k, n in sizes.items()}
+    j = {"coins": coins, "limits": limits}
+    match name:
+        case "honest":
+            if rng.random() < 0.3:
+                j["limits"] = None
+            if rng.random() < 0.3:
+                where = rng.choice(["log", "hellos", "ledger", "pins", "openings", "path", "coins"])
+                other = rng.choice([None, "x", 5, {"a": []}])
+                if where in ("log", "hellos"):
+                    session[where] = other
+                elif where in ("ledger", "pins"):
+                    coins[where] = other
+                elif where == "openings":
+                    coins["segment"] = rng.choice([other, {**coins["segment"], "openings": other}])
+                elif where == "path":
+                    k = rng.randrange(len(openings))
+                    openings[k] = rng.choice([other, {**openings[k], "path": other}])
+                else:
+                    j["coins"] = rng.choice([other, [coins]])
+        case "request":
+            if rng.random() < 0.5:
+                del j[rng.choice(sorted(j))]
+            elif rng.random() < 0.5:
+                del limits[rng.choice(sorted(limits))]
+            else:
+                limits[rng.choice(sorted(limits))] = rng.choice([-1, True, "1", None])
+        case _:
+            limits[name] = sizes[name] - 1
     return j
 
 
@@ -2064,6 +2159,8 @@ PINNED = D.Port(PIECES, "challenger_pinned", pinned, _cases(pinned_case, PINNED_
 READ = D.Port(PIECES, "challenger_read", read, _cases(read_case, READ_NAMES), package=PACKAGE, of_record="lean")
 DRAW_COINS = D.Port(PIECES, "challenger_draw_coins", draw_coins, _cases(draw_coins_case, DRAW_COINS_NAMES),
                     package=PACKAGE, of_record="lean")
+WITHIN = D.Port(PIECES, "challenger_within", within, _cases(within_case, WITHIN_NAMES), package=PACKAGE,
+                of_record="lean")
 COIN_TREES = D.Port(PIECES, "challenger_coin_trees", coin_trees, _cases(coin_trees_case, COIN_TREES_NAMES),
                     package=PACKAGE, of_record="lean")
 SESSION_TREES = D.Port(PIECES, "challenger_session_trees", session_trees,
@@ -2078,7 +2175,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
-        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
+        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (WITHIN, within_case, WITHIN_NAMES, 100),
+        (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
         (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200)]
 
 

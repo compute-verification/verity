@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainAlign
-import Proofs.Flock.Claims.KS.OffAlign
+module
+
+public import Proofs.Flock.Claims.KS.PlainAlign
+public import Proofs.Flock.Claims.KS.OffAlign
 
 /-!
 # The plain slot's off mass, after the slot's coins
@@ -15,6 +17,8 @@ off mass after `j` coins at the cap table 0's output records (`opCapL`):
   (`capAtL_of_sessRelL`).
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec
@@ -24,7 +28,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **Rep `r`'s level-`ℓ + 1` openings at the cap table 0's output records**: `opRL` at the recorded cap, and nothing
 where none is recorded. -/
 noncomputable def opCapL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
-    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ)
     (outs : List (Model.OutCL 𝔽 D Sl)) :
     Fin (2 ^ (lvOf sch (ℓ + 1)).logLen) → Option (Fin (2 ^ (lvOf sch (ℓ + 1)).lanes) → 𝔽) := fun p =>
   ((if r = 0 then (outs.getD 0 dfltOutL).pend.1 else (outs.getD 0 dfltOutL).pend.2).caps[ℓ]?).bind fun d =>

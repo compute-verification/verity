@@ -4,7 +4,12 @@ position at or above `2^16` keeps bits 16 and up in word 1, so the row commits d
 word 0 the row digest would cut to 16 bits. At `H ≤ 16` the row is the one-word form. Two words reach `H ≤ 32`, which
 every `fast100` level is below.
 -/
-import Flock.RecCoins
+module
+
+public import Flock.RecCoins
+meta import Flock.RecCoins
+
+@[expose] public section
 
 namespace Flock.Test.RecCoins
 
@@ -46,14 +51,14 @@ def hexOf (b : ByteArray) : String := String.join (b.toList.map fun x => (Nat.to
 #guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 2 16 with
   | .ok dom => hexOf (FV3.root dom ((Array.range 2).map fun i => Registered.rowLeaf dom i
       (Hm96.Default512.treeLeaf (commitRow (zeroRows 2 OUT_WORDS)[i]! (zeroSalt ZERO_VALUE i)))) Sha512.hash) ==
-    "947124207d4f71d4f7d2ad6de910d213c77500f21a99332b7eb06cfe91ffcfaeb0ee2ef530656112c33ed85d7345535abcac993e7d5e89f54ba71367b5406d2b"
+    "0c1c723fe84b8d46b33113381470267458703a3cfbefda4e1e041280512d77ec7618470128fd7133a322110a8bfb836ceceb595a9a68409b7167bdba64fd97c6"
   | .error _ => false
 
 /-! R's opening part's one zero row (`checkOpening`), as `rec_residuals.stage_opening` registers it. -/
 #guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 1 16 with
   | .ok dom => hexOf (FV3.root dom #[Registered.rowLeaf dom 0
       (Hm96.Default512.treeLeaf (commitRow (zeroRows 1 OUT_WORDS)[0]! (zeroSalt ZERO_VALUE 0)))] Sha512.hash) ==
-    "2eca9c1be0de4fd86674c7aefcc800622e515195cd96359356984ea51c40ae617781640911365d6f049bc6f4390754bd00fcb0064bc21c5b193ed407be742dfb"
+    "33e1e709f4aa0bb797aaa25b403e5b331b0441174259408d33b71955c86cae76b9130710ab42eea9501b616c032fc690433084f272cfa6244051fc385469c84d"
   | .error _ => false
 
 /-! The recursion's statement version: the verifier's inner shape is `verity/rec-inner/v2`'s, and `v1`'s, whose V*

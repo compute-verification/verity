@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Carrier
-import Proofs.Accounting.Requirement
+module
+
+public import Mathlib
+public import Definitions.Accounting.Carrier
+public import Proofs.Accounting.Requirement
 
 /-!
 # A pass's credit against its tiles of the declared circuit
@@ -13,6 +15,8 @@ bits each and the rest in one block a group. So the credit is at most a tile's b
 those are appended tiles (`tiles_subset_appended`).
 -/
 
+@[expose] public section
+
 namespace Accounting.Requirement
 
 variable {G : Type} [DecidableEq G]
@@ -20,8 +24,9 @@ variable {G : Type} [DecidableEq G]
 /-- **A pass's credit is at most a tile's bits for each of its tiles of `W`**, at a step whose memory map and plan hold
 `W`'s credited blocks, whose reads from incomplete blocks lie in one block a group, and whose plan's blocks are at
 distinct positions of the pass's layout `lay`. -/
-theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) (e : Execution G) (ℓ : Layout G)
-    (σ : Store) (plan : Finset ℕ) (grp : G → K) (t : ℕ) (addr : ℕ → Fin T × Fin M) (lay : Fin N ↪ Fin T × Fin M)
+theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) (e : Execution G)
+    (ℓ : Store.Placement G) (σ : Store) (plan : Finset ℕ) (grp : G → K) (t : ℕ) (addr : ℕ → Fin T × Fin M)
+    (lay : Fin N ↪ Fin T × Fin M)
     (hS : StoreMatches W e ℓ σ 32768 t) (hP : PlanMatches W e ℓ plan 32768 t)
     (hO : OneBlockEach ℓ grp (reads W e t \ creditedReads W e ℓ t))
     (hinj : Set.InjOn addr ↑plan) (hrange : ∀ b ∈ plan, addr b ∈ Set.range lay) :

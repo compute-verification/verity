@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.Paths
-import Definitions.Nci.Assumptions.CoverAdditive
+module
+
+public import Proofs.Nci.Cover.Paths
+public import Definitions.Nci.Assumptions.CoverAdditive
 
 /-!
 # The cover theorem's vocabulary on a declaration's gates
@@ -20,12 +22,14 @@ wiring (`Nci.Cover.Circuit`), which also reads a declaration bit by bit (`Circui
   computations as the regions (`conditionalUpdateHardness_of_conditional`).
 -/
 
+@[expose] public section
+
 namespace Nci.Cover.SecurityProofs
 
 open Finset
 
 /-- **The gate view** of a declaration: its gates, their wires and its registered parameters. -/
-abbrev ofGates (d : Verity.Declaration) : Circuit where
+abbrev ofGates (d : Verity.RegisteredCircuit) : Circuit where
   N := d.D.N
   pred := d.D.reads
   pred_lt := d.D.reads_lt
@@ -34,7 +38,7 @@ abbrev ofGates (d : Verity.Declaration) : Circuit where
 
 namespace Gates
 
-variable {d : Verity.Declaration}
+variable {d : Verity.RegisteredCircuit}
 
 theorem mem_sources {g : Fin d.D.N} : g ∈ Nci.Covering.sources d.D ↔ d.D.reads g = ∅ := by
   simp [Nci.Covering.sources]
@@ -53,7 +57,7 @@ theorem inner_subset_computed (S : Nci.Covering.Subcircuit d.D) : S.inner ⊆ (o
   fun _ hg => mem_computed.2 ⟨(mem_sdiff.1 hg).1, fun h => (mem_sdiff.1 hg).2 (inputs_subset_ins S h)⟩
 
 /-- **A set of gates as a subcircuit**, with the inputs the gate view hands it. -/
-def toSubcircuit (d : Verity.Declaration) (I : Finset (Fin d.D.N)) : Nci.Covering.Subcircuit d.D where
+def toSubcircuit (d : Verity.RegisteredCircuit) (I : Finset (Fin d.D.N)) : Nci.Covering.Subcircuit d.D where
   gates := I
   ins := (ofGates d).inputs I
   ins_sub := filter_subset _ _

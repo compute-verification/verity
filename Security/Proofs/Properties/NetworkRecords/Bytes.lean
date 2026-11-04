@@ -1,5 +1,7 @@
-import NetworkCheck.RecordsGrid
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import NetworkCheck.RecordsGrid
+public import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # Bytes the committed digest is written in
@@ -8,6 +10,8 @@ A byte array's fold is its list's (`foldl_eq`); `hexOf` writes each byte as two 
 byte arrays with one hex string are one (`hexOf_inj`); lists cut into pieces of one length `k > 0` are one when their
 concatenations are (`flatten_inj`); `k`-byte pieces of whole bits are `k` bytes (`bytesOfBits_size`).
 -/
+
+@[expose] public section
 
 open NetworkCheck.Check (bytesOfBits bytesOfBitsList)
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj)

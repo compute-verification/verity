@@ -7,7 +7,11 @@ the unrolled rows for their order. The proof is an induction over the copies `pl
 of an ordered Definition, its inputs bound to the constant or to earlier columns (port bits if input columns), writes only
 rows that read such columns (`place_good`); a copy in the input rows writes only there (`place_local`).
 -/
-import Flock.Tmpl
+module
+
+public import Flock.Tmpl
+
+@[expose] public section
 
 namespace Flock.TmplOrder
 

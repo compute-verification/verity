@@ -1,4 +1,6 @@
-import Definitions.Pous.Guarantees
+module
+
+public import Definitions.Pous.Guarantees
 
 /-!
 # PoUS's lemmas, stated
@@ -14,6 +16,8 @@ They keep their names in `Pous.Guarantees`, beside the frozen statements of `Sec
 This module states and proves nothing else, and imports no proof: `grade.sh` grades `KFloor` and `Theorem1ii` (its
 controls) and the four open statements against it, and a submission may import it.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
-import Proofs.Flock.Soundness.Refine.Table
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
+public import Proofs.Flock.Soundness.Refine.Table
 
 /-!
 # The PIOP's rounds, as the frames they emit (R11b)
@@ -14,6 +16,8 @@ by emitting its frames, in order.
 `rep_rounds` composes them with `ligerito_frames`: when `verifyRep` accepts, every round of the rep's stream retained
 the bytes of its chunk of `repFrames`, one chunk per round.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -218,7 +222,7 @@ theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (ses
           repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T := by
         simp [repFrames, List.append_assoc]
       rw [hfr] at e
-      obtain ⟨-, hk, hR, -⟩ := e
+      obtain ⟨-, hk, hR, -, -⟩ := e
       refine ⟨by rw [← c2, hk]; simp, fun j hj => ?_⟩
       have hj' : j < (chunks (repFrames st sch (spec.domain spec.tables[i]! r).toUTF8 (2 + extras.size) p T)).1.length := by
         rw [← c2, hk] at hj; simpa using hj

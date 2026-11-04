@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HonestHalf
-import Proofs.Flock.Claims.Recursion.VStarRowsFit
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.VStarRowsFit
 
 /-!
 # The honest half with the fitted rows proved (`honest_half_tops`)
@@ -14,6 +16,8 @@ holds both reps' stream rounds (`hH`), every part is staged on the run (`stagedP
 `honest_half_tops` is `honest_half`'s statement without the `RowsFit` hypothesis, and `honest_half`'s proof with `hpE`
 from `hpEarly_tops` and `rowsFit_tops`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HonestHalfTops
 

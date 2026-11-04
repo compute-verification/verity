@@ -1,7 +1,9 @@
-import Definitions.Pouw.Dither
-import Definitions.Core.Accel.Machine
-import Definitions.Core.Accel.H200
-import Definitions.Core.Accel.Sm120
+module
+
+public import Definitions.Pouw.Dither
+public import Definitions.Core.Accel.Machine
+public import Definitions.Core.Accel.H200
+public import Definitions.Core.Accel.Sm120
 
 /-!
 # The headline's model on the cards: the H200 and the RTX PRO 6000 (trusted)
@@ -14,7 +16,7 @@ import Definitions.Core.Accel.Sm120
   the pooled cards share their stores and resources, so the links between them are free), and the period's other
   devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network certifier), each resource
   at its θ rate;
-* **where a round's coin and words sit in the cards' memory** (`Layout`);
+* **where a round's coin and words sit in the cards' memory** (`RoundPlan`);
 * **`G` is the devices at the card's semantics `x`** (`OnCard`): `G`'s resources are the pooled cards' and the
   others', at their rates; its memory is theirs; its (P1) and (P2) are the machine's at `x`; and every words program
   the cards run is a program of `G` with the run's units as its use, its seconds as its wall time and no import;
@@ -37,6 +39,8 @@ import Definitions.Core.Accel.Sm120
 The card's semantics `x` are not fixed here: the headline holds at every `x` meeting P1 (`Card.Exact`) and P2
 (`Open.ProductForm`, as `Assumptions.AccelProductForm`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 
@@ -88,8 +92,8 @@ def Devices.machine {c : Verity.Accel.Card} (D : Devices c) (x : Verity.Accel.Op
 
 /-- **Where a round's coin and words sit in the cards' memory**: the dither coin written into the memory a words
 program starts from (`putDraw`), and the words read from the memory it ends with (`getTr`), as the deployed kernel lays
-them out. A layout moves words; it computes nothing. The headline holds at every layout. -/
-structure Layout (m : Verity.Accel.Machine) (P : RoundProto) where
+them out. A round plan moves words; it computes nothing. The headline holds at every round plan. -/
+structure RoundPlan (m : Verity.Accel.Machine) (P : RoundProto) where
   putDraw : P.Draw → m.Mem → m.Mem
   getTr : m.Mem → P.Tr
 
@@ -123,7 +127,7 @@ premise `Assumptions.ShaRealize`, which is open. A program of `G` cheaper than a
 `SAKSha` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at has the card's
 programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
-    (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
+    (L : RoundPlan (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
     (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ)) ∧
     (∀ h, G.rate (e.symm (.inr h)) = D.oth.rate h) ∧
     G.mem = ((D.machine x).bits : ℝ) + D.oth.mem ∧

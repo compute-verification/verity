@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
-import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
-import Proofs.Flock.Soundness.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+public import Proofs.Flock.Soundness.ParseStmt
 
 /-!
 # A hidden-output statement's flat twin
@@ -20,6 +22,8 @@ inputs read the same in both. The hidden-output headlines' rows (`Layout.v1Ports
 `Layout.scopeOkH` and `Layout.scopeGenH` require) are each unsegmented, their padding perhaps starting in their last
 compression's block, or `sha512/row-seg/v1`, the output rows unsegmented (`rowsFit_of_rows`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
