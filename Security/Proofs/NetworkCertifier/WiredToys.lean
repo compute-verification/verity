@@ -542,7 +542,7 @@ theorem flip_excludes (H : Msg → Msg) :
         ⟨[2, 3], rfl, 2, Or.inl (by simp), fun hr => by
           obtain ⟨b, hb2, hb1⟩ := hr 1 rfl
           rw [h2] at hb2
-          rw [h1] at hb1
+          rw [flip_read _ (i := 1) (by decide), h1] at hb1
           exact absurd ((Option.some.inj hb2).trans (Option.some.inj hb1).symm) (by decide)⟩⟩)
     have hsub : incorrect H accCm flipStmt flipPart flipLay.wires (wit4 false true false true) ⊆ Finset.range 2 :=
       Finset.union_subset (Finset.filter_subset _ _) (Finset.filter_subset _ _)
