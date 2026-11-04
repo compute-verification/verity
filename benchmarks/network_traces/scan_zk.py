@@ -181,7 +181,7 @@ from verity.ml.circuits.boolean import trace as TR  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
+from verity.ml.circuits.refs import Coll  # noqa: E402
 from verity.ml.circuits.types import Array, Tuple  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
@@ -194,6 +194,7 @@ from verity.ml.crypto import lms  # noqa: E402
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
+from verity.core.protocols.certifier.scan_service import scan_root  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
@@ -1080,37 +1081,6 @@ def _defs(cls: IS.Class) -> dict[str, object]:
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D),
             "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB)}
-
-
-def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Program:
-    """The scan's root in the generator form (`NetworkCheck.Period`'s `scanOf`): each `(template, n, fixed)` of
-    `members` one batch over its n units, in order, its first `fixed` parameters inputs of its own (``<i>.<name>``),
-    and each later one, lane j's ``prog<j>``, at bucket t (the first template's first unit bucket 0, each next unit the
-    next bucket) row ⌊t / every⌋ (`entry_at`) of lane j's input ``prog<j>``, its slot entries of nb boundaries."""
-    sigs = [t.signature() for t, _, _ in members]
-    lanes = [len(ps) - fixed for (ps, _), (_, _, fixed) in zip(sigs, members)]
-    entry = next(ps[fixed][1] for (ps, _), (_, _, fixed), L in zip(sigs, members, lanes) if L)
-    L = max(lanes)
-
-    def signature(S):
-        params = tuple((f"{i}.{name}", Array(n, ty)) for i, ((ps, _), (_, n, fixed)) in enumerate(zip(sigs, members))
-                       for name, ty in ps[:fixed])
-        return (*params, *((f"prog{j}", Array(nb, entry)) for j in range(L))), \
-            Tuple(*(Array(n, ret) for (_, ret), (_, n, _) in zip(sigs, members)))
-
-    def body(B, S, *args):
-        entries, outs, at, start = args[len(args) - L:], [], 0, 0
-        for (t, n, fixed), (ps, _) in zip(members, sigs):
-            gathered = [array_of([entries[j][(start + m) // every] for m in range(n)])
-                        for j in range(len(ps) - fixed)]
-            outs.append(B.batch(t, *args[at:at + fixed], *gathered, axes=(0,) * len(ps)))
-            at, start = at + fixed, start + n
-        return coll_concat(signature(S)[1], outs)
-
-    defn = CompositeDefinition("ScanZkRoot", 1, ("templates", "counts", "nb", "every"), signature, body,
-                               register=False)
-    return Program(bind(defn, templates=tuple(PA.template_id(t) for t, _, _ in members),
-                        counts=tuple(n for _, n, _ in members), nb=nb, every=every))
 
 
 def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls: IS.Class, nb: int) -> dict:
