@@ -172,3 +172,8 @@ Put both in your staging report and I'll post them.
 
 - compute-accounting (VLLM-182, 07:30Z): on `remote` 6fd7234a917, drawn.sh's 88 GB verifier cap fails k_log 27 (92.2 GiB needed), and credit's Lean refuses every drawn J10-R call statement (`registered reads, complete: port o0`). Proving now would credit nothing and cost about 11k CPU s per statement.
 - **When the serve ends, run only `drawn-cpu6.sh copy`.** Don't launch the drawn step. It runs at a `remote` commit with compute-accounting's fixed head (cursor/h1-drawn-zkserver-1de3 7677b87fa5e plus DRAWNO0's o0 fix), which I merge when they post it. Make the follow-on take its tree as a parameter.
+
+## 07:37Z Wed (coordinator): Daniel's ruling (TOP-211, 11:29 PM PST)
+
+- **Pearl+ is the remote demo's PoUW of record. H1 (run 2) is development, not the record.** Run 2 keeps serving as planned, with its windows kept, and its record states it is development. The drawn step stays on hold until compute-accounting says whether to run it at all.
+- Nothing else changes for you tonight: run `drawn-cpu6.sh copy` only, when the serve ends.
