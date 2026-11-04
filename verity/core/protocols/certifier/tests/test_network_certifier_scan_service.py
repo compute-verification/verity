@@ -45,6 +45,9 @@ PARAMS = W.WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, 
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 LINK, SESSION = "responses", signers.SESSION
 TIE = SC.EgressTie(LINK, PARAMS, SESSION, CLS, proof_deadline=60.0)
+#: TIE's Spec digest (`Spec.to_json`: its values, selection, Check, public items with their reasons, and context)
+SPEC_DIGEST = ("6db08ec9d958e84c00fa8f2cb32cc36c99aaf020283a91759298824ec850a427"
+               "3bf841c8e33d4e38b4cd0889f789ada727111d3eb2e841e38afcf275751f181c")
 PROMPTS = ([1000, 1007, 1014], [2000 + 3 * k for k in range(60)], [131071 - k for k in range(100)])
 RESPONSES = ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43))
 #: the server sends request 1's second token one off the compute's
@@ -355,3 +358,9 @@ def test_only_the_scan_service_builds_an_egress_tie_verdict():
                     (isinstance(f, ast.Attribute) and f.attr == "EgressTieVerdict"):
                 builders.add(path.relative_to(root).as_posix())
     assert builders == {"core/protocols/certifier/scan_service.py"}
+
+
+def test_the_egress_tie_spec_is_pinned():
+    """The Spec a stream registers under is the pinned one: a change to anything it states, a public item's reason
+    included, changes the digest and updates `SPEC_DIGEST` in the same change."""
+    assert TIE.spec.digest() == SPEC_DIGEST
