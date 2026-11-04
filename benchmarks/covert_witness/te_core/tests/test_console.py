@@ -58,6 +58,14 @@ def test_the_route_refuses_a_source_over_300_characters():
         "its source is 0 characters, not 1 to 300"]
 
 
+def test_the_route_refuses_a_title_over_120_characters():
+    """The panels route answers 400 to it ("title must be 1 to 120 characters")."""
+    p = p1(2, 1)
+    assert not console.refused(p | {"title": "t" * 120})
+    assert console.refused(p | {"title": "t" * 121}) == ["its title is 121 characters, not 1 to 120"]
+    assert console.refused(p | {"title": ""}) == ["its title is 0 characters, not 1 to 120"]
+
+
 def test_write_cuts_every_panel(tmp_path):
     from te_core.plots import NAMES
     for n in NAMES:

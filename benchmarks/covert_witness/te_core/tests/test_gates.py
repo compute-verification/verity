@@ -25,6 +25,8 @@ def test_prices():
     assert gates.per_mac("elementwise/bf16") == 2053 + 1894
     assert gates.per_mac("elementwise/f32") == gates.per_mac("gemm/f32") == 12637
     assert gates.per_mac("gather") == 48
+    assert gates.per_and("gemm/bf16") == pytest.approx((7872 + 15049 + 761) / 7872)
+    assert gates.UNIT == "gates: AND + XOR + NOT, 3.0x a bf16 GEMM's AND count"
 
 
 def test_kinds_and_assumptions():
@@ -38,6 +40,9 @@ def test_kinds_and_assumptions():
     assert gates.kind_of("fwd", "theta", "_scaled_mm") == ("gemm/e4m3", "")
     kind, note = gates.kind_of("fwd", "theta", "_int_mm", "int8")
     assert kind == "gemm/bf16" and "no Definition" in note
+    for op in ("mv", "addmv", "addmv_"):   # matrix-vector products, which te_core.capture.structure counts as GEMMs
+        assert gates.kind_of("forward", "", op, "bfloat16") == ("gemm/bf16", "")
+    assert gates.kind_of("forward", "", "mvlgamma", "bfloat16")[0] == "elementwise/bf16"
 
 
 def test_a_v23_log_in_gates():

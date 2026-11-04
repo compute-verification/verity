@@ -3,6 +3,7 @@
 # (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`) on CPU torch.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Script mode runs `tests/cw_fake/`'s island against its own fake `prepare`; test_formats reads covert_witness's real one,

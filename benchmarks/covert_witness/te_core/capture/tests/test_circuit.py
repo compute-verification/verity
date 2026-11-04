@@ -181,8 +181,8 @@ def test_a_cache_rewritten_each_step(starts, source):
 
 @pytest.mark.parametrize("update", ["adamw", "mezo-clip"])
 def test_a_saved_circuit_measures_alike(starts, tmp_path, update):
-    """With the recording's read-back lists, which a saved circuit keeps (the scorer measures the saved one); one saved
-    without them measures without them, which te_core.formalism refuses as unchecked."""
+    """With the recording's read-back lists and product rows, which a saved circuit keeps (the scorer measures the saved
+    one); one saved without the lists measures without them, which te_core.formalism refuses as unchecked."""
     g = recorded(starts, update)
     g.circuit.save(tmp_path / "c.npz")
     assert measure(StepCircuit.load(tmp_path / "c.npz")) == g.formalism

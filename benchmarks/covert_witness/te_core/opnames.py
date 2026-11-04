@@ -6,7 +6,7 @@ from __future__ import annotations
 #: te_core.capture has a formula for (an RNN kernel, `_trilinear`, a packed or sparse matmul), makes a run invalid or a
 #: capture refused, since its work would count as zero.
 GEMM_LIKE = ("mm", "matmul", "conv", "linear", "attention", "einsum", "tensordot", "bilinear", "lstm", "gru", "rnn",
-             "addmv", "addr", "dot", "dist", "embedding_bag", "kron")
+             "mv", "addr", "dot", "dist", "embedding_bag", "kron")
 #: names with one of those parts that compute no products
 NOT_GEMM = frozenset({"cummax", "cummin", "digamma", "digamma_", "igamma", "igamma_", "igammac", "igammac_", "lgamma",
                       "lgamma_", "mvlgamma", "mvlgamma_", "polygamma", "polygamma_", "_standard_gamma",
