@@ -342,10 +342,9 @@ statement reviewer, for a lift or any other change.) Any other lift prints in fu
 theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
 still lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
-`X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
-audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
-lifted, or no longer a guarantee.
+`four_names` lists the root of each of the lock's guarantees (`["Nci", "NetTiming", …]`), and each is `X.SecurityProofs.G
+: X.Guarantees.G` (universe parameters aside), `G` a definition of a `Guarantees` module, but a witness, a frozen guarantee
+and one `four_names_except` holds ({G: why not yet}). An entry there in the form, frozen, a witness or gone fails.
 
 `check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
 binders and type as its source writes them, after the `variable`s in scope that Lean includes in the theorem (those the
