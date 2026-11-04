@@ -462,6 +462,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Placement`, stated in Accounting: becomes Core's, moved into Security/Definitions/Core/ (memory-accounting)",
     "Security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Store":
         "duplicate of `CircuitRequirement.Store`, stated in Accounting: becomes Core's, moved into Security/Definitions/Core/ (memory-accounting)",
+    "Security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Store.Placement":
+        "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
     "Security/Definitions/Accounting/TS/J10R.lean::Accounting.TS.J10R.Layout":
         "homonym, a tile shape: rename (compute-accounting)",
     "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
@@ -758,10 +760,6 @@ KNOWN: dict[str, str] = {
     "integrations/vllm/verity_vllm/acquire/plan.py::Site": "homonym, a quantisation site: rename (circuits)",
     "integrations/vllm/verity_vllm/acquire/served_device.py::Device":
         "homonym, a served build's device: rename (circuits)",
-    "integrations/vllm/verity_vllm/check/match/resolve.py::Program":
-        "homonym, the Program side of a match's resolution: rename (vllm)",
-    "integrations/vllm/verity_vllm/check/verdict.py::Verdict":
-        "homonym, a check run's results and outcome: rename (vllm)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
     "integrations/vllm/verity_vllm/commit/row_tables_device.py::Device":
         "homonym, one CUDA device's build of a kernel library: rename (circuits)",
