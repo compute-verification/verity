@@ -722,6 +722,43 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         SP.rows_case(run, scan)
 
 
+def test_the_scans_circuit_files_are_its_programs_templates_in_their_units_order_each_held_to_its_pin(tmp_path):
+    """`scan_period.scan_circuits`: each template the scan's joint Program stages, by its base (not the summary's key
+    order), with its file and that file's SHA-512, the pin its sessions were held to; another round's stagers aren't
+    the Program's; a stager with no file, no template or pin, or a file of other bytes, is refused by name."""
+    import scan_period as SP
+
+    scan, joint = tmp_path / "scan", sz.PROGRAMS[sz.TEMPLATES]
+    texts = {tp: f"flock-ir-unit/v2 {tp}\n".encode() for tp in sz.TEMPLATES}
+    for tp, text in texts.items():
+        (scan / joint / tp).mkdir(parents=True)
+        (scan / joint / tp / "circuit.txt").write_bytes(text)
+    pins = {tp: hashlib.sha512(text).hexdigest() for tp, text in texts.items()}
+    bases = {"egress": 0, "first": 6, "ingress": 7}
+    stagers = {f"{joint}/{tp}": {"template": f"t:{tp}", "pin": pins[tp], "base": bases[tp]} for tp in sz.TEMPLATES}
+    stagers[f"{sz.PROGRAMS[('egress',)]}/egress"] = {"template": "t:solo", "pin": "ab" * 64, "base": 0}
+
+    def summary(s: dict) -> None:
+        (scan / "summary.json").write_text(json.dumps({"stagers": s}))
+
+    summary(stagers)
+    assert SP.scan_circuits(scan) == [(f"t:{tp}", pins[tp], scan / joint / tp / "circuit.txt")
+                                      for tp in ("egress", "first", "ingress")]
+    summary({})
+    with pytest.raises(SystemExit, match="staged no template of its Program"):
+        SP.scan_circuits(scan)
+    summary({**stagers, f"{joint}/first": {**stagers[f"{joint}/first"], "pin": None}})
+    with pytest.raises(SystemExit, match="composed no circuit for its template first"):
+        SP.scan_circuits(scan)
+    summary(stagers)
+    (scan / joint / "ingress" / "circuit.txt").write_bytes(texts["ingress"] + b"requests 2\n")
+    with pytest.raises(SystemExit, match="isn't the circuit template ingress's sessions were held to"):
+        SP.scan_circuits(scan)
+    (scan / joint / "ingress" / "circuit.txt").unlink()
+    with pytest.raises(SystemExit, match="composed no circuit for its template ingress"):
+        SP.scan_circuits(scan)
+
+
 def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_still_scans_its_b_c(tmp_path):
     """A member's refs (`refs_of`), each instance's table row of each port, are small integers its statement fixes:
     S_0's first 16 bytes (``now`` and ``phase`` 1, ``last`` 0, slot 0 empty) equal instance 1's refs where it reads

@@ -46,6 +46,7 @@ and its Lean.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -148,6 +149,31 @@ def circuit_of_record(path: Path) -> str:
     if doc.get("format") != CIRCUIT or not isinstance(doc.get("program"), str):
         raise SystemExit(f"{path}: not a {CIRCUIT} record naming its program")
     return doc["program"]
+
+
+def scan_circuits(scan: Path) -> list[tuple[str, str, Path]]:
+    """Each template of the scan's Program (the parameters' ``scan``, its joint round's) with the C-Flock circuit file the
+    auditor composed for it from its public Definition (``joint/<tp>/circuit.txt``) and that file's SHA-512, the pin every
+    session of the template's members was held to (``summary.json``'s ``stagers``): ``(template, sha512, file)`` in the
+    order the population's units take the templates. SystemExit where the summary stages no template of the Program,
+    names no template or pin for one, or its file is missing or hashes to another than its pin."""
+    joint = SZ.PROGRAMS[SZ.TEMPLATES]
+    stagers = json.loads((scan / "summary.json").read_text()).get("stagers") or {}
+    staged = sorted(((k.removeprefix(f"{joint}/"), s) for k, s in stagers.items() if k.startswith(f"{joint}/")),
+                    key=lambda x: x[1]["base"])
+    if not staged:
+        raise SystemExit(f"{scan}: the scan staged no template of its Program, so no circuit of it")
+    out = []
+    for tp, s in staged:
+        f, t, pin = scan / joint / tp / "circuit.txt", s.get("template"), s.get("pin")
+        if t is None or pin is None or not f.is_file():
+            raise SystemExit(f"{scan}: the scan composed no circuit for its template {tp}, or names no template or pin")
+        with open(f, "rb") as h:
+            if hashlib.file_digest(h, "sha512").hexdigest() != pin:
+                raise SystemExit(f"{f} isn't the circuit template {tp}'s sessions were held to: it hashes to another "
+                                 "than its pin")
+        out.append((t, pin, f))
+    return out
 
 
 def lean_check(exe: str, case: dict, d: Path,
