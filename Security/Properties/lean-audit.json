@@ -341,6 +341,10 @@
    "owner": "@memory-accounting",
    "digest": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9"
   },
+  "Verity.Assumptions.TrustedHost": {
+   "owner": "@network-accounting",
+   "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
+  },
   "Verity.Vocab.BandwidthAuditSound": {
    "owner": "@memory-accounting",
    "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc"
@@ -373,9 +377,21 @@
    "owner": "@memory-accounting",
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
   },
-  "Verity.Assumptions.TrustedHost": {
+  "NetTiming.SchedulesCovered": {
    "owner": "@network-accounting",
-   "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
+   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
+  },
+  "NetTiming.SenderDecodes": {
+   "owner": "@network-accounting",
+   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
+  },
+  "NetTiming.TapsOpen": {
+   "owner": "@network-accounting",
+   "digest": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae"
+  },
+  "NetTiming.WindowsPlaced": {
+   "owner": "@network-accounting",
+   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
   }
  },
  "meaning": [
