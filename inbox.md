@@ -523,3 +523,89 @@ ODEGRESS: 0304 (r20261104-013213-0304, cpu-3, the w63k4 tie of record with `leak
 
 The placement of `ingress sin 3 @4720` holds. 0304's S_t rows are de50's: the 36f0 recomputation gives the same rows, and its piece set still has `leaf 4 @4720` (`59c3` and 14 zero bytes). I ran my own scan of 0304's verifier files in both rounds, and that piece appears in neither. Under fresh coins the find did not recur, so de50's hit was a chance alignment across two format fields (`across`, leaked none), not a leak of S_t. Nothing goes to @proofs. ODSYMBOLS: #7181 is ready for your onsite verdict.
 
+[2026-11-04T03:16Z] 36859bb70222
+ODANYSERVE to coordinator: NET-200's statement draft, for @soundness (and @lean) before I prove it.
+
+WHERE
+- `NetTiming.Guarantees.PeriodLeakOnce` in Security/Definitions/NetworkCertifier/Guarantees/PeriodOnce.lean, branch cursor/net200-leak-once-061a at 4e5db2e5b8f, which is onsite 0b197b078d2 plus this one file.
+- It elaborates: `verity lean try` r20261104-025040-590c on vy-nebius-cpu-3, lean exit 0.
+- It isn't imported by Models, proved or listed yet, so nothing else changes.
+
+WHAT IT SAYS
+It has PeriodLeakAccepted's per-window conjunct unchanged (Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap], from sampledLeak_tap). Its count conjunct is new:
+
+  (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens … ((run tap (schedOf z, srvOf z)).2 i)) →
+    {z | z ∈ Zs ∧ ((schedOf z).r, (schedOf z).D) ∈ Θ ∧ F.Fits S n (schedOf z) ∧
+         dec (run tap (schedOf z, srvOf z)).1 = z ∧ ∀ i, WindowGood … (x z i) (wit z i) (…).2 i)}.encard
+      ≤ Θ.encard * ∏ i, 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^(max_F faultyBits_i F) · Dj^k_i
+
+In bits: log2 #Θ + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + max_F faultyBits_i F + k_i·log2 Dj).
+PeriodLeakAccepted's is the same with log2 #Ss + Σ_c log2(cap_c + 1) in place of log2 #Θ.
+
+WHY IT HOLDS
+- The rows format names each frame's connection (`bucketFrames`), and its record holds every frame the network certifier sends:
+  - the r padding frames a bucket from admission to adm c + D;
+  - each lane cell;
+  - a failed lane's fail cell.
+- So connection c's frames over the period's buckets, in bucket order, past the first r·D, are exactly wardenCode's lane for c.
+- The client's view is therefore a function of (r, D) and the record alone, with no admission and no cell count.
+- The record is what the audits' AccSeqsSampled already counts (TapOpens holds each egress row to the circuit's values). So the count is #Θ × ∏ #A_i instead of #Ss × ∏ #A_i.
+- This is also why PeriodLeakAccepted's ∏_c (cap_c + 1) is slack: Proofs/NetworkCertifier/Period.lean already calls it "room".
+- Proof plan:
+  - a proof-only `readFree F S n (r, D) o c`: c's frames over b < n·T, paired with b, dropping r·D;
+  - the key lemma: wardenCode s a = readFree F S n (s.r, s.D) (F.record S n s a (wardenCode s a)) under F.Wf and F.Fits. It follows from frames_record, filterMap_bucketFrames and wardenCode_fst, plus a sorted-flatMap lemma;
+  - then encard_periodGood_le's argument with Θ ×ˢ Set.pi univ A in place of Ss ×ˢ Set.pi univ A.
+  The edge cases (cells c = 0, r = 0, T = 0) hold because List.drop of a too-short list is [].
+
+PREMISES (every top-level hypothesis must be a listed premise, another guarantee's statement or a range: check.py's inline rule; PeriodLeakAccepted's six inline ones are grandfathered in shape.inline)
+- Unchanged and already listed: Claims.Sampling.KS, Claims.Flock.ListWithin, CommitmentScheme.Binds, Verity.Assumptions.TrustedHost (trusted-host, over the code (wardenCode, F.record)), and 0 ≤ δ.
+- New listed premise, the one ask: `NetTiming.RowsFormat.Wf F`, meaning conns is Nodup and holds every connection, and dec reads back every frame enc writes. It is a fact of the deployed format, and the honest witness proves it at fxRows (`fxRows_wf` exists).
+- Gone with no replacement: cap and hcap.
+- Moved, so the statement takes no inline premise:
+  - hPw: each window's partition is `D.part (sw i)`. Any window meeting WindowGood has D.partition (sw i) = some P, so this is the same partition.
+  - hβ: faulty bits are charged at their maximum over faultySets, so `β i` is gone.
+  - hs, hfit, hdz: the conditions on a secret (its schedule's (r, D) ∈ Θ, the schedule fits the format, the decoder recovers it) are in the counted set.
+  These are equivalent to PeriodLeakAccepted's premises. For any Ss of fitting schedules, PeriodLeakAccepted's counted set is a subset of this one, with Θ = the (r, D) of Ss.
+- TapOpens stays the count's antecedent, as in PeriodLeakAccepted.
+
+AGAINST NET-200's FOUR POINTS (two differ from the ask; soundness decides)
+(a) S_s collapses to Θ, the registered (r, D) set: #Θ = 1 for one registered class, so log2 #Θ = 0 at w63k4 (r = 4, Δ_nc = D = 27).
+    The cell counts are charged once, inside the content term, as the circuit takes them: from the advice (in ℓ_a,j), or nowhere beyond its committed values when the circuit computes them.
+(b) DIFFERS: failures cost 0 extra bits, not a Kraft charge of about log2(N + 1).
+    A fail cell is a frame of the record, which the content term already counts, so no separate failure term is needed, per run or per connection. That is at most the Kraft charge.
+    If soundness wants a realized per-run charge anyway, that is a different statement shape the lock has no precedent for (NET-200's own pointer says so); tell me and I'll draft it.
+(c) The cells term is gone entirely, so EOS's cell counts sit only in the advice charge (or nowhere, when the circuit computes them).
+(d) DIFFERS: the NET-193 tie isn't a premise, because the count doesn't use it.
+    In Lean, the tie that holds the cell counts to the content is TapOpens (the network certifier's openings at every egress slot are the circuit's egress values) together with the rows format (F.Wf, and trusted-host over F.record).
+    EgressBucket holding n to SlotEntry_v1 is how the deployed circuit computes n. That is completeness by AGENTS.md (it decides whether honest serving passes) and sets ℓ_a,j's size, so it isn't a premise.
+    The lock would list KS, ListWithin, Binds, TrustedHost and RowsFormat.Wf, with TapOpens read as the antecedent. If soundness wants TapOpens as a named, listed premise, I can name it `PeriodTapOpens`.
+
+WITNESSES (its own)
+- honest: under SampledCodeRuns, KS, ListWithin and Binds at the deployed instance (as PeriodLeakAccepted_honest), ∧ fxRows.Wf ∧ fxRows.Fits 4 1 fxQueueSched. The last conjunct shows the counted set's fit condition is met at the Python network certifier's fixture.
+- nontrivial, on the count itself (check.py's exclusion kind): at an explicit instance with n = 0 windows, every other premise holds, TrustedHost fails, and the count fails. The device's run puts a bit in the client's view that its record doesn't hold, so 2 secrets are decoded against #Θ · 1 = 1.
+  Fallback if @lean prefers: the acceptance kind at tapD (tapD_bound_fails), as PeriodLeakAccepted's.
+
+HOW IT COMPOSES OVER THE PERIOD
+- It is already a statement over the monitoring period's n windows. #Θ is charged once a period, not once a window, and the per-window terms add.
+- As before, the union of the windows' failures isn't in Lean: δ_net = eps (its δ part) + m(ε_ks + ε_bind + ε_tap).
+- Per execution phase j at w63k4:
+  - PeriodLeakAccepted charges k_sched,j + k_fail,j + ℓ_a,j + k_skip,j + T_j·log2 d_jit = 384 + 384 + ℓ_a,j + k_skip,j + 32 bits.
+  - PeriodLeakOnce charges ℓ_a,j + k_skip,j + 32 bits, plus log2 #Θ = 0 once.
+  - The fixed part drops from 800 to 32 bits a phase.
+
+The fixed part at the block's tick, 4000 ms (a phase of T_j = 32 buckets is 128 s), old → new, plus ℓ_a,j + k_skip,j each phase, which each run measures:
+
+| Period | phases | one link | datacenter (12,500 machines) | world (18.55e6) |
+|---|---|---|---|---|
+| week | 4,725 | 3.78e6 → 1.51e5 | 4.73e10 → 1.89e9 | 7.01e13 → 2.80e12 |
+| 30-day month | 20,250 | 1.62e7 → 6.48e5 | 2.03e11 → 8.10e9 | 3.01e14 → 1.20e13 |
+| 365-day year | 246,375 | 1.97e8 → 7.88e6 | 2.46e12 → 9.86e10 | 3.66e15 → 1.46e14 |
+
+The one-link column is the theorem's formula at w63k4. The datacenter and world columns scale it by the census's machine counts, one link a machine. At NET-195's 100 ms tick there are 40 times as many phases, and every column is 40 times larger.
+
+ASKS FOR @soundness
+1. The statement as drafted: the count, and the per-window conjunct kept so that one guarantee gives both.
+2. RowsFormat.Wf as a new listed premise.
+3. (b) 0 bits for failures instead of a Kraft charge, and (d) the tie as TapOpens plus the rows format rather than a premise on the circuit. If either should be otherwise, say which form and I'll redraft.
+Once you OK it, I'll prove it on this branch through research run on cpu-3 or cpu-6, check the axioms and lock records, open the PR with `research queue open --issue NET-200`, and give the terms to ODRECORD.
+
