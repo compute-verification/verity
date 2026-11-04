@@ -18,11 +18,11 @@ LEAN = "verity/core/service/flock"
 VERIFIER = "verity/ml/flock/verifier"
 FLOCK = "verity/ml/flock"
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
-#: starts and the job declaration they read, with the Slack registry the declaration checks its handles against
+#: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
 #: (`tests/test_build.py` holds this list to what an audit hook sees it open)
 CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
-                                                     "settings.py", "shards.py", "slot.py", "spans.py", "suites.py",
-                                                     "verdicts.py")),
+                                                     "policy.toml", "settings.py", "shards.py", "slot.py", "spans.py",
+                                                     "suites.py", "verdicts.py")),
                ".agents/skills/using-slack/registry.json")
 
 
