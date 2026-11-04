@@ -420,7 +420,7 @@ theorem anchorRead_rows {s : Schedule} {c : NetworkCheck.Circuit.Wiring} {params
     · rw [SampledProofs.Wires.Wire.units, SampledProofs.Wires.Wire.pairs, ← prodR_filter, List.filter_reverse, hd,
         anchorDigits, ← List.filter_reverse, prodR_filter]
       simp [SampledProofs.Wires.prodR, Nat.mul_comm]
-    · simp [SampledProofs.Wires.Wire.readerAt, hs, hc, hc0]
+    · simp [SampledProofs.Wires.Wire.readerAt, hs, hc, hc0, Nat.mod_one]
     · rw [hw, Nat.mul_add_mod_of_lt hb, Nat.mul_assoc]
 
 /-- An audit the check takes for anchored (`anchored`) with circuit record `r` reads the scan's state at its slots'
