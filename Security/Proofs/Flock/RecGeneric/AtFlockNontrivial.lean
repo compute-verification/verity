@@ -25,6 +25,7 @@ open Claims Claims.Recursion
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
+omit [Inhabited Coin] in
 /-- **The gated link finds nothing where no run is accepted**: its plan's first question is answered no, so it searches
 no run. -/
 theorem linkPlan_PrAt_noAcc {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
@@ -49,6 +50,7 @@ theorem Comp.E_none_of_EO_none {W : Type} (K : Comp Coin) (I : Proto Coin W) (S 
 
 variable {Col T Col' T' : Type} [DecidableEq Col] [DecidableEq Col']
 
+omit [DecidableEq Col] in
 /-- **`KSLinkOn` fails at the verifier that accepts everything** at any statement of `G` where the compiled verifier
 takes a round, the statement has a V\* session, the outer Flock's parser refuses the empty statement and `κ < 1/2` at
 the deployed decoders: `Pr[accept ∧ ¬extract] = 1` for the silent prover, every finder term is `0`, and at
