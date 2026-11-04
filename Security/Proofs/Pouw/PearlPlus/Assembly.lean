@@ -1,7 +1,7 @@
 import Properties.Pouw.PearlPlus
 import Definitions.Pouw.PearlC.TileCheck
 import Proofs.Properties.Pouw.PearlPlus.Open
-import Proofs.Pouw.PearlPlus.Words
+import Proofs.Pouw.PearlPlus.Semantics
 
 /-!
 # Pearl+'s bridge, part (d): a passed tile is good in the game
@@ -755,10 +755,9 @@ namespace Pouw.PearlPlus.Bridge
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
-/-- **(d)** from what a passed tile establishes (`TileAcceptMeans`) and what its words are (`WordsAreTheSemantics`):
+/-- **(d)** from what a passed tile establishes (`TileAcceptMeans`) and what its words are (`wordsAreTheSemantics`):
 the leaf binds the check's words to the commitment's, or SHA-512 collides on the two digests' messages. -/
-theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hW : WordsAreTheSemantics) :
-    TilePassGivesTheWords := by
+theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) : TilePassGivesTheWords := by
   intro Q R S saltOf rootOf ρ H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hpass
   obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, hwid, hrows, hcols⟩ := hof
   obtain ⟨bound, hb⟩ := Assembly.passOrOver_bound hpass
@@ -796,7 +795,7 @@ theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (
     obtain ⟨z, hz, rfl⟩ := List.getElem_of_mem hj
     have hx! := getElem!_pos rows x hx
     have hz! := getElem!_pos cols z hz
-    have hWx := hW saltOf rootOf ρ H s U ((auditTiling 64 64 U.layout).unit g) c.act p.salt
+    have hWx := wordsAreTheSemantics saltOf rootOf ρ H s U ((auditTiling 64 64 U.layout).unit g) c.act p.salt
       ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) wn' rows cols
       ops ch hsalt hroot hK
       (fun i hi => Assembly.rows_lt (by rw [hrows]; exact List.mem_toFinset.2 hi))
