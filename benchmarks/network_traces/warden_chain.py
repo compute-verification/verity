@@ -20,6 +20,9 @@ certifier path none of its records enters the chain.
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
+* `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
+  `verity/network-rows/v1`): the deployment's key, link, schedule, session and windows, and each execution phase's
+  three records (`warden_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid) and then certified.
 """
 from __future__ import annotations
 
@@ -29,19 +32,20 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import certifier_serve as cs
-import warden_serve as WS
-
 from verity.core.protocols.certifier import io_tie as IT
+from verity.core.protocols.certifier import lean_audit as LA
 from verity.core.protocols.certifier import service as SVC
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import DATA, id_request
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.crypto import lms
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import certifier_serve as cs
+import warden_serve as WS
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
          "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
@@ -200,3 +204,26 @@ def io(run: Path) -> dict:
                     position += 1
     return {"accepted": not violations and bool(requests), "requests": len(requests),
             "tokens": sum(len(r["output"]) for r in requests), "violations": violations[:20], "records": requests}
+
+
+def rows_audit_case(run: Path) -> dict:
+    """The run's ``network-rows`` case (the module docstring's `rows_audit_case`) as `scan_period.lean_check` writes
+    it: the params, and the commitment and evidence hex (no evidence: ``{}``). SystemExit naming an execution phase's
+    record or certified record the run lacks."""
+    dep, params = deployment(run)
+    wit = witness(run)
+    key = cs.read_public(dep["key"])
+    certified, _ = WS.read_certified(wit / "certified.jsonl")
+    raw = {(name, r.window): r for name, rs in WS.read_records(wit, params).items() for r in rs}
+    body = []
+    for w in range(dep["windows"]):
+        for name, (link, direction) in WS.CERTIFIED.items():
+            r, c = raw.get((name, w)), certified.get((link, direction, w))
+            if r is None or c is None:
+                raise SystemExit(f"{run}: {name} window {w} has no {'record' if r is None else 'certified record'}")
+            body += [LA.encode(r), LA.encode(c)]
+    p = key.params
+    lms = {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}
+    return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": lms, "schedule": dict(dep["params"]),
+                       "session": dep["session"], "windows": dep["windows"]},
+            "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}
