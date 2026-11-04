@@ -293,14 +293,14 @@ end Run
 /-! ## The wires -/
 
 /-- **A wired gate outside the incorrect proof blocks reads the trace's value** once the wires are resolved in more
-rounds than the wired gates ranked below it: its wire is right, so the trace holds its writer's value there, and the
-writer, a returned gate that is not a constant, has the trace's value (`valOver_out`) on inputs that do, the wired ones
-among them ranked lower. -/
+rounds than the wired gates ranked below it: its wire is right, so the trace holds there the value its writer is read
+at, and the writer, a returned gate (a constant, an input or a computed gate), has the trace's value (`valOver_out`) on
+inputs that do, the wired ones among them ranked lower. -/
 theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ}
     {ref : ℕ → Option Bool} {F : Finset ℕ} (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u) (hwf : lay.WiresFit C k)
     (r : ℕ → ℕ) (hr : ∀ g w g', lay.wires g = some w → lay.wires g' ≠ none → Depends C g' w → r g' < r g)
-    (hright : ∀ g, C.gates[g]? = some .input → ¬ FaultyGate C P F g → WireRight lay.wires ref g) {inp : ℕ → Bool}
+    (hright : ∀ g, C.gates[g]? = some .input → ¬ FaultyGate C P F g → WireRight C lay.wires ref g) {inp : ℕ → Bool}
     (hinp : ∀ g w g', lay.wires g = some w → Depends C g' w → C.gates[g']? = some .input → lay.wires g' = none →
       ¬ FaultyGate C P F g' → inp g' = traceVal C ref g') :
     ∀ n g w, lay.wires g = some w → (wiredBelow C lay.wires r g).card < n → ¬ FaultyGate C P F g →
@@ -311,12 +311,12 @@ theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGa
   | succ n ih =>
   intro g w hw hc hnf
   rw [resolveWires_succ hw]
-  obtain ⟨hgi, -, hwo, hwc, -⟩ := hwf.1 g w hw
+  obtain ⟨hgi, -, hwo, -⟩ := hwf.1 g w hw
   obtain ⟨b, hgb, hwb⟩ := hright g hgi hnf w hw
   have htg : traceVal C ref g = b := by
     rw [traceVal, read_of_not_const (fun b' h => by rw [hgi] at h; cases h), hgb, Option.getD_some]
   have htw : traceVal C ref w = b := by
-    rw [traceVal, read_of_not_const hwc, hwb, Option.getD_some]
+    rw [traceVal, hwb, Option.getD_some]
   refine (valOver_out hT hP ι hι (fun g' => Depends C g' w) ?_ ?_ hwo Relation.ReflTransGen.refl).trans
     (htw.trans htg.symm)
   · intro g' x hx hg' i hi
@@ -439,7 +439,7 @@ status complete. -/
 theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ} (hT : C.Topological)
     (hP : P.Partitions C) (hfit : lay.Fits C k) {ref : ℕ → Option Bool} {F : Finset ℕ} (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u)
-    (hright : ∀ g, C.gates[g]? = some .input → ¬ FaultyGate C P F g → WireRight lay.wires ref g)
+    (hright : ∀ g, C.gates[g]? = some .input → ¬ FaultyGate C P F g → WireRight C lay.wires ref g)
     {op : ℕ → List (Obs L K S) → List Bool} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o)
     (hcov : Covered k o) : Accepted (circuitProgram C lay k) op k o (traceVal C ref, heldAdv C P F ref) := by
   intro t ht
@@ -463,7 +463,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
       exact inputOf_eq hcar ht fun t' h1 h2 hgi => hg t' h1 h2 g hgi Relation.ReflTransGen.refl
     | some w =>
       exact resolveWires_eq hT hP ι hι hwf r hr hright
-        (fun g w g' hw hdep _ _ _ => inputOf_eq hcar ht fun t' _ h2 hgi => (hwf.1 g w hw).2.2.2.2 t' h2 g' hgi hdep)
+        (fun g w g' hw hdep _ _ _ => inputOf_eq hcar ht fun t' _ h2 hgi => (hwf.1 g w hw).2.2.2 t' h2 g' hgi hdep)
         _ g w hw (card_wiredBelow_lt (List.getElem?_eq_some_iff.1 hgi).1) hnf
   have heq : ∀ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ),
       valOver C (resolveWires C lay.wires (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref)
@@ -482,7 +482,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
 /-- **An input gate outside the incorrect proof blocks has its wire right**: its proof block is not wire-wrong. -/
 theorem wireRight_of_not_faultyGate (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) {P : Partition}
     (hP : P.Partitions s.prog) (wires : ℕ → Option ℕ) (w : Wit) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
-    (hnf : ¬ FaultyGate s.prog P (incorrect H Cm s P wires w) g) : WireRight wires (w.val H Cm s) g := by
+    (hnf : ¬ FaultyGate s.prog P (incorrect H Cm s P wires w) g) : WireRight s.prog wires (w.val H Cm s) g := by
   classical
   by_contra hn
   have hglt : g < s.prog.gates.length := (List.getElem?_eq_some_iff.1 hg).1

@@ -164,8 +164,7 @@ theorem fits_iff (lay : BoundaryGates 1 2) (he : lay.egress = flipEgress) (hi : 
     simp at hg
   · obtain ⟨hg, hw'⟩ := hw g w hgw
     refine ⟨by rcases hg with rfl | rfl <;> rfl, fun t _ => by rw [hi]; simp,
-      by rcases hw' with rfl | rfl <;> decide, fun b => by rcases hw' with rfl | rfl <;> simp [flipProg],
-      fun t _ i hi' => by rw [hi] at hi'; simp at hi'⟩
+      by rcases hw' with rfl | rfl <;> decide, fun t _ i hi' => by rw [hi] at hi'; simp at hi'⟩
 
 theorem flip_acyclic : WiresAcyclic flipProg flipLay.wires := by
   refine ⟨fun _ => 0, fun g w g' hg hg' hd => ?_⟩
@@ -261,20 +260,24 @@ theorem flip_faulty (H : Msg → Msg) {a b c d : Bool} (hb : b = !a) (hd : d = !
       ((refIn_of_boundary (by decide) _ _).trans h2) ((refIn_of_boundary (by decide) _ _).trans h3)⟩
 
 theorem wireWrong_eq_empty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition}
-    {wires : ℕ → Option ℕ} {w : Wit} (h : ∀ g, WireRight wires (w.val H Cm s) g) :
+    {wires : ℕ → Option ℕ} {w : Wit} (h : ∀ g, WireRight s.prog wires (w.val H Cm s) g) :
     wireWrong H Cm s P wires w = ∅ := by
   classical
   refine Finset.eq_empty_of_forall_notMem fun _ hv => ?_
   obtain ⟨-, _, -, g, -, hg⟩ := Finset.mem_filter.1 hv
   exact hg (h g)
 
+/-- `flipProg`'s writers are negations, no constant, so they are read at their committed values. -/
+theorem flip_read (val : ℕ → Option Bool) {i : ℕ} (hi : i = 1 ∨ i = 3) : flipStmt.prog.read val i = val i := by
+  rcases hi with rfl | rfl <;> simp [Prog.read, flipStmt, flipProg]
+
 theorem cycle_wireRight (H : Msg → Msg) (a : Bool) (g : ℕ) :
-    WireRight cycleLay.wires ((wit4 a (!a) (!a) a).val H accCm flipStmt) g := by
+    WireRight flipStmt.prog cycleLay.wires ((wit4 a (!a) (!a) a).val H accCm flipStmt) g := by
   obtain ⟨h0, h1, h2, h3⟩ := wit4_val H a (!a) (!a) a
   intro w hw
   rcases cycle_wired hw with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-  · exact ⟨a, h0, h3⟩
-  · exact ⟨!a, h2, h1⟩
+  · exact ⟨a, h0, (flip_read _ (i := 3) (Or.inr rfl)).trans h3⟩
+  · exact ⟨!a, h2, (flip_read _ (i := 1) (Or.inl rfl)).trans h1⟩
 
 /-- Under `cycleLay`'s wiring, a trace whose inputs are its writers' values has no incorrect proof block. -/
 theorem cycle_incorrect (H : Msg → Msg) (a : Bool) :
@@ -300,11 +303,11 @@ theorem flip_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt fl
   obtain ⟨u, hu, ι, hc⟩ := Classical.not_not.1 hnf
   obtain rfl : [2, 3] = u := Option.some.inj hu
   have h32 := pair_val (C := flipProg) (i := 2) (j := 3) rfl rfl (by omega) (by decide) (by decide) hc
-  have hr : WireRight flipLay.wires (w.val H accCm flipStmt) 2 := by
+  have hr : WireRight flipStmt.prog flipLay.wires (w.val H accCm flipStmt) 2 := by
     by_contra hn
     exact hnw ⟨[2, 3], rfl, 2, Or.inl (by simp), hn⟩
   obtain ⟨b, h2, h1⟩ := hr 1 rfl
-  exact ⟨b, h1, by simp [h32, h2]⟩
+  exact ⟨b, (flip_read _ (i := 1) (Or.inl rfl)).symm.trans h1, by simp [h32, h2]⟩
 
 /-! ## The rows the traces carry -/
 
