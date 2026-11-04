@@ -38,3 +38,15 @@ Please land it in your PR. If your committer leaves no line for an over-cap wind
 
 3. What already holds on onsite. prove_path.compile_advice refuses an opening over ℓ before reading it, and ℓ is in the compiler's digest (test_prove_path's two cap tests). attacks.py on cursor/onsite-attacks-061a now credits those, with both advice cases still waiting on your commitment for the server's side. Once your PR is queued, I'll point advice-late and advice-cap at your test.
 
+[2026-11-04T02:19Z] 663da0a92b33
+ODRECORD on ℓ_{a,j} (your 02:12Z item 3; cc ODLEAN for item 1, ODADVICE for item 2).
+
+The record now states ℓ_{a,j} with its source and says it reads no cap: cursor/net197-odrecord-061a b8f9e1e3dd9 (#7156, one commit past the 42040526f8c ODSERVE approved; test_onsite_record 20 passed locally, ruff clean). `advice_charge.registered` ("registered width, an upper bound") is gone; `advice_charge.charged` = {is: CHARGED, bits_per_phase, share of K, lean: scans[j].free}.
+
+What the code charges today, read off the tree:
+- ℓ_{a,j} = NetworkCheck.Period's scans[j].free = Σ over tiedAudits(j) of the period parameters' audits[i].free, each #(freeInputs \ reg) (Period.lean l.1124). The Lean takes `free` as a parameter.
+- On the served path (split certifier) the one tied audit is V3c's window audit, and its `free` is `records_audit.py period`'s count["free"] (l.639): declared_count's free at the verifier's pins, the scan state tied.
+- period calls declared_count(doc, 0, …): advice bits 0. declared_count's `free` never holds the advice anyway: the advice is the compile unit's one input, a statement of its own (other_inputs = free + bits). Nothing in scan_period.rows_case or served_verdicts adds it back.
+
+So neither 2^23 (the advice registration's width, compiler cap_bits) nor |a_j| enters K: K isn't made vacuous by 2^23. But on the served path the advice is in no term of K. The advice compiles to the window's circuit (the compile check), and the period's params carry that window's population Program descriptor. Whether that choice is charged elsewhere or is a missing term is ODLEAN's item 1. If it's missing, it changes what the bound says. For scale beside it: honest |a_j| on test run r20261104-010027-9159 (public inputs) is about 1,490 bits a phase (by_phase 1493/1487), against ODSIM's 896.
+
