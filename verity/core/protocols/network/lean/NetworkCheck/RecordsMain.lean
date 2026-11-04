@@ -8,9 +8,10 @@ import NetworkCheck.Members
 (`verdicts-no-grid`), of N2's verdict of record on one link-window (`link-window`, `NetworkCheck.LinkWindow`), of
 the client's check of one window's served certificates (`certificates`, `NetworkCheck.LinkWindow.refusals`), of the
 syncs the certifier signed for a link, read through its clock certificates' openings (`clocks`,
-`NetworkCheck.Period.signedSyncs`), of a compute audit's circuit record checked against its Program (`circuit`,
-`NetworkCheck.Circuit.check`), and of that record's members (`members`, `NetworkCheck.Circuit.members`). Audited under
-`NetworkCheck`. -/
+`NetworkCheck.Period.signedSyncs`), of whether a scan's ingress bucket reads its slot entries at their slots
+(`reads-entries`, `NetworkCheck.Period.readsEntries`), of a compute audit's circuit record checked against its Program
+(`circuit`, `NetworkCheck.Circuit.check`), and of that record's members (`members`, `NetworkCheck.Circuit.members`).
+Audited under `NetworkCheck`. -/
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -20,6 +21,7 @@ def main (args : List String) : IO UInt32 := do
       ("link-window", NetworkCheck.LinkWindow.linkWindowFn),
       ("certificates", NetworkCheck.LinkWindow.certificatesFn),
       ("clocks", NetworkCheck.Period.clocksFn),
+      ("reads-entries", NetworkCheck.Period.readsEntriesFn),
       ("circuit", NetworkCheck.Circuit.circuitFn),
       ("members", NetworkCheck.Circuit.membersFn)])
     return 0

@@ -74,6 +74,7 @@ import json
 import math
 import random
 import re
+from collections.abc import Callable
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -457,24 +458,112 @@ def _axis_dims(t, ax: int) -> tuple[int, int] | None:
     return (t[1], leaves_of(t[2])) if ax == 0 else _axis_dims(t[2], ax - 1)
 
 
-def _member_ref(x: dict, o: int, m: int, k: int, j: dict) -> tuple[str, int, int] | None:
-    """`Arg.memberRef`: member `m`'s leaf `k` of node `x`'s argument `o`, with the dims the decoder gives a batch
-    argument from its axis; None past the argument's references."""
+def _member_refs(x: dict, o: int, j: dict) -> Callable[[int, int], tuple[str, int, int] | None]:
+    """`Arg.memberRef` of node `x`'s argument `o`: member `m`'s leaf `k`, with the dims the decoder gives a batch
+    argument from its axis; None past the argument's references. They are expanded once (`_refs`), as the decoded
+    argument holds its `Seq`, and every member and leaf read through the function indexes them."""
     a, nodes = x["args"][o], j["definitions"][j["root"]]["body"]["nodes"]
     ax = (x.get("axes") or [None] * len(x["args"]))[o]
     t = j["types"][a["type"]] if isinstance(a["type"], int) else a["type"]
     dims = _axis_dims(t, ax) if ax is not None else None
     refs = _refs(a, nodes)
-    i = k if dims is None else (k // dims[1] * dims[0] + m) * dims[1] + k % dims[1]
-    return refs[i] if i < len(refs) else None
+
+    def ref(m: int, k: int) -> tuple[str, int, int] | None:
+        i = k if dims is None else (k // dims[1] * dims[0] + m) * dims[1] + k % dims[1]
+        return refs[i] if i < len(refs) else None
+    return ref
+
+
+def _reads_entries_walk(x: dict, o: int, t0: int, every: int, E: int, ks: list[int], j: dict) -> bool:
+    """`readsEntries` member by member and leaf by leaf, as it read before it read the arguments' parts: for each lane
+    `i` and member `m` (bucket `t0 + m`), argument `o + i` is row `⌊(t0 + m) / every⌋` of input node `ks[i]`, `E`
+    leaves a row. The reference `test_reads_entries_is_the_walk` holds `_reads_entries` and Lean's to."""
+    def reads(i: int, k: int) -> bool:
+        ref = _member_refs(x, o + i, j)
+        return all(ref(m, ell) == ("n", k, (t0 + m) // every * E + ell) for m in range(x["n"]) for ell in range(E))
+    return all(o + i < len(x["args"]) and reads(i, k) for i, k in enumerate(ks))
+
+
+def _entry_leaf(t0: int, every: int, E: int, q: int) -> int:
+    """`entryLeaf`: reference `q` of a `prog<j>` argument mapped over its leading axis, leaf `q mod E` of row
+    `⌊(t0 + ⌊q / E⌋) / every⌋`."""
+    return (t0 + q // E) // every * E + q % E
+
+
+def _rows_step(t0: int, every: int, a: int, rho: int, a1: int, a2: int) -> bool:
+    """`rowsStep`: `⌊(t0 + m + a) / every⌋ − ⌊(t0 + m) / every⌋ = rho` for every member `m` of `[a1, a2)`, from the
+    first member's residue mod `every` and their count."""
+    if a2 <= a1:
+        return True
+    r, res = a % every, (t0 + a1) % every
+    last = res + a2 - a1 - 1
+    if rho == a // every:
+        return r == 0 or last < every - r
+    return rho == a // every + 1 and r != 0 and every - r <= res and last < every
+
+
+def _steps_by(t0: int, every: int, E: int, I: int, sigma: int, lo: int, hi: int) -> bool:
+    """`stepsBy`: `_entry_leaf(q + I) − _entry_leaf(q) = sigma` for every `q` of `[lo, hi)`, from the members the range
+    touches on each side of leaf `E − I mod E`."""
+    if hi <= lo:
+        return True
+    beta, m1, m2 = I % E, lo // E, (hi - 1) // E
+
+    def side(delta: int, a1: int, a2: int) -> bool:
+        need = sigma - beta + delta * E
+        return a2 <= a1 or (need >= 0 and need % E == 0 and _rows_step(t0, every, I // E + delta, need // E, a1, a2))
+    return side(0, m1 if lo % E < E - beta else m1 + 1, m2 + 1) and \
+        (beta == 0 or side(1, m1, m2 + 1 if E - beta <= (hi - 1) % E else m2))
+
+
+def _part_reads(k: int, t0: int, every: int, E: int, s: int, q: dict) -> bool:
+    """`partReads`: part `q`, its references from `s` on, names leaf `_entry_leaf(q)` of node `k` at each: an affine
+    or strided part by its first reference and its strides, an explicit one reference by reference."""
+    if "affine" in q:
+        sp, i, b, c = q["affine"]
+        return c == 0 or (sp == "n" and i == k and b == _entry_leaf(t0, every, E, s)
+                          and _steps_by(t0, every, E, 1, 1, s, s + c - 1))
+    if "strided" in q:
+        sp, i, b, inner, os, step, c = q["strided"]
+        I = inner or c
+        return c == 0 or (sp == "n" and i == k and b == _entry_leaf(t0, every, E, s)
+                          and _steps_by(t0, every, E, 1, step, s, s + min(I, c) - 1)
+                          and _steps_by(t0, every, E, I, os, s, s + c - I))
+    return all((sp, i, ell) == ("n", k, _entry_leaf(t0, every, E, s + u))
+               for u, (sp, i, ell) in enumerate(q["explicit"]))
+
+
+def _seq_reads(parts: list[dict], N: int, k: int, t0: int, every: int, E: int) -> bool:
+    """`seqReads`: the parts are `N` references, each part's from its start."""
+    at = 0
+    for q in parts:
+        if not _part_reads(k, t0, every, E, at, q):
+            return False
+        at += len(q["explicit"]) if "explicit" in q else (q.get("affine") or q["strided"])[-1]
+    return at == N
 
 
 def _reads_entries(x: dict, o: int, t0: int, every: int, E: int, ks: list[int], j: dict) -> bool:
     """`readsEntries`: for each lane `i` and member `m` (bucket `t0 + m`), argument `o + i` is row
-    `⌊(t0 + m) / every⌋` of input node `ks[i]`, lane `i`'s slot entries, `E` leaves a row, leaf by leaf."""
-    return all(o + i < len(x["args"]) and all(
-        _member_ref(x, o + i, m, ell, j) == ("n", k, (t0 + m) // every * E + ell)
-        for m in range(x["n"]) for ell in range(E)) for i, k in enumerate(ks))
+    `⌊(t0 + m) / every⌋` of input node `ks[i]`, lane `i`'s slot entries, `E` leaves a row, read off the argument's
+    parts (`_seq_reads`): mapped over its leading axis, its `n·E` references are `_entry_leaf`'s; unmapped, its `E`
+    are one row all `n` members share; mapped over an inner axis, refused."""
+    nodes = j["definitions"][j["root"]]["body"]["nodes"]
+    axes = x.get("axes") or [None] * len(x["args"])
+
+    def lane(i: int, k: int) -> bool:
+        if o + i >= len(x["args"]):
+            return False
+        n, a = x["n"], x["args"][o + i]
+        if n == 0 or E == 0:
+            return True
+        t = j["types"][a["type"]] if isinstance(a["type"], int) else a["type"]
+        dims = _axis_dims(t, axes[o + i]) if axes[o + i] is not None else None
+        parts = _parts(a["refs"], nodes)
+        if dims is None:
+            return t0 // every == (t0 + n - 1) // every and _seq_reads(parts, E, k, t0, every, E)
+        return dims[1] == E and _seq_reads(parts, n * E, k, t0, every, E)
+    return all(lane(i, k) for i, k in enumerate(ks))
 
 
 #: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
@@ -735,7 +824,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
                        "depend on the ingress (NetTiming.BoundaryGates.Fits)")
-    r0 = [_member_ref(xf, 1 + i, 0, 0, j) for i in range(L)]
+    r0 = [_member_refs(xf, 1 + i, j)(0, 0) for i in range(L)]
     pks = [r[1] for r in r0 if r is not None]
     if (len(pks) != L or any(r[0] == "p" for r in r0) or len(set(pks)) != L
             or any(k in rows or not (k < len(nodes) and _is_input(nodes[k], j)) for k in pks)):
