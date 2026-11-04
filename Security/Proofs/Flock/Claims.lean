@@ -350,6 +350,7 @@ import Proofs.Flock.Claims.Recursion.ResStepsWD
 import Proofs.Flock.Claims.Recursion.ResNextW
 import Proofs.Flock.Claims.Recursion.ResAccEnd
 import Proofs.Flock.Claims.Recursion.OpenCoefTie
+import Proofs.Flock.Claims.ZKOut
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

@@ -113,6 +113,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
 import Proofs.Flock.Claims.ZK.Layout
 import Proofs.Flock.Claims.ZK.Cut
+import Proofs.Flock.Claims.ZK.DeferredOut
 import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
@@ -480,6 +481,9 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`). The server that defers every stop to the last
   round (`ZkServer.nextD`) releases the reference run or it with its last message the stop (`ZkServer.split_deferred`),
   within a factor 2 of the simulator that guesses which (`ZkServer.zk_deferred`, `leaky1`).
+* `DeferredOut`: which one is public, the bit whether the session's last round carries the stop (`stopOf`), so per
+  outcome (`outD`: the verdict and that bit) the deferred server is `Claims.ZKOut`'s bound at the factor `1`, at the
+  simulator given the outcome (`simOutD`, `leaky1` at its bit; `ZkServer.zkOut_deferred`).
 * `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
   a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`

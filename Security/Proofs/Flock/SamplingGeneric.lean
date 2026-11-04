@@ -9,6 +9,8 @@ import Proofs.Flock.SamplingGeneric.Bits
 import Proofs.Flock.SamplingGeneric.Reg
 import Proofs.Flock.SamplingGeneric.Efficient
 import Proofs.Flock.SamplingGeneric.Counter
+import Proofs.Flock.SamplingGeneric.ZK
+import Proofs.Flock.SamplingGeneric.FlockZk
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -33,6 +35,11 @@ the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `Exp
 against the incorrect set of the plurality trace the prover's tape fixes, follows from the sessions' bound and the
 rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so **`CompilerKSReg` is proved** (`compilerKSReg`),
 and with it Flock's (`flockKSReg`).
+
+**`CompilerZK` is proved** (`compilerZK`, `SamplingGeneric/ZK.lean`): a hybrid over the sessions, each step `A`'s zero
+knowledge at the session's statement against `V*` after the run's messages before it (`residual`). Flock's ZK server is
+zero knowledge per outcome (`FlockZk.server_zkOut`, `SamplingGeneric/FlockZk.lean`), at the simulator given the outcome
+and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean_loop` takes.
 -/
 
 namespace Claims.SamplingGeneric
