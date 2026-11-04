@@ -3,7 +3,8 @@
 * `H1u`: a build of benchmarks/hash/dither/h1u.cu (its sm_90a arms; any build exporting
   kh_seeds_j10r and kh_units_multi_j10r): one call's seeds (kh_seeds_j10r: seed_c at the call's first position, sigma_R
   at base + u) and every unit's receipt (kh_units_multi_j10r, mode 0: the call's row tiles, then its proof blocks; with ``sm``
-  kh_units_multi_j10r_sm on every SM, the served launch). Receipts only: z is the served GEMM's.
+  kh_units_multi_j10r_sm on every SM, the served launch). Receipts only: z is the served GEMM's. Its workspace is the
+  size `j10r_ws.workspace_bytes` gives, with `WS_TAIL` bytes of `WS_SENTINEL` past it that no launch may write.
 * `Ref`: j10r_ref.so (j10r_ref.cu), the fallback: seeds, receipts and z of listed proof blocks.
 
 Both take A [M, K] and B [N, K] int8 on the GPU, and the call's (salt, root_a, root_b, base).
@@ -11,13 +12,19 @@ Both take A [M, K] and B [N, K] int8 on the GPU, and the call's (salt, root_a, r
 from __future__ import annotations
 
 import ctypes
+import sys
+from pathlib import Path
 
 import numpy as np
 import torch
 
+sys.path.append(str(Path(__file__).resolve().parents[2] / "hash" / "dither"))
+import j10r_ws as JWS
+
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 T = 32
+WS_TAIL, WS_SENTINEL = 1 << 20, 0x5C
 #: 0xA5A5A5A5 and 0x5A5A5A5A as s32: a receipt word equals either with probability 2^-32, so over a call of 10^9 words
 #: one poison alone flags real words; a word is unwritten only where it holds each poison after the run under it
 POISONS = (-1515870811, 1515870810)
@@ -73,8 +80,8 @@ class H1u:
         h.kh_seeds_j10r.argtypes = [vp, u64, u64, u32, vp, vp]
         h.kh_units_multi_j10r.argtypes = [vp, u32, u32, u32, vp, ctypes.c_int, vp]
         h.kh_ucallr_bytes.restype = u32
-        h.kh_j10r_rows_bytes.restype = u64
-        h.kh_j10r_rows_bytes.argtypes = [u32, u32]
+        h.kh_j10r_row_fault_word.restype = u64
+        h.kh_j10r_row_fault_word.argtypes = [u32, u32, u32, ctypes.c_int]
         h.kh_words.restype = u32
         h.kh_words.argtypes = [u32]
         h.kh_digits.argtypes = [u32]
@@ -83,6 +90,8 @@ class H1u:
             h.kh_smc_words.restype = u32
         if int(h.kh_ucallr_bytes()) != UCALLR.itemsize:
             raise RuntimeError(f"{path}: UCallR is {int(h.kh_ucallr_bytes())} bytes, not {UCALLR.itemsize}")
+        #: H1U_JW: the column pass alone reads the call's seed_c, and no unit reads its own
+        self.jw = bool(JWS.flags(h) & JWS.JW)
 
     @staticmethod
     def has_sm(path: str) -> bool:
@@ -91,15 +100,6 @@ class H1u:
 
     def words(self, k: int) -> int:
         return int(self.h.kh_words(k))
-
-    def ws_bytes(self, m: int, n: int, k: int) -> int:
-        """A call's row workspace: kh_j10r_jw_bytes (an H1U_JW build's: its column blocks and W' too), else
-        kh_j10r_rows_bytes."""
-        if hasattr(self.h, "kh_j10r_jw_bytes"):
-            self.h.kh_j10r_jw_bytes.restype = ctypes.c_ulonglong
-            self.h.kh_j10r_jw_bytes.argtypes = [ctypes.c_uint] * 3
-            return int(self.h.kh_j10r_jw_bytes(m, n, k))
-        return int(self.h.kh_j10r_rows_bytes(m, k))
 
 
 class H1uCall:
@@ -115,7 +115,9 @@ class H1uCall:
         self.live = torch.ones(m // T, dtype=torch.uint8, device="cuda")
         self.seeds = torch.empty((self.units, 16), dtype=torch.int64, device="cuda")
         self.out = torch.empty((self.units, lib.words(k)), dtype=torch.int32, device="cuda")
-        self.rws = torch.empty((lib.ws_bytes(m, n, k),), dtype=torch.uint8, device="cuda")
+        nbytes = JWS.workspace_bytes(lib.h, m, n, k)
+        full = torch.full((nbytes + WS_TAIL,), WS_SENTINEL, dtype=torch.uint8, device="cuda")
+        self.rws, self.tail = full[:nbytes], full[nbytes:]
         self.next = torch.zeros(int(lib.h.kh_smc_words()), dtype=torch.int32, device="cuda") if lib.sm else None
         t = np.zeros(2, dtype=UCALLR)
         t[0] = (a.data_ptr(), b.data_ptr(), self.seeds.data_ptr(), self.out.data_ptr(), self.rws.data_ptr(), n, k, 0,
@@ -128,17 +130,33 @@ class H1uCall:
         self.rws.fill_(p & 0xFF)
         self.seeds.fill_(p)
 
-    def run(self) -> None:
+    def run(self, units: int | None = None, mode: int = 0) -> None:
+        """Mode 0: the seeds, then `units` (default all) of the call (with ``sm`` the served launch). Modes 1 and 2:
+        kh_units_multi_j10r's rows alone and units alone, on the seeds a mode 0 run wrote."""
         h, st, m = self.lib.h, _stream(), self.a.shape[0]
-        if rc := h.kh_seeds_j10r(self.data.data_ptr(), self.base, self.base, self.units, self.seeds.data_ptr(), st):
+        n = self.units if units is None else units
+        if mode == 0 and (rc := h.kh_seeds_j10r(self.data.data_ptr(), self.base, self.base, self.units,
+                                                self.seeds.data_ptr(), st)):
             raise RuntimeError(f"kh_seeds_j10r rc {rc}")
-        if self.lib.sm:
-            rc = h.kh_units_multi_j10r_sm(self.tab.data_ptr(), 1, self.units, m, self.live.data_ptr(), 1, 1,
-                                          self.next.data_ptr(), st)
+        sm = self.lib.sm and mode == 0
+        if sm:
+            rc = h.kh_units_multi_j10r_sm(self.tab.data_ptr(), 1, n, m, self.live.data_ptr(), 1, 1, self.next.data_ptr(),
+                                          st)
         else:
-            rc = h.kh_units_multi_j10r(self.tab.data_ptr(), 1, self.units, m, self.live.data_ptr(), 0, st)
+            rc = h.kh_units_multi_j10r(self.tab.data_ptr(), 1, n, m, self.live.data_ptr(), mode, st)
         if rc:
-            raise RuntimeError(f"kh_units_multi_j10r{'_sm' if self.lib.sm else ''} rc {rc}")
+            raise RuntimeError(f"kh_units_multi_j10r{'_sm' if sm else ''} rc {rc}")
+
+    def tail_written(self) -> int:
+        """The bytes past the workspace the launches so far wrote: 0, or a launch wrote past its buffer."""
+        torch.cuda.synchronize()
+        return int((self.tail != WS_SENTINEL).sum())
+
+    def end_written(self, last: int = 4096) -> int:
+        """The workspace's bytes of its last `last` that aren't `POISON`'s byte: an H1U_JW build's W' fills its
+        workspace to the end, so a run over a poisoned one leaves some, and its size is the one its units use."""
+        torch.cuda.synchronize()
+        return int((self.rws[-last:] != (POISON & 0xFF)).sum())
 
 
 class Ref:

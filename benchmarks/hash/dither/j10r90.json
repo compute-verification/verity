@@ -1,6 +1,0 @@
-{
- "sm90_pin": {
-  "run": "r20261023-120437-0149",
-  "note": "j10r90.sh's diagnostic: the run that pinned this entry on vy-dc-h200 (pin_target.sh 13.0.1-sm_90a, all 45,162,742,383 cases exact); the entry never landed in sass_pins.json"
- }
-}
