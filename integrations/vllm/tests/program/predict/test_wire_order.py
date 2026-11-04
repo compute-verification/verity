@@ -71,56 +71,68 @@ def _int(x, least: int | None = None) -> bool:
 
 
 def check(record, order) -> list[int]:
-    """Each of ``record``'s wires' greatest rank(writer) - rank(reader) under ``order``, every one below 0; else `Refused`.
+    """Each of ``record``'s wires' greatest rank(writer) - rank(reader) under ``order``, every one below 0; else `Refused`,
+    in the period check's order (`NetworkCheck.Circuit.orderOf`, then `orderWhy`).
 
-    Segments first, in order: each names a template of the record, its ``radix`` and ``r`` one integer each a digit with
-    each radix at least 1, its units within its template's, one template's segments disjoint, and one pair a record wire.
-    Then each wire on each side, the writer's first: the writer side is offset ``base`` with digit k's stride its step, the
-    reader side offset ``at`` with digit k's stride the reader units' place of k, the cut digit's 0. The side's segment is
-    the side's template, its offset ``b`` lies in it, each moving digit (radix past 1, a stride t) takes the slowest position
-    of radix past 1 whose place divides t, its multiple m = t / place there, and each position's digit of ``b`` moved by
-    its digits' m·(radix - 1) stays in the position. Each side's rank is then ``K + Σ_k a_k·d_k`` over the wire's digits,
-    so its greatest rank(writer) - rank(reader) is ``K_w - K_r + Σ_k max(0, (a_w,k - a_r,k)·(radix_k - 1))``."""
+    The certificate is read whole first: its keys and format, each segment a string template, a natural ``at``, an integer
+    ``c``, and ``radix`` and ``r`` one integer each a digit with each radix at least 1, and each pair two naturals. Then
+    the segments, in order: each names a template of the record and lies within its units; then one template's segments
+    disjoint (the first segment overlapping a later one, with the first such); then one pair a record wire. Then wire by
+    wire: both its segments are segments, of its writer's and its reader's templates, and each side lies in its segment,
+    the writer's first: the writer side is offset ``base`` with digit k's stride its step, the reader side offset ``at``
+    with digit k's stride the reader units' place of k, the cut digit's 0. A side's offset ``b`` lies in its segment, each
+    moving digit (radix past 1, a stride t) takes the slowest position of radix past 1 whose place divides t, its multiple
+    m = t / place there, and each position's digit of ``b`` moved by its digits' m·(radix - 1) stays in the position. Each
+    side's rank is then ``K + Σ_k a_k·d_k`` over the wire's digits, so its greatest rank(writer) - rank(reader) is
+    ``K_w - K_r + Σ_k max(0, (a_w,k - a_r,k)·(radix_k - 1))``."""
     units = {t: n for t, n in record["templates"]}
     wires = record["wires"]
-    if not isinstance(order, dict) or set(order) != {"format", "segments", "wires"} or order["format"] != WO.SCHEMA:
+    if not (isinstance(order, dict) and set(order) == {"format", "segments", "wires"} and order["format"] == WO.SCHEMA
+            and isinstance(order["segments"], list) and isinstance(order["wires"], list)):
         raise Refused(f"not a {WO.SCHEMA} certificate")
-    segs = order["segments"]
+    segs, pairs = order["segments"], order["wires"]
     for s, g in enumerate(segs):
-        if not isinstance(g, dict) or set(g) != set(SEGMENT) or not (_int(g["at"]) and _int(g["c"])):
+        if not (isinstance(g, dict) and set(g) == set(SEGMENT) and isinstance(g["template"], str) and _int(g["at"], 0)
+                and _int(g["c"])):
             raise Refused(f"segment {s}: not a segment of integers at and c")
-        if g["template"] not in units:
-            raise Refused(f"segment {s} names no template of the record")
         if not (isinstance(g["radix"], list) and isinstance(g["r"], list) and len(g["r"]) == len(g["radix"])
                 and all(_int(x, 1) for x in g["radix"]) and all(_int(x) for x in g["r"])):
             raise Refused(f"segment {s}: radix and r are one integer each a digit, each radix at least 1")
-        end = g["at"] + math.prod(g["radix"])
-        if g["at"] < 0 or end > units[g["template"]]:
-            raise Refused(f"segment {s}: units [{g['at']}, {end}) outside {g['template']}'s {units[g['template']]}")
-    by: dict[str, list[tuple[int, int, int]]] = {}
-    for s, g in enumerate(segs):
-        by.setdefault(g["template"], []).append((g["at"], s, g["at"] + math.prod(g["radix"])))
-    for t, xs in by.items():
-        xs.sort()
-        for (_, s, end), (at, u, _) in zip(xs, xs[1:]):
-            if at < end:
-                raise Refused(f"segments {min(s, u)} and {max(s, u)} of {t} overlap")
-    if not isinstance(order["wires"], list) or len(order["wires"]) != len(wires):
-        raise Refused(f"{len(order['wires'])} wire pairs for {len(wires)} record wires")
-    out = []
-    for i, (w, pair) in enumerate(zip(wires, order["wires"])):
-        if not (isinstance(pair, list) and len(pair) == 2):
+    for i, pair in enumerate(pairs):
+        if not (isinstance(pair, list) and len(pair) == 2 and all(_int(s, 0) for s in pair)):
             raise Refused(f"wire {i}: not a [writer segment, reader segment] pair")
-        if (bad := next((s for s in pair if not (_int(s, 0) and s < len(segs))), None)) is not None:
+    span = [(g["at"], g["at"] + math.prod(g["radix"])) for g in segs]
+    for s, g in enumerate(segs):
+        if g["template"] not in units:
+            raise Refused(f"segment {s} names no template of the record")
+        if span[s][1] > units[g["template"]]:
+            raise Refused(f"segment {s}: units [{g['at']}, {span[s][1]}) outside {g['template']}'s {units[g['template']]}")
+    by: dict[str, list[int]] = {}
+    for s, g in enumerate(segs):
+        by.setdefault(g["template"], []).append(s)
+    first = []
+    for ss in by.values():
+        xs = sorted(span[s] for s in ss)
+        if any(lo < hi for (_, hi), (lo, _) in zip(xs, xs[1:])):
+            first.append(next((s, u) for k, s in enumerate(ss) for u in ss[k + 1:]
+                              if span[s][0] < span[u][1] and span[u][0] < span[s][1]))
+    if first:
+        s, u = min(first)
+        raise Refused(f"segments {s} and {u} of {segs[s]['template']} overlap")
+    if len(pairs) != len(wires):
+        raise Refused(f"{len(pairs)} wire pairs for {len(wires)} record wires")
+    out = []
+    for i, (w, pair) in enumerate(zip(wires, pairs)):
+        if (bad := next((s for s in pair if s >= len(segs)), None)) is not None:
             raise Refused(f"wire {i}: segment {bad} is no segment")
+        for side, tid, s in (("writer", w["writer"], pair[0]), ("reader", w["reader"], pair[1])):
+            if segs[s]["template"] != tid:
+                raise Refused(f"wire {i}: {side} segment {s} is template {segs[s]['template']}, not {tid}")
         radix, C = w["radix"], w.get("cut", [0, 1])[1]
         reader = _places(radix[:-1]) + [0] if C > 1 else _places(radix)
         K, a = [], []
-        for (side, tid, o, strides), s in zip((("writer", w["writer"], w["base"], w["step"]),
-                                                ("reader", w["reader"], w["at"], reader)), pair):
+        for (side, o, strides), s in zip((("writer", w["base"], w["step"]), ("reader", w["at"], reader)), pair):
             g = segs[s]
-            if g["template"] != tid:
-                raise Refused(f"wire {i}: {side} segment {s} is template {g['template']}, not {tid}")
             R, P, b = g["radix"], _places(g["radix"]), o - g["at"]
             if not 0 <= b < math.prod(R):
                 raise Refused(f"wire {i}: {side} offset {b} outside segment {s}")
@@ -319,16 +331,51 @@ def test_a_toy_certificate_is_taken_at_the_tightest_ranks():
     ((("A", 0, [8, 0], 0, [1, 0]), B), ([0, 1],), "segment 0: radix and r are one integer each a digit, each radix at least 1"),
     ((("A", 4, [8], 0, [1]), B), ([0, 1],), "segment 0: units [4, 12) outside A's 8"),
     ((A, B, ("A", 4, [2], 9, [0])), ([0, 1],), "segments 0 and 2 of A overlap"),
+    ((("A", -1, [8], 0, [1]), B), ([0, 1],), "segment 0: not a segment of integers at and c"),
+    (((5, 0, [8], 0, [1]), B), ([0, 1],), "segment 0: not a segment of integers at and c"),
+    ((A, B), ([0, -1],), "wire 0: not a [writer segment, reader segment] pair"),
+    ((("C", 0, [8], 0, [1]), B), ([0, 1, 1],), "wire 0: not a [writer segment, reader segment] pair"),
+    ((("A", 4, [4], 0, [1]), ("A", 0, [2], 0, [1]), ("A", 1, [2], 0, [1]), ("A", 6, [1], 0, [0]), B), ([0, 4],),
+     "segments 0 and 3 of A overlap"),
+    ((("A", 4, [4], 0, [1]), B), ([0, 0],), "wire 0: reader segment 0 is template A, not B"),
 ])
 def test_each_refusal_names_its_wire_or_segment(segments, wires, why):
+    """Each refusal in the period check's words and order: the certificate read whole before a segment's template or a
+    pair's count is checked, the first segment overlapping a later one, and both of a wire's templates before its sides."""
     with pytest.raises(Refused, match=f"^{re.escape(why)}$"):
         check(TOY, _order(*segments, wires=wires))
 
 
+def test_a_certificate_of_other_keys_format_or_lists_is_none():
+    for bad in ({}, {"format": WO.SCHEMA, "segments": {}, "wires": []}, {**_order(A, B), "format": "verity/wire-order/v0"},
+                {**_order(A, B), "cut": 1}):
+        with pytest.raises(Refused, match=f"^{re.escape(f'not a {WO.SCHEMA} certificate')}$"):
+            check(TOY, bad)
+
+
+def _looped(name: str) -> tuple[dict, dict, int]:
+    """``name``'s description with its first uncut wire whose reader has an output as wide as a row of the wire's port
+    made to read that output of its own reader unit, unit for unit: a cyclic wiring that `interface.check_wires` takes.
+    With it, the class's certificate with the reader's segment as the wire's writer segment too, and the wire's index."""
+    low, desc = _lowered(name)
+    lays = low.circuit.layouts
+    for i, w in enumerate(desc["wires"]):
+        lay, k = lays[w["reader"]][0], low.circuit.cuts.get(w["reader"], {}).get(w["port"], 1)
+        out = next((o for o, words in lay.outs if words == dict(lay.rows)[w["port"]] // k), None)
+        if w["writer"] != w["reader"] and "cut" not in w and out is not None:
+            wires = list(desc["wires"])
+            wires[i] = {**w, "writer": w["reader"], "out": out, "base": w["at"], "step": _places(w["radix"])}
+            IF.check_wires(lays, [IF.Wire.of(x) for x in wires], low.circuit.cuts)
+            pairs = [list(p) for p in low.order["wires"]]
+            pairs[i] = [pairs[i][1], pairs[i][1]]
+            return {**desc, "wires": wires}, {**low.order, "wires": pairs}, i
+    raise AssertionError(f"{name}: no wire to loop")
+
+
 def test_a_cyclic_wiring_has_no_certificate():
     """A's unit reads B's and B's reads A's: the two wires' rank differences sum to 0, so one reaches 0 whatever the ranks
-    (here every c of each in [-4, 4]); a unit reading its own row reaches 0 at any rank. TINY's record with one wire
-    stated back as well is refused, its certificate's pair for it the original's swapped."""
+    (here every c of each in [-4, 4]); a unit reading its own row reaches 0 at any rank. TINY's record with one wire made
+    to read its reader unit's own output (`_looped`), which every check of the wires but the order takes, is refused."""
     cyclic = {"templates": [["A", 1], ["B", 1]], "wires": [_wire("B", "A"), _wire("A", "B")]}
     for ca, cb in product(range(-4, 5), repeat=2):
         with pytest.raises(Refused, match=r"^wire [01]: rank\(writer\) - rank\(reader\) reaches \d+ >= 0$"):
@@ -336,13 +383,9 @@ def test_a_cyclic_wiring_has_no_certificate():
     for c in range(-4, 5):
         with pytest.raises(Refused, match=re.escape("wire 0: rank(writer) - rank(reader) reaches 0 >= 0")):
             check({"templates": [["A", 1]], "wires": [_wire("A", "A")]}, _order(("A", 0, [1], c, [0]), wires=([0, 0],)))
-    low, desc = _lowered("tiny")
-    i, w = next((i, w) for i, w in enumerate(desc["wires"])
-                if w["writer"] != w["reader"] and "cut" not in w and w["step"] == _places(w["radix"]))
-    back = {**w, "reader": w["writer"], "writer": w["reader"], "at": w["base"], "base": w["at"]}
-    order = {**low.order, "wires": [*low.order["wires"], low.order["wires"][i][::-1]]}
-    with pytest.raises(Refused, match=rf"^wire {len(desc['wires'])}: rank\(writer\) - rank\(reader\) reaches \d+ >= 0$"):
-        check({**desc, "wires": [*desc["wires"], back]}, order)
+    looped, order, i = _looped("tiny")
+    with pytest.raises(Refused, match=f"^{re.escape(f'wire {i}: rank(writer) - rank(reader) reaches 0 >= 0')}$"):
+        check(looped, order)
 
 
 def test_the_lowering_refuses_a_wire_whose_writer_is_made_after_its_reader():
