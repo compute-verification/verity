@@ -3,13 +3,12 @@
 reader unit i's ``x`` the writer unit i's ``o0`` (one template-level wire, `interface.Wire`): small circuits, so that the
 case and circuits this run keeps are a small test fixture (`tests/test_a5_wired.py`). Committed by `interface.Window` under
 ``<ROOT>/rank0`` with its registered circuit record, and audited by `a5.audit` as rank 0 of a one-rank step on a local
-challenger's coins under
-``stratified:1``, one unit of each template: each template's circuit composed by Flock's `UnitStager` on its rows
-(`interface.unit_rows`), M0's `--zk` session of each drawn member behind the ZK server, the Lean verifier of record, the
-stream's outcome and the negatives. Then v2's per-member verdicts on the audit's case (``rank0/case-v2.json``, its
-``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`, and its challenger and coins
-the audit's draw's, `a5.drawn_by`) by
-``sampled-proofs-one-stage-zk verdicts --check`` (``--v2``), five ways:
+challenger's coins under ``stratified:1``, one unit of each template: each template's circuit composed by Flock's
+`UnitStager` on its rows (`interface.unit_rows`), M0's `--zk` session of each drawn member behind the ZK server, the
+Lean verifier of record, the stream's outcome and the negatives. Then v2's per-member verdicts on the audit's case
+(``rank0/case-v2.json``, its ``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`,
+and its challenger and coins the audit's draw's, `a5.drawn_by`) by ``sampled-proofs-one-stage-zk verdicts --check``
+(``--v2``), five ways:
 
 * ``wired``: the case as the audit made it: every session accepted, each verdict naming the wiring's SHA-512;
 * ``unwired``: its parameters without ``wires``: every session accepted, no verdict naming a wiring;
