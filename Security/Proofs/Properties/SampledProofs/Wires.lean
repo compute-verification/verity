@@ -54,13 +54,6 @@ theorem filter_range_lt {g : Nat} : ∀ {N : Nat}, g ≤ N →
       simp [Nat.not_lt.2 (Nat.le_of_lt_succ h)]
     · exact List.filter_eq_self.2 fun x hx => by simpa using List.mem_range.1 hx
 
-theorem sum_map_const_range (n c : Nat) : ((List.range n).map fun _ => c).sum = n * c := by
-  induction n with
-  | zero => simp
-  | succ n ih =>
-    rw [List.range_succ, List.map_append, List.sum_append_nat, ih, Nat.add_mul]
-    simp
-
 /-! ## The lowered program -/
 
 theorem lower_length (kp : KeyProg) (κ : Nat → Option Bool) (g : Nat) :
@@ -136,11 +129,6 @@ theorem row_isSome {kp : KeyProg} {g : Nat} (h1 : kp.inputs ≤ g) (h2 : g - kp.
   unfold KeyProg.row?
   rw [ite_eq_right (Nat.not_lt.2 h1), Array.getElem?_eq_getElem h2] <;> rfl
 
-theorem keyProg_rows_size (c : Flock.Circuit) (n : Nat) :
-    (keyProg c n).rows.size = n * ((Rows.ofNet c.unit).stack c.upv).nComp := by
-  simp only [keyProg, List.size_toArray, List.length_flatMap, List.length_map, List.length_range]
-  exact sum_map_const_range _ _
-
 /-- **An output bit's gate is a row** of the key program. -/
 theorem outGate_row {c : Flock.Circuit} {n u k j t g : Nat} (h : outGate c n u k j t = some g) :
     g < (keyProg c n).size ∧ ((keyProg c n).row? g).isSome = true := by
@@ -154,7 +142,8 @@ theorem outGate_row {c : Flock.Circuit} {n u k j t g : Nat} (h : outGate c n u k
     obtain ⟨h1, h2⟩ := row_lt (I := 2 + n * ((Rows.ofNet c.unit).stack c.upv).nIn)
       (Y := ((Rows.ofNet c.unit).stack c.upv).nComp) (X := (Rows.ofNet c.unit).nComp + 1)
       (e := 1 + (outCol c j t - (Rows.ofNet c.unit).nIn)) hu hk (by omega) rfl
-    exact row_isSome (kp := keyProg c n) h1 (by rw [keyProg_rows_size]; exact h2)
+    exact row_isSome (kp := keyProg c n) (by rw [SampledProofs.Bits.keyProg_inputs]; exact h1)
+      (by rw [SampledProofs.Bits.keyProg_inputs, SampledProofs.Bits.keyProg_rows_size]; exact h2)
   · cases h
 
 /-! ## Members -/
