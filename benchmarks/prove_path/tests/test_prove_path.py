@@ -1411,10 +1411,10 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
     monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
-    a = argparse.Namespace(**vars(s.a), transfer_gate=[], out=str(out), advice=str(tmp_path / "advice.bin"),
-                           key=str(tmp_path / "private" / "key"), window_class=None, window_registration=None)
     with pytest.raises(Loaded):
-        PP.window_commit_of_advice(a)
+        PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                 str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                 "--checkpoint-dir", "unread", "--out", str(out)])
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
     assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
     assert not list(Path(s.a.row_dir).glob("build_request*"))
