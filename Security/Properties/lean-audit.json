@@ -69,7 +69,8 @@
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
   "Properties.Firewall",
-  "Properties.Core.Site"
+  "Properties.Core.Site",
+  "Properties.Verity.Subprotocols"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -520,6 +521,10 @@
   "Verity.remote_soundness_of_subprotocols": {
    "honest": ["Verity.remote_soundness_of_subprotocols_honest"],
    "nontrivial": "Verity.remote_soundness_of_subprotocols_nontrivial"
+  },
+  "Verity.soundness_at_of_componentBounds": {
+   "honest": ["Verity.soundness_at_of_componentBounds_honest"],
+   "nontrivial": "Verity.soundness_at_of_componentBounds_nontrivial"
   },
   "Properties.Composition.acceptSame": {
    "honest": ["Properties.Composition.acceptSame_honest"],
@@ -3907,6 +3912,15 @@
    "assumptions": [],
    "type_hash": "6b58eb505a9bce5f3e3068ff276b0f6b7f22c5aa2702a1d43cf7b62ffbd757e6"
   },
+  "Verity.soundness_at_of_componentBounds": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_at_of_componentBounds_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_at_of_componentBounds_nontrivial": {
+   "owner": "@soundness"
+  },
   "Verity.soundness_at_of_targets": {
    "owner": "@soundness",
    "signature": ["Verity.soundness_at_of_targets : Verity.SoundnessOf"],
@@ -5303,6 +5317,7 @@
    "Verity.soundness_of_subprotocols_nontrivial": "lemma: Soundness's nontrivial lemma: SoundnessFor fails at onsite for a verifier that accepts everything at the idle deployment Verity.Idle.exact",
    "Verity.remote_soundness_of_subprotocols_honest": "completeness: RemoteSoundness's honest lemma: its three targets hold at remote's compiled composite at the idle deployment Verity.Idle.unbounded",
    "Verity.remote_soundness_of_subprotocols_nontrivial": "lemma: RemoteSoundness's nontrivial lemma: SoundnessFor fails at remote for a verifier that accepts everything at the idle deployment Verity.Idle.exact",
+   "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.sampledProofsSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it (for a subprotocol that decides an Audit, from a coupled per-period guarantee, Vocab.componentBound_of_coupling), with the same claims, errors and Vocab",
    "Properties.Composition.acceptSame_honest": "completeness: AcceptSame's honest lemma: remote's checkSame accepts a composition that fits, with no components, under the binding of no digests",
    "Properties.Composition.acceptSame_nontrivial": "lemma: AcceptSame's nontrivial lemma: SameAccepted fails at parameters that name a component the composition doesn't have, which a verifier that accepts everything accepts",
    "Properties.Composition.acceptTied_honest": "completeness: AcceptTied's honest lemma: holdTies accepts an accepted outcome whose ties hold",
