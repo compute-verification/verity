@@ -37,7 +37,7 @@ witness and the verifier. It reads the server through what it sends, never throu
 prover is zero knowledge per outcome at every witness (`ZKOut`), within the outer error at the released outcome,
 averaged over the first part (`ZkRelease.err`), plus `δ` per leaf. A misbehaving worker costs only the refusal's
 outcome: the refused view reads no value. Without the refusal the outer prover would run on a non-witness, where its
-zero knowledge says nothing. Summed over the outcomes it is the leak form (`Claims.ZKOutLeak`).
+zero knowledge says nothing. Summed over the outcomes it is the leak form (`Claims.zkOutLeak`).
 
 At hm96 (`Leaves.hm96`, through any encoding of a commit string's two halves) `Hides` holds at the key's hiding gap
 (`Hm96Hides`, Z2, from `ZK.ideal_leaves_adaptive`).
