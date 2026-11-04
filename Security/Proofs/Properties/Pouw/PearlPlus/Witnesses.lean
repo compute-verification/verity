@@ -354,7 +354,7 @@ theorem loadedGivesUp_nontrivial :
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
-    ∀ pos rows cols (_ops : Ops) (_ch : Checked), ¬ (noCallsPass.tile? 0 = some (pos, rows, cols)) := by
+    ∀ pos rows cols (_ops : Words.Ops) (_ch : Words.Checked), ¬ (noCallsPass.tile? 0 = some (pos, rows, cols)) := by
   intro pos rows cols _ _ h
   cases h
 
