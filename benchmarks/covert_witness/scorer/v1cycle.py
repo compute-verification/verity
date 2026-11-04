@@ -1624,7 +1624,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None, kept:
             + f". {fb}" + (f"; {ap_said}" if ap_said else "")
             + "; nothing else PUT; t as the frozen tail and rescore_v1's analysis are in the tables art only"
             + ("; every row carries te_core_version" if meta.get("version_cell") else "") + f". art: {arts}."
-            + (f" formalism.jsonl kept on {os.uname().nodename} at {kept} until the next refresh." if kept else ""))
+            + (f" formalism.jsonl kept on {os.environ.get('TE_NODE') or os.uname().nodename} at {kept} until the next "
+               "refresh." if kept else ""))
 
 
 if __name__ == "__main__":

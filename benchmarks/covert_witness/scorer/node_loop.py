@@ -159,6 +159,8 @@ def ledger_tar() -> Path | None:
 
 
 def launch(env: dict[str, str], send: list[Path], mem_gb: float, timeout: str) -> str:
+    # the machine's research name, which v1cycle's DIGEST names (the node's hostname is its provider's)
+    env = {"TE_NODE": NODE} | env
     cmd = ["research", "run", "--on", NODE, "--pool", "research", "--as", V.TRACE_LANE, "--project", "verity",
            "--source", str(WT), "--cwd", "source", "--store-read", "--mem-gb", f"{mem_gb:g}", "--timeout", timeout,
            "--pool-wait", str(POOL_WAIT_S),
