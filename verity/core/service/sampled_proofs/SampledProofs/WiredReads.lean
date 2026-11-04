@@ -77,13 +77,10 @@ def writersOf (record : Json) (ports : Array (String × Json)) : V (Std.HashMap 
     | _, _ => pure ()
   pure out
 
-/-- The context (module docstring, `ctxOf`): the wiring `spec`, the templates' first units from the verifier's own program
-and query (`Partition.evaluate`), each template the wiring names one of them with the wiring's units, and the members
-and registration's ports. -/
-def ctxOf (spec : String × Wires.Wiring × Wires.Summary) (program : Program) (query : Json) (record : Json)
+/-- The context at the templates' first units and counts `firsts`: each template the wiring `spec` names one of them with
+the wiring's units, and the members and registration's ports. -/
+def ctxAt (spec : String × Wires.Wiring × Wires.Summary) (firsts : Array (String × Nat × Nat)) (record : Json)
     (ports : Array (String × Json)) (members : Array Member) : V Ctx := do
-  let rs ← Partition.evaluate program query
-  let firsts := rs.map fun r => (r.template, r.first, r.count)
   for (tid, t) in spec.2.1.templates do
     match firsts.filter (·.1 == tid) with
     | #[(_, _, n)] =>
@@ -92,6 +89,13 @@ def ctxOf (spec : String × Wires.Wiring × Wires.Summary) (program : Program) (
     | _ => throw s!"proofs: wires: template {tid} is not one template of the verifier's partition"
   pure { digest := spec.1, wiring := spec.2.1, summary := spec.2.2, firsts, members,
          writers := ← writersOf record ports }
+
+/-- The context (module docstring, `ctxOf`): `ctxAt` the templates' first units from the verifier's own program and query
+(`Partition.evaluate`). -/
+def ctxOf (spec : String × Wires.Wiring × Wires.Summary) (program : Program) (query : Json) (record : Json)
+    (ports : Array (String × Json)) (members : Array Member) : V Ctx := do
+  let rs ← Partition.evaluate program query
+  ctxAt spec (rs.map fun r => (r.template, r.first, r.count)) record ports members
 
 /-- Row `r` of template `tid`'s port `p`: the port itself when uncut, else `p#r` (`interface.row_name`). -/
 def rowName (c : Wires.Wiring) (tid p : String) (r : Nat) : String :=
@@ -125,19 +129,16 @@ def readOf (ctx : Ctx) (row : String) (tid : String) (v : Int) (out : String) : 
     throw s!"wired reads: {port}'s root has {w.leaves} leaves, and member {m.name} {count m.units} units"
   pure { writer := w, pos := rank m.units g }
 
-/-- **A session's wired reads** (module docstring, `derive`): each row of the member's template that a wire meeting the
-member's units fills, with one read per session instance of statement `st` (`readOf`, at the writer `Summary.writerOf`
-gives the instance's unit's row), the instance's unit its `units.indices`, which the verifier derived. -/
-def derive (ctx : Ctx) (m : Member) (st : Flock.Stmt) : V (Array Flock.RegWired.Port) := do
-  if !Flock.Registered.derived st.partition then
-    throw "wired reads: the statement's units are taken as stated, and a wired row's writer binds only as far as its unit does: the verifier derives them (--partition, --program)"
+/-- The wired reads of the instances at population units `indices`: each row of the member's template that a wire meeting
+the member's units fills, with one read per instance (`readOf`, at the writer `Summary.writerOf` gives the instance's
+unit's row). -/
+def deriveAt (ctx : Ctx) (m : Member) (indices : Array Nat) : V (Array Flock.RegWired.Port) := do
   let some (lo0, _) := m.units[0]? | throw s!"wired reads: member {m.name} holds no unit"
   let some (tid, first, _) := templateAt ctx lo0 | throw s!"wired reads: member {m.name}'s unit {lo0} is in no template"
   let ws := ctx.summary.wires.filter fun w =>
     w.reader == tid && m.units.any fun (a, b) => first + w.start < b && a < first + w.start + w.readerUnits
   if let some w := ws.find? fun w => m.units.any fun (a, b) => a < first + w.start || first + w.start + w.readerUnits < b then
     throw s!"wired reads: a wire fills port {w.port} of only some of member {m.name}'s units: members are cut at every wire's ends"
-  let indices ← Flock.Registered.unitIndices st.pub
   let units ← indices.mapM fun g => do
     if !within m.units g then throw s!"wired reads: the statement's unit {g} is not member {m.name}'s"
     pure (g - first)
@@ -149,6 +150,13 @@ def derive (ctx : Ctx) (m : Member) (st : Flock.Stmt) : V (Array Flock.RegWired.
         | throw s!"wired reads: no wire fills row {name} of unit {u} of {tid}"
       readOf ctx name wt v out
     pure { name, reads }
+
+/-- **A session's wired reads** (module docstring, `derive`): `deriveAt` statement `st`'s instances, each instance's unit
+its `units.indices`, which the verifier derived. -/
+def derive (ctx : Ctx) (m : Member) (st : Flock.Stmt) : V (Array Flock.RegWired.Port) := do
+  if !Flock.Registered.derived st.partition then
+    throw "wired reads: the statement's units are taken as stated, and a wired row's writer binds only as far as its unit does: the verifier derives them (--partition, --program)"
+  deriveAt ctx m (← Flock.Registered.unitIndices st.pub)
 
 /-- **The member's bound ports are the registration's** (module docstring, `boundHeld`): each bound port's root the
 registration's for `<member>/<port>` and its domain the verifier's own. -/
@@ -169,5 +177,47 @@ def boundHeld (ctx : Ctx) (m : Member) (bound : Array Flock.RegBound.Bound) : V 
 #guard rank #[(10, 14)] 12 == 2
 #guard count #[(5, 6), (0, 2)] == 3
 #guard within #[(5, 6), (0, 2)] 1 && !within #[(5, 6), (0, 2)] 2
+
+/-! ## The difftest piece -/
+
+private def triples (j : Json) : Except String (Array (String × Nat × Nat)) := do
+  (← Wires.arrOf "firsts" j).toArray.mapM fun f => do
+    match ← Wires.arrOf "a first" f with
+    | [t, lo, n] => pure (← Wires.strOf "a first's template" t, ← Wires.natOf "a first unit" lo, ← Wires.natOf "a count" n)
+    | _ => throw "a first is [template, first, count]"
+
+private def memberOf (j : Json) : Except String Member := do
+  Wires.sameKeys j ["name", "units"] "a member"
+  let units ← (← Wires.arrOf "units" (← Wires.field j "units")).toArray.mapM fun u => do
+    match ← Wires.arrOf "a range" u with
+    | [a, b] => pure (← Wires.natOf "a range's low" a, ← Wires.natOf "a range's high" b)
+    | _ => throw "a range is [lo, hi]"
+  pure { name := ← Wires.strOf "a member's name" (← Wires.field j "name"), units }
+
+private def readJson (r : Flock.RegWired.Read) : Json :=
+  Json.arr #[Json.str r.writer.name, Json.str (Flock.hexOf r.writer.root), Json.str (Flock.hexOf r.writer.domain),
+    Lean.toJson r.writer.leaves, Lean.toJson r.pos]
+
+/-- The `wired_reads` piece: `ctxAt` and `deriveAt` on `{wiring, firsts, members, record, ports, member, indices}`, the
+member named `member` of `members`. The output is `{"ok": true, "ports"}`, each wired row's name and its reads
+`[writer, root, domain, leaves, pos]`, or `{"ok": false, "reason"}`; a malformed instance is refused as one. -/
+def piece (j : Json) : V Json := do
+  Wires.sameKeys j ["wiring", "firsts", "members", "record", "ports", "member", "indices"] "an instance"
+  let wj ← Wires.field j "wiring"
+  Wires.sameKeys wj ["templates", "cuts", "wires"] "the wiring"
+  let _ ← Wires.Wiring.ofJson wj
+  let firsts ← triples (← Wires.field j "firsts")
+  let members ← (← Wires.arrOf "members" (← Wires.field j "members")).toArray.mapM memberOf
+  let ports ← Wires.fields (← Wires.field j "ports")
+  let name ← Wires.strOf "member" (← Wires.field j "member")
+  let some m := members.find? (·.name == name) | throw s!"no member {name}"
+  let indices ← (← Wires.arrOf "indices" (← Wires.field j "indices")).toArray.mapM (Wires.natOf "an index")
+  let reads : V (Array Flock.RegWired.Port) := do
+    deriveAt (← ctxAt (← specOf wj) firsts (← Wires.field j "record") ports.toArray members) m indices
+  match reads with
+  | .ok ps =>
+    return Json.mkObj [("ok", true), ("ports", Json.arr (ps.map fun p =>
+      Json.mkObj [("name", Json.str p.name), ("reads", Json.arr (p.reads.map readJson))]))]
+  | .error e => return Json.mkObj [("ok", false), ("reason", Json.str e)]
 
 end SampledProofs.WiredReads

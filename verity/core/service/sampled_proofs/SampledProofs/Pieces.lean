@@ -60,6 +60,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
+* `wired_reads`: a per-member session's wired reads, each wired row's writer root and position per instance
+  (`WiredReads.ctxAt`, `WiredReads.deriveAt`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -81,6 +83,7 @@ import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
 import SampledProofs.WiresDrawn
+import SampledProofs.WiredReads
 
 namespace SampledProofs.Pieces
 
@@ -611,7 +614,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
+   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("wired_reads", WiredReads.piece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
