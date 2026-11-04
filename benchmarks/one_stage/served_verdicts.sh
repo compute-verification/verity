@@ -140,12 +140,15 @@
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
 #     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), the certifier's answer reads V3c's
-#     period.json: the chain after the window commit, beside V3c's audit and period.json (after them in a deferral's
-#     follow-on, whose node is held to the audit's memory alone, and only once V3c wrote period.json), within
+#     period.json: the chain after the window commit, beside V3c's audit and period.json on a node that holds both
+#     (NODE_MEM_GB at least V3C_AUDIT_MEM_GB plus CERTIFIER_CHAIN_MEM_GB, default 96), else after them, which a
+#     CERTIFIER-CHAIN line says, and always after them in a deferral's follow-on, whose node is held to the audit's
+#     memory alone (after them, only once V3c wrote period.json), within
 #     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within
 #     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
-#     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
-#     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
+#     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit
+#     (their sum on a node that holds only one), and the period check, which the run's --timeout holds beside the other
+#     steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; the steps' logs (CERTIFIER_PRIVATE) move to the
 #     serve dir's private/pieces/certifier before the run exits, `served_verdicts.sh v3c`, which writes no record, included.
 #     The chain's scan proves at CR_SCAN_DELTA (chain_record.sh's), 2^-64 by default, written as the double that is
@@ -417,7 +420,7 @@ if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=$
 elif [ -n "${H1_TIE:-}" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
 V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
-V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
+V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290} CERTIFIER_CHAIN_MEM_GB=${CERTIFIER_CHAIN_MEM_GB:-96}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
@@ -581,11 +584,16 @@ certifier_step() {  # $1 chain|period: the split network certifier's step on V3c
   say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
   return $rc
 }
-v3c_proved() {  # V3c's window committed, the build done: the certifier's chain beside V3c's audit, then its period check;
-  # in a deferral's follow-on, whose node is held to the audit's memory alone, the chain after the audit, once V3c wrote
-  # the period.json its period check reads
+v3c_proved() {  # V3c's window committed, the build done: the certifier's chain beside V3c's audit on a node that holds
+  # both, else after it (always in a deferral's follow-on, whose node is held to the audit's memory alone), once V3c wrote
+  # the period.json its period check reads; then its period check
   local rc prc chain=
-  [ -n "$FOLLOW" ] || { certifier_step chain & chain=$!; }
+  if [ -z "$FOLLOW" ] && [ "$NODE_MEM_GB" -ge $((V3C_AUDIT_MEM_GB + CERTIFIER_CHAIN_MEM_GB)) ]; then
+    certifier_step chain & chain=$!
+  elif [ -z "$FOLLOW" ] && [ -n "${CERTIFIER_CHAIN_CMD:-}" ]; then
+    say "CERTIFIER-CHAIN after V3c's audit: this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs" \
+        "(V3C_AUDIT_MEM_GB) plus the $CERTIFIER_CHAIN_MEM_GB GB of the chain beside it (CERTIFIER_CHAIN_MEM_GB)"
+  fi
   v3c_audit; rc=$?
   v3c_period; prc=$?
   if [ -n "$chain" ]; then wait "$chain"; elif [ "$prc" = 0 ]; then certifier_step chain; fi
