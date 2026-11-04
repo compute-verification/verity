@@ -234,6 +234,24 @@ def test_a_declared_commit_overrides_the_run_commit(tmp_path):
     assert res["verification"]["commands"][0]["argv"][-1] == "abcdef1"
 
 
+def test_every_row_verifies_the_arm_rows_off_the_panel_too(tmp_path):
+    run_dir = tmp_path / "run"
+    v = script(tmp_path, "v.py", RUN_VERIFIER)
+    path = result(run_dir, {"pc": per_run(v)})
+    res = json.loads(path.read_text())
+    res["shapes"].append({"label": "m16-n10240-k8192", "arms": {"pc": {"graph": {}}}})
+    path.write_text(json.dumps(res))
+    for s in [*SHAPES, "m16-n10240-k8192"]:
+        manifest(run_dir, "pc", s)
+    code, res = run(path)
+    assert code == V.EXIT_OK and len(res["verification"]["rows"]) == 2
+    assert "verified" not in res["shapes"][-1]["arms"]["pc"]
+    code, res = run(path, "--every-row")
+    assert code == V.EXIT_OK and len(res["verification"]["rows"]) == 3
+    off = res["shapes"][-1]["arms"]["pc"]["verified"]
+    assert off["verification"]["accepted"] and off["transcript"].startswith(f"{RUN}:transcripts/pc/m16-n10240-k8192/")
+
+
 GOOD = {"transcript": "transcripts/{arm}/{shape}/t.json", "commands": [["{python}", "v.py", "{transcript}", "{commit}"]]}
 
 
