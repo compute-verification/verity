@@ -322,6 +322,7 @@ public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.DeployEfficient
 public import Proofs.Flock.Claims.Assembled
 public import Proofs.Flock.Claims.ZK
+public import Proofs.Flock.Claims.ZKOut
 public import Proofs.Flock.Claims.KS.ZkAcceptsAt
 public import Proofs.Flock.Claims.KS.ZkAcceptsRun
 public import Proofs.Flock.Claims.CompleteFails
