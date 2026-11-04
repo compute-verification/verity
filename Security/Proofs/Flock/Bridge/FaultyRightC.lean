@@ -184,23 +184,23 @@ theorem correct_blockOf_of {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u
     obtain ⟨w, -⟩ := mem_unitGates.1 hg
     exact absurd ⟨w⟩ hN
 
-/-- **A unit correct on its own values is correct at its slot**: where `X` makes `u` correct (`Partition.Correct`: its
-committed outputs are its gates applied to its committed inputs, all read from `X`) and is `κ`'s constant at each of
-`u`'s committed wires `κ` fixes, slot `u`'s proof block is correct on committed values that carry `X` at each committed
-wire of `u` that `κ` doesn't fix, whatever its interior values (`correct_blockOf_of` at `u`'s local evaluation on `X`,
-which is `X` on `u`'s committed wires). -/
+/-- **A unit correct on its own values is correct at its slot**: where `Xu` makes `u` correct (`Partition.Correct`: its
+committed outputs are its gates applied to its committed inputs, all read from `Xu`) and is `κ`'s constant at each of
+`u`'s committed wires `κ` fixes, slot `u`'s proof block is correct on committed values that carry `Xu` at each committed
+wire of `u` that `κ` doesn't fix, whatever its interior values (`correct_blockOf_of` at `u`'s local evaluation on `Xu`,
+which is `Xu` on `u`'s committed wires). -/
 theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
-    (X : Fin C.N → Bool) (hX : P.Correct X u) (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → X g = b)
-    (val : ℕ → Option Bool) (hval : ∀ g ∈ P.io u, κ g = none → val (posOf C g) = some (X g)) (ι : ℕ → Bool) :
+    (Xu : Fin C.N → Bool) (hX : P.Correct Xu u) (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → Xu g = b)
+    (val : ℕ → Option Bool) (hval : ∀ g ∈ P.io u, κ g = none → val (posOf C g) = some (Xu g)) (ι : ℕ → Bool) :
     (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u) val ι) (blockOf P κ u) := by
-  have hloc : ∀ g ∈ P.io u, P.localEval X u g = X g := by
+  have hloc : ∀ g ∈ P.io u, P.localEval Xu u g = Xu g := by
     intro g hg
     by_cases hu : P.unit g = some u
     · simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter] at hg
       exact (hX g hg.1 hu).symm
-    · exact P.localEval_of_not_mem X hu
-  exact correct_blockOf_of P u hκin (P.localEval X u) (fun _ hu => P.localEval_of_mem X hu)
+    · exact P.localEval_of_not_mem Xu hu
+  exact correct_blockOf_of P u hκin (P.localEval Xu u) (fun _ hu => P.localEval_of_mem Xu hu)
     (fun g hg b hk => (hloc g hg).trans (hκ g hg b hk)) val
     (fun g hg hk => (hval g hg hk).trans (congrArg some (hloc g hg).symm)) ι
 
