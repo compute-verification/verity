@@ -609,11 +609,12 @@ def certifier_with(m: str, audits: list[tuple[dict, dict, dict]]) -> dict:
 
 
 def on_r(made: dict, verdict: str = R.ACCEPT) -> tuple[dict, dict, dict]:
-    """R (what `reusing` made, ``made``) as the network certifier's compute audit: its Program, R, and one-stage's answer
-    for R accepting its one unit drawn, or refused at ``verdict``."""
+    """R (what `reusing` made, ``made``) as the network certifier's compute audit: its Program and steps (the period counts
+    its free inputs off the Program, `inputGates`), R, and one-stage's answer for R accepting its one unit drawn, or
+    refused at ``verdict``."""
     s, rec = made["setup"], made["record"]
     got = NP.PC._accepted(bytes.fromhex(OS.R.digest(rec)), s.sha512, rec["partition"], s.population, 1, "1/10", 0)
-    return {"free": 0, "program": s.desc, "steps": 0}, rec, got if verdict == R.ACCEPT else NP.PC._refused(got, verdict)
+    return {"program": s.desc, "steps": 0}, rec, got if verdict == R.ACCEPT else NP.PC._refused(got, verdict)
 
 
 def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_network_server,
