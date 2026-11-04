@@ -93,8 +93,9 @@ the RTX PRO 6000 node's queue jobs, for when its Kueue is up.
 
 Before a shape's reps, the same interleaved schedule runs as a warm-up (kept apart, in `warmup_items`) for at least
 `--warmup-s` of device time and until a round's median SM clock is within 0.5% of the round before (`--warmup-max-s` bounds
-it; the shape's `warmup` says whether it got steady). Then every entry's timed item is sized to the same device time, at
-least `--item-ms` (40): calls for a baseline or an arm, replays for a chain (`sizing`). Every item samples NVML while the GPU
+it; the shape's `warmup` says whether it got steady). Every entry's item is sized to the same device time, at least
+`--item-ms` (40): calls for a baseline or an arm, replays for a chain, from the warm-up's first round (so its later rounds
+run the timed items) and again from its last (`sizing`). Every item samples NVML while the GPU
 runs it (`sensors.during`), and each panel row carries both sides' reps in the same run (`panel.reps`: per-call and item ms
 and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` and `sm_clock_base` for `panel.py`, and
 `clock_gap` (medians more than 0.5% apart).

@@ -111,10 +111,11 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    the line alone links nothing); a link that fails leaves the PR open, printing
                                                    why and the `link` command that retries it
     research queue link PR --issue KEY             link the open PR to Linear issue KEY through the Linear app, as `open` does
-    research queue edit PR --body-file F [--dry-run]
-                                                   replace the PR's body with F outright, through gh as `open` does, keeping only
-                                                   the Cursor PR tool's markers and footer (`edit_pr`); refuses a body that drops or
-                                                   changes the PR's `Lane NAME` owner; --dry-run prints the body it would write
+    research queue edit PR --body-file F [--title T] [--dry-run]
+                                                   replace the PR's body with F outright (and its title with T), through gh as
+                                                   `open` does, keeping only the Cursor PR tool's markers and footer (`edit_pr`);
+                                                   refuses a body that drops or changes the PR's `Lane NAME` owner; --dry-run
+                                                   prints the body it would write
     research queue stats --log FILE [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`)
     research queue checked-heads [--tip REV] [--json] [--out FILE]
@@ -5528,11 +5529,12 @@ def edited_body(old: str, new: str) -> str:
     return text + (f"\n\n{foot}" if foot else "") + "\n"
 
 
-def edit_pr(top: Path, repo: str, number: int, body: str, *, dry_run: bool = False, gh: str | None = None,
-            run=subprocess.run) -> tuple[str, str]:
-    """Replace PR ``number``'s body with ``body`` outright (`edited_body`) and return its URL and the body it now has; with
-    ``dry_run``, change nothing.  Refused (`QueueError`) when the PR's body names its owner on a `Lane NAME` line and the new
-    one names another owner or none: an edit never moves a PR to another lane or out of the queue."""
+def edit_pr(top: Path, repo: str, number: int, body: str, *, title: str | None = None, dry_run: bool = False,
+            gh: str | None = None, run=subprocess.run) -> tuple[str, str]:
+    """Replace PR ``number``'s body with ``body`` outright (`edited_body`), and its title with ``title`` when given, and return
+    its URL and the body it now has; with ``dry_run``, change nothing.  Refused (`QueueError`) when the PR's body names its
+    owner on a `Lane NAME` line and the new one names another owner or none: an edit never moves a PR to another lane or out
+    of the queue."""
     call = _gh_call("edit", top, gh, run)
     cur = json.loads(call("pr", "view", str(number), "--repo", repo, "--json", "body,url"))
     text = edited_body(cur.get("body") or "", body)
@@ -5541,7 +5543,7 @@ def edit_pr(top: Path, repo: str, number: int, body: str, *, dry_run: bool = Fal
         raise QueueError(f"edit: #{number}'s new body names owner {now or 'none'}, and the PR's is {was.group(1)}: keep its "
                          f"`Lane {was.group(1)}` line; nothing edited")
     if not dry_run:
-        call("pr", "edit", str(number), "--repo", repo, "--body", text)
+        call("pr", "edit", str(number), "--repo", repo, *(("--title", title) if title else ()), "--body", text)
     return cur.get("url") or f"#{number}", text
 
 
@@ -5685,7 +5687,7 @@ def main(argv: list[str]) -> int:
                                   "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
                                   "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
                                   "head pushed meanwhile")
-    ap.add_argument("--title", help="open: the PR's title")
+    ap.add_argument("--title", help="open: the PR's title; edit: its new title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim but for --issue's last line (its first line "
                                                    "`Lane NAME` names the owner); "
                                                    "edit: the PR's whole new body, in place of all its text")
@@ -5772,11 +5774,13 @@ def main(argv: list[str]) -> int:
             repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
             if not repo:
                 raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
-            url, body = edit_pr(top, repo, int(a.pr), a.body_file.read_text(), dry_run=a.dry_run)
+            url, body = edit_pr(top, repo, int(a.pr), a.body_file.read_text(), title=a.title, dry_run=a.dry_run)
+            titled = f" and its title with {a.title!r}" if a.title else ""
             if a.dry_run:
-                print(f"research queue edit: would replace {url}'s body with ({len(body)} bytes; dry run):\n{body}", end="")
+                print(f"research queue edit: would replace {url}'s body{titled} with ({len(body)} bytes; dry run):\n{body}",
+                      end="")
             else:
-                print(f"research queue edit: {url}'s body replaced ({len(body)} bytes)")
+                print(f"research queue edit: {url}'s body replaced ({len(body)} bytes){titled}")
             return 0
         except (QueueError, OSError) as e:
             print(f"research queue: {e}", file=sys.stderr)

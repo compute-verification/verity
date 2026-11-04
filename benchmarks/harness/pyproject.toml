@@ -102,6 +102,13 @@ inputs = [
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion,
+    # and `verity bench overhead` is the door's runner, which a test runs
+    "benchmarks/census/deployments.json",
+    "benchmarks/census/adversary.json",
+    "benchmarks/census/hardware.json",
+    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/overhead/run.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

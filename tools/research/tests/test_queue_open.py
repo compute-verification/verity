@@ -290,6 +290,25 @@ def test_edit_replaces_the_whole_body_keeping_only_the_pr_tools_markers_and_foot
     assert edit_pr(tmp_path, "o/r", 4622, f"{STACKED}\n", gh="gh", run=again)[1].count(FOOTER) == 1
 
 
+def test_edit_with_a_title_retitles_the_pr_in_the_same_call(tmp_path, monkeypatch, capsys):
+    from research import queue as Q
+    from research.cli import main as research_main
+
+    gh = ViewGh("Lane ci\n\nold\n")
+    Q.edit_pr(tmp_path, "o/r", 7, "Lane ci\n\nnew\n", title="two demos: T", gh="gh", run=gh)
+    assert gh.calls[-1] == ["pr", "edit", "7", "--repo", "o/r", "--title", "two demos: T", "--body", "Lane ci\n\nnew\n"]
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "body.md").write_text("Lane ci\n\nnew\n")
+    got = []
+    monkeypatch.setattr(Q, "edit_pr", lambda *a, **k: (got.append(k["title"]), ("https://github.com/o/r/pull/7", a[3]))[1])
+    argv = ["queue", "edit", "7", "--body-file", str(tmp_path / "body.md"), "--remote", "https://github.com/o/r.git"]
+    assert research_main([*argv, "--title", "two demos: T"]) == 0 and research_main(argv) == 0
+    assert got == ["two demos: T", None]
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].endswith("body replaced (13 bytes) and its title with 'two demos: T'") and out[1].endswith("(13 bytes)")
+
+
 def test_edit_of_a_body_without_the_pr_tools_markup_is_the_file_verbatim(tmp_path):
     from research.queue import edit_pr
 

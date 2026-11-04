@@ -5,9 +5,11 @@ consistency gate rejects a hash-free call faster than the plain GEMM allows, and
 from __future__ import annotations
 
 import argparse
+import importlib.machinery
 import random
 import re
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +27,7 @@ import identity as I  # noqa: E402
 import report as R  # noqa: E402
 import schedule as S  # noqa: E402
 import shapes as SH  # noqa: E402
+import torch_baselines as TB
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 
@@ -381,6 +384,60 @@ def test_a_flush_precedes_every_timed_burst():
     assert dev.log == ["flush", "record", "record"] * S.MIN_REPS
 
 
+def test_the_traced_pass_reps_every_entry_by_burst_inside_the_profilers_range_each_item_a_range_of_its_own():
+    """The timed items carry no NVTX range and fall outside the profiler's range; the traced pass's items, kept apart, are
+    every entry by the burst method `reps` times, each enqueue a range named by its index with its flush outside."""
+
+    b, dev = bench()
+    dev.nvtx_push = lambda text: dev.log.append(("push", text))
+    dev.nvtx_pop = lambda: dev.log.append("pop")
+    dev.profiler_start = lambda: dev.log.append("start")
+    dev.profiler_stop = lambda: dev.log.append("stop")
+    es = [entry(dev, ("baseline", "s", "f", f"k{i}"), ms) for i, ms in enumerate((1.0, 2.0))]
+    for e in es:
+        b.gate(e.key, lambda: (True, {}))
+    b.capture(es, 4)
+    dev.log.clear()
+    b.timed(es, 4, seed=2)
+    assert not any(x in dev.log for x in ("pop", "start")) and all(it["cpu_s"] >= 0 for it in b.items)
+    dev.log.clear()
+    b.traced_pass(es, 4, seed=3)
+    assert dev.log[0] == "start" and dev.log[-1] == "stop" and dev.log.count("start") == 1
+    pushes = [x[1] for x in dev.log if isinstance(x, tuple)]
+    assert pushes == [f"item {i}" for i in range(S.MIN_REPS * len(es))]
+    i = dev.log.index(("push", "item 0"))
+    assert dev.log[i - 2:i] == ["flush", "record"] and dev.log[i + 1:i + 3] == ["pop", "record"]
+    assert len(b.items) == S.MIN_REPS * len(es) * len(H.METHODS)
+    assert sorted((tuple(it["key"]), it["rep"], it["method"]) for it in b.traced_items) == sorted(
+        (e.key, r, "burst") for e in es for r in range(S.MIN_REPS))
+
+
+def test_the_profiler_is_primed_with_empty_ranges_until_a_start_returns_at_once():
+    """A start that blocks (the profiler starting up) is followed by another empty range; one that returns at once ends the
+    priming, and it stops at its bound unready."""
+
+    class Dev:
+        def __init__(self, blocks):
+            self.blocks, self.t, self.log = list(blocks), 0.0, []
+
+        def profiler_start(self):
+            self.t += self.blocks.pop(0) if self.blocks else 0.0
+            self.log.append("start")
+
+        def profiler_stop(self):
+            self.log.append("stop")
+
+    dev = Dev([30.0, 0.1])
+    got = H.prime_profiler(dev, clock=lambda: dev.t)
+    assert got["start_s"] == pytest.approx([30.0, 0.1]) and got["ready"] and got["ready_s"] == H.PRIME_READY_S
+    assert dev.log == ["start", "stop"] * 2
+    dev = Dev([])
+    assert H.prime_profiler(dev, clock=lambda: dev.t)["start_s"] == [0.0] and dev.log == ["start", "stop"]
+    dev = Dev([30.0] * 9)
+    got = H.prime_profiler(dev, clock=lambda: dev.t, tries=3)
+    assert got["start_s"] == [30.0] * 3 and not got["ready"] and dev.log == ["start", "stop"] * 3
+
+
 def test_a_burst_cycles_the_operand_sets():
     dev = FakeDevice()
     calls = [FakeCall(dev, 1.0) for _ in range(3)]
@@ -446,6 +503,17 @@ def test_the_warmup_lasts_its_device_time_and_stops_at_its_bound_unsteady():
     b, es = warm_bench([2600, 2600, 2400, 2400] * 10)
     w = b.warmup(es, 4, seed=3, min_ms=0.0, max_ms=35.0)
     assert not w["steady"] and w["rounds"] == 4 and w["device_ms"] == pytest.approx(40.0)
+
+
+def test_the_warmup_runs_the_timed_items_after_its_first_round():
+    b, es = warm_bench([2400])
+    w = b.warmup(es, 4, seed=3, min_ms=50.0, max_ms=1e6, item_ms=40.0)
+    assert w["rounds"] == 2 and w["device_ms"] == pytest.approx(4.0 + 6.0 + 40.0 + 40.5)
+    assert sorted((it["round"], it["burst"]) for it in b.warmups) == [(0, 4), (0, 4), (1, 27), (1, 40)]
+    graphs = [e.graph for e in es]
+    sz = b.equalize(es, w["per_call"], 4, item_ms=40.0)
+    assert sz["target_ms"] == 40.0 and [x["calls"] for x in sz["entries"]] == [40, 27]
+    assert all(e.graph is g for e, g in zip(es, graphs))
 
 
 def test_the_warmup_needs_every_gate():
@@ -638,9 +706,11 @@ def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
         I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, table[6], node + ",GPU-nope")
 
 
-def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms():
-    I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")
-    for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86")):
+def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_with_132():
+    assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
+    assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
+    for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
 
@@ -698,7 +768,16 @@ def test_the_shapes_hold_both_panel_headlines_once():
     assert SH.ALIASES["llama3.1-70b-o-decode"] == "m32-n8192-k8192"
     assert SH.phase_of(SH.select(["llama3.1-70b-o-decode"])[0]) == "decode"
     with pytest.raises(KeyError):
-        SH.select(["m1-n1-k1"])
+        SH.select(["m1-n1"])
+
+
+def test_any_shape_is_selected_by_its_key_after_the_named_ones():
+    got = SH.select(["m16-n10240-k8192", "m8192-n8192-k8192", "m16-n10240-k8192", "m1-n57344-k8192"])
+    assert [(s.label, s.m, s.k, s.n) for s in got] == [("m8192-n8192-k8192", 8192, 8192, 8192),
+                                                        ("m16-n10240-k8192", 16, 8192, 10240),
+                                                        ("m1-n57344-k8192", 1, 8192, 57344)]
+    with pytest.raises(KeyError):
+        SH.select(["m0-n1-k1"])
 
 
 def test_scale_tensors_cover_every_block():
@@ -846,7 +925,8 @@ def test_a_verity_registry_entry_is_its_own_source_in_one_tile_order_with_a_work
     assert {(n, int(k)) for n, k, _ in entries} >= {("verity_nvf4_256x128_o_ew", 5), ("verity_fp8_256x128_o_ew", 1)}
     assert {q for *_, q in entries} == {"query", "query_fp8"}  # the (m, n, k) form: query_fixed
     registry = (native / "cutlass_registry.cu").read_text()
-    assert re.search(r"#endif\s+phc_table_nvf4, phc_table_fp8\}", registry)  # in a no-CUTLASS build too
+    # in a no-CUTLASS build too; an sm_90a build (-DPH_NO_PLAIN) has none
+    assert re.search(r"#endif\s+#ifndef PH_NO_PLAIN\s+phc_table_nvf4, phc_table_fp8,\s+#endif\s+phc_table_none\}", registry)
     assert '"$PLAIN - nvf4_plain 0"' in (native / "build.sh").read_text()
 
     kernels = [{"index": 0, "name": "cutlass3x_nvfp4_256x128x128_coop", "kind": 5, "swap": 0},
@@ -1002,6 +1082,12 @@ def test_each_librarys_fastest_is_a_finalist_beside_the_fastest_few(monkeypatch)
     assert [e.meta["library"] for e in got] == ["cutlass"] * 3 + ["lt", "lt13"]
     assert len(made) == 3 * len(ms) and all(fc.freed == (n not in final) for n, fc in made)
     assert [e.key[-1] for e in H.finalists_of(got, 1)] == ["cutlass3x_a", "lt_x", "lt13_z"]
+
+    made.clear()
+    twins = H.twin_entries(dev, SHAPE, [B.FAMILIES["fp8-e4m3"]], so, gated, got, None)
+    assert [(e.key, e.kind, e.gate_key) for e in twins] == [
+        (("twin", SHAPE.label, "fp8-e4m3", "cutlass3x_a"), "twin", ("baseline", SHAPE.label, "fp8-e4m3", "cutlass3x_a"))]
+    assert [n for n, _ in made] == ["cutlass3x_a"] * 3 and not set(map(id, twins[0].calls)) & set(map(id, got[0].calls))
 
 
 def test_a_names_file_must_name_configurations_of_the_enumerated_families(tmp_path, capsys):
@@ -1456,3 +1542,20 @@ def test_a_transcript_buffer_over_an_operand_is_refused_before_anything_is_poiso
     assert rec["by"] == "harness" and "a overlaps operand a" in rec["error"] and not (tmp_path / "transcripts").exists()
     assert dev.read(sets[0].a.ptr, 64) == b"\x07" * 64
     assert H.operand_overlaps({"root": call.outputs["root"]}, sets[0]) == []
+
+
+def test_the_bridge_finds_deepgemm_where_vllm_does_an_installed_package_first_then_the_wheels_copy(monkeypatch):
+    def module(name: str, version: str) -> types.ModuleType:
+        m = types.ModuleType(name)
+        m.__version__, m.__spec__ = version, importlib.machinery.ModuleSpec(name, None)
+        return m
+
+    monkeypatch.setitem(sys.modules, "deep_gemm", None)
+    monkeypatch.setitem(sys.modules, "vllm.third_party.deep_gemm", module("vllm.third_party.deep_gemm", "2.6.1"))
+    assert TB.deep_gemm() == ("vllm.third_party.deep_gemm", "2.6.1")
+    monkeypatch.setitem(sys.modules, "deep_gemm", module("deep_gemm", "2.7.0"))
+    assert TB.deep_gemm() == ("deep_gemm", "2.7.0")
+    monkeypatch.setitem(sys.modules, "deep_gemm", None)
+    monkeypatch.setitem(sys.modules, "vllm.third_party.deep_gemm", None)
+    with pytest.raises(ImportError, match="no DeepGEMM"):
+        TB.deep_gemm()
