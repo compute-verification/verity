@@ -60,6 +60,7 @@
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Flock.Claims.Bridge.CustodyZkP",
   "Proofs.Properties.Verity.SampledCoins",
+  "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
@@ -83,7 +84,8 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"
+  "Proofs.Properties.Challenger",
+  "Proofs.Properties.Firewall"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
