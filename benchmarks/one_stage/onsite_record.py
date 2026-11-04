@@ -74,6 +74,12 @@ already vacuous (at least 1), the eps a phase under which it wouldn't be (``eps_
 ``delta``) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
 one execution phase, proved only where m is 1.
 
+**Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
+unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
+that write what it reads, the registration, the live draw and its receipt, and the public files, each by where it is (the
+serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
+each must be kept (``kept``, `REPROOF_KEPT`).
+
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
 """
@@ -268,6 +274,46 @@ NO_MEASUREMENT = ("no test run's measurement given (--advice-charge: `advice_cha
                   "public inputs)")
 TEST_PHASES = ("the test run's own: T buckets of τ from its first Commit period's engine clock reading, not the network "
                "certifier's phase boundaries, so a Commit period near a boundary can count in the next phase")
+#: what a later re-proof of the run's sampled units needs, each wire a sampled unit reads then proved inside its session:
+#: each by name, where it is (the serve dir, the prover's on the served node, by its path there with w<K> the audited
+#: window and <class> V3c's class; or OUT, the run's public files) and what it holds
+REPROOF = {
+    "values": ("serve dir", "v3c-w<K>-<class>/window/",
+               "the window commit: every unit's committed values with their rows and salts, the sampled units' and those "
+               "of the units that write what they read, and its circuit.json and registration.json"),
+    "openings": ("serve dir", "v3c-w<K>-<class>/audit/window/",
+                 "each sampled unit's opening as it was proved (m<k>-private.bin, m<k>-public.bin, v<j>-private.bin), "
+                 "with the partition and the Program the audit sampled"),
+    "draw": ("serve dir", "v3c-w<K>-<class>/audit/window/{draw,segment,receipt}.json",
+             "the live draw and its receipt, the stream's record that it received the registration before it read a coin"),
+    "coins": ("serve dir", "v3c-w<K>-<class>/audit/challenger/",
+              "the live challenger session the draw read its coins from"),
+    "advice": ("serve dir", "advice/w<K>/",
+               "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
+               "hiding root"),
+    "weights": ("serve dir", "weights_registration.json, private/weights.key, private/cos_sin_cache.npy",
+                "the weights registration the audit pins, the committer's key their salts come from and the rotary table, "
+                "beside the checkpoint (REPO at REV, public)"),
+    "run root": ("serve dir", "windows.jsonl", "the run root the audit holds the registration to"),
+    "circuit": ("serve dir", "window-circuit-w<K>-<class>.json",
+                "the verifier's window-circuit record at the class, which the window commit's circuit is held to"),
+    "h1": ("serve dir", "h1/", "under H1_TIE, H1's registration of the window and its log, whose tables the circuit reads"),
+    "registration": ("OUT", "v3c-audit/registration.json",
+                     "the window's registration, whose roots bind every committed value and which the period's "
+                     "commitment holds whole"),
+    "audit": ("OUT", "v3c-audit/summary.json",
+              "the audit's summary: its draw, its coins and that the registration was fixed before the draw"),
+    "audit record": ("OUT", "v3c-audit/window/audit.json", "the audit record, each sampled unit's verdict"),
+    "period audit": ("OUT", "v3c-audit/period.json", "the audit as the network certifier's period reads it"),
+    "main": ("OUT", "v3c-audit/main.txt", "main's first-parent line the challenger session pins on"),
+    "advice registration": ("OUT", REGISTRATION, "the advice registration's public form, its compiler's cap"),
+    "case": ("OUT", str(CASE), "the network certifier's period case, whose commitment holds the tied audits' "
+                               "registrations"),
+    "record": ("OUT", "record/verdicts.json", "the window report of every verdict"),
+}
+REPROOF_KEPT = ("each in custody, retained past the week after the run, never only on the served node. This record reads "
+                "OUT alone: it says whether the run wrote each of OUT's, and nothing of the serve dir's, the prover's, "
+                "which `publish` keeps off OUT; a re-proof holds each to the public registration and the audit's summary")
 
 
 def missing(why: str, src: str | None = None) -> dict[str, Any]:
@@ -588,6 +634,14 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
 
+def reproof(out: Path) -> dict[str, Any]:
+    """The re-proof inputs (`REPROOF`), each with where it is and what it holds, and of OUT's whether the run wrote it."""
+    return {"inputs": {name: {"in": at, "path": path, "holds": what} | ({"present": (out / path).exists()}
+                                                                       if at == "OUT" else {})
+                       for name, (at, path, what) in REPROOF.items()},
+            "kept": REPROOF_KEPT}
+
+
 def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
@@ -614,7 +668,8 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
-        "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None)}
+        "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None),
+        "reproof": reproof(out)}
     nv = v["the network certifier"]
     if nv["verdict"] != "accept":
         why = (f"the network certifier's verdict is {nv['verdict']}"

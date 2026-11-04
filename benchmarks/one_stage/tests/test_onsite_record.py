@@ -642,6 +642,27 @@ def test_a_case_of_another_period_or_none_leaves_the_periods_unfilled(tmp_path):
         "missing": f"no {OR.CASE}: the execution phase's length is its params' schedule"}
 
 
+def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tmp_path):
+    """What a later re-proof of the sampled units needs is listed by name, whatever the verdicts: the serve dir's, which
+    the record can't see, by their paths there, naming no window, and OUT's with whether the run wrote each; how each must
+    be kept is stated beside them."""
+    out = accepted(tmp_path)
+    got = OR.record(out)["reproof"]
+    assert got["kept"] == OR.REPROOF_KEPT and list(got["inputs"]) == list(OR.REPROOF)
+    serve = {k for k, v in got["inputs"].items() if v["in"] == "serve dir"}
+    assert {"values", "openings", "draw", "coins", "advice", "weights"} <= serve
+    assert not any("present" in got["inputs"][k] for k in serve) and not SV.NAMED.search(json.dumps(got))
+    written = {OR.REGISTRATION, str(OR.CASE), "record/verdicts.json"}
+    assert {v["path"]: v["present"] for v in got["inputs"].values() if v["in"] == "OUT"} == {
+        v[1]: v[1] in written for v in OR.REPROOF.values() if v[0] == "OUT"}
+    for at, path, _ in OR.REPROOF.values():
+        if at == "OUT":
+            (out / path).parent.mkdir(parents=True, exist_ok=True)
+            (out / path).touch()
+    assert all(v["present"] for v in OR.record(out)["reproof"]["inputs"].values() if v["in"] == "OUT")
+    assert OR.record(served_out(tmp_path / "rehearsal"))["reproof"]["kept"] == OR.REPROOF_KEPT
+
+
 def test_the_record_leaves_the_node_as_written(tmp_path):
     out = accepted(tmp_path)
     f = tmp_path / "advice-charge.json"
