@@ -14,8 +14,8 @@ public import Proofs.Flock.RecGeneric.AtFlockReruns
 * `conflictPlanIsF0I`: `conflictPlan` in `innerModel` is `F0I` (`ConflictPlanIsF0I`).
 
 The last two hold where `Open(DE, S)` at hm96 is the bound record's `IVStar` (`IVStarOfBound`), so that a rerun's inner
-view is its sample's (`innerModel_acc_iff`). A plan's search in any model (`capPlan_search`, `conflictPlan_search`) is
-read off its loops' (`capLoop_exec`, `waitLoop_exec`, `waitsPlan_exec`), and the two finders' coins correspond one to
+view is its sample's (`innerModel_acc_iff`). A plan's search in any model (`capPlan_search_pick`, `conflictPlan_search_pick`) is
+read off its loops' (`capLoop_exec_pick`, `waitLoop_exec_pick`, `waitsPlan_exec_pick`), and the two finders' coins correspond one to
 one (`binEquiv`, `Fin.consEquiv`, `conflictEquiv`), so each pair of probabilities is of one event, or of a smaller one.
 -/
 
@@ -34,7 +34,7 @@ variable {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (us :
 open Classical in
 /-- **The caps' loop searches `u₀` and its first fork that is accepted and queries the cap** (`g`), `u₀` again where
 none is. -/
-theorem capLoop_exec (j : ℕ) (opens : (ℕ → Coin) → Bool) (g : (Fin n → Coin) × C → Prop)
+theorem capLoop_exec_pick (j : ℕ) (opens : (ℕ → Coin) → Bool) (g : (Fin n → Coin) × C → Prop)
     (hg : ∀ u, g u ↔ m.acc ω (fork (m.cut j) (us 0).1 u.1, u.2) ∧
       opens (m.coins (fork (m.cut j) (us 0).1 u.1, u.2)) = true) :
     ∀ (N i : ℕ), ∃ e, ((capLoop j opens N i).exec m ω us).2.2 = [.fresh 0, e] ∧
@@ -48,7 +48,7 @@ theorem capLoop_exec (j : ℕ) (opens : (ℕ → Coin) → Bool) (g : (Fin n →
     have hp : firstPick g (N + 1) (fun t : Fin (N + 1) => us (i + t.val)) =
         if g (us i) then some (us i) else firstPick g N fun t : Fin N => us (i + 1 + t.val) := by
       simp only [firstPick, Fin.val_zero, Nat.add_zero, htail]
-    obtain ⟨e, he, hn⟩ := capLoop_exec j opens g hg N (i + 1)
+    obtain ⟨e, he, hn⟩ := capLoop_exec_pick j opens g hg N (i + 1)
     by_cases hgi : g (us i)
     · obtain ⟨ha, ho⟩ := (hg _).1 hgi
       refine ⟨.fork j (.fresh 0) (.fresh i), ?_, ?_⟩
@@ -68,7 +68,7 @@ theorem capLoop_exec (j : ℕ) (opens : (ℕ → Coin) → Bool) (g : (Fin n →
 open Classical in
 /-- **`FC`'s plan searches its first run and the caps' loop's pick** where the first run is accepted and queries the cap
 (`c`), and nothing otherwise; `g` is the loop's test and `φ` its fork from the first run. -/
-theorem capPlan_search (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x)) (u₀ : (Fin n → Coin) × C)
+theorem capPlan_search_pick (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x)) (u₀ : (Fin n → Coin) × C)
     (hu₀ : us 0 = u₀) (vs : Fin M → (Fin n → Coin) × C) (hvs : ∀ t : Fin M, us (1 + t.val) = vs t) (c : Prop)
     (hc : c ↔ m.acc ω u₀ ∧ Cp.opens x q (m.coins u₀) = true) (g : (Fin n → Coin) × C → Prop)
     (hg : ∀ u, g u ↔ m.acc ω (fork (m.cut (Cp.round x q)) u₀.1 u.1, u.2) ∧
@@ -80,7 +80,7 @@ theorem capPlan_search (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x
   obtain rfl : (fun t : Fin M => us (1 + t.val)) = vs := funext hvs
   by_cases hc' : c
   · obtain ⟨ha, ho⟩ := hc.1 hc'
-    obtain ⟨e, he, hn⟩ := capLoop_exec m ω us (Cp.round x q) (Cp.opens x q) g hg M 1
+    obtain ⟨e, he, hn⟩ := capLoop_exec_pick m ω us (Cp.round x q) (Cp.opens x q) g hg M 1
     have hex : (((capPlan Cp M).plan x q).exec m ω us).2.2 =
         ((capLoop (Cp.round x q) (Cp.opens x q) M 1).exec m ω us).2.2 := by
       simp only [capPlan, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ho, ↓reduceIte]
@@ -94,7 +94,7 @@ theorem capPlan_search (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x
     · simp only [capPlan, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte, List.flatMap_nil]
 
 /-- **A wait goes on with its first accepted fresh run**, none where none of its `N` is. -/
-theorem waitLoop_exec (cont : Option RunExp → Plan Coin) : ∀ (N i : ℕ),
+theorem waitLoop_exec_pick (cont : Option RunExp → Plan Coin) : ∀ (N i : ℕ),
     ((waitLoop cont N i).exec m ω us).2.2 =
       ((cont (firstPick (fun e => m.acc ω (m.named us e)) N fun t : Fin N => RunExp.fresh (i + t.val))).exec
         m ω us).2.2
@@ -108,17 +108,17 @@ theorem waitLoop_exec (cont : Option RunExp → Plan Coin) : ∀ (N i : ℕ),
         Nat.add_zero]
     · simp only [waitLoop, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte, firstPick, Fin.val_zero,
         Nat.add_zero, htail]
-      exact waitLoop_exec cont N (i + 1)
+      exact waitLoop_exec_pick cont N (i + 1)
 
 /-- **`w` waits of `R` fresh runs each search what they found**: wait `t` looks at the runs `base + R·t + r`. -/
-theorem waitsPlan_exec (R : ℕ) : ∀ (w base : ℕ) (found : List RunExp),
+theorem waitsPlan_exec_pick (R : ℕ) : ∀ (w base : ℕ) (found : List RunExp),
     ((waitsPlan R w base found).exec m ω us).2.2 =
       found ++ (List.finRange w).flatMap fun t =>
         (firstPick (fun e => m.acc ω (m.named us e)) R
           fun r : Fin R => RunExp.fresh (base + R * t.val + r.val)).toList
   | 0, _, found => by simp only [waitsPlan, Plan.exec, List.finRange_zero, List.flatMap_nil, List.append_nil]
   | w + 1, base, found => by
-    simp only [waitsPlan, waitLoop_exec, waitsPlan_exec R w (base + R)]
+    simp only [waitsPlan, waitLoop_exec_pick, waitsPlan_exec_pick R w (base + R)]
     rw [List.finRange_succ, List.flatMap_cons, List.flatMap_map, List.append_assoc]
     refine congrArg (found ++ ·) (congrArg₂ (· ++ ·) ?_ ?_)
     · refine congrArg (fun f : Fin R → RunExp => (firstPick (fun e => m.acc ω (m.named us e)) R f).toList)
@@ -133,7 +133,7 @@ theorem waitsPlan_exec (R : ℕ) : ∀ (w base : ℕ) (found : List RunExp),
 open Classical in
 /-- **`F0`'s plan searches its first run and each wait's first accepted run** where the first run is accepted (`c`),
 and nothing otherwise; `g` is the waits' test. -/
-theorem conflictPlan_search (k : Msg → ℕ) (R : ℕ) (x : Msg) (z : Fin 1) (u₀ : (Fin n → Coin) × C)
+theorem conflictPlan_search_pick (k : Msg → ℕ) (R : ℕ) (x : Msg) (z : Fin 1) (u₀ : (Fin n → Coin) × C)
     (hu₀ : us 0 = u₀) (ws : Fin (k x) → Fin R → (Fin n → Coin) × C)
     (hws : ∀ t r, us (1 + R * t.val + r.val) = ws t r) (c : Prop) (hc : c ↔ m.acc ω u₀)
     (g : (Fin n → Coin) × C → Prop) (hg : ∀ u, g u ↔ m.acc ω u) :
@@ -150,7 +150,7 @@ theorem conflictPlan_search (k : Msg → ℕ) (R : ℕ) (x : Msg) (z : Fin 1) (u
     have hmap : ∀ o : Option RunExp,
         (o.map fun e => m.log ω (m.named us e)) = (o.map (m.named us)).map (m.log ω) :=
       fun o => by cases o <;> rfl
-    rw [if_pos hc', hex, waitsPlan_exec, List.flatMap_append, flatMap_toList]
+    rw [if_pos hc', hex, waitsPlan_exec_pick, List.flatMap_append, flatMap_toList]
     refine congrArg₂ (· ++ ·) ?_ (congrArg (fun f => (List.finRange (k x)).flatMap f) (funext fun t => ?_))
     · simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, RunModel.named]
     · rw [hmap, firstPick_map (m.named us) (fun e => m.acc ω (m.named us e)) (m.acc ω) (fun _ => Iff.rfl)]
@@ -285,7 +285,7 @@ theorem capPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List (ℕ 
     innerModel_acc_iff D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO hxI ω
   rw [(RunFinder.finder_out (capPlan Cp M) ((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x)
       ((compAt D Bd decI DO decO).xI x) hW q ω (Fin.cons d₀ vs)).trans
-    (congrArg findColl (capPlan_search ((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x) ω
+    (congrArg findColl (capPlan_search_pick ((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x) ω
       (slotRuns (Fin.cons d₀ vs : Fin (M + 1) → _)) Cp M ((compAt D Bd decI DO decO).xI x) q d₀
       (slotRuns_cons_zero d₀ vs) vs (slotRuns_cons_one_add d₀ vs)
       (opensAtI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x q ω d₀)
@@ -357,7 +357,7 @@ theorem conflictPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List 
   rw [(RunFinder.finder_out (conflictPlan Bd.DE.k R) ((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x)
       ((compAt D Bd decI DO decO).xI x) Nat.one_pos (default : Fin 1) ω
       (Fin.cons d₀ fun p => ws (finProdFinEquiv.symm p).1 (finProdFinEquiv.symm p).2)).trans
-    (congrArg findColl (conflictPlan_search ((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x) ω
+    (congrArg findColl (conflictPlan_search_pick ((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x) ω
       (slotRuns (Fin.cons d₀ fun p => ws (finProdFinEquiv.symm p).1 (finProdFinEquiv.symm p).2 :
         Fin (Bd.DE.k (Claims.Recursion.xI (D.record Bd.IVStar) x) * R + 1) → _))
       Bd.DE.k R ((compAt D Bd decI DO decO).xI x) default d₀ (slotRuns_cons_zero _ _) ws (slotRuns_wait d₀ ws)
