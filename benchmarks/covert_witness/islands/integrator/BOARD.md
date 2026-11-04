@@ -132,3 +132,6 @@ art:c109f12fe7690c3b54a3c256d21975f80a9f5326ad5270511b0155901430b153, moved ther
 13:36Z integrator [STARTED] FINAL r20261104-000307-6d2c seed own: r20261104-133540-2919 on vy-nebius-3 (shallow s-t20, about 17 min once it holds a GPU)
 13:38Z integrator [STARTED] FINAL r20261104-000307-6d2c seed 101: r20261104-133800-5971 on vy-nebius-3 (shallow s-t20, about 17 min once it holds a GPU)
 13:38Z integrator [STARTED] FINAL r20261104-000307-6d2c seed 102: r20261104-133807-2e50 on vy-nebius-3 (shallow s-t20, about 17 min once it holds a GPU)
+13:40Z integrator [STARTED] FINAL r20261103-234019-5409 seed own: r20261104-134028-a191 on vy-nebius-1 (quant s-t20, about 14 min once it holds a GPU)
+13:40Z integrator [STARTED] FINAL r20261103-234019-5409 seed 101: r20261104-134036-c6d9 on vy-nebius-3 (quant s-t20, about 14 min once it holds a GPU)
+13:40Z integrator [STARTED] FINAL r20261103-234019-5409 seed 102: r20261104-134043-6c60 on vy-nebius-3 (quant s-t20, about 14 min once it holds a GPU)
