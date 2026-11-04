@@ -412,16 +412,16 @@ def rehearsed(run: Path) -> None:
     if end.get("rc") != 0 or v.get("accepted") is not True:
         problems = device_problems(run)
         try:
-            violations = WC.io(run)["violations"]
-        except (OSError, ValueError, KeyError, SystemExit):
-            violations = []
+            violations, unread = WC.io(run)["violations"], ""
+        except (OSError, ValueError, KeyError, SystemExit) as e:
+            violations, unread = [], f"; its certified I/O unread ({type(e).__name__}: {e})"
         if any(why == WC.NOT_ID_CELL for _, why in violations):
             raise Rejected(f"the network certifier's certified egress holds {WC.NOT_ID_CELL.removeprefix('an ')}: "
                            f"bytes the server sent that are no output's; the network certifier's own check: "
                            f"{problems[:4]}")
         raise NotRun(f"the gate's rehearsal didn't pass, so it certified no served answer: exit {end.get('rc')}, "
                      f"{end.get('ended')}; its check accepted {v.get('accepted')} with {v.get('problems')} problems, "
-                     f"failed {v.get('failed')}; the network certifier's own check: {problems[:4]}")
+                     f"failed {v.get('failed')}; the network certifier's own check: {problems[:4]}{unread}")
 
 
 def release_run(r: dict) -> str | None:

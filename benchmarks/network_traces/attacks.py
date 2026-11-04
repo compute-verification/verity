@@ -250,14 +250,15 @@ def bypass_request(request: bytes, frame_bytes: int, same_user: bool) -> bytes:
     head, _, body = request.partition(b"\r\n\r\n")
     kept = b"\r\n".join(x for x in head.split(b"\r\n")
                         if x.partition(b":")[0].strip().lower() not in (RELEASE_HEADER, RUN_HEADER))
+    not_id = "the request isn't a network-certifier-form id request"
     try:
         doc = json.loads(body)
         fields = {k: doc[k] for k in WC.FIELDS}
         ok = id_request(**fields, frame_bytes=frame_bytes, offset=0) == kept + b"\r\n\r\n" + body
-    except (ValueError, KeyError, TypeError):
-        ok = False
+    except (ValueError, KeyError, TypeError) as e:
+        raise ValueError(f"{not_id}: {type(e).__name__}: {e}") from e
     if not ok:
-        raise ValueError("the request isn't a network-certifier-form id request")
+        raise ValueError(not_id)
     if not same_user:
         user = fields["user"]
         fields["user"] = user[:-1] + ("~" if user[-1:] != "~" else "^") if user else "~"
@@ -355,7 +356,7 @@ class Relay:
                 c_reader, c_writer = await self.open()
                 c_writer.write(copy)
                 await c_writer.drain()
-                task = asyncio.ensure_future(self._drop(c_reader, c_writer))
+                task = asyncio.ensure_future(self._drop(line["connection"], c_reader, c_writer))
                 self._copies.add(task)
                 task.add_done_callback(self._copies.discard)
                 line["copy_bytes"] = len(copy)
@@ -373,16 +374,17 @@ class Relay:
             self.log(line)
             writer.close()
 
-    @staticmethod
-    async def _drop(reader: asyncio.StreamReader, writer: Any) -> None:
-        """The copy's answer read whole and dropped."""
+    async def _drop(self, k: int, reader: asyncio.StreamReader, writer: Any) -> None:
+        """Connection `k`'s copy's answer read whole and dropped; its bytes, or why it ended short, go to the log."""
+        got: dict = {"connection": k, "copy": "dropped", "bytes": 0}
         try:
-            while await reader.read(1 << 16):
-                pass
-        except (ConnectionError, OSError):
-            pass
+            while data := await reader.read(1 << 16):
+                got["bytes"] += len(data)
+        except (ConnectionError, OSError) as e:
+            got["error"] = f"{type(e).__name__}: {e}"
         finally:
             writer.close()
+            self.log(got)
 
 
 async def serve_relay(attack: str, listen: int, to: int, *, cell_bytes: int, bucket_s: float, delay: int, nth: int,
