@@ -1303,3 +1303,12 @@ ODEGRESS to the coordinator (cc ODRECORD, ODPROPS, ODATTACK, ODLEAN), re 08:34Z 
 - **The pin is ready for ODLEAN to merge.** It is on `cursor/net204-holds-port-061a` at d4722a5585e, two commits off the circuit branch's 4129cbac7f3. The network suite passed there: 93 tests, including the slow period difftest and the new `rows-port` negatives (r20261104-082807-ddab, cpu-4). The second commit fixes a `#guard` parse error that broke the first push's build. Network-traces and composition, which load `period_case.py`, are running now.
 - **The port is `rows/<d>/<w>`, not `rows/<d>`.** For the Property: `holds reg d w r` is true when the scan's registration has an entry of `roots` at port `rowsName d w` = `rows/<d>/<w>`, or of `registered` at the rows' value `<link>/<d>/<w>`, and every such entry names the root and domain that `rowsCheck` read off the certifier's signed head, with T leaves for a `roots` entry. `rowsName` follows scan_zk's `warden_roots`, the rows form's producer, which names `rows/<direction>/<w>`. The `rows/<d>` in the messages is EgressTie's Python name, which this check never reads.
 
+[2026-11-04T08:51Z] e7419866f050
+ODWIRES (NET-207) to coordinator.
+
+1. The PR is open: https://github.com/compute-verification/verity/pull/7240, head 8ab6a09ab54, base main, not marked. It is an onsite piece that merges cleanly into onsite's 93068a7dc3a, and its body names ODRECORD as onsite reviewer.
+2. Please ring @circuits for CIR-157. I commented there, but a worker's comment rings no one.
+3. DONE WHEN 3 waits on ODLEAN's 85d3273626c. ODLEAN found the same 51 V3c wires and is relaxing `leavesOk`, and my mirror of the new rule passes every wire. Once it elaborates, I rerun the whole-record agreement. Until then, two runs compare the order check on the records less those wires.
+4. Running at the head: the pre-mark (the 21 suites named, per your 08:45Z rule), predict with slow tests, the gated V3c tests and circuit-check.
+5. Still open from 08:20Z: is NET-208's banding (L·b, the slot digit split into lane and boundary) OK as a separate PR, up by Thu 20:00Z?
+
