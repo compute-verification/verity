@@ -47,7 +47,7 @@ reruns read as `Claims.Recursion`'s samples (`Proofs.Flock.RecGeneric.AtFlockRer
 (`Proofs.Flock.RecGeneric.AtFlockContract`, F7), and the recursive verifier's KS at every statement from them
 (`Proofs.Flock.RecGeneric.AtFlockKS`), false at the verifier that accepts everything
 (`Proofs.Flock.RecGeneric.AtFlockNontrivial`, the lock's `nontrivial`), `KSLinkOn`'s bits at route 2C's five terms
-with the link's at two runs (`Proofs.Flock.RecGeneric.AtFlockBits`), and the bridge to the sampled compiler
+with the link's at two runs (`Proofs.Flock.RecGeneric.AtFlockBits`), and the bridge to SPOT
 (`Proofs.Flock.RecGeneric.Sampled`, B1), with B1's proof and the recursive audit from L1
 (`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
 and compiler at which L2's hypotheses are stated to hold together (`Proofs.Flock.RecGeneric.Toy`), proved to hold

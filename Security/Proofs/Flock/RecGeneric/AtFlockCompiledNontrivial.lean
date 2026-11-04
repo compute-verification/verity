@@ -13,10 +13,12 @@ rounds and accepts at its first round with no SHA-512 call (`RecAt.acceptAll`), 
 `RecDeploy.KSFixture`. The silent prover is accepted on every run. The accepting record stages no V\* statement, so
 `Compiled.EO`'s first session's witness would have to pass the outer Flock's check at the empty statement, which its
 parser refuses: `E_O` gives no witnesses (`Compiled.EO_none_of_stmts_nil`), `E*` extracts nothing
-(`Comp.E_none_of_EO_none`), `Pr[accept ∧ ¬extract] = 1`, and no rerun's witnesses fall outside `R_O`. No rerun logs a
-call, so every run finder of `Comp.err` finds nothing (`RunFinder.PrAt_log_nil`), which leaves `κ` and the tails
-(`Comp.err_ofFlock_quiet`); the tails are below `1/4` each at a large enough `M` and `R`, and `λ₂ ≥ 100` at the deployed
-decoders gives `κ < 1/2`.
+(`Comp.E_none_of_EO_none`), `Pr[accept ∧ ¬extract] = 1` (`Compiled.prBad_silent`), and no rerun's witnesses fall
+outside `R_O`. No rerun logs a call, so every run finder of `Comp.err` finds nothing (`RunFinder.PrAt_log_nil`), which
+leaves `κ` and the tails (`Comp.err_ofFlock_silent`); the tails are below `1/4` each at a large enough `M` and `R`, so
+the bound fails wherever `κ < 1/2` (`Compiled.not_bound_silent`). At the compiled verifier, `κ` is the compiled
+record's (`compiledAt_acceptAll_κ`, through `Bd.deploy`'s `κ`, waits and rounds, which are `DE`'s), and `λ₂ ≥ 100` at
+the deployed decoders gives `κ < 1/2`.
 -/
 
 @[expose] public section
@@ -38,12 +40,26 @@ theorem RunFinder.PrAt_log_nil {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype
   unfold RunFinder.PrAt
   split_ifs with h
   · unfold Finder.Pr
-    refine (Pr_congr fun s => iff_false_intro ?_).trans Pr_false
+    refine (Pr_congr fun t => iff_false_intro ?_).trans Pr_false
     rintro ⟨u, v, hs, -⟩
     simp only [RunFinder.finder, hlog, hfm, findColl, reduceCtorEq] at hs
   · rfl
 
-variable {Col T Col' T' : Type} [DecidableEq Col] [DecidableEq Col']
+/-- **No rerun's witnesses fall outside `R_O` where `E_O` gives none.** -/
+theorem Comp.PrOut_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
+    (hW : ∀ ω u, K.wits H P x ω u = none) : K.PrOut H P x = 0 := by
+  unfold Comp.PrOut
+  refine (Pr_congr fun t => iff_false_intro ?_).trans Pr_false
+  rintro ⟨w, hw, -⟩
+  cases (hW t.1 t.2).symm.trans hw
+
+/-- **A rerun logs no call where `E_O` gives no witnesses**: `calls` is read only at witnesses. -/
+theorem Comp.rerunCalls_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg)
+    (hW : ∀ ω u, K.wits H P x ω u = none) (ω : Ω) (u : (Fin (K.V.k x) → Coin) × K.EO.C x) :
+    K.rerunCalls H P x ω u = [] :=
+  congrArg (fun o : Option K.WO => (o.map (K.calls H x u.1)).getD []) (hW ω u)
+
+variable {Col T Col' T' : Type}
 
 /-- **`Compiled.EO` over the outer Flock gives no witnesses where the run stages no statement**, at a statement with a
 session whose outer parser refuses the empty statement: witnesses are one per session, the first paired with the first
@@ -64,8 +80,20 @@ theorem Compiled.EO_none_of_stmts_nil (DO : Claims.Flock.Deploy Coin Col' T') (L
   have hc : (Arg.ofFlock DO).check [] (ws[0]'h0).2 = false := by
     show Claims.Flock.check DO.parse [] _ = false
     unfold Claims.Flock.check
-    rw [hP] <;> rfl
+    rw [hP]
   exact absurd (hc.symm.trans h2) Bool.false_ne_true
+
+/-- **The silent prover is always accepted and never extracted** at a compiled verifier over the outer Flock that
+accepts at every round and stages no statement, at a statement with a session whose outer parser refuses the empty
+statement: `E_O` gives no witnesses (`Compiled.EO_none_of_stmts_nil`), so `E*` extracts nothing
+(`Comp.E_none_of_EO_none`). -/
+theorem Compiled.prBad_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : Compiled Coin (Arg.ofFlock DO))
+    {W : Type} (I : Proto Coin W) (S : Server) (H : Msg → Msg) (x : Msg)
+    (hv : ∀ as cs, L.V.next x as cs = .ret .acc) (hk : 0 < L.V.k x) (hs : ∀ ms, L.stmts x ms = [])
+    (hS : 0 < L.nS x) (hP : DO.parse [] = none) :
+    PrBad H L.V (L.toComp.R I) (L.toComp.E I S) x Claims.Witness.silentP = 1 :=
+  prBad_acc H _ _ _ x _ hv hk fun ω r₀ c => Comp.E_none_of_EO_none _ _ _ H _ x ω r₀ c fun d c' =>
+    Compiled.EO_none_of_stmts_nil DO L H Claims.Witness.silentP x hs hS hP ω d c'
 
 /-- **`Comp.err` at the element-level Flock where nothing is found**: where `B` finds nothing, no rerun's witnesses
 fall outside `R_O` and no run finder finds anything in the composite's reruns, `Comp.err` at the loop bounds
@@ -106,77 +134,143 @@ theorem Comp.err_ofFlock_quiet (K : Comp Coin) (Bd : Bound Coin Col T) (decI : L
   simp only [mul_zero, Real.sqrt_zero]
   ring
 
+/-- **`Comp.err` at the element-level Flock where `E_O` gives no witnesses and the compiled verifier makes no call of
+its own**, where `B` finds nothing: `Comp.err_ofFlock_quiet`, since no rerun's witnesses fall outside `R_O`
+(`Comp.PrOut_of_wits_none`) and no rerun logs a call (`Comp.rerunCalls_of_wits_none`). -/
+theorem Comp.err_ofFlock_silent (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
+    (Cp : Caps Coin) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
+    (M R : ℕ) (hB : PrB H K.V P x = 0) (hW : ∀ ω u, K.wits H P x ω u = none)
+    (hown : ∀ ω u, K.ownAt H P x ω u = []) :
+    K.err (Proto.ofFlock Bd decI Cp) S H P x (![0, M, R] : Fin 3 → ℕ) M =
+      K.κ (Proto.ofFlock Bd decI Cp) x +
+        (4 * (Cp.width (K.xI x) : ℝ) + K.β (Proto.ofFlock Bd decI Cp) x) * (1 / ((M : ℝ) + 1)) +
+        4 * (((Bd.DE.k (K.xI x) : ℝ) + 1) / ((R : ℝ) + 1)) :=
+  Comp.err_ofFlock_quiet K Bd decI Cp S H P x M R hB (Comp.PrOut_of_wits_none K H P x hW)
+    (fun F => RunFinder.PrAt_log_nil H F _ _ (Comp.rerunCalls_of_wits_none K H P x hW))
+    fun F => RunFinder.PrAt_log_nil H F _ _ fun ω u => by
+      show K.rerunCalls H P x ω u ++ K.ownAt H P x ω u = []
+      rw [Comp.rerunCalls_of_wits_none K H P x hW ω u, hown ω u, List.append_nil]
+
+/-- **`Comp.err` misses the silent prover** at a compiled verifier over the outer Flock that accepts at every round,
+stages no statement and makes no call of its own, at a statement with a session whose outer parser refuses the empty
+statement, wherever the composite's `κ` at the element-level Flock is below `1/2`: `Pr[accept ∧ ¬extract] = 1`
+(`Compiled.prBad_silent`), while at `M = ⌈4·(4W + β)⌉` and `R = 16·(k_I + 1)` the bound is `κ` and two tails below
+`1/4` each (`Comp.err_ofFlock_silent`). -/
+theorem Compiled.not_bound_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : Compiled Coin (Arg.ofFlock DO))
+    (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) (S : Server) (H : Msg → Msg)
+    (x : Msg) (hv : ∀ as cs, L.V.next x as cs = .ret .acc) (hk : 0 < L.V.k x) (hs : ∀ ms, L.stmts x ms = [])
+    (hS : 0 < L.nS x) (hP : DO.parse [] = none) (hown : ∀ ms, L.own H x ms = [])
+    (hκ : L.toComp.κ (Proto.ofFlock Bd decI Cp) x < 1 / 2)
+    (h : ∀ (m : Fin (Proto.ofFlock Bd decI Cp).nT → ℕ) (M : ℕ),
+      PrBad H L.V (L.toComp.R (Proto.ofFlock Bd decI Cp)) (L.toComp.E (Proto.ofFlock Bd decI Cp) S) x
+          Claims.Witness.silentP ≤
+        L.toComp.err (Proto.ofFlock Bd decI Cp) S H Claims.Witness.silentP x m M) :
+    False := by
+  have hE := Comp.err_ofFlock_silent L.toComp Bd decI Cp S H Claims.Witness.silentP x
+    ⌈4 * (4 * (Cp.width (L.toComp.xI x) : ℝ) + L.toComp.β (Proto.ofFlock Bd decI Cp) x)⌉₊
+    (16 * (Bd.DE.k (L.toComp.xI x) + 1)) (prB_acc H _ _ x hv)
+    (fun ω u => Compiled.EO_none_of_stmts_nil DO L H Claims.Witness.silentP x hs hS hP ω u.1 u.2)
+    fun ω u => hown (run H Claims.Witness.silentP L.V x ω u.1).msgs
+  have h1 := (Compiled.prBad_silent DO L (Proto.ofFlock Bd decI Cp) S H x hv hk hs hS hP).symm.trans_le
+    ((h _ _).trans_eq hE)
+  have h2 := add_lt_add (add_lt_add hκ (Claims.Witness.Recursion.tail_lt_quarter
+    (4 * (Cp.width (L.toComp.xI x) : ℝ) + L.toComp.β (Proto.ofFlock Bd decI Cp) x)))
+    (Claims.Witness.Recursion.f0_tail_lt (Bd.DE.k (L.toComp.xI x)))
+  exact absurd (h1.trans_lt h2) (by norm_num)
+
+/-- **`Bd.deploy`'s `κ` is `DE`'s**: it changes only `DE`'s verifier, opened columns and weight. -/
+theorem Bound.deploy_κ (Bd : Bound Coin Col T) (y : Msg) : Claims.Flock.κ Bd.deploy y = Claims.Flock.κ Bd.DE y := by
+  simp only [Claims.Flock.κ, Claims.Flock.Deploy.k, Bound.deploy]
+
+/-- **`Bd.deploy`'s waits are `DE`'s.** -/
+theorem Bound.deploy_waits (Bd : Bound Coin Col T) (y : Msg) : Bd.deploy.waits y = Bd.DE.waits y := by
+  simp only [Bound.deploy]
+
+/-- **`Bd.deploy`'s accepted reruns per wait are `DE`'s.** -/
+theorem Bound.deploy_k (Bd : Bound Coin Col T) (y : Msg) : Bd.deploy.k y = Bd.DE.k y := by
+  simp only [Claims.Flock.Deploy.k, Bound.deploy]
+
+/-- **The recursion's `κ` at the element-level Flock over `Bd.deploy`**, at `DE`'s `κ`, waits and rounds per wait
+(`Bound.deploy_κ`, `Bound.deploy_waits`, `Bound.deploy_k`). -/
+theorem κ_ofFlock_deploy (D : RecAt Coin) (IV : Verifier Coin) (Bd : Bound Coin Col T)
+    (decI : List (ℕ × Col) → List T) (x : Msg) :
+    Claims.Recursion.κ (D.record IV) (Inner.ofFlock Bd.deploy decI) x =
+      Claims.Flock.κ Bd.DE (xI (D.record IV) x) +
+        ((1 + Bd.DE.waits (xI (D.record IV) x) * Bd.DE.k (xI (D.record IV) x) : ℕ) : ℝ) *
+          ∑ s : Fin ((D.record IV).nS x), ((D.record IV).nums x s).κ := by
+  simp only [Claims.Recursion.κ, Claims.Recursion.NI, Inner.ofFlock, Bound.deploy_κ, Bound.deploy_waits,
+    Bound.deploy_k]
+
+/-- **The composite's `κ` at the element-level Flock**: `DE`'s `κ` at the inner statement and `N_I = 1 + m·k` at
+`DE`'s waits and rounds per wait times the sessions' `κ`s. -/
+theorem Compiled.κ_ofFlock {A : Arg Coin} (L : Compiled Coin A) (Bd : Bound Coin Col T)
+    (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) (x : Msg) :
+    L.toComp.κ (Proto.ofFlock Bd decI Cp) x =
+      Claims.Flock.κ Bd.DE (L.xI x) + ((1 + Bd.DE.waits (L.xI x) * Bd.DE.k (L.xI x) : ℕ) : ℝ) *
+        ∑ s : Fin (L.nS x), L.κb x s :=
+  rfl
+
+section AcceptAll
+
+variable (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin)
+  (x : Msg)
+
+/-- The compiled verifier at the verifier that accepts everything accepts at every round. -/
+theorem compiledAt_acceptAll_next : ∀ as cs, (compiledAt D.acceptAll Bd DO Cp).V.next x as cs = .ret .acc :=
+  fun _ _ => rfl
+
+/-- The compiled verifier at the verifier that accepts everything stages no statement. -/
+theorem compiledAt_acceptAll_stmts : ∀ ms, (compiledAt D.acceptAll Bd DO Cp).stmts x ms = [] :=
+  fun _ => rfl
+
+/-- The compiled verifier at the verifier that accepts everything makes no call of its own. -/
+theorem compiledAt_acceptAll_own (H : Msg → Msg) : ∀ ms, (compiledAt D.acceptAll Bd DO Cp).own H x ms = [] :=
+  fun _ => rfl
+
+/-- The compiled verifier at the verifier that accepts everything takes the compiled record's rounds, at the bound
+record's `IVStar` (`IVStarOfBound`). -/
+theorem compiledAt_acceptAll_k (hIV : IVStarOfBound Bd) :
+    (compiledAt D.acceptAll Bd DO Cp).V.k x = (D.record Bd.IVStar).V.k x := by
+  show (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).V.k x = _
+  rw [hIV]
+
+/-- The compiled verifier at the verifier that accepts everything has the compiled record's sessions, at the bound
+record's `IVStar` (`IVStarOfBound`). -/
+theorem compiledAt_acceptAll_nS (hIV : IVStarOfBound Bd) :
+    (compiledAt D.acceptAll Bd DO Cp).nS x = (D.record Bd.IVStar).nS x := by
+  show (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).nS x = _
+  rw [hIV]
+
+/-- The composite's `κ` at the verifier that accepts everything is the compiled record's at the deployed decoder, at
+the bound record's `IVStar` (`IVStarOfBound`): `Compiled.κ_ofFlock` and `κ_ofFlock_deploy`. -/
+theorem compiledAt_acceptAll_κ (hIV : IVStarOfBound Bd) :
+    (compiledAt D.acceptAll Bd DO Cp).toComp.κ (Proto.ofFlock Bd Bd.deploy.decode Cp) x =
+      Claims.Recursion.κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) x := by
+  rw [Compiled.κ_ofFlock, κ_ofFlock_deploy]
+  show Claims.Flock.κ Bd.DE (xI (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)) x) +
+      ((1 + Bd.DE.waits (xI (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)) x) *
+        Bd.DE.k (xI (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)) x) : ℕ) : ℝ) *
+      ∑ s : Fin ((D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).nS x),
+        ((D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).nums x s).κ = _
+  rw [hIV]
+
+end AcceptAll
+
 /-- **`KSCompiledOn` fails at the verifier that accepts everything** at any statement of `G` where the compiled verifier
 takes a round, the statement has a V\* session, the outer Flock's parser refuses the empty statement and `κ < 1/2` at
-the deployed decoders, with the server's `IVStar` the bound record's (`IVStarOfBound`): `Pr[accept ∧ ¬extract] = 1`
-for the silent prover, every finder term is `0`, and at `M = ⌈4·(4W + β)⌉` and `R = 16·(k_I + 1)` each tail is below
-`1/4`. -/
+the deployed decoders, with the server's `IVStar` the bound record's (`IVStarOfBound`): `Compiled.not_bound_silent` at
+`compiledAt`, which accepts at every round, stages no statement and makes no call of its own. -/
 theorem not_ksCompiledOn_acceptAll (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (x : Msg) (hx : G x)
     (hIV : IVStarOfBound Bd) (hk : 0 < (D.record Bd.IVStar).V.k x) (hS : 0 < (D.record Bd.IVStar).nS x)
     (hP : DO.parse [] = none)
     (hκ : Claims.Recursion.κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) x < 1 / 2) :
-    ¬ KSCompiledOn H D.acceptAll Bd DO Cp G := by
-  intro h
-  have hk' : 0 < (compiledAt D.acceptAll Bd DO Cp).V.k x := by
-    show 0 < (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).V.k x
-    rw [hIV]
-    exact hk
-  have hS' : 0 < (compiledAt D.acceptAll Bd DO Cp).nS x := by
-    show 0 < (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).nS x
-    rw [hIV]
-    exact hS
-  have hκK : (compiledAt D.acceptAll Bd DO Cp).toComp.κ (Proto.ofFlock Bd Bd.deploy.decode Cp) x < 1 / 2 := by
-    show Claims.Recursion.κ (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans))
-      (Inner.ofFlock Bd.deploy Bd.deploy.decode) x < 1 / 2
-    rw [hIV]
-    exact hκ
-  have hEO := Compiled.EO_none_of_stmts_nil DO (compiledAt D.acceptAll Bd DO Cp) H Claims.Witness.silentP x
-    (fun _ => rfl) hS' hP
-  have hW : ∀ ω u, (compiledAt D.acceptAll Bd DO Cp).toComp.wits H Claims.Witness.silentP x ω u = none :=
-    fun ω u => hEO ω u.1 u.2
-  have hBad : PrBad H (compiledAt D.acceptAll Bd DO Cp).V
-      ((compiledAt D.acceptAll Bd DO Cp).toComp.R (Proto.ofFlock Bd Bd.deploy.decode Cp))
-      ((compiledAt D.acceptAll Bd DO Cp).toComp.E (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd)) x
-      Claims.Witness.silentP = 1 :=
-    prBad_acc H _ _ _ x _ (fun _ _ => rfl) hk' fun ω r₀ c =>
-      Comp.E_none_of_EO_none _ _ _ H _ x ω r₀ c fun d c' => hEO ω d c'
-  have hB : PrB H (compiledAt D.acceptAll Bd DO Cp).toComp.V Claims.Witness.silentP x = 0 :=
-    prB_acc H _ _ x fun _ _ => rfl
-  have hPO : (compiledAt D.acceptAll Bd DO Cp).toComp.PrOut H Claims.Witness.silentP x = 0 := by
-    unfold Comp.PrOut
-    refine (Pr_congr fun t => iff_false_intro ?_).trans Pr_false
-    rintro ⟨w, hw, -⟩
-    cases (hW t.1 t.2).symm.trans hw
-  have hrer : ∀ ω u,
-      (compiledAt D.acceptAll Bd DO Cp).toComp.rerunCalls H Claims.Witness.silentP x ω u = [] := by
-    intro ω u
-    unfold Comp.rerunCalls
-    rw [hW] <;> rfl
-  have hown : ∀ ω u, (compiledAt D.acceptAll Bd DO Cp).toComp.ownAt H Claims.Witness.silentP x ω u = [] :=
-    fun _ _ => rfl
-  have hIn : ∀ F : RunFinder Coin, F.PrAt H ((compiledAt D.acceptAll Bd DO Cp).toComp.innerModel
-      ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H Claims.Witness.silentP x)
-      ((compiledAt D.acceptAll Bd DO Cp).toComp.xI x) = 0 :=
-    fun F => RunFinder.PrAt_log_nil H F _ _ hrer
-  have hVer : ∀ F : RunFinder Coin, F.PrAt H ((compiledAt D.acceptAll Bd DO Cp).toComp.verModel
-      ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H Claims.Witness.silentP x)
-      ((compiledAt D.acceptAll Bd DO Cp).toComp.xI x) = 0 :=
-    fun F => RunFinder.PrAt_log_nil H F _ _ fun ω u => by
-      show (compiledAt D.acceptAll Bd DO Cp).toComp.rerunCalls H Claims.Witness.silentP x ω u ++
-        (compiledAt D.acceptAll Bd DO Cp).toComp.ownAt H Claims.Witness.silentP x ω u = []
-      rw [hrer, hown, List.append_nil]
-  have hE := Comp.err_ofFlock_quiet (compiledAt D.acceptAll Bd DO Cp).toComp Bd Bd.deploy.decode Cp
-    (Server.ofBound Bd) H Claims.Witness.silentP x
-    ⌈4 * (4 * (Cp.width ((compiledAt D.acceptAll Bd DO Cp).toComp.xI x) : ℝ) +
-      (compiledAt D.acceptAll Bd DO Cp).toComp.β (Proto.ofFlock Bd Bd.deploy.decode Cp) x)⌉₊
-    (16 * (Bd.DE.k ((compiledAt D.acceptAll Bd DO Cp).toComp.xI x) + 1)) hB hPO hIn hVer
-  have h1 := hBad.symm.trans_le ((h x hx Unit Claims.Witness.silentP _ _).trans_eq hE)
-  have hT := Claims.Witness.Recursion.tail_lt_quarter
-    (4 * (Cp.width ((compiledAt D.acceptAll Bd DO Cp).toComp.xI x) : ℝ) +
-      (compiledAt D.acceptAll Bd DO Cp).toComp.β (Proto.ofFlock Bd Bd.deploy.decode Cp) x)
-  have hF := Claims.Witness.Recursion.f0_tail_lt (Bd.DE.k ((compiledAt D.acceptAll Bd DO Cp).toComp.xI x))
-  linarith
+    ¬ KSCompiledOn H D.acceptAll Bd DO Cp G := fun h =>
+  Compiled.not_bound_silent DO (compiledAt D.acceptAll Bd DO Cp) Bd Bd.deploy.decode Cp (Server.ofBound Bd) H x
+    (compiledAt_acceptAll_next D Bd DO Cp x) (hk.trans_eq (compiledAt_acceptAll_k D Bd DO Cp x hIV).symm)
+    (compiledAt_acceptAll_stmts D Bd DO Cp x) (hS.trans_eq (compiledAt_acceptAll_nS D Bd DO Cp x hIV).symm) hP
+    (compiledAt_acceptAll_own D Bd DO Cp x H) ((compiledAt_acceptAll_κ D Bd DO Cp x hIV).trans_lt hκ)
+    fun m M => h x hx Unit Claims.Witness.silentP m M
 
 end Claims.RecGeneric
 
