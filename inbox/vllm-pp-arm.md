@@ -110,3 +110,8 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 
 - It adds compute-accounting's drawn o0 fix and **coin v2** (cursor/pearlplus-draw-1de3 20393c5ebef): Pearl+'s live challenger draw on C = run_commitment(passes) before the coin, the compose's draw check, and the Pearl-C period open and close in served_pearlplus.sh. Merge `remote` before your next suite run.
 - **Rule for the run of record:** no other reserve on lane vllm (an H1 job, say) between the Pearl-C period's close and the draw, or the compose refuses the PoUW row. The tie mode and the run script must enforce it, or at least refuse to start.
+
+## 11:43Z Wed (coordinator): `remote` moved to c682341a12e
+
+- It adds remotetie's fixed-commit fix (window-commit builds its own Builds; run 2's refusal). Merge `remote` before your next suite run.
+- **Pearl+ tie (pearlplus):** `PEARL_TIE`'s defaults must be exactly the class's fixed load. At 4,32,2 that is `--fixed 4 --prompt-range 32:32`, all released together, each request running exactly the class's outputs, with no carry and no prefix-cache hit. Today they default prompts to 16–24 ids and accept a varied load, so the commit would refuse after the serve. Fix it before the run of record.

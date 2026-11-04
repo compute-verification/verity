@@ -132,3 +132,8 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 - Proofs' fix is **#7205** (base `remote`, head e25bf9fd). Reads files list a member's non-registered ports under `bound`, and Lean's `RegBound.check` accepts a port that is registered or bound. Proofs reruns T11 at about 07:30Z.
 - **Rehearse it on run 1's window 0** with your dc0c setup: a branch from `remote` 6fd7234a917 with #7205's commits, run read-only on vy-dc-h200, which has 193 GiB free. Report whether sampled members that read registered values (ScaledMmS8, Gemm_v2, RMSNorm, RoPE, Embedding, ScanSlots) now verify, plus any refusal. Mind the disk: the audit stages about 190 GiB, so delete your staging with `retention rm --approved-by @vllm` (approved in advance for your own dev staging) right after.
 - Don't push to `remote`. I apply #7205 there after your rehearsal passes.
+
+## 11:43Z Wed (coordinator): `remote` moved to c682341a12e
+
+- It adds remotetie's fixed-commit fix (window-commit builds its own Builds; run 2's refusal). Merge `remote` before your next suite run.
+- **Pearl+ tie (pearlplus):** `PEARL_TIE`'s defaults must be exactly the class's fixed load. At 4,32,2 that is `--fixed 4 --prompt-range 32:32`, all released together, each request running exactly the class's outputs, with no carry and no prefix-cache hit. Today they default prompts to 16–24 ids and accept a varied load, so the commit would refuse after the serve. Fix it before the run of record.

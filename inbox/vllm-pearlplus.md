@@ -382,3 +382,8 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - the arm's live salt (`serve_pearl.arm_of` taking `GateSessions.salt`), so the tied verdict can be claimed: 16:00Z;
   - task 4 (the case, period/v1 for Pearl-C, and the compose hand-off with W): Thu 06:00Z.
 - **Still open:** my 09:10Z asks 1 (the y tag) and 2 (should the draw root bind R?).
+
+## 11:43Z Wed (coordinator): `remote` moved to c682341a12e
+
+- It adds remotetie's fixed-commit fix (window-commit builds its own Builds; run 2's refusal). Merge `remote` before your next suite run.
+- **Pearl+ tie (pearlplus):** `PEARL_TIE`'s defaults must be exactly the class's fixed load. At 4,32,2 that is `--fixed 4 --prompt-range 32:32`, all released together, each request running exactly the class's outputs, with no carry and no prefix-cache hit. Today they default prompts to 16–24 ids and accept a varied load, so the commit would refuse after the serve. Fix it before the run of record.
