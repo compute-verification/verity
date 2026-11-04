@@ -33,24 +33,24 @@ from verity.ml.windows import interface as IF
 
 SEGMENT = ("template", "at", "radix", "c", "r")
 #: each class the tests lower (its registered program, class, grain and tables: H1's, `test_window_circuit_tables`', or
-#: Pearl+'s, `test_window_circuit_pearl`'s) and its function (`_function`): the digest of its templates, cuts and
-#: registered reads with every wired reader row's writer row, and the wired rows. Placing wires in entries
+#: Pearl+'s, `test_window_circuit_pearl`'s) and its function (`_function`): the digest of its description but its wires
+#: and of its external I/O, with every wired reader row's writer row, and the wired rows. Placing wires in entries
 #: (`window_builder.placed`) restates them and never changes what they wire.
 FUNCTIONS = {
-    "tiny": (S._registered, T.CLASS, T.GRAIN, None, 3264, "60788acb1c75aa92db0554bcdab73b4f699e8a668159b714de34fa1120037b86274"
-             "ade8b0435acb4f575ddfdc8abb9b81c3658371ee3aa831410c795d033bdd8"),
-    "slots": (S._registered, T.SLOTS, T.GRAIN, None, 13056, "773ff46288b89b94206019ca1271656362b22cb039e9ef423c338c1914d26eeccd"
-              "f31be40f0ac33d22a60466e576f1296fc863940f6606cc6aa360a970333ba3"),
-    "int8": (T8._registered, T.CLASS, T8.GRAIN, None, 3824, "6cfd9a85ed56bd052784c90f496ef433595ae90199880cdee08fdad12e5d08fb65"
-             "68a098170d0079c7cb7dad02680b002b60b112f7469f6c5134237c82d98439"),
-    "fa3": (TF._registered, T.CLASS, T.GRAIN, None, 3264, "38dc0707d9a99f2362b4e84901ed8a963f3d715fe9d11a6c2367c6be5e24780fbd20"
-            "ac164496e879c021641222f37cc53176770dc45b618e15732c3f43aeb019"),
-    "long": (S._registered, WindowClass(2, 8, 4), T.GRAIN, None, 8236, "78d5880bb814f0c2c6a66eb44676d32bb9034ac817c89c2aa566e0"
-             "d38eec96259bd6b1b15434f09df481bb88bef35b732396d134bc760efd01c85851640d06b5"),
-    "h1-tables": (T8._registered, T.CLASS, T8.GRAIN, TT.TABLES, 3824, "6fd3175c1e627eeeb9454c8381b94c6e55fcf9a7a171dc33b5845d8"
-                  "6a63098be35be3ab1ad4bd5ca40b0d7485645d4748884936e4c73850ddd8ed31bee7e9150"),
-    "pearl": (TP._registered, T.CLASS, T.GRAIN, TP.PEARL, 1964, "afbb150443c597ac9312b986571f983447098535e5b0b3d85a7fd1706457c5"
-              "01569d7daef60c5d56785099270ec107bc85d9fc48af75c76d6205ed50f0de0ec3"),
+    "tiny": (S._registered, T.CLASS, T.GRAIN, None, 3264, "4348f7c1395f69e72ccb1896ddebabb786b40b144987ea6241a9f0e0e66fce7a130"
+             "1cb291b201430cb7303872ce17425b8f39c1d6fb911ac96267151002b0586"),
+    "slots": (S._registered, T.SLOTS, T.GRAIN, None, 13056, "a79b8d28bbdc4ee951ff66d294dad77a0b9e394818cafb203a19c5c769d11696e9"
+              "3933dcee1d0ebb7c87982aae6fb74b1320ea7b850f9c7428613f4a87a625a4"),
+    "int8": (T8._registered, T.CLASS, T8.GRAIN, None, 3824, "83d67739cb058f733b4c06aa6a2b4c93b4c6dca2d5b488261e92fa0b193c9ae019"
+             "bbfc75926fc8c21bbbf01601df2e3520f1015f5cfecd99c87b6f65800a3b75"),
+    "fa3": (TF._registered, T.CLASS, T.GRAIN, None, 3264, "72572d0bb227ea0abe3c239b7102d93715d9706d90852686c8836be541e808525822"
+            "298406d0644916a5d65b9a974dc7b026636d0b3da757d38fd3262ba2441f"),
+    "long": (S._registered, WindowClass(2, 8, 4), T.GRAIN, None, 8236, "4821b42fa44fb023c3385fa2dd763629515d4f364d29783256a85a"
+             "2692fa82faf58796832d9ea007e36346e1ec34c8e1350a272d89573708953347746d02638c"),
+    "h1-tables": (T8._registered, T.CLASS, T8.GRAIN, TT.TABLES, 3824, "1ddf3f3a38f117997bb721b8cd1e041d2609327340128f109cefece"
+                  "2324d0fd3caae71d023c847cc443e676a8752833082eeb6f55844a77050d6abd5165cd43b"),
+    "pearl": (TP._registered, T.CLASS, T.GRAIN, TP.PEARL, 1964, "a170c3dd445ed2b6fc062b1a89a2b838b39dfb7af5bd8fc3ee1130650b2c57"
+              "9f24cad9ed469f8e02641576b4578968d8a483337773cd7e71ea72a6c3f06d7896"),
 }
 
 
@@ -177,12 +177,10 @@ def unrolled(record, order) -> list[int]:
     return out
 
 
-DECLARED = ("templates", "cuts", "registered", "ingress")
-
-
-def _function(desc) -> tuple[str, int]:
-    """A circuit's function apart from how its wires state it: the SHA-512 of its templates, cuts, registered reads and
-    ingress with every wired reader row ``(port, unit, row)``'s writer row ``(out, unit)`` in order, and the wired rows."""
+def _function(desc, external) -> tuple[str, int]:
+    """A circuit's function apart from how its wires state it: the SHA-512 of its description but its wires (its templates
+    and whichever of cuts, registered reads and ingress it has) and of its external I/O ``external``, with every wired
+    reader row ``(port, unit, row)``'s writer row ``(out, unit)`` in order, and the wired rows."""
     ports = sorted({(w["reader"], w["port"]) for w in desc["wires"]})
     outs = sorted({(w["writer"], w["out"]) for w in desc["wires"]})
     pi, oi, cols = {p: k for k, p in enumerate(ports)}, {o: k for k, o in enumerate(outs)}, []
@@ -193,7 +191,8 @@ def _function(desc) -> tuple[str, int]:
     rows = np.concatenate(cols)
     rows = rows[np.lexsort((rows[:, 2], rows[:, 1], rows[:, 0]))]
     assert not (np.diff(rows[:, :3], axis=0) == 0).all(axis=1).any(), "a reader row wired twice"
-    h = hashlib.sha512(json.dumps({k: desc.get(k) for k in DECLARED}, sort_keys=True, separators=(",", ":")).encode())
+    h = hashlib.sha512(json.dumps({"external": list(external), **{k: v for k, v in desc.items() if k != "wires"}},
+                                  sort_keys=True, separators=(",", ":")).encode())
     h.update(json.dumps([ports, outs], separators=(",", ":")).encode())
     h.update(np.ascontiguousarray(rows, dtype="<i8").tobytes())
     return h.hexdigest(), len(rows)
@@ -214,7 +213,7 @@ def test_each_classs_certificate_orders_its_wires_on_its_entries_its_function_un
     assert [{k: s[k] for k in ("template", "at", "radix")} for s in low.order["segments"]] == [
         {"template": e.template, "at": e.at, "radix": list(e.radix)} for e in low.circuit.blocks.inference]
     assert len(check(desc, json.loads(json.dumps(low.order)))) == len(desc["wires"])
-    assert _function(desc) == (digest, rows)
+    assert _function(desc, low.circuit.external) == (digest, rows)
 
 
 @pytest.mark.parametrize("name", list(FUNCTIONS))
@@ -230,12 +229,14 @@ def test_unit_by_unit_each_writer_ranks_below_its_reader_so_a_pass_through_chain
 
 
 def test_a_wire_read_one_writer_unit_on_is_another_function():
-    """`_function` reads the wires: TINY's first wire read one writer unit on is another function of as many rows."""
-    _, desc = _lowered("tiny")
+    """`_function` reads the wires and the external I/O: TINY's first wire read one writer unit on is another function of
+    as many rows, and so is TINY with its external input and output swapped."""
+    low, desc = _lowered("tiny")
     w = desc["wires"][0]
     moved = {**desc, "wires": [{**w, "base": w["base"] + 1}, *desc["wires"][1:]]}
-    (digest, rows), (*_, n, pinned) = _function(moved), FUNCTIONS["tiny"]
+    (digest, rows), (*_, n, pinned) = _function(moved, low.circuit.external), FUNCTIONS["tiny"]
     assert rows == n and digest != pinned
+    assert _function(desc, low.circuit.external[::-1]) != (pinned, n)
 
 
 def test_a_layer_is_a_digit_of_its_own_ranked_by_its_time():

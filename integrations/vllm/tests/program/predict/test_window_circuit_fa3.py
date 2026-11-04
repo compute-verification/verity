@@ -144,10 +144,10 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
     block). Its wire-order certificate is taken by the period check's closed form (`test_wire_order.check`), unit by unit the
-    same (`test_wire_order.unrolled`), and its function (`test_wire_order._function`: its templates, cuts and registered
-    reads, and every wired row's writer row) is the one `LLAMA_1B_FUNCTION` pins. Its numbers (units, templates, registered
-    reads, the heads' census, the most rows and k_log of a proof block, its wires and entries, the certificate's greatest
-    rank and tightest reach, peak RSS) are printed as a JSON line."""
+    same (`test_wire_order.unrolled`), and its function (`test_wire_order._function`: its description but its wires, its
+    external I/O, and every wired row's writer row) is the one `LLAMA_1B_FUNCTION` pins. Its numbers (units, templates,
+    registered reads, the heads' census, the most rows and k_log of a proof block, its wires and entries, the certificate's
+    greatest rank and tightest reach, peak RSS) are printed as a JSON line."""
     # test_wire_order imports this module
     from tests.program.predict.test_wire_order import _function, check, unrolled
 
@@ -170,7 +170,7 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
                       "heads": dict(heads), "rows": rows, "k_log": k_log, "wires": len(circuit.wires),
                       "entries": len(circuit.blocks.inference), "rank": max(ranks), "reach": max(reach),
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
-    assert _function(desc) == LLAMA_1B_FUNCTION
+    assert _function(desc, circuit.external) == LLAMA_1B_FUNCTION
     assert rows <= IF.MAX_ROWS and k_log <= IF.K_MAX
     assert {lab.split("{")[0] for lab in n} >= {"SelectCollect_v1", "SelectEntry_v1"}
     assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
