@@ -28,7 +28,7 @@
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
-  records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
+  records: the endpoint's advice bound to the run, in the clear, required on the advice profile. N2's
   summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
@@ -38,9 +38,10 @@
   its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
-  N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
-  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's draw
-  and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
+  N2's members and the rehearsal's own check on each run it must refuse; token, which that check lets through, pends
+  the egress tie (`scan_service.EgressTie`). d1's K (`pooled_k`) counts the served units' compute audits
+  (``--audit``: each window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at
+  each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
   ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
   ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
@@ -53,7 +54,7 @@
   (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
   endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
-  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
+  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the ingress tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
   --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_warden`), every one is
   required, and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
@@ -83,8 +84,7 @@ ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose egress counts der
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
     "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit window's advice "
-                "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
-                "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
+                "opened to its registered root and rebuilt from the certified I/O",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
                     "certificate's LMS signature under the certifier's key and session, by the Lean "
                     "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
@@ -95,7 +95,7 @@ CLEAR = {
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
-    "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
+    "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the ingress tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
     "warden_certificates": "at the auditor, on the warden's witness: the warden's own offline check "
@@ -122,7 +122,7 @@ SCAN_ONLY = "scan only, N2 not given"
 STUBBED = (
     "the records come from the certifier-only path (certifier_serve.py's proxy in front of the endpoint), not the "
     "network certifier's own cells as one device, so there are no warden rows and the scan isn't run",
-    "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
+    "the egress tie (scan_service.EgressTie) isn't run: there are no network certifier cells, so token pends it",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: the network certifier path (``--job``'s ``path``): every step reads an active network certifier's own run
 #: (`warden_chain`)
@@ -139,7 +139,8 @@ WARDEN_SERVED_STUBBED = (
     "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
     "Commit's port isn't proved", WARDEN_STUBBED[1])
-#: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
+#: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the egress
+#: tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
 SCAN_ACCEPTS = ("honest", "block")
@@ -305,28 +306,20 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
 # --- report -----------------------------------------------------------------------------------------------------------
 
 def endpoint_step(e: dict | None) -> dict:
-    """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
-    run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
-    (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
-    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the execution phases
-    its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
+    """network-e2e's ``--no-prove`` report on the run and the endpoint's records: accepted when the endpoint's own advice
+    is bound to the run's certified I/O and rebuilt from it (`chain.served_advice`), in the clear. A rehearsal has no
+    network certifier cells, so its token run, which the rehearsal's own check accepts, pends the egress tie
+    (`scan_service.EgressTie`) and is no negative here."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)", "in_the_clear": CLEAR["endpoint"]}
-    chain = e.get("chain") or {}
-    b, t = chain.get("bits") or {}, chain.get("tie") or {}
-    honest = (t.get("runs") or {}).get("honest") or {}
+    b = (e.get("chain") or {}).get("bits") or {}
     windows = b.get("commit_windows") or []
     advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
               "commit_windows": len(windows), "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt"))
                                                                    for c in windows)}
-    tie = {k: honest.get(k) for k in ("verdict", "ok", "codes", "requests", "outputs", "placed", "unplaced", "why")}
-    ok = bool(advice["bound"] and advice["rebuilt"]) and honest.get("verdict") == "accepted"
-    checked = {n for n, g in (e.get("negatives") or {}).items() if g.get("own_code")}
-    negatives = {name: r.get("verdict") == "refused" and r.get("ok") is True
-                 for name, r in (t.get("runs") or {}).items() if name != "honest" and name not in checked
-                 and r.get("verdict") in ("accepted", "refused")}
-    return {"verdict": "accepted" if ok else "refused", "advice": advice, "tie": tie | {"ran": t.get("ran"),
-            "stand_ins": t.get("stand_ins")}, "negatives": negatives, "advice_bits": advice_bits(b),
+    why = None if advice["bound"] and advice["rebuilt"] else (
+        advice["why"] or "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
+    return {"verdict": "refused" if why else "accepted", "why": why, "advice": advice, "advice_bits": advice_bits(b),
             "in_the_clear": CLEAR["endpoint"]}
 
 
@@ -672,7 +665,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
-                "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
+                "the ingress tie (IoTieRequest) is checked in the clear, outside the proofs",
                 "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
                 "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
                 "are run conditions, not yet named assumptions",
@@ -975,8 +968,7 @@ def report(a) -> dict:
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
                  for s, v in (g.get("strategies") or {}).items() if s not in REHEARSAL_ACCEPTS}
-    negatives = {**rehearsal, **{f"tie/{k}": v for k, v in endpoint.get("negatives", {}).items()},
-                 **{f"tie/{k}": v for k, v in (tie or {}).get("negatives", {}).items()},
+    negatives = {**rehearsal, **{f"tie/{k}": v for k, v in (tie or {}).get("negatives", {}).items()},
                  **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audit_dirs = [Path(d) for d in getattr(a, "audit", None) or []]
@@ -1012,8 +1004,7 @@ def markdown(r: dict) -> str:
              if s[k].get(f)]
     ep = s["endpoint"]
     if ep.get("advice"):
-        notes.append(f"- endpoint: advice {ep['advice']}; " + (f"I/O tie on honest {ep['tie']}" if "tie" in ep else
-                                                                f"certified I/O {ep.get('io')}"))
+        notes.append(f"- endpoint: advice {ep['advice']}" + (f"; certified I/O {ep['io']}" if "io" in ep else ""))
     if s.get("tie", {}).get("tie"):
         notes.append(f"- tie: link-windows tied by member {s['tie']['tie']}")
     lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]

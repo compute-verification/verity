@@ -9,14 +9,14 @@
 #   custody  each gate run's files against its end.json (chain_record.py custody)
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified, and the run's
 #            certified records held by the Lean's audit, network-records (chain_record.py certs)
-#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
-#            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
+#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run, in the clear (network-e2e's e2e.py
+#            --no-prove: chain.served_advice)
 #   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
 #            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
 #            N2 unit holds, not run
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
-#   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
+#   tie      on the warden path, the ingress tie, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
@@ -192,7 +192,7 @@ if [ -n "${CR_ENDPOINT:-}" ] && [ "${CR_PATH:-}" = warden ]; then
 elif [ -n "${CR_ENDPOINT:-}" ]; then
   unpack "$CR_ENDPOINT" "$W/endpoint"
   EP=$(find "$W/endpoint" -name advice_trace.jsonl -printf '%h\n' -quit)
-  log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to ${HONEST#$G/} and the I/O tie, in the clear"
+  log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to ${HONEST#$G/}, in the clear"
   "$PY" benchmarks/network_e2e/e2e.py --from "${HONEST%/out/honest}" --no-prove --no-negatives --endpoint-run "${EP:-$W/endpoint}" \
     --out "$E2E" --work "$W/e2e-work" > "$OUT/endpoint.log" 2>&1
   log "chain: endpoint done, rc $?"

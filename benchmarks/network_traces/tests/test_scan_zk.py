@@ -167,7 +167,7 @@ def test_a_state_tree_that_skips_or_alters_a_transition_is_refused_where_its_uni
 
 
 def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
-    """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
+    """The egress tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
     view trees G·T leaves (the state tree the group's window state, from bucket 0) and the slot entries NR a boundary of
     the group, each member's warden port its own link-window's registration, the group's last ingress unit a member of
     its own, and the chains running across the windows."""

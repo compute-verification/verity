@@ -155,9 +155,9 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.LinkWindow.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
-| endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
+| endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O, `e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
 | N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
-| scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
+| scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the ingress tie (`IoTieRequest`) stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sampled draw on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
@@ -191,7 +191,7 @@ the relay's own offline check on its witness (`warden_serve.check`) and holds th
 certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
-parameters digest, no sync declared or charged). The I/O tie is proved on the relay's ingress (`n2_tie_zk.py prove
+parameters digest, no sync declared or charged). The ingress tie is proved on the relay's ingress (`n2_tie_zk.py prove
 --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove --warden-run`'s. Each step is held to the
 one relay run the certificates step read, and every one is required.
 
