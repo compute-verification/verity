@@ -134,6 +134,9 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; the steps' logs (CERTIFIER_PRIVATE) move to the
 #     serve dir's private/pieces/certifier before the run exits, `served_verdicts.sh v3c`, which writes no record, included.
+#     The chain's scan proves at CR_SCAN_DELTA (chain_record.sh's), 2^-64 by default, written as the double that is
+#     2^-64 exactly, which scan_zk.py keeps exact: every scan block is drawn, so no δ costs proving or leaves a wrong unit.
+#     The tied V3c audit's δ stays sampled proofs' own; the network period reads that draw at its own δ_i.
 # Coins: sampled proofs' sample, V3c's audit's, is on a local development challenger session's coins where the audit runs
 # (`--challenger local`: the served node, or a deferral's follow-on) unless PP_CHALLENGER names the live challenger
 # (gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); the verifier draws none of its own. Its session is
@@ -254,7 +257,7 @@ ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
-FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE" FOLLOW= CLASH=
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA" FOLLOW= CLASH=
 if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
   FOLLOW=1
   declare -A given=()
@@ -307,6 +310,7 @@ if [ "$PRODUCT" = onsite ]; then
   fi
 fi
 export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT
+export CR_SCAN_DELTA=${CR_SCAN_DELTA:-5.421010862427522e-20}
 PRED=${PRED:-$D/predicted}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
@@ -824,7 +828,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   [ ! -f "$OUT/record/inference-only.json" ] || cp "$OUT/record/inference-only.json" "$DEFER_DIR/inference-only.json" || return 1
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" H1_TIE "${H1_TIE:-}" \
     COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
-    > "$DEFER_DIR/deferred.env" || return 1
+    CR_SCAN_DELTA "$CR_SCAN_DELTA" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
