@@ -130,6 +130,18 @@ def array(flow, of: list[int], n, a) -> int:
     return of[max(r)]
 
 
+def names(flow, of: list[int]) -> dict:
+    """Each array (`of`, `values`') → a name, one an array: the node that made its first value, and that value's place
+    among the node's values past the first, since one node can write many (a fused update writes every weight)."""
+    out: dict = {}
+    made: dict = defaultdict(int)
+    for v, c in enumerate(of):
+        name = getattr(flow.node[v], "name", str(v))
+        out.setdefault(c, f"{name}[{made[name]}]" if made[name] else name)
+        made[name] += 1
+    return out
+
+
 def check(products: list[dict]) -> dict:
     """ω and the repeated pairs of M's `products`, each {"node", "phase", "arrays": [a, b], "dw", ...}: {"omega",
     "clique", "omega_forward" and "omega_dw" (the forward products' graph's and the weight gradients'), "arrays"
@@ -177,8 +189,8 @@ def refusal(arrays: dict | None) -> str | None:
 
 def of_step(g) -> list[dict]:
     """M's products on a recorded step (te_core.capture.script's `record`), each {"node", "op", "part", "phase",
-    "arrays", "dw"}: its operands' arrays, each the class of the value it read (`array`, named by the class's first
-    node), and whether it is a weight gradient (a backward product contracting over tokens, as
+    "arrays", "dw"}: its operands' arrays, each the class of the value it read (`array`, by its `names`), and whether
+    it is a weight gradient (a backward product contracting over tokens, as
     he_of_rows has it). Refused where M's count differs from the step's rows' (te_core.formalism.he_of_rows' M)."""
     from te_core.capture import products as P
     from te_core.capture.structure import _gemms, _pk
@@ -187,9 +199,7 @@ def of_step(g) -> list[dict]:
     gathered = P._gathered(vs, P._made(vs))
     by_name = {n.name: n for n in vs.nodes}
     of = values(vs.flow)
-    first: dict = {}
-    for v, c in enumerate(of):
-        first.setdefault(c, getattr(vs.flow.node[v], "name", str(v)))
+    first = names(vs.flow, of)
     out = []
     for m in g.matmuls:
         n = by_name[m.node]
