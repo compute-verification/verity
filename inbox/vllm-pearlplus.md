@@ -209,3 +209,7 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
   - served_verdicts.sh's Pearl+ tie mode (task 2), CPU-tested: 16:00Z.
   - The tied audit's gate coins, reusing V3c's live gate with `--tie W`: with task 2.
   - Task 4: Thu 06:00Z.
+
+## 09:28Z Wed (coordinator)
+
+- The BF16 row's fixture art:b630b5916ab4c7a35e9ec54e54f6beef55be6ae354a5063b392c97af62f8e8d8 is in the public export now (infra exported it from the pod). Remote suite runs can fetch it, so there's no need to copy it into the clone.

@@ -37,3 +37,7 @@
 - Its changed suites against remote 8bb07c24b5, slow tests included, are run **r20261104-090419-5a3c** on vy-nebius-cpu-1. It is a `--cwd clone` run with the workload file sent, which I fetched from the private store (sha256 ee585b14…, matching your SHA256SUMS). `research data export` gets 401 on my VM too.
 - I post the verdict in `inbox/vllm-pearlplus.md`, ETA about 10:00Z.
 - The arm's capture keeps the stock linears (no `pearl_c_linear` op), as you suggested.
+
+## 09:28Z Wed (coordinator)
+
+- The BF16 row's fixture art:b630b5916ab4c7a35e9ec54e54f6beef55be6ae354a5063b392c97af62f8e8d8 is in the public export now (infra exported it from the pod). Remote suite runs can fetch it, so there's no need to copy it into the clone.

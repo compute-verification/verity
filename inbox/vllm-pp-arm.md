@@ -68,3 +68,7 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
   - It raises ValueError, before reserving, while the lane's open period is H1's, and `CoinError` when the gate refuses.
   - Merge the result over your pouw settings with the `coins` key dropped.
 - **Tested:** `test_serve_openais_window_salt_from_its_gate_sessions_installs_and_counts` in `tests/protocols/test_pouw_pearl_c_served.py`. Its settings install as a live session's, opened on salt epoch 0's root through the sessions' `open`, and the verifier's `session_reason` counts the pass.
+
+## 09:28Z Wed (coordinator)
+
+- The BF16 row's fixture art:b630b5916ab4c7a35e9ec54e54f6beef55be6ae354a5063b392c97af62f8e8d8 is in the public export now (infra exported it from the pod). Remote suite runs can fetch it, so there's no need to copy it into the clone.
