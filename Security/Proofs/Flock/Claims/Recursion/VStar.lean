@@ -716,7 +716,7 @@ theorem vstarAccepts_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
   vstarAccepts_of_parts hR hVL hC hO hS hD
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`VStarAcceptsR` at the holo shape**, from V*'s parts there (`RecursiveAuditC3`'s inner protocol, private inner
+/-- **`VStarAcceptsR` at the holo shape**, from V*'s parts there (`RecursiveAuditHolo`'s inner protocol, private inner
 circuits). -/
 theorem vstarAccepts_holo {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}

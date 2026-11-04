@@ -221,7 +221,7 @@ def test_a_p2_store_takes_no_append_and_no_sloth_session(store) -> None:
     v = s.append(bytes(64), 1)
     assert isinstance(v, audit.Verdict) and v.failure == "append"
     with pytest.raises(ValueError, match="p2.Session"):
-        audit.Session(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
+        audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
     sloth = audit.register(SOURCE, NODE, 2, bytes(64), nonce=bytes(32))
     with pytest.raises(ValueError, match="P2 Registration"):
         p2.Session(params(reg), sloth, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)

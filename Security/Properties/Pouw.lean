@@ -13,7 +13,7 @@ The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 mult
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.
 
 What a property assumes is in its statement. The draw's (`DrawMisses`) is not: the miss probability it bounds is the
-one of `K′` indices drawn uniformly without replacement from `[0, N)`, which is what the proof service's live draw is
+one of `K′` indices drawn uniformly without replacement from `[0, N)`, which is what the proof system's live draw is
 under its named assumptions (the operating system's bytes are uniform, `UniformRandomBytes`, and the service draws a
 uniform subset of them); nothing here models the draw.
 -/

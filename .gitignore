@@ -57,6 +57,7 @@ verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/forged-proofs
 verity/ml/flock/tests/fixtures/hidden-outputs
 verity/ml/flock/tests/fixtures/honest-plain
+verity/ml/flock/tests/fixtures/plain-tree
 benchmarks/pouw/machine_model/data/cover/corpus.json
 benchmarks/pouw/sass_census/data/bu_12_9.json
 benchmarks/pouw/sass_census/data/sass_isa_tables.json
@@ -65,6 +66,7 @@ verity/ml/flock/tests/fixtures/public-inputs
 verity/ml/flock/tests/fixtures/public-inputs-blocks
 verity/ml/flock/tests/fixtures/rec-c3-inner
 verity/ml/flock/tests/fixtures/rec-coins
+verity/ml/flock/tests/fixtures/rec-links
 verity/ml/flock/tests/fixtures/zk-sessions
 integrations/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures

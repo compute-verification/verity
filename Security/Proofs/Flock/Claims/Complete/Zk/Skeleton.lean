@@ -98,7 +98,7 @@ def live (o : RunZk H rel) : Live :=
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
 /-- The record, decoded. -/
-def sess (o : RunZk H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+def sess (o : RunZk H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s `--zk` schedule. -/
 def sch (o : RunZk H rel) (i : ℕ) : Schedule := (zkSchedsOf o.tabs)[i]!.1

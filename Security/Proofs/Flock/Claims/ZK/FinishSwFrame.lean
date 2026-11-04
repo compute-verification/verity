@@ -66,7 +66,7 @@ theorem swSrcE_hmk_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
       (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ∀ k < (layE x j).zp 64, ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked k =
       q.vals[k]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]! := by
   intro k hk
@@ -86,7 +86,7 @@ theorem swSrcE_l0_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ :
       (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ∀ k, (layE x j).zp 64 ≤ k → k < (layE x j).hab → ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked k =
       B j r k + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]! := by
   intro k hk0 hk
