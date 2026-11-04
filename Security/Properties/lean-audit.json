@@ -76,7 +76,8 @@
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
-  "Properties.Core.Site"
+  "Properties.Core.Site",
+  "Properties.NetworkPeriodLeak"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -456,6 +457,7 @@
   "Definitions.Core.TC.Spec",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkPeriodLeak",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
@@ -664,6 +666,9 @@
   "Properties.NetworkPeriod.rowsStateHeld": {
    "honest": ["Properties.NetworkPeriod.rowsStateHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStateHeld_nontrivial"
+  },
+  "Properties.NetworkPeriodLeak.periodLeakRegistered": {
+   "nontrivial": "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1237,6 +1242,17 @@
    "imports": ["Flock.Annot", "Flock.AnnotExpand"],
    "except": [],
    "why": "the annotation check's property is stated against C-Flock's Flock.Annot and its per-gate reference, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.NetworkPeriodLeak": {
+   "imports": [
+    "NetworkCheck.Period",
+    "Definitions.NetworkCertifier",
+    "Definitions.Core.Assumptions",
+    "Mathlib.Data.Set.Card",
+    "Mathlib.Algebra.BigOperators.Fin"
+   ],
+   "except": [],
+   "why": "the leak through the network certifier over a monitoring period is stated against the period check's acceptance (`NetworkCheck.Period.check`), the sampled audit's and the network certifier's definitions (`Definitions.NetworkCertifier`), trusted-host (`Definitions.Core.Assumptions`) and Mathlib's cardinalities and finite products, never a proof"
   }
  },
  "reads_exempt": {
@@ -3042,6 +3058,12 @@
    ],
    "assumptions": [],
    "type_hash": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70"
+  },
+  "Properties.NetworkPeriodLeak.periodLeakRegistered": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -6049,6 +6071,10 @@
    "Properties.NetworkPeriod.rowsStateHeld": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkPeriodLeak.periodLeakRegistered": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -6156,7 +6182,8 @@
    "Properties.NetworkPeriod.rowsStateAnchored_honest": "completeness: RowsStateAnchored's honest lemma: the period check accepts a rows-form period of no phase, and a phase whose tied audit's circuit record reads row b of the scan's state at unit l·2 + b from base 0 is anchored",
    "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts",
    "Properties.NetworkPeriod.rowsStateHeld_honest": "completeness: RowsStateHeld's honest lemma: the period check accepts a rows-form period of no phase, and an audit whose SCAN_STATE is its one phase's scan's state, at its root and domain, is held there and charged its stateFree",
-   "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish"
+   "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
+   "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial": "lemma: PeriodLeakRegistered's nontrivial witness: its per-window bound fails at the accepting verifier tapD, at SHA-512, at one step at δ = 1/8 with no input registered and a registration with no openings, which opens every registered input (NetTiming.Witness.tapD_reg_bound_fails)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

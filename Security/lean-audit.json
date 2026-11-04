@@ -2285,10 +2285,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "NetTiming.RowsFormat.Wf": {
-   "owner": "@network-accounting",
-   "digest": "8c44e4c800f3d66fea030082c526ca92ef3802df4ff667584ebb23cd151c1f2e"
   }
  },
  "meaning": [
@@ -2816,9 +2812,6 @@
    "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   },
-  "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-   "nontrivial": "NetTiming.Witness.PeriodLeakRegistered_nontrivial"
-  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
   },
@@ -3122,11 +3115,6 @@
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
    "missing": "honest",
    "why": "its premises at the network certifier's rows are the sampled leg's (KSWired at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
-  },
-  "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-   "type_hash": "f2fad87144bd190ccbf629bb799807d80047ddb2dbc70aff1d4a6bb40c0fd1c6",
-   "missing": "honest",
-   "why": "its honest witness is the sampled leg's guarantee at the honest deployment (Verity.Vocab.SampledProofsSound at one-stage v2), which sampled-audits-sound is to prove"
   },
   "NetTiming.SecurityProofs.PooledWrongUnitsLe": "4b11601f70dff05cee40e380db457b79380461d4bb512fd7a54931a34a305d38",
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
@@ -10067,12 +10055,6 @@
    "assumptions": [],
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b"
   },
-  "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakRegistered : NetTiming.Guarantees.PeriodLeakRegistered"],
-   "assumptions": [],
-   "type_hash": "f2fad87144bd190ccbf629bb799807d80047ddb2dbc70aff1d4a6bb40c0fd1c6"
-  },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe"],
@@ -10430,45 +10412,6 @@
    ],
    "assumptions": [],
    "type_hash": "6d5989bb9928b43e730b8de9d106321e4bf69b6f3c022bb3cc664608992a6bd5"
-  },
-  "NetTiming.Witness.PeriodLeakRegistered_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.PeriodLeakRegistered_nontrivial :",
-    "  Not",
-    "    (Real.instLE.le",
-    "      (Claims.PrBad FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "        (NetTiming.RLeakTap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
-    "          (NetTiming.Witness.tapD Unit).partition 1 1 1 (fun x => NetTiming.Witness.notLay) (fun x => 1) (1 / 8)",
-    "          (fun s x =>",
-    "            NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection",
-    "              (NetTiming.regVal List.nil))",
-    "          1 fun x => NetTiming.Witness.tapOps)",
-    "        (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) List.nil",
-    "        Claims.Witness.silentP)",
-    "      (instHAdd.hAdd",
-    "        (instHAdd.hAdd",
-    "          (instHAdd.hAdd",
-    "            (instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.tapD Unit) (1 / 8) List.nil)",
-    "              (instHMul.hMul (Claims.Sampling.γ (NetTiming.Witness.tapD Unit) List.nil)",
-    "                  (Claims.PrB FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V Claims.Witness.silentP List.nil)).sqrt)",
-    "            (Claims.Finder.Pr FlockDeploy.sha512",
-    "              (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "                (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) Unit",
-    "                Claims.Witness.silentP List.nil)))",
-    "          (Claims.Finder.Pr FlockDeploy.sha512",
-    "            (NetTiming.Btap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "              (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
-    "              (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
-    "              (fun x => NetTiming.Witness.tapOps) Unit Claims.Witness.silentP List.nil)))",
-    "        (Claims.Finder.Pr FlockDeploy.sha512",
-    "          (NetTiming.Breg FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
-    "            (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
-    "            (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse (fun x => List.nil) Unit",
-    "            Claims.Witness.silentP List.nil))))"
-   ],
-   "assumptions": [],
-   "type_hash": "9d7f0a96bd8af156085a23d514bc81f7f6917a1f3d623232b39952b8ce15ff3c"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -14810,8 +14753,7 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (Security/Definitions/Accounting/RateAuditPooled.lean, Causal), not a deployed sampler or verifier.",
-   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
-   "NetTiming.SecurityProofs.PeriodLeakRegistered": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows with the registered inputs at the values the registration opens (NetTiming.sampledLeak_tapReg: RLeakTap at AsReg and regVal, on the statements whose registration opens its registered inputs, RegOpensAt, an antecedent, with KSWired at the layout's wires and CommitmentScheme.Binds at each deployment, and Btap and Breg the collisions with the network certifier's and the registration's openings) with the read-back of its record from the rows and the schedule's (r, D) (RowsFormat.encard_periodRead_le), over the network certifier's code (wardenCode, recording in a well-formed rows format, RowsFormat.Wf, on the schedules whose (r, D) is in the registered set Θ and which fit it, SchedulesCovered) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code, and, where the network certifier registers its observations at every window (TapsOpen, an antecedent), it counts the secrets whose every window meets WindowGoodReg (RLeakTap at the extracted witness and the registration's opened values at the registered inputs) against #Θ for the schedules, with each window's failure bounded on its own and no union over the monitoring period's live coins yet."
+   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
