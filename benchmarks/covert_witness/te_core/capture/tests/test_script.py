@@ -9,6 +9,7 @@ import io
 import json
 import math
 import os
+import re
 from pathlib import Path
 
 import numpy as np
@@ -205,6 +206,7 @@ def test_a_record_replays_at_the_tier_it_was_scored_at(starts, tmp_path, monkeyp
     its own steps only at that tier. A long-tier record replays to step 2; at the search tier, or with no evaluation,
     the program ends before it. CW_TIER is the environment's again after."""
     monkeypatch.delenv("CW_TIER", raising=False)
+    monkeypatch.setattr(torch, "__version__", f"{script.products.TORCH}+cpu")
     run = {"steps": [{"wall_s": 0.1, "tokens": T, "matmul_macs": 0, "by": {}}] * 6, "tier": "search"}
     if tier is not None:
         run["evaluation"] = {"budget": {"tier": tier, "train_flops": 0.0}}
@@ -221,3 +223,15 @@ def test_a_record_replays_at_the_tier_it_was_scored_at(starts, tmp_path, monkeyp
         with pytest.raises(CaptureRefused, match="the program ended after 2 steps, before step 2 ended"):
             script.main(argv)
     assert "CW_TIER" not in os.environ
+
+
+@pytest.mark.parametrize("version", ["2.14.0+cpu", "2.15.1", "2.16.0+cu130"])
+def test_the_trace_command_refuses_a_torch_other_than_the_trace_jobs_before_reading_anything(tmp_path, monkeypatch,
+                                                                                               version):
+    """A step's graph moves with torch's version (from 2.14 to 2.15 the counter's attention count moved), so the frozen
+    capture traces only under the trace job's torch, whatever its build; the run.json here doesn't exist."""
+    monkeypatch.setattr(torch, "__version__", version)
+    argv = ["--script", str(PROGRAM), "--run", str(tmp_path / "absent.json"), "--step", "2", "--starts", str(tmp_path)]
+    with pytest.raises(SystemExit, match=rf"torch {re.escape(version)} here, but the capture is frozen at 4\.12\.9 under torch "
+                                         r"2\.15\.0.*trace under torch==2\.15\.0\+cpu"):
+        script.main(argv)

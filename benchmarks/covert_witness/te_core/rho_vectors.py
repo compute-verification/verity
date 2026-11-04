@@ -13,26 +13,33 @@ each kind's term and the inputs it reads, the max over the kinds and the kind it
 ρ_fit, ρ and the label. A case's `measured` is te_core.formalism.from_json's form, reading A's `entries`, `ops` and
 `products` in it.
 
-`fresh` holds the fresh-products term (te_core.formalism.fresh_products) on te_core.io_bound's hand-written product
-sets (`io_bound.vectors`), the 45M start's dense step (`dense_45m.products.json`) and two void steps of the lowrank
-worker's battery on s-t20 (`BATTERY_VOID`), each at its (c, k) and |C|: the term, io_bound's figure with P-cell
-(`formalism.P_CELL`), both figures (`fresh_cell` with whole cells, `fresh_no_cell` without), the order its products
-are summed in (the reference circuit's chain, `formalism.ORDER`, where none is declared), what the best subset
-dropped (`subset`; null where it dropped none) and what the cell says it rests on; a circuit that declares a tree is
-unmeasured. A set no subset of which has a proved Λ, or one with a product fed by chains with no fixed point, is void
-(`formalism.FRESH_VOID`): its figures are the best subset's among the products no such chain feeds, null where none
-has one, and `void` has the row's reason, the share of the counted MACs the subset keeps and how many products a
-diverged chain feeds. `dial` holds the term
-as the console's dial reads it from a row's rho_inputs, each case's and the 45M step's term over c at every k of the
-dial (`formalism.fresh_per_c`), and both figures at each of those k and a few c, which are c times it (`PER_C_RULE`).
-`grid` holds the same at every k of the console's grid (te_core.policy's `K_GRID`, a session's input ids at 16 bits
-for 1,024 to 32,768 input tokens) and the serving block's 145,568 bits (`grid_k`), at the console's c, on the 45M
-start's dense step and s-t20's at full size (`GRID_STEPS`, each its product rows at those k, `grid_rows`): only a
-captured step gives rows at a k, and a trace keeps them at the dial's k alone.
-`published` holds te_core.formalism.published under
-reading A at a cell for each case of its rule (`PUBLISHED`): Fit; the max above 1, partial where a kind is
-unmeasured; None where a kind is unmeasured and no term exceeds 1; 1, binding none, a void term's reason with it where
-the term is void.
+`products` holds the products term, the theorem of record's (te_core.formalism.he_products, `he_figure` on M), on
+hand-written M (`HAND`) and on M from the 45M start's dense step (`dense_45m.products.json`), s-t20's dense step at
+full size (`GRID_STEPS`) and the lowrank worker's LoRA and DoRA steps on s-t20 (`BATTERY_VOID`), each at its (c, k)
+and |C|: M's groups (each its β per operand, its operands' widths, b_y, whether it is a forward product, its MACs and
+its output wires), the term, the β, b_y, F, α, N and O it took, M's share of the candidates' MACs, whether it charged
+an operand below its width (at its β_eff), the step's adapter rank and what the cell says it rests on
+(`formalism.he_rests_on`).
+
+`fresh` holds the old fresh-products figure (te_core.formalism.fresh_products, the sensitivity fresh_old) on
+te_core.io_bound's hand-written product sets (`io_bound.vectors`), the 45M start's dense step and the battery's two
+steps, each at its (c, k) and |C|: both figures (`fresh_old` with whole cells where `formalism.P_CELL`,
+`fresh_no_cell` without), the order its products are summed in (the reference circuit's chain, `formalism.ORDER`,
+where none is declared), what the best subset dropped (`subset`; null where it dropped none) and what it rests on; a
+circuit that declares a tree is unmeasured. A set no subset of which has a proved Λ, or one with a product fed by
+chains with no fixed point, is void (`formalism.FRESH_VOID`): its figures are the best subset's among the products no
+such chain feeds, null where none has one, and `void` has the reason, the share of the counted MACs the subset keeps
+and how many products a diverged chain feeds.
+
+`dial` holds the products term as the console's dial reads it from a row's rho_inputs, each case's and the 45M step's
+over c at every k of the dial (`formalism.fresh_per_c`: [fresh_old/c, term/c]), and the term and the old figures at
+each of those k and a few c, which are c times it (`PER_C_RULE`). `grid` holds the same at every k of the console's
+grid (te_core.policy's `K_GRID`, a session's input ids at 16 bits for 1,024 to 32,768 input tokens) and the serving
+block's 145,568 bits (`grid_k`), at the console's c, on the 45M start's dense step and s-t20's at full size
+(`GRID_STEPS`, each its product rows at those k, `grid_rows`): only a captured step gives rows at a k, and a trace
+keeps them at the dial's k alone. `published` holds te_core.formalism.published under reading A at a cell for each
+case of its rule (`PUBLISHED`): Fit; the max above 1, partial where a kind is unmeasured; None where a kind is
+unmeasured and no term exceeds 1; 1, binding none.
 
 `sessions` holds the console's c, te_core.policy's `session` at every size it states a shape for (`SHAPES`) and each
 session of `SESSIONS`: its inputs (parameters, input and output tokens, the shape) and its outputs (the tokens that run
@@ -97,10 +104,9 @@ OFF_DIAL = 100_000
 PUBLISHED = (("dense", 1, 80_000_000), ("dense", 4096, 80_000), ("dense", 4096, OFF_DIAL), ("dense", None, None),
              ("lora", None, None), ("adapter-live", 4096, OFF_DIAL), ("adapter-live", 4096, None),
              ("dense, DoRA's void products", None, None), ("dense, DoRA's void products", 1, None))
-#: the `PUBLISHED` case whose fresh-products term is void: the dense case with the battery's DoRA step's product rows
-#: (`BATTERY_VOID`), its best subset's figure binding at the console's c and floored at 1 at one token a block. The
-#: JSON's `void_case` says how a port builds its record: `measured`'s dense case with the products of the `fresh`
-#: vector it names, so they aren't written twice
+#: the `PUBLISHED` case whose old fresh-products figure is void: the dense case with the battery's DoRA step's product
+#: rows (`BATTERY_VOID`), where the products term is measured. The JSON's `void_case` says how a port builds its
+#: record: `measured`'s dense case with the products of the `fresh` vector it names, so they aren't written twice
 VOID_CASE = ("dense, DoRA's void products", "dora-all-r16-m64")
 #: tokens per block at which `dial` evaluates each case's fresh-products term at every k of the console's dial, beside
 #: the console's c
@@ -118,8 +124,8 @@ GRID_STEPS = {
     "s-t20's dense step at full size": ("s_t20.grid.products.json",
                                         {"size": "s", "vocab": 32000, "batch": 256, "ctx": 1024, "micro_steps": 4}),
 }
-#: the lowrank worker's battery programs on s-t20 whose fresh-products term is void, each traced
-#: step's product rows at the console's k: DoRA rank 16 on all 42 matrices and LoRA rank 16 on every block's MLP
+#: the lowrank worker's battery programs on s-t20 whose old fresh-products figure is void, each traced step's product
+#: rows at the console's k: DoRA rank 16 on all 42 matrices and LoRA rank 16 on every block's MLP
 BATTERY_VOID = ("battery_void.products.json", {
     "dora-all-r16-m64": "the s-t20 start's DoRA rank-16 step on all 42 matrices (void: its two small unfed fp32 "
                         "products beside it)",
@@ -127,6 +133,19 @@ BATTERY_VOID = ("battery_void.products.json", {
                         "it)"})
 OPS = ("counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's "
        "gates (te_core.tiles.of_graph)")
+#: hand-written M for the products term, each (name, c, k, |C|, groups) with its figure worked by hand in
+#: tests/test_rho_vectors.py: a forward and a backward product sharing arrays at k = 3·2^14, where α = 2k and the
+#: outputs' term is 2/3 of the MACs' (ρ 10^6); and at the console's k, a forward product at β 16 beside a backward one
+#: whose operand an adapter of rank 16 reaches, at β_eff 3.2 (K* 32), which binds
+HAND = (("a forward and a backward product, k 49,152", 1e12, 49_152.0, 1e15,
+         [{"beta": [16.0, 16.0], "width": [16.0, 16.0], "b_y": 16.0, "forward": True, "macs": 2.21184e14,
+           "wires": 2.21184e14 / 48},
+          {"beta": [16.0, 16.0], "width": [16.0, 16.0], "b_y": 16.0, "forward": False, "macs": 2.21184e14,
+           "wires": 2.21184e14 / 48}]),
+        ("a forward product beside one an adapter's rank-16 output reaches, the console's k", 1e12, 65_536.0, 1e15,
+         [{"beta": [16.0, 16.0], "width": [16.0, 16.0], "b_y": 16.0, "forward": True, "macs": 5.89824e14,
+           "wires": 5.89824e14 / 48},
+          {"beta": [16.0, 3.2], "width": [16.0, 16.0], "b_y": 16.0, "forward": False, "macs": 1e17, "wires": 1e12}]))
 #: (input tokens, output tokens): the console's session, the workload note's tighter and looser ones, a prefill alone
 #: and the least session
 SESSIONS = ((4096, 1024), (2048, 3072), (16384, 1024), (1024, 0), (1, 1))
@@ -179,20 +198,63 @@ def case_measured(case: dict) -> formalism.Measured:
     return formalism.complete(block, {"output": {"e_bytes": delta / 8}}, TINY)
 
 
+def battery(program: str) -> tuple[float, dict]:
+    """`BATTERY_VOID`'s step `program`: its |C| and its `Measured.products` (`formalism.products_of_trace` of its
+    rows)."""
+    fx = json.loads((FIXTURES / BATTERY_VOID[0]).read_text())
+    p = fx["programs"][program]
+    block = {x: v for x, v in p.items() if x != "args"} | {"rows": [fx["rows"][i] for i in p["rows"]]}
+    return block["gates"], formalism.products_of_trace(block)
+
+
+def products(base: formalism.Measured) -> dict:
+    """The products term's vectors: `HAND`'s M through `formalism.he_figure`, and each traced step's products as
+    `Measured.products` on `base` with one part of |C| gates (the term reads only M and |C|) through
+    `formalism.he_products` at the console's (c, k), with the M it read."""
+    sets = [(name, c, k, C, {"k": k, "groups": groups, "r_step": None,
+                             "candidates_macs": sum(g["macs"] for g in groups), "self_macs": 0.0,
+                             "gathered_macs": 0.0}, None) for name, c, k, C, groups in HAND]
+    rows = json.loads((FIXTURES / DENSE_45M).read_text())
+    sets.append(("the 45M start's dense step", *policy.CONSOLE, rows["gates"], None, formalism.products_of_trace(rows)))
+    name, (fixture, _) = list(GRID_STEPS.items())[1]
+    rows = json.loads((GRID_FIXTURES / fixture).read_text())
+    sets.append((name, *policy.CONSOLE, rows["gates"], None, formalism.products_of_trace(rows)))
+    for program, label in BATTERY_VOID[1].items():
+        C, p = battery(program)
+        sets.append((label.split(" (")[0], *policy.CONSOLE, C, None, p))
+    out = []
+    for name, c, k, C, he, p in sets:
+        if p is None:
+            got, why = formalism.he_figure(he, c, C), None
+        else:
+            m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
+                        products=p)
+            _, why, got = formalism.he_products(m, c, k)
+            he = formalism.classified_at(p, k)["he"]
+        out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "he": he}, "term": got.get("rho"),
+                    "why": why, "rests_on": formalism.he_rests_on(got)}
+                   | {x: got.get(x) for x in ("beta", "b_y", "F", "alpha", "N", "O", "macs_share", "below_width",
+                                              "r_step")})
+    return {"rule": "for each t among the groups' least β (above 0): M_t the groups whose every β ≥ t, N and O their "
+                    "MACs and output wires, b_y their least output width, F = 2/sqrt(3) where a group isn't a forward "
+                    "product, else 1, alpha = F/2 sqrt(k^3/(t^2 b_y)); term = max(0, max over t of (c/C_gates) (N/(k "
+                    "+ alpha) - F (k/2) sqrt(O N)/t/(k + alpha)^1.5)), and its beta, b_y, F, alpha, N and O are the "
+                    "best t's; rho floors it at 1",
+            "rests_on": formalism.RESTS_ON["fresh_products"], "vectors": out}
+
+
 def fresh(base: formalism.Measured) -> dict:
-    """The fresh-products term's vectors: each product set as `Measured.products` on `base` with one part of |C| gates
-    (the term reads only the products and |C|), through `formalism.fresh_products` at its (c, k)."""
+    """The old fresh-products figure's vectors (the sensitivity fresh_old): each product set as `Measured.products` on
+    `base` with one part of |C| gates (the figure reads only the products and |C|), through
+    `formalism.fresh_products` at its (c, k)."""
     sets = [(v["name"], v["inputs"]["c"], v["inputs"]["k"], v["inputs"]["C_gates"],
              {"k": v["inputs"]["k"], "order": "chain", "products": v["inputs"]["products"]})
             for v in io_bound.vectors()["vectors"]]
     rows = json.loads((FIXTURES / DENSE_45M).read_text())
     console = {x: v for x, v in formalism.products_of_trace(rows).items() if x != "at"}
     sets.append(("the 45M start's dense step, its trace's order unknown", *policy.CONSOLE, rows["gates"], console))
-    fx = json.loads((FIXTURES / BATTERY_VOID[0]).read_text())
     for program, label in BATTERY_VOID[1].items():
-        p = fx["programs"][program]
-        block = {x: v for x, v in p.items() if x != "args"} | {"rows": [fx["rows"][i] for i in p["rows"]]}
-        sets.append((label, *policy.CONSOLE, block["gates"], formalism.products_of_trace(block)))
+        sets.append((label, *policy.CONSOLE, *battery(program)))
     name, c, k, C, square = sets[0]
     sets += [(f"{name}, no order declared", c, k, C, square | {"order": None}),
              (f"{name}, a circuit that declares a tree", c, k, C, square | {"order": "tree"})]
@@ -200,30 +262,27 @@ def fresh(base: formalism.Measured) -> dict:
     for name, c, k, C, products in sets:
         m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
                     products=products)
-        term, why, got = formalism.fresh_products(m, c, k)
-        out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": products}, "term": term,
-                    "fresh_cell": got.get("fresh_cell"), "fresh_no_cell": got.get("fresh_no_cell"),
+        _, why, got = formalism.fresh_products(m, c, k)
+        out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": products},
+                    "fresh_old": got.get("fresh_cell"), "fresh_no_cell": got.get("fresh_no_cell"),
                     "order": got["order"], "why": why, "subset": got.get("subset"),
                     "share": got["io_bound"]["share"], "void": got.get("void")})
-    return {"p_cell": formalism.P_CELL, "order": formalism.ORDER,
-            "rests_on": formalism.RESTS_ON_CELL["fresh_products"], "fresh_cell": formalism.SENSITIVITIES["fresh_cell"],
+    return {"p_cell": formalism.P_CELL, "order": formalism.ORDER, "rests_on": formalism.SENSITIVITIES["fresh_old"],
             "fresh_no_cell": formalism.SENSITIVITIES["fresh_no_cell"], "void": formalism.FRESH_VOID, "vectors": out}
 
 
-#: how a port reads the fresh-products term at (c, k) from `formalism.fresh_per_c`
-PER_C_RULE = (f"fresh_no_cell(c, k) = c × fresh_per_c[k][0] (without whole cells), fresh_cell(c, k) = c × "
-              f"fresh_per_c[k][1] (with them), and the term is {'fresh_cell' if formalism.P_CELL else 'fresh_no_cell'}"
-              f" (p_cell {str(formalism.P_CELL).lower()}); [null, null] where the term is void with no subset figure, "
-              "which is computed, so rho's floor reads it as 1 where no other kind exceeds 1; null where "
-              "fresh_per_c[k] is null (unmeasured) or k is off the dial")
+#: how a port reads the products term and the old figure at (c, k) from `formalism.fresh_per_c`
+PER_C_RULE = ("term(c, k) = c × fresh_per_c[k][1] (the products term), fresh_old(c, k) = c × fresh_per_c[k][0] (the "
+              "old figure, a sensitivity; null where it is unmeasured, or void with no subset figure); null where "
+              "fresh_per_c[k] is null (the term unmeasured) or k is off the dial")
 
 
 def dial(ms: dict[str, formalism.Measured]) -> dict:
-    """The fresh-products term as the console's dial reads it from a row's rho_inputs (`formalism.fresh_per_c`, by
+    """The products term as the console's dial reads it from a row's rho_inputs (`formalism.fresh_per_c`, by
     te_core.panels' `rho_columns`) for each case and the 45M start's dense step, and at each k of the dial
     (te_core.capture.products' `DIAL_K`) and each c (the console's, and `DIAL_TOKENS` blocks of the tiny start's
-    forward) `formalism.fresh_products`' term and both figures, so a port that takes c times the entry at k can check
-    them (`PER_C_RULE`); null where unmeasured, with the reason."""
+    forward) the term (`formalism.he_products`) and the old figures (`formalism.fresh_products`'), so a port that
+    takes c times the entry at k can check them (`PER_C_RULE`); null where unmeasured, with the term's reason."""
     from .capture.products import DIAL_K
 
     rows = json.loads((FIXTURES / DENSE_45M).read_text())
@@ -237,11 +296,17 @@ def dial(ms: dict[str, formalism.Measured]) -> dict:
         cells = []
         for k in DIAL_K:
             for c in (policy.CONSOLE[0], *(n * W_FWD for n in DIAL_TOKENS)):
-                term, why, got = formalism.fresh_products(m, c, k)
-                cells.append({"c": c, "k": k, "term": term, "fresh_cell": got.get("fresh_cell"),
-                              "fresh_no_cell": got.get("fresh_no_cell"), "why": why})
+                cells.append(cell(m, c, k))
         out.append({"name": name, "C_gates": m.gates, "fresh_per_c": formalism.fresh_per_c(m), "cells": cells})
     return {"rule": PER_C_RULE, "k": list(DIAL_K), "vectors": out}
+
+
+def cell(m: formalism.Measured, c: float, k: float) -> dict:
+    """`dial`'s and `grid`'s cell at (c, k): the products term with its reason, and the old figures."""
+    term, why, _ = formalism.he_products(m, c, k)
+    _, _, got = formalism.fresh_products(m, c, k)
+    return {"c": c, "k": k, "term": term, "fresh_old": got.get("fresh_cell"), "fresh_no_cell": got.get("fresh_no_cell"),
+            "why": why}
 
 
 def grid_k() -> tuple[int, ...]:
@@ -266,11 +331,11 @@ def grid_rows(graph) -> dict:
 
 
 def grid(base: formalism.Measured) -> dict:
-    """The fresh-products term at every k of `grid_k` on each step of `GRID_STEPS`, measured as `dial` measures the 45M
-    step (its fixture's rows as `Measured.products` on `base`, one part of |C| gates): `formalism.fresh_per_c`, and at
-    each k the term and both figures, which are c times it, at the console's c and at the k's
-    own: the 45M reference's session of k/16 input tokens and the console's output tokens on the grid, the serving
-    block's c at its k (te_core.panels' `SERVED`); null where unmeasured, with the reason."""
+    """The products term at every k of `grid_k` on each step of `GRID_STEPS`, measured as `dial` measures the 45M step
+    (its fixture's rows as `Measured.products` on `base`, one part of |C| gates): `formalism.fresh_per_c`, and at each
+    k the term and the old figures (`cell`), which are c times it, at the console's c and at the k's own: the 45M
+    reference's session of k/16 input tokens and the console's output tokens on the grid, the serving block's c at its
+    k (te_core.panels' `SERVED`); null where unmeasured, with the reason."""
     from .panels import SERVED
 
     own = {k: policy.session_gates(policy.REFERENCE_PARAMS, n, policy.CONSOLE_SESSION[1])
@@ -281,12 +346,7 @@ def grid(base: formalism.Measured) -> dict:
         C = rows["gates"]
         m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
                     products=formalism.products_of_trace(rows))
-        cells = []
-        for k in grid_k():
-            for c in dict.fromkeys((policy.CONSOLE[0], own[k])):
-                term, why, got = formalism.fresh_products(m, c, k)
-                cells.append({"c": c, "k": k, "term": term, "fresh_cell": got.get("fresh_cell"),
-                              "fresh_no_cell": got.get("fresh_no_cell"), "why": why})
+        cells = [cell(m, c, k) for k in grid_k() for c in dict.fromkeys((policy.CONSOLE[0], own[k]))]
         out.append({"name": name, "C_gates": C, "fresh_per_c": formalism.fresh_per_c(m), "cells": cells})
     return {"rule": f"{PER_C_RULE}; at each k of the console's grid (a session's input ids at 16 bits) and the serving "
                     "block's, and at the console's c and the k's own (the 45M reference's session of k/16 input tokens "
@@ -296,10 +356,7 @@ def grid(base: formalism.Measured) -> dict:
 
 def void_case(dense: formalism.Measured) -> formalism.Measured:
     """`VOID_CASE`'s record: the dense case with the battery's DoRA step's product rows (`BATTERY_VOID`)."""
-    fx = json.loads((FIXTURES / BATTERY_VOID[0]).read_text())
-    p = fx["programs"][VOID_CASE[1]]
-    block = {x: v for x, v in p.items() if x != "args"} | {"rows": [fx["rows"][i] for i in p["rows"]]}
-    return replace(dense, products=formalism.products_of_trace(block))
+    return replace(dense, products=battery(VOID_CASE[1])[1])
 
 
 def published(measured: dict[str, formalism.Measured]) -> list[dict]:
@@ -337,14 +394,14 @@ def build() -> dict:
     return finite({
         "schema": SCHEMA, "version": VERSION, "about": __doc__.split("\n\n")[0],
         "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' terms); 1 where every kind is "
-                "computed and none has a figure (a void term with no subset figure is computed: it is in void); null "
-                "where a kind isn't computed and none has a figure. Sensitivities are never in the max.",
+                "computed and none has a figure; null where a kind isn't computed and none has a figure. "
+                "Sensitivities are never in the max.",
         "published_rule": "Fit holds: rho_fit, binding fit. Else, where a kind's term exceeds 1: the max, binding "
-                          "that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured (no figure "
-                          "and not void): null, binding unmeasured, why naming it. Else: 1, binding none. A void "
-                          "fresh-products term is computed, its figure its best subset's (null where none has one), "
-                          "and void and why carry its reason.",
-        "fresh": fresh(ms["dense"]), "dial": dial(ms), "grid": grid(ms["dense"]), "published": published(ms | void),
+                          "that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, "
+                          "binding unmeasured, why naming it. Else: 1, binding none. products_rests_on is the "
+                          "products term's own, with its beta and b_y, wherever it is measured.",
+        "products": products(ms["dense"]), "fresh": fresh(ms["dense"]), "dial": dial(ms), "grid": grid(ms["dense"]),
+        "published": published(ms | void),
         "kinds": list(formalism.KINDS), "rests_on": formalism.RESTS_ON, "sensitivities": formalism.SENSITIVITIES,
         "w_fwd_gates": W_FWD, "start": TINY, "program": PROGRAM,
         "cases": {name: {k: v for k, v in case.items() if k not in ("delta_bits", "decoder_gates")}

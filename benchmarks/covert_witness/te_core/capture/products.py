@@ -39,6 +39,9 @@ from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _F
 #: wrote it (`capture_code`, te_core.capture.script's `record`, from 4.12.14 on; a trace without it was written by 4.12.9
 #: to 4.12.13's code, which differ only in that 4.12.12's and 4.12.13's list fewer elementwise products)
 CAPTURE = "4.12.9"
+#: the torch the frozen capture traces under, the trace job's (``torch==2.15.0+cpu``): a step's graph, and so what the
+#: capture counts on it, moves with torch's version, so te_core.capture.script refuses to trace under another
+TORCH = "2.15.0"
 ORDER = "unknown"
 #: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block
 #: sizes, the reference's, the served demo's block and the console's default

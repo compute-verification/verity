@@ -68,7 +68,7 @@ def test_records_share_one_object_per_trace_and_a_put_refuses_once_one_is_change
     first["data_dependent"].append("x")
     assert second["data_dependent"] == ["x"] and ledger.changed_traces() == 1
     with pytest.raises(SystemExit, match="1 of the ledger's shared traces changed in place"):
-        console.put({"id": "training/x"})
+        console.put({"id": "training/algorithm-policy"})
 
 
 def test_index_joins_promotions_and_final_scores(tmp_path):

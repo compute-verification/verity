@@ -514,54 +514,52 @@ def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_
 BF16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
 
 
-def made_whole(m: formalism.Measured, *k_whole: float) -> formalism.Measured:
-    squares = [{"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": k} | BF16 for k in k_whole]
-    return dataclasses.replace(m, products={"k": AP.CONSOLE[1], "order": "chain", "products": squares})
+def made_whole(m: formalism.Measured, *k_whole: float, extra: tuple[dict, ...] = ()) -> formalism.Measured:
+    squares = [*({"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": k} | BF16 for k in k_whole), *extra]
+    return dataclasses.replace(m, products={"k": AP.CONSOLE[1], "order": "chain", "products": squares,
+                                            "he": formalism.he_of_products(squares, AP.CONSOLE[1])})
 
 
-def test_the_kinds_cell_names_the_products_a_best_subset_drops():
-    """te_core 4.10 bounds the fresh-products term on the best subset of its products, so a short whole-making chain
-    with a bound (K = 128) costs no step its term, and the kinds cell says beside the term what that subset dropped; a
-    term on every product, or an unmeasured one, names no subset. A chain with none (K = 64) makes the term void, and
-    the term is then the best subset's figure, the rest's (coordinator 21:54Z), with the subset named and the void's
-    reason in the cell's why; with nothing left the void has no figure and names no subset."""
+def test_the_kinds_cell_names_a_best_subset_only_where_a_row_carries_one():
+    """From te_core 4.13 the products term is the theorem of record's on M, which takes no whole-making and drops no
+    product, so a published ρ names no best subset: not with a short chain beside a long one (K = 128 beside 512),
+    nor with a chain that voids the old figure (K = 64), on which the term is measured, each square product adding
+    its own share. A row that carries a subset (an older ρ's) still has the kinds cell name it, its rule a string."""
     m = info()["starts"][0].rows[0]["measured"]
     small = {"macs": 5e11, "outputs": 5e11 / 128, "k_dim": 128, "k_whole": 128} | BF16
-    one = formalism.published(dataclasses.replace(made_whole(m, 512), products=made_whole(m, 512).products | {
-        "products": [*made_whole(m, 512).products["products"], small]}), reading="A")
+    one = formalism.published(made_whole(m, 512, extra=(small,)), reading="A")
     got = json.loads(AP.kinds(one))
     assert one["terms"]["fresh_products"] > 0 and got["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL[
         "fresh_products"]}
-    assert got["fresh_subset"] == {"dropped": 1, "of": 2, "k_whole_min": 512,
-                                   "dropped_macs_share": pytest.approx(5e11 / (5e14 + 5e11), rel=10 ** -AP.DIGITS)}
+    alone = formalism.published(made_whole(m, 512), reading="A")["terms"]["fresh_products"]
     void = formalism.published(made_whole(m, 512, 64), reading="A")
-    cell = json.loads(AP.kinds(void))
-    assert void["terms"]["fresh_products"] == formalism.published(made_whole(m, 512), reading="A")["terms"][
-        "fresh_products"] and void["binding_kind"] == "fresh_products"
-    assert cell["fresh_subset"] == {"dropped": 1, "of": 2, "k_whole_min": 512, "dropped_macs_share": 0.5}
-    assert cell["why"] == void["void"] == ("the products count diverges; best subset 1.88e+06, keeping 50% of the "
-                                           "step's fresh multiplications")
-    ruled = one | {"fresh_subset": one["fresh_subset"] | {"rule": "fed", "threshold": 0.25, "dropped_fed": [3, 4]}}
-    assert json.loads(AP.kinds(ruled))["fresh_subset"] == ruled["fresh_subset"] | {
-        "dropped_macs_share": pytest.approx(ruled["fresh_subset"]["dropped_macs_share"], rel=10 ** -AP.DIGITS)}
-    for alone in (512, 64):
-        assert "fresh_subset" not in json.loads(AP.kinds(formalism.published(made_whole(m, alone), reading="A")))
+    assert void["terms"]["fresh_products"] == pytest.approx(2 * alone, rel=1e-12)
+    assert void["binding_kind"] == "fresh_products" and void["void"] is None
+    for x in (one, void, *(formalism.published(made_whole(m, k), reading="A") for k in (512, 64))):
+        assert "fresh_subset" not in x and "fresh_subset" not in json.loads(AP.kinds(x))
+    sub = {"dropped": 1, "of": 2, "k_whole_min": 512, "dropped_macs_share": 5e11 / (5e14 + 5e11), "rule": "fed",
+           "threshold": 0.25, "dropped_fed": [3, 4]}
+    assert json.loads(AP.kinds(one | {"fresh_subset": sub}))["fresh_subset"] == sub | {
+        "dropped_macs_share": pytest.approx(sub["dropped_macs_share"], rel=10 ** -AP.DIGITS)}
 
 
-def test_a_void_fresh_products_term_is_what_io_bound_voids_under_reading_a_where_fit_fails():
-    """te_core 4.9 measured the fresh-products term as 0 where io_bound's proved Λ is void (coordinator 13:32Z: no
-    result); from te_core 4.10 that term is unmeasured (`formalism.FRESH_VOID`), never 0, so `voided` finds no void
-    0 in a published ρ at the console's default, nor in a measured term, an unmeasured one or reading B's ρ."""
+def test_a_products_term_is_measured_where_the_old_figure_is_void_and_voided_finds_no_void_0():
+    """te_core 4.10 left the fresh-products term unmeasured where io_bound's proved Λ is void (K = 64 at the
+    console's k); from 4.13 the term is the theorem of record's, which takes no whole-making, so it is measured
+    there, the same as where Λ is proved (K = 512), and only the sensitivity fresh_old is None. `voided` finds no
+    void 0 in either, nor in an unmeasured term or reading B's ρ; a cell marked void names no premises."""
     m = info()["starts"][0].rows[0]["measured"]
     void, whole = made_whole(m, 64), made_whole(m, 512)
-    one = formalism.published(void, reading="A")
-    assert one["terms"]["fresh_products"] is None and not AP.voided(void, one)
-    assert formalism.published(whole, reading="A")["terms"]["fresh_products"] > 0
-    assert not AP.voided(whole, formalism.published(whole, reading="A"))
-    assert not AP.voided(m, formalism.published(m, reading="A")) and not AP.voided(void, formalism.published(void))
+    one, kept = formalism.published(void, reading="A"), formalism.published(whole, reading="A")
+    assert one["terms"]["fresh_products"] == pytest.approx(kept["terms"]["fresh_products"], rel=1e-12)
+    assert kept["terms"]["fresh_products"] > 0 and one["void"] is None
+    assert one["sensitivities"]["fresh_old"] is None and kept["sensitivities"]["fresh_old"] > 0
+    for x in (void, whole, m):
+        assert not AP.voided(x, formalism.published(x, reading="A")) and not AP.voided(x, formalism.published(x))
     assert not AP.voided(void, one | {"binding_kind": "fit"})
     got = json.loads(AP.kinds(one, void=True))
-    assert got["void"] == AP.VOIDED and "rests_on" not in got and got["bound"]["fresh_products"] is None
+    assert got["void"] == AP.VOIDED and "rests_on" not in got
+    assert got["bound"]["fresh_products"] == pytest.approx(one["terms"]["fresh_products"], rel=10 ** -AP.DIGITS)
 
 
 def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):

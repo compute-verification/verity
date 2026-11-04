@@ -1,11 +1,17 @@
-"""te_core.console cuts a panel to the panels route's limits, the first cut that fits, and names the cut in its note."""
+"""te_core.console cuts a panel to the panels route's limits, the first cut that fits, and names the cut in its note;
+its PUT refuses, before any request, a panel te_core doesn't PUT, a te_core object that isn't its source's, and a te_core
+tree that isn't the integrator's branch's head."""
+import functools
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import console
+from te_core import algorithm_policy, console, formalism, ledger
 
 P1 = ["start", "start_id", "size", "saturation", "curve", "policy", "basis", "target_pct", "compute_gates",
       "compute_frac", "loss", "loss_lo", "loss_hi", "record", "checkpoint", "method", "family"]
@@ -73,3 +79,105 @@ def test_write_cuts_every_panel(tmp_path):
         (tmp_path / f"{n}.json").write_text(json.dumps(p))
     made = console.write(tmp_path, tmp_path / "console")
     assert sorted(made) == sorted(NAMES) and all((tmp_path / "console" / f"{n}.json").exists() for n in NAMES)
+
+
+@pytest.mark.parametrize("pid, why", [
+    ("training/x", "not a panel te_core PUTs"), ("training/frontier-branches", "retired: frontier-branches is stored"),
+    *((f"training/{n}", "retired: te_core.plots' panels are off the console") for n in console.NAMES)])
+def test_put_refuses_a_panel_te_core_doesnt_put_before_any_request(pid, why):
+    with pytest.raises(SystemExit, match=f"console.put {pid}: {why}"):
+        console.put({"id": pid})
+
+
+def test_every_training_panel_is_one_put_puts():
+    """The four training panels `put` PUTs: algorithm-policy's two, standard-workloads' and size-scaling (ladder-v3's),
+    none of them retired."""
+    assert set(console.PANELS) == {"training/algorithm-policy", "training/frontier-fit", "training/standard-workloads",
+                                   "training/size-scaling"} and not set(console.PANELS) & set(console.RETIRED)
+
+
+@pytest.mark.parametrize("patch, named", [
+    (lambda: (formalism, "published", lambda *a, **k: None), "te_core.formalism.published isn't the function"),
+    (lambda: (formalism, "published", functools.partial(formalism.published, reading="B")),
+     "te_core.formalism.published isn't the function"),
+    (lambda: (formalism, "published", functools.wraps(formalism.published)(lambda *a, **k: None)),
+     "te_core.formalism.published isn't the function"),
+    (lambda: (formalism, "P_CELL", False), "te_core.formalism.P_CELL is False, its source's True"),
+    (lambda: (formalism.Measured, "gates", property(lambda self: 0.0)),
+     "te_core.formalism.Measured.gates isn't the method"),
+    (lambda: (algorithm_policy, "console", ledger), "te_core.algorithm_policy.console isn't te_core.console"),
+    (lambda: (console, "put", lambda p: "200"), "te_core.console.put isn't the function")])
+def test_put_refuses_a_wrapped_swapped_or_reset_te_core_object(monkeypatch, patch, named):
+    """The front-doors ruling: a ruling reaches a published number only as a te_core VERSION, so a function replaced
+    by a lambda, a partial or a wrapper that names it, a constant set at run time, a method, a module's import of
+    another's name, or `put` itself wrapped (as a scorer's wrapper did) stops the PUT."""
+    put = console.put
+    monkeypatch.setattr(ledger, "SHARED", {})
+    monkeypatch.setattr(*patch())
+    assert any(b.startswith(named) for b in console.replaced())
+    with pytest.raises(SystemExit, match="te_core objects aren't their source's"):
+        put({"id": "training/algorithm-policy"})
+
+
+def test_a_clean_te_core_has_nothing_replaced_and_its_put_fetches_the_branchs_head_before_any_request():
+    """In a process of its own, so no other test's state reaches it: every te_core module imported (torch's wrapping of
+    a dispatch mode's `__torch_dispatch__` and the standard library's decorators are the source's), `replaced` finds
+    nothing, and a PUT goes on to fetch `BRANCH` from origin, which here fails and refuses the PUT."""
+    script = """
+import importlib, pkgutil, subprocess, sys
+import te_core
+from te_core import console, ledger
+for m in pkgutil.walk_packages(te_core.__path__, "te_core."):
+    if ".tests" not in m.name:
+        importlib.import_module(m.name)
+print(console.replaced())
+calls = []
+subprocess.run = lambda argv, **k: calls.append(argv) or subprocess.CompletedProcess(argv, 1, "", "no network")
+ledger.SHARED.clear()
+try:
+    console.put({"id": "training/algorithm-policy"})
+except SystemExit as e:
+    print(e)
+print(calls)
+"""
+    here = Path(console.__file__).resolve().parent
+    out = subprocess.run([sys.executable, "-c", script], cwd=here.parent, capture_output=True, text=True, check=True)
+    lines = out.stdout.splitlines()
+    assert lines[0] == "[]", out.stdout + out.stderr
+    assert lines[1].startswith(f"console.put training/algorithm-policy: te_core's tree can't be held to {console.BRANCH}")
+    assert lines[2] == str([["git", "-C", str(here), "fetch", "--quiet", "origin",
+                             f"+refs/heads/{console.BRANCH}:refs/remotes/origin/{console.BRANCH}"]])
+
+
+def test_off_branch_names_uncommitted_and_untracked_files_and_the_branchs_files_head_lacks_or_changes(tmp_path):
+    """A te_core tree is the branch's when it is clean and has every file of te_core at the branch's head; a file
+    only it has is its publisher's own."""
+    repo, ref = tmp_path / "repo", "refs/remotes/origin/b"
+    te = repo / "cw" / "te_core"
+    te.mkdir(parents=True)
+
+    def git(*a):
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                        "-c", "core.hooksPath=/dev/null", *a], check=True, capture_output=True)
+
+    def commit():
+        git("add", "-A")
+        git("commit", "-qm", "c")
+
+    (te / "a.py").write_text("A = 1\n")
+    (te / "b.py").write_text("B = 1\n")
+    git("init", "-q")
+    commit()
+    git("update-ref", ref, "HEAD")
+    assert console.off_branch(ref, te) == []
+    (te / "own.py").write_text("OWN = 1\n")
+    assert console.off_branch(ref, te) == ["uncommitted changes or untracked files in cw/te_core: cw/te_core/own.py"]
+    commit()
+    assert console.off_branch(ref, te) == []
+    (te / "a.py").write_text("A = 2\n")
+    (te / "b.py").unlink()
+    assert console.off_branch(ref, te)[0].startswith("uncommitted changes or untracked files in cw/te_core: ")
+    commit()
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short=10", ref], capture_output=True, text=True,
+                          check=True).stdout.strip()
+    assert console.off_branch(ref, te) == [f"2 files of cw/te_core at {ref} ({head}) differ here or are missing: a.py, b.py"]

@@ -1,9 +1,9 @@
 """`training/frontier-branches`, a retired console training panel (the console's are now `training/algorithm-policy`
-and `training/frontier-fit`, both PUT by te_core.algorithm_policy, and no refresh PUTs this one): held-out bits per byte
-against total training compute in Boolean gates, every line a frontier (at each loss, the least compute anything
-reached under that line's rules).
+and `training/frontier-fit`, both PUT by te_core.algorithm_policy, and nothing PUTs this one: it has no `--publish`, and
+te_core.console's `put` refuses its id): held-out bits per byte against total training compute in Boolean gates, every
+line a frontier (at each loss, the least compute anything reached under that line's rules).
 
-    python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
+    python -m te_core.panels frontier-branches --out DIR [--pretraining DIR]
                                                [te_core.rescore's ledger and quantities options]
 
 Its rows (`COLUMNS`) are the points of three kinds of curve, each on one data (`data`: `v3`, harness v3's OLMo 2 mix,
@@ -57,7 +57,7 @@ the frontier, each honest curve and each marked throttled curve keep their point
 every other throttled curve the most points (`POINTS`) that fit, the first to reach each of losses evenly spaced over
 its own span; where every candidate doesn't fit at the fewest points, the most that do, those on the most cells'
 curves first (`ranked`), the note saying how many, before the other curves' points go further apart. DIR gets
-`frontier-branches.json` (uncut, every data), `console/frontier-branches.json` (cut, which `--publish` PUTs) and
+`frontier-branches.json` (uncut, every data), `console/frontier-branches.json` (cut, for the evidence store) and
 `frontier-branches.png`, plotted from the cut rows at the marked cells.
 """
 from __future__ import annotations
@@ -257,9 +257,9 @@ def through(u, ks) -> tuple[tuple[float, float], ...]:
 def rho_columns(m: formalism.Measured, w: float) -> dict:
     """A candidate's ρ columns at its checkpoint's quantities `m` from a start whose forward is `w` gates a token:
     te_core.algorithm_policy's `inputs`, with u_in through the dial's k (`K_LEVELS`), where a measured u_in's many
-    points don't fit a cell; and in `rho_inputs` the fresh-products term over c at each k it is classified at
-    (`fresh_per_c`, te_core.formalism's: [without P-cell, with it] by k's integer, null where unmeasured, [null, null]
-    where the term is void with no subset figure, the whole entry null with no product rows), so the dial's term at
+    points don't fit a cell; and in `rho_inputs` the products term over c at each k it is classified at
+    (`fresh_per_c`, te_core.formalism's: [the old figure fresh_old, the term] by k's integer, null where the term is
+    unmeasured, the old figure null where it is, the whole entry null with no product rows), so the dial's term at
     (c, k) is c times it."""
     v = dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(m, w)))
     v |= {"w_fit_gates": m.w_fit, "alpha_ratio": m.alpha_ratio}
@@ -525,7 +525,6 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="panel", required=True)
     fb = rescore.arguments(sub.add_parser(NAME, help="the frontier and its branches"))
-    fb.add_argument("--publish", action="store_true", help=f"PUT the cut panel to {console.PANELS_URL}/{PANEL}")
     fb.add_argument("--pretraining", type=Path, default=None,
                     help=f"the pretraining runs, a directory per run id (default {PRETRAINING}, fetched)")
     a = ap.parse_args(argv)
@@ -544,10 +543,6 @@ def main(argv=None) -> int:
     print(summary(info))
     print(f"{PANEL}: {len(p['rows'])} rows uncut; console {len(q['rows'])} rows, {len(console.body(q))} bytes, note "
           f"{len(q['note'])} characters -> {a.out}: {NAME}.json, console/{NAME}.json, {png.name}")
-    if a.publish:
-        status = console.put(q)
-        print(f"PUT {console.PANELS_URL}/{PANEL}: {status}")
-        return 0 if status.startswith("2") else 1
     return 0
 
 
