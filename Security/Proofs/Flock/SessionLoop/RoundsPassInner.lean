@@ -303,7 +303,7 @@ theorem run_ownReqs_epsBeta (c : Cfg) (prior : Array F128) (sched own : Array (B
     · rw [show s'.eps = s1.eps from congrArg Prod.fst hk, he]
       split_ifs with h
       · subst h
-        first | rfl | simp only [Nat.add_zero]
+        rfl
       · exact hIH.1 (by omega)
     · rw [show s'.beta = s1.beta from congrArg Prod.snd hk, hbt]
       split_ifs with h
@@ -346,7 +346,7 @@ theorem repState_own_epsBeta (c c' : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray
     · rw [he]
       split_ifs with h
       · subst h
-        first | rfl | simp only [Nat.add_zero]
+        rfl
       · exact hE.1 (by omega)
     · rw [hb]
       split_ifs with h
@@ -360,9 +360,9 @@ theorem repState_own_epsBeta (c c' : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray
 theorem ownRound_state_congr (c : Cfg) {S s : Masker} (w t : ByteArray) (n : ℕ) {k : ℕ} (hk : k < 4)
     (h1 : k = 1 → S.eps = s.eps) (h3 : k = 3 → S.beta = s.beta) : ownRound c S w t n k = ownRound c s w t n k := by
   obtain rfl | rfl | rfl | rfl : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 := by omega
-  · rfl
+  · simp only [ownRound]
   · simp only [ownRound, h1 rfl]
-  · rfl
+  · simp only [ownRound]
   · simp only [ownRound, h3 rfl]
 
 theorem innerSched_state_congr (c : Cfg) {S s : Masker} (fin : Array ByteArray) (n : ℕ) {k : ℕ} (hk : k < 4)
@@ -449,14 +449,14 @@ theorem passes_self {c : Cfg} {s : Masker} {v : ByteArray} {n : ℕ} {o : ByteAr
   try rfl
 
 /-- **`valsDev` sends a round that frees no word as it came**: where the frame took the stream's coins at `m` and
-takes the scheduled round `r` there freeing no word, `r` frames and a squeeze, neither `final_c'` nor `τ` written
-changing it, `valsDev`'s round is `r`. -/
+takes the scheduled round `r` there freeing no word, `r` frames and a squeeze, neither the `final_c'` `valsDev` writes
+nor its `τ` changing it, `valsDev`'s round is `r`. -/
 theorem valsDev_own (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg} {w : Flock.Wit} {ρ : Tp}
     {g : List (Msg × Msg)} {m : Masker} {c : Cfg} {n : ℕ} {r o : ByteArray} {t : Masker}
     (hm : L.answered x ρ g = .ok m) (hc : L.cfg x ρ g = c) (hn : L.coins x g.length = n)
     (hsc : L.scheduled x w ρ g (computedOf (L.computed x w ρ g)) = r.data.toList)
     (hq : roundFree c { m with stopped := false } r n = .ok (o, t, #[])) (hF : Frames r.data.toList n)
-    (h0 : ∀ a, setFinalC a r.data.toList = r.data.toList)
+    (h0 : setFinalC (vsAt vs L x w ρ g c.lay.fc + c.h.getD c.lay.fc 0) r.data.toList = r.data.toList)
     (h2 : setTau m (vsTauAt vs L x w ρ g) r.data.toList = r.data.toList) :
     valsDev vs L x w ρ g (computedOf (L.computed x w ρ g)) = r.data.toList := by
   have hr : (⟨r.data.toList.toArray⟩ : ByteArray) = r := by rw [Array.toArray_toList]
@@ -466,7 +466,7 @@ theorem valsDev_own (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg} 
   simp only
   rw [hsc, hr, hc, hn, hq]
   simp only
-  rw [if_pos hF, hfill, h0, h2]
+  rw [ite_eq_left hF, hfill, h0, h2]
 
 /-- **A round `valsDev` sends as it came passes the frame's checks** wherever `cross` passes it: where the frame took
 the stream's coins at `m` and takes the scheduled round `r` there, a rep not stopped, and `valsDev` sends `r`. -/
@@ -536,7 +536,7 @@ theorem roundOk_ownAt (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg
     · subst he
       exact h2 rfl
     · exact setTau_of_ne (by rw [hin]; intro e; exact he (Option.some.inj e)) _ _
-  have hd := valsDev_own vs L hm hc hn hsc hq hF h0 h2'
+  have hd := valsDev_own vs L hm hc hn hsc hq hF (h0 _) h2'
   exact roundOk_valsDev_own vs L hm hc hn hsc hd hq hcr
 
 end Loop
@@ -609,7 +609,7 @@ theorem ofLoop_answered_epsBeta (T : CoinLayer.TableData)
     rw [hki] at this
     simpa [roundsOf] using this
   obtain ⟨_, _, _, _, hdm, hxe⟩ := placeholder_ok hph'
-  obtain ⟨-, hd, -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec sts hx) hk
+  obtain ⟨-, hd, hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec sts hx) hk
   have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
     rw [← hcs]
     cases h1 with
