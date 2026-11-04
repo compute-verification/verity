@@ -9,8 +9,10 @@ by SHA-512) the record states, beside its figure over one execution phase. A pub
 the clock form, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
 its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
 the bound as that run's. The figure of record, every period's cells included, is that K only where the verdict held
-both checks the tight ℓ_{a,j} rests on, and otherwise charges ℓ_a + 1 bits for each tied audit of each phase, the
-tight K's cells beside it, conditional on the open checks. The run's `publish`
+both checks the tight ℓ_{a,j} rests on and the lock (a toy one in Security's lock's place) leaves no premise of its
+guarantee open, and otherwise charges ℓ_a + 1 bits for each tied audit of each phase, the tight K's cells beside it,
+conditional on what is open. A tied audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
+share of the schedule's egress capacity, and the served egress is missing. The run's `publish`
 leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
 accepted."""
 from __future__ import annotations
@@ -59,6 +61,20 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
 TREE = "ab12" * 10
 #: the certifier's published verdict line, after an earlier attempt's
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
+#: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
+CAPACITY = 1008 * 512 * 8
+#: the premises of a lock recording no named assumption for the guarantee the tight K rests on
+NO_PREMISES = {"is": OR.PREMISES, "from": "Security/lean-audit.json guarantees[g].assumptions",
+               "guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}, "open": []}
+
+
+@pytest.fixture(autouse=True)
+def lock(tmp_path_factory, monkeypatch) -> Path:
+    """A lock in Security's lock's place recording each guarantee the tight K rests on with no named assumption."""
+    f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
+    f.write_text(json.dumps({"guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}}))
+    monkeypatch.setattr(OR, "LOCK", f)
+    return f
 
 
 def answer(public: dict | None, verdict: str = "accept") -> dict:
@@ -181,12 +197,15 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
-    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
+    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": NO_PREMISES,
                               "advice": {"bits_per_phase": [1], "tied": OR.TIED_ALL}}
+    assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
     assert rec["advice_charge"]["cap"] == {"ell_a": [0], "is": OR.CAP}
-    assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN
+    assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN and "`PREMISES`" in OR.OPEN
     assert rec["periods"]["run"]["bits"] == KR and rec["periods_tight"]["run"]["bits"] == K
     assert rec["periods_tight"]["conditional_on"] == ["free", "circuit"]
+    assert rec["periods"]["egress"] == {"capacity_bits_per_phase": CAPACITY, "is": OR.EGRESS,
+                                        "served": {"missing": OR.SERVED_EGRESS}}
 
 
 def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_the_tight_K_is_beside_it(tmp_path, capsys):
@@ -214,6 +233,26 @@ def test_the_figure_of_record_is_the_tight_K_only_where_the_verdict_held_both_ch
     assert (of["held"], of["open"]) == ([c for c in OR.CHECKS if c not in open_], open_)
     assert of["K"] == (K if not open_ else K + 2 ** 23 + 1)
     assert ("periods_tight" in rec) == bool(open_) and rec["periods"]["run"]["bits"] == of["K"]
+
+
+@pytest.mark.parametrize("guarantees, found", [
+    ({OR.RESTS_ON[0]: {"assumptions": ["NetTiming.Assumptions.B", "NetTiming.Assumptions.A"]}},
+     {OR.RESTS_ON[0]: {"assumptions": ["NetTiming.Assumptions.B", "NetTiming.Assumptions.A"]}}),
+    ({}, {OR.RESTS_ON[0]: {"missing": "not in the lock"}})])
+def test_a_premise_the_lock_leaves_open_keeps_the_figure_of_record_charged_with_both_checks_held(
+        tmp_path, lock, guarantees, found):
+    """Both checks held, and the lock records a named assumption of the guarantee the tight K rests on, or doesn't list
+    it: each is an open premise, so the figure of record still charges ℓ_a + 1 for the tied audit, and the tight K's
+    cells beside it are conditional on those premises; with one check open too, on both."""
+    lock.write_text(json.dumps({"guarantees": guarantees}))
+    open_ = sorted(a for f in found.values() for a in f.get("assumptions", ())) or list(OR.RESTS_ON)
+    rec = OR.record(accepted(tmp_path / "held", dict(PUBLIC, held=["free", "circuit"]), audits=(SERVED,)))
+    of = rec["bound"]["of_record"]
+    assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], open_, K + 2 ** 23 + 1)
+    assert of["premises"] == dict(NO_PREMISES, guarantees=found, open=open_)
+    assert rec["periods_tight"]["conditional_on"] == open_ and rec["periods_tight"]["run"]["bits"] == K
+    rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"]), audits=(SERVED,)))
+    assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
 
 
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
@@ -261,6 +300,33 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
     assert (rec["periods"]["phase_s"], rec["periods"]["run"]["seconds"], b["period_s"]) == ("128", "384", "384")
     assert rec["periods"]["week"]["node"]["parameters"]["connections"] == str(128 * math.ceil(7 * 86400 / 128))
+    assert rec["periods"]["egress"]["capacity_bits_per_phase"] == 4 * 4 * 32 * 512 * 8
+
+
+@pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
+def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
+    """Monday's defaults: w63k4 at a 4 s tick over three execution phases, each phase's tied V3c audit drawn subset:1
+    (charged), so k_{skip,j} is its E_w = 896 slot-entry bits beside the schedule's and the jitter's 800: with
+    ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of record, of the schedule's egress capacity
+    of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase. Drawn whole, its 16 proof blocks proved, the entries
+    and its δ leave the bound."""
+    sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
+    import scan_zk as SZ
+    schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
+    scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
+    audit = {"delta": f"1/{2 ** 64}", "drawn": drawn, "units": 16, "wrong_units": 0}
+    charged = 3 if drawn < 16 else 0
+    public = dict(PUBLIC, K=3 * (800 + entries), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
+                  audits=[audit] * 3, eps=str(Fraction(3 + charged, 2 ** 64)), held=["free", "circuit"])
+    rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule, audits=(SERVED,)))
+    b, run = rec["bound"], rec["periods"]["run"]
+    assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [entries] * 3, "entries_per_phase": [entries] * 3}
+    assert b["delta"]["charged"] == str(Fraction(charged, 2 ** 64))
+    assert (b["of_record"]["K"], b["of_record"]["open"], "periods_tight" in rec) == (3 * (800 + entries), [], False)
+    capacity = 4 * 4 * 32 * 512 * 8
+    assert run["per_phase"]["bits"] == 800 + entries and run["share_of_capacity"] == (800 + entries) / capacity
+    assert rec["periods"]["year"]["datacenter"]["share_of_capacity"] == (800 + entries) / capacity
+    assert rec["periods"]["egress"]["capacity_bits_per_phase"] == capacity == 2 ** 21
 
 
 @pytest.mark.parametrize("caps", [[], [4, 4], [5] * (4 * 63)])
@@ -283,7 +349,7 @@ def census_line(name: str, *fields: str) -> dict:
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = OR.record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)
-    one = {"bits": KR, "share": KR / LB.WEIGHTS.bits, "vacuous": False, "how": "proved",
+    one = {"bits": KR, "share": KR / LB.WEIGHTS.bits, "share_of_capacity": KR / CAPACITY, "vacuous": False, "how": "proved",
            "delta_net": [{"symbol": "eps", "value": "1/1048576"}, {"symbol": "ε_ks", "times": 1},
                          {"symbol": "ε_bind", "times": 1}, {"symbol": "ε_tap", "times": 1}],
            "eps_per_phase_below": "1", "statement": LB.STATEMENTS["per_period"]}
@@ -300,10 +366,12 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
                 KR * w * n, OR.delta_net(Fraction(1, 2 ** 20) * w * n, w * n), "scaled", rules[where])
             assert c["delta_net"][0]["value"] == str(Fraction(w * n, 2 ** 20))
             assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == KR * w * n / LB.WEIGHTS.bits
+            assert c["share_of_capacity"] == KR / CAPACITY
             assert c["eps_per_phase_below"] == str(Fraction(1, w * n))
             assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n}
             assert c["per_phase"] == (one if where == "node" else {
-                "bits": KR * n, "share": KR * n / LB.WEIGHTS.bits, "delta_net": OR.delta_net(Fraction(n, 2 ** 20), n),
+                "bits": KR * n, "share": KR * n / LB.WEIGHTS.bits, "share_of_capacity": KR / CAPACITY,
+                "delta_net": OR.delta_net(Fraction(n, 2 ** 20), n),
                 "vacuous": n >= 2 ** 20, "eps_per_phase_below": str(Fraction(1, n)), "how": "scaled", "rule": where,
                 "statement": OR.STATEMENTS[where]})
     assert p["week"]["datacenter"]["statement"] == LB.STATEMENTS["datacenter"]

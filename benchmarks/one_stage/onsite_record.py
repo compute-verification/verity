@@ -36,13 +36,15 @@ of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
 collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
 ``delta`` splits eps into the scans' δ and the charged audits', with eps a phase (`DELTA`: what sets each, and what a
-smaller one costs).
+smaller one costs); ``skip`` is k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part
+(`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
-tight ℓ_{a,j} rests on (``held``, `CHECKS`), and while one is ``open``, K plus ℓ_a + 1 bits for each audit tied to each
+tight ℓ_{a,j} rests on (``held``, `CHECKS`) and Security's lock lists no named assumption of the guarantee it rests on
+(``premises``, `PREMISES`), and while one of either is ``open``, K plus ℓ_a + 1 bits for each audit tied to each
 execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
@@ -57,13 +59,15 @@ that run's, never a figure of this one. ``tree`` is the commit the run served fr
 
 **Periods**, of the figure of record: the run's own certification period (``run``), proved, and each monitoring period
 of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world. Where the figure of
-record isn't the tight K, ``periods_tight`` gives the same cells of the tight K beside them, with the open checks it is
-conditional on (``conditional_on``), never as the result. A node's cell is proved where the run's period
+record isn't the tight K, ``periods_tight`` gives the same cells of the tight K beside them, with the open checks and
+premises it is conditional on (``conditional_on``), never as the result. A node's cell is proved where the run's period
 covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
 cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
-(`leak_bounds.WEIGHTS`), its δ_net's terms over the execution phases it counts (``delta_net``), whether eps alone is
+(`leak_bounds.WEIGHTS`), its share of the egress its execution phases can carry (``share_of_capacity``, the schedule's
+capacity in ``egress``, `EGRESS`; the served egress is missing, `SERVED_EGRESS`), its δ_net's terms over the execution
+phases it counts (``delta_net``), whether eps alone is
 already vacuous (at least 1), the eps a phase under which it wouldn't be (``eps_per_phase_below``, beside the bound's
 ``delta``) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
 one execution phase, proved only where m is 1.
@@ -146,7 +150,7 @@ NO_NCI_DELTA = "no published file states it: remote's composite publishes each c
 DELTA = ("what sets eps: each one-stage answer's stated δ, its integrity profile's, a sampling-design parameter in "
          "(0, 1) and not C-Flock's soundness error, which is in ε_ks. eps is m · δ_scan, every phase's scan at one δ, "
          "plus the δ of each tied audit drawn in part (`charged`, NetworkCheck.Period's chargedOf). A scan with every "
-         "proof block drawn holds no wrong unit at any δ, so a smaller δ_scan costs neither proving nor bits; drawn in "
+         "proof block drawn holds no incorrect proof block at any δ, so a smaller δ_scan costs neither proving nor bits; drawn in "
          "part, its bound grows as δ falls (faulty_sets, faulty_bits). A tied audit drawn in part charges every slot "
          "entry bit of its phase (faulty_entries) whatever its bound, so a smaller δ costs K nothing either, but the "
          "δ is also that audit's own answer's, whose bound grows as δ falls at a fixed draw; drawn whole, its δ leaves "
@@ -159,20 +163,32 @@ CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audi
            "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
-           "performs both checks it rests on (`CHECKS`, `OPEN`)")
+           "performs both checks it rests on and the lock lists no open premise for it (`CHECKS`, `PREMISES`, `OPEN`)")
+SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
+        "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
+        "``faulty_entries``, every slot-entry bit E_w of each audit tied to j's scan that is drawn in part (charged, "
+        "NetworkCheck.Period's chargedOf), whatever its bound. Drawn whole, a tied audit adds no entries and its δ "
+        "leaves eps, at the cost of proving every one of its proof blocks")
 #: the checks the tight ℓ_{a,j} rests on, each by the name the period's public lists it under in ``held`` once its Lean
 #: check performs it
 CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
           "circuit": "each tied audit's circuit held fixed whatever its advice"}
+#: Security's lock in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions)
+LOCK = HERE.parents[1] / "Security" / "lean-audit.json"
+#: the guarantees the tight K rests on, by their names in `LOCK`
+RESTS_ON = ("NetTiming.SecurityProofs.PeriodLeakAccepted",)
+PREMISES = ("the premises the tight K rests on: each named assumption a guarantee of `RESTS_ON` takes as Security's "
+            "lock records it (its ``assumptions``), open until a Property proves it against the code and the guarantee "
+            "takes it no longer, and each such guarantee the lock doesn't list")
 OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
-        "every check of `CHECKS` (the public's held). While one is open it is K plus ℓ_a + 1 bits for each audit tied "
-        "to each execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of "
-        "fewer than 2^(ℓ_a + 1) strings. The tight K's cells go beside the figure of record's, conditional on the open "
-        "checks (periods_tight)")
+        "every check of `CHECKS` (the public's held) and the lock lists no open premise for it (`PREMISES`). While "
+        "either is open it is K plus ℓ_a + 1 bits for each audit tied to each execution phase's scan, beside that "
+        "phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer than 2^(ℓ_a + 1) strings. The tight K's "
+        "cells go beside the figure of record's, conditional on what is open (periods_tight)")
 CAP = ("ℓ_a, each audit's registered advice length in the case's commitment (its registration's window.advice.bits; 0 "
        "for no advice): the compiler's cap, the length each Commit period's advice is padded to before it is committed. "
-       "A cap, in no term of PeriodLeakAccepted's K: it enters the figure of record only while a check of `CHECKS` is "
-       "open, as ℓ_a + 1 bits for each tied audit (`OPEN`)")
+       "A cap, in no term of PeriodLeakAccepted's K: it enters the figure of record only while a check of `CHECKS` or "
+       "a premise is open, as ℓ_a + 1 bits for each tied audit (`OPEN`)")
 TIED_ALL = ("every audit of the case's commitment: the public names no scan's tied audits (scans[j].tied), so each is "
             "charged to every execution phase, exact with one audit")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
@@ -189,6 +205,12 @@ RULES = {
              "an H100-equivalent's FLOP/s, in machines of the reference datacenter's GPUs, rounded up, one network "
              "certifier on each",
 }
+EGRESS = ("the schedule's egress capacity an execution phase, from the case's params.schedule: at most lanes connections "
+          "live, each at most slots cells a bucket, over its T buckets, and no more than its caps' total (egress_cells "
+          "for each of its lanes · T connections), each cell cell_bytes bytes. It bounds the egress a phase can carry, so "
+          "K's share of it (each cell's share_of_capacity) is a lower bound on K's share of the egress it carried")
+SERVED_EGRESS = ("not in this record: the egress the run served is a count of its own traffic, which no published file "
+                 "states (the network certifier's chain files that count it stay on the node)")
 FROM_BOUND = "bound: the run's K and eps over its m execution phases"
 FROM_SCHEDULE = f"{CASE} params.schedule: an execution phase's T buckets of τ"
 STATEMENTS = {"run": LB.STATEMENTS["per_period"], "node": LB.STATEMENTS["per_period"],
@@ -280,9 +302,12 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
                          f"{sorted(map(str, deltas))}, and the period's check holds them to one")
     (scan,) = deltas
     sources = [EPS, *ERRORS.values()]
+    skip = {"is": SKIP, "bits_per_phase": [t["bits"] for t in terms if t["symbol"] == "k_{skip,j}"],
+            "entries_per_phase": [int(s["faulty_entries"]) for s in public["scans"]]}
     return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
             "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
-            "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA}}
+            "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA},
+            "skip": skip}
 
 
 def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
@@ -317,10 +342,10 @@ def eps_of(b: Mapping[str, Any]) -> Fraction:
     return Fraction(b["delta_net"]["terms"][0]["value"])
 
 
-def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
-    """An execution phase's seconds, T buckets of τ (the case's ``schedule``), and the connections its caps count
+def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int, int]:
+    """An execution phase's seconds, T buckets of τ (the case's ``schedule``), the connections its caps count
     (``cells``), the case's period held to the answer's phases where its params keep ``windows`` and its caps to its
-    schedule's over them (`CONNECTIONS`)."""
+    schedule's over them (`CONNECTIONS`), and its egress capacity a phase in bits (`EGRESS`)."""
     params = case["params"]
     if "windows" in params and int(params["windows"]) != phases:
         raise ValueError(f"the case's period has {params['windows']} execution phases, and its answer {phases}")
@@ -332,7 +357,9 @@ def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
         raise ValueError(f"the case's {len(caps)} caps aren't its schedule's (Schedule.caps: egress_cells = "
                          f"{s['egress_cells']} for each of its lanes · m · T = {n} connections), which the period's "
                          "check refuses")
-    return Fraction(int(s["window"]) * int(s["bucket_ms"]), 1000), n
+    T = int(s["window"])
+    cells = min(int(s["lanes"]) * int(s["slots"]) * T, n // phases * int(s["egress_cells"]))
+    return Fraction(T * int(s["bucket_ms"]), 1000), n, cells * 8 * int(s["cell_bytes"])
 
 
 def census_line(name: str, *fields: str) -> dict[str, Any]:
@@ -354,26 +381,31 @@ def census() -> dict[str, Any]:
             "world": {"links": LB.world_links(), "sources": world}}
 
 
-def cell(bits: Fraction, eps: Fraction, phases: int, where: str, rule: str | None = None) -> dict[str, Any]:
-    """A cell over ``phases`` execution phases, proved, or scaled by ``rule`` (`RULES`)."""
-    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "delta_net": delta_net(eps, phases),
+def cell(bits: Fraction, eps: Fraction, phases: int, where: str, capacity: int,
+         rule: str | None = None) -> dict[str, Any]:
+    """A cell over ``phases`` execution phases, each of ``capacity`` egress bits (`EGRESS`), proved, or scaled by
+    ``rule`` (`RULES`)."""
+    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits),
+            "share_of_capacity": float(bits / (capacity * phases)), "delta_net": delta_net(eps, phases),
             "vacuous": eps >= 1, "eps_per_phase_below": str(Fraction(1, phases)),
             "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
 
 
-def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) -> dict[str, Any]:
+def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int, capacity: int) -> dict[str, Any]:
     """The run's own period, proved, and each monitoring period's node, proved where the run's period covers it and
     else scaled, datacenter and world, scaled from the node's, each beside its figure over one execution phase (module
     docstring)."""
     refs = census()
     links = {"node": 1, **{k: v["links"] for k, v in refs.items()}}
     one, one_eps, period_s = Fraction(K, m), eps / m, m * phase_s
-    per_phase = cell(one, one_eps, 1, "run", None if m == 1 else "per-phase")
-    run = cell(Fraction(K), eps, m, "run") | {"seconds": str(period_s), "phases": m, "connections": connections,
-                                              "per_phase": per_phase}
+    per_phase = cell(one, one_eps, 1, "run", capacity, None if m == 1 else "per-phase")
+    run = cell(Fraction(K), eps, m, "run", capacity) | {"seconds": str(period_s), "phases": m,
+                                                        "connections": connections, "per_phase": per_phase}
     sources = {"per-phase": [FROM_BOUND], "run-to-period": [FROM_BOUND, FROM_SCHEDULE],
                **{k: v["sources"] for k, v in refs.items()}}
     out: dict[str, Any] = {"phase_s": str(phase_s), "weights": LB.WEIGHTS.label, "run": run,
+                           "egress": {"capacity_bits_per_phase": capacity, "is": EGRESS,
+                                      "served": {"missing": SERVED_EGRESS}},
                            "rules": {k: {"rule": text, "sources": sources[k]} for k, text in RULES.items()}}
     for name, seconds in LB.PERIODS.items():
         w = math.ceil(Fraction(seconds) / phase_s)
@@ -384,9 +416,9 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) 
             rule = where if where != "node" else None if covered else "run-to-period"
             params = {"phases": node, "phase_s": str(phase_s), "links": n,
                       "connections": str(Fraction(connections, m) * node * n)}
-            out[name][where] = cell(one * node * n, one_eps * node * n, node * n, where, rule) | {
+            out[name][where] = cell(one * node * n, one_eps * node * n, node * n, where, capacity, rule) | {
                 "parameters": params,
-                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, n, where, where)}
+                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, n, where, capacity, where)}
     return out
 
 
@@ -428,15 +460,28 @@ def caps(case: Mapping[str, Any]) -> list[int]:
     return [advice_bits(r) for r in json.loads(bytes.fromhex(case["commitment"]))["audits"]]
 
 
-def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int) -> dict[str, Any]:
-    """The figure of record (`OPEN`) from the period's public and the audits' caps ``ell``: ``K``, the checks the public
-    holds and those open, and the advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's
-    ``scans[j].tied``, else every audit: `TIED_ALL`)."""
+def premises(lock: Path) -> dict[str, Any]:
+    """The tight K's premises (`PREMISES`) as ``lock`` records them: each guarantee of `RESTS_ON` with its named
+    assumptions, or missing, and those ``open``: every assumption, and each guarantee the lock doesn't list."""
+    listed = json.loads(lock.read_text())["guarantees"]
+    found = {g: {"assumptions": list(listed[g]["assumptions"])} if g in listed else {"missing": "not in the lock"}
+             for g in RESTS_ON}
+    open_ = sorted({a for f in found.values() for a in f.get("assumptions", ())}
+                   | {g for g, f in found.items() if "missing" in f})
+    return {"is": PREMISES, "from": "Security/lean-audit.json guarantees[g].assumptions", "guarantees": found,
+            "open": open_}
+
+
+def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:
+    """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell`` and the tight K's premises
+    ``prem`` (`premises`): ``K``, the checks the public holds, what is open (those checks and the premises), and the
+    advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's ``scans[j].tied``, else every audit:
+    `TIED_ALL`)."""
     held = [c for c in CHECKS if c in (public.get("held") or ())]
-    open_ = [c for c in CHECKS if c not in held]
+    open_ = [c for c in CHECKS if c not in held] + list(prem["open"])
     tied = [s.get("tied") for s in public["scans"]]
     per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
-    return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN,
+    return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
             "advice": {"bits_per_phase": per,
                        "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}}
 
@@ -493,14 +538,15 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except ValueError as e:
         b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
+    prem = premises(LOCK)
     try:
         ell = caps(case)
-        b["of_record"] = of_record(answer["public"], ell, b["K"])
+        b["of_record"] = of_record(answer["public"], ell, b["K"], prem)
         advice["cap"] = {"ell_a": ell, "is": CAP}
     except (IndexError, KeyError, TypeError, ValueError) as e:
         b["of_record"] = advice["cap"] = {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}
     try:
-        phase_s, connections = schedule(case, b["phases"])
+        phase_s, connections, capacity = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:
         b["connections"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
@@ -509,9 +555,10 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     if "K" not in b["of_record"]:
         return rec | {"periods": {"missing": "no figure of record: " + b["of_record"]["error"]}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
-    rec["periods"] = periods(K, eps, m, phase_s, connections)
+    rec["periods"] = periods(K, eps, m, phase_s, connections, capacity)
     if K != b["K"]:
-        rec["periods_tight"] = {"conditional_on": b["of_record"]["open"], **periods(b["K"], eps, m, phase_s, connections)}
+        rec["periods_tight"] = {"conditional_on": b["of_record"]["open"],
+                                **periods(b["K"], eps, m, phase_s, connections, capacity)}
     return rec
 
 
@@ -528,7 +575,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
             "composite_error": {k: rec["composite_error"][k] for k in ("stated", "vacuous")},
             "connections": (b.get("connections") or {}).get("count"),
-            "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "delta_net", "how")},
+            "year_datacenter": None if year is None else {
+                k: year[k] for k in ("bits", "share", "share_of_capacity", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
