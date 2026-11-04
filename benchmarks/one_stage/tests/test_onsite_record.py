@@ -176,18 +176,16 @@ def commitment(*audits: dict) -> str:
 
 def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list[int] | None = None,
              schedule: dict = SCHEDULE, audits: tuple[dict, ...] = (NO_ADVICE,),
-             registration: dict | None = PUBLISHED, circuits: list[list[dict]] | None = None) -> Path:
+             registration: dict | None = PUBLISHED) -> Path:
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
     ``schedule``, whose caps are the schedule's (`Schedule.caps`) unless given, and whose commitment holds ``audits``'
-    registrations, each audit's params pinning its ``circuits``, none unless given, with ``registration`` its published
-    advice registration, none where None."""
+    registrations, with ``registration`` its published advice registration, none where None."""
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
     if caps is None:
         caps = [schedule["egress_cells"]] * (schedule["lanes"] * windows * schedule["window"])
-    pins = [{"circuits": c} for c in circuits] if circuits is not None else [{} for _ in audits]
     out = served_out(tmp_path, network=network_row(public), work=pouw,
                      case={"commitment": commitment(*audits), "evidence": "00",
-                           "params": {"audits": pins, "windows": windows, "cells": caps, "schedule": schedule}},
+                           "params": {"windows": windows, "cells": caps, "schedule": schedule}},
                      composites={"remote": remote_composite()})
     (out / "machine.txt").write_text(f"ubuntu\n{NODE}\n{TREE}\n96\nserve dir /serve/d\n")
     (out / "verdicts.txt").write_text('THE NETWORK CERTIFIER {"rc": 1, "verdict": "error"}\nRECORD {}\n'
@@ -810,23 +808,6 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
     assert all(v["present"] for v in OR.record(out)["reproof"]["inputs"].values() if v["in"] == "OUT")
     assert OR.record(served_out(tmp_path / "rehearsal"))["reproof"]["kept"] == OR.REPROOF_KEPT
     assert got["copy"] == {"missing": OR.NO_COPY}
-
-
-def test_the_record_lists_each_tied_audits_circuit_files_public_by_the_digests_the_periods_params_pin(tmp_path):
-    """The period check reads C-Flock's circuit file of each template a tied audit's Program batches, held to the
-    SHA-512 its params pin: the record lists them, public, by those pins in template order, each file in OUT by its pin
-    and whether the run wrote it; with none pinned they're missing with why, and a pin that isn't a SHA-512 is the
-    params' error, never a path."""
-    pins = [[{"template": "Int8RowQuant", "sha512": "ab" * 64}, {"template": "Rms", "sha512": "cd" * 64}]]
-    out = accepted(tmp_path / "pinned", circuits=pins)
-    (out / OR.CIRCUITS).mkdir(parents=True)
-    (out / OR.CIRCUITS / f"{'ab' * 64}.txt").write_text("flock-ir-unit/v2")
-    assert OR.record(out)["bound"]["circuits"] == {"public": True, "audits": [[
-        {"template": "Int8RowQuant", "sha512": "ab" * 64, "file": f"{OR.CIRCUITS}/{'ab' * 64}.txt", "present": True},
-        {"template": "Rms", "sha512": "cd" * 64, "file": f"{OR.CIRCUITS}/{'cd' * 64}.txt", "present": False}]]}
-    assert OR.record(accepted(tmp_path / "none"))["bound"]["circuits"] == {"missing": OR.NO_CIRCUITS}
-    bad = OR.record(accepted(tmp_path / "bad", circuits=[[{"template": "Rms", "sha512": "../x"}]]))["bound"]
-    assert bad["circuits"] == {"error": f"{OR.CASE} params: ValueError: template 'Rms''s pin '../x' isn't a SHA-512"}
 
 
 def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_by_path_alone(tmp_path):
