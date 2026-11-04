@@ -1,5 +1,6 @@
 import Properties.Pouw.PearlPlusDraw
 import Proofs.Properties.Pouw.Commit
+import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # Pearl+'s run draw (`Properties.Pouw.PearlPlusDraw`)
@@ -9,7 +10,12 @@ import Proofs.Properties.Pouw.Commit
 is `uniformOn` of the stream at `("u", j)`. Over their running sums (`runSums`) `bisectRight` finds the unit the integer
 falls in (`pick_posOf`), the unit `finSigmaFinEquiv` numbers that ticket on (`ticketAt_fst`): both count every unit's
 weight before it and skip a unit of none. Where no ticket holds weight, the filter keeps none and the draw is empty.
-`CoinBytesGiveUniformTickets` is a `sorry` stub so far.
+
+`CoinBytesGiveUniformTickets`, by counting. `uniformOn` of a stream's bytes is C-Flock's rejection sampler on them
+(`uniformOn_bytesOf`, through `DrawExec.uniform_streamOf`), so at most `256^L / W` streams of `L` bytes give each
+integer below `W` (`card_uniformOn_le`, `DrawExec.uniformL_le` at one value). The streams that number tickets in `E` lie
+in the union over `E`'s tickets `c` of the products of those sets, each of at most `(256^L / W)^t` streams, and the
+tickets number `W^t` (`card_ticket_total`). Where `W^t` is 0 there is no ticket to number and no stream in the event.
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -17,6 +23,8 @@ namespace Properties.Pouw.PearlPlus
 open PouwCommit PouwCheck.PearlPlus
 
 open Finset
+
+open scoped ENNReal
 
 /-! ## Running sums, positive tickets and the ticket a number falls in -/
 
@@ -242,6 +250,117 @@ theorem drawIsOnItsStreams : DrawIsOnItsStreams := by
   rw [toOption_drawStep]
   exact pick_eq tk _ fun r h => uniformOn_lt (Nat.pos_of_ne_zero hW) h
 
-theorem coinBytesGiveUniformTickets : CoinBytesGiveUniformTickets := sorry
+/-! ## The coin bytes -/
+
+open FlockSoundness.Audit.DrawExec (bsOf uniformL)
+
+/-- `uniformOn` of a stream's bytes is the rejection sampler on them. -/
+theorem uniformOn_bytesOf {L : ℕ} (s : Fin L → Fin 256) (n : ℕ) :
+    FlockSoundness.Randomness.uniformOn n (Properties.SampledProofs.bytesOf s) =
+      (uniformL n (L + 1) (bsOf s)).map Prod.fst := by
+  have h := FlockSoundness.Audit.DrawExec.uniform_streamOf s n (L + 1) 0 (Nat.zero_le _)
+  rw [List.drop_zero] at h
+  have hb : Properties.SampledProofs.bytesOf s = FlockSoundness.Audit.Law.streamOf s := rfl
+  unfold FlockSoundness.Randomness.uniformOn
+  rw [hb, FlockSoundness.Audit.DrawExec.size_streamOf]
+  revert h
+  cases uniformL n (L + 1) (bsOf s) with
+  | none => intro h; rw [h]; rfl
+  | some p =>
+    obtain ⟨r, rest⟩ := p
+    rintro ⟨q, -, -, h⟩
+    rw [h]
+    rfl
+
+/-- **At most `256^L / n` streams of `L` bytes give each integer below `n`.** -/
+theorem card_uniformOn_le {L n v : ℕ} (hv : v < n) :
+    (univ.filter fun s : Fin L → Fin 256 =>
+      FlockSoundness.Randomness.uniformOn n (Properties.SampledProofs.bytesOf s) = some v).card * n ≤ 256 ^ L := by
+  classical
+  have hn : 0 < n := by omega
+  have hQ : ∀ r < n, ∀ ℓ, Verity.Game.prCoin (fun _ : Fin ℓ → Fin 256 => r = v) ≤ if r = v then 1 else 0 := by
+    intro r _ ℓ
+    by_cases hr : r = v
+    · rw [ite_eq_left hr]; exact FlockSoundness.Audit.DrawExec.prCoin_le_one _
+    · simp only [hr, ite_false]; exact (Verity.Game.prCoin_false).le
+  have hle := FlockSoundness.Audit.DrawExec.uniformL_le n hn (fun r _ => r = v) _ hQ (L + 1) L
+  rw [Finset.sum_ite_eq' (range n) v (fun _ => (1 : ℝ≥0∞)), ite_eq_left (Finset.mem_range.2 hv)] at hle
+  have hev : (fun g : Fin L → Fin 256 => ∃ r rest, uniformL n (L + 1) (bsOf g) = some (r, rest) ∧ r = v) =
+      fun s => FlockSoundness.Randomness.uniformOn n (Properties.SampledProofs.bytesOf s) = some v := by
+    funext s
+    rw [uniformOn_bytesOf]
+    apply propext
+    cases uniformL n (L + 1) (bsOf s) with
+    | none => simp
+    | some p => obtain ⟨r, rest⟩ := p; simp [eq_comm]
+  rw [hev, Verity.Game.prCoin_eq_card] at hle
+  simp only [Fintype.card_fun, Fintype.card_fin, Nat.cast_pow, Nat.cast_ofNat] at hle
+  have hc : ((256 : ℝ≥0∞) ^ L) ≠ 0 := by positivity
+  have hc' : ((256 : ℝ≥0∞) ^ L) ≠ ⊤ := ENNReal.pow_ne_top (by norm_num)
+  rw [ENNReal.div_le_iff hc hc'] at hle
+  have hn0 : (n : ℝ≥0∞) ≠ 0 := by exact_mod_cast hn.ne'
+  have := mul_le_mul_of_nonneg_right hle (by simp : (0 : ℝ≥0∞) ≤ n)
+  rw [mul_comm (1 / (n : ℝ≥0∞)), mul_assoc, one_div, ENNReal.inv_mul_cancel hn0 (ENNReal.natCast_ne_top n),
+    mul_one] at this
+  exact_mod_cast this
+
+/-- The run's tickets number its total `W`. -/
+theorem card_ticket_total (tk : List ((ℕ × ℕ) × ℕ)) :
+    Fintype.card (_root_.Pouw.Ticket (weightsOf tk) tk.length) = ticketTotal tk := by
+  rw [Fintype.card_sigma]
+  simp only [Fintype.card_fin]
+  exact sum_weightsOf tk
+
+theorem coinBytesGiveUniformTickets : CoinBytesGiveUniformTickets := by
+  intro tk t E
+  classical
+  set n := ticketTotal tk with hn
+  set L := drawBytes tk
+  set A : ℕ → Finset (Fin L → Fin 256) := fun v =>
+    univ.filter fun s => FlockSoundness.Randomness.uniformOn n (Properties.SampledProofs.bytesOf s) = some v with hA
+  set S := univ.filter fun g : Fin t → Fin L → Fin 256 =>
+    ∃ c : Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length,
+      (∀ j, FlockSoundness.Randomness.uniformOn n (Properties.SampledProofs.bytesOf (g j)) =
+        some (finSigmaFinEquiv (c j)).val) ∧ E c with hS
+  have hsub : S ⊆ (univ.filter E).biUnion fun c => Fintype.piFinset fun j => A (finSigmaFinEquiv (c j)).val := by
+    intro g hg
+    obtain ⟨c, hc, hE⟩ := (mem_filter.1 hg).2
+    exact mem_biUnion.2
+      ⟨c, mem_filter.2 ⟨mem_univ _, hE⟩, Fintype.mem_piFinset.2 fun j => mem_filter.2 ⟨mem_univ _, hc j⟩⟩
+  have hprod : ∀ c : Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length,
+      (∏ j, (A (finSigmaFinEquiv (c j)).val).card) * n ^ t ≤ (256 ^ L) ^ t := by
+    intro c
+    have h1 : n ^ t = ∏ _j : Fin t, n := by simp
+    have h2 : (256 ^ L) ^ t = ∏ _j : Fin t, 256 ^ L := by simp
+    rw [h1, h2, ← Finset.prod_mul_distrib]
+    refine Finset.prod_le_prod fun j _ => card_uniformOn_le ?_
+    exact lt_of_lt_of_eq (finSigmaFinEquiv (c j)).isLt (sum_weightsOf tk)
+  have hcount : S.card * n ^ t ≤ (univ.filter E).card * (256 ^ L) ^ t := by
+    calc S.card * n ^ t
+        ≤ (∑ c ∈ univ.filter E, (Fintype.piFinset fun j => A (finSigmaFinEquiv (c j)).val).card) * n ^ t :=
+          Nat.mul_le_mul_right _ ((card_le_card hsub).trans card_biUnion_le)
+      _ = ∑ c ∈ univ.filter E, (∏ j, (A (finSigmaFinEquiv (c j)).val).card) * n ^ t := by
+          rw [Finset.sum_mul]
+          simp only [Fintype.card_piFinset]
+      _ ≤ ∑ c ∈ univ.filter E, (256 ^ L) ^ t := Finset.sum_le_sum fun c _ => hprod c
+      _ = (univ.filter E).card * (256 ^ L) ^ t := by rw [Finset.sum_const, smul_eq_mul]
+  unfold _root_.Pouw.pr
+  have hcl : Fintype.card (Fin t → Fin L → Fin 256) = (256 ^ L) ^ t := by
+    simp only [Fintype.card_fun, Fintype.card_fin]
+  have hcr : Fintype.card (Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length) = n ^ t := by
+    rw [Fintype.card_fun, card_ticket_total, Fintype.card_fin]
+  rw [hcl, hcr]
+  have hgoal : (S.card : ℝ) / ((256 ^ L) ^ t : ℕ) ≤ ((univ.filter E).card : ℝ) / (n ^ t : ℕ) := by
+    rcases Nat.eq_zero_or_pos (n ^ t) with h0 | hpos
+    · have : IsEmpty (Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length) :=
+        Fintype.card_eq_zero_iff.1 (hcr.trans h0)
+      have hS0 : S = ∅ := Finset.eq_empty_of_forall_notMem fun g hg => by
+        obtain ⟨c, -⟩ := (mem_filter.1 hg).2
+        exact isEmptyElim c
+      rw [hS0, Finset.card_empty, Nat.cast_zero, zero_div]
+      positivity
+    · rw [div_le_div_iff₀ (by positivity) (by exact_mod_cast hpos)]
+      exact_mod_cast hcount
+  convert hgoal
 
 end Properties.Pouw.PearlPlus
