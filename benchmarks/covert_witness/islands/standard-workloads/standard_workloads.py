@@ -27,23 +27,23 @@ at the console's default policy (`CONSOLE`, te_core.policy's: one full session o
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
 has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
-algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
-them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_no_cell, the fresh-products figure
-without P-cell, the term being the figure with it, blocks holding whole multiply cells) and reading B's token and
-decoding forms. `capture_code` is published's, the VERSION of the code that wrote the row's trace (null where the
-trace records none, one from before te_core 4.12.14, or the row has no trace). `rho_inputs` holds
-`KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
-any (c, k), and beside them te_core.panels' `FRESH`, the fresh-products term over c at each k of the dial its products
-are classified at (null for a run with no product rows), which the console's port multiplies by c; `build` refuses a
+algorithm_policy's cell of the terms the max takes (the products term the theorem of record's ρ_HE, given (H) and (E)),
+its `partial` and `why` where published sets them, and, beside them, the sensitivities `SENSITIVITIES`: published's
+(reduction, update and fresh_old, the old products figure, which rests on P-width extended, false on honest circuits)
+and reading B's token and decoding forms. `capture_code` is published's, the VERSION of the code that wrote the
+row's trace (null where the trace records none, one from before te_core 4.12.14, or the row has no trace).
+`rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives
+the dial's ρ at any (c, k), and beside them te_core.panels' `FRESH`, the old figure and the products term over c at
+each k of the dial its products are classified at ([fresh_old/c, term/c]; null for a run with no product rows), which
+the console's port multiplies by c; `build` refuses a
 row whose rho_inputs miss formalism.at's ρ at either point or whose token dials miss its measured tokens
 (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
 assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
-`POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
-the console's default, or assumed with te_core's reason or where untraced steps that update count none, where the
-bound can't price them (a void term), why in plain words (`unpriced`), and where the serving block's k leaves it
-unmeasured. The words the builder adds there and in the note name no code (`CODE`): the
+`POINTS` rests on it (`held`). Beside `KEYS`, `products` is the products kind's input (`products`): measured at
+the console's default, or assumed with te_core's reason or where untraced steps that update count none, and where the
+serving block's k leaves it unmeasured. The words the builder adds there and in the note name no code (`CODE`): the
 code is training's slowdown code, and only te_core's reasons, which the builder relays as they are, are te_core's to
 word.
 
@@ -112,8 +112,8 @@ BOUND = ("terms", "max", "binding", "unmeasured", "sensitivities")
 ROWS = HERE / "rows.json"
 #: a modelled row's run cell, before what the model is: no run measures the workload, so no trace
 MODELLED = "modelled: no trace"
-#: how a note cites stored tables: a research run's out/ (`cite`), or an art
-TABLES = re.compile(r" Tables (?:run:r\d{8}-\d{6}-[0-9a-f]{4}/out/\S+|art:[0-9a-f]{64})\.")
+#: how a note cites stored tables: their path in a research run's out/ (`cite`)
+TABLES = re.compile(r" Tables run:r\d{8}-\d{6}-[0-9a-f]{4}/out/\S+\.")
 FP4 = "float4_e2m1fn_x2"
 GEMMS = ("mm", "addmm", "bmm")
 #: each column's te_core quantities (algorithm_policy's `LABELLED`, and the two 4.x terms)
@@ -372,43 +372,14 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
     return out | (override or {})
 
 
-def unpriced(b: dict) -> str | None:
-    """Why the bound can't price the run's fresh products, in plain words, where the one bound `b` at a point has their
-    term void (None where it hasn't; formalism.FRESH_VOID says it in full): how many of the step's counted products
-    a cycle with no fixed point feeds, and the best figure on a set of the others with the share of the step's fresh
-    multiplications it keeps, a lower bound, or that none has one, so they add nothing to the row's ρ."""
-    if "fresh_products" not in b["void"]:
-        return None
-    fresh, term = b["inputs"]["fresh_products"], b["terms"]["fresh_products"]
-    n, fed, kept = fresh["products"], fresh["void"]["diverged_fed"], fresh["void"]["kept_macs_share"]
-    counted = f"the step counts {n} product{'s' * (n != 1)} whose two operands both depend on the update"
-    if fed:
-        who = ("it is" if n == 1 else "every one of them is" if fed >= n else
-               f"{fed} of them {'is' if fed == 1 else 'are'}")
-        why = (f"{counted}, and {who} fed by a cycle of products whose outputs make other products' operands whole; at "
-               f"the point's block size each pass round the cycle makes more operand entries whole than it reads, so "
-               f"the count compounds without limit")
-    else:
-        why = f"{counted}, and no set of them has a proved cap on how many of them a block does"
-    if term is not None:
-        return (f"{why}; the best set of the others gives {algorithm_policy.num(term)}"
-                + ("" if kept is None else f" on {kept:.1%} of the step's fresh multiplications")
-                + ", a lower bound, which the row's slowdown takes where it is the largest")
-    left = ("; no product is left to price" if fed >= n else "; no set of the others has a proved cap either" if fed
-            else "")
-    return (f"{why}{left}, so {'it adds' if n == 1 else 'they add'} nothing to the row's slowdown, the largest figure "
-            f"the other kinds give, floored at 1")
-
-
 def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> str:
-    """The fresh-products kind's input, the run's products of two fresh operands, as the one bound `b` read them at
-    each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where unmeasured, where
-    the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where `left`, `untraced`'s
-    steps but those that update nothing, have none, te_core counting the traced steps' alone); where the bound can't
-    price them at a point (their term void), why in plain words (`unpriced`); and where unmeasured at the serving
-    block, te_core's reason."""
+    """The products kind's input, the run's products whose two operands both depend on the update, as the one bound
+    `b` read them at each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where
+    unmeasured, where the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where
+    `left`, `untraced`'s steps but those that update nothing, have none, te_core counting the traced steps' alone);
+    and where unmeasured at the serving block, te_core's reason."""
     con, srv = b["console"], b["served"]
-    if (why := con["unmeasured"].get("fresh_products")) is not None and "fresh_products" not in con["void"]:
+    if (why := con["unmeasured"].get("fresh_products")) is not None:
         return f"assumed: {why}" + (_UNTRACED if rounds else "")
     stand = con["inputs"]["fresh_products"].get("stand_in")
     said = [f"{formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced structures)"
@@ -418,17 +389,8 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
         said.append(f"none on {len(left)} untraced step{'s' if len(left) > 1 else ''} ({'; '.join(left[:3])}{more}), "
                     f"the slowdown code counting the traced steps' products alone")
     out = f"assumed: {'; and '.join(said)}" if said else "measured"
-    here, there = unpriced(con), unpriced(srv)
-    off = srv["unmeasured"].get("fresh_products") if there is None else None
-    if here is not None:
-        out += (f"{'; and' if said else ', but'} the bound can't price them "
-                f"{'at either point' if there == here else _DEFAULT}: {here}")
-    elif not said and (there is not None or off is not None):
-        out += f" {_DEFAULT}"
-    if there is not None and there != here:
-        out += f"; at the serving block, the bound can't price them: {there}"
-    elif off is not None:
-        out += f"; at the serving block, {off}"
+    if (off := srv["unmeasured"].get("fresh_products")) is not None:
+        out += f"{'' if said else f' {_DEFAULT}'}; at the serving block, {off}"
     return out
 
 
@@ -566,20 +528,17 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
 
 
 def note(p: dict, tables: str | None = None) -> str:
-    """The panel's note, its readings as its rows have them, the fresh-products figure with or without P-cell as the
-    term takes it (formalism's `P_CELL`) and the other beside it, and `tables` the stored tables (`cite`'s, or an
-    art)."""
+    """The panel's note: its readings as its rows have them, the products term the theorem of record's ρ_HE and the old
+    figure beside it (published's `fresh_old`), the points, and `tables` the stored tables (`cite`'s)."""
     (c, k), (cs, ks), (into, out) = POINTS["console"], POINTS["served"], policy.CONSOLE_SESSION
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
     how = ("reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else
            "reading A, one bound over the valid kinds (null: unmeasured)")
-    on = formalism.P_CELL
-    cell = (f"Fresh products {'assume' if on else 'do not assume'} blocks hold whole multiply cells (P-cell); kinds' "
-            f"{formalism.CELL_SENSITIVITIES[-1]} is the figure {'without' if on else 'with'}.")
-    return (f"Training's slowdown code {VERSION}: {how}. {cell} All but rho_served at the console's default: c = "
-            f"{algorithm_policy.num(c, 5)} gates, one full {into:,}-in, {out:,}-out session of the "
-            f"{policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. rho_served at the serving "
-            f"block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,})." + (f" Tables {tables}." if tables else ""))
+    return (f"Training's slowdown code {VERSION}: {how}. Products term: rho_HE (theorem of record, given (H), (E)); "
+            f"kinds' fresh_old, the old term, rests on P-width extended, false on honest circuits. All but rho_served "
+            f"at the console's default: c = {algorithm_policy.num(c, 5)} gates, one {into:,}-in, {out:,}-out session "
+            f"of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. rho_served at the "
+            f"serving block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,})." + (f" Tables {tables}." if tables else ""))
 
 
 def refused(p: dict) -> list[str]:
