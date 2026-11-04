@@ -122,7 +122,8 @@ def _ident(s: str) -> str:
     return s + "_" if keyword.iskeyword(s) else s
 
 
-def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor):
+def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW,
+                example_batch: torch.Tensor) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
@@ -183,7 +184,7 @@ class StepSurvey:
 
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep",
-                exported=None) -> DeriveReport | StepSurvey:
+                exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
     """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `exported`:
     `export_step`'s result. `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole
     (`rules.training_survey.survey`)."""
