@@ -3,7 +3,7 @@ import SampledProofs.Bits
 import SampledProofs.Bound
 import Definitions.Claims.Sampling.Strata
 import Definitions.NetworkCertifier.PeriodConditions
-import Definitions.NetworkCertifier.Tied
+import Properties.NetworkScan.Flattens
 
 /-!
 # An accepted scan's incorrect sets commit at most the check's `faulty_bits` (`NetTiming.WindowsPlaced`)
@@ -17,12 +17,10 @@ one egress unit commits (`scanOf`). `ScanWindowsPlaced` says that this number is
 statements are laid out as `SampledProofs.Bits` lays out a sampled statement's gates (`StmtBits`), wherever the audit's
 bound holds (`WrongBounds`).
 
-* `gateOf`, `memberProg`: Bits' Boolean-profile program of a member, as a sampling statement's.
-* `LaidOut s P ms κ`: the statement `s` and its partition `P` are the members `ms` laid out by Bits at the constants
-  `κ`: `s`'s gates are the members' programs side by side, and each of `P`'s proof blocks is a member's unit's
-  (`Bits.blockOf`), at the member's first position (`Bits.base`).
-* `StmtBits D`: every statement `D` parses, with its partition, is laid out by Bits from members each a template of its
-  descriptor's Program (`Bits.check`, at a template node of the root, `templateNodes`).
+* `StmtBits D`: every statement `D` parses is its audit's members' joint program (`Properties.NetworkScan.Flattens`),
+  each member a template of its descriptor's Program that Bits lays out (`Bits.check`, at a template node of the root,
+  `templateNodes`), and each of its partition's proof blocks is a member's unit's (`Bits.blockOf`, at the deployed
+  constants), at the member's first position (`Bits.base`).
 * `WrongBounds s P δ b`: each possible incorrect set of `s` at `δ` holds at most `b` proof blocks. It is the sampled
   leg's: the audit's answer publishes `b` (`SampledProofs.Bound.boundOf`), and `WrongBoundsDrawn` gives it at a strata
   draw. The period check reads the answer's `bound` and not the draw, so `ScanWindowsPlaced` takes it as it stands.
@@ -37,41 +35,24 @@ bound holds (`WrongBounds`).
 namespace Properties.NetworkPeriod
 
 open NetworkCheck.Period (Schedule Scan scanOf templateNodes)
-open SampledProofs.Bits (LGate Members keyProg blockOf base)
+open NetworkCheck.Circuit (templateDef)
+open SampledProofs.Bits (Members keyProg blockOf base)
+open Properties.NetworkScan (Flattens consts)
 open Claims.Sampling
 
-/-- Bits' Boolean-profile gate as a sampling statement's, constructor for constructor. -/
-def gateOf : LGate → BGate
-  | .input => .input
-  | .const b => .const b
-  | .not i => .not i
-  | .and ws => .and ws
-  | .xor ws => .xor ws
-
-/-- **A member's program** at the constants `κ`, as a sampling statement's: its circuit file's key program over its
-units, lowered to the Boolean profile (`Bits.prog`). -/
-def memberProg (ci : Flock.Circuit × Array ℕ) (κ : ℕ → Option Bool) : Prog :=
-  let p := SampledProofs.Bits.prog (keyProg ci.1 ci.2.size) κ
-  ⟨p.1.map gateOf, p.2⟩
-
-/-- **The statement `s` and its partition `P` are the members `ms` laid out by Bits**, member `m` at the constants
-`κ m`: `s`'s gates are the members' programs side by side (`NetTiming.sideBySide`), and each of `P`'s proof blocks is
-some member's unit's (`Bits.blockOf`), at the member's first position (`Bits.base`). -/
-def LaidOut (s : AuditStatement) (P : Partition) (ms : Members) (κ : ℕ → ℕ → Option Bool) : Prop :=
-  s.prog = NetTiming.sideBySide ((List.range ms.length).map fun m => memberProg (ms.getD m default) (κ m)) ∧
-    ∀ v < P.blocks.length, ∃ m < ms.length, ∃ u < (ms.getD m default).2.size,
-      P.blocks.getD v [] =
-        (blockOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size) (κ m) u).map (base ms m + ·)
-
 /-- **The deployment lays its statements out as `SampledProofs.Bits` does**: every statement `D` parses has a
-descriptor C-Flock decodes to a Program `P` and a partition, and is laid out by Bits (`LaidOut`) from members each a
-template of `P`'s root (a template node's Definition, `templateNodes`) that Bits lays out (`Bits.check`). The deployed
-parser is the sampled verifier's, so it is that code's premise. -/
+descriptor C-Flock decodes to a Program `P` and a partition `Q`, its gates are some members' joint program (`Flattens`),
+each member a template of `P`'s root (a template node's Definition, `templateNodes`) that Bits lays out (`Bits.check`),
+and each of `Q`'s proof blocks is some member's unit's (`Bits.blockOf`, at the deployed constants `consts`), at the
+member's first position (`Bits.base`). The deployed parser is the sampled verifier's, so it is that code's premise. -/
 def StmtBits {Coin Col T : Type} (D : Deploy Coin Col T) : Prop :=
-  ∀ x s, D.parse x = some s → ∃ (P : Flock.Program.Prog) (Q : Partition) (ms : Members) (κ : ℕ → ℕ → Option Bool),
-    Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ D.partition s = some Q ∧ LaidOut s Q ms κ ∧
+  ∀ x s, D.parse x = some s → ∃ (P : Flock.Program.Prog) (Q : Partition) (ms : Members),
+    Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ D.partition s = some Q ∧ Flattens ms s.prog ∧
+      (∀ v < Q.blocks.length, ∃ m < ms.length, ∃ u < (ms.getD m default).2.size,
+        Q.blocks.getD v [] =
+          (blockOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size) consts u).map (base ms m + ·)) ∧
       ∀ m < ms.length, ∃ k ∈ templateNodes P,
-        SampledProofs.Bits.check (ms.getD m default).1 P (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).id = none
+        SampledProofs.Bits.check (ms.getD m default).1 P (templateDef P k).key = none
 
 /-- **The audit's bound holds at `δ`**: each possible incorrect set of the statement `s` at its partition `P` and `δ`
 (`NetTiming.faultySets`) holds at most `b` proof blocks. -/

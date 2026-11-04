@@ -1126,10 +1126,10 @@
     "SampledProofs.Bound",
     "Definitions.Claims.Sampling.Strata",
     "Definitions.NetworkCertifier.PeriodConditions",
-    "Definitions.NetworkCertifier.Tied"
+    "Properties.NetworkScan.Flattens"
    ],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`, its members' joint program `Properties.NetworkScan.Flattens`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
