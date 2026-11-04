@@ -550,53 +550,76 @@ pub struct LeanLevel0 {
     pub root: Vec<u8>,
 }
 
-/// The level-0 hiding of record on a firewalled table under the Lean session loop: the loop, on its frames port `addr`, draws
-/// the mask slot's words, level 0's hiding and salts from the OS for the host's packed witness `z` of the session's table
-/// `table` at `m`, writes the words into `z`'s mask slot, commits level 0 on them and keeps it for that table of the session
-/// `session` names ([`level0_session`]) until that session ends (`level0 SESSION TABLE M LEN` followed by `z`, answered
-/// `ok N R` and the samples then the root, its last `R` bytes). The loop samples a table's level 0 once a session and refuses
-/// a second request for it. `mask_words`, `extra_words`, `lanes` (the extra ones included), `t_pad` and `leaves` are the
-/// statement's sizes, which the answer must have.
+/// One table's part of a level-0 request to the Lean session loop ([`lean_level0`]): its statement's `m`, the host's packed
+/// witness `z`, and the statement's sizes the answer must have: `mask_words`, `extra_words`, `lanes` (the extra ones
+/// included), `t_pad` and `leaves`.
 #[cfg(feature = "sha512")]
-#[allow(clippy::too_many_arguments)]
-pub fn lean_level0(addr: &str, session: &str, table: usize, m: usize, z: &[F128], mask_words: usize, extra_words: usize, lanes: usize,
-                   t_pad: usize, leaves: usize) -> Result<LeanLevel0, String> {
+#[derive(Clone, Copy)]
+pub struct Level0Ask<'a> {
+    pub m: usize,
+    pub z: &'a [F128],
+    pub mask_words: usize,
+    pub extra_words: usize,
+    pub lanes: usize,
+    pub t_pad: usize,
+    pub leaves: usize,
+}
+
+/// The level-0 hiding of record on a session's firewalled tables under the Lean session loop: the loop, on its frames port
+/// `addr`, takes every table's packed witness in one request (`level0 SESSION M LEN …`, a pair a table in table order,
+/// followed by the witnesses), and only then draws each table's mask slot's words, level 0's hiding and salts from the OS,
+/// writes the words into the witness's mask slot, commits level 0 on them and keeps them for the session `session` names
+/// ([`level0_session`]) until that session ends. It answers each table in order, `ok N R` and the samples then the root, its
+/// last `R` bytes, or the request `err WHY`, nothing drawn. So no table's witness can depend on another table's draws. The
+/// loop takes one request a session, with every table's witness, and refuses any other.
+#[cfg(feature = "sha512")]
+pub fn lean_level0(addr: &str, session: &str, asks: &[Level0Ask]) -> Result<Vec<LeanLevel0>, String> {
     use std::io::{BufRead, Read, Write};
     let fail = |e: String| refused(format!("the Lean loop's level 0 at {addr}: {e}"));
     let tcp = std::net::TcpStream::connect(addr).map_err(|e| fail(e.to_string()))?;
     let _ = tcp.set_nodelay(true);
     let mut out = std::io::BufReader::new(tcp.try_clone().map_err(|e| fail(e.to_string()))?);
-    let body = f128_wire(z);
+    let bodies: Vec<Vec<u8>> = asks.iter().map(|a| f128_wire(a.z)).collect();
+    let sizes: String = asks.iter().zip(&bodies).map(|(a, b)| format!(" {} {}", a.m, b.len())).collect();
     let mut w = &tcp;
-    write!(w, "level0 {session} {table} {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
-    let mut line = String::new();
-    out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
-    let l = line.trim_end();
-    let (n, r) = match (l.strip_prefix("ok ").and_then(|v| v.split_once(' ')), l.strip_prefix("err ")) {
-        (Some((n, r)), _) => match (n.parse::<usize>(), r.parse::<usize>()) {
-            (Ok(n), Ok(r)) => (n, r),
-            _ => return Err(fail(format!("the answer {l:?}"))),
-        },
-        (_, Some(why)) => return Err(fail(why.to_string())),
-        _ => return Err(fail(format!("the answer {l:?}"))),
-    };
-    use flock_core::pcs::ligerito::zk::EXTRA_LANES;
-    let o_extra = 16 * mask_words;
-    let o_pads = o_extra + 16 * EXTRA_LANES * extra_words;
-    let o_salts = o_pads + 16 * lanes * t_pad;
-    let o_root = o_salts + crate::zk_hooks::SALT_BYTES * leaves;
-    if n != o_root + r || r == 0 {
-        return Err(fail(format!("{n} bytes with a {r}-byte root where the draws take {o_root}")));
+    write!(w, "level0 {session}{sizes}\n").map_err(|e| fail(e.to_string()))?;
+    for b in &bodies {
+        w.write_all(b).map_err(|e| fail(e.to_string()))?;
     }
-    let mut b = vec![0u8; n];
-    out.read_exact(&mut b).map_err(|e| fail(e.to_string()))?;
-    let words = |o: usize, k: usize| -> Vec<F128> {
-        (0..k).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
-                                 u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
-    };
-    Ok(LeanLevel0 { mask: words(0, mask_words), extra: (0..EXTRA_LANES).map(|e| words(o_extra + 16 * extra_words * e, extra_words)).collect(),
-                    pads: (0..lanes).map(|l| words(o_pads + 16 * t_pad * l, t_pad)).collect(),
-                    salts: b[o_salts..o_root].to_vec(), root: b[o_root..].to_vec() })
+    w.flush().map_err(|e| fail(e.to_string()))?;
+    use flock_core::pcs::ligerito::zk::EXTRA_LANES;
+    let mut got = Vec::with_capacity(asks.len());
+    for (j, a) in asks.iter().enumerate() {
+        let mut line = String::new();
+        out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
+        let l = line.trim_end();
+        let (n, r) = match (l.strip_prefix("ok ").and_then(|v| v.split_once(' ')), l.strip_prefix("err ")) {
+            (Some((n, r)), _) => match (n.parse::<usize>(), r.parse::<usize>()) {
+                (Ok(n), Ok(r)) => (n, r),
+                _ => return Err(fail(format!("table {j}'s answer {l:?}"))),
+            },
+            (_, Some(why)) => return Err(fail(why.to_string())),
+            _ => return Err(fail(format!("table {j}'s answer {l:?}"))),
+        };
+        let o_extra = 16 * a.mask_words;
+        let o_pads = o_extra + 16 * EXTRA_LANES * a.extra_words;
+        let o_salts = o_pads + 16 * a.lanes * a.t_pad;
+        let o_root = o_salts + crate::zk_hooks::SALT_BYTES * a.leaves;
+        if n != o_root + r || r == 0 {
+            return Err(fail(format!("table {j}: {n} bytes with a {r}-byte root where the draws take {o_root}")));
+        }
+        let mut b = vec![0u8; n];
+        out.read_exact(&mut b).map_err(|e| fail(e.to_string()))?;
+        let words = |o: usize, k: usize| -> Vec<F128> {
+            (0..k).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
+                                     u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
+        };
+        got.push(LeanLevel0 { mask: words(0, a.mask_words),
+                              extra: (0..EXTRA_LANES).map(|e| words(o_extra + 16 * a.extra_words * e, a.extra_words)).collect(),
+                              pads: (0..a.lanes).map(|l| words(o_pads + 16 * a.t_pad * l, a.t_pad)).collect(),
+                              salts: b[o_salts..o_root].to_vec(), root: b[o_root..].to_vec() });
+    }
+    Ok(got)
 }
 
 /// The ZK server's session loop of record: `flock-firewall session` (`Flock.Firewall.Session` in the Lean verifier) owns the
