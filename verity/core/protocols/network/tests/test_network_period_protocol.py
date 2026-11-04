@@ -126,6 +126,9 @@ ROWS_REFUSALS = {
     "rows-prog-untied": ("is no compute audit's output",) * 2,
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
+    "rows-state-misindexed": (PC.MISREAD,) * 2,
+    "rows-state-unpinned": (PC.UNPINNED,) * 2,
+    "rows-state-misanchored": (PC.MISANCHORED,) * 2,
 }
 
 
@@ -134,8 +137,10 @@ def test_the_rows_form_refuses_what_it_must(server):
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, and a scan whose state is not its wired audit's
-    `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
+    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
+    `SCAN_STATE`, one whose units read their state off the chain, one whose row 0 isn't opened to the empty state and
+    one whose tied audit reads the state off its slots' anchors: Lean and the mirror each refuse every one at that
+    check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -164,16 +169,16 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
     (`PC.UNSTATES`): a `SCAN_STATE` that skips or alters one of the scan's transitions (the scan's state entry, or the
     audit's, at another root or domain), no state entry on either side or the scan's under another name, the state of
     an audit the scan's `prog` isn't wired to, a root that is no string, and a second state entry at another root on
-    either side; and a mirror that skips the tie accepts what Lean refuses."""
-    unstate = PC.UNSTATES
-    for u in unstate:
+    either side; and a mirror that skips the tie accepts what Lean refuses, on the audit's side (the scan's own state
+    entry broken also leaves its row 0's opening under no root it states, which the mirror then refuses)."""
+    for u in PC.UNSTATES:
         monkeypatch.setattr(PC, "UNSTATES", (u,))
         for n in range(3):
             case = build("rows-state-untied", n, small=n % 2 == 0)
             assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
-    monkeypatch.setattr(PC, "UNSTATES", unstate)
+    monkeypatch.setattr(PC, "UNSTATES", ("audit", "audit-root", "audit-extra"))
     monkeypatch.setattr(PC, "_state_tied", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
@@ -206,6 +211,107 @@ def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
     monkeypatch.setattr(PC, "_held", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-circuit-swapped", n, small=True), server, PC.UNHELD)
+
+
+def test_a_scan_whose_units_read_their_state_off_the_chain_is_refused(server, monkeypatch):
+    """Ingress unit t reads `sin` at state leaf t and registers its `o1` at leaf t + 1, as the scan's registration
+    states (`PC.state_reads`), so the rows form refuses, in Lean and in the mirror and by name, each way those reads can
+    leave the chain while the state stays tied by root and domain (`PC.MISREADS`): a `sin` at leaf t + 1, an `o1` at
+    leaf t, a run over other units, the two runs swapped, the reads or a run missing or renamed, and a field no
+    natural; and a mirror that skips the reads accepts what Lean refuses."""
+    misreads = PC.MISREADS
+    for u in misreads:
+        monkeypatch.setattr(PC, "MISREADS", (u,))
+        for n in range(3):
+            case = build("rows-state-misindexed", n, small=n % 2 == 0)
+            assert PC.MISREAD in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.MISREAD in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "MISREADS", misreads)
+    monkeypatch.setattr(PC, "_state_read", lambda p, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-state-misindexed", n, small=True), server, PC.MISREAD)
+
+
+def test_a_scan_whose_row_0_is_not_the_empty_state_is_refused(server, monkeypatch):
+    """Row 0 of the scan's state, which no unit computes and the Programs anchored at bucket 0 read, must open to the
+    empty state, so the rows form refuses, in Lean and in the mirror and by name, each way the opening can fail
+    (`PC.UNPINS`): a state tree whose row 0 the prover chose, opened as committed, no opening, another salt or path,
+    another word count, leaf 1's opening, and a field of another type; and a mirror that skips the opening accepts
+    what Lean refuses."""
+    unpins = PC.UNPINS
+    for u in unpins:
+        monkeypatch.setattr(PC, "UNPINS", (u,))
+        for n in range(3):
+            case = build("rows-state-unpinned", n, small=n % 2 == 0)
+            assert PC.UNPINNED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNPINNED in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNPINS", unpins)
+    monkeypatch.setattr(PC, "_state_empty", lambda p, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-state-unpinned", n, small=True), server, PC.UNPINNED)
+
+
+def test_a_tied_audit_that_reads_the_state_off_its_slots_anchors_is_refused(server, monkeypatch):
+    """Lane l's slot at boundary b, unit l · nb + b of a tied audit's slot entries, computes its entry on the state
+    before its anchor's bucket, row b · every of the scan's state, so a period whose tied audits' circuit records read
+    the state there (`PC.anchor_audit`, a digit of radix 1 between or not) passes, and Lean accepts it with the mirror's
+    public; the rows form refuses, in Lean and in the mirror and by name, each way the read can leave the anchors while
+    every tie, wiring, state and hold stays (`PC.MISANCHORS`): the row after the anchor's, lane 1's slots at it, the
+    lanes' and boundaries' digits swapped, a read of the slot entries' output, a state parameter of T + 1 rows, and a
+    table over the state; and a mirror that skips the anchors accepts what Lean refuses."""
+    for n in range(3):
+        case = build("rows-state-anchored", n, small=n % 2 == 0)
+        c = PC.commitment(bytes.fromhex(case["commitment"]))
+        tied = {i for reg in c.windows for i in PC._tied_audits(c.audits, reg)}
+        assert tied and all("circuit" in case["params"]["audits"][i] for i in tied), (n, tied)
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    misanchors = PC.MISANCHORS
+    for u in misanchors:
+        monkeypatch.setattr(PC, "MISANCHORS", (u,))
+        for n in range(2):
+            case = build("rows-state-misanchored", n, small=n % 2 == 0)
+            assert PC.MISANCHORED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.MISANCHORED in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "MISANCHORS", misanchors)
+    monkeypatch.setattr(PC, "_anchored", lambda s, a: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-state-misanchored", n, small=True), server, PC.MISANCHORED)
+
+
+def test_a_tied_audit_is_charged_its_state_reads_held_only_at_the_scans_state(server, monkeypatch):
+    """A phase's term charges a tied audit its free inputs with its reads of the scan's state held (`state_free`) only
+    where its `SCAN_STATE` is the scan's state in every phase tied to it (`PC._state_held`), the root the scan's
+    registration's own: where each tied audit reads it at its slots' anchors (`rows-state-anchored`) each is charged its
+    `state_free`, below its `free`, and where the aimed phase ties a second audit whose `SCAN_STATE` is another
+    link-window's or none's (`rows-state-unheld`) that one is charged its `free` in every phase tied to it. Lean
+    accepts each with the mirror's public, and a mirror that holds every tied audit's reads, or none, gives another
+    public than Lean's."""
+    for m in ("rows-state-anchored", "rows-state-unheld"):
+        for n in range(3):
+            case = build(m, n, small=n % 2 == 0)
+            p, c = PC.params(case["params"]), PC.commitment(bytes.fromhex(case["commitment"]))
+            tied = [PC._tied_audits(c.audits, reg) for reg in c.windows]
+            held = {i: PC._state_held(c.audits, c.windows, i) for ts in tied for i in ts}
+            assert all(p.audits[i].state_free < p.audits[i].free for i in held), (m, n, p.audits)
+            assert all(held.values()) == (m == "rows-state-anchored"), (m, n, held)
+            want = [p.scan.free + sum(p.audits[i].state_free if held[i] else p.audits[i].free for i in ts)
+                    for ts in tied]
+            out = reference(case)
+            assert out["verdict"] == ACCEPT and [s["free"] for s in out["public"]["scans"]] == want, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+    for m, always in (("rows-state-unheld", True), ("rows-state-anchored", False)):
+        monkeypatch.setattr(PC, "_state_held", lambda audits, windows, i, always=always: always)
+        for n in range(2):
+            with pytest.raises(D.Mismatch) as x:
+                D.replay(PORT, build(m, n, small=True), server)
+            assert x.value.lean[0] == x.value.python[0] == ACCEPT, x.value
 
 
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
@@ -515,9 +621,10 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
     """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
-    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
-    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
-    than `16 · b`, and Lean's public is the mirror's."""
+    Program's units commits, its parameters and its return, read off the Program, not a proof block's 16-bit public
+    output: over honest clock-form periods whose audits' stand-in units take a 16-bit parameter and return 8 to 320
+    bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
+    mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)
