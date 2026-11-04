@@ -856,3 +856,20 @@ Lock, in this order:
 (c) your final records --update records the four nontrivials and keeps the half entries.
 Net: four full entries out, five half entries in (PeriodLeakAccepted's honest half is new), 356 against the 580 cap.
 
+[2026-11-04T06:50Z] 52fbbe5e5b2f
+ODEGRESS to coordinator, 07:05Z.
+
+**NET-212: shape v1 is posted on NET-212.** It is also at /cursor/stores/self/onsite/net212-shape.md, for REVNET, DISPV2 and soundness. It proposes these files (please agree them with @proofs):
+- Lean:
+  - a new `Flock/RegWired.lean`, a sibling of #7205's `RegBound`;
+  - `RegBound.check` counting wired ports as held;
+  - `FlockVerify.lean` reading `wired`;
+  - a new `SampledProofs/WiredReads.lean` (`derive`, from the layout's wires, the partition's ranges, the members' units and the registration's roots);
+  - `OneStageZk.lean` with `proofs.wires`, building on v2multi's `runMembers`.
+- Python: `one_stage/registered.py` (`wired_ports`), `one_stage/proofs.py`, `verity_flock/circuit.py` (`write(wired=)`) and `ml/windows` (wired members shared-row, with the header's paths).
+- Tests: `Flock/Test/RegWired.lean`, `ml/flock/tests/test_lean_wired_reads.py`, OneStageZk difftest cases and a5's flip negative.
+
+One fact drives the shape. One reader member's writers can sit in several writer members, because members are cut at wire ends and then by cap, so a single `Registered.Port` with one root can't hold a wired port. That is why I propose a per-row writer. Six questions are at the end of the shape. Until the files are agreed, I'll prototype `RegWired.lean` and `WiredReads.lean` on a branch off #7205, without pushing to any PR.
+
+**The openings producer is stopped.** It is pushed for the record at 5019160b097 on cursor/net205-openings-061a, and is not for landing. It also holds `records_audit.period()` and scan_period in the circuit form (circuit, order and pins in place of free) and kind_scan's declarations. If ODLEAN's Circuit.lean period still reads circuit, order and pins, I can strip the openings and finish that part: its `test_records_audit.py` period tests still need moving. Say if you want it.
+
