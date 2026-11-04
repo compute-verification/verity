@@ -33,6 +33,8 @@ ARMS = [
     ("70b", "56 at their least clip that clears, up to 30%", "r20261104-110454-943c", "70b-clip"),
     ("70b", "50 clipped up to 30%, layer 0 q, k, v and layer 1 q uncredited", "r20261104-110454-c096", "70b-op"),
     ("70b", "24 clipped at 5%, layer 0 q, k, v and layer 1 v uncredited", "r20261104-113440-42a5", "70b-op5"),
+    ("70b", "8 concentrated gate/up deflated by 32, layer 0 q, k, v and layer 1 v uncredited", "r20261104-140933-edd7",
+     "70b-defl"),
     ("70b", "design U, live weight noise f = 1 on q, k, v", "r20261104-112058-99e8", "70b-u2-w1"),
     ("70b", "design U, live weight noise f = 4 on q, k, v", "r20261104-112058-99e8", "70b-u2-w4"),
 ]
