@@ -2,7 +2,7 @@
 on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
 are the Lean verifier of record's (``sampled-proofs-verifier``, built first).
 
-    python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT
+    python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT [--lean build|EXE]
 
 The gate is this file's ``gate`` verb, a command in place of ``ssh research@vy-challenger-1`` (PEARLC_CHALLENGER_GATE):
 it runs `auditor.gate` as lane `LANE`'s gate key on the scratch host, and starts each opened session's challenger in a
@@ -21,10 +21,11 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 6. `served_verdicts.piece_row`: PoUW's row, composed of record when `pearlplus_of_record` holds.
 
 Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), sampled proofs' window
-registration and records audit (two files tied to W), and the Lean ``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``,
-copied from Pearl+'s answer; the node step that writes it is another lane's). Then, as a control, a second draw on the
-same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and the piece written
-after it composes the same row."""
+registration and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
+``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
+Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a
+second draw on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
+the piece written after it composes the same row."""
 from __future__ import annotations
 
 import argparse
@@ -171,16 +172,16 @@ def _alive_pid(pid: int) -> bool:
     return stat.exists() and stat.read_text().rsplit(")", 1)[1].split()[0] != "Z"
 
 
-def run(out: Path) -> int:
+def run(out: Path, lean: str | None = None) -> int:
     root = Path(tempfile.mkdtemp(prefix="pp-auditor-"))
     try:
-        return _run(out, root)
+        return _run(out, root, lean)
     finally:
         _stop(root)
         _logs(root, out)
 
 
-def _run(out: Path, root: Path) -> int:
+def _run(out: Path, root: Path, lean: str | None = None) -> int:
     from verity.core.protocols.pouw import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -215,7 +216,7 @@ def _run(out: Path, root: Path) -> int:
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
                                   "sampled_proofs": "registration.json chained after W and a records-audit summary tied to W",
-                                  "lean": "pearlplus-lean.json copied from Pearl+'s answer (the node step is PEARLLEAN's)"}}
+                                  "lean": "pearlplus-lean.json copied from Pearl+'s answer (--lean runs the node's step)"}}
 
     # 1. the lane's Pearl-C period
     if _cli(log, "period open", ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(piece),
@@ -278,10 +279,24 @@ def _run(out: Path, root: Path) -> int:
 
     # 6. the compose
     tie = ((answer.get("public") or {}).get("tie") or {}).get("record")
-    (piece / S.PEARLPLUS_LEAN).write_text(json.dumps({
-        "verdict": answer.get("verdict"), "reason": None, "commitment": answer.get("commitment"),
-        "source": (answer.get("profile") or {}).get("source"), "drawn": verified.get("draws"), "work": work,
-        "tie": {"record": tie}, "stand_in": True}))
+    if lean is None:
+        (piece / S.PEARLPLUS_LEAN).write_text(json.dumps({
+            "verdict": answer.get("verdict"), "reason": None, "commitment": answer.get("commitment"),
+            "source": (answer.get("profile") or {}).get("source"), "drawn": verified.get("draws"), "work": work,
+            "tie": {"record": tie}, "stand_in": True}))
+    else:
+        exe = lean
+        if lean == "build":
+            pkg = TREE / "verity" / "core" / "protocols" / "pouw" / "lean" / "pearlplus"
+            b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
+            log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
+            exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
+        _cli(log, "lean", ["benchmarks/pouw/pearl_c_vllm/served_passes.py", "lean", "--passes", str(served), "--verify",
+                           str(piece / "verify.json"), "--exe", exe, "--out", str(piece / S.PEARLPLUS_LEAN)])
+        del report["stand_ins"]["lean"]
+        held = json.loads((piece / "pearlplus-lean-check.json").read_text())
+        report["lean"] = {k: held.get(k) for k in ("exe", "exe_sha256", "argv", "rc", "stderr", "differ", "reason")} | {
+            "lean": {k: (held.get("lean") or {}).get(k) for k in ("verdict", "reason", "refused", "source", "work")}}
     audit = out / "sampled-proofs"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"previous": tie, "registered": [], "stand_in": True}))
@@ -341,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="verb", required=True)
     r = sub.add_parser("run")
     r.add_argument("--out", type=Path, required=True)
+    r.add_argument("--lean", help="the Lean verdict by served_passes.py lean with this pouw-pearlplus ('build': built in "
+                   "PouwCheck.PearlPlus's package) in place of the stand-in")
     gt = sub.add_parser("gate")
     gt.add_argument("--root", type=Path, required=True)
     gt.add_argument("words")
@@ -352,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
         return gate(a.root, a.words)
     if a.verb == "serve":
         return serve(a.root, a.session)
-    return run(a.out)
+    return run(a.out, a.lean)
 
 
 if __name__ == "__main__":
