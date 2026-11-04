@@ -43,8 +43,9 @@ connections k_sched and k_fail count, every one the schedule can carry (`CONNECT
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
-tight ℓ_{a,j} rests on (``held``, `CHECKS`) and Security's lock lists no named assumption of the guarantee it rests on
-(``premises``, `PREMISES`), and while one of either is ``open``, K plus ℓ_a + 1 bits for each audit tied to each
+tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
+`PREMISES` discharged by theorems in Security's lock that take no named assumption but a standing one, `STANDING`), and
+while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
 execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
@@ -163,7 +164,7 @@ CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audi
            "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
-           "performs both checks it rests on and the lock lists no open premise for it (`CHECKS`, `PREMISES`, `OPEN`)")
+           "performs both checks it rests on and none of its premises is open (`CHECKS`, `DISCHARGE`, `OPEN`)")
 SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
         "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
         "``faulty_entries``, every slot-entry bit E_w of each audit tied to j's scan that is drawn in part (charged, "
@@ -177,11 +178,41 @@ CHECKS = {"free": "each tied audit's free inputs computed from its Program's des
 LOCK = HERE.parents[1] / "Security" / "lean-audit.json"
 #: the guarantees the tight K rests on, by their names in `LOCK`
 RESTS_ON = ("NetTiming.SecurityProofs.PeriodLeakAccepted",)
-PREMISES = ("the premises the tight K rests on: each named assumption a guarantee of `RESTS_ON` takes as Security's "
-            "lock records it (its ``assumptions``), open until a Property proves it against the code and the guarantee "
-            "takes it no longer, and each such guarantee the lock doesn't list")
+#: each premise the tight K rests on, by the name ``open`` gives it: what it says, the theorems that discharge it at the
+#: deployed code by their names in `LOCK`'s guarantees (none named yet leaves it open), and the named assumptions of
+#: `RESTS_ON` it stands for, which its discharge decides
+PREMISES: dict[str, dict[str, Any]] = {
+    "wires-fit": {"is": "the wires part of BoundaryGates.Fits at the tied audit's statements: the decoder link, and the "
+                        "period check running Circuit.check",
+                  "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
+                                    "Properties.NetworkCertifier.circuitWiresFit",
+                                    "Properties.NetworkPeriod.rowsWiresChecked"), "assumes": ()},
+    "session-wires": {"is": "SessionWires: each sampled proof block's wired rows equal their writers', the period check "
+                            "running drawnOk on both openings as it reads them from the delivered session records. Its "
+                            "session half, that those are the committed rows, is SessionOpens and the binding, from the "
+                            "sampled leg (`sampled-leg`), never a named assumption",
+                      "discharged_by": ("Properties.NetworkCertifier.sessionWires_of",
+                                        "Properties.NetworkPeriod.rowsWiresDrawn"), "assumes": ()},
+    "free-count": {"is": "each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
+                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",), "assumes": ()},
+    "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
+                       "discharged_by": ("Properties.NetworkPeriod.rowsHeld",), "assumes": ()},
+    "circuit-held": {"is": "each tied audit's class circuit held",
+                     "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",), "assumes": ()},
+    "sampled-leg": {"is": "the sampled facts the period takes (KS, SessionOpens, the registered reads' openings) from the "
+                          "sampled leg's guarantee, one-stage v2's, whose verifier of record is Lean, as a hypothesis on "
+                          "the layer below: never SampledCodeRuns or another premise about the deployed Python",
+                    "discharged_by": (), "assumes": ()},
+}
+#: the named assumptions that may stand under the figure of record, each on an auditor-trusted device
+STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's"}
+DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
+             "is in Security's lock with no named assumption but a standing one (`STANDING`), and open while none is "
+             "named; and each named assumption of a guarantee of `RESTS_ON` that is neither standing nor a premise's, by "
+             "its own name, with each such guarantee the lock doesn't list. No premise about our own Python stands: "
+             "soundness is in Lean or rests on an auditor-trusted device")
 OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
-        "every check of `CHECKS` (the public's held) and the lock lists no open premise for it (`PREMISES`). While "
+        "every check of `CHECKS` (the public's held) and no premise of it is open (`DISCHARGE`). While "
         "either is open it is K plus ℓ_a + 1 bits for each audit tied to each execution phase's scan, beside that "
         "phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer than 2^(ℓ_a + 1) strings. The tight K's "
         "cells go beside the figure of record's, conditional on what is open (periods_tight)")
@@ -459,15 +490,25 @@ def caps(case: Mapping[str, Any]) -> list[int]:
 
 
 def premises(lock: Path) -> dict[str, Any]:
-    """The tight K's premises (`PREMISES`) as ``lock`` records them: each guarantee of `RESTS_ON` with its named
-    assumptions, or missing, and those ``open``: every assumption, and each guarantee the lock doesn't list."""
+    """The tight K's premises as ``lock`` records their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
+    the lock doesn't list (``missing``) and the named assumptions of those it does that don't stand (``assumes``), each
+    guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
+    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees the lock doesn't list."""
     listed = json.loads(lock.read_text())["guarantees"]
-    found = {g: {"assumptions": list(listed[g]["assumptions"])} if g in listed else {"missing": "not in the lock"}
+    found, open_ = {}, []
+    for name, p in PREMISES.items():
+        missing = [t for t in p["discharged_by"] if t not in listed]
+        assumes = sorted({a for t in p["discharged_by"] if t in listed for a in listed[t]["assumptions"]} - set(STANDING))
+        found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing, "assumes": assumes}
+        if missing or assumes or not p["discharged_by"]:
+            open_.append(name)
+    covered = set(STANDING) | {a for p in PREMISES.values() for a in p["assumes"]}
+    rests = {g: {"assumptions": list(listed[g]["assumptions"])} if g in listed else {"missing": "not in the lock"}
              for g in RESTS_ON}
-    open_ = sorted({a for f in found.values() for a in f.get("assumptions", ())}
-                   | {g for g, f in found.items() if "missing" in f})
-    return {"is": PREMISES, "from": "Security/lean-audit.json guarantees[g].assumptions", "guarantees": found,
-            "open": open_}
+    open_ += sorted({a for r in rests.values() for a in r.get("assumptions", ()) if a not in covered}
+                    | {g for g, r in rests.items() if "missing" in r})
+    return {"is": DISCHARGE, "from": "Security/lean-audit.json guarantees", "premises": found, "rests_on": rests,
+            "standing": STANDING, "open": open_}
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:

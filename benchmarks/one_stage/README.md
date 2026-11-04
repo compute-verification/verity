@@ -222,9 +222,10 @@ negatives.
   the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
   the figure of record's: K as the period's check states it only where its Lean verdict held both checks the tight
   ℓ_{a,j} rests on (each tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its
-  advice) and `Security/lean-audit.json` lists no named assumption of `PeriodLeakAccepted`, and while one of those is
-  open, K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside them, conditional on
-  what is open. The realized advice charge is private: the record states ℓ_{a,j} with its source,
+  advice) and none of its premises is open: each is discharged by theorems `Security/lean-audit.json` lists, taking no
+  named assumption but a standing one (an auditor-trusted device's), and no premise about our own Python stands. While
+  one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
+  them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it each audit's registered
   advice length ℓ_a as a cap, in no term of K, and `--advice-charge` states a test
   run's measurement beside the bound as that run's.

@@ -9,9 +9,9 @@ by SHA-512) the record states, beside its figure over one execution phase. A pub
 the clock form, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
 its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
 the bound as that run's. The figure of record, every period's cells included, is that K only where the verdict held
-both checks the tight ℓ_{a,j} rests on and the lock (a toy one in Security's lock's place) leaves no premise of its
-guarantee open, and otherwise charges ℓ_a + 1 bits for each tied audit of each phase, the tight K's cells beside it,
-conditional on what is open. A tied audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
+both checks the tight ℓ_{a,j} rests on and the lock (a toy one in Security's lock's place) lists every premise's
+discharge, taking no assumption but a standing one, and otherwise charges ℓ_a + 1 bits for each tied audit of each
+phase, the tight K's cells beside it, conditional on what is open, by name. A tied audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
 share of the schedule's egress capacity, and the served egress is missing. The run's `publish`
 leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
 accepted."""
@@ -63,16 +63,33 @@ TREE = "ab12" * 10
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
-#: the premises of a lock recording no named assumption for the guarantee the tight K rests on
-NO_PREMISES = {"is": OR.PREMISES, "from": "Security/lean-audit.json guarantees[g].assumptions",
-               "guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}, "open": []}
+#: a stand-in for the sampled leg's guarantee, which `PREMISES` names no discharge of yet, and that premise as it is
+SAMPLED_LEG = "Toy.SampledAuditsSound"
+SAMPLED_LEG_PREMISE = OR.PREMISES["sampled-leg"]
+
+
+def discharged() -> dict:
+    """``premises`` of a lock listing every discharge and each guarantee the tight K rests on, none with an assumption."""
+    found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "assumes": []}
+             for n, p in OR.PREMISES.items()}
+    return {"is": OR.DISCHARGE, "from": "Security/lean-audit.json guarantees", "premises": found,
+            "rests_on": {g: {"assumptions": []} for g in OR.RESTS_ON}, "standing": OR.STANDING, "open": []}
+
+
+def write_lock(f: Path, given: dict[str, list[str] | None] | None = None) -> None:
+    """A lock at ``f`` listing every discharge of `PREMISES` and each guarantee the tight K rests on with no named
+    assumption, each guarantee of ``given`` instead with the assumptions given, or unlisted where None."""
+    names = [t for p in OR.PREMISES.values() for t in p["discharged_by"]] + list(OR.RESTS_ON)
+    listed = {g: [] for g in names} | (given or {})
+    f.write_text(json.dumps({"guarantees": {g: {"assumptions": a} for g, a in listed.items() if a is not None}}))
 
 
 @pytest.fixture(autouse=True)
 def lock(tmp_path_factory, monkeypatch) -> Path:
-    """A lock in Security's lock's place recording each guarantee the tight K rests on with no named assumption."""
+    """A lock in Security's lock's place discharging every premise, the sampled leg's by `SAMPLED_LEG`."""
+    monkeypatch.setitem(OR.PREMISES, "sampled-leg", dict(OR.PREMISES["sampled-leg"], discharged_by=(SAMPLED_LEG,)))
     f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
-    f.write_text(json.dumps({"guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}}))
+    write_lock(f)
     monkeypatch.setattr(OR, "LOCK", f)
     return f
 
@@ -197,11 +214,11 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
-    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": NO_PREMISES,
+    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": discharged(),
                               "advice": {"bits_per_phase": [1], "tied": OR.TIED_ALL}}
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
     assert rec["advice_charge"]["cap"] == {"ell_a": [0], "is": OR.CAP}
-    assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN and "`PREMISES`" in OR.OPEN
+    assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN and "`DISCHARGE`" in OR.OPEN
     assert rec["periods"]["run"]["bits"] == KR and rec["periods_tight"]["run"]["bits"] == K
     assert rec["periods_tight"]["conditional_on"] == ["free", "circuit"]
     assert rec["periods"]["egress"] == {"capacity_bits_per_phase": CAPACITY, "is": OR.EGRESS,
@@ -235,24 +252,63 @@ def test_the_figure_of_record_is_the_tight_K_only_where_the_verdict_held_both_ch
     assert ("periods_tight" in rec) == bool(open_) and rec["periods"]["run"]["bits"] == of["K"]
 
 
-@pytest.mark.parametrize("guarantees, found", [
-    ({OR.RESTS_ON[0]: {"assumptions": ["NetTiming.Assumptions.B", "NetTiming.Assumptions.A"]}},
-     {OR.RESTS_ON[0]: {"assumptions": ["NetTiming.Assumptions.B", "NetTiming.Assumptions.A"]}}),
-    ({}, {OR.RESTS_ON[0]: {"missing": "not in the lock"}})])
-def test_a_premise_the_lock_leaves_open_keeps_the_figure_of_record_charged_with_both_checks_held(
-        tmp_path, lock, guarantees, found):
-    """Both checks held, and the lock records a named assumption of the guarantee the tight K rests on, or doesn't list
-    it: each is an open premise, so the figure of record still charges ℓ_a + 1 for the tied audit, and the tight K's
-    cells beside it are conditional on those premises; with one check open too, on both."""
-    lock.write_text(json.dumps({"guarantees": guarantees}))
-    open_ = sorted(a for f in found.values() for a in f.get("assumptions", ())) or list(OR.RESTS_ON)
-    rec = OR.record(accepted(tmp_path / "held", dict(PUBLIC, held=["free", "circuit"]), audits=(SERVED,)))
+def held_both(out: Path) -> dict:
+    """The figure of record of ``out``'s served audit, both checks held."""
+    return OR.record(accepted(out, dict(PUBLIC, held=["free", "circuit"]), audits=(SERVED,)))
+
+
+def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
+        tmp_path, lock, monkeypatch):
+    """The lock as Security's is today, listing the guarantee the tight K rests on and none of the theorems that
+    discharge its premises, and the sampled leg with no discharge named: every premise is open, by name, so the figure
+    of record charges ℓ_a + 1 for the tied audit, and the tight K's cells beside it are conditional on each."""
+    monkeypatch.setitem(OR.PREMISES, "sampled-leg", SAMPLED_LEG_PREMISE)
+    lock.write_text(json.dumps({"guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}}))
+    rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], open_, K + 2 ** 23 + 1)
-    assert of["premises"] == dict(NO_PREMISES, guarantees=found, open=open_)
-    assert rec["periods_tight"]["conditional_on"] == open_ and rec["periods_tight"]["run"]["bits"] == K
+    assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], list(OR.PREMISES), K + 2 ** 23 + 1)
+    assert [p["missing"] for p in of["premises"]["premises"].values()] == [
+        list(p["discharged_by"]) for p in OR.PREMISES.values()]
+    assert of["premises"]["premises"]["sampled-leg"]["discharged_by"] == []
+    assert rec["periods_tight"]["conditional_on"] == list(OR.PREMISES) and rec["periods_tight"]["run"]["bits"] == K
+    assert "SampledCodeRuns" in OR.PREMISES["sampled-leg"]["is"] and "Python" in OR.DISCHARGE
+
+
+@pytest.mark.parametrize("given, open_", [
+    ({}, []),
+    ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
+    ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
+    ({"Properties.NetworkCertifier.circuitCounts": None}, ["free-count"]),
+    ({OR.RESTS_ON[0]: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
+    ({OR.RESTS_ON[0]: ["Verity.Assumptions.TrustedHost"]}, []),
+    ({OR.RESTS_ON[0]: None}, list(OR.RESTS_ON))])
+def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_none_but_a_standing_assumption_taken(
+        tmp_path, lock, given, open_):
+    """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
+    stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of the guarantee the tight
+    K rests on that is neither standing nor a premise's, by its name, and that guarantee where the lock doesn't list
+    it. trusted-host stands. With one check open too, the tight K is conditional on both."""
+    write_lock(lock, given)
+    rec = held_both(tmp_path / "held")
+    of = rec["bound"]["of_record"]
+    assert (of["open"], of["K"], "periods_tight" in rec) == (open_, K + 2 ** 23 + 1 if open_ else K, bool(open_))
+    assert of["premises"]["open"] == open_
+    p = of["premises"]["premises"]
+    assert p["held-performed"]["assumes"] == (["NetTiming.Assumptions.SampledCodeRuns"] if "held-performed" in open_
+                                              else [])
+    assert p["free-count"]["missing"] == (["Properties.NetworkCertifier.circuitCounts"] if "free-count" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"]), audits=(SERVED,)))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
+
+
+def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
+    """The guarantee the tight K rests on takes the wires premise as a named hypothesis: discharged, it stays listed and
+    nothing is open; with one of its discharges missing, the premise is open, by its own name alone."""
+    monkeypatch.setitem(OR.PREMISES, "wires-fit", dict(OR.PREMISES["wires-fit"], assumes=("NetTiming.WiresFit",)))
+    write_lock(lock, {OR.RESTS_ON[0]: ["NetTiming.WiresFit"]})
+    assert held_both(tmp_path / "a")["bound"]["of_record"]["open"] == []
+    write_lock(lock, {OR.RESTS_ON[0]: ["NetTiming.WiresFit"], "Properties.NetworkCertifier.circuitWiresFit": None})
+    assert held_both(tmp_path / "b")["bound"]["of_record"]["open"] == ["wires-fit"]
 
 
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
