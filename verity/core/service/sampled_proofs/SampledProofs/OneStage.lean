@@ -127,7 +127,7 @@ private def logRecord (j : Json) : V Json := do
   return j
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the law: the stream's run reads them and refuses the law
-itself (`Run.run`, `shapes`). -/
+its rule names itself (`Run.run`, `bernoulli`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
@@ -249,12 +249,11 @@ def paramsParsed (j : Json) : V Params := do
       "windows is named in held (or pinned)")
   pure p
 
-/-- The parameters (`paramsParsed`), with every `bernoulli` law refused, at any `p`: the sampled audit's soundness
-statement covers none (at `0 < p < 1` its drawn count varies, and `p = 0` and `p = 1` it doesn't cover either). -/
+/-- The parameters (`paramsParsed`), with every `bernoulli` law refused, at any `p` (`Draw.bernoulli`): the sampled
+audit's soundness statement covers none. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
-  if jeq (getD p.verifier.law "law") "bernoulli" then
-    throw "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
+  if Draw.bernoulli p.verifier.law then throw Draw.BERNOULLI
   return p
 
 def commitmentOf (b : ByteArray) : V Commitment := do

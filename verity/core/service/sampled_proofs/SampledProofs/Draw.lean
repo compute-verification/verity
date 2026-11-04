@@ -99,15 +99,16 @@ def probability? (p : String) : Option (Nat × Nat) :=
   | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
   | _ => none
 
-/-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
-up tables of different shapes: `bernoulli` at `0 < p < 1`, which the sampled audit's soundness statement doesn't cover.
-The stream's run refuses it (`Run.run`: `shapes`); the audit (`OneStage.paramsOfJson`) refuses every `bernoulli` law. -/
-def countVaries (law : Json) : Bool :=
-  match getD law "law", getD law "p" with
-  | .str "bernoulli", .str p => match probability? p with
-    | some (num, den) => 0 < num && num < den
-    | none => false
-  | _, _ => false
+/-- `service.bernoulli`: the law is `bernoulli`, at any `p`, which the sampled audit's soundness statement doesn't cover
+(at `0 < p < 1` its drawn count varies; at `p = 0` it draws nothing, at `p = 1` everything, and neither is covered
+either). The audit (`OneStage.paramsOfJson`) and the stream's run (`Run.run`: `bernoulli`) refuse it. -/
+def bernoulli (law : Json) : Bool :=
+  match getD law "law" with
+  | .str "bernoulli" => true
+  | _ => false
+
+/-- The refusal of a `bernoulli` law (`service.BERNOULLI`). -/
+def BERNOULLI : String := "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
 
 private def sumSizes (rs : Array (Int × Int)) : Int := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
 
