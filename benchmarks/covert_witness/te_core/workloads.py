@@ -460,7 +460,8 @@ class Fresh:
     reads every later token), not only the update up to the layer and the ids up to the token (a forward);
     `attention` for attention's products, two token-indexed dims, which te_core.io_bound counts none of; `paid`, per
     layer from the bottom, the largest k at which both operands pass io_bound's P-width (paid at their width: `_paid`;
-    empty, at every k)."""
+    empty, at every k); `role`, forward, dx (input gradients), dw (weight gradients) or optimizer, which the products
+    term's M reads (te_core.formalism.he_of_products)."""
     kind: str
     macs: float
     entries: float
@@ -472,6 +473,7 @@ class Fresh:
     sequence: bool = False
     attention: bool = False
     paid: tuple = ()
+    role: str = "forward"
 
     def escaped(self, update_bits: float, k: float) -> float:
         """The share of a layer's products that a block computes from θ, `update_bits` of the update's share up to
@@ -516,23 +518,25 @@ def dense_fresh(sh: Shape, gemm: str, tokens: float, span: float, seq: tuple, ba
     def layer(kind: str, macs: float, entries: float, attention: bool = False) -> Fresh:
         return Fresh(kind, macs / n, entries / n, n, tokens, *seq, attention=attention)
 
-    def whole(kind: str, macs: float, entries: float, attention: bool = False) -> Fresh:
-        return Fresh(kind, macs, entries, 1.0, tokens, *seq, sequence=True, attention=attention)
+    def whole(kind: str, macs: float, entries: float, role: str, attention: bool = False) -> Fresh:
+        return Fresh(kind, macs, entries, 1.0, tokens, *seq, sequence=True, attention=attention, role=role)
 
     out = [layer(gemm, sh.matrix_params - gathered, sh.n_layer * (5 + 2 * MLP) * d - 3 * d),
            Fresh(gemm, head, sh.vocab, 1.0, tokens * head_share, *seq),
            layer("gemm/bf16", attn, sh.n_layer * heads * span, True), layer("gemm/bf16", attn, sh.n_layer * d, True)]
     if batch_tokens is not None:
         weights = sh.matrix_params + head
-        out += [whole(gemm, weights, sh.n_layer * (6 + MLP) * d + d),
-                whole(gemm, weights - gathered, (weights - gathered) / batch_tokens),
-                whole("gemm/bf16", attn, sh.n_layer * heads * span, True),
-                whole("gemm/bf16", 3 * attn, 3 * sh.n_layer * d, True)]
+        out += [whole(gemm, weights, sh.n_layer * (6 + MLP) * d + d, "dx"),
+                whole(gemm, weights - gathered, (weights - gathered) / batch_tokens, "dw"),
+                whole("gemm/bf16", attn, sh.n_layer * heads * span, "dx", True),
+                whole("gemm/bf16", 3 * attn, 3 * sh.n_layer * d, "dx", True)]
     return out
 
 
 #: the bits an entry a LoRA's GEMMs pass (bf16), each operand's width in io_bound's P-width
 ADAPTER_BITS = 16.0
+#: each of a LoRA's products' role (`Fresh.role`), by its name in `adapter_fresh`
+ADAPTER_ROLES = {"x A": "forward", "(x A) B": "forward", "dy B^T": "dx", "(dy B^T) A^T": "dx", "dB": "dw", "dA": "dw"}
 
 
 def _stream(matrices: tuple, n: int, lam: float, b: float = ADAPTER_BITS) -> list[dict]:
@@ -614,8 +618,8 @@ def adapter_fresh(sh: Shape, ad: Adapter, tokens: float, span: float, seq: tuple
             add("dB", r * d_out, r * d_out / batch_tokens, paid_dy, True)
             add("(dy B^T) A^T", r * d_in, d_in, () if feeds[x] else (0.0,) + (math.inf,) * (count - 1), True)
             add("dA", r * d_in, r * d_in / batch_tokens, paid_in, True)
-    out = [Fresh("gemm/bf16", macs, entries, n, tokens, *seq, sequence=sequence, paid=paid)
-           for (_, paid, sequence), (macs, entries) in groups.items()]
+    out = [Fresh("gemm/bf16", macs, entries, n, tokens, *seq, sequence=sequence, paid=paid,
+                 role=ADAPTER_ROLES[name]) for (name, paid, sequence), (macs, entries) in groups.items()]
     heads = d / HEAD_DIM
     out.append(Fresh("gemm/bf16", 2 * d * span, heads * span + d, n, tokens, *seq, attention=True))
     if batch_tokens is not None:
@@ -631,7 +635,8 @@ def muon_fresh(sh: Shape, optimizer: str, steps: float, seq: tuple) -> list[Fres
     if optimizer != "muon":
         return []
     per = NEWTON_SCHULZ_STEPS * sh.n_layer * (4 + 3 * MLP)
-    return [Fresh("gemm/bf16", per * sh.d_model ** 3, per * sh.d_model ** 2, 1.0, steps, *seq, sequence=True)]
+    return [Fresh("gemm/bf16", per * sh.d_model ** 3, per * sh.d_model ** 2, 1.0, steps, *seq, sequence=True,
+                  role="optimizer")]
 
 
 # ---- the whole-making system ------------------------------------------------------------------------------------------
@@ -1219,7 +1224,7 @@ def products(m: Model, c: float, k: float) -> list[dict]:
             b_a, b_b, b_c = WIDTHS[f.kind]
             out.append({"macs": macs, "outputs": entries, "k_dim": macs / entries, "k_whole": m.derived["d_model"],
                         "b_a": b_a, "b_b": b_b, "b_c": b_c, "gates_per_mac": per_mac(f.kind),
-                        "cell_gates": float(gates(PRICES[f.kind][0][0]))})
+                        "cell_gates": float(gates(PRICES[f.kind][0][0])), "role": f.role})
     return out
 
 
