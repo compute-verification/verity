@@ -1,7 +1,7 @@
 """The `lf` model of the training-efficiency ladder (`benchmarks/covert_witness/model.py` on the te-ref-optim branch), for
-the training-step frontend's tests and its census tool: a Llama-style decoder (RMSNorm, SwiGLU, RoPE, no biases, tied input
-and output embeddings) over the GPT-2 vocabulary padded to 50,304, its loss the next-token cross-entropy, and the plain AdamW
-the step is derived with (the ladder trains its matrices with Muon instead).
+the training-step frontend's tests and the grader's (`benchmarks/covert_witness/grader`): a Llama-style decoder (RMSNorm,
+SwiGLU, RoPE, no biases, tied input and output embeddings) over the GPT-2 vocabulary padded to 50,304, its loss the next-token
+cross-entropy, and the plain AdamW the step is derived with (the ladder trains its matrices with Muon instead).
 
 The ladder runs the forward under CUDA bf16 autocast, which for this model casts each linear's two operands to bf16 and leaves
 every other op as it is (attention's operands are bf16 already). `LM(..., matmul_dtype=torch.bfloat16)` writes those casts out;

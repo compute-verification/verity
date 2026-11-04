@@ -204,12 +204,13 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     if isinstance(prog, Unsupported):
         return StepSurvey(rep.unsupported, holes, None, {}, {}, layout, refused=prog)
     nodes = prog.root.body.nodes
-    return StepSurvey(rep.unsupported, holes, census(prog), _primitives(prog), {
+    return StepSurvey(rep.unsupported, holes, census(prog), primitives(prog), {
         "names": list(prog.theta), "input_nodes": len(prog.root.theta),
         "bits": sum(nodes[i].n * nodes[i].fn.ret.w for i in prog.root.theta)}, layout)
 
 
-def _primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
+def primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
+    """The primitives `prog` calls, at any depth, by id: what a census (`verity.ml.circuits.census.census`) prices."""
     out, seen, stack = {}, set(), [prog.root]
     while stack:
         fn = stack.pop()
@@ -272,4 +273,4 @@ def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
     return True
 
 
-__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "step_report", "step_program"]
+__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program"]
