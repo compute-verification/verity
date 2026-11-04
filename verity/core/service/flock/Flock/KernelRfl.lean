@@ -6,6 +6,8 @@ module
 
 public import Lean.Elab.Tactic.Basic
 public import Lean.Meta.AppBuilder
+meta import Lean.Elab.Tactic.Basic
+meta import Lean.Meta.AppBuilder
 
 @[expose] public section
 
