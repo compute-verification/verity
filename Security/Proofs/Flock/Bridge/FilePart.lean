@@ -1,6 +1,6 @@
 import Proofs.Flock.Bridge.FilePart.Srcs
 import Proofs.Flock.Bridge.FilePartTarget
-import Proofs.Flock.Bridge.Targets
+import Proofs.Flock.Bridge.RelDeploy
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
@@ -23,7 +23,7 @@ the circuit's constants:
 
 * `filePartOf c n ns`: the code's partition, `FilePart.ofCircuit c n`'s blocks, unit `u`'s at slot `u`, in consecutive
   runs of the sizes `ns`.
-* `partOf_ofCircuit`: at a circuit in scope it is `partOf`'s, so `relDeploy_ofCircuit` is `RelDeployTarget` with the
+* `partOf_ofCircuit`: at a circuit in scope it is `partOf`'s, so `relDeploy_ofCircuit` is `relDeploy` with the
   partition hypothesis `cd.partition s = some (filePartOf D.unroll n ns)`.
 * `why_eq_none`, `check_ok`: the population check (`FilePart.check`) passes exactly where the registration's strata,
   read stratum by stratum, are the units in order, of sizes `ns` (`FilePart.sizes`), and the public file's units are
@@ -141,9 +141,9 @@ theorem partOf_ofCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.un
   unfold partOf filePartOf
   rw [h]
 
-/-- **rel_deploy at the code's partition**: `RelDeployTarget` at the key program of a circuit in scope and the
-circuit's constants, its partition hypothesis the deployed partition being the code's (`filePartOf`). -/
-theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
+/-- **rel_deploy at the code's partition**: `relDeploy` at the key program of a circuit in scope and the circuit's
+constants, its partition hypothesis the deployed partition being the code's (`filePartOf`). -/
+theorem relDeploy_ofCircuit {T : Type}
     (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
     (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
     (hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true) (n : ℕ)
@@ -166,7 +166,7 @@ theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
     ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
       (witDep Cc (commitDep Cc rows D.unroll nl roots) Claims.Sampling.sha512Msg roots Xr) := by
   intro Cc P κ hL hx hpart hrel
-  exact hR F cd P rows D.unroll nl ns r κ desc q roots Xr δ x hL hx
+  exact relDeploy F cd P rows D.unroll nl ns r κ desc q roots Xr δ x hL hx
     (hpart.trans (congrArg some (partOf_ofCircuit D hU hscope n ns).symm)) hrel
 
 /-- **The population check's verdict**: `why` finds nothing exactly where the strata, read stratum by stratum, are the
