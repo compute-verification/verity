@@ -937,7 +937,7 @@ theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω)
 
 /-- **The fresh frames of the family `label` answering `after` in `σ`'s play**: those whose log ends in the play's
 evidence (`freshSel`). -/
-noncomputable def sampleSel (σ : Strategy (V.game θ F c)) (label : String) (after : ByteArray) :
+noncomputable def sampleSel (_σ : Strategy (V.game θ F c)) (label : String) (after : ByteArray) :
     FillSel Exchange (Fin 512 → Bool) :=
   freshSel (evidenceG θ F c) label after
 
