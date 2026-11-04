@@ -33,8 +33,11 @@ K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
-``error``. Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the record
-(`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is ℓ_{a,j} as the bound charges each
+``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
+tight ℓ_{a,j} rests on (``held``, `CHECKS`), and while one is ``open``, K plus ℓ_a + 1 bits for each audit tied to each
+execution phase's scan (``advice``: each audit's ℓ_a, its registered advice length in the case's commitment, and the
+bits each phase adds). Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the
+record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is ℓ_{a,j} as the bound charges each
 execution phase, with its share of K and its source (`CHARGED`: the tied compute audits' unregistered inputs, read off
 the period's parameters, with no advice length and no cap in them); and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
@@ -43,8 +46,10 @@ clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a t
 (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
 that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
-**Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
-for the serving node, the census's reference datacenter and the world. A node's cell is proved where the run's period
+**Periods**, of the figure of record: the run's own certification period (``run``), proved, and each monitoring period
+of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world. Where the figure of
+record isn't the tight K, ``periods_tight`` gives the same cells of the tight K beside them, with the open checks it is
+conditional on (``conditional_on``), never as the result. A node's cell is proved where the run's period
 covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
@@ -126,7 +131,20 @@ CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audi
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
            "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
-           "cap_bits) nor |a_j| is in it")
+           "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
+           "performs both checks it rests on (`CHECKS`, `OPEN`)")
+#: the checks the tight ℓ_{a,j} rests on, each by the name the period's public lists it under in ``held`` once its Lean
+#: check performs it
+CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
+          "circuit": "each tied audit's circuit held fixed whatever its advice"}
+OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
+        "every check of `CHECKS` (the public's held). While one is open it is K plus ℓ_a + 1 bits for each audit tied "
+        "to each execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits is one of fewer than "
+        "2^(ℓ_a + 1) strings. ℓ_a is the audit's registered advice length (its registration's window.advice.bits in the "
+        "case's commitment, the compiler's cap once the advice is padded; 0 for no advice), and the tight K's cells go "
+        "beside the figure of record's, conditional on the open checks (periods_tight)")
+TIED_ALL = ("every audit of the case's commitment: the public names no scan's tied audits (scans[j].tied), so each is "
+            "charged to every execution phase, exact with one audit")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
     "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
@@ -341,6 +359,26 @@ def charged(b: Mapping[str, Any]) -> dict[str, Any]:
             "lean": "scans[j].free"}
 
 
+def advice_bits(reg: Mapping[str, Any]) -> int:
+    """ℓ_a of a compute audit's registration: its window's registered advice length, 0 where it names no advice."""
+    adv = (reg.get("window") or {}).get("advice")
+    return int(adv["bits"]) if isinstance(adv, Mapping) else 0
+
+
+def of_record(public: Mapping[str, Any], case: Mapping[str, Any], K: int) -> dict[str, Any]:
+    """The figure of record (`OPEN`) from the period's public and its case's commitment: ``K``, the checks the public
+    holds and those open, and the advice ℓ_a + 1 charges, each audit's ℓ_a and its sum over each phase's tied audits
+    (the public's ``scans[j].tied``, else every audit: `TIED_ALL`)."""
+    held = [c for c in CHECKS if c in (public.get("held") or ())]
+    open_ = [c for c in CHECKS if c not in held]
+    ell = [advice_bits(r) for r in json.loads(bytes.fromhex(case["commitment"]))["audits"]]
+    tied = [s.get("tied") for s in public["scans"]]
+    per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
+    return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN,
+            "advice": {"ell_a": ell, "bits_per_phase": per,
+                       "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}}
+
+
 def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
@@ -383,26 +421,44 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     advice["charged"] = charged(b)
     b["period_s"] = None
     try:
-        phase_s, connections = schedule(json.loads((out / CASE).read_text()), b["phases"])
+        case = json.loads((out / CASE).read_text())
     except FileNotFoundError:
         b["connections"] = {"missing": f"no {CASE}: they are its params' caps"}
+        b["of_record"] = {"missing": f"no {CASE}: its commitment holds the tied audits' registrations"}
         return rec | {"periods": {"missing": f"no {CASE}: the execution phase's length is its params' schedule"}}
+    except ValueError as e:
+        b["connections"] = b["of_record"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
+        return rec | {"periods": b["of_record"]}
+    try:
+        b["of_record"] = of_record(answer["public"], case, b["K"])
+    except (IndexError, KeyError, TypeError, ValueError) as e:
+        b["of_record"] = {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}
+    try:
+        phase_s, connections = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:
         b["connections"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
     b["connections"] = {"count": connections, "from": CONNECTIONS}
     b["period_s"] = str(b["phases"] * phase_s)
-    return rec | {"periods": periods(b["K"], eps_of(b), b["phases"], phase_s, connections)}
+    if "K" not in b["of_record"]:
+        return rec | {"periods": {"missing": "no figure of record: " + b["of_record"]["error"]}}
+    eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
+    rec["periods"] = periods(K, eps, m, phase_s, connections)
+    if K != b["K"]:
+        rec["periods_tight"] = {"conditional_on": b["of_record"]["open"], **periods(b["K"], eps, m, phase_s, connections)}
+    return rec
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: each verdict, whether the run is of record, K, its δ_net's terms and connections, the
-    year's datacenter cell, and the measured advice charge's test run."""
+    """The ``ONSITE`` line: each verdict, whether the run is of record, K of record, the tight K and the checks it is
+    conditional on, its δ_net's terms and connections, the year's datacenter cell, and the measured advice charge's
+    test run."""
     b, p = rec.get("bound") or {}, rec.get("periods") or {}
     year = (p.get("year") or {}).get("datacenter")
-    m = rec["advice_charge"]["measured"]
+    m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
-            "K": b.get("K"), "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
+            "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
+            "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}

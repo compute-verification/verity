@@ -215,9 +215,13 @@ negatives.
   which no check computes), and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
-  whose sources the record states, beside its figure over one execution phase. The realized advice charge is private:
-  the record states ℓ_{a,j} with its source, the tied compute audits' free inputs (no advice length and no cap is in
-  them), and `--advice-charge` states a test run's measurement beside the bound as that run's.
+  whose sources the record states, beside its figure over one execution phase. The cells are the figure of record's:
+  K as the period's check states it only where its Lean verdict held both checks the tight ℓ_{a,j} rests on (each
+  tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its advice), and while
+  either is open, K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside them,
+  conditional on the open checks. The realized advice charge is private: the record states ℓ_{a,j} with its source,
+  the tied compute audits' free inputs (no advice length and no cap is in them), and `--advice-charge` states a test
+  run's measurement beside the bound as that run's.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
