@@ -44,9 +44,9 @@ open _root_.Flock.Firewall.Level0 (Level0 Slot Slots commit ofSession)
 /-- **At the model's `Hello`, `EnvOk` where the relay's nonce is the tape's**: where `x` sets up the session on `spec`
 and the nonce the relay drew from the operating system is the tape's `ν`, the `Hello` it frames is the model's. -/
 theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {spec : SessionSpec} {sts : Array Stmt}
-    {ins : _} {e : Env} (hs : FlockDeploy.setupOf true x = some (ins, spec, sts))
+    {seen : List String} {ins : _} {e : Env} (hs : FlockDeploy.setupOf true x = some (ins, spec, sts))
     (hn : e.nonce = ⟨(Claims.ZKMal.CoinLayer.nb ν).toArray⟩) :
-    EnvOk spec .hello e (Claims.ZKMal.CoinLayer.helloMsg x ν) := by
+    EnvOk spec seen .hello e (Claims.ZKMal.CoinLayer.helloMsg x ν) := by
   show _root_.Flock.Firewall.Hello.msg spec e.nonce = _
   unfold Claims.ZKMal.CoinLayer.helloMsg
   rw [hs, hn]
@@ -603,13 +603,14 @@ theorem streamsOk_tables {spec : SessionSpec} {sts : Array Stmt} {ct : _root_.Fl
 is `commitRead` against the loop's slots after its draw of `ls` (`AfterDraw`), at the session's tables (the setup's,
 each with its statement's `m`), and the setup's coin tree's streams are the session's (`streamsOk`), `EnvOk` holds at
 the link whose roots are `ls`'s. -/
-theorem envOk_commit_after {spec : SessionSpec} {sts : Array Stmt} {ct : _root_.Flock.CoinTree.Spec} {e : Env}
-    {R : Slots} {sid : Nat} {f : ByteArray} {ls : Array Level0} {publics : List ByteArray}
+theorem envOk_commit_after {spec : SessionSpec} {sts : Array Stmt} {seen : List String}
+    {ct : _root_.Flock.CoinTree.Spec} {e : Env} {R : Slots} {sid : Nat} {f : ByteArray} {ls : Array Level0}
+    {publics : List ByteArray}
     (hread : e.commit = (commitRead R sid (spec.tables.zip (sts.map (·.m))) f).1)
     (hok : _root_.Flock.Firewall.Session.streamsOk spec sts ct = true) (ha : AfterDraw sid ls R)
     (hr : ls.size < 2 ^ 64) (hp : publics.length < 2 ^ 64) (hrb : ∀ l ∈ ls, l.root.size < 2 ^ 64)
     (hpb : ∀ b ∈ publics, b.size < 2 ^ 64) :
-    EnvOk spec .commit e (0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics) := by
+    EnvOk spec seen .commit e (0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics) := by
   obtain ⟨hsz, hn⟩ := streamsOk_tables hok
   have hnames : (spec.tables.zip (sts.map (·.m))).toList.map (·.1) = spec.tables.toList := by
     rw [Array.toList_zip]

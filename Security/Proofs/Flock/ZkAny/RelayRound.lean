@@ -11,12 +11,14 @@ name, its level 0 and, through `Frames.placeOf`, the loop's salts, and changes t
 at the stream's first round, `Frames.withAlg` and rep 1's `prior`:
 
 * `roundPlace_later`: past the stream's first round, where `placeOf` places the round in a scheduled round's place, or
-  fails it, the round's place is that, the frame `placeOf`'s, and the frame takes the device round.
+  fails it, the round's place is that, the frame `placeOf`'s, and the frame takes the device round exactly where the
+  session has not stopped (`Frames.Sessions.stopped`: no rep's frame of it stopped).
 * `roundPlace_own`: past the opening (`placeOf`'s `own`), the round's place is the inner proof's round `j` the
   frame's own (`Frame.innerSched` on the rounds the loop's finish computed for the rep, `Sessions.innerOf`), and the
-  frame takes the device round exactly where the finish computed round `j`.
+  frame takes the device round exactly where the session has not stopped and the finish computed round `j`.
 * `roundPlace_first0`, `roundPlace_first1`: at the stream's first round, the place is `placeOf`'s on the frame with its
-  algebraic phase, at rep 1 after rep 0's algebraic-phase coins.
+  algebraic phase, at rep 1 after rep 0's algebraic-phase coins, and the frame takes the device round exactly where
+  the session has not stopped.
 * `roundStep_put`: the round puts back `roundPlace`'s frame at the frame's state after the round, with some values.
 * `round_coins`: where only updates that keep the rep's frame come between the round's read, its put and its coins'
   read, the coins find that frame and `Frames.coinsStep` puts back `Loop.coinsOf` of it.
@@ -32,7 +34,8 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock (Stmt F128)
 open _root_.Flock.Firewall.Frames (Sessions Rep Release)
 
-/-- **A later round at a scheduled or failed place** is at `placeOf`'s place, on `placeOf`'s frame. -/
+/-- **A later round at a scheduled or failed place** is at `placeOf`'s place, on `placeOf`'s frame, and the frame
+takes the device round exactly where the session has not stopped. -/
 theorem roundPlace_later {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.Firewall.Level0.Level0} {pl : _root_.Flock.Firewall.Frame.Place} {k : Nat} {q : Rep}
@@ -42,17 +45,22 @@ theorem roundPlace_later {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots
     (hfst : (p.coins.isEmpty && !p.st.begun) = false)
     (hp : _root_.Flock.Firewall.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 = .ok (pl, k, q))
     (hpl : pl ≠ .own) :
-    _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, false, none) := by
+    ∃ nd, _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, false, nd) ∧
+      (nd = none ↔ R.stopped sid = false) := by
   unfold sessAt at hs
   unfold _root_.Flock.Firewall.Frames.roundPlace
   rcases pl with c | _ | _
   all_goals first
     | exact absurd rfl hpl
-    | simp only [hf, hs, hst, hname, hl0, hfst, hp, bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
-        ↓reduceIte]
+    | (cases hss : R.stopped sid
+       all_goals
+         simp only [hf, hs, hst, hname, hl0, hfst, hp, bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
+           ↓reduceIte]
+         exact ⟨_, rfl, by simp⟩)
 
 /-- **A later round past the opening** is at the inner proof's round `j` the frame's own, on the rounds the loop's
-finish computed for the rep, and the frame takes the device round exactly where the finish computed round `j`. -/
+finish computed for the rep, and the frame takes the device round exactly where the session has not stopped and the
+finish computed round `j`. -/
 theorem roundPlace_own {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.Firewall.Level0.Level0} {k : Nat} {q : Rep}
@@ -65,18 +73,14 @@ theorem roundPlace_own {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} 
     ∃ nd, _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n =
         .ok (q, .sched (_root_.Flock.Firewall.Frame.innerSched q.cfg q.st.m (R.innerOf l0.root r) n
           (q.st.m.inner.getD 0)), false, nd) ∧
-      (nd = none ↔ q.st.m.inner.getD 0 < (R.innerOf l0.root r).size) := by
+      (nd = none ↔ R.stopped sid = false ∧ q.st.m.inner.getD 0 < (R.innerOf l0.root r).size) := by
   have hj' : ¬ _root_.Flock.Firewall.Frame.INNER_ROUNDS ≤ q.st.m.inner.getD 0 := Nat.not_le.mpr hj
   unfold sessAt at hs
   unfold _root_.Flock.Firewall.Frames.roundPlace
   simp only [hf, hs, hst, hname, hl0, hfst, hp, hj', bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
     ↓reduceIte]
   refine ⟨_, rfl, ?_⟩
-  split
-  · rename_i h
-    simp [h]
-  · rename_i h
-    simp [h]
+  by_cases h : q.st.m.inner.getD 0 < (R.innerOf l0.root r).size <;> cases hss : R.stopped sid <;> simp [h]
 
 /-- **A round puts back `roundPlace`'s frame**, its frame state the frame's after the round in its place (the device's
 round, or none where `roundPlace` takes none), with some values. -/
@@ -167,7 +171,7 @@ theorem repInv_round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.Firewall.
     _root_.Flock.Firewall.Frames.coinsStep R₂ sid i r cs = .ok (Loop.coinsOf p₁ st₂ cs) ∧
       Loop.RepInv t (s.spec.domain name r).toUTF8 xs hi (Loop.coinsOf p₁ st₂ cs) := by
   obtain ⟨q, hq, hinv⟩ := hq
-  have hrp := roundPlace_later (dom := dom) (content := content) (n := n) hf hs hst hname hl0 hfst hq hpl
+  obtain ⟨_, hrp, -⟩ := roundPlace_later (dom := dom) (content := content) (n := n) hf hs hst hname hl0 hfst hq hpl
   have hfr : (frameAt R sid i r).isSome := by
     rw [← find_frameAt, hf]
     rfl
@@ -175,7 +179,8 @@ theorem repInv_round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.Firewall.
   exact ⟨hc, hinv _ v cs st₂⟩
 
 /-- **A stream's first round at rep 0** is at `placeOf`'s place on the frame `withAlg` gives its algebraic phase, where
-the round opens with the stream's domain frame. -/
+the round opens with the stream's domain frame, and the frame takes the device round exactly where the session has not
+stopped. -/
 theorem roundPlace_first0 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i j : Nat}
     {dom content : ByteArray} {n : Nat} {p p' : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.Firewall.Level0.Level0} {pl : _root_.Flock.Firewall.Frame.Place} {k : Nat} {q : Rep}
@@ -187,19 +192,23 @@ theorem roundPlace_first0 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slot
     (hw : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok p')
     (hp : _root_.Flock.Firewall.Frames.placeOf R.salts l0 s p' (s.spec.domain name 0).toUTF8 = .ok (pl, k, q))
     (hpl : pl ≠ .own) :
-    _root_.Flock.Firewall.Frames.roundPlace R L0 sid i 0 dom content n = .ok (q, pl, true, none) := by
+    ∃ nd, _root_.Flock.Firewall.Frames.roundPlace R L0 sid i 0 dom content n = .ok (q, pl, true, nd) ∧
+      (nd = none ↔ R.stopped sid = false) := by
   have h01 : ((0 : Nat) == 1) = false := rfl
   unfold sessAt at hs
   unfold _root_.Flock.Firewall.Frames.roundPlace
   rcases pl with c | _ | _
   all_goals first
     | exact absurd rfl hpl
-    | simp only [hf, hs, hst, hname, hl0, hfst, hdom, hw, h01, hp, bind, Except.bind, pure, Except.pure,
-        Bool.false_eq_true, ↓reduceIte]
+    | (cases hss : R.stopped sid
+       all_goals
+         simp only [hf, hs, hst, hname, hl0, hfst, hdom, hw, h01, hp, bind, Except.bind, pure, Except.pure,
+           Bool.false_eq_true, ↓reduceIte]
+         exact ⟨_, rfl, by simp⟩)
 
 /-- **A stream's first round at rep 1** is at `placeOf`'s place on the frame `withAlg` gives its algebraic phase, after
 rep 0's algebraic-phase coins (`Frame.step`'s `prior`), where the round opens with the stream's domain frame and rep 0's
-algebraic phase ended. -/
+algebraic phase ended, and the frame takes the device round exactly where the session has not stopped. -/
 theorem roundPlace_first1 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i j j0 : Nat}
     {dom content : ByteArray} {n : Nat} {p p' p0 : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.Firewall.Level0.Level0} {st₁ : _root_.Flock.Firewall.Frame.State}
@@ -217,14 +226,18 @@ theorem roundPlace_first1 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slot
     (hp : _root_.Flock.Firewall.Frames.placeOf R.salts l0 s { p' with st := st₁ } (s.spec.domain name 1).toUTF8 =
       .ok (pl, k, q))
     (hpl : pl ≠ .own) :
-    _root_.Flock.Firewall.Frames.roundPlace R L0 sid i 1 dom content n = .ok (q, pl, true, none) := by
+    ∃ nd, _root_.Flock.Firewall.Frames.roundPlace R L0 sid i 1 dom content n = .ok (q, pl, true, nd) ∧
+      (nd = none ↔ R.stopped sid = false) := by
   have h11 : ((1 : Nat) == 1) = true := rfl
   unfold sessAt at hs
   unfold _root_.Flock.Firewall.Frames.roundPlace
   rcases pl with c | _ | _
   all_goals first
     | exact absurd rfl hpl
-    | simp only [hf, hs, hst, hname, hl0, hfst, hdom, hw, h11, h0, hle, hpr, hp, bind, Except.bind, pure,
-        Except.pure, Bool.false_eq_true, ↓reduceIte]
+    | (cases hss : R.stopped sid
+       all_goals
+         simp only [hf, hs, hst, hname, hl0, hfst, hdom, hw, h11, h0, hle, hpr, hp, bind, Except.bind, pure,
+           Except.pure, Bool.false_eq_true, ↓reduceIte]
+         exact ⟨_, rfl, by simp⟩)
 
 end Claims.ZKServer.Relay

@@ -146,7 +146,7 @@ theorem relay_zkOut_env {W St : Type} {N Ω : Msg → Type} [∀ x, Fintype (N x
     (ins : N x × Ω x → List (ByteArray × Env))
     (hs : ∀ ω, ∀ p ∈ ins ω, p.2.setup = .ok (spec, sts))
     (hb : ∀ ω, ∀ p ∈ ins ω, ∀ why, (p.2.barrier (some why)).isSome)
-    (he : ∀ ω, EnvPre spec (relaySteps true (ins ω)) ((runStar H (P w x) Vs x ω θ).msgs.map (·.1))) :
+    (he : ∀ ω, EnvPre spec [] (relaySteps true (ins ω)) ((runStar H (P w x) Vs x ω θ).msgs.map (·.1))) :
     PerOutcome (fun ω => (mout x (runStar H (P w x) Vs x ω θ).msgs, relayLen true (relayB spec sts) (ins ω)))
       (fun ω => out true {} {} (ins ω))
       (fun o (c : S.C x) => (weave (ctlOf (.ok (spec, sts))) (tmplOf (.ok (spec, sts)))
