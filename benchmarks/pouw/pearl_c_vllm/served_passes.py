@@ -612,7 +612,8 @@ def lean(args: argparse.Namespace) -> int:
     said = p.stdout.strip().splitlines()
     try:
         got = json.loads(said[-1]) if said else None
-    except ValueError:
+    except ValueError as e:
+        rec["unparsed"] = f"the Lean's last line isn't JSON: {e}"
         got = None
     if not isinstance(got, dict) or p.returncode != (got.get("verdict") != "accept"):
         return done(f"the Lean exited {p.returncode} without a verdict: {(p.stdout + p.stderr).strip()[-400:]}", 2)
