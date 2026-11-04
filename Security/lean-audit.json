@@ -2890,6 +2890,26 @@
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
    "nontrivial": "Flock.Guarantees.recursiveKSDeployed_nontrivial"
+  },
+  "Nci.Cut.SecurityProofs.Bound": {
+   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "Nci.Cut.SecurityProofs.Bound_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Cut.SecurityProofs.Slowdown": {
+   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "Nci.Cut.SecurityProofs.Slowdown_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Cut.SecurityProofs.HE": {
+   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "Nci.Cut.SecurityProofs.HE_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Cut.SecurityProofs.HEShared": {
+   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "Nci.Cut.SecurityProofs.HEShared_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -9323,6 +9343,33 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
+  "Nci.Cut.SecurityProofs.Bound": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.Bound_nontrivial": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.Cut_honest": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.HE": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.HEShared": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.HEShared_nontrivial": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.HE_nontrivial": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.Slowdown": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.Slowdown_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.BlockDescription : Nci.Ldl.Guarantees.BlockDescription"],
@@ -14646,7 +14693,16 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
-   "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob."
+   "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
+   "Nci.Cut.SecurityProofs.Bound": "frozen (no-function): It is about an arbitrary registered circuit, its charged work (Nci.Cut.Work, Security/Definitions/Nci/Cut.lean) and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet, and stating that join among the properties is what would give it an acceptance.",
+   "Nci.Cut.SecurityProofs.Slowdown": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), each priced at c, with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet.",
+   "Nci.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, Security/Definitions/Nci/Assumptions/Cut.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
+   "Nci.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (Security/Definitions/Nci/Assumptions/Cut.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
+   "Nci.Cut.SecurityProofs.Cut_honest": "completeness: Bound's, Slowdown's, HE's and HEShared's honest witness (their witnesses entries): at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), one matmul y = w x with two MACs, their premises hold together: a block for each MAC reading two inputs (k = 2), each word its own value, the arrays W and X on the edge of the complete graph on two vertices (ω = 2) at unit costs (q = 1), (H) at those costs and k = 2, and (E) at b = 1, all proved, so none of them is vacuous.",
+   "Nci.Cut.SecurityProofs.Bound_nontrivial": "completeness: Bound's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Bound without the block cap: one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds m (k + α) + √(Π(0) m O) = 0, all proved, so Bound's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.Cut.SecurityProofs.Slowdown_nontrivial": "completeness: Slowdown's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Slowdown without the block cap: one block holding both MACs reads three inputs, more than k = 1, and at c = 1 the bound (c / |C|) (N / (k + α) - √(Π(1) O N) / (k + α)^{3/2}) = 1 exceeds m c / |C| = 1/2, all proved, so Slowdown's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.Cut.SecurityProofs.HE_nontrivial": "completeness: HE's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), HE without the block cap: Cut_honest's values and (E) at b = 1, with (H) at k = 0; one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds the bound, 0, all proved, so HE's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.Cut.SecurityProofs.HEShared_nontrivial": "completeness: HEShared's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), HEShared without the block cap: Cut_honest's arrays, values, costs and (E) at b = 1, with (H) at k = 0; one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds the bound, 0, all proved, so HEShared's conclusion is not a tautology and needs the premise it drops."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
