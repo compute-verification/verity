@@ -1,4 +1,5 @@
 import PouwPearlPlus
+import Definitions.Pouw.PearlC.Unscale
 
 /-!
 # Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
@@ -21,9 +22,29 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
 * `TileAcceptMeans`: a tile that passes opens against the pass's roots, its checked words are the committed leaf's, its
   rows keep the per-row rules, its credited cells' replayed debit is within ρ = 1/400 of their credit (as a tile and per
   credited A row), and its served y rows are the unscale of its U.
+* `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
+  (`PearlCUnscale_v1` at `BIAS` off).
+* `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
+  the plan's passes, at the run's draws and δ = 1/100.
 * `OpeningBinds`: two openings of one position of a tree both accepted name one value, or SHA-512 collides.
 
-The credit at Pearl's assumption (`credit_at_assumption`) and the window record's tie (`tie`) are not ported.
+The window record's tie (`tie`) is not ported.
+
+**The device record.** The premise is read at the H100's record, `devH100` (`Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1`,
+and at W1 `TTOutTilePearlCH100Rev1W1` on `W1Device.h100`), and the run it is applied to served on an H200. Every field of
+that record the premise reads is the H200's, so the properties are stated at it and there is no H200 instance:
+
+* the promotion period G = 4 (`d.G`, which is all the tile domain `pearlCDomainDev` reads): the scheme's own, and the H200
+  serves the one scheme, `pearl-c-h100-v1-h3`;
+* the prices (`Prices.h100`: an FP32 add 32, a BF16 MAC 2, `Costs.adopted`) and W1's (`W1Prices.h100`: an E4M3 or S8 MAC 1,
+  a BF16 MAC 2, FP32 32, a conversion 64, INT32 64), per tensor-core clock: the H200 is the same GH100 at sm_90a, the same
+  4,096 E4M3 MACs per SM a clock and half that in BF16 (`Core.Accel.H200`), and its data sheet's FP8 and BF16 rates are the
+  H100 SXM's;
+* the steps (`hopperE4m3K32` at G = 4, the BF16 k16 peel, `PeelExact`, `Skip.unitFlags`, `SaltDead`) and W1's fragments
+  (`h100Frags`: wgmma E4M3 m64nNk32 and BF16 m64nNk16, N = 64 to 256, each priced whole): the same wgmma on the same die,
+  and the verifier recomputed the H200's served tiles bit for bit at `HOPPER_E4M3_K32` (r20261103-140949-ca34, 459 tiles);
+* W1's `sha` and `fetch` prices are not the record's but the cost model's parameters, taken at the H200's measured ones
+  (they differ from the H100's in its memory, which W1 does not otherwise price, and the bound only weakens as they grow).
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -126,6 +147,23 @@ def TileKeepsTheCap : Prop :=
       rowDebit.foldl (· + ·) 0 * (Rule.CAP_DEN * r.matmul.n) ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
       ∀ d ∈ rowDebit, d * (Rule.CAP_DEN * r.matmul.n) ≤
         Rule.CAP_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
+
+/-! ## The served y and the work -/
+
+/-- **The unscale the check holds y to is the served y's Definition**: wherever `Rule.yOf` gives a word (each step finite),
+it is `Pouw.PearlC.unscale` of the same U and α (`PearlCUnscale_v1` at `BIAS` off), and the check's copy is that
+Definition everywhere. -/
+def YIsTheUnscale : Prop :=
+  (∀ u alphaA alphaB, Rule.unscale u alphaA alphaB = Pouw.PearlC.unscale u alphaA alphaB) ∧
+  ∀ u alphaA alphaB y, Rule.yOf u alphaA alphaB = some y → y = Pouw.PearlC.unscale u alphaA alphaB
+
+/-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's draws and
+δ = 1/100 (`creditAtAssumption`); a refused or rejected run publishes none. -/
+def WorkIsTheCredit : Prop :=
+  ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
+    ((check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
+      (check i opener).work = some (creditAtAssumption pl.passes i.draws DELTA)) ∧
+    ((check i opener).accept = false → (check i opener).work = none)
 
 /-! ## The trees -/
 
