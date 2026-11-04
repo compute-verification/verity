@@ -3946,22 +3946,16 @@ def _covered_case(kind: str, p: str = "1/2") -> tuple[dict, dict, dict]:
 
 def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     """The one-stage audit, v1 (`OneStage.protocol`) and v2 (`OneStageZk`), Lean's the Python's: parameters under a
-    Bernoulli law are refused at every p, 0, 1 and between (`paramsOfJson`), and evidence whose draw carries a closure
+    Bernoulli law at 0 < p < 1 are refused (`paramsOfJson`), and evidence whose draw carries a closure
     (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger so that its refusal of
-    parameters naming none (`NO_CHALLENGER`) isn't what refuses them. The same audit under subset, stratified, work and
-    All's law is accepted by v1, and v2 takes its parameters."""
-    bernoulli = [("bernoulli", p, "params: ") for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3")]
-    for kind, p, stage in (*bernoulli, ("subset", None, None), ("stratified", None, None), ("work", None, None),
-                           ("all", None, None), ("closure", None, "evidence: ")):
-        params, rec, evidence = _covered_case(kind, p or "1/2")
+    parameters naming none (`NO_CHALLENGER`) isn't what refuses them; the same work audit without the closure is
+    accepted by v1."""
+    for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
+        params, rec, evidence = _covered_case(kind)
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         out = server.exchange(case)
-        assert out == answer(case) | {"reason": out["reason"]}, (kind, p, out)
-        if stage is None:
-            assert out["verdict"] == "accept", (kind, out)
-        else:
-            assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, p, out)
-            assert "soundness statement doesn't cover" in out["reason"], (kind, p, out)
+        assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
+        assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
         circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         d = Drawn(random.Random(kind))
@@ -3971,11 +3965,24 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                                   "proofs": {"circuit": _sha(circuit), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
-        if stage is None:
-            assert not (out["reason"] or "").startswith("params: "), (kind, out)
-        else:
-            assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, p, out)
-            assert "soundness statement doesn't cover" in out["reason"], (kind, p, out)
+        assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
+        assert "soundness statement doesn't cover" in out["reason"], (kind, out)
+        if kind == "bernoulli":
+            for p in ("0/1", "0/4", "1/1", "3/3", "2/3"):
+                law = {"law": "bernoulli", "p": p}
+                one, two = {**case, "params": {**params, "law": law}}, {**v2, "params": {**v2["params"], "law": law}}
+                out = server.exchange(one)
+                assert out == answer(one) | {"reason": out["reason"]}, (p, out)
+                assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
+                out = server_v2.exchange(_json(two))
+                assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
+    for kind in ("subset", "stratified", "work", "all"):
+        params, rec, evidence = _covered_case(kind)
+        case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+        assert D.replay(ONE_STAGE, case, server)[0] == "accept", kind
+        two = {**v2, "params": {**v2["params"], "law": params["law"], "work_table": params["work_table"]}}
+        out = server_v2.exchange(_json(two))
+        assert not (out["reason"] or "").startswith("params: "), (kind, out)
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):
