@@ -84,9 +84,11 @@ DESCRIPTOR = {"**": S}
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
 #: a one-stage registration (`one_stage.registration.record`): the digests and population of the Program and query, the
 #: law the verifier's sampling design over them, the roots and registered values hiding commitments under domains of
-#: their structure; its window the provenance: a scan round's account and members, or a committed window's run root,
-#: circuit record, class, per-window values, registered roots and index leaf. The window's own number is none of them,
-#: and the advice's binding (`interface.advice_binding`) is `OPENING`'s.
+#: their structure; its window the provenance: a scan round's account and members, its state's reads (`stateRead`'s
+#: runs) and row 0's opening (`stateEmpty`: the empty state, which the protocol fixes, its width and salt structure and
+#: its path's siblings hiding commitments; no unit reads leaf 0), or a committed window's run root, circuit record,
+#: class, per-window values, registered roots and index leaf. The window's own number is none of them, and the advice's
+#: binding (`interface.advice_binding`) is `OPENING`'s.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -95,6 +97,8 @@ REGISTRATION = {
     "roots[].port": S, "roots[].leaves": S, "roots[].domain": S, "roots[].root": M,
     **under("registered[]", ENTRY),
     "window.kind": S, "window.link": S, "window.of": S, "window.members.*.template": S, "window.members.*.units[]": S,
+    "window.reads.*.*.leaf": S, "window.reads.*.*.units[]": S,
+    "window.empty.*.words": S, "window.empty.*.salt": S, "window.empty.*.path": M,
     "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
     "window.window_circuit.class[]": S, "window.activations.program": S,
     **under("window.activations.values.*", ENTRY),

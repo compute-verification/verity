@@ -36,11 +36,13 @@ sys.path.append(str(ROOT / "benchmarks" / "one_stage"))
 import served_verdicts as SV  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-#: a scan round's registration provenance (`scan_zk`'s)
+#: a scan round's registration provenance (`scan_zk`'s), its state's reads and row 0's opening included
 SCAN_WINDOW = {"kind": "stand-in", "link": "registered: each row port at the network certifier's signed root",
                "of": "round honest: link-windows [0] of the network certifier's run",
                "members": {"first": {"template": "IngressScanFirst_v3", "units": [0]},
-                           "egress-0": {"template": "EgressBucket_v1", "units": [1, 2]}}}
+                           "egress-0": {"template": "EgressBucket_v1", "units": [1, 2]}},
+               "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, 1]}, "sin": {"leaf": 1, "units": [1, 2]}}},
+               "empty": {"scan/state": {"words": 4, "salt": "07" * 192, "path": "08" * 64}}}
 #: V3c's committed window's provenance: `prove_path.py window-commit`'s class and scan state, `rows.registration`'s kind
 #: and run root, `Window.write`'s circuit record and registered roots, `rows.write`'s index leaf and order
 V3C_WINDOW = {"kind": "served", "run": "ab" * 64, "window_circuit": {"class": [4, 32, 4, 4, 16]},
