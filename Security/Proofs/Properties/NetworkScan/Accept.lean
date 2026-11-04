@@ -9,7 +9,7 @@ import Proofs.Properties.Nci.BodiesOk
 egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
 returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
 its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`) with two templates,
-or three where the window has a later step, which part (3) reads.
+or three where the window has a later step, which part (3) reads, its root one of its Definitions.
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -53,6 +53,7 @@ structure Accepted (P : Prog) (s : Schedule) : Prop where
   ingress : ∀ t < s.window, Ingress P s (bucket P t)
   topo : P.orderViolation = none
   shape : (∃ a e, templateNodes P = [a, e] ∧ s.window ≤ 1) ∨ ∃ a b e, templateNodes P = [a, b, e]
+  root_lt : P.root < P.defs.size
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β} (h : (x >>= f) = .ok y) :
     ∃ a, x = .ok a ∧ f a = .ok y := by
@@ -114,6 +115,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨root, hroot, h⟩ := bind_ok h
   replace hroot := needSome_ok hroot
+  have hrlt : P.root < P.defs.size := (Array.getElem?_eq_some_iff.1 hroot).1
   obtain rfl : root = P.defs[P.root]! := by
     obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hroot
     rw [getElem!_pos P.defs _ hlt, e]
@@ -200,7 +202,8 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
       simp only [Option.some.injEq] at hln
       omega
     · exact .inr ⟨a, b, e, hts⟩
-  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15, hshape⟩
+  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15, hshape,
+    hrlt⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa

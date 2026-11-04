@@ -15,7 +15,8 @@ What the scan's and the wired rows' proofs read about Bits' key program lowered 
 * inputs: a lowered gate is `.input` exactly at an input gate the constants don't fix (`prog_input_iff`);
 * outputs: the key program returns every instance's output copy bits (`mem_outs_keyProg`), each a row
   (`row?_outGate`) whose position holds its AND (`prog_and`), and the members return theirs from `base`
-  (`mem_outs_jointOf_iff`);
+  (`mem_outs_jointOf_iff`); an output copy bit in range on a computed row has a gate (`outGate_isSome`), and its
+  position is returned and not an input (`outBit_returned`);
 * reads: a key program's row reads the constants and its own unit's gates (`row_unit`, through `wireOf`), so a lowered
   gate reads the constants and its own unit's positions (`reads_unit`), and in the members' program a gate that depends
   on a unit's position is that unit's (`depends_unit`); the members' program reads only its own positions
@@ -679,6 +680,28 @@ theorem mem_outs_jointOf_iff (ms : Members) (y : ℕ) :
     refine ⟨m, hm, _, ?_, rfl⟩
     simp only [memberProg, prog]
     exact List.mem_map_of_mem ((mem_outs_keyProg _ _ g).2 ⟨u, k, j, t, hg⟩)
+
+/-- **An output copy bit has a gate** where its unit, instance, leaf and bit are in range and its column is a computed
+row (`outGate_some`'s converse). -/
+theorem outGate_isSome {c : Flock.Circuit} {n u k j t : ℕ} (hu : u < n) (hk : k < c.upv)
+    (hj : j < (c.leavesOut.getD k #[]).size) (ht : t < 16) (h1 : (Rows.ofNet c.unit).nIn ≤ outCol c j t)
+    (h2 : outCol c j t < (Rows.ofNet c.unit).nIn + (Rows.ofNet c.unit).nComp) :
+    ∃ g, outGate c n u k j t = some g := by
+  unfold outGate
+  simp [hu, hk, hj, ht, h1, h2]
+
+/-- **A member's output copy bit is returned, and not an input,** in the members' program. -/
+theorem outBit_returned (ms : Members) {m u k j t x : ℕ} (hm : m < ms.length)
+    (h : outBit (ms.getD m default).1 (ms.getD m default).2.size u k j t = some x) :
+    base ms m + x ∈ (jointOf ms).outs ∧ (jointOf ms).gates[base ms m + x]? ≠ some .input := by
+  refine ⟨(mem_outs_jointOf_iff ms _).2 ⟨m, hm, u, k, j, t, x, h, rfl⟩, ?_⟩
+  simp only [outBit, Option.map_eq_some_iff] at h
+  obtain ⟨g, hg, rfl⟩ := h
+  obtain ⟨a, b, hab⟩ := prog_outGate (consts (ms.getD m default).1 (ms.getD m default).2.size) hg
+  rw [getElem?_jointOf ms hm (lt_length_of_getElem? _ _ hab)]
+  unfold memberProg
+  rw [hab]
+  simp [bgateAt]
 
 /-! ## Reads in the members' program -/
 
