@@ -9,8 +9,8 @@ SHA-512 chunks of 64 words, as a Flock port row and its `values` row are laid ou
 16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` sampled from the operating system once, at registration,
 `b || c = hm96.SHA512.commit_string(default_key, x, y)`, and the frame-v3-sha512 leaf `row_leaf(D, r,
 hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The value's root is the frame-v3-sha512 root over its
-rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes
-of `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})`, with
+rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the 64
+bytes of `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})`, with
 `"word_bits"` beside them when it is not 16 (16 is the default, so a 16-bit value's domain, entry and root are what they
 were before `word_bits`). The prover keeps the rows and salts; the registration names the root.
 
@@ -66,7 +66,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest
+from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
@@ -80,7 +80,7 @@ from verity.ml.circuits.types import Array
 
 from . import partition as P
 
-REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
+REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
 READS = "verity/registered-reads/v0"
 #: the format whose port may carry `READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
@@ -112,7 +112,7 @@ PRODUCED_KEY = "produced"
 #: the domain binding's key a value committed inside its window's open root adds in the window's place: the session the
 #: auditor's ledger opened for the window (PoUW's round-0 input-ids table, `credit.domain_of`)
 SESSION_KEY = "session"
-SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
 WINDOW_SALT = "verity/one-stage/window-salt/v1"
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
@@ -164,12 +164,11 @@ def domain(program: str, value: str, words: int, leaves: int, word_bits: int = W
         raise ValueError(f"a session is a nonempty string, not {session!r}")
     if produced is not None and not (isinstance(produced, str) and len(produced) == 128 and _HEX.fullmatch(produced)):
         raise ValueError(f"a registration digest is lowercase hex of 64 bytes, not {produced!r}")
-    binding = identity_digest(REGISTERED_DOMAIN, {"program": program, "value": value, "schema": SCHEMA, "words": int(words),
-                                                  "leaves": int(leaves), **width_entry(word_bits),
-                                                  **({} if window_root(window) is None else {WINDOW_KEY: window}),
-                                                  **({} if produced is None else {PRODUCED_KEY: produced}),
-                                                  **({} if session is None else {SESSION_KEY: session})})
-    return CommitmentDomain(bytes.fromhex(binding), OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
+    binding = identity_digest_sha512(REGISTERED_DOMAIN, {
+        "program": program, "value": value, "schema": SCHEMA, "words": int(words), "leaves": int(leaves),
+        **width_entry(word_bits), **({} if window_root(window) is None else {WINDOW_KEY: window}),
+        **({} if produced is None else {PRODUCED_KEY: produced}), **({} if session is None else {SESSION_KEY: session})})
+    return CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
 
 
 def row_words(row: Sequence[int], word_bits: int = WORD_BITS, schema: str = SCHEMA) -> list[int]:
@@ -438,11 +437,12 @@ def registered_entries(program: Program, values: Mapping[str, int], schemas: Map
 
 
 def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
-    """Row i's public salt of a supplied value: SHAKE256 of `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and
-    i (u32 little-endian), NUL between them, 192 bytes. They hide nothing the record doesn't show: the reads need only the
-    commitment's binding."""
+    """Row i's public salt of a supplied value: 192 bytes of SHA-512 in counter mode (`SHA-512(m ‖ u32be c)` for c < 3, each
+    output whole) over `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and i (u32 little-endian), NUL between
+    them. They hide nothing the record doesn't show: the reads need only the commitment's binding."""
     head = SUPPLIED_SALT.encode() + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
-    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(_INST.salt_bytes) for i in range(n)]
+    return [b"".join(hashlib.sha512(head + i.to_bytes(4, "little") + c.to_bytes(4, "big")).digest()
+                     for c in range(_INST.salt_bytes // 64)) for i in range(n)]
 
 
 def sources(supplied: Any) -> dict[str, list[list[tuple[str, str]]]]:

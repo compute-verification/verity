@@ -226,8 +226,8 @@ abbrev CHALLENGER_COMMITMENT : String := "verity/challenger/commitment/v1"
 abbrev CHALLENGER_RELEASE_LOG : String := "verity/challenger/release-log/v1"
 abbrev INTEGRITY_PROFILE : String := "verity/integrity-profile/v1"
 abbrev ONE_STAGE_AUDIT : String := "verity/one-stage/audit/v0"
-abbrev ONE_STAGE_REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
-abbrev ONE_STAGE_SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v0"
+abbrev ONE_STAGE_REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
+abbrev ONE_STAGE_SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v1"
 abbrev ONE_STAGE_PERIOD_SALT : String := "verity/one-stage/window-salt/v1"
 abbrev PROOF_SERVICE_OUTCOME : String := "verity/proof-service/outcome/v0"
 abbrev PROOF_SERVICE_STREAM : String := "verity/proof-service/stream/v0"
@@ -386,9 +386,8 @@ abbrev NETWORK_CERTIFICATE : String := "verity/network-certificate/v4"
 abbrev NETWORK_RECORDS : String := "verity/network-records/v3"
 abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 
--- Not yet read from here: composition (onsite, remote, product)
+-- Not yet read from here: composition (onsite, remote)
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v0"
-abbrev PRODUCT_PROTOCOL : String := "verity/product/v0"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
 
 -- Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)
