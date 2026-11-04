@@ -150,7 +150,7 @@ theorem openStepM_unit (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arra
   have key : ∀ (P : _root_.Flock.TMW _root_.Flock.Firewall.Drive.OpenM Memo) s0 s1,
       (fun _ => ()) <$> (P.run' s0).run' s1 = (((fun _ => ()) <$> P).run' s0).run' s1 := by
     intro P s0 s1
-    simp only [StateT.run'_eq, StateT.run_map, Functor.map_map, Function.comp_def]
+    simp only [StateT.run'_eq, StateT.run_map, Functor.map_map]
   unfold _root_.Flock.Firewall.Drive.openStepM _root_.Flock.Firewall.Drive.openStep
   dsimp only
   rw [key]
@@ -163,8 +163,8 @@ theorem openStepM_unit (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arra
   by_cases hk : (s.size != coins.size) = true
   · simp only [hk, ↓reduceIte]
     rfl
-  · simp only [hk, ↓reduceIte, map_bind, pure_bind, ← _root_.Flock.Firewall.Finish.repOpeningMemo_fst none,
-      bind_map_left, map_pure]
+  · simp only [hk, Bool.false_eq_true, ↓reduceIte, map_bind, pure_bind,
+      ← _root_.Flock.Firewall.Finish.repOpeningMemo_fst none, bind_map_left, map_pure]
 
 theorem schedSoFar_alg (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (p : _root_.Flock.Firewall.Frames.Rep)
