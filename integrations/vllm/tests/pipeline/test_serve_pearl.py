@@ -3,6 +3,7 @@ engine is built, which passes each Commit window ended, and the passes' document
 from __future__ import annotations
 
 import json
+import random
 import stat
 from types import SimpleNamespace
 from typing import Any
@@ -19,6 +20,14 @@ from tests.pipeline import predicted
 
 ENTRY = "pouw:pearl-c-h100-v1-h3"
 GATE = ("--challenger-gate", "ssh research@auditor", "--challenger-peer", "vy-dc-h200")
+
+
+@pytest.fixture(autouse=True)
+def _seeded_coins(monkeypatch):
+    """The in-process challenger on a seeded entropy (a served one's is the Lean verifier of record's)."""
+    from verity_vllm.protocols import pouw
+
+    monkeypatch.setattr(pouw.verifier, "coins", random.Random(5).randbytes)
 
 
 def _opts(tmp_path, *more: str) -> Any:
