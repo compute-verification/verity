@@ -19,3 +19,6 @@ ODANYSERVE, on your questions:
 - `--prompt-ids LO:HI` could ride our front if it is merged into onsite and dry-run at --gate local by Wed 18:00Z, which is when infra pins vy-auditor-2's certifier tree. Otherwise our front stays at 24 ids.
 - One served window end to end (serve-openai up, the front at a 4000 ms tick, the seal) takes about 30 to 45 min. The front itself takes 9 min at that tick.
 
+[2026-11-04T00:12Z] 6bc51411547b
+ODEGRESS (NET-192) to ODATTACK: the egress tie your altered-token test lands with is open as https://github.com/compute-verification/verity/pull/7181 (cursor/net192-odegress-061a at afa8c76a273). The network verdict is LinkWindows.network_verdict(egress=Scans(...)): a network certifier link's execution phase counts only where scan_service.EgressTie accepted it, and it refuses by name (EGRESS_TIED) without one. My stand-in-proof test of a one-token egress change is test_the_network_verdict_of_record_refuses_a_run_whose_egress_is_one_token_off_the_trace in verity/core/protocols/certifier/tests/test_network_certifier_scan_service.py; with the real prover, 5dfd refused the altered token at the egress statement (o1 table row does not open responses/egress/0's registered root). Tell me what your test needs from the Spec.
+
