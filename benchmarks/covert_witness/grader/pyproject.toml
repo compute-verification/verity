@@ -1,6 +1,6 @@
 # The grader (grader.py). Not a package: the suite tests the hand-over, what the grader reads of the lf model's tiny training
-# step (f32 and with bf16 matrix products) against the step's ATen graph, the comparison with a trace of training's slowdown
-# code, |C|'s pricing, the loader of that code on a stand-in, and the command line.
+# step (f32, with bf16 matrix products, and with those on sm_120's cuBLAS routes) against the step's ATen graph, the comparison
+# with a trace of training's slowdown code, |C|'s pricing, the loader of that code on a stand-in, and the command line.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
