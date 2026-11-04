@@ -1,6 +1,7 @@
 import Properties.NetworkScan
 import Proofs.Properties.NetworkScan.Accept
 import Proofs.Properties.NetworkScan.Lowered
+import Proofs.Properties.NetworkScan.Query
 import Proofs.Flock.SamplingScope
 
 /-!
