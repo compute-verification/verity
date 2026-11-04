@@ -3362,12 +3362,6 @@
    "assumptions": [],
    "type_hash": "3824aad752bcde7f7623cbf22f9be6692c3423041bbb695ccbffdf3504ac7449"
   },
-  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
-   "owner": "@proofs",
-   "signature": ["Properties.Pouw.PearlPlus.refusedBeforeTheCoin : Properties.Pouw.PearlPlus.RefusedBeforeTheCoin"],
-   "assumptions": [],
-   "type_hash": "04a994afa72912a80e8367b3a327cd717d628c83ee8ad19f3ec1f9c4a2ff6feb"
-  },
   "Properties.Pouw.PearlPlus.tileAcceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.tileAcceptMeans : Properties.Pouw.PearlPlus.TileAcceptMeans"],
@@ -5283,10 +5277,6 @@
     "function": "PouwCheck.PearlPlus.plan",
     "outcome": "accept"
    },
-   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
-    "function": "PouwCheck.PearlPlus.plan",
-    "outcome": "accept"
-   },
    "Properties.Pouw.PearlPlus.tileAcceptMeans": {
     "function": "PouwCheck.PearlPlus.checkTile",
     "outcome": "accept"
@@ -6051,6 +6041,7 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "unstated: where `plan` refuses (a pass retained or given up after the coin, a pass that doesn't load, passes that share a call), the run's answer is that refusal, with no plan, verdicts or work; a draft statement, unproved, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two openings of one position of an hm96 tree, both accepted against its root, open one value, or two different messages hashed in checking them (`rowsHashed`) have one SHA-512 digest; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted run publishes is `creditAtAssumption` over the plan's passes at the run's draws, the draws that landed on a tile over its inert-work bound (X_O) and δ = 1/100, crediting nothing on a test instance's input, and a refused or rejected run publishes none; a draft statement, unproved, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "unstated: Pearl+'s run draw names, for draw j, the tile of the ticket (Pouw.Ticket, in finSigmaFinEquiv's order) its key's stream j numbers, the law Pouw.MissBound reads, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
@@ -11552,7 +11543,6 @@
     "Properties.Evaluator.Casts.f32ToE4m3Sat",
     "Properties.Evaluator.Casts.roundEvenDyadic",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans"
    ]
   },
@@ -11653,7 +11643,6 @@
     "Properties.Evaluator.Fp32.roundSum",
     "Properties.Evaluator.Fp32.zeroWord",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
     "Properties.Pouw.PearlPlus.yIsTheUnscale"
@@ -11728,7 +11717,6 @@
     "Properties.Evaluator.Scalar.selectBf16",
     "Properties.Evaluator.Scalar.selectI32",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
     "Properties.Pouw.PearlPlus.yIsTheUnscale"
@@ -11745,7 +11733,6 @@
     "Properties.Evaluator.TC.ampereBf16Dot16",
     "Properties.Evaluator.TC.hopperBf16Dot16",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap"
    ]
@@ -11803,7 +11790,6 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap"
    ]
@@ -11887,7 +11873,6 @@
     "Properties.Evaluator.TC.valueTerm",
     "Properties.Evaluator.TC.zero",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans"
    ]
   },
@@ -12065,7 +12050,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -12771,7 +12755,6 @@
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -12971,7 +12954,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -13284,7 +13266,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -13456,7 +13437,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -13756,7 +13736,6 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -15911,7 +15890,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -19498,7 +19476,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -19556,8 +19533,7 @@
     "Properties.Pouw.Commit.saltSize",
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
-    "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin"
+    "Properties.Pouw.PearlPlus.planMeans"
    ]
   },
   "PouwCommit.Draws": {
@@ -19591,7 +19567,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -19657,7 +19632,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans"
    ]
   },
@@ -19704,7 +19678,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -19745,7 +19718,6 @@
    "guarantees": [
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans"
    ]
   },
@@ -19769,7 +19741,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
@@ -19817,11 +19788,7 @@
     "PouwCheck.PearlPlus.replay": "5e594110dc7685309b0566a28eabbf90bfdcd32ab17cd31adf2424192be5c702",
     "PouwCheck.PearlPlus.replay._sparseCasesOn_5": "a56c995847250cb2fc442cf03de59e4ad8bb94a6268945f9c92befc3f9d8f619"
    },
-   "guarantees": [
-    "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin"
-   ]
+   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans", "Properties.Pouw.PearlPlus.planMeans"]
   },
   "PouwPearlPlus.Credit": {
    "digest": "c29dc95bd6ea898f52dba2b33015f1235824d112427c6a39bcb3abbdaeea905c",
@@ -19831,7 +19798,7 @@
     "PouwCheck.PearlPlus.creditAtAssumption": "05dd4509a6353eaae4b5f1a1d07e8ffe175c2f8ad7f258a639fb86d312912281",
     "PouwCheck.PearlPlus.epsilon": "cb15503d36361237c23d6ffc1590016fc2beeaadfc9bfa5b9fac547eb99072e0"
    },
-   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans", "Properties.Pouw.PearlPlus.refusedBeforeTheCoin"]
+   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans"]
   },
   "PouwPearlPlus.Load": {
    "digest": "8d01b014f849403480c41a66a0cf8d2845b3b4ce2f25a51355685f505a3b2857",
@@ -19868,8 +19835,7 @@
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
-    "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin"
+    "Properties.Pouw.PearlPlus.planMeans"
    ]
   },
   "PouwPearlPlus.Records": {
@@ -19932,7 +19898,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap"
    ]
@@ -19980,7 +19945,6 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
     "Properties.Pouw.PearlPlus.yIsTheUnscale"
@@ -20023,7 +19987,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans"
    ]
   },
@@ -20049,11 +20012,7 @@
     "PouwCheck.PearlPlus.words32": "b0a75e9e9bb49c20ebb11518c9a7617e4ba5c9981300196f3173a89f497fe718",
     "PouwCheck.PearlPlus.yBinding": "d40152a558ebd58425577e7151fbd958df74d6dfc0185e78477a987f8c20417e"
    },
-   "guarantees": [
-    "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
-   ]
+   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans", "Properties.Pouw.PearlPlus.tileAcceptMeans"]
   },
   "PouwPearlPlus.Words": {
    "digest": "c7bf49932de60154ba86899601accdd4ba05995fc5c848f16b14762ef11c6087",
@@ -20122,7 +20081,6 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap"
    ]
@@ -22289,7 +22247,6 @@
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
     "Properties.Pouw.PearlPlus.yIsTheUnscale"
