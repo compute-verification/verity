@@ -192,7 +192,7 @@ Protocols and claims:
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
   under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
 - `Flock.Guarantees.RecursiveAuditHolo` may rest on `registrant-holds-openings`; in Lean the salt is a binder
-  applied at the salts the prover's workers committed under, never `∃ salt` or a `Classical.choose` of one.
+  applied at the salts the prover committed under, never `∃ salt` or a `Classical.choose` of one.
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.

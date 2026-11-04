@@ -33,7 +33,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
   `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session. Under `--zk` with
-  `FC_FIREWALL=1`, `flock-circuit` is the prover workers' side of the ZK server, which is Lean
+  `FC_FIREWALL=1`, `flock-circuit` is the prover's side of the firewall, which is Lean
   (`../../core/service/flock/Flock/Firewall`, `flock-firewall`, and its release side `../../core/service/firewall/`):
   `live/PROTOCOL.md` §10.4 says what each side computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.

@@ -514,7 +514,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   implemented.
 - **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
   keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
-- **The firewall** (with C-Flock's ZK server):
+- **The firewall** (C-Flock's):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, queued check coins are the
     fix, and `Timed` must then read the check coin's time apart from the selection's;
   - main's batch rule fixes every staged statement before any run's challenge phase. Dither's statements are staged

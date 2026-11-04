@@ -136,15 +136,15 @@ negatives.
   test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
   `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
   law the registered one among it), its run, registration and partition, each sampled member's public body and a live
-  sample's receipt and record. Each sampled member is one `prove --zk` session behind the Lean ZK server, one at a time, served the bundle's
+  sample's receipt and record. Each sampled member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
   sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
-  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the ZK server and
-  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the firewall and
+  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and firewall into its `out/bin`, stamped
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
   source, so M3's reserved window doesn't spend time on the build.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
-  `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
-  record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
+  `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
+  record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
   spends on one sampled statement of a block's sample.
 - `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,

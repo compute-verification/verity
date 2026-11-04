@@ -35,7 +35,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 ## Parties
 
 - **The developer** (the prover) runs the datacenter. It registers, reports its advice, commits its values and proves the sampled
-  proof blocks behind the ZK server. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
+  proof blocks behind the firewall. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
 - **The auditor** has two parts, both on auditor hosts that the developer doesn't control: its **challenger** (the
   live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each sampled
@@ -83,12 +83,12 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
 3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
    1. The developer reports its advice a_j, at most ℓ_a bits, committed. B(a_j) outputs the execution block E_j,
       partitioned into inference blocks, each of which is partitioned into proof blocks, with its placement. The
-      developer proves through the ZK server that it ran B correctly on the committed advice of at most ℓ_a bits, and
+      developer proves through the firewall that it ran B correctly on the committed advice of at most ℓ_a bits, and
       that B's output explains the committed trace: each proof block's inputs and outputs are committed values. The
       same statement can prove that every inference block has c gates and reads at most k bits outside θ, which is the
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
-   3. The developer proves each sampled proof block with C-Flock `--zk` behind the ZK server, and the Lean verifier
+   3. The developer proves each sampled proof block with C-Flock `--zk` behind the firewall, and the Lean verifier
       `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
       proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
@@ -160,7 +160,7 @@ about learning, and they are where its scientific content lies; the second, the 
 
 ### 1. The proofs of the sampled proof blocks
 
-**Establishes.** One Flock `--zk` audit of the sampled proof blocks, proved through the ZK server, is knowledge sound:
+**Establishes.** One Flock `--zk` audit of the sampled proof blocks, proved through the firewall, is knowledge sound:
 if the verifier accepts, the prover knows values satisfying the sampled proof blocks, except with probability ε_ks + ε_bind: the knowledge-soundness
 error, plus the binding error, which here sums the Lean's link, rows and registered-reads terms.
 It is zero knowledge against an honest verifier: the verifier's view is simulatable without those values, to within the
@@ -423,7 +423,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading the
   result instead of assuming `Complies`.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
-  its check inside the ZK server is open.
+  its check inside the firewall is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
 - **The rate ceiling.** Reference efficiency, which sets ζ̄, is a hypothesis.
 - **Part 6's premises.**

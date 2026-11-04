@@ -155,7 +155,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
 | "verifier gateway" | the challenger |
 | "batch verifier" (B-Ligero's was another thing) | the verifier |
-| "workers", "GPU workers" for the party behind the firewall; the code's `Worker` names (`ZkServer.Worker`, `ZkServer.BWorker`, `firewall::run_worker`) and its comments, until renamed | the prover, which runs on the GPU servers |
+| "workers", "GPU workers" for the party behind the firewall; the code's `Worker` names (`ZkServer.Worker`, `ZkServer.BWorker`, `firewall::run_worker`), its comments and Flock's live protocol (`verity/ml/flock/live/PROTOCOL.md`), until renamed | the prover, which runs on the GPU servers |
 | "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
 | "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`HorizonSampling`, `RateHorizon`, `ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until they are renamed | monitoring period (`horizon` is its pooled reading) |

@@ -20,8 +20,8 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 (`SampledProofs.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
-sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
-server replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as
+sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the
+firewall replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as
 (b) says.
 
 ## Terms
@@ -158,7 +158,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.ml.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.ml.circuits.evaluation.evaluate_words` |
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
-| `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
+| `prove(statement, witness)` | firewall | a `Statement`, the openings | a proof | STAND-IN for Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
 | `sampled_proofs`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
@@ -229,7 +229,7 @@ In a noun-based layout, each part of the example goes where its noun is:
   digest of the chain (today's `verity.ml.circuits`).
 - `verity/commitments`: `commit`, `opens`, the row and frame commitments (today split between `one_stage.registered`,
   `verity.ml.commitments` and the certifier's own).
-- `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the ZK server.
+- `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the firewall.
 - `verity/protocols/onsite` and `verity/protocols/remote`: the parties and manifests, each composite's per-declaration
   subprotocol checks and `account`, over the composition's rule.
 - The model, its load and `operate` stay with the integration that serves them (`integrations/`).

@@ -132,7 +132,7 @@ The statements no pinned upstream build has (hidden outputs, `--zk`) agree with 
 Other scripts here hold one Lean part to its Python or Rust counterpart: `transcript_check.py` (the transcript and layout
 rebuilt from `PROTOCOL.md` alone), `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`,
 `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py`, `record_text.py`, `zk_mutants.py`,
-and the firewall's (`firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`): the ZK server's contract
+and the firewall's (`firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`): the firewall's contract
 and session loop against the inner phase's proxy, and each tamper control held to a visible refusal.
 
 ## Tests
