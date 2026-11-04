@@ -186,7 +186,9 @@ and never served (`onsite.SIMULATED` lists what the lab leaves unmet). In each z
 client are on the zone's boundary and every answer crosses the zone's uplink. The serve dirs, which hold the gate's
 fetch and its witness, stay under `--keep`, private and outside `--out`. The piece (`certifier_piece.py piece`:
 `network-rows` on the network certifier's records, the chain, then `network-period`) runs on each zone's serve dir at
-the endpoint's one Commit period, with the chain's scan at the class the front's gate ran (w63k4 by default). With no
+the endpoint's one Commit period, with the chain's scan at the class the front's gate ran (w63k4 by default), under
+the lab's own record of the run's deployment, its local gate's copy (`--certifier-key`: the lab is its own auditor,
+`onsite.auditor_record`). With no
 compute audit of the window (V3c), the period check refuses the honest case at the wiring. `record` writes `record.json` and `record.md`: each zone's verdicts (the gate's check,
 the chain's, the period check's) and its K in `PeriodLeakAccepted`'s terms (k_sched, k_fail, and ℓ_a,j, k_skip,j and
 T_j·log2 d_jit over m execution phases, ℓ_a,j being the period check's `scans[j].free`), per week, month and year,

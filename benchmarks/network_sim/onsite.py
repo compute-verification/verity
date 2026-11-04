@@ -15,7 +15,8 @@ active-warden path):
 - **the piece**: `certifier_piece.py piece SERVE_DIR WINDOW OUT/<zone>/piece`, the verdict path. It audits the kept
   run's records as rows (`network-rows`), runs the chain on the kept run (certs, endpoint, N2, tie and the scan at the
   run's class), then the period check (`network-period`), whose answer is the zone's verdict. WINDOW is the endpoint's
-  Commit period holding the front's requests (`window`).
+  Commit period holding the front's requests (`window`). The network certifier's key and session are the auditor's
+  record's (``--certifier-key``), the lab's own: its local gate's copy of the run (`auditor_record`).
 
 `front` runs every zone at once on a lab that is up in its shape and idle (`mockdc.py up`), and writes OUT/front.json.
 `piece` copies the front's outcome from ``--front`` (the front's OUT) into its own OUT, runs each zone's piece in turn
@@ -230,6 +231,22 @@ def scan_class(session: dict | None) -> str:
     return words[words.index("--scan-class") + 1] if "--scan-class" in words else GATE_CLASS
 
 
+def auditor_record(serve_dir: Path, into: Path) -> Path | None:
+    """The auditor's record of the kept run's deployment (`warden_chain.RECORD`, the piece's ``--certifier-key``)
+    written to ``into``. The lab is its own auditor, so the record is its local gate's own copy of the run (the front's
+    ``--gate local``: this tree's gate on a scratch host under the serve dir), as a served run's auditor reads the
+    gate's (``CERTIFIER_KEY``). None where the run or that copy is missing, and the piece then refuses."""
+    import warden_chain as WC
+    try:
+        run = CP.kept_run(serve_dir)
+        (gate,) = {p.parent.parent for p in (serve_dir / CP.PRIVATE / CP.SS.LOCAL_GATE).rglob(
+            f"{run}/out/deployment.json")}
+        into.write_text(json.dumps(WC.own_record(gate)))
+    except (CP.NotRun, SystemExit, OSError, ValueError):
+        return None
+    return into
+
+
 def piece(args) -> int:
     out, keep = dirs(args)
     given = Path(args.front).resolve() if args.front else out
@@ -247,9 +264,10 @@ def piece(args) -> int:
         serve, d = keep / b / "serve", out / b / "piece"
         d.mkdir(parents=True, exist_ok=True)
         cls = scan_class(_json(out / b / "front" / "session.json"))
+        key = auditor_record(serve, keep / b / "certifier-key.json")
         argv = [sys.executable, "-B", "-u", str(TRACES / "certifier_piece.py"), "piece", str(serve),
-                str(window(serve)), str(d), *(["--lean", args.lean] if args.lean else []),
-                f"CR_SCAN_ARGS=--class {cls}", *args.set]
+                str(window(serve)), str(d), *(["--certifier-key", str(key)] if key else []),
+                *(["--lean", args.lean] if args.lean else []), f"CR_SCAN_ARGS=--class {cls}", *args.set]
         print(f"{b}: the piece at the scan class {cls}", flush=True)
         with open(d / "piece.log", "w") as log:
             codes[b] = subprocess.run(argv, cwd=mockdc.ROOT, stdout=log, stderr=subprocess.STDOUT).returncode

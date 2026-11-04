@@ -1,15 +1,18 @@
-"""`onsite.py`'s window pick, its reading of the front's and the piece's released outcomes, and its record: each zone's
-verdicts and K in `PeriodLeakAccepted`'s terms, the lab's zones summed, labelled simulated. The front and the piece
+"""`onsite.py`'s window pick, the auditor's record of the run's deployment it hands the piece (its local gate's copy),
+its reading of the front's and the piece's released outcomes, and its record: each zone's verdicts and K in
+`PeriodLeakAccepted`'s terms, the lab's zones summed, labelled simulated. The front and the piece
 themselves need the lab's namespaces and the chain's builds, so they run as recorded runs (README, "The onsite path");
 here their outputs are written by hand in the shapes they release."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import io
 import json
 import math
+import shutil
 import tarfile
 from dataclasses import asdict
 from fractions import Fraction
@@ -197,6 +200,24 @@ def test_the_piece_takes_the_fronts_outcome_from_its_out(onsite, tmp_path):
     assert (out / "front.json").is_file() and (out / "b0" / "front" / "session.json").is_file()
     with pytest.raises(SystemExit, match="no front.json in"):
         onsite.piece(argparse.Namespace(**vars(args) | {"out": str(tmp_path / "other"), "front": None}))
+
+
+def test_the_pieces_record_of_the_deployment_is_the_local_gates_own_copy(onsite, tmp_path):
+    """`auditor_record`: the lab, its own auditor, hands the piece its local gate's own out/deployment.json of the kept
+    run as the auditor's record (`warden_chain.RECORD`), and none where the gate kept no copy of the run."""
+    serve, run = tmp_path / "serve", "r1"
+    kept = serve / onsite.CP.PRIVATE
+    (kept / run).mkdir(parents=True)
+    (kept / run / "fetch.tar.gz").write_bytes(b"")
+    gate = kept / onsite.CP.SS.LOCAL_GATE / "var" / "certifier" / run / "out"
+    gate.mkdir(parents=True)
+    dep = {"key": {"public": "ab"}, "session": "cd", "params": {}}
+    (gate / "deployment.json").write_text(json.dumps(dep, indent=1))
+    rec = json.loads(onsite.auditor_record(serve, tmp_path / "key.json").read_text())
+    assert (rec["schema"], rec["key"], rec["session"], rec["deployment"]) == ("certifier-key/v1", dep["key"], "cd", dep)
+    assert rec["deployment_sha512"] == hashlib.sha512((gate / "deployment.json").read_bytes()).hexdigest()
+    shutil.rmtree(kept / onsite.CP.SS.LOCAL_GATE)
+    assert onsite.auditor_record(serve, tmp_path / "none.json") is None and not (tmp_path / "none.json").exists()
 
 
 def test_keep_is_refused_inside_out(onsite, tmp_path):
