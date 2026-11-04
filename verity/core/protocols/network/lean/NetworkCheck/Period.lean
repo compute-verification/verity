@@ -715,15 +715,72 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries, record,
          circuit, stateFree }
 
+/-- Leaf `q` of a `prog<j>` argument of ingress buckets `t0, t0 + 1, …` mapped over its leading axis, `E` leaves a
+member: member `⌊q / E⌋`'s leaf `q mod E`, so leaf `q mod E` of row `⌊(t0 + ⌊q / E⌋) / every⌋` of lane `j`'s slot
+entries. -/
+def entryLeaf (t0 every E q : Nat) : Nat := (t0 + q / E) / every * E + q % E
+
+/-- Whether `⌊(t0 + m + a) / every⌋ − ⌊(t0 + m) / every⌋ = ρ` for every member `m` of `[a1, a2)`. The difference is
+`⌊a / every⌋`, plus one where `(t0 + m) mod every ≥ every − a mod every`; consecutive members' residues run on from
+`(t0 + a1) mod every`, so they all lie on the side `ρ` names when they stop short of that cut, or of `every`. -/
+def rowsStep (t0 every a ρ a1 a2 : Nat) : Bool :=
+  if a2 ≤ a1 then true
+  else if every == 0 then ρ == 0
+  else
+    let r := a % every
+    let res := (t0 + a1) % every
+    let last := res + (a2 - a1 - 1)
+    if ρ == a / every then r == 0 || last < every - r
+    else ρ == a / every + 1 && r != 0 && every - r ≤ res && last < every
+
+/-- Whether `entryLeaf (q + I) − entryLeaf q = σ` for every `q` of `[lo, hi)` (`1 ≤ E`), from the members the range
+touches rather than its leaves. With `I = α·E + β` and `q = m·E + l`, the difference is `(R (m + α + δ) − R m)·E + β −
+δ·E`, `R m = ⌊(t0 + m) / every⌋`, where `δ` says `E − β ≤ l`: for each `δ`, the members with such a leaf in the range,
+consecutive ones, step their rows by `(σ − β + δ·E) / E` (`rowsStep`). -/
+def stepsBy (t0 every E I : Nat) (σ : Int) (lo hi : Nat) : Bool :=
+  hi ≤ lo || (
+    let β := I % E
+    let m1 := lo / E
+    let m2 := (hi - 1) / E
+    let side := fun (δ a1 a2 : Nat) =>
+      let need : Int := σ - (β : Int) + (δ : Int) * (E : Int)
+      a2 ≤ a1 || (0 ≤ need && need % (E : Int) == 0 && rowsStep t0 every (I / E + δ) (need / (E : Int)).toNat a1 a2)
+    side 0 (if lo % E < E - β then m1 else m1 + 1) (m2 + 1) &&
+      (β == 0 || side 1 m1 (if E - β ≤ (hi - 1) % E then m2 + 1 else m2)))
+
+/-- Whether a part of a `prog<j>` argument, its references from `s` on, names leaf `entryLeaf t0 every E q` of node `k`
+at each `q`, in O(1) unless explicit: an affine part by its first reference, stepping by one; a strided part by its
+first reference, stepping by its inner stride within its first block and by its outer stride from block to block, which
+carries the first block's agreement to every block; an explicit part reference by reference. -/
+def partReads (k t0 every E s : Nat) : Flock.Program.Part → Bool
+  | .affine p i b c => c == 0 || (!p && i == k && b == entryLeaf t0 every E s && stepsBy t0 every E 1 1 s (s + c - 1))
+  | .strided p i b inner os is c =>
+    let I := if inner == 0 then c else inner
+    c == 0 || (!p && i == k && b == (entryLeaf t0 every E s : Int) && stepsBy t0 every E 1 is s (s + min I c - 1) &&
+      stepsBy t0 every E I os s (s + c - I))
+  | .explicit it => it.zipIdx.all fun (r, u) => r == { p := false, i := k, j := entryLeaf t0 every E (s + u) }
+
+/-- Whether a `prog<j>` argument's sequence is `N` references, reference `q` leaf `entryLeaf t0 every E q` of node `k`,
+part by part: a part's references are its own indices from its start (`Flock.Program.Seq.get` bisects to the part
+holding an index). -/
+def seqReads (s : Flock.Program.Seq) (N k t0 every E : Nat) : Bool :=
+  s.count == N && (s.parts.zip s.starts).all fun (q, st) => partReads k t0 every E st q
+
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
 and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `⌊(t0 + m) / every⌋` of input node `ks[j]`,
 lane `j`'s slot entries, `E` leaves a row, leaf by leaf (`Flock.Program.Arg.memberRef`). That row is lane `j`'s slot of
 the boundary whose Programs bucket `t0 + m` reads, leaf `⌊(t0 + m) / every⌋` of the chunk `wired` holds lane `j`'s
-tree to. -/
+tree to.
+
+It reads the argument's description part by part (`seqReads`), never member by member. Mapped over its leading axis
+(`dims` `(n, E)`), member `m`'s leaf `l` is reference `m·E + l`, so the argument is `n·E` references, reference `q` leaf
+`entryLeaf t0 every E q`; unmapped, every member reads its `E` references, so the members share one row. A mapping over
+an inner axis (`dims` `(n, L)`, `L < E`) is refused: no generator form reads its entries so. -/
 def readsEntries (x : Flock.Program.Node) (o t0 every E : Nat) (ks : List Nat) : Bool :=
   ks.zipIdx.all fun (k, j) => match x.args[o + j]? with
-    | some a => (List.range x.n).all fun m => (List.range E).all fun l =>
-        a.memberRef m l == { p := false, i := k, j := (t0 + m) / every * E + l }
+    | some a => x.n == 0 || E == 0 || (match a.dims with
+      | none => t0 / every == (t0 + x.n - 1) / every && seqReads a.seq E k t0 every E
+      | some (_, L) => L == E && seqReads a.seq (x.n * E) k t0 every E)
     | none => false
 
 /-- A batch of 3 members whose argument `1 + j` reads leaf `rows[m]` of node `k` at member `m`, one leaf a member, for
@@ -740,6 +797,29 @@ def entriesProbe (lanes : List (Nat × List Nat)) : Flock.Program.Node :=
   !readsEntries (entriesProbe [(7, [0, 1, 1])]) 1 1 2 1 [6] &&
   !readsEntries (entriesProbe [(7, [0, 1, 1]), (8, [0, 1, 1])]) 1 1 2 1 [8, 7] &&
   !readsEntries (entriesProbe [(7, [0, 1, 1]), (7, [2, 3, 3])]) 1 1 2 1 [7, 7]
+
+/-- A batch of `n` members whose argument `1` is `parts` under `dims`. -/
+def entriesNode (n : Nat) (dims : Option (Nat × Nat)) (parts : Array Flock.Program.Part) : Flock.Program.Node :=
+  Flock.Program.Node.mk .batch 0 #[⟨.value 1, .ofParts #[], none⟩, ⟨.value 1, .ofParts parts, dims⟩] (.value 1) #[] n 0
+
+/- Buckets 1 … 4 at `every` 2 read rows 0, 1, 1, 2 of 2 leaves: as affine runs, with the repeated row strided, and
+explicitly; at `every` 1 one run; unmapped, two buckets of row 1. Refused: a run past a row's repeat, a strided repeat
+stepping on, a run from the wrong row, unmapped buckets of two rows, a mapping over an inner axis and a short
+argument. -/
+#guard readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 4, .affine false 7 2 4]) 1 1 2 2 [7] &&
+  readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 2, .strided false 7 2 2 0 1 4, .affine false 7 4 2])
+    1 1 2 2 [7] &&
+  readsEntries (entriesNode 4 (some (4, 2))
+    #[.explicit (#[0, 1, 2, 3, 2, 3, 4, 5].map fun j => { p := false, i := 7, j })]) 1 1 2 2 [7] &&
+  readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 2 8]) 1 1 1 2 [7] &&
+  readsEntries (entriesNode 2 none #[.affine false 7 2 2]) 1 2 2 2 [7] &&
+  !readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 4, .affine false 7 4 4]) 1 1 2 2 [7] &&
+  !readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 2, .strided false 7 2 2 2 1 4, .affine false 7 4 2])
+    1 1 2 2 [7] &&
+  !readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 8]) 1 1 1 2 [7] &&
+  !readsEntries (entriesNode 2 none #[.affine false 7 2 2]) 1 1 2 2 [7] &&
+  !readsEntries (entriesNode 4 (some (4, 1)) #[.affine false 7 0 4, .affine false 7 2 4]) 1 1 2 2 [7] &&
+  !readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 4]) 1 1 2 2 [7]
 
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
 registered Program (`program`, its SHA-512) and the generator form of the schedule's execution phase: its root batches
@@ -762,7 +842,8 @@ is an ingress row's input node, so no egress gate depends on an ingress gate; an
 
 The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and lane `j`'s read one input node of
 its own, distinct from every other lane's and from the rows, lane `j`'s slot entries (`T / every` rows each, `lanes ·
-T / every` counted once among the input gates): bucket `t`'s `prog<j>` is its row `⌊t / every⌋` (`readsEntries`), the
+T / every` counted once among the input gates): bucket `t`'s `prog<j>`, mapped over its leading axis or unmapped, is
+its row `⌊t / every⌋` (`readsEntries`, read off the argument's parts), the
 leaf the period check's `wired` holds to chunk `j` of an audit's `SlotEntry_v1` or `SelectEntry_v1` entries port;
 their bits are the scan's `entries`. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
