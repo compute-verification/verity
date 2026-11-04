@@ -519,7 +519,8 @@ v3c_period() {  # V3c's audit as one compute audit of the network certifier's pe
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
     --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --circuits "$VW/circuits") > "$VLOG/period.log" 2>&1
   local rc=$?
-  [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/" && cp -r "$VW/circuits" "$OUT/v3c-audit/"
+  [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/" && rm -rf "$OUT/v3c-audit/circuits" \
+    && cp -r "$VW/circuits" "$OUT/v3c-audit/"
   say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$VLOG/period.log" | cut -c1-800)"
   return $rc
 }
