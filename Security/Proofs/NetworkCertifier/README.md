@@ -128,11 +128,9 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
                                          status complete, and each bound is false at the verifier that accepts
                                          everything (`acceptAll`); the per-execution-block forms at `e₀ = 0`, from
                                          the empty prefix. In the lock's `witnesses`
-PeriodWitnesses.lean  the monitoring period's two pairs (PeriodLeakAccepted, PooledLeakAccepted), in the
-                                         lock's `witnesses`: no binder over the instance, the sampled verifier's
-                                         code the one named assumption (Assumptions/SampledCode.lean)
-Assumptions/SampledCode.lean  `NetTiming.Assumptions.SampledCodeRuns`: the sampled verifier the service runs
-                                         is a `SamplingDeploy.Code` whose run meets the record's facts
+PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, none with a binder over the
+                                         instance: PooledLeakAccepted's pair and PeriodLeakAccepted's nontrivial,
+                                         whose honest half `unwitnessed` exempts
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
