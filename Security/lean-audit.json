@@ -2397,6 +2397,10 @@
      "Claims.Witness.Recursion.ZKPriv_meets"
     ]
    },
+   "Claims.ZKOut": {
+    "fails": "Claims.ZKOut_fails",
+    "meets": ["Claims.Flock.masked_meets_zk", "Claims.Flock.scope_meets_zk"]
+   },
    "Claims.Recursion.KSBound": {
     "fails": "Claims.Witness.Recursion.KSBound_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
@@ -2503,6 +2507,7 @@
   "not": {
    "Claims.Collision": "a helper the claims read: two inputs with one output",
    "Claims.ERepCost": "proved at every deployment (`Claims.ERep_cost`); Flock's `Efficient` reads it",
+   "Claims.ZKOutLeak": "a corollary of `ZKOut`, proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment",
    "Claims.ExtractRunsExpLe": "a helper the claims read: an extractor's expected reruns, at most a bound, which every `Efficient` reads",
    "Claims.ExtractRunsLe": "a helper the claims read: an extractor's reruns, at most a bound, which every `Efficient` reads",
    "Claims.Flock.InScope": "a helper the claims read: the forms Flock proves, which its scope reads",
@@ -6612,6 +6617,9 @@
    ],
    "assumptions": [],
    "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
+  },
+  "Claims.ZKOut_fails": {
+   "owner": "@proofs"
   },
   "Flock.Guarantees.recursiveKS_nontrivial": {
    "owner": "@proofs",
