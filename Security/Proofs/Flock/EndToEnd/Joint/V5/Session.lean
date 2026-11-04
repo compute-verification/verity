@@ -125,13 +125,13 @@ theorem accepted_drawnWrong_le (L : Law m.n) (hL : m.OneClass L) (τ : Strategy 
   refine (execRefinesZK_tables_drawnA execArith hs512 (planZHJP m.dj m.y₀) (AcceptsZKP m.I m.own) m.wr
     (opnAtZHJP (planZHJP m.dj m.y₀) m.I m.own m.dj) m.dg (decAtZJ (planZHJP m.dj m.y₀)) (fun _ _ _ _ => true)
     (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) m.N
-    (decodesZCJH_custodyAt m.I m.own m.ht (Flock.Desc.parse_flat m.hD) m.hcount _ m.dj m.y₀ m.wr L m.hTags m.hCust hL)
+    (decodesZCJH_custodyAt m.I m.own m.ht m.hcS m.hcount _ m.dj m.y₀ m.wr L m.hTags m.hCust hL)
     τ (fun S => ∃ u ∈ S, u ∈ m.wrongSet L hL τ)).trans ?_
   refine (prob_mono (q := fun o : Bool × Finset (Fin m.n) => o.1 = true ∧ ¬ Disjoint (m.wrongSet L hL τ) o.2)
     (fun o h => ⟨h.1, Finset.not_disjoint_iff.2 (let ⟨u, hu, hw⟩ := h.2; ⟨u, hw, hu⟩)⟩) _ _).trans ?_
   refine (zk_flock_drawnC_regC execArith hs512 m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon
     (loweringSoundZK_of_place execArith _ (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀)
-      (placeZHJP m.dj m.y₀ m.ht (Flock.Desc.parse_flat m.hD) m.hscope m.hU m.hpi))
+      (placeZHJP m.dj m.y₀ m.ht m.hcS m.hscope m.hU m.hpi))
     (Discharge.Layout.keyProgP_readsOwn _ m.hU m.n m.pi _)
     (Flock.Bridge.openingsCanonV5 m.n Reg m.I m.own m.ht m.D m.hD m.hU m.pi m.hpi m.pub m.hpub m.hscope m.kd m.dj
       m.S₀ m.d₀ m.y₀)
