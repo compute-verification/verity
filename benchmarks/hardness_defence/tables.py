@@ -8,6 +8,10 @@ The sources are the runs in SOURCES, fetched first with `research fetch RUN --al
 with rotated.py's current cost formulas (`rotated.score`), except K-chunked ones, which carry their own. Where several
 records price one matrix the same way (more ranks, other orders), the least per chip@price is kept. A matrix credited at
 a margin is credited at its least over the leaf / 1.05 of its MACs, the least over chips and prices.
+
+A rotation or live-noise variant is priced on a few matrices in the natural order only, beside design U's codes of the
+same run: its scores here are design U's least (every order priced) plus its change against that same-run record
+(estimated), so that it isn't credited with what the attacker's orders take off design U.
 """
 
 from __future__ import annotations
@@ -165,6 +169,7 @@ def chunk_split_least(rec: dict) -> float:
 
 def load(runs: Path) -> Book:
     book = Book()
+    refs, variants = {}, []
     for run, pattern, model, tags in SOURCES:
         dirs = sorted((runs / run / "out").glob(pattern))
         for d in dirs:
@@ -187,12 +192,21 @@ def load(runs: Path) -> Book:
                     for k in KEYS:
                         s = rotated.score(rec, k)
                         scores[k] = (s["over_leaf"], s["route"])
-                    book.add(model, rec["tensor"], (target, rot, deflate, 0, 1), scores, split, run, orders,
-                             split_least(rec))
+                    var = (target, rot, deflate, 0, 1)
+                    book.add(model, rec["tensor"], var, scores, split, run, orders, split_least(rec))
+                    if not orders and var == U:
+                        refs[(run, model, rec["tensor"])] = scores
+                    elif not orders and rot != U[1]:
+                        variants.append((run, model, rec["tensor"], var, scores, None))
                     if "noise" in rec:
                         ns = {k: (s["over_leaf"], s["route"]) for k in KEYS for s in [rotated.noise_score(rec, k)]}
-                        book.add(model, rec["tensor"], (target, rot, deflate, rec["noise"]["f"], 1), ns, True, run,
-                                 orders)
+                        nvar = (target, rot, deflate, rec["noise"]["f"], 1)
+                        book.add(model, rec["tensor"], nvar, ns, True, run, orders)
+                        variants.append((run, model, rec["tensor"], nvar, ns, scores))
+    for run, model, t, var, scores, ref in variants:
+        ref, base = ref or refs.get((run, model, t)), book.get(model, t)
+        if ref and base and var[0] == U[0]:
+            book.v[model][t][var] = {k: (base[k][0] + scores[k][0] - ref[k][0], scores[k][1]) for k in KEYS}
     return book
 
 
@@ -299,12 +313,12 @@ def noise(f):
 
 DEFENCES = {
     "design U (2%, no defence)": base,
-    "1: second Hadamard (where priced)": rotation("hadamard2"),
-    "1: Haar rotation (where priced)": rotation("haar"),
-    "1: output-side Hadamard too (where priced)": rotation("both"),
+    "1: second Hadamard (where priced, estimated)": rotation("hadamard2"),
+    "1: Haar rotation (where priced, estimated)": rotation("haar"),
+    "1: output-side Hadamard too (where priced, estimated)": rotation("both"),
     "2: least clip that clears, up to 30%": clip,
-    "3: live weight noise f=1 (where priced)": noise(1),
-    "3: live weight noise f=4 (where priced)": noise(4),
+    "3: live weight noise f=1 (where priced, estimated)": noise(1),
+    "3: live weight noise f=4 (where priced, estimated)": noise(4),
     "4: q, k, v at a margin": qkv_margin,
     "4: every broken matrix at a margin": margin,
     "4: q, k, v uncredited": qkv_out,
