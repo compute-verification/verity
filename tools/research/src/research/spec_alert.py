@@ -3,10 +3,11 @@ guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash, and the premises it rests on, its `premises`: a premise it gains or drops is shown), every definition the statements
-read (its hash, under `reads`), every listed premise no `reads` record holds (its `digest` under `assumptions` or `open`,
-of it and the definitions it reads: one that gains a digest is shown as recorded), the named assumptions (`assumptions`:
-one added or removed is shown, and so is a premise that becomes one) and the open premises (`open`: one listed, one
-discharged, and a new issue or due date are shown; an assumption that becomes open is tallied), what
+read (its hash, under `reads`), every listed premise no `reads` record holds (its `digest` under `assumptions`, `domain`
+or `open`, of it and the definitions it reads: one that gains a digest is shown as recorded), the named assumptions
+(`assumptions`: one added or removed is shown, and so is a premise that becomes one), the domain hypotheses (`domain`:
+one listed, with its `why`, one no longer listed, and a new `why` are shown) and the open premises (`open`: one listed,
+one discharged, and a new issue or due date are shown; an assumption that becomes open is tallied), what
 the shape rule exempts (`shape.frozen`:
 an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
 entry added there is shown). Between the main the push replaced and the one it
@@ -72,9 +73,9 @@ def _definitions(doc: dict) -> dict[str, tuple[str | None, str]]:
 
 
 def _listed(doc: dict) -> dict[str, tuple[str, dict]]:
-    """{premise: (its section, `assumptions` or `open`, its entry)} over the record's listed premises."""
+    """{premise: (its section, `assumptions`, `domain` or `open`, its entry)} over the record's listed premises."""
     out: dict[str, tuple[str, dict]] = {}
-    for k in ("open", "assumptions"):
+    for k in ("open", "domain", "assumptions"):
         section = doc.get(k) or {}
         if isinstance(section, dict):
             out |= {n: (k, r if isinstance(r, dict) else {}) for n, r in section.items()}
@@ -89,18 +90,28 @@ def _assumptions(doc: dict) -> dict[str, str | None]:
 
 
 def _premises(rec: dict) -> list[str] | None:
-    """The premises a guarantee's record says its statement rests on, named assumptions and open premises alike (one
-    that moves between them is no change to what the statement takes); None in a record written before records held
-    them."""
+    """The premises a guarantee's record says its statement rests on, named assumptions, domain hypotheses and open
+    premises alike (one that moves between them is no change to what the statement takes); None in a record written
+    before records held them."""
     p = rec.get("premises")
     p = {"assumptions": p} if isinstance(p, list) else p
     if not isinstance(p, dict):
         return None
-    return sorted({x for k in ("assumptions", "open") for x in (p.get(k) or []) if isinstance(x, str)})
+    return sorted({x for k in ("assumptions", "domain", "open") for x in (p.get(k) or []) if isinstance(x, str)})
 
 
 def _ticket(r: dict) -> str:
     return f"{r.get('issue')}, due {r.get('due')}"
+
+
+def _scope(r: dict) -> str:
+    return f"{r.get('why')}" + (f", citing `{r['cites']}`" if r.get("cites") else "")
+
+
+def _was(entry: tuple[str, dict]) -> str:
+    kind, r = entry
+    return {"assumptions": "a named assumption", "domain": f"a domain hypothesis: {_scope(r)}"}.get(
+        kind, f"open: {_ticket(r)}")
 
 
 def _frozen(doc: dict) -> dict[str, str]:
@@ -146,9 +157,11 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     The kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed;
     `premised`, text "", for a record that lists them for the first time), `definition`, `assumption` (a listed premise's
     digest changed under its name), `recorded` (a premise listed before, with a digest now), `assumed` (a named assumption
-    added, or an open premise now one), `unassumed` (a named assumption no longer listed), `open` (an open premise
-    listed), `opened` (text "": a named assumption now open), `discharged` (an open premise no longer listed),
-    `ticket` (an open premise's issue or due date changed), `frozen` (an entry added to `shape.frozen`, the guarantees and
+    added, or another premise now one), `unassumed` (a named assumption no longer listed), `domain` (a domain hypothesis
+    listed, or another premise now one, with its `why`), `undomained` (a domain hypothesis no longer listed), `scope` (a
+    domain hypothesis's `why` or `cites` changed), `open` (an open premise listed, or a domain hypothesis now one),
+    `opened` (text "": a named assumption now open), `discharged` (an open premise no longer listed), `ticket` (an open
+    premise's issue or due date changed), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
     `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
@@ -196,7 +209,7 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
             before = {h for h in aa.get(name, ()) if h is not None}
             if h1 is None or name not in aa or h1 in before:
                 continue
-            what = "open premise" if sections[name][0] == "open" else "assumption"
+            what = {"open": "open premise", "domain": "domain hypothesis"}.get(sections[name][0], "assumption")
             if not before:
                 out.append((_package(p), "recorded", f"• {what} `{name}` recorded: its statement and the definitions it "
                                                      f"reads are now digested in its record"))
@@ -208,10 +221,16 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     lb = {n: (_package(p), e) for p, d in news.items() for n, e in _listed(d).items()}
     for n, (p, (kind, r)) in sorted(lb.items()):
         was = la[n][1] if n in la else None
-        if kind == "assumptions" and (was is None or was[0] == "open"):
-            out.append((p, "assumed", f"• named assumption `{n}` listed" + (f" (was open: {_ticket(was[1])})" if was else "")))
-        elif kind == "open" and was is None:
-            out.append((p, "open", f"• open premise `{n}` listed ({_ticket(r)})"))
+        if kind == "assumptions" and (was is None or was[0] != "assumptions"):
+            out.append((p, "assumed", f"• named assumption `{n}` listed" + (f" (was {_was(was)})" if was else "")))
+        elif kind == "domain" and (was is None or was[0] != "domain"):
+            out.append((p, "domain", f"• domain hypothesis `{n}` listed: {_scope(r)}"
+                        + (f" (was {_was(was)})" if was else "")))
+        elif kind == "domain" and _scope(r) != _scope(was[1]):
+            out.append((p, "scope", f"• domain hypothesis `{n}`: {_scope(r)} (was {_scope(was[1])})"))
+        elif kind == "open" and (was is None or was[0] == "domain"):
+            out.append((p, "open", f"• open premise `{n}` listed ({_ticket(r)})"
+                        + (f" (was {_was(was)})" if was else "")))
         elif kind == "open" and was[0] == "assumptions":
             out.append((p, "opened", ""))
         elif kind == "open" and _ticket(r) != _ticket(was[1]):
@@ -219,7 +238,8 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     for n, (p, (kind, r)) in sorted(la.items()):
         if n not in lb:
             out.append((p, "unassumed", f"• named assumption `{n}` no longer listed") if kind == "assumptions" else
-                       (p, "discharged", f"• open premise `{n}` discharged: no longer listed ({_ticket(r)})"))
+                       (p, "undomained", f"• domain hypothesis `{n}` no longer listed ({_scope(r)})") if kind == "domain"
+                       else (p, "discharged", f"• open premise `{n}` discharged: no longer listed ({_ticket(r)})"))
     fa = {n for d in olds.values() for n in _frozen(d)}
     out += [(_package(p), "frozen", f"• frozen `{n}` (doesn't have the shape yet): {why}")
             for p, d in news.items() for n, why in sorted(_frozen(d).items()) if n not in fa]
@@ -256,6 +276,8 @@ def _tally(kinds: list[str]) -> str:
     d = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("definition", "changed"), ("rehashed", "rehashed")) if k in kinds)
     a = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("assumption", "changed"), ("recorded", "recorded"),
                                                        ("assumed", "named"), ("unassumed", "no longer named"),
+                                                       ("domain", "domain listed"), ("undomained", "domain dropped"),
+                                                       ("scope", "domain restated"),
                                                        ("open", "open listed"), ("opened", "now open"),
                                                        ("discharged", "discharged"), ("ticket", "re-ticketed"))
                   if k in kinds)

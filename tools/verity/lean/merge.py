@@ -9,8 +9,8 @@
                                                                the readers an older record lists
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
-a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the open premises, the dependencies, and the policy's own
-sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
+a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the open premises, the domain
+hypotheses, the dependencies, and the policy's own sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
 guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
 from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
 under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers (`audit.READER_KEYS`)
@@ -27,9 +27,9 @@ one side reads nowhere while the other kept it as the base had it is dropped (`g
 reads it, so in the merged tree only the other side's new or restated guarantees can, and one moved to another module
 leaves the old one (`moved`); a group left without definitions is dropped. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
-refuses when both sides changed it differently: an `owner`, an open premise's `issue` or `due`, a `shape` or `frozen` entry (a `shape.inline` entry is one
-premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
-sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
+refuses when both sides changed it differently: an `owner`, an open premise's `issue` or `due`, a domain hypothesis's
+`why` or `cites`, a `shape` or `frozen` entry (a `shape.inline` entry is one premise of a guarantee, so two sides that
+each add or drop premises of one guarantee merge: `DEEPER`; a premise both sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
 revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
 other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
 an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
@@ -102,7 +102,7 @@ CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"assumptions", "open", "guarantees", "reads", "dependencies", "compile_time"}
+SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`)
 NESTED = {"upstream", "shape", "claims", "trees"}
@@ -238,10 +238,11 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
 
 
 def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str], section: str = "assumptions") -> dict:
-    """The named assumptions (or, ``section`` `open`, the open premises) entry by entry, each one's hand-written fields
-    (`owner`; an open premise's `issue` and `due` too) apart from its `digest` (the build's: the hash its `reads` record
-    holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the train's Lean check
-    drops it when no guarantee of the merged tree reads it (`assumptions.unread`, `open.unread`)."""
+    """The named assumptions (or, ``section`` `open` or `domain`, the open premises or the domain hypotheses) entry by
+    entry, each one's hand-written fields (`owner`; an open premise's `issue` and `due`, a domain hypothesis's `why` and
+    `cites`) apart from its `digest` (the build's: the hash its `reads` record holds), which merges as `derived`.  An
+    entry one side removed and the other changed is kept: the train's Lean check drops it when no guarantee of the merged
+    tree reads it (`assumptions.unread`, `open.unread`, `domain.unread`)."""
     out = {}
     for k in keys(section, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
@@ -251,7 +252,7 @@ def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
             v = derived(f"{section}[{k}]", x, y, z, candidate)
         else:
             v = {}
-            for f in ("owner", "digest", "issue", "due"):
+            for f in ("owner", "digest", "issue", "due", "why", "cites"):
                 w = (derived if f == "digest" else one)(f"{section}[{k}].{f}", owned(x, f), owned(y, f), owned(z, f),
                                                         candidate if f == "digest" else why)
                 v |= {} if w is MISSING else {f: w}
@@ -416,7 +417,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate, records)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why, candidate)
-        elif k in ("assumptions", "open") and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
+        elif k in ("assumptions", "domain", "open") and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
             v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate, k)
             v = MISSING if not v and MISSING in (a, b) else v
         elif k in JUDGED and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):

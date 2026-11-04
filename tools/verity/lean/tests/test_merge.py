@@ -145,6 +145,13 @@ def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
     merged, why = M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-1", "2026-12-31"))
     assert why == [] and merged["open"]["P.Sound"] == {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-2",
                                                        "due": "2026-12-31"}, "one side's issue, the other's due date"
+    def scoped(rec, why, cites=None):
+        return rec | {"domain": {"P.Scope": {"owner": "@lean", "digest": "a" * 64, "why": why}
+                                 | ({"cites": cites} if cites else {})}}
+    assert M.merge(scoped(base, "x"), scoped(ours, "y"), scoped(theirs, "z"))[1] == [
+        "domain[P.Scope].why: changed on both sides, differently"]
+    merged, why = M.merge(scoped(base, "x"), scoped(ours, "y"), scoped(theirs, "x", "P.u"))
+    assert why == [] and merged["domain"]["P.Scope"] == {"owner": "@lean", "digest": "a" * 64, "why": "y", "cites": "P.u"}
 
 
 def test_an_owner_merges_apart_from_the_statement():

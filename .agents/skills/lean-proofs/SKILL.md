@@ -135,7 +135,11 @@ repository.
   `Security/Definitions/Assumptions.lean`, the lock's `assumptions_module`; the check refuses one declared elsewhere.
   Every other premise a guarantee takes (a premise about our own code or protocol) is open: listed under `open` with
   the Linear issue that discharges it and its due date, by hand, since `--update` adds none (`open_seed` once, at the
-  migration). Prove it, drop it, or move a real one into the file; the list only shrinks.
+  migration). Prove it, drop it, or move a real one into the file; the list only shrinks. A hypothesis that is part
+  of what the guarantee says (a domain or scope, an event a lemma conditions on, the layer below's guarantee in a
+  modular lemma, a specification the deployed instance meets) is listed under `domain` with a one-line `why` and no
+  issue; where the guarantee has an honest witness, that witness must conclude it at the deployed instance, else it is
+  open. Another listed guarantee's statement taken as a hypothesis is a domain entry citing it (`cites`).
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is

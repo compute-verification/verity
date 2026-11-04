@@ -198,7 +198,8 @@ reverted on `checked` (how a PR lands: the team skill).
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
   named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to.
+  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to, unless it
+  is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`).

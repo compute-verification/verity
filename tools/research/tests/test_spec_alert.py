@@ -136,6 +136,27 @@ def test_the_named_assumptions_and_the_open_premises_are_shown_as_they_change():
     assert spec.changes(new, new) == []
 
 
+def test_a_domain_hypothesis_is_shown_with_what_it_restricts_as_it_is_listed_moved_or_restated():
+    """A domain hypothesis owes no issue, so each one listed, each premise that moves in or out of `domain`, and a new
+    `why` are shown with what it restricts."""
+    def doc(**sections) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1)}) | sections
+    ticket = {"owner": "@proofs", "issue": "PROOFS-1", "due": "2026-11-30"}
+    scope = {"owner": "@proofs", "why": "the circuits the bound is over"}
+    old = doc(open={"P.Scope": ticket, "P.Kept": ticket}, domain={"P.Event": scope, "P.Back": scope, "P.Gone": scope})
+    new = doc(open={"P.Kept": ticket, "P.Back": ticket},
+              domain={"P.Scope": scope, "P.Event": scope | {"why": "the runs that accepted"},
+                      "P.Below": scope | {"why": "the layer below's guarantee", "cites": "P.u"}})
+    assert spec.changes(old, new) == [
+        "• open premise `P.Back` listed (PROOFS-1, due 2026-11-30) (was a domain hypothesis: the circuits the bound is over)",
+        "• domain hypothesis `P.Below` listed: the layer below's guarantee, citing `P.u`",
+        "• domain hypothesis `P.Event`: the runs that accepted (was the circuits the bound is over)",
+        "• domain hypothesis `P.Scope` listed: the circuits the bound is over (was open: PROOFS-1, due 2026-11-30)",
+        "• domain hypothesis `P.Gone` no longer listed (the circuits the bound is over)"]
+    assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
+        "premises: 2 domain listed, 1 domain dropped, 1 domain restated, 1 open listed"
+
+
 def test_an_entry_added_to_the_frozen_shape_list_is_shown_with_its_reason_and_one_removed_is_not():
     """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change, so the DM shows it."""
     base = _doc({"P.t": _g("P.t : A", H1)})

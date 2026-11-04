@@ -206,11 +206,12 @@ installs it first, so a machine without elan works), must pass clean and fail on
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions_module`: the one module a named assumption is declared in. `assumptions`: the named assumptions, each
-  with its `owner`, the premises declared there; one declared elsewhere fails. `open`: every other premise, each with
-  its `owner`, the Linear `issue` that discharges it and its `due` date, written by hand: an unlisted one fails, update
-  or not, naming the entry to write, and only `open_seed` ({module prefix or owner: {issue, due[, owner]}}, consumed)
-  lets `--update` add one. A premise is a closed hypothesis, or one a statement takes whose head the repository builds
+- `assumptions_module`: the one module a named assumption is declared in. `assumptions`: the named assumptions (with
+  `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
+  below's guarantee), with `owner` and a one-line `why`; `--update` adds one that is another listed guarantee's
+  statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,
+  the Linear `issue` that discharges it and its `due` date, by hand: an unlisted one fails, naming the entry to write,
+  and only `open_seed` ({module prefix or owner: {issue, due[, owner]}}, consumed) lets `--update` add one. A premise is a closed hypothesis, or one a statement takes whose head the repository builds
   (`Facts.lean`'s `premises`); a `Prop` a statement only reads is in neither, held by its `reads` record. A new named
   assumption fails until `--update` adds it with its guarantees' owner. An alias of listed premises is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of
   `∀` and `→` and reducible unfolding, only listed premises or such aliases (`Facts.lean`'s `unfolds`; what it takes may
@@ -219,11 +220,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
   module or of a module under `shape.premises` that a hypothesis mentions, or a hypothesis's head that the repository
-  builds (a condition or a scope, which no witness is held to). `--update` writes each one's `digest`: its `reads`
+  builds. `--update` writes each one's `digest`: its `reads`
   record's, else that of it and every definition it reads in `meaning` and this repository's modules
   (`assumption_reads`). So a change to a premise or to what it reads fails under its own name,
-  and the landing DM shows it; one no guarantee reads fails. A list of modules is the old form:
-  it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
+  and the landing DM shows it; one no guarantee reads fails.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
