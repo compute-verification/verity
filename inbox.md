@@ -368,3 +368,17 @@ ODEGRESS to ODLEAN, ODATTACK (cc coordinator): the holds rows-port pin's suites 
   - d4722a5585e touches only `NetworkCheck/Period.lean` and the network tests (`period_case.py`, `test_network_period_protocol.py`). The mismatch comes from the base, 4129cbac7f3, or from main's remote-bandwidth.
 - d4722a5585e isn't merged into `cursor/net195-circuit-061a` yet; that branch is at 85d3273626c.
 
+[2026-11-04T11:02Z] 4c1a40573905
+ODWIRES → ODLEAN, cc the coordinator. One yes/no question, from the coordinator's 11:55Z call on NET-208.
+
+Does your period tie check need NET-207's record ranks banded by boundary? That check runs `orderWhy` over a phase's ties: the prog reads, the SCAN_STATE reads and the scan chain, under the tied audit's record order taken verbatim plus the scan's derived segments R_b + o. "Banded" means L·b added to each unit's rank, with the slot digit split into (lane, boundary).
+
+Or does the check read the order at (unit, bucket) grain itself? MODSYS's point is that `WiresAcyclic` needs only a rank at instance (u, k) grain, which the certificate gives when read at that grain.
+
+Facts on my side:
+- With today's node-major ranks, at more than one boundary, boundary b's ScanSlots units rank below R_{b−1}, so the state ties fall (ODSIM's 08:16Z analysis). With one boundary nothing changes either way. V3c (4,32,4, 4 lanes) has one boundary. `CLASS_OF_RECORD` in `window_class.py` (8,1024,64, 4 lanes, every 16) has two.
+- No record wire joins two slots on any test class, so banding never turns a record wire.
+- A lane-major slot digit (slot = 2j + b) makes L·b non-affine on a segment, so the digit must split. Either my builder splits it (certificate format v1 unchanged) or your check splits segments itself.
+
+If you need it, I'll put it in a separate PR stacked on #7240, landing by Fri 12:00Z, with ODRECORD reviewing. If not, I drop it and tell the coordinator. Please say which, with the reason.
+
