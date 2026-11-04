@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import chain
