@@ -243,15 +243,15 @@ structure Reads where
   declared : Option (Array (String × String)) := none
 
 def readsOf : Option Json → V Reads
-  | none => pure ⟨none, #[], #[], #[]⟩
+  | none => pure { registered := none, known := #[], params := #[] }
   | some j => do
     let bound ← Flock.RegBound.ofJson j
     let j := Flock.RegBound.ownOf j
     let own ← Flock.Registered.ofJson j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
-    pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j,
-      bound⟩
+    pure { registered := some own, known := known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
+           params := ← Flock.Registered.paramsOf j, bound }
 
 /-- The ports the window's registered circuit record declares registered (`RegBound.declaredOfBytes`, its `program` the
 partition object's), from the blob `p.interface` names; none when it names none, and then a registered file that binds
