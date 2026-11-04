@@ -1,6 +1,6 @@
 """The scale-products policy (`verity_vllm.query.scale_products`): `ScaledMmFp8BlockSharedScale_v1` commits exactly its cdiv(N, G) * K/G
 F32Mul products, a ragged N's partial block in `fp8_twins.scale_products`' order; on a small FP8 Program, one `scale_products` identity per (step, linear module) on the op path of the module's output; a
-Program of `ScaledMmFp8Block_v1` (`fp8_scale_construction = per-coordinate`) gets none and a byte-identical manifest; the plan, coverage,
+Program of `ScaledMmFp8Block_v1`, which no target profile binds, gets none and a byte-identical manifest; the plan, coverage,
 form (B), the Build and the word check know the family.  The source: tests/acquire/test_scale_products_source.py."""
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ GU, DN = "model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"
 
 
 def fp8_program(shared: bool) -> dict:
-    """`_program_fp8`'s instance sequence, its GEMMs `ScaledMmFp8BlockSharedScale_v1` when `shared`."""
+    """`_program_fp8`'s instance sequence, its GEMMs `ScaledMmFp8Block_v1` unless `shared`."""
     inst, _woff, _wbits = _program_fp8()
-    if shared:
+    if not shared:
         for r in inst["rows"]:
-            r["spec"] = r["spec"].replace(f"{fp8.ScaledMmFp8Block.id}{{", f"{fp8.ScaledMmFp8BlockSharedScale.id}{{")
+            r["spec"] = r["spec"].replace(f"{fp8.ScaledMmFp8BlockSharedScale.id}{{", f"{fp8.ScaledMmFp8Block.id}{{")
     return inst
 
 

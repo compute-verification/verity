@@ -138,9 +138,9 @@ class TargetProfile:
                            `registry.sampling_vocab.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
                            `to_json()` when None.
     fp8_scale_construction -> how the blockwise FP8 GEMM's scale products `sx[kb] * sw[nb][kb]` are constructed (a Program static,
-                           declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
-                           `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
-                           `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
+                           declared-and-bound, never attested).  `"shared-per-block"` (the default when None, and the one value) binds
+                           `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
+                           from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
                            whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
@@ -216,7 +216,7 @@ class TargetProfile:
     DEFAULT_WEIGHT_ONLY_CALLS = "once"
     SAMPLER_CONSTRUCTIONS = ("greedy-check-per-stage", "shared-greedy")
     DEFAULT_SAMPLER_CONSTRUCTION = "shared-greedy"
-    FP8_SCALE_CONSTRUCTIONS = ("per-coordinate", "shared-per-block")
+    FP8_SCALE_CONSTRUCTIONS = ("shared-per-block",)
     DEFAULT_FP8_SCALE_CONSTRUCTION = "shared-per-block"
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken

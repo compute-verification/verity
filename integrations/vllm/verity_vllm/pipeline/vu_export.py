@@ -16,7 +16,8 @@ Each evaluated row is decomposed into the subcircuit a backend proves, and every
 relation before it is written (a decomposition that does not reproduce the row's words is an error, never an instance):
 
   Gemm_v1{K,N} / Gemm_v2{K,N,DOT}  -> GemmCoordinate<K>: x[K], w[K] (one weight row), y[1]; `gemm-coordinate-<dot>-k<K>`
-  ScaledMmFp8Block_v1{K,N,G}       -> ScaledMmFp8BlockCoordinate<K,G>: x[K] e4m3, sx[K/G] f32, w[K] e4m3, sw[K/G] f32 (the weight row's
+  ScaledMmFp8BlockSharedScale_v1{K,N,G}
+                                   -> ScaledMmFp8BlockCoordinate<K,G>: x[K] e4m3, sx[K/G] f32, w[K] e4m3, sw[K/G] f32 (the weight row's
                                       block scales), y[1] bf16; `gemm-coordinate-fp8-block<G>-hopper-e4m3-k<K>`
   MoeExpertGemm_v1{E,K,N}          -> GemmCoordinate<K> over a row of the routed expert: x[K], w[K], y[1];
                                       `moe-expert-gemm-coordinate-ampere-bf16-k<K>`
@@ -371,7 +372,7 @@ def _decompose_row(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
 
 
 DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose_gemm, "Gemm_v2": _decompose_gemm,
-                                                           "ScaledMmFp8Block_v1": _decompose_fp8_block,
+                                                           "ScaledMmFp8BlockSharedScale_v1": _decompose_fp8_block,
                                                            "MoeExpertGemm_v1": partial(_decompose_moe_expert, routed=False),
                                                            "MoeExpertGemmW_v1": partial(_decompose_moe_expert, routed=True),
                                                            "MoeExpertGemm_v2": partial(_decompose_moe_expert, routed=False),
@@ -394,7 +395,7 @@ def _expert_rows(g: int) -> Callable[[dict[str, Any], list], tuple[np.ndarray, d
 #: beside `DECOMPOSE`, keyed alike: the weight operand a coordinate cut reads rows of -> (operand index, its [N, K] rows and extra
 #: reference fields); the store keeps a fixed sample of those rows and the whole operand by checkpoint reference
 WEIGHT_ROWS_OF: dict[str, tuple[int, Callable[[dict[str, Any], list], tuple[np.ndarray, dict[str, Any]]]]] = {
-    "Gemm_v1": (1, _dense_rows(1, np.uint16)), "Gemm_v2": (1, _dense_rows(1, np.uint16)), "ScaledMmFp8Block_v1": (2, _dense_rows(2, np.uint8)),
+    "Gemm_v1": (1, _dense_rows(1, np.uint16)), "Gemm_v2": (1, _dense_rows(1, np.uint16)), "ScaledMmFp8BlockSharedScale_v1": (2, _dense_rows(2, np.uint8)),
     "MoeExpertGemm_v1": (2, _expert_rows(2)), "MoeExpertGemmW_v1": (3, _expert_rows(3)),
     "MoeExpertGemm_v2": (2, _expert_rows(2)), "MoeExpertGemmW_v2": (3, _expert_rows(3))}
 
@@ -422,7 +423,7 @@ def _rope_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], i
 
 #: beside `DECOMPOSE`, keyed alike: the template a Definition's Calls are cut into (every other Definition: the row itself)
 TEMPLATE_OF: dict[str, Callable[[str, dict[str, Any]], tuple[str, dict[str, Any], int]]] = {
-    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "ScaledMmFp8Block_v1": _fp8_block_template,
+    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "ScaledMmFp8BlockSharedScale_v1": _fp8_block_template,
     "MoeExpertGemm_v1": partial(_moe_expert_template, "GemmCoordinate"), "MoeExpertGemmW_v1": partial(_moe_expert_template, "RoutedGemmCoordinate"),
     "MoeExpertGemm_v2": partial(_moe_expert_template, "GemmCoordinate"), "MoeExpertGemmW_v2": partial(_moe_expert_template, "RoutedGemmCoordinate"),
     "Attention_v3": _attention_template, "Attention_v2": _attention_template, "RoPE_v1": _rope_template}

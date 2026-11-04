@@ -246,8 +246,8 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
 class CutlassScaledMmFp8BlockRule(InPlaceRule):
     """`_C.cutlass_scaled_mm(out! bf16 [.., N], a e4m3 [.., K], b = W.T ([K, N] view of e4m3 W [N, K]), a_scales f32 [.., K/G],
     b_scales = Ws.T ([K/G, cdiv(N, G)] view of f32 Ws [cdiv(N, G), K/G]: N may end mid-block, `fp8.weight_blocks`), bias None)` ->
-    `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by
-    default, ScaledMmFp8Block_v1 per-coordinate; the version 3 forms over the target's step where it is not Hopper's,
+    `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1, and
+    its version 3 form over the target's step where it is not Hopper's,
     `frontend.targets.fp8_block_dot`); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
     [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8) and is refused here, named.  A target whose GEMM record
