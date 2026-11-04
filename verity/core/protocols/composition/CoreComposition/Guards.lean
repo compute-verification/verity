@@ -117,8 +117,8 @@ private def stray (x : Stubbed) : Stubbed := { x with root := ⟨(List.replicate
 #guard (answerS [accepts "a", accepts "b", { accepts "c" with root := ByteArray.empty }]).reason ==
   some "c reject: commitment: a root is 32 bytes, not 0"
 
-private def reads (s : String) : String × (ByteArray → Option ByteArray) :=
-  (s, fun b => ((Stub.stub s).commitment b).toOption.map (Stub.stub s).digest)
+private def reads (s : String) : String × (Case → Option (List ByteArray)) :=
+  (s, fun k => ((Stub.stub s).commitment k.commitment).toOption.map fun c => [(Stub.stub s).digest c])
 
 private def tiedToy : Protocol :=
   tiedSame "verity/toy/v3" ["a", "c"] [⟨"store", [reads "a", reads "b"]⟩] [Stub.stub "a", Stub.stub "b", Stub.stub "c"]

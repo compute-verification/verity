@@ -30,7 +30,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
-  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`); then v1's
+  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
+  `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`); then v1's
   `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
@@ -210,9 +211,10 @@ private def headerLine (b : ByteArray) : ByteArray := Id.run do
     if b[i]! == 10 then return b.extract 0 i
   return b
 
+/-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
 private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
+  Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
