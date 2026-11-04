@@ -77,7 +77,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
    design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
    compiler B. It fixes no circuit: in the Lean (`Verity.RegisteredCircuit`, `Compiler.run`), D, θ, 𝓘 and the proof
-   blocks are B's output on the log's θ and the advice, and the committed trace is `Verity.Committed`.
+   blocks are B's output on the log's θ and the advice; the committed trace is `Verity.Committed`.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
 3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
@@ -421,7 +421,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
   property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
-  verdict's rate, not assuming `Complies c k` of d.
+  verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
