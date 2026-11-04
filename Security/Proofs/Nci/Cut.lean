@@ -34,8 +34,10 @@ all its gates.
 5. **Algebra** (`real_step`): `N ≤ m k + V`, `V ≤ √(m Π O) + √(m Π ∑ |E|)` and `∑ |E| ≤ m k / b_y` give `bound`, and
    `slowdown` follows by cases on `m` against `N / (k + α)` (`slow_step`).
 
-`onePremise` bounds `π(S) ≤ |S ∩ W| |S ∩ X|` (`pi_le_card_mul`) and applies AM–GM (`amgm_bound`). With shared arrays,
-`u_r = β_r |S ∩ A r|` and `q ≤ β_r β_s` on each matmul's arrays give `q π(S) ≤ ∑ u_r u_s` over those pairs:
+`onePremise` bounds `π(S) ≤ |val(S ∩ W)| |val(S ∩ X)|` (`pi_le_card_mul`: a MAC's pair of words goes to its pair of
+values, one-to-one since `val` is one-to-one on each matmul's words and no two matmuls share a pair of values) and
+applies AM–GM (`amgm_bound`). With shared arrays, `|S ∩ W_a| ≤ |val(S ∩ A r)|` (`card_inter_le_image`), and
+`u_r = β_r |val(S ∩ A r)|` and `q ≤ β_r β_s` on each matmul's arrays give `q π(S) ≤ ∑ u_r u_s` over those pairs:
 `sharedArrays` bounds the sum by `(∑ u)² / 3` (`triangle_bound`), and `sharedArraysClique` by the weighted Turán
 inequality (`weighted_turan_real`), the limit of Turán's theorem on the graph that replaces each array `r` by `⌊n u_r⌋`
 copies (`blowUp`, `weighted_turan`).
@@ -519,36 +521,57 @@ theorem piMax_le {ι : Type} [Fintype ι] {d : Declaration} (W : Work d.D ι) {k
   · intro S hS
     exact h S (mem_filter.1 hS).2
 
-/-- When no two matmuls share both a `w`- and an `x`-word, `π(S) ≤ |S ∩ W| |S ∩ X|`. -/
-theorem pi_le_card_mul {ι : Type} [Fintype ι] (W : Work C ι)
-    (h : ∀ a b, a ≠ b → Disjoint (W.wWords a) (W.wWords b) ∨ Disjoint (W.xWords a) (W.xWords b))
-    (S : Finset (Finset (Fin C.N))) : W.pi S ≤ (S ∩ W.allW).card * (S ∩ W.allX).card := by
+/-- When `val` is one-to-one on each matmul's `w`-words and on its `x`-words, and no two matmuls share both a `w`- and
+an `x`-value, `π(S) ≤ |val(S ∩ W)| |val(S ∩ X)|`. -/
+theorem pi_le_card_mul {ι V : Type} [Fintype ι] [DecidableEq V] (W : Work C ι) (val : Finset (Fin C.N) → V)
+    (hval : ∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a))
+    (h : ∀ a b, a ≠ b → Disjoint ((W.wWords a).image val) ((W.wWords b).image val) ∨
+      Disjoint ((W.xWords a).image val) ((W.xWords b).image val))
+    (S : Finset (Finset (Fin C.N))) :
+    W.pi S ≤ ((S ∩ W.allW).image val).card * ((S ∩ W.allX).image val).card := by
   rw [← card_product]
   calc W.pi S = (univ.sigma fun a => (S ∩ W.wWords a) ×ˢ (S ∩ W.xWords a)).card := by
         rw [Work.pi, card_sigma]
         exact sum_congr rfl fun a _ => (card_product _ _).symm
-    _ ≤ ((S ∩ W.allW) ×ˢ (S ∩ W.allX)).card := by
-        refine card_le_card_of_injOn (fun e => e.2) (fun e he => ?_) fun e he e' he' hee => ?_
+    _ ≤ (((S ∩ W.allW).image val) ×ˢ ((S ∩ W.allX).image val)).card := by
+        refine card_le_card_of_injOn (fun e => (val e.2.1, val e.2.2)) (fun e he => ?_) fun e he e' he' hee => ?_
         · obtain ⟨-, he2⟩ := mem_sigma.1 (mem_coe.1 he)
           obtain ⟨hw, hx⟩ := mem_product.1 he2
-          exact mem_coe.2 (mem_product.2
-            ⟨mem_inter.2 ⟨(mem_inter.1 hw).1, mem_biUnion.2 ⟨e.1, mem_univ _, (mem_inter.1 hw).2⟩⟩,
-              mem_inter.2 ⟨(mem_inter.1 hx).1, mem_biUnion.2 ⟨e.1, mem_univ _, (mem_inter.1 hx).2⟩⟩⟩)
+          have hW : e.2.1 ∈ S ∩ W.allW :=
+            mem_inter.2 ⟨(mem_inter.1 hw).1, mem_biUnion.2 ⟨e.1, mem_univ _, (mem_inter.1 hw).2⟩⟩
+          have hX : e.2.2 ∈ S ∩ W.allX :=
+            mem_inter.2 ⟨(mem_inter.1 hx).1, mem_biUnion.2 ⟨e.1, mem_univ _, (mem_inter.1 hx).2⟩⟩
+          exact mem_coe.2 (mem_product.2 ⟨mem_image_of_mem val hW, mem_image_of_mem val hX⟩)
         · obtain ⟨-, he2⟩ := mem_sigma.1 (mem_coe.1 he)
           obtain ⟨-, he2'⟩ := mem_sigma.1 (mem_coe.1 he')
-          have h2 : e.2 = e'.2 := hee
+          obtain ⟨hw, hx⟩ := mem_product.1 he2
+          obtain ⟨hw', hx'⟩ := mem_product.1 he2'
+          have hv : (val e.2.1, val e.2.2) = (val e'.2.1, val e'.2.2) := hee
+          obtain ⟨hv1, hv2⟩ := Prod.mk.inj hv
           have h1 : e.1 = e'.1 := by
             by_contra hne
             rcases h e.1 e'.1 hne with hd | hd
-            · have hw' : e.2.1 ∈ W.wWords e'.1 := by
-                rw [h2]
-                exact (mem_inter.1 (mem_product.1 he2').1).2
-              exact disjoint_left.1 hd (mem_inter.1 (mem_product.1 he2).1).2 hw'
-            · have hx' : e.2.2 ∈ W.xWords e'.1 := by
-                rw [h2]
-                exact (mem_inter.1 (mem_product.1 he2').2).2
-              exact disjoint_left.1 hd (mem_inter.1 (mem_product.1 he2).2).2 hx'
-          exact Sigma.ext h1 (heq_of_eq h2)
+            · refine disjoint_left.1 hd (mem_image_of_mem val (mem_inter.1 hw).2) ?_
+              rw [hv1]
+              exact mem_image_of_mem val (mem_inter.1 hw').2
+            · refine disjoint_left.1 hd (mem_image_of_mem val (mem_inter.1 hx).2) ?_
+              rw [hv2]
+              exact mem_image_of_mem val (mem_inter.1 hx').2
+          have hw'' : e'.2.1 ∈ W.wWords e.1 := by
+            rw [h1]
+            exact (mem_inter.1 hw').2
+          have hx'' : e'.2.2 ∈ W.xWords e.1 := by
+            rw [h1]
+            exact (mem_inter.1 hx').2
+          exact Sigma.ext h1 (heq_of_eq (Prod.ext ((hval e.1).1 (mem_coe.2 (mem_inter.1 hw).2) (mem_coe.2 hw'') hv1)
+            ((hval e.1).2 (mem_coe.2 (mem_inter.1 hx).2) (mem_coe.2 hx'') hv2)))
+
+/-- With `val` one-to-one on `T ⊆ A`, `|S ∩ T| ≤ |val(S ∩ A)|`. -/
+theorem card_inter_le_image {V : Type} [DecidableEq V] {val : Finset (Fin C.N) → V}
+    {T A : Finset (Finset (Fin C.N))} (hval : Set.InjOn val T) (hTA : T ⊆ A) (S : Finset (Finset (Fin C.N))) :
+    (S ∩ T).card ≤ ((S ∩ A).image val).card :=
+  (card_image_of_injOn (hval.mono (coe_subset.2 inter_subset_right))).symm.le.trans
+    (card_le_card (image_subset_image (inter_subset_inter_left hTA)))
 
 theorem amgm_bound {p q βw βx κ : ℝ} (hw : 0 < βw) (hx : 0 < βx) (hp : 0 ≤ p) (hq : 0 ≤ q)
     (h : βw * p + βx * q ≤ κ) : p * q ≤ κ ^ 2 / (4 * βw * βx) := by
@@ -569,11 +592,11 @@ theorem alpha_bound {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} 
     (bY_nonneg W))).trans_eq sqrt_quarter
 
 theorem onePremise : OnePremise := by
-  intro ι _ _ d W k βw βx hw hx hshare hprem
+  intro ι V _ _ _ d W val k βw βx hw hx hval hshare hprem
   have hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (4 * βw * βx) := by
     refine piMax_le W (div_nonneg (sq_nonneg _) (mul_pos (mul_pos zero_lt_four hw) hx).le) fun S hS => ?_
-    have h1 : (W.pi S : ℝ) ≤ (S ∩ W.allW).card * (S ∩ W.allX).card := by
-      exact_mod_cast pi_le_card_mul W hshare S
+    have h1 : (W.pi S : ℝ) ≤ ((S ∩ W.allW).image val).card * ((S ∩ W.allX).image val).card := by
+      exact_mod_cast pi_le_card_mul W val hval hshare S
     exact h1.trans (amgm_bound hw hx (Nat.cast_nonneg _) (Nat.cast_nonneg _)
       ((hprem S hS).trans (Nat.cast_le.2 hS)))
   exact ⟨hpi, alpha_bound W hpi⟩
@@ -593,28 +616,31 @@ theorem triangle_bound {a b c βa βb βc q κ : ℝ} (ha : 0 ≤ a) (hb : 0 ≤
   nlinarith [h1, h2, h3]
 
 theorem sharedArrays : SharedArrays := by
-  intro d W k A β hβ h00 h01 h10 h12 h22 h21 hprem
+  intro V _ d W val k A β hβ h00 h01 h10 h12 h22 h21 hval hprem
   have hq : 0 < min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)) :=
     lt_min (mul_pos (hβ 0) (hβ 1)) (lt_min (mul_pos (hβ 0) (hβ 2)) (mul_pos (hβ 2) (hβ 1)))
   have hB : (0 : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)))) :=
     mul_nonneg (by norm_num) (div_nonneg (sq_nonneg _) (mul_pos four_pos hq).le)
   refine piMax_le W hB fun S hS => ?_
-  have hpi : W.pi S ≤ (S ∩ A 0).card * (S ∩ A 1).card + (S ∩ A 0).card * (S ∩ A 2).card +
-      (S ∩ A 2).card * (S ∩ A 1).card := by
-    rw [Work.pi, Fin.sum_univ_three]
-    exact Nat.add_le_add (Nat.add_le_add
-      (Nat.mul_le_mul (card_le_card (inter_subset_inter_left h00)) (card_le_card (inter_subset_inter_left h01)))
-      (Nat.mul_le_mul (card_le_card (inter_subset_inter_left h10)) (card_le_card (inter_subset_inter_left h12))))
-      (Nat.mul_le_mul (card_le_card (inter_subset_inter_left h22)) (card_le_card (inter_subset_inter_left h21)))
-  have hpi' : (W.pi S : ℝ) ≤ (S ∩ A 0).card * (S ∩ A 1).card + (S ∩ A 0).card * (S ∩ A 2).card +
-      (S ∩ A 2).card * (S ∩ A 1).card := by
-    exact_mod_cast hpi
-  have hs : 0 ≤ β 0 * (S ∩ A 0).card + β 1 * (S ∩ A 1).card + β 2 * (S ∩ A 2).card :=
-    add_nonneg (add_nonneg (mul_nonneg (hβ 0).le (Nat.cast_nonneg _)) (mul_nonneg (hβ 1).le (Nat.cast_nonneg _)))
-      (mul_nonneg (hβ 2).le (Nat.cast_nonneg _))
-  exact hpi'.trans (triangle_bound (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hq (min_le_left _ _)
-    ((min_le_right _ _).trans (min_le_left _ _)) ((min_le_right _ _).trans (min_le_right _ _)) hs
-    ((hprem S hS).trans (Nat.cast_le.2 hS)))
+  have key : ∀ n : Fin 3 → ℕ, (S ∩ W.wWords 0).card ≤ n 0 → (S ∩ W.xWords 0).card ≤ n 1 →
+      (S ∩ W.wWords 1).card ≤ n 0 → (S ∩ W.xWords 1).card ≤ n 2 → (S ∩ W.wWords 2).card ≤ n 2 →
+      (S ∩ W.xWords 2).card ≤ n 1 → β 0 * (n 0 : ℝ) + β 1 * n 1 + β 2 * n 2 ≤ k →
+      (W.pi S : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)))) := by
+    intro n h0w h0x h1w h1x h2w h2x hk
+    have hpi : W.pi S ≤ n 0 * n 1 + n 0 * n 2 + n 2 * n 1 := by
+      rw [Work.pi, Fin.sum_univ_three]
+      exact Nat.add_le_add (Nat.add_le_add (Nat.mul_le_mul h0w h0x) (Nat.mul_le_mul h1w h1x)) (Nat.mul_le_mul h2w h2x)
+    have hpi' : (W.pi S : ℝ) ≤ n 0 * n 1 + n 0 * n 2 + n 2 * n 1 := by
+      exact_mod_cast hpi
+    have hs : 0 ≤ β 0 * (n 0 : ℝ) + β 1 * n 1 + β 2 * n 2 :=
+      add_nonneg (add_nonneg (mul_nonneg (hβ 0).le (Nat.cast_nonneg _)) (mul_nonneg (hβ 1).le (Nat.cast_nonneg _)))
+        (mul_nonneg (hβ 2).le (Nat.cast_nonneg _))
+    exact hpi'.trans (triangle_bound (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hq (min_le_left _ _)
+      ((min_le_right _ _).trans (min_le_left _ _)) ((min_le_right _ _).trans (min_le_right _ _)) hs hk)
+  exact key (fun r => ((S ∩ A r).image val).card) (card_inter_le_image (hval 0).1 h00 S)
+    (card_inter_le_image (hval 0).2 h01 S) (card_inter_le_image (hval 1).1 h10 S)
+    (card_inter_le_image (hval 1).2 h12 S) (card_inter_le_image (hval 2).1 h22 S)
+    (card_inter_le_image (hval 2).2 h21 S) ((hprem S hS).trans (Nat.cast_le.2 hS))
 
 /-- The blow-up of `G`: each vertex `r` replaced by `z r` copies, copies adjacent when their vertices are. -/
 def blowUp {ρ : Type} (G : SimpleGraph ρ) (z : ρ → ℕ) : SimpleGraph (Σ r, Fin (z r)) := G.comap Sigma.fst
@@ -697,7 +723,7 @@ theorem clique_real {t T U σ k q ω : ℝ} (hq : 0 < q) (hω : 1 ≤ ω) (hσ :
     mul_le_mul_of_nonneg_left hqT (mul_pos two_pos hω0).le]
 
 theorem sharedArraysClique : SharedArraysClique := by
-  intro ι ρ _ _ _ d W k ω G A e β q hω hG hadj hinj hsub hβ hq hqe hprem
+  intro ι ρ V _ _ _ _ d W val k ω G A e β q hω hG hadj hinj hsub hval hβ hq hqe hprem
   have hω' : 1 ≤ ω := hω
   have hω1 : (1 : ℝ) ≤ ω := Nat.one_le_cast.2 hω'
   have hB : (0 : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) := by
@@ -706,24 +732,27 @@ theorem sharedArraysClique : SharedArraysClique := by
       linarith
     exact mul_nonneg (mul_nonneg zero_le_two h1) (div_nonneg (sq_nonneg _) (mul_pos four_pos hq).le)
   refine piMax_le W hB fun S hS => ?_
-  have hpi : W.pi S ≤ ∑ a, (S ∩ A (e a).1).card * (S ∩ A (e a).2).card :=
-    sum_le_sum fun a _ => Nat.mul_le_mul (card_le_card (inter_subset_inter_left (hsub a).1))
-      (card_le_card (inter_subset_inter_left (hsub a).2))
-  have hpi' : (W.pi S : ℝ) ≤ ∑ a, ((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card := by
-    exact_mod_cast hpi
-  have hu : ∀ r, 0 ≤ β r * (S ∩ A r).card := fun r => mul_nonneg (hβ r) (Nat.cast_nonneg _)
-  have hT : 2 * (ω : ℝ) * ∑ a, β (e a).1 * (S ∩ A (e a).1).card * (β (e a).2 * (S ∩ A (e a).2).card) ≤
-      (ω - 1) * (∑ r, β r * (S ∩ A r).card) ^ 2 :=
-    weighted_turan_real hω hG e hadj hinj (fun r => β r * (S ∩ A r).card) hu
-  have hqT : q * ∑ a, ((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card ≤
-      ∑ a, β (e a).1 * (S ∩ A (e a).1).card * (β (e a).2 * (S ∩ A (e a).2).card) := by
-    rw [mul_sum]
-    refine sum_le_sum fun a _ => ?_
-    calc q * (((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card)
-        ≤ β (e a).1 * β (e a).2 * (((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card) :=
-          mul_le_mul_of_nonneg_right (hqe a) (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-      _ = β (e a).1 * (S ∩ A (e a).1).card * (β (e a).2 * (S ∩ A (e a).2).card) := by ring
-  exact clique_real hq hω1 (sum_nonneg fun r _ => hu r) hpi' hqT hT ((hprem S hS).trans (Nat.cast_le.2 hS))
+  have key : ∀ n : ρ → ℕ, (∀ a, (S ∩ W.wWords a).card ≤ n (e a).1 ∧ (S ∩ W.xWords a).card ≤ n (e a).2) →
+      ∑ r, β r * (n r : ℝ) ≤ k → (W.pi S : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) := by
+    intro n hn hk
+    have hpi : W.pi S ≤ ∑ a, n (e a).1 * n (e a).2 :=
+      sum_le_sum fun a _ => Nat.mul_le_mul (hn a).1 (hn a).2
+    have hpi' : (W.pi S : ℝ) ≤ ∑ a, (n (e a).1 : ℝ) * n (e a).2 := by
+      exact_mod_cast hpi
+    have hu : ∀ r, 0 ≤ β r * n r := fun r => mul_nonneg (hβ r) (Nat.cast_nonneg _)
+    have hT : 2 * (ω : ℝ) * ∑ a, β (e a).1 * n (e a).1 * (β (e a).2 * n (e a).2) ≤
+        (ω - 1) * (∑ r, β r * n r) ^ 2 :=
+      weighted_turan_real hω hG e hadj hinj (fun r => β r * n r) hu
+    have hqT : q * ∑ a, (n (e a).1 : ℝ) * n (e a).2 ≤ ∑ a, β (e a).1 * n (e a).1 * (β (e a).2 * n (e a).2) := by
+      rw [mul_sum]
+      refine sum_le_sum fun a _ => ?_
+      calc q * ((n (e a).1 : ℝ) * n (e a).2) ≤ β (e a).1 * β (e a).2 * ((n (e a).1 : ℝ) * n (e a).2) :=
+            mul_le_mul_of_nonneg_right (hqe a) (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+        _ = β (e a).1 * n (e a).1 * (β (e a).2 * n (e a).2) := by ring
+    exact clique_real hq hω1 (sum_nonneg fun r _ => hu r) hpi' hqT hT hk
+  exact key (fun r => ((S ∩ A r).image val).card)
+    (fun a => ⟨card_inter_le_image (hval a).1 (hsub a).1 S, card_inter_le_image (hval a).2 (hsub a).2 S⟩)
+    ((hprem S hS).trans (Nat.cast_le.2 hS))
 
 /-! ### The theorem of record -/
 
@@ -759,8 +788,8 @@ theorem alphaHE_nonneg (k : ℕ) (q b : ℝ) : 0 ≤ alphaHE k q b :=
   div_nonneg (Real.sqrt_nonneg _) zero_le_two
 
 theorem he : HE := by
-  intro ι _ _ d W k m c P βw βx b hw hx hb hshare hH hE hk
-  obtain ⟨hpi, -⟩ := onePremise ι d W k βw βx hw hx hshare hH
+  intro ι V _ _ _ d W val k m c P βw βx b hw hx hb hval hshare hH hE hk
+  obtain ⟨hpi, -⟩ := onePremise ι V d W val k βw βx hw hx hval hshare hH
   have hα : alpha d W k ≤ alphaHE k (βw * βx) b := (alpha_le_of_exports W hb hE hpi).trans_eq sqrt_quarter
   have hp : (0 : ℝ) ≤ k ^ 2 / (4 * βw * βx) := div_nonneg (sq_nonneg _) (mul_pos (mul_pos four_pos hw) hx).le
   have hk2 : (0 : ℝ) ≤ k / 2 := div_nonneg (Nat.cast_nonneg k) zero_le_two
@@ -774,10 +803,10 @@ theorem he : HE := by
   exact ⟨hN, hs⟩
 
 theorem heShared : HEShared := by
-  intro ι ρ _ _ _ d W k m c P G A e β q b hG hadj hinj hsub hβ hq hqe hb hH hE hk
+  intro ι ρ V _ _ _ _ d W val k m c P G A e β q b hG hadj hinj hsub hval hβ hq hqe hb hH hE hk
   have h3 : (0 : ℝ) ≤ 3 := by norm_num
   have hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (3 * q) :=
-    (sharedArraysClique ι ρ d W k 3 G A e β q (by norm_num) hG hadj hinj hsub hβ hq hqe hH).trans_eq
+    (sharedArraysClique ι ρ V d W val k 3 G A e β q (by norm_num) hG hadj hinj hsub hval hβ hq hqe hH).trans_eq
       (by push_cast; ring)
   have hα : alpha d W k ≤ 2 / √3 * alphaHE k q b := by
     refine (alpha_le_of_exports W hb hE hpi).trans_eq ?_
