@@ -136,7 +136,7 @@ theorem rowsProgWired_honest :
 /-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
 digest `selectEntryPins`' first), and its registration, with that template's entries port at the root `r` and the
 domain `d`. -/
-def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)], none⟩
+def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)], none, none⟩
 
 def selectReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
@@ -164,7 +164,7 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
-def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")], none⟩
+def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")], none, none⟩
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
@@ -369,5 +369,121 @@ theorem rowsCircuitHeld_nontrivial :
     h slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_swapped] at hh
   cases hh
+
+/-! ## The rows form's tied audits read the scan's state at their slots' anchors -/
+
+/-- A digit of radix 1 moves no index: leaving the digits of radix 1 out keeps `accum`. -/
+theorem accum_filter (ps : List (ℕ × ℤ)) (i : ℕ) :
+    SampledProofs.Wires.accum (ps.filter (·.1 != 1)) i = SampledProofs.Wires.accum ps i := by
+  induction ps generalizing i with
+  | nil => rfl
+  | cons p ps ih =>
+    obtain ⟨r, st⟩ := p
+    by_cases hr : r = 1
+    · subst hr
+      rw [List.filter_cons_of_neg (p := fun x : ℕ × ℤ => x.1 != 1) (a := (1, st)) (l := ps) (by simp), ih]
+      simp [SampledProofs.Wires.accum]
+    · rw [List.filter_cons_of_pos (p := fun x : ℕ × ℤ => x.1 != 1) (a := (r, st)) (l := ps) (by simpa using hr)]
+      simp only [SampledProofs.Wires.accum, ih]
+
+/-- Leaving the digits of radix 1 out keeps the product of the radices. -/
+theorem prodR_filter (ps : List (ℕ × ℤ)) :
+    SampledProofs.Wires.prodR (ps.filter (·.1 != 1)) = SampledProofs.Wires.prodR ps := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    obtain ⟨r, st⟩ := p
+    by_cases hr : r = 1
+    · subst hr
+      rw [List.filter_cons_of_neg (p := fun x : ℕ × ℤ => x.1 != 1) (a := (1, st)) (l := ps) (by simp), ih]
+      simp [SampledProofs.Wires.prodR]
+    · rw [List.filter_cons_of_pos (p := fun x : ℕ × ℤ => x.1 != 1) (a := (r, st)) (l := ps) (by simpa using hr)]
+      simp only [SampledProofs.Wires.prodR, List.foldr_cons] at ih ⊢
+      rw [ih]
+
+/-- A registered read the check takes for its slots' anchors' (`anchorRead`) reads the scan's state at them
+(`AnchoredRead`). -/
+theorem anchorRead_rows {s : Schedule} {c : NetworkCheck.Circuit.Wiring} {params : List (String × ℕ)}
+    {x : NetworkCheck.Circuit.Read} (h : anchorRead s c params x = true) : AnchoredRead s c params x := by
+  refine ⟨?_, fun W k hp => ?_⟩
+  · cases hp : NetworkCheck.Circuit.portOf c x.pat.reader x.pat.port false with
+    | none => simp [anchorRead, hp] at h
+    | some _ => rfl
+  · simp only [anchorRead, hp, Bool.and_eq_true, beq_iff_eq, and_assoc] at h
+    obtain ⟨hk, hs, hc0, hc, hbase, hd, hl⟩ := h
+    have hw : ∀ i, x.pat.writerAt i = ((i % (s.window / s.every) * (s.every * W) : ℕ) : ℤ) := by
+      intro i
+      rw [SampledProofs.Wires.Wire.writerAt, hbase, SampledProofs.Wires.Wire.pairs, ← accum_filter,
+        List.filter_reverse, hd, anchorDigits, ← List.filter_reverse, accum_filter]
+      simp [SampledProofs.Wires.accum]
+    refine ⟨hk, hl, ?_, fun l _ b hb => ⟨?_, ?_⟩⟩
+    · rw [SampledProofs.Wires.Wire.units, SampledProofs.Wires.Wire.pairs, ← prodR_filter, List.filter_reverse, hd,
+        anchorDigits, ← List.filter_reverse, prodR_filter]
+      simp [SampledProofs.Wires.prodR, Nat.mul_comm]
+    · simp [SampledProofs.Wires.Wire.readerAt, hs, hc, hc0]
+    · rw [hw, Nat.mul_add_mod_of_lt hb, Nat.mul_assoc]
+
+/-- An audit the check takes for anchored (`anchored`) with circuit record `r` reads the scan's state at its slots'
+anchors (`AnchoredRecord`). -/
+theorem anchored_record {s : Schedule} {a : Audit} {r : NetworkCheck.Circuit.Stated} (h : anchored s a = true)
+    (hr : a.circuit = some r) : AnchoredRecord s r := by
+  simp only [anchored, hr, Bool.and_eq_true] at h
+  obtain ⟨hrd, htab⟩ := h
+  refine ⟨by simpa using htab, fun x hx hp => anchorRead_rows ?_⟩
+  exact List.all_eq_true.mp hrd x (List.mem_filter.mpr ⟨hx, beq_iff_eq.mpr hp⟩)
+
+/-- **A link-window's state finding is none only when its tied audits read the scan's state at their slots'
+anchors**: each audit tied to its scan (`tiedAudits`) with a circuit record reads, at unit `l · nb + b` (lane `l`'s
+slot at boundary `b`, `wired`'s chunk `l` leaf `b`), row `b · every` of the scan's state, and declares no table over
+it (`AnchoredRecord`). -/
+theorem stateCheck_anchored {p : Params} {s : Schedule} {audits : Array Lean.Json} {w : ℕ} {reg : Lean.Json}
+    (h : stateCheck p s audits w reg = none) :
+    ∀ j ∈ tiedAudits audits reg, ∀ (a : Audit) (r : NetworkCheck.Circuit.Stated), p.audits[j]? = some a →
+      a.circuit = some r → AnchoredRecord s r := by
+  intro j hj a r ha hr
+  have hat : anchoredAt p.audits s audits reg = true := by
+    unfold stateCheck at h
+    split at h
+    · split at h
+      · split at h
+        · assumption
+        · simp at h
+      · cases h
+    · cases h
+  rw [anchoredAt, Array.all_eq_true'] at hat
+  have hj' := hat j hj
+  simp only [ha, Option.map_some, Option.getD_some] at hj'
+  exact anchored_record hj' hr
+
+theorem rowsStateAnchored : RowsStateAnchored := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  exact stateCheck_anchored (stateCheck_of_accept h hform hreg)
+
+/-- **`RowsStateAnchored`'s honest lemma**: the check accepts a rows-form period of no phase, and a phase whose tied
+audit's circuit record reads row `b` of the scan's state at unit `l · 2 + b` from base 0 (`anchorAudit 0`) is
+anchored. -/
+theorem rowsStateAnchored_honest :
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+        ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+    anchoredAt #[anchorAudit 0] anchorSchedule #[heldReg "c"] tiedWindow = true :=
+  ⟨rowsCircuitHeld_honest.1, by decide +kernel⟩
+
+/-- **`RowsStateAnchored`'s nontrivial lemma**: `RowsStateAnchoredAt` fails at a rows-form period of one phase whose
+tied audit's circuit record reads the scan's state from base 3 (`anchorAudit 3`), so lane 0's slot at boundary 0 reads
+row 1, past its anchor's row 0, which a check that accepts everything accepts. -/
+theorem rowsStateAnchored_nontrivial :
+    ¬ RowsStateAnchoredAt
+      ⟨#[anchorAudit 3], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
+        .rows anchorSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+      ⟨#[heldReg "c"], #[tiedWindow], .empty⟩ := by
+  intro h
+  have hj : 0 ∈ tiedAudits #[heldReg "c"] tiedWindow := by
+    rw [show tiedAudits #[heldReg "c"] tiedWindow = #[0] by decide +kernel]
+    exact Array.mem_singleton.mpr rfl
+  have hr := ((h anchorSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl 0 hj (anchorAudit 3)
+    (anchorRecord (stateReadAt 3)) rfl rfl).2 (stateReadAt 3) (List.mem_singleton.mpr rfl) rfl).2 3 1
+    (by decide +kernel)
+  exact absurd (hr.2.2.2 0 (by decide +kernel) 0 (by decide +kernel)).2 (by decide +kernel)
 
 end Properties.NetworkPeriod

@@ -46,6 +46,12 @@ tied audit's term counts is the Program its registration names is the audit chec
 them by matching, `isStr`) and no property here states. Its witnesses are an empty rows-form period
 `check` accepts, beside a tied audit registered under the class circuit, and an explicit period whose tied audit is
 registered under another (`RowsCircuitHeldAt` false), which a check that accepts everything accepts.
+
+`RowsStateAnchored` says the check accepts no phase whose tied audit's circuit record reads the scan's state other than
+at its slots' anchors: lane `l`'s slot at boundary `b`, unit `l · nb + b`, reads row `b · every`, the state before its
+anchor's bucket, so with `RowsStateTied` a slot's Program reads the state the scan reached at its anchor. Its witnesses
+are an empty rows-form period `check` accepts, beside a tied audit whose record reads row `b` at unit `l · 2 + b`
+(`anchorAudit 0`), and an explicit period whose record reads from base 3 (`RowsStateAnchoredAt` false).
 -/
 
 namespace Properties.NetworkPeriod
@@ -146,6 +152,46 @@ def RowsCircuitHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsCircuitHeldAt p c
 
+/-- Registered read `x` of the scan's state, in a record of wiring `c` and parameters `params`, reads it at its slots'
+anchors under schedule `s`: it is of an input port of its reader template, uncut and of `W` words, from a parameter of
+`T · W` leaves, the scan's `T` state rows, over the units `l · nb + b` for each lane `l` and boundary `b` below
+`nb` = T / `every` (lane-major, as `wired` reads chunk `l`'s leaf `b`), each reading its port's one row from the
+parameter's leaf `b · every · W`: row `b · every`, the scan's state before its anchor's bucket. -/
+def AnchoredRead (s : Schedule) (c : NetworkCheck.Circuit.Wiring) (params : List (String × ℕ))
+    (x : NetworkCheck.Circuit.Read) : Prop :=
+  (NetworkCheck.Circuit.portOf c x.pat.reader x.pat.port false).isSome = true ∧
+    ∀ (W k : ℕ), NetworkCheck.Circuit.portOf c x.pat.reader x.pat.port false = some (W, k) →
+      k = 1 ∧ params.lookup stateValue = some (s.window * W) ∧ x.pat.units = s.lanes * (s.window / s.every) ∧
+      ∀ l < s.lanes, ∀ b < s.window / s.every,
+        x.pat.readerAt (l * (s.window / s.every) + b) = (l * (s.window / s.every) + b, 0) ∧
+        x.pat.writerAt (l * (s.window / s.every) + b) = ((b * s.every * W : ℕ) : ℤ)
+
+/-- Circuit record `r` reads the scan's state at its slots' anchors under schedule `s`: no table of it is over the
+scan's state (`stateValue`), and each of its registered reads of it is the anchors' (`AnchoredRead`). -/
+def AnchoredRecord (s : Schedule) (r : NetworkCheck.Circuit.Stated) : Prop :=
+  (∀ t ∈ r.registered.tables, t.param ≠ stateValue) ∧
+    ∀ x ∈ r.registered.reads, x.param = stateValue → AnchoredRead s r.wiring r.registered.params x
+
+/-- What `RowsStateAnchored` says of a period its check accepted: in the rows form, each audit tied to a
+link-window's scan (`tiedAudits`) with a circuit record reads the scan's state at its slots' anchors
+(`AnchoredRecord`). -/
+def RowsStateAnchoredAt (p : Params) (c : Commitment) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
+      ∀ j ∈ tiedAudits c.audits reg, ∀ (a : Audit) (r : NetworkCheck.Circuit.Stated), p.audits[j]? = some a →
+        a.circuit = some r → AnchoredRecord s r
+
+/-- **The rows form accepts no link-window whose tied audit's circuit record reads the scan's state off its slots'
+anchors.** If the check accepts a period in the rows form, each audit a link-window's scan's `prog` is an output of
+(`tiedAudits`) whose circuit record reads `verity/certifier/scan-state/v1` reads it, unit `l · nb + b` (lane `l`'s
+slot at boundary `b`) at row `b · every` of the scan's `T` state rows, whole and from base 0, and declares no table
+over it (`anchoredAt`). With `RowsStateTied`, which holds those rows to the scan's chain from the empty state, the
+state a slot's Program reads is the one the scan reached at its anchor, never a later one past the requests the scan
+admitted there. -/
+def RowsStateAnchored : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsStateAnchoredAt p c
+
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at
 `check`) to say something. -/
@@ -158,7 +204,7 @@ def tiedWindow : Lean.Json :=
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)], none⟩
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)], none, none⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 
@@ -167,5 +213,24 @@ def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 def heldReg (d : String) : Lean.Json :=
   Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
     [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+
+/-- Two lanes, T = 2, `every` 1: two boundaries, four slots. -/
+def anchorSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 2⟩
+
+/-- A circuit record of one template `S` of 4 units, its input port `state` of 3 words, whose one registered read is
+`read`, over the scan's state as a parameter of 6 leaves (the two state rows of 3 words). -/
+def anchorRecord (read : NetworkCheck.Circuit.Read) : NetworkCheck.Circuit.Stated :=
+  { templates := [("S", 4)], cap := 0,
+    wiring := { templates := [("S", { units := 4, rows := [("state", ⟨3, 1⟩)], outs := [("o0", 1)] })], cuts := [],
+                wires := [] },
+    registered := { params := [(stateValue, 6)], reads := [read] } }
+
+/-- `S`'s read of the scan's state from `base`: unit `l · 2 + b` at leaf `base + 3b`, so row `b` at base 0. -/
+def stateReadAt (base : ℤ) : NetworkCheck.Circuit.Read :=
+  { param := stateValue, pat := { reader := "S", port := "state", writer := stateValue, out := "", start := 0,
+                                  radix := [2, 2], base, step := [0, 3], cut0 := 0, cuts := 1 } }
+
+/-- The slot audit with the circuit record whose read of the scan's state is from `base`. -/
+def anchorAudit (base : ℤ) : Audit := { slotAudit with circuit := some (anchorRecord (stateReadAt base)) }
 
 end Properties.NetworkPeriod
