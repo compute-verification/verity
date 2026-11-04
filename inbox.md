@@ -53,3 +53,6 @@ PEARLLEAN #7221:
   Properties' AcceptMeans/TileAcceptMeans/WorkIsTheCredit/PlanMeans follow the new shapes, still unstated; they typecheck.
   Python -k (give-up ⇔ volunteer-needed, ε) passes locally; the difftest of both modes runs remotely next.
 
+[2026-11-04T16:40Z] b2683afd4477
+PEARLLEAN #7221: CMP-326 done — benchmarks/pouw/pearl_c_sm90 added to pearlplus_lean's [tool.verity.tests] inputs at e53a7b82409, pushed (on top of step 2's 812cfc50374).
+
