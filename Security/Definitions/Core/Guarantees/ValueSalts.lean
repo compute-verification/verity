@@ -17,6 +17,13 @@ registers more than once also chooses which ones its statements read: each one p
 with at most `b` passed over it chooses among `streamChoices r m b`, `∑_{|P| ≤ b} ∏_{i ∉ P} m i` choices. Every epoch
 opened the session its registration registered, so `m i ≥ 1` and that is at most `∑_{i ≤ b} C(r, i) · ∏_i m i`: at most
 `log₂ ∑_{i ≤ b} C(r, i) + ∑_i log₂ m i` bits.
+
+**`m` is the service's, not the stack's.** Both statements hold for every `m`, but a stack that chose `m` from its values
+would leak through `m` itself as well, which neither counts. The ZK server's value service of record
+(`core-firewall values`, `Flock.Firewall.Values.answer`) fixes `m` at 1: it refuses a commit while its epoch's session is
+not yet registered. So the stack chooses no `m` and no session, every record says `m = 1`, `RegisteredLeakage` at
+`m = 1` is the whole of what a registration leaks (no `log₂ m` term), and over a stream, at every `m i = 1`, the stack's
+only choice is which registrations it passes over: at most `log₂ ∑_{i ≤ b} C(r, i)` bits.
 -/
 
 namespace Verity.Guarantees
@@ -28,7 +35,8 @@ open Verity Verity.ValueSalts Verity.Assumptions
 commits before it registers, values `v`, stack `st`, event `A` on a record and key `k₀`: if the stack reads no key
 (`ZkServerOwnUser`), the probability that the loop admits the record it hands and the record meets `A` is at most `m`
 times the probability of `A` on an ideal record plus the PRF gap, plus the probability that the stack, run at the key
-`k₀`, forges a record tag. -/
+`k₀`, forges a record tag. The value service of record fixes `m` at 1, so the stack does not choose it and the factor
+is 1. -/
 def RegisteredLeakage : Prop :=
   ∀ {K S Y V O T R : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R]
     (sv : Service K S Y V O T R) (n m : ℕ) (v : V) (st : Stack K V S O T R m)
@@ -43,7 +51,8 @@ number `b` of registrations the loop may pass over (at most the stream's failure
 probability that the loop admits the stream the stack hands it and the stream meets `A` is at most the sum, over the
 stack's choices `d` (`streamChoices r m b`: a session of each registration's epoch, or none, at most `b` none), of the
 probability of `A` on an ideal stream passing over `d`'s none plus the PRF gap at `d`, plus the probability that the
-stack, run at the key `k₀`, forges a record tag at some registration. -/
+stack, run at the key `k₀`, forges a record tag at some registration. The value service of record fixes every `m i` at
+1, so the stack chooses no `m`, adaptively or otherwise, and `d` ranges over its choices of which to pass over alone. -/
 def RegisteredStreamLeakage : Prop :=
   ∀ {K S Y V O T R : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R]
     (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v : Fin r → V) (st : StreamStack K V S O T R r m)

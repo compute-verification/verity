@@ -683,8 +683,10 @@ service started again opens a new one. A registration the record did not take is
 took no registration: …`), its epoch closed all the same, and `flock-firewall values`, which keeps no record, refuses
 every registration. `n` and `m` are public. `n` is protocol structure, and `m` is the number of sessions the epoch
 opened: a stack that commits its values in `m` sessions and registers the one whose roots it likes leaks at most
-`log₂ m` bits through the choice, a term of the guarantee (`Verity.Guarantees.RegisteredLeakage`), as PoUW's noise
-seeds' grinding is.
+`log₂ m` bits through the choice (`Verity.Guarantees.RegisteredLeakage`), and one that chose `m` from its values would
+leak through `m` too. So the service of record fixes `m` at 1, protocol structure: an epoch opens one session, and a
+commit while its session is not yet registered is refused (`err the current epoch's session is not yet registered: …`),
+nothing of it answered. The stack chooses neither `m` nor a session, every record says `m = 1`, and the term is 0.
 
 The release side admits each registration once, oldest first (the record's rule 5, `Core.Firewall.admitReads`, §10.5). Given the
 key (`core-firewall session --salt-key FILE`; `FC_FIREWALL_SALT_KEY` for `flock-circuit --firewall-state`), every hm96
@@ -699,12 +701,16 @@ only on the server's salts: one on salts of the stack's own is rejected at its o
 claims are checked (`zk_value_salts`'s `kept`), and a statement the stack committed under its own salts is refused at
 its admission (`own`). A stack that registers more than once also chooses which registrations the auditor's statements
 read: across a stream of `r` registrations with at most `b` passed over, at most
-`log₂ Σ_{i≤b} C(r, i) + Σ_i log₂ m_i` bits, `m_i` registration `i`'s count (`Verity.Guarantees.RegisteredStreamLeakage`),
-counted in the stream's bound beside its stops (§10.5).
+`log₂ Σ_{i≤b} C(r, i) + Σ_i log₂ m_i` bits, `m_i` registration `i`'s count, 1 on the service of record, so at most
+`log₂ Σ_{i≤b} C(r, i)` (`Verity.Guarantees.RegisteredStreamLeakage`), counted in the stream's bound beside its stops
+(§10.5).
 
-Two limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
-yet requires the key of a deployment's loop. And the ZK server numbers one sequence of registrations for all its
-streams: a skip counts on the stream of the statement that passed it over.
+Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
+yet requires the key of a deployment's loop. The ZK server numbers one sequence of registrations for all its
+streams: a skip counts on the stream of the statement that passed it over. And the epoch is the service's process's: a
+service started again opens a new epoch, in which the session of the one it cut short never registers, so each restart
+of the service mid-epoch, the ZK server's own act (`zk-server-own-user`), gives a stack one more session for that
+registration.
 
 The tags, the record tags and the count mean what they say only while nothing the stack runs reads the key or the
 epoch: the key file is created its owner's alone, and the service and the loop run under the ZK server's own OS user,
@@ -1260,13 +1266,15 @@ missed time and spend the budget.
 **The bound over a stream.** Over a stream of n recursive sessions with budget b whose statements read r registrations,
 rules 1–5 leave the challenger: which recursive sessions failed and which registrations were passed over (at most b in
 all, by rule 4), for each failure j, the form it took (one, at one position of the order fixed at open, by rule 1), and
-for each registration i admitted, which of its epoch's m_i sessions it is (rule 5, §10.2). Every proof that leaves,
+for each registration i admitted, which of its epoch's m_i sessions it is (rule 5, §10.2; m_i = 1 on the service of
+record, so none). Every proof that leaves,
 leaves at its public time (rule 3), one at a time (rule 2), so the interleaving across streams is fixed too. That is at
 most
 
 `log₂ Σ_{i≤b} C(n + r, i) + Σ_j log₂ q_j + Σ_i log₂ m_i` bits,
 
-with q_j the number of forms failure j can take, one for a registration passed over. The registrations' part is
+with q_j the number of forms failure j can take, one for a registration passed over, and the last sum 0 on the service of
+record. The registrations' part is
 `Verity.Guarantees.RegisteredStreamLeakage`'s; the rest is counted here. The figures below are a stream with no
 registrations (r = 0). A refusal of the outer send check is one symbol: it stops its session at
 the session's `Finish`, after every round of the schedule (§10.1), so a stream whose failures are all the ZK server's reveals
