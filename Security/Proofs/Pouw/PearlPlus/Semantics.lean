@@ -1,4 +1,4 @@
-import Proofs.Pouw.PearlPlus.Peel
+import Proofs.Pouw.PearlPlus.Factors
 
 /-!
 # Pearl+'s bridge, part (b): a tile's words are the semantics' (the proof)
@@ -13,6 +13,7 @@ import Proofs.Pouw.PearlPlus.Peel
 * `tileWords`: over a noise whose lines are the check's, a tile entry's `C̃` and `U` are `chainWordP?` and `peelExactP`
   at the H100 on `pc8Sem`'s operands, given the peel factor rows (`PeelARow`, `PeelBRow`).
 * `wordsAreTheSemantics_of`: at -h3's noise (`Noise.lean`) those are the protocol's ticket and useful words.
+* `wordsAreTheSemantics`: with the peel factor rows proved (`peelARow`, `peelBRow`, `Factors.lean`).
 -/
 
 namespace Pouw.PearlPlus.Bridge
@@ -450,5 +451,8 @@ theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSem
     have hv := congrArg (fun o => Option.bind o wordQ) hP
     simp only [Option.bind_some] at hv
     exact hv.symm
+
+/-- **(b) A tile's words are the semantics'.** -/
+theorem wordsAreTheSemantics : WordsAreTheSemantics := wordsAreTheSemantics_of peelARow peelBRow
 
 end Pouw.PearlPlus.Bridge
