@@ -1264,3 +1264,60 @@ def test_parameter_gates_of_an_h200_weight_is_its_range_in_constant_memory():
         tracemalloc.stop()
     assert gates == range(5, 5 + n) and rows == n // 1024
     assert peak < 1 << 16, peak
+
+
+#: A `--registered` file's ports of `W`, of 16-bit words, and of `T`, a bit row of 32-bit words, each at its own root.
+PORT_W = {"value": "W", "root": "a1" * 64, "leaves": 4, "words": 6, "domain": "d1" * 64, "reads": [0, None]}
+PORT_T = {"value": "T", "root": "b2" * 64, "leaves": 2, "words": 3, G.WIDTH_KEY: 32, "domain": "d2" * 64,
+          G.SCHEMA_KEY: G.SCHEMA_V2, "reads": [None, 1]}
+
+
+def _entry(p: dict) -> dict:
+    """The record's entry for port `p`'s value, as R7 writes it: `word_bits` only when not 16, no row format."""
+    e = {"value": p["value"], "root": p["root"], "leaves": p["leaves"], "words": p.get("words"), "domain": p["domain"]}
+    return e | ({G.WIDTH_KEY: p[G.WIDTH_KEY]} if p.get(G.WIDTH_KEY, G.WORD_BITS) != G.WORD_BITS else {})
+
+
+def test_v2_refuses_a_port_name_twice():
+    """`ports_twice` (`Flock.Registered.dupName?`): the first name a later port repeats, which v2 refuses."""
+    assert G.ports_twice(["w", "t", "a0"]) is None
+    assert G.ports_twice(["w", "t", "w", "t"]) == "w"
+    assert G.ports_twice(["a0", "t", "t"]) == "t"
+
+
+def test_v2_refuses_two_ports_of_one_root_registering_it_differently():
+    """`root_clash` (`Flock.Registered.rootClash`): ports of one value at its root registering it alike stand, as an
+    array's ports `name[i]` do, whatever they read and however they name the defaults; one root at another leaf count,
+    words, word bits, domain, row format or value is two ports v2 refuses, a row's opening finding its port by root; a
+    port at another root clashes with none."""
+    alike = {**PORT_W, "reads": [None, 1], G.WIDTH_KEY: 16, G.SCHEMA_KEY: G.SCHEMA}
+    assert G.root_clash([("a0", PORT_W), ("a1", alike), ("t", PORT_T)]) is None
+    for k, v in (("leaves", 5), ("words", 7), (G.WIDTH_KEY, 32), ("domain", "e3" * 64), (G.SCHEMA_KEY, G.SCHEMA_SEG),
+                 ("value", "U")):
+        assert G.root_clash([("t", PORT_T), ("a0", PORT_W), ("a1", {**PORT_W, k: v})]) == ("a0", "a1"), k
+    assert G.root_clash([("a0", {k: v for k, v in PORT_W.items() if k != "words"}), ("a1", PORT_W)]) == ("a0", "a1")
+    assert G.root_clash([("a0", PORT_W), ("a1", {**PORT_W, "leaves": 5, "root": "c4" * 64})]) is None
+
+
+def test_v2_holds_each_port_to_the_records_entry_for_its_value():
+    """`entry_clash` (`SampledProofs.Registered.entryClash`): a port agrees with the record's entry for its value in root,
+    leaf count, words, word bits (16 where the entry leaves them out) and domain, and its row format is the one the
+    verifier counts the value's rows in (`row_schemas`, else `row/v1`); v2 refuses the first port that doesn't, at the
+    first field it differs in. A value's last entry is the one read, and a port of a value the record has no entry for
+    is held by nothing here."""
+    schemas, ports = {"T": G.SCHEMA_V2}, [("w", PORT_W), ("t", PORT_T)]
+    rec = {"registered": [_entry(PORT_W), _entry(PORT_T)]}
+    assert G.WIDTH_KEY not in _entry(PORT_W) and G.entry_clash(ports, rec, schemas) is None
+    for k, v in (("root", "c4" * 64), ("leaves", 5), ("leaves", True), ("words", 7), (G.WIDTH_KEY, 32),
+                 ("domain", "e3" * 64)):
+        assert G.entry_clash(ports, {"registered": [{**_entry(PORT_W), k: v}, _entry(PORT_T)]}, schemas) == ("w", k), k
+    assert G.entry_clash(ports, {"registered": [{**_entry(PORT_W), G.WIDTH_KEY: 16}, _entry(PORT_T)]}, schemas) is None
+    assert G.entry_clash(ports, {"registered": [_entry(PORT_W), {**_entry(PORT_T), G.WIDTH_KEY: 16}]},
+                         schemas) == ("t", G.WIDTH_KEY)
+    assert G.entry_clash(ports, rec, {}) == ("t", G.SCHEMA_KEY)
+    assert G.entry_clash(ports, rec, {**schemas, "W": G.SCHEMA_SEG}) == ("w", G.SCHEMA_KEY)
+    changed = {**_entry(PORT_W), "leaves": 5}
+    assert G.entry_clash(ports, {"registered": [changed, *rec["registered"]]}, schemas) is None
+    assert G.entry_clash(ports, {"registered": [*rec["registered"], changed]}, schemas) == ("w", "leaves")
+    assert G.entry_clash([*ports, ("u", {**PORT_W, "value": "U", "leaves": 9})], rec, schemas) is None
+    assert all(G.entry_clash(ports, r, schemas) is None for r in ({}, None, {"registered": None}, {"registered": [5]}))

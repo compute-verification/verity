@@ -504,7 +504,7 @@ def portsHeld (p : Params) (c : OneStage.Commitment) : V Unit := do
   let some own := (← readsOf p.own.registered).registered | pure ()
   match Registered.entryClash p.base.verifier.schemas c.record own with
   | some (q, k) =>
-    throw s!"registered: port {q.name} reads {q.value} at another {k} than the registration record's entry for it"
+    throw s!"registered: port {q.name} of {q.value} differs in {k} from the registration record's entry for {q.value}"
   | none => pure ()
 
 /-- What `portsHeld` accepts: no port of the verifier's registered reads differs from the record's entry for its value. -/
