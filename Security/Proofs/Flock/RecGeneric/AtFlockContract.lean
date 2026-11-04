@@ -145,9 +145,9 @@ theorem forks_of (hF : RecFacts H D Bd decI DO pk x) {Ω : Type} (P : Prover Ω)
       ((D.record Bd.IVStar).nS x) w)
     (ho' : OuterHolds DO (runVstar H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) P x ω (fork j r r'))
       ((D.record Bd.IVStar).nS x) w')
-    (hne : (((run H (replay (D.msgs x w)) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
+    (hne : ((run H (replay (D.msgs x w)) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
         fun i => coinSeq r i.val).seen.msgs.map Prod.fst).getD j [] ≠
-      (((run H (replay (D.msgs x w')) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
+      ((run H (replay (D.msgs x w')) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
         fun i => coinSeq (fork j r r') i.val).seen.msgs.map Prod.fst).getD j [])
     (hcond : j + 1 < Bd.IVStar.k (xI (D.record Bd.IVStar) x) ∨
       [Bd.DE.cols (Bd.openView (run H (replay (D.msgs x w)) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
@@ -176,7 +176,7 @@ theorem forks_of (hF : RecFacts H D Bd decI DO pk x) {Ω : Type} (P : Prover Ω)
     · exact setupCalls_true H _ _ p hp
   have hk : j < Bd.DE.V.k (xI (D.record Bd.IVStar) x) := hj
   have hv : ∀ (r₀ : Fin ((D.record Bd.IVStar).V.k x) → Coin) (w₀ : List Claims.Flock.Wit),
-      (((run H (replay (D.msgs x w₀)) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
+      ((run H (replay (D.msgs x w₀)) Bd.IVStar (xI (D.record Bd.IVStar) x) ()
         fun i => coinSeq r₀ i.val).seen.msgs.map Prod.fst).getD j [] = (D.msgs x w₀).getD j [] := fun r₀ w₀ =>
     (Bd.run_ivstar_fst H (xI (D.record Bd.IVStar) x) (D.msgs x w₀) (fun i => coinSeq r₀ i.val) j).trans (if_pos hk)
   have hne' : (D.msgs x w).getD j [] ≠ (D.msgs x w').getD j [] := fun h =>
@@ -332,7 +332,7 @@ variable {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) 
 
 /-- **The recorded calls are true on an accepted run** at witnesses in the outer relation at the run's V\* statements,
 from the readers' facts (`ReadersTrue`), as `callsTrue` reads them at `E_O`'s. -/
-theorem callsTrue_holds (DO : Claims.Flock.Deploy Coin Col T) (hT : ReadersTrue H I.V b DO) (x : Msg) {Ω : Type}
+theorem callsTrue_holds (DO : Claims.Flock.Deploy Coin Col T) (hT : ReadersTrue H I.V b DO) (x : Msg) (Ω : Type)
     (P : Prover Ω) (ω : Ω) (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit)
     (hacc : (run H P (deployRec I.V ivScope b).V x ω r).out = .acc)
     (ho : Claims.Recursion.OuterHolds DO (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r)
@@ -400,14 +400,14 @@ theorem facts_route_stagedVS (rel relO : _root_.Flock.Readable.Parsed → _root_
     margin := roundsMargin_deployRec FlockDeploy.sha512 I ivScope bL fun x => V_k_pos_flock false x
     binds := hEC
     callsLog := fun r ws => Or.inl (innerRun_calls FlockDeploy.sha512 I ivScope bL x r ws)
-    callsTrue := fun _ P ω r ws hr ho => hTw P ω r ws hr ho
+    callsTrue := fun Ω P ω r ws hr ho => hTw Ω P ω r ws hr ho
     accepts := fun Ω P ω r ws hr ho => by
       obtain ⟨st, hst, -⟩ := refuses I.V ivScope bL FlockDeploy.sha512 x Ω P ω r hr
-      exact hacc x st hst (hx st hst) Ω P ω r hr ws ho (hTw P ω r ws hr ho)
+      exact hacc x st hst (hx st hst) Ω P ω r hr ws ho (hTw Ω P ω r ws hr ho)
     readers := fun Ω P ω r ws hr ho => by
       obtain ⟨st, hst, -⟩ := refuses I.V ivScope bL FlockDeploy.sha512 x Ω P ω r hr
       exact readers_run FlockDeploy.sha512 I ivScope b L (deployZkRec relO) _ shows cmt hHW (hHe decI) hOp hst
-        (hx st hst) (hSt decI x st hst (hx st hst) Ω P ω r hr) ho (hTw P ω r ws hr ho) }
+        (hx st hst) (hSt decI x st hst (hx st hst) Ω P ω r hr) ho (hTw Ω P ω r ws hr ho) }
 
 section LayR
 
