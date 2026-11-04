@@ -184,13 +184,15 @@ theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.
 `S` whose file decodes only to the verifier's draw of `S` under the law `law S` is `DrawOkZKHJP` at `mPtsOf c.g |S|` link
 points. -/
 theorem drawOkZKHJP_of_count (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (h1 : I.count ≤ 1)
+    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (h1 : I.count ≤ 1)
     (law : Finset (Fin n) → Draw.Law) (pop : ℕ) (dj : Finset (Fin n) → Lean.Json)
     (hdj : ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D = ZkLink.drawOf (law S) pop S) (S : Finset (Fin n)) :
     DrawOkZKHJP I own dj (mPtsOf c.g S.card) S := by
   intro j
-  have hc' : HmOut.parse (tagsAt (zkTags I) I.count j) I.circuitFile I.tables = .ok c :=
-    (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
+  have hty : (tagsAt (zkTags I) I.count j).typed = false :=
+    (Exec.tagsAt_typed _ _ _).trans ((zkTags_typed I).trans ht)
+  have hc' : HmOut.parseStmt (tagsAt (zkTags I) I.count j) I.circuitFile I.tables = .ok c :=
+    (parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hcS
   have hn : nTab I = 1 := by simp [nTab, h1]
   have hdr : drawJ I (dj S) j = dj S := by simp [drawJ, h1]
   have hpart : partS I (dj S) S j = S := by
@@ -202,7 +204,7 @@ theorem drawOkZKHJP_of_count (I : Inputs) (own : Option ByteArray) (ht : I.tags.
   · rw [hdr] at h
     rw [hdj S D h, drawOf_proved, drawOf_mem]
     exact ⟨u, by rwa [hpart] at hu, rfl⟩
-  · refine setupHidden_mPts_of_provedP hc' (fun D h => ?_) hst
+  · refine setupHidden_mPts_of_provedP hty hc' (fun D h => ?_) hst
     rw [hdr] at h
     rw [hdj S D h, drawOf_proved, drawOf_size]
 
@@ -211,7 +213,7 @@ draw** (`decodesZCJH_liveIP` at `RecordCustodyZKJPLaw`): the record's custody at
 and its draw file, which decodes only to the verifier's draw under its law, the coin server's draws
 (`drawOkZKHJP_of_count`) at `mPts` link points, at a sampling design each of whose draws `S` has `mPtsOf c.g |S| = mPts`. -/
 theorem decodesZCJH_custodyAt (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (h1 : I.count ≤ 1)
+    (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (h1 : I.count ≤ 1)
     (law : Finset (Fin n) → Draw.Law) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -221,8 +223,8 @@ theorem decodesZCJH_custodyAt (I : Inputs) (own : Option ByteArray) (ht : I.tags
     DecodesOnZKJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
-  decodesZCJH_liveIP I own ht hc dj y₀ wr L hT hCust.1 fun ω => by
+  decodesZCJH_liveIP I own ht dj y₀ wr L hT hCust.1 fun ω => by
     rw [← hm ω]
-    exact drawOkZKHJP_of_count I own ht hc h1 law n dj hCust.2 (L.draw ω)
+    exact drawOkZKHJP_of_count I own ht hcS h1 law n dj hCust.2 (L.draw ω)
 
 end FlockSoundness.Discharge.ZkHidden

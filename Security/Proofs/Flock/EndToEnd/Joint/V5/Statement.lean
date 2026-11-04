@@ -123,10 +123,14 @@ noncomputable def game (L : Law m.n) : Game (Reg × Finset (Fin m.n) × Discharg
 /-- The member's program's partition into proof blocks. -/
 noncomputable def P := (keyProgP m.D.unroll m.pi m.hU m.n).partition (Discharge.Layout.outsOfP m.D.unroll m.hU m.n m.pi)
 
+/-- The member's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
+theorem hcS : HmOut.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D.unroll :=
+  Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse m.hD)
+
 /-- The member's public file's commitments. -/
 noncomputable def vb :=
-  (rsZHJP (Reg := Reg) m.dj m.y₀ m.ht (Flock.Desc.parse_flat m.hD) m.hscope m.hU m.hpi m.hpub).bindingZ
-    (rsZHJP_computes m.dj m.y₀ m.ht (Flock.Desc.parse_flat m.hD) m.hscope m.hU m.hpi m.hpub)
+  (rsZHJP (Reg := Reg) m.dj m.y₀ m.ht m.hcS m.hscope m.hU m.hpi m.hpub).bindingZ
+    (rsZHJP_computes m.dj m.y₀ m.ht m.hcS m.hscope m.hU m.hpi m.hpub)
 
 /-- **V5's canonical openings** at the member's public file's leaf map and its constants at public inputs
 (`Bridge.constsOfP`), as `SampledKSLiveV5` reads them. -/
@@ -144,7 +148,7 @@ noncomputable def sim (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L
   simZJA execArith hs512 (planZHJP m.dj m.y₀) (AcceptsZKP m.I m.own) m.wr (opnAtZHJP (planZHJP m.dj m.y₀) m.I m.own m.dj)
     m.dg (decAtZJ (planZHJP m.dj m.y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => [])
     (fun _ _ rs j => capOfRoot rs[j.val]!) m.N
-    (decodesZCJH_custodyAt m.I m.own m.ht (Flock.Desc.parse_flat m.hD) m.hcount _ m.dj m.y₀ m.wr L m.hTags m.hCust hL)
+    (decodesZCJH_custodyAt m.I m.own m.ht m.hcS m.hcount _ m.dj m.y₀ m.wr L m.hTags m.hCust hL)
     τ
 
 /-- **The member's incorrect proof blocks** at `τ`: `wrongRegZc` at V5's canonical openings in the committed trace fixed
