@@ -1,40 +1,41 @@
 module
 
 public import Proofs.Flock.ZkAny.Finish
+public import Proofs.Flock.ZkAny.RelayOut
 public import Proofs.Flock.Claims.ZK.FrameZK
-public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Soundness.CROnly.Hiding
 public import Proofs.Flock.Soundness.ZK.RealLeaves
-public import Proofs.Core.Game.Basic
 public import Definitions.Flock.ZK.AnyValues
 
 /-!
-# C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at a relay
+# C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed relay
 
-`Flock.Guarantees.SessionLoopZKAny` states the session loop's release (`LeanRelease.ofLoop`, at the stops its own frames'
-refusals give, `LeanRelease.rfOf`) as `Claims.ZKOut` at its `Finish` verdict, for every worker and any values whose
-unswitched round encoding is causal (`RefSession.UnCausal`), at every relation at whose statements the session's table
-witnesses are valid: no `Flock.R`, no premise that the workers' rows hold anywhere but where the release goes on at its
-`Finish`, and no premise that their switched round encoding is causal. Before the `Finish` the release is the unswitched
-prover's on both branches, and it splits only at the `Finish`: where it stops, the simulator is the refusing prover's cut
-at the `Finish`; where it goes on, the honest prover's Goldreich–Kahan simulator, through the go prover `RefSession.goP`.
+`Flock.Guarantees.SessionLoopZKAny` states the session loop's release (`LeanRelease.ofLoop`, at the stops its own
+frames' refusals give, `LeanRelease.rfOf`) as `Claims.ZKOut` at its `Finish` verdict, for every worker and any values
+whose unswitched round encoding is causal (`RefSession.UnCausal`), at every relation at whose statements the session's
+table witnesses are valid: no `Flock.R`, no premise that the workers' rows hold anywhere but where the release goes on
+at its `Finish`, and no premise that their switched round encoding is causal. Before the `Finish` the release is the
+unswitched prover's on both branches, and it splits only at the `Finish`: where it stops, the simulator is the refusing
+prover's cut at the `Finish`; where it goes on, the honest prover's Goldreich–Kahan simulator, through the go prover
+`RefSession.goP`.
 
-At a relay that sends the model's release woven with frames of its own, the same holds per outcome
-(`FlockSoundness.ZK.PerOutcome`) at the pair of the verdict and a public outcome `pos ∈ Q` (at the deployed relay, where
-the release ended and what the deployed `Finish` reveals on a stop), wherever the relay's bytes are a public function
-`g`, fixed before the witness, of `pos` and the model's release (`RelayLift`): `ZKOutRelay`, which costs `2·|Q|`
-outcomes.
+At the deployed relay (`Flock.Firewall.Session.relay`, as `Relay.out`), which sends the setup's control frames at their
+places and the model's frames at theirs, the same holds per outcome (`FlockSoundness.ZK.PerOutcome`) at the pair of the
+verdict and where the release ended (`Relay.relayEnd`), at the same error (`Relay.relay_zkOut`): `ZKOutRelay`, which
+costs `2·((tmplOf s).length + 1)` outcomes.
 
 Premises: the session's Props at the loop's tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`), `UnCausal`
 at the values, and the transport's trusts at every statement of the relation (`LeanRelease.TrustsStop`: the link, live
-and fill rounds at the unswitched prover, the `Finish`, and the rows where it goes on). The loop's stops, coin check,
-`Hello` and last round are theorems at `ofLoop` (`stopsAt_of_readsCoins`, `stopsCausal_rfOf`, `checkIs_coinLayer`,
-`helloEq_of_helloIs`, `loop_last`), and hm96's hiding is at its gap at the pinned key (`CROnly.hm96Hiding_gap`). Scope:
-the released bytes and their order, not their times.
+and fill rounds at the unswitched prover, the `Finish`, and the rows where it goes on); at the relay, what its host
+gives it (`RelayEnvAt`), the auditor's coins at each coin request (`Relay.CoinReqsAnswered`) and its model frames as
+the model's transcript encoded (`RelayFrames`). The loop's stops, coin check, `Hello` and last round are theorems at
+`ofLoop` (`stopsAt_of_readsCoins`, `stopsCausal_rfOf`, `checkIs_coinLayer`, `helloEq_of_helloIs`, `loop_last`), and
+hm96's hiding is at its gap at the pinned key (`CROnly.hm96Hiding_gap`). Scope: the released bytes and their order, not
+their times.
 
 * `LeanRelease.TrustsStop`: the transport's trusts at the unswitched prover, at every statement of a relation.
-* `RelayLift`, `ZKOutRelay`, `zkOutRelay_of_zkOut`: a relay's bytes as a public function of a public outcome and the
-  model's release, `ZKOut` read at such a relay, and that `ZKOut` gives it.
+* `RelayEnvAt`, `RelayFrames`, `ZKOutRelay`, `zkOutRelay_of_zkOut`: the relay's host and model frames, `ZKOut` read at
+  the deployed relay, and that `ZKOut` gives it.
 * `Loop.anySim`, `Loop.anyErr`: the session loop's simulator given the verdict and its error per outcome.
 * **`Flock.SecurityProofs.SessionLoopZKAny`**: `LeanRelease.zk_finish_out` at `ofLoop`, and `zkOutRelay_of_zkOut`.
 -/
@@ -50,66 +51,59 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **A relay's bytes are a public function of a public outcome and the model's release**: at each of the release's
-randomness `ω`, the bytes `rel ω` the relay releases are `g` at the outcome `pos ω` of the model's release `model ω`. At
-the deployed relay, which sends the setup's control frames at their fixed places and the model's frames, encoded, at
-theirs, over the schedule cut where the release ended, `pos` is that cut and `g` weaves the control frames into the
-encoded model frames there. -/
-def RelayLift {Ω B Q : Type} (rel : Ω → B) (pos : Ω → Q) (g : Q → List (Msg × Out) → B)
-    (model : Ω → List (Msg × Out)) : Prop :=
-  ∀ ω, rel ω = g (pos ω) (model ω)
+/-- **What the deployed relay reads from its host, at the setup `s`**: at each of the protocol's randomness `ω`, every
+request of `ins ω` carries the setup `s`, and every barrier it waits at returns. -/
+def RelayEnvAt {Ω : Type} (s : _root_.Flock.V (_root_.Flock.SessionSpec × Array _root_.Flock.Stmt))
+    (ins : Ω → List (ByteArray × Relay.Env)) : Prop :=
+  ∀ ω, ∀ p ∈ ins ω, p.2.setup = s ∧ ∀ why, (p.2.barrier (some why)).isSome
 
-/-- **`ZKOut` read at a relay**: for `(x, w) ∈ R`, every verifier `V*` of the protocol's `k(x)` rounds and tape `θ`,
-and every public `g`, fixed before the witness, wherever the bytes `rel` a relay releases are `g x` at a public outcome
-`pos` of the protocol's transcript (`RelayLift`), they are simulated per outcome at the pair of the protocol's outcome
-and `pos`, by the simulator given the protocol's outcome read through `g x` at `pos`, within `ε` in `ℝ≥0∞`. -/
+/-- **The deployed relay's model frames are the model's release, encoded**: at each of the protocol's randomness `ω`,
+the frames the relay sends from the model (`Relay.relayFrames`) are the model's transcript `model ω` encoded by
+`enc`. -/
+def RelayFrames {Ω : Type} (hold : Bool) (ins : Ω → List (ByteArray × Relay.Env))
+    (enc : List (Msg × Out) → List (List ByteArray)) (model : Ω → List (Msg × Out)) : Prop :=
+  ∀ ω, Relay.relayFrames hold (ins ω) = enc (model ω)
+
+/-- **`ZKOut` read at the deployed relay**: for `(x, w) ∈ R`, every verifier `V*` of the protocol's `k(x)` rounds and
+tape `θ`, every setup `s` and the requests `ins ω` the relay reads at each of the protocol's randomness `ω`, where the
+relay's host gives it the setup `s` (`RelayEnvAt`), the auditor answers each coin request with coins
+(`Relay.CoinReqsAnswered`), and the relay's model frames are the protocol's transcript encoded by `enc`
+(`RelayFrames`), the relay's release (`Relay.out`) is simulated per outcome at the pair of the protocol's outcome and
+where the release ended (`Relay.relayEnd`, one of the schedule's `(tmplOf s).length + 1` cuts), by the simulator given
+the protocol's outcome, encoded and woven with the setup's control frames over the schedule's cut, within `ε` in
+`ℝ≥0∞`. That simulator reads `enc`, so it is fixed before the witness only at an `enc` that is: `RelayFrames` at an
+`enc` that reads the witness gives a simulator that reads it too. -/
 def ZKOutRelay {W St : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
     (out : Msg → List (Msg × Out) → St) (S : SimOut St) (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ) :
     Prop :=
-  ∀ {B Q : Type} (g : Msg → Q → List (Msg × Out) → B) (x : Msg) (w : W), R x w →
-    ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (rel : N x × Ω x → B) (pos : N x × Ω x → Q),
-      RelayLift rel pos (g x) (fun ω => (runStar H (P w x) Vs x ω θ).msgs) →
-      FlockSoundness.ZK.PerOutcome (fun ω => (out x (runStar H (P w x) Vs x ω θ).msgs, pos ω)) rel
-        (fun o (c : S.C x) => g x o.2 ((S.given o.1).out H Vs θ x c)) (fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1))
+  ∀ (x : Msg) (w : W), R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x →
+    ∀ (hold : Bool) (s : _root_.Flock.V (_root_.Flock.SessionSpec × Array _root_.Flock.Stmt))
+      (ins : N x × Ω x → List (ByteArray × Relay.Env)) (enc : List (Msg × Out) → List (List ByteArray)),
+    RelayEnvAt s ins → (∀ ω, Relay.CoinReqsAnswered (ins ω)) →
+    RelayFrames hold ins enc (fun ω => (runStar H (P w x) Vs x ω θ).msgs) →
+    FlockSoundness.ZK.PerOutcome (fun ω => (out x (runStar H (P w x) Vs x ω θ).msgs, Relay.relayEnd hold s (ins ω)))
+      (fun ω => Relay.out hold {} {} (ins ω))
+      (fun o (c : S.C x) =>
+        Relay.weave (Relay.ctlOf s) ((Relay.tmplOf s).take o.2) (enc ((S.given o.1).out H Vs θ x c)))
+      (fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1))
 
-/-- A bound in `Claims.Pr` is one in `prCoin`, its error read in `ℝ≥0∞`. -/
-private theorem prCoin_le_of_Pr {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Nonempty β] {p : α → Prop}
-    {q : β → Prop} {e : ℝ} (h : Claims.Pr p ≤ Claims.Pr q + e) :
-    Verity.Game.prCoin p ≤ Verity.Game.prCoin q + ENNReal.ofReal e :=
-  calc Verity.Game.prCoin p = ENNReal.ofReal (Claims.Pr p) := by
-        rw [Claims.Sampling.Pr_eq_toReal_prCoin, ENNReal.ofReal_toReal (FlockSoundness.ZK.prCoin_ne_top p)]
-    _ ≤ ENNReal.ofReal (Claims.Pr q + e) := ENNReal.ofReal_le_ofReal h
-    _ ≤ ENNReal.ofReal (Claims.Pr q) + ENNReal.ofReal e := ENNReal.ofReal_add_le
-    _ = Verity.Game.prCoin q + ENNReal.ofReal e := by
-        rw [Claims.Sampling.Pr_eq_toReal_prCoin, ENNReal.ofReal_toReal (FlockSoundness.ZK.prCoin_ne_top q)]
-
-/-- **`ZKOut` gives `ZKOutRelay`**: the relay's event at an outcome pair is the protocol's at its outcome, read through
-`g x` at the second. -/
+/-- **`ZKOut` gives `ZKOutRelay`** (`Relay.relay_zkOut`). -/
 theorem zkOutRelay_of_zkOut {W St : Type} {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
     [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] {H : Msg → Msg} {k : Msg → ℕ} {P : W → (x : Msg) → Prover (N x × Ω x)}
     {R : Rel W} {out : Msg → List (Msg × Out) → St} {S : SimOut St}
     {ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ} (h : ZKOut N Ω H k P R out S ε) :
-    ZKOutRelay N Ω H k P R out S ε := by
-  intro B Q g x w hR Θ Vs θ hk rel pos hfr
-  rintro ⟨o, q⟩ E
-  have hm : Verity.Game.prCoin (fun ω : N x × Ω x =>
-        (out x (runStar H (P w x) Vs x ω θ).msgs, pos ω) = (o, q) ∧ E (rel ω)) ≤
-      Verity.Game.prCoin (fun ω : N x × Ω x =>
-        out x (runStar H (P w x) Vs x ω θ).msgs = o ∧ E (g x q (runStar H (P w x) Vs x ω θ).msgs)) :=
-    Verity.Game.prCoin_mono fun ω hω => by
-      obtain ⟨h1, h2⟩ := Prod.mk.inj hω.1
-      refine ⟨h1, ?_⟩
-      rw [← h2, ← hfr ω]
-      exact hω.2
-  exact hm.trans (prCoin_le_of_Pr (h x w hR Θ Vs θ hk o fun τ => E (g x q τ)))
+    ZKOutRelay N Ω H k P R out S ε :=
+  fun _ _ hR _ Vs θ hk hold s ins enc hE hc hfr =>
+    Relay.relay_zkOut h hR Vs θ hk hold s ins enc (fun ω p hp => (hE ω p hp).1) (fun ω p hp => (hE ω p hp).2) hc hfr
 
 namespace LeanRelease
 
 /-- **The transport's trusts at the unswitched prover, at every statement of `Rl`**: at each `(x, w) ∈ Rl`, the
 firewall's own link, the worker's frame rounds and the stand-in frame rounds are the unswitched prover's
 (`LinkRoundEqStop`, `LiveRoundEqStop`, `FillRoundEqStop`), the firewall's own `Finish` is the switched prover's last
-message (`FinalRoundEq`), and the `Finish` goes on only where the workers' rows hold at the drawn pads (`FinishRows`). -/
+message (`FinalRoundEq`), and the `Finish` goes on only where the workers' rows hold at the drawn pads
+(`FinishRows`). -/
 def TrustsStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (Rl : Rel Flock.Wit) : Prop :=
   ∀ x w, Rl x w → LinkRoundEqStop S vs L x w ∧ LiveRoundEqStop S vs L H wk x w ∧ FillRoundEqStop S vs L H wk x w ∧
@@ -161,13 +155,14 @@ noncomputable def anyErr (T : CoinLayer.TableData) (vs : (CoinLayer.session loop
 
 end Loop
 
-/-- **C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at a relay.** At every
+/-- **C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed
+relay.** At every
 table data `T`, values `vs` whose unswitched round encoding is causal, repetition count `0 < t` and relation `Rl` at
 whose statements the session's table witnesses are valid, where the session meets the tables' side (`Tables`,
 `DummyReg`, `Causal`, `TapeOK`), at every `L₀` (the release's inner rounds), tables `real` and worker `wk` where the
 transport's trusts hold at the statements of `Rl` (`LeanRelease.TrustsStop`), the session loop's release
 (`LeanRelease.ofLoop`) against every `V*` of its `refK x + 2` rounds meets `Claims.ZKOut` at its `Finish` verdict
-(`goesOnAt` at its last round), at `Loop.anySim` within `Loop.anyErr`, and so `ZKOutRelay` at a relay. -/
+(`goesOnAt` at its last round), at `Loop.anySim` within `Loop.anyErr`, and so `ZKOutRelay` at the deployed relay. -/
 def _root_.Flock.Guarantees.SessionLoopZKAny : Prop :=
   ∀ (T : CoinLayer.TableData) (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ), 0 < t →
     ∀ (Rl : Rel Flock.Wit),
@@ -204,7 +199,8 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at a relay**:
+/-- **C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed
+relay**:
 `LeanRelease.zk_finish_out` at `ofLoop`, with the loop's stops, check, `Hello` and last round from its own lemmas and
 hm96's hiding at its gap, and `zkOutRelay_of_zkOut`. -/
 theorem SessionLoopZKAny : Flock.Guarantees.SessionLoopZKAny := by
