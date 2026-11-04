@@ -28,3 +28,7 @@ The port keeps #7043's intent, but the serving side isn't sound yet. Fix these o
 1. **Onsite deferral:** I raised it on VLLM-193 with network-accounting and memory-accounting. My recommendation there: the PoUS case is written on the served node and carried, hashed, in `private/deferred/`, and the preflight lifts the onsite refusal. Wait for memory-accounting's confirmation (by Thu 12:00Z) before changing the preflight. Then it's yours, by Thu 18:00Z.
 2. **R2's day:** your proposal is posted on PRF-370 (12:22Z): the challenger's signed reserve entry `started_utc`, with `day0` anchored in the signed period-open entry, and the declaration in prf346's format. Answers are due Thu 06:00Z. Meanwhile build the reader against that shape behind the development fallback, so it's a small change once the format is final.
 3. Commit the regenerated Lean records (5b39, 2cd5, bb45) when they finish. Suites: if f047 is still waiting on nebius-2, move it to cpu-7, -9, -11 or -12, which start at once.
+
+## 12:30Z Wed (coordinator): drop the onsite preflight change
+
+memory-accounting answered on VLLM-193: PoUS, the wipe and PoUB are out for Monday. The onsite run of record is `PRODUCT=remote-network`, whose composite reads no PoUS case. ODSERVE (network-accounting) makes the one edit to the H1_TIE deferral refusal (`served_verdicts.sh` :1235 at your 4f0282d0c2), on its onsite branch, with :1180's condition. **Don't change that line on your branch**, so the two don't conflict. Keep the day log carried, hashed, in `private/deferred/` as you have it.
