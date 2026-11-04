@@ -117,8 +117,9 @@ def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
 
 def test_a_salt_dead_element_over_the_row_cap(exe, tmp_path, monkeypatch):
     """P3's forming term: credited row 9 holds one entry 300 times its RMS, which keeps the per-row rules and is salt-dead
-    (its forming's two ends round to one code), a debit of fs·|cols|/n = 64 that puts the row over its cap, 41 at k = 128,
-    where its words flag no atom. Both verdicts reject the tile on it; without the term the Python's accepts."""
+    (its forming's two ends round to one code), inert work of fs·|cols|/n = 64 that puts the row over its inert-work
+    bound, 41 at k = 128, where its words flag no atom. Both verdicts reject the tile on it; without the term the
+    Python's accepts."""
     path = T.proved_pass(tmp_path, H100, spike=300.0)[0]
     got = same(exe, [path], 16)
     assert got["verdict"] == "reject" and "A row 9's replayed debit 64 exceeds its cap 41 (the row cap" in got["reason"]

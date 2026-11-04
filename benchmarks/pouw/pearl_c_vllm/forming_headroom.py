@@ -1,7 +1,8 @@
-"""Whether the forming term could flip the verdict of a tile measured before the served debit charged it.  Lean's tile debit
-(`PearlCSem.tileDebitRev1`) adds fs·(|C|/n)·elems, elems the elements of the tile's passing rows R that are salt-dead
-(`saltDeadP`) or unneeded (every credited column flagged at the element's word), which `pearl_c_debit.forming_elements`
-now replays; a line recorded since (one with ``forming_elements``) has its verdict with it, and is refused here.
+"""Whether the forming term could flip the verdict of a tile measured before the served replay charged it.  Lean's tile
+inert work (`PearlCSem.tileDebitRev1`) adds fs·(|C|/n)·elems, elems the elements of the tile's passing rows R that are
+salt-dead (`saltDeadP`) or unneeded (every credited column flagged at the element's word), which
+`pearl_c_debit.forming_elements` now replays; a line recorded since (one with ``forming_elements``) has its verdict with
+it, and is refused here.
 
 From each recorded line (`served_debit.py`'s ``*-tiles.jsonl``), exactly, at the cited statement's prices (`STATEMENT`,
 `Prices.sm120Loop`; c moves W_ref only, not capOK): the unneeded elements are at most 32·⌊atoms/|C|⌋, since each is in a

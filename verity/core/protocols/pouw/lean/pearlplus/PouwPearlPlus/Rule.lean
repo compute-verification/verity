@@ -14,8 +14,8 @@ After a tile's openings and digest pass, the record decides it, in `check_opened
   debit (`word_debit`) is 40 units per flagged atom (32 MACs and a quarter of a promotion add) and 32 per later promotion
   into a +0 total. P3's forming term (`pearl_c_debit.forming_elements`, `tileDebitDev`'s elems) adds fs = 64 times |cols|/n
   per credited row's element (i, l), l < k, that is salt-dead (`saltDead`: the support's two ends agree) or whose atom
-  block every word of the row over the credited columns flags. In integers, with D the words' debit and E the elements,
-  the tile passes when 400·(n·D + 64·|cols|·E) ≤ creditOf(1, |K|, n)·|rows|·|cols|.
+  block every word of the row over the credited columns flags. In integers, with D the words' inert work and E the
+  elements, the tile keeps its inert-work bound when 400·(n·D + 64·|cols|·E) ≤ creditOf(1, |K|, n)·|rows|·|cols|.
 * **The served y** (`check_y`), on a call that commits one: each real row of the tile opens against the call's y root, and
   its word at column j is `RN_bf16(RN(RN(U · RN(1/α_A)) · RN(1/α_B)))` widened, `pearl_c_u.y`: `unscale`, the copy of the
   served y's Definition (`Pouw.PearlC.unscale`, `PearlCUnscale_v1` at `BIAS` off), where each step stays finite.
@@ -177,7 +177,7 @@ def rowElements (alpha beta : Nat) (x : Array Nat) (flags : List (Array Bool)) :
   let dead ← x.mapM (saltDead alpha cb)
   return ((List.range x.size).filter fun l => every[l / 32]! || dead[l]!).length
 
-/-- fs, the salt-dependent part of `FORMING` (the noise atom and the cast), per debited forming element. Must equal
+/-- fs, the salt-dependent part of `FORMING` (the noise atom and the cast), per inert forming element. Must equal
 `Prices.h100`'s `forming_credited`. -/
 def FS : Nat := 64
 

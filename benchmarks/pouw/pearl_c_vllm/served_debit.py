@@ -13,8 +13,8 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.tile_debit`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``forming_elements``, each debited
-  fs·|cols|/n).  Under a format with the row cap (-h3) the rule also caps each
+  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``forming_elements``, each
+  fs·|cols|/n of inert work).  Under a format with the row cap (-h3) the rule also caps each
   credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
   its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited

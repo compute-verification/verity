@@ -1412,8 +1412,8 @@ def _replay_every_tile(p) -> dict[int, str]:
 
 def test_a_salt_dead_element_puts_its_row_over_the_cap(tmp_path, monkeypatch):
     """P3's forming term in the tile rule (`pearl_c_debit.forming_elements`): credited row 9 holds one entry 300 times its
-    RMS, which keeps the per-row rules and is salt-dead, a debit of fs·|cols|/n = 64 over the row's cap of 41 at k = 128
-    with no flagged atom, so its tile, and it alone, fails; without the term every tile passes."""
+    RMS, which keeps the per-row rules and is salt-dead, inert work of fs·|cols|/n = 64 over the row's bound of 41 at
+    k = 128 with no flagged atom, so its tile, and it alone, fails; without the term every tile passes."""
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", spike=300.0)[0]
     p = VR.load(path, published(path))
     assert _replay_every_tile(p) == {0: "A row 9's replayed debit 64 exceeds its cap 41 (the row cap: ρ·its credited "

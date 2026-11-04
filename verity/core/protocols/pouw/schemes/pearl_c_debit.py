@@ -21,7 +21,7 @@
   forming's accumulator f32(α·x) (`circuit.words.ends_agree`, the hidden cap's bit).
 * `forming_elements(flags, dead)`: P3's per-tile rule (`tileDebitDev`'s `elems`): the A′ elements (i, l), l < k, of the
   tile's rows that are salt-dead or whose atom block l/32 every word of the row over the tile's columns flags.  Each
-  is debited fs·|cols|/n, the tile's share of an element its row band shares (`clear_work.tile_cap`).
+  counts fs·|cols|/n of inert work, the tile's share of an element its row band shares (`clear_work.tile_cap`).
 * `tile_debit(a_rows, b_rows, formed)`: the chain debit and `forming_elements`, each word's flags replayed once.
 * `debit_units(atoms, elements, prices, device, zeros=…)` is rev1's `tileDebitRev1` at a device's W1 prices
   (`pearl_c.Prices`, the device's own by default): `debitDev` (`debitOf` at `Params.pi`, `Costs.adopted` on the H100),
@@ -194,8 +194,8 @@ def salt_dead(alpha: int, x: Sequence[int], beta: int, device: Device = H100) ->
 
 
 def forming_elements(flags: Sequence[Sequence[Sequence[bool]]], dead, device: Device = H100) -> int:
-    """`tileDebitDev`'s debited forming elements: over the tile's rows i, the l < k with row i's atom block l/32 flagged by
-    every word (i, j) of the tile's columns (``flags[i][j]``, `word_flags`), or salt-dead (``dead(i)``, row i's
+    """`tileDebitDev`'s inert forming elements: over the tile's rows i, the l < k with row i's atom block l/32 flagged
+    by every word (i, j) of the tile's columns (``flags[i][j]``, `word_flags`), or salt-dead (``dead(i)``, row i's
     `salt_dead`, read only where some word leaves the block unflagged)."""
     elements, atom = 0, device.atom.k
     for i, words in enumerate(flags):

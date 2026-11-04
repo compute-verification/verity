@@ -142,8 +142,8 @@ def test_h100_gamma_is_rev1s_pin(pin, n):
 
 
 def test_the_zero_word_debits_every_later_promotion():
-    """`tile_cap`'s debit holds `tileDebitRev1`'s later +0 promotions, a zero word's k/(32·G) − 1, and its forming
-    elements: every atom of a zero word is flagged, so each of the row's k elements is debited, its |cols|/n share."""
+    """`tile_cap`'s inert work holds `tileDebitRev1`'s later +0 promotions, a zero word's k/(32·G) − 1, and its forming
+    elements: every atom of a zero word is flagged, so each of the row's k elements is inert, its |cols|/n share."""
     s, k = scheme_of(next(t for t in TWINS if t["statement"] == "pearl-c-sm120/v1")), 1024
     record = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, k)
     atoms, zeros = D.chain_debit([[0] * k], [[0] * k], s.device)

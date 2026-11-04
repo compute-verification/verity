@@ -20,8 +20,9 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
   source and the commitment.
 * `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
 * `TileAcceptMeans`: a tile that passes opens against the pass's roots, its checked words are the committed leaf's, its
-  rows keep the per-row rules, its credited cells' replayed debit, P3's forming term included, is within ρ = 1/400 of their
-  credit (as a tile and per credited A row), and its served y rows are the unscale of its U.
+  rows keep the per-row rules, its credited cells' replayed inert work, P3's forming term included, is within the
+  inert-work share ρ = 1/400 of their credit (as a tile and per credited A row), and its served y rows are the unscale
+  of its U.
 * `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
   (`PearlCUnscale_v1` at `BIAS` off).
 * `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
@@ -133,11 +134,12 @@ def TileAcceptMeans : Prop :=
         ys.all (opens (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false) yRoot ROW_SCHEMA) ∧
         Rule.yReason rows cols ops ch (ys.map fun y => words32 (openedValue y.value)) = none
 
-/-- **The cap a passed tile keeps** (`Rule.checkOpened`'s `capFailure`): on its credited rows `cr` and columns `cc`, the
-replayed debit, 40 per flagged atom-word, 32 per later +0 promotion and fs·|cc|/n per forming element of a credited row
-(`Rule.rowElements`: salt-dead, or in an atom block every word of its row flags; `tileDebitDev`'s elems), is at most
-ρ = 1/400 of `creditOf(1, |K|, n)/n` per credited cell, as a tile and on each credited A row (four times that at a census
-width). `Rule.debitUnits` is n times the debit, so the tile's test is 400·(n·D + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|. -/
+/-- **The inert-work bound a passed tile keeps** (`Rule.checkOpened`'s `capFailure`): on its credited rows `cr` and
+columns `cc`, the replayed inert work, 40 per flagged atom-word, 32 per later +0 promotion and fs·|cc|/n per forming
+element of a credited row (`Rule.rowElements`: salt-dead, or in an atom block every word of its row flags;
+`tileDebitDev`'s elems), is at most the inert-work share ρ = 1/400 of `creditOf(1, |K|, n)/n` per credited cell, as a
+tile and on each credited A row (four times that at a census width). `Rule.debitUnits` is n times the inert work, so the
+tile's test is 400·(n·D + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|. -/
 def TileKeepsTheCap : Prop :=
   ∀ (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops), Rule.checkOpened s r rows cols ops = none →
     let (cr, cc) := r.credited rows cols
