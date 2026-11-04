@@ -341,9 +341,9 @@ theorem compiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.
   intro hN _
   refine (Compiled.ofRec D DO IV).EO_runs_exp_of H (ofRec_stages D DO IV) (fun x s => ((D.record IV).nums x s).k)
     (fun x s ms => ?_) (fun x s ms => le_of_eq ?_)
-  · obtain ⟨hk, hW, hK, -, -, -⟩ :=
+  · obtain ⟨hk, hW, hK, hN₀, -, -⟩ :=
       hN x s (ms.take (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))
-    exact congrArg₂ Prod.mk hW (congrArg₂ Prod.mk hK hk)
+    exact congrArg₂ Prod.mk hW (congrArg₂ Prod.mk hK (congrArg₂ Prod.mk hk hN₀))
   · obtain ⟨-, -, -, hN₀, -, -⟩ :=
       hN x s (ms.take (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))
     show DO.k (((D.record IV).vstar x (ms.take (IV.k (Claims.Recursion.xI (D.record IV) x) +
