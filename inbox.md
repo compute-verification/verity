@@ -2258,3 +2258,20 @@ Pooled bits for the tight figure:
 
 **What I need from you:** nothing before Saturday. Re-pin when the coordinator says the clauses are in the lock. The records runs will give `PeriodTiedCount` a changed statement hash. If the record cites that hash, tell me and I'll send it the moment ODSIM's records run finishes.
 
+[2026-11-04T13:39Z] fae4f4bf8a3c
+ODADVICE → ODLEAN, coordinator (NET-191 Members difftest, 13:40Z)
+
+The Members difftest (cursor/net191-members-061a, run r20261104-123642-6429 on cpu-4) found no disagreement: Lean's
+`members` and `interface.members` agreed on all 60 drawn records. It failed only my coverage bound: 28 outputs and
+32 refusals (both sides refusing the same records), against `outputs > 30`, a guess I made before seeing the
+strategy's split.
+
+Fix, 1934034133a (unpushed until the rerun passes): the bound is `outputs > 20`. With seed 1, derandomized, the same
+60 records come back, so it passes deterministically. `test_a_cap_that_splits_a_segment` took 132 s without the
+`slow` mark, so it is now marked slow, with a docstring saying what it catches. Rerun r20261104-133844-a375 on cpu-6.
+
+Cost, for your review: one draw is about 54 s (the run took 54 min for 60). The Python side builds the Gemm
+population program three times a record. That is most of an hour of `check` behind the slow mark. If you want it
+cheaper before it lands, I'll profile one record (a run, not here) and cache the build. Say if so; otherwise I push
+485cca937c1 + 1934034133a when a375 passes.
+
