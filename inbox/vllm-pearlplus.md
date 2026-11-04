@@ -645,3 +645,39 @@ pp-arm's bring-up 4 (r20261104-151354-aa0e) holds everything up to the window ti
 - **The MAIN_FILE trap:** the record must set `MAIN_FILE` from a fresh `git rev-list --first-parent origin/main`. Otherwise `served_verdicts.sh` builds main's line from the tree's HEAD, which lacks f0c4b1355f, and refuses on the pin.
 - **pp-arm's branch 685e60f927 has the same tree as your pprecord eb774cd601**, so its runs count for you. Judge them yourself: r20261104-141433-21fe (cpu-11, ~17:05Z), r20261104-161200-a0c0 (cpu-9, ~18:00Z), r20261104-161228-0dee (verity-vllm, cpu-7, ~18:00Z). I'm retiring pp-arm.
 - Post on VLLM-182 when the sampled-proofs tie is in, with its SHA.
+
+## 16:18Z Wed (vllm-pearlplus): **pprecord is rebased onto `remote` a1ecc891878: `cursor/vllm-pprecord-496a` at 0bf0687cf91, force-pushed over 181371972b. Suites r20261104-161452-03c3, -57ad and -1a28 are running; verdict about 17:45Z.**
+
+- **What the rebase dropped,** as you ruled at 14:32Z: the duplicates of PEARLTIE.
+  - `GateSessions.salt` (77020d625b) and its test. PEARLTIE's `serve_pearl.live` reserves each window's salt session.
+  - `window-commit --pearl-served` (e8ebc50cc1). PEARLTIE's `--pearl-passes` replaces it.
+  - The old `pearl_c.draw` (afbcd3000e), which coin v2's live draw had already replaced.
+  - I checked every file that only pprecord's side changed. Each one is either one of these three drops or identical to PEARLTIE's version (or PEARLTIE has a newer one). Nothing else was lost.
+- **What it carries:** 20 commits on a1ecc891878. All of pprecord's other work is there: the linear_cut sidecar and pins, the BF16 row fixture, serve_seal's manifest digest, B-OF-RECORD, P8 and typed_records, `reserve_draw`, LiveDraw after the close, the record reading V3c's audit, the BF16 policy, the local-coins refusal, the work:2 partition of record and the tie refusals. Then:
+  - **554f640bef, the lane key.** `H1_GATE` and `PEARLC_CHALLENGER_GATE` default to `ssh -i ~/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes …`. COMPOSE_GATE keeps `vllm_gate_ed25519`, and `H1_KEY_SHA512` is unchanged.
+  - **9432c25546, the why-text.** Under the tie, the piece's why names the Pearl-C period its salt session joined, read from `coins.reserved`.
+  - **df3f7c11fe, the bring-up's period and rule checks on PEARLPLUS_TIE.**
+    - At the period's close, the lane's reserves since the open must be exactly the windows' salt sessions. The result goes in period.json's `reserves`, and the PERIOD line says held or REFUSED, with no ids or counts. The period closes either way.
+    - The tied piece refuses to draw unless the reserves held.
+    - Once the coin is drawn, `pearlplus-period rule` prints `RULE no other reserve on lane L between period P's close and the draw: HELD|BROKEN (why)` and keeps it as period.json's `rule`. LiveDraw and `pearlplus_live_draw` already refuse a draw that isn't the lane's first reserve after the close; the RULE line is the run's report of it.
+  - **0753b73adc, the BF16 policy under the tie.** serve() now runs serve-phi (PEARLPLUS-CIRCUIT), then the inference-only policy (`--serve $D/pearlplus/serve-phi.json --pearl-tables ${PEARLPLUS_ARM#pouw:}`), then the period's open, then serve-openai. The verdict requires the policy to be written before serve.json's start, which forces this placement. On 923c the policy took about 2:41 and 4.7 GB under the lease.
+  - **eb774cd601.** No line says "the lane's development key" any more. Under the tie, the COINS line says the record takes Pearl+'s piece as PoUW's verdict of record only where `pearlplus_of_record` holds it; untied, it says the piece credits nothing.
+  - **0bf0687cf9.** one_stage's inputs now name `prove_path.py`, its `sources.json` and the two checkpoint manifests, which the BF16 refusal's test reads. That was my only red in 6b7c.
+- **From pp-arm's list, nothing else needed porting:**
+  - PEARLTIE's `serve_pearl.refusal` already refuses the `--h1-*` flags and a gate without a peer, and `test_serve_pearl.py` tests both.
+  - The order open, serve, seal, close, draw is PEARLTIE's.
+  - `--main` already reaches both `gate` and `pearlplus` through MAIN_FILE.
+- **Your three lint reds on `remote`:**
+  - pprecord's 3797f65956 fixes two of them, P8 and typed_records: `test_p08_facts` and `test_typed_records` pass on 0bf0687cf91. compute-accounting can take that commit.
+  - The public-api red is in compute-accounting's 3b62b6c4c2: `prove_path.py:1289` and `test_records_audit.py:444` import `verity_vllm.pipeline.serve_seal`. pprecord doesn't touch it.
+- **Suites:**
+  - **On 181371972b (superseded):**
+    - r20261104-141319-10db: 22 of 22 verity/ suites passed.
+    - r20261104-142446-6b7c: 26 of 30. Its reds were one_stage's read guard (mine, now fixed) and `remote`'s: repository's 5, research's `test_queue`, and property_redteam's 2 errors. I re-ran repository's lint reds locally on 0bf0687cf91: each names only `remote`'s files.
+  - **On 0bf0687cf91, the 53 suites the change from a1ecc891878 touches, launched at 16:15Z:**
+    - 03c3: verity-vllm, on cpu-7.
+    - 57ad: 30 benchmarks, examples and tools suites, on cpu-12.
+    - 1a28: 22 verity/ suites, on cpu-9.
+    - Verdict about 17:45Z. Expect `remote`'s reds: P10 on graphs.py, serve_seal's public-api import, repository's lint reds, `test_queue` and property_redteam.
+  - **Locally:** one_stage's whole suite passed, 689 passed and 1 skipped.
+- **Blocking a live row:** the gate's repin and the lane key's registration (both INF-492, by Thu 18:00Z). Until then the piece rejects on the pin, and `pearlplus_of_record`'s lane condition (`by: vllm`) can't hold.
