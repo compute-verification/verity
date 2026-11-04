@@ -34,9 +34,10 @@ slowdown under (H) and (E), a floor on what a set of gates exports; `HEShared` i
 
 A word is a set of gates, so a value and each of its casts are distinct words. The premises count values: `val` names
 the value each word carries, the casts of one value carrying one, and is one-to-one on each matmul's `w`-words and on
-its `x`-words. (H), the share condition and the arrays' costs read `val(S ∩ W)`, the values of `S`'s words, and
-`val = id` counts words. The statements carry no hypothesis their proofs don't read: no fan-in bound, `W` and `X` may
-share values, and outputs may repeat. None is listed in `lean-audit.json`; `Proofs.Nci.Cut` proves each.
+its `x`-words. (H) and the arrays' costs count `val(S ∩ W)`, the values of `S`'s words in `W`, the share condition
+compares the matmuls' values, and `val = id` counts words. The statements carry no hypothesis their proofs don't read:
+no fan-in bound, `W` and `X` may share values, and outputs may repeat. None is listed in `lean-audit.json`;
+`Proofs.Nci.Cut` proves each.
 -/
 
 namespace Nci.Cut
