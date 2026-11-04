@@ -409,7 +409,7 @@ theorem osl_ite_same {α : Type} (c : Prop) [Decidable c] {P : Got → Hist → 
 
 theorem osl_liftT {α : Type} {P : Got → Hist → Prop} {B : α → Got → Hist → Prop} {m : TMW OpenM α}
     (h : OS A P B m) : OSL A P B (liftT m : LP OpenM α) := fun st => by
-  show OS A _ (StateT.lift m st)
+  show OS A _ _ (StateT.lift m st)
   exact os_bind h fun a => os_pure (B := fun (r : α × LigState) => B r.1) (a, st) fun _ _ hb => hb
 
 /-- A step that neither asks nor stops nor moves the channel keeps `P`. -/
@@ -558,7 +558,8 @@ theorem ligeritoPZk_st (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Sche
       rintro cs1 ⟨hA1, hr1⟩
       have hind : _root_.Flock.Zk.rhoIndependent (rh0, rh1) = true := by
         have e0 : (h0 ++ [cs0]).getD (m + (sq sch.n).length + 1 + sch.k0) #[] = cs0 := by
-          rw [← hl0, List.getD_eq_getElem?_getD, List.getElem?_append_right le_rfl, Nat.sub_self] <;> simp
+          rw [← hl0, List.getD_eq_getElem?_getD, List.getElem?_append_right le_rfl, Nat.sub_self]
+          simp
         have := hρ (h0 ++ [cs0]) cs1 (by simp [hl0]) hA1
         rw [e0] at this
         rw [hr0, hr1]
