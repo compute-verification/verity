@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Witnesses.RecursionLin2
 public import Proofs.Flock.Claims.Witnesses.Stated
 public import Proofs.Flock.Claims.Witnesses.Meets
 public import Proofs.Flock.Claims.Witnesses.BindingMeets
+public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 
 /-!
 # Refutation witnesses
@@ -24,7 +25,8 @@ guarantees: `Stated` states the shared, Flock and sampling claims' failures over
 `Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`), and `BindingMeets` the
 sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). The ZK-recursion compiler's claims carry
 `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at the deployed record
-(`RecursionMeets`).
+(`RecursionMeets`). `SamplingGeneric` has the generic sampled compiler's witnesses in the witness rule's form: an
+`honest` lemma met at Flock's deployed masked argument and a `nontrivial` one that drops a premise.
 -/
 
 @[expose] public section
