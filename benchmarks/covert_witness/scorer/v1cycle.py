@@ -36,7 +36,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    five old panels stay in the re-score's directory, unpublished (23:56Z).
 5. Deletes the measured ledger, which the next refresh builds afresh, and publishes the tables (the re-score's files
    linked into its tree) and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
-   PANELS_DIR, deletes its re-score and publish directories once both are in the store, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
+   PANELS_DIR, deletes its publish directory and its re-score's but the headline formalism.jsonl (KEPT, until the next
+   refresh's replaces it) once both are in the store, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
    rho) as one more when algorithm-policy writes one; an S whose rho is Slowdown's bound carries loose-end-attention
    (01:22Z: A1 charges no read of earlier tokens' keys and values).
 
@@ -145,6 +146,8 @@ PINS: list[str] = []
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
 #: where each refresh writes its directory
 OUT_ROOT = Path(os.environ.get("TE_OUT_ROOT", "/tmp/scorer/v1"))
+#: the one re-score file a stored refresh keeps in OUT_ROOT/<stamp>/rescore/, until the next refresh's replaces it
+KEPT = "formalism.jsonl"
 #: a refresh on a CPU node (refresh-node.sh: the agent VM only edits), which can launch no research run and holds no
 #: store write key, no console token and no ssh: its shards trace here, beside it, in this kept directory
 #: (`trace_here`), the earlier shards' run records come from the store (`take_src`), and its tables stay in the run's
@@ -1341,17 +1344,26 @@ def main() -> int:
             ids["fb"] = here_out(trees["fb"], "fb") if HERE_DIR else put_data(
                 trees["fb"], "evidence/v1", {"what": f"te formalism v2 {what} {FB}", "put": put, **meta})
     fb_rows = {"uncut": len(fb["rows"]), "console": len(json.loads(cut)["rows"])} if fb else None
+    stored = bool(ids.get("tables") and (fb is None or ids.get("fb")))
+    kept = rs / KEPT if stored and not final else None
     summary = meta | {"art": ids, "frontier_branches": {"put": put, "rows": fb_rows}, "rescore": last,
-                      "rescore_ladder_fit": LADDER_FIT, "out": str(out)}
+                      "rescore_ladder_fit": LADDER_FIT, "out": str(out), "formalism_kept": kept and str(kept)}
     (out / "cycle.json").write_text(json.dumps(summary, indent=1) + "\n")
     line = digest(json.loads((rs / "p2-slowdown-vs-gain.json").read_text()),
-                  meta | {"version_cell": bool(fb and "te_core_version" in fb["columns"])}, ids, put, fb_rows)
+                  meta | {"version_cell": bool(fb and "te_core_version" in fb["columns"])}, ids, put, fb_rows, kept)
     (out / "digest.txt").write_text(line + "\n")
     # this VM's disk is shared and a refresh's copies are about 5 GB; what later refreshes read of one (`retrace_order`)
-    # is its algorithm-policy directory, which stays
-    if ids.get("tables") and (fb is None or ids.get("fb")):
-        for d in (rs, out / "publish"):
-            shutil.rmtree(d, ignore_errors=True)
+    # is its algorithm-policy directory, and the plots rebuilt from its rows read its headline formalism.jsonl (KEPT,
+    # 2.4 GB, else fetched from the record), so both stay, the latter until the next refresh's replaces it
+    if stored:
+        shutil.rmtree(out / "publish", ignore_errors=True)
+        for p in rs.iterdir():
+            if p != kept:
+                shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
+        # a refresh's re-score directory holding its formalism.jsonl alone is one that ended; another may still be scoring
+        for old in OUT_ROOT.glob(f"*/rescore/{KEPT}") if kept else ():
+            if old != kept and [q.name for q in old.parent.iterdir()] == [KEPT]:
+                shutil.rmtree(old.parent, ignore_errors=True)
     said, tables = policy.get("coverage") or [], S.short(ids.get("tables", "–"))
     cov = (f"training/algorithm-policy (te_core {meta['te_core_version']}; tables {tables}) "
            + said[0] if said[:1] and said[0].startswith("coverage at ") else
@@ -1426,9 +1438,9 @@ def final_md(rs: Path, fin: dict, tab: dict) -> str:
     return "\n".join(L)
 
 
-def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> str:
+def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None, kept: Path | None = None) -> str:
     """At the reference target and policy, per start: H and S (rho, basis, W*'s checkpoint) from te_core's P2 rows
-    (te_core.frontier's cells), and frontier-branches' rows and PUT."""
+    (te_core.frontier's cells), frontier-branches' rows and PUT, and where its formalism.jsonl is kept."""
     p2 = frame(p)
     measured = "trace" in meta
     parts = []
@@ -1522,7 +1534,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
             f"(loose-end-attention)) at −1% and {REFERENCE}: " + "; ".join(parts)
             + f". {fb}" + (f"; {ap_said}" if ap_said else "")
             + "; nothing else PUT; t as the frozen tail and rescore_v1's analysis are in the tables art only"
-            + ("; every row carries te_core_version" if meta.get("version_cell") else "") + f". art: {arts}.")
+            + ("; every row carries te_core_version" if meta.get("version_cell") else "") + f". art: {arts}."
+            + (f" formalism.jsonl kept on {os.uname().nodename} at {kept} until the next refresh." if kept else ""))
 
 
 if __name__ == "__main__":
