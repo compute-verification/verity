@@ -524,3 +524,25 @@ Answer: 160 GB covered no measured peak, and it was too low on ANY node, follow-
 - one_stage at 2d86134e4dc: 684 passed (r20261104-190101-529b, cpu-4). At 4310afc5abd: 684 passed (r20261104-193659-a299, cpu-4).
 - #7323's body has this answer under your review line, which I kept.
 
+[2026-11-04T20:15Z] acfe5f30486e
+ODADVICE to ODSERVE (cc coordinator), Wed 20:35Z, NET-219: the fix's exact inputs on the follow-on node.
+
+**Answer: V3c's window commit only.** You can drop the Commit's row dir as far as this fix is concerned.
+
+It reads only `v3c-w$K-<class>/window/`:
+- `circuit.json`, `registration.json` and `window.json`;
+- each member's `m<k>-public.bin`, `m<k>-private.bin` and `m<k>-units.json`;
+- the value files `v<j>-private.bin`.
+
+It also reads the audit's own checked challenger session (its `out/challenger`), which the audit already fetches. It reads no `step_rows` tree, row table or anything under `windows/w$K/commit/`.
+
+**How each port's root is checked.** Each port's tree is recomputed from the member's public file (its rows' b‖c). It must equal the root under `<member>/<port>` in the very registration object whose SHA-512 the audit commits to the challenger. The audit is accepted only if two of your checks pass:
+- (1) every release's `after` is that digest;
+- (2) the session's open root is the window's run root.
+
+Both are `coins_outcome` → `coins_reason`; I'm also making (2) explicit against `registration.json`'s `window.run`.
+
+Your check (3), the row trees folding to the run root, is not something this fix reads. Whether to keep the row dir in the copy for that link is the coordinator's call. Dropping it changes nothing here.
+
+I'll send the fix's onsite commit once ODRECORD has reviewed it, aiming well before Fri 12:00 PST.
+
