@@ -1,4 +1,5 @@
 import Proofs.Flock.Bridge.LeafMap
+import Proofs.Flock.Bridge.Assumptions.StatementParses
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 
 /-!
@@ -7,8 +8,9 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 `SampledKSLiveV2` at flock-verify `--zk --public-inputs`, with or without shared rows. `own` is the verifier's own
 recomputation of each proof block's public input words (`HmIn.checkOwn`), and the statement holds at every `own`:
 
-* the circuit file's descriptor `D` (`Flock.Desc.parseStmt`): a flat circuit, or a templated statement whose circuit
-  `D.unroll` is its committed circuit unrolled through its template, read everywhere as the statement circuit;
+* the circuit file's descriptor `D` (`Flock.Desc.parseStmt`, which `SampledKSLiveV5` takes as the named premise
+  `Bridge.Assumptions.StatementParses`): a flat circuit, or a templated statement whose circuit `D.unroll` is its
+  committed circuit unrolled through its template, read everywhere as the statement circuit;
 * the circuit's public input ports `pi` (`HmIn.parse`) and the population's public file loaded over them
   (`HmIn.loadPublic`), in place of `HmOut.loadPublic` and `pub.tables = none`;
 * the program `Placed.keyProgP`, whose proof blocks read the gates of their keys with public inputs, its outputs
@@ -179,11 +181,12 @@ open Classical in
 `--zk --public-inputs` at `own` accepts and the committed trace fixed at registration, read as the sampling witness
 of the session's statement at the constants `constsOfP` (the constant, the zero and every proof block's public input bits), is
 outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at the deployed commitment at the public file's leaf map, with
-probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`). -/
+probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`)
+and the statement file reading as `D` (`Bridge.Assumptions.StatementParses`). -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Bridge.Assumptions.StatementParses I D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
