@@ -22,11 +22,11 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   Daniel's words: "Split the Verity and infra repos", "Security posture finalized". A tier-2 or tier-3 title says what
   will be true, in at most eight plain words: "A full check finishes within 45 minutes". "X measured" isn't a goal until
   it names what's delivered: "Second swarm's training results out". A title says what happens, not the mechanism's
-  name or which tool does it: "Each day's serving runs one program fixed in advance", not "One declared circuit per
+  name or which tool does it: "Each day's serving runs one program fixed in advance", not "One registered circuit per
   day"; not "Landing converts Lean merges onto the module system", which names the tool and leaves unclear what
   changes.
-- **One owner** (`--owner`): the lead of the component the goal mostly builds, who keeps it true and confirms it at
-  least daily (`research goals confirm ID`). Other components that do pieces of it are @handle in its plan; a check
+- **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true and confirms it at
+  least daily (`research goals confirm ID`). Other areas that do pieces of it are @handle in its plan; a check
   the remote demo runs is the demo lead's goal even when proofs writes it in Lean.
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
 - **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear --by LANE`), and the page shows
@@ -38,20 +38,20 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
-- **Tags** (`--tag`, repeated) are the development components responsible for the goal, from one fixed list in
+- **Tags** (`--tag`, repeated) are the development areas responsible for the goal, from one fixed list in
   Daniel's words: `remote-demo`, `onsite-demo`, `proofs`, `circuits`, `lean`, `vllm`, `compute-accounting`,
   `network-accounting`, `memory-accounting`, `accounting` (work across all three), `training`, `ci`, `infra`,
   `security`, `cleanup`. The site refuses any other tag.
-  - A component is a scope of responsibility in Verity's automated development, usually one lead's, often a part of
+  - An area is a scope of responsibility in Verity's automated development, usually one lead's, often a part of
     the architecture. The demos assemble the others; `ci`, `infra`, `security` and `cleanup` belong to the system that
     develops Verity.
-  - Tag the components a goal builds or changes, never one it only uses. The trivial PoUW's Lean guarantee uses the
+  - Tag the areas a goal builds or changes, never one it only uses. The trivial PoUW's Lean guarantee uses the
     proof system, so it's `compute-accounting`, not `proofs`. The daily-program check builds part of the remote demo,
     so it's `remote-demo`.
-  - One tag is work inside a component; several mark joint work that can't be done at their interfaces.
+  - One tag is work inside an area; several mark joint work that can't be done at their interfaces.
   - `proofs` is the proof system; `lean` is Lean's code and build (the module system, the Lean check, toolchain bumps).
-  - The list is at Daniel's level (3 Nov). Finer components, such as kernels, benchmarks, compute-research, soundness
-    and comms, are real to the leads but below it: their goals take the tag of the component they belong to at his
+  - The list is at Daniel's level (3 Nov). Finer areas, such as kernels, benchmarks, compute-research, soundness
+    and comms, are real to the leads but below it: their goals take the tag of the area they belong to at his
     level. A kernel the demo serves is `compute-accounting` or `vllm`, and the demo's cost measurements are
     `remote-demo`.
   - Why a goal matters isn't a tag: it's the tier-1 project above it.
@@ -81,12 +81,12 @@ Links only (`--wait goal:ID`, `--wait ask:CARD`, repeated for each; `--no-wait` 
 - A link carries nothing else. The dependency's state lives on it; why you need it goes in your description.
 - Your own work isn't a dependency. Slow or risky work is your status, explained in your description.
 
-A goal's peek draws what it waits on and what needs it in one timeline around its own due date, so a link due after
+A goal's peek shows what it waits on and what needs it in one timeline around its own due date, so a link due after
 it shows red. Fix the cause (re-date, re-scope, or chase the dependency) rather than the status.
 
 ## The description
 
-Markdown for Daniel to skim. It never restates a field (due date, status, owner, tags or links): the page draws those.
+Markdown for Daniel to skim. It never restates a field (due date, status, owner, tags or links): the page shows those.
 
 **Open with one plain sentence** saying precisely what will be true, sharper than the title. Not bold.
 
