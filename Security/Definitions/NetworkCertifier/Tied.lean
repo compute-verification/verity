@@ -27,7 +27,6 @@ tie is right by binding instead: its reader and its writer are committed as one 
 
 * `RowsStateHeld` and `RowsProgWired`: the state and the `prog` ties are placed together;
 * `RowsStateEmpty`: the state reads at row `0` are registered inputs that the registration opens at the empty state;
-* `RowsCircuitHeld`: each tied audit's Program is the class circuit's, one Program for the period;
 * `RowsTiesOrdered`: the phase's layout fits its joint Program (`BoundaryGates.Fits`, over `DependsWired`): the wires
   acyclic, and no step's egress reaching a later step's ingress through reads and wires, which holds when each slot
   reads the state of its boundary's first row;
@@ -149,10 +148,6 @@ which the registration (its openings `ops`) opens at the empty state, every bit 
 def RowsStateEmpty (ph : Phase) (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool))
     (t : Ties) : Prop :=
   ∀ g ∈ t.start, g ∈ ph.reg reg ∧ ph.regVal ops g = false
-
-/-- **RowsCircuitHeld**: each tied audit's Program is the class circuit `C`, the one Program the workload's class
-registers for the period, so the prover chooses no phase's circuit. -/
-def RowsCircuitHeld (ph : Phase) (C : Prog) : Prop := ∀ s ∈ ph.tied, s.prog = C
 
 /-- **RowsTiesOrdered**: the phase's layout fits its joint Program over the horizon `k` (`BoundaryGates.Fits`): its
 wires, each statement's own and the ties, are acyclic, and no step's egress depends through reads and wires on a later
