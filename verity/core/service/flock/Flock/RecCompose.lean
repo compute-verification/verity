@@ -31,9 +31,14 @@ the last event (`checkRun`). `OneRun` states it, and `check_oneRun` proves it of
 each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, never committed before the run. The
 record is read once, in comparisons quadratic in V*'s statement count (at most 4096, `RecBudget`), never per gate.
 -/
-import Lean.Data.Json
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.JsonParse
+public import Flock.Bytes
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Flock
 namespace RecCompose
@@ -215,7 +220,7 @@ def Accepts (n : Nat) (rows inner : String) (links : Option (String × Nat)) (vs
 def verdicts (log : String) : Except String (Array Json) :=
   (log.splitOn "\n").foldlM (init := #[]) fun out line =>
     if line.startsWith "VERDICT " then
-      match Json.parse (line.drop 8).toString with
+      match JsonParse.parse (line.drop 8).toString with
       | .ok j => pure (out.push j)
       | .error e => throw s!"a VERDICT line that is not JSON: {e}"
     else pure out
@@ -356,7 +361,7 @@ def eventsOf : Nat → List Json → Except String (List Event)
 /-- **The record** `{"kind": "verity/rec-run/v1", "events": [...]}`: its events, in the order the challenger logged
 them. -/
 def runOf (text : String) : Except String (List Event) :=
-  match Json.parse text with
+  match JsonParse.parse text with
   | .error _ => .error "run record: not JSON"
   | .ok j =>
     if (j.getObjValAs? String "kind").toOption != some RUN_KIND then .error s!"run record: not a {RUN_KIND} record"

@@ -1,7 +1,9 @@
-import Proofs.Core.Game.Expect
-import Definitions.Flock.Game.Expect
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Rewinding
+module
+
+public import Proofs.Core.Game.Expect
+public import Definitions.Flock.Game.Expect
+public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Rewinding
 
 /-!
 # C-Flock's game library is Core's: `Expect`
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Rewinding
 Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Expect`, so C-Flock's soundness proofs
 and every other protocol's read one game library.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

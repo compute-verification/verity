@@ -1,7 +1,13 @@
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Flock.With.VerifyE
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `Deploy.V`'s round count is the rounds the shipped verifier reads
@@ -10,6 +16,8 @@ The plain verdict's facts are stated at `verifyWithMK keep` (the shipped text wi
 through `keep`) wherever their proofs read none of those digests, so they hold at the element-level verdict
 (`keep := fun _ => true`) too. The shipped verdict's (`verifyWithM`, `keep := id`) follow by `rfl`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -309,7 +317,7 @@ def StreamR (s : Lean.Json) (x : StreamRec) : Prop :=
 theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
@@ -351,7 +359,7 @@ theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
 theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
@@ -363,7 +371,7 @@ theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : Stri
 order, the first stream record of its name and that record's rounds' coin counts and coins. -/
 theorem liveOf_parts {spec : SessionSpec} {text : String} {lv : Live} (h : liveOf spec text = .ok lv) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok lv.points ∧

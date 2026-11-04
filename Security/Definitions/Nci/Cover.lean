@@ -1,6 +1,8 @@
-import Mathlib.Data.Finset.Card
-import Mathlib.Data.Finset.Image
-import Mathlib.Data.Set.Pairwise.Basic
+module
+
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Finset.Image
+public import Mathlib.Data.Set.Pairwise.Basic
 
 /-!
 # The cover theorem: the vocabulary
@@ -27,6 +29,8 @@ lookups (`Keyed`) can be counted. On a declaration's gates the two agree: its in
 * `MulBlocks.Upstream`: the upstream certificate, a structural property of the training computation: each use's
   activation is computed, inside a region of its own, from products over at least `D` distinct updated parameters.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

@@ -283,11 +283,12 @@ hello_at() {
 }
 
 # proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
-# with $DD/stage/draw.json) and prove_live against it; the prover's status
+# with $DD/stage/draw.json, each session's send check Lean's flock-firewall live) and prove_live against it; the prover's
+# status
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
-    --draw $DD/stage/draw.json > $O/inner/proxy/proxy.log 2>&1 &
+    --draw $DD/stage/draw.json --lean $FC_FIREWALL_LEAN > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
@@ -575,6 +576,7 @@ inner)
   # the verifier's full draw, which verify requires of a session over the inner session (RecSetup.innerDrawn)
   inner_partition > $O/inner/partition.txt || exit 1
   cp $D/draw.json $O/inner/
+  [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
   again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }

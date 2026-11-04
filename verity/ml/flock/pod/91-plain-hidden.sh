@@ -8,7 +8,9 @@
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), lean-honest.log (its VERDICT
 # line), fixture.txt.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
-# env: CPUS=16  K=16 (the subset sample's units, of the stage's 32)  FLOCK_WORK=/workspace, or where /workspace isn't writable
+# env: CPUS=16  K=16 (the subset sample's units, of the stage's 32)  COINS=os, or tree for the session on the keyed coin
+#      tree (FC_COINS=tree, verify --coins tree; tests/test_lean_plain_tree.py's fixture)  FLOCK_WORK=/workspace, or where
+#      /workspace isn't writable
 #      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/plain-hidden (the prover
 #      build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -23,7 +25,9 @@ if [ -z "${PH_PINNED:-}" ]; then
   # no slice locks here (a vy-cpu pod): the check slot (research run --pool) has pinned the job to its own cores
   export PH_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 fi
-export FC_COINS=os
+COINS=${COINS:-os}
+case $COINS in os|tree) ;; *) echo "COINS=$COINS: os or tree" >&2; exit 2 ;; esac
+export FC_COINS=$COINS
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/plain-hidden}/out; mkdir -p $O
 if [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ]; then
   if [ -d /workspace/jobs ]; then export FLOCK_WORK=/workspace/jobs/pc-read-gadget; else export FLOCK_WORK=/workspace/cache/plain-hidden; fi
@@ -88,7 +92,7 @@ kill $SP 2>/dev/null; wait $SP
 SESS=$(dirname $(ls -1 $S/sessions/*/session.json | LC_ALL=C sort | tail -1)) || exit 1
 
 wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-$LEAN_BIN verify --statement verity/flock-circuit --coins os --circuit $D/circuit.txt --public $D/pub-$N.bin \
+$LEAN_BIN verify --statement verity/flock-circuit --coins $COINS --circuit $D/circuit.txt --public $D/pub-$N.bin \
   --partition $D/partition.json --program $D/program.json --session $SESS > $O/lean-honest.log 2>&1
 echo "honest rc $?"
 grep -h '^VERDICT' $O/lean-honest.log | head -1 | cut -c1-600

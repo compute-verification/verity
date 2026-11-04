@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawJ
-import Proofs.Flock.Claims.KS.ConflictTied
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawJ
+public import Proofs.Flock.Claims.KS.ConflictTied
 
 /-!
 # The reader's premise between the text and parsed-value writers
@@ -17,6 +19,8 @@ alike:
   `TxNoOffAtJK` at what `wrPDJK` writes.
 * `plainVerdictAtJK_of_K`: `plainVerdictAtK` gives `plainVerdictAtJK` at the same outcome and root.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

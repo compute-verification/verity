@@ -1,5 +1,7 @@
-import Proofs.Core.Game.Rewinding
-import Definitions.Flock.Rewinding
+module
+
+public import Proofs.Core.Game.Rewinding
+public import Definitions.Flock.Rewinding
 
 /-!
 # C-Flock's rewinding lemma is Core's: `Rewinding`
@@ -7,6 +9,8 @@ import Definitions.Flock.Rewinding
 Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Rewinding`, so C-Flock's soundness
 proofs and every other protocol's read one game library.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Rewinding
 

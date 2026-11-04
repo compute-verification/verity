@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
-import Proofs.Flock.Soundness.Discharge.Composed.Base
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.Composed.Base
 
 /-!
 # The ring switch is complete at the replay's claim points
@@ -30,6 +32,8 @@ at it, so the mask-slot part of `ŝ_k` is `Φ_k(u)` at the claim's point beyond 
 
 None of the three reads a coin's value: no division or inverse is taken, so they hold at every coin.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.RingSwitch
 

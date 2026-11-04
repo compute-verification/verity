@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.Game.Poly
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # The opening phase: ring switching and batching (`Flock.Opening`)
@@ -24,6 +26,8 @@ The argument, per codeword `M` with witness `z` (paper Appendix B):
 * **The batch.** A nonzero linear form in the batching coins vanishes with probability at most
   `1/|F|` (`prCoin_batch_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

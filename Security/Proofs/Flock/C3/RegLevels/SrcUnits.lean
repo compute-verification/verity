@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.RegLevels.SrcRun
-import Proofs.Flock.C3.RegLevels.SrcConss
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcRun
+public import Proofs.Flock.C3.RegLevels.SrcConss
 
 /-!
 # n7's levels: `levelTie_of_run`'s `Opened` from R's units
@@ -12,6 +14,8 @@ a `capArr` cap. There the caps' shape (`CapsAt`, `capsAt_ligOfRead`), the openin
 fields hold by construction. Left: R's openings' read (`q` rows of the level's lanes, the level's `q`, the run's `α`)
 and each opening's units (`OpensUnits`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

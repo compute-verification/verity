@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CallsTop
-import Proofs.Flock.Claims.Recursion.LastCallsR
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsTop
+public import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
 # A decision's SHA-512 calls on every run
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.LastCallsR
 whose oracle log is its logged run's (`verifyJ_log`). So on every run, accepting or not, it calls SHA-512 at most once a
 file (`filesDg_calls_le`) and then `cl_verifyJ_rec`'s count at `jAt`'s streams (`decisionAtS_calls_le`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

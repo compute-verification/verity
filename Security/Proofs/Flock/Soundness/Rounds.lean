@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Game.Poly
-import Definitions.Flock.Piop
-import Definitions.Flock.Ligerito
-import Mathlib.Algebra.CharP.Defs
+module
+
+public import Proofs.Flock.Soundness.Game.Poly
+public import Definitions.Flock.Piop
+public import Definitions.Flock.Ligerito
+public import Mathlib.Algebra.CharP.Defs
 
 /-!
 # One sumcheck round
@@ -16,6 +18,8 @@ them unchanged (`DESIGN.md` §8).
 
 All three identities use characteristic 2 (`1 + 1 = 0`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Rounds
 

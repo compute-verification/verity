@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Game.Interleave
+module
+
+public import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
 # Piece (a), the oracle count: two interactions, each continued on its own
@@ -12,6 +14,8 @@ It goes through `valueF`, the value of a game whose outcome `a` pays `u a` (`val
 indicator): `value p (g.bind f)` is `valueF` at the continuations' values (`value_bind_valueF`), and the repetition
 theorem holds for products of payoffs (`valueF_interleave_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

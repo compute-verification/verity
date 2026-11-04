@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameShape
+module
+
+public import Proofs.Flock.Claims.ZK.FrameShape
 
 /-!
 # The frame takes the firewall's own rounds of the inner proof
@@ -8,10 +10,13 @@ every value it can compute from its draws and the coins (`innerOwn`): only `fina
 the frame to refuse one of the firewall's own rounds, the rep's next coins would be refused ("coins for no round"), a
 stop that reads the draws. So:
 
-* `ownRound`: the firewall's own round `k` of the inner proof at a configuration and state, as `innerOwn` fixes it.
+* `ownRound` (the frame's `Frame.ownRound`): the firewall's own round `k` of the inner proof at a configuration and
+  state, as `innerOwn` fixes it, which the session loop's frames schedule (`Frame.innerSched`).
 * **`innerOwn_ownRound`**: at every configuration and state, so at the rep's draws and at any other draws alike, the
   frame's check of the inner proof takes it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -19,18 +24,7 @@ open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header)
 open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame wordBytes innerOwn)
 
-/-- **The firewall's own round `k` of the inner proof** at the configuration `c` and the state `s` (its `ε` and `β`),
-squeezing `n` coins, as the frame fixes it (`innerOwn`): round 0 the inner label, `final_c'`'s word `w` and `ε`'s
-squeeze; round 1 `(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` and the batching coins; round 2 `τ`'s 64-byte commitment `t`
-and `β`'s squeeze; round 3 `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries. -/
-def ownRound (c : Cfg) (s : Masker) (w t : ByteArray) (n : ℕ) : ℕ → ByteArray
-  | 0 => (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1) ++ w ++ header 4 1 1
-  | 1 => header 3 2 2 ++ wordBytes #[s.eps * c.h[c.lay.fa]! + c.h[c.lay.tx]!, c.h[c.lay.fb]! + c.h[c.lay.ty]!] ++
-      header 4 2 n
-  | 2 => header 5 0 64 ++ t ++ header 4 1 1
-  | _ =>
-    let y := (c.rowH.zip c.rowMu).map fun (a, b) => a + s.beta * b
-    header 3 2 y.size ++ wordBytes y ++ header 4 2 n
+export _root_.Flock.Firewall.Frame (ownRound)
 
 theorem byteArray_beq_self (a : ByteArray) : (a == a) = true := by
   show (a.data == a.data) = true

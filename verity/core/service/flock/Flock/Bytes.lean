@@ -1,7 +1,13 @@
 /-
 Byte encodings and a total reader over `ByteArray` (`Flock.Verify`, `Flock.Proof`).
 -/
-import Flock.Field
+module
+
+public import Flock.Field
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

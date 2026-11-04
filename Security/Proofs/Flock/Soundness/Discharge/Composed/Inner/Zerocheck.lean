@@ -1,4 +1,6 @@
-import Proofs.Flock.Level3
+module
+
+public import Proofs.Flock.Level3
 
 /-!
 # The clear zerocheck is complete at every coin with `r_j ≠ 1`
@@ -20,6 +22,8 @@ executable's own arithmetic (`F128`, `dot`, `lagrange nodesL den6Inv`, `combWeig
 `r_j = 1` is excluded: there `G(0) = (claim + r_j·g₁)·(1 + r_j)⁻¹` reads `inv 0 = 0`, and the replayed claim leaves the
 honest one. The seven pinned coordinates are never 1 (`pinned_append_ne_one`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.Zerocheck
 

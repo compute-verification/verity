@@ -1,9 +1,11 @@
-import Definitions.Pouw.Guarantees.NCP
-import Proofs.Pouw.NCP.Proofs
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.NCP.RelationWitness
-import Proofs.Pouw.NCP.RouteUProofs
-import Proofs.Pouw.NCP.RouteUWordProofs
+module
+
+public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.NCP.Proofs
+public import Proofs.Pouw.NCP.GameProofs
+public import Proofs.Pouw.NCP.RelationWitness
+public import Proofs.Pouw.NCP.RouteUProofs
+public import Proofs.Pouw.NCP.RouteUWordProofs
 
 /-!
 # Proofs of NCP's guarantees
@@ -13,6 +15,8 @@ One theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G` per guarantee, w
 `Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name. `GammaFromTTNCP_U`'s statement keeps its
 source's namespace, `Pouw.NCP.RouteU`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.NCP
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
 # The link points' count of a `setupH` statement
@@ -11,6 +13,8 @@ draws that prove as many units set up at the same `m_pts` (`setupH_mPts_eq`), na
 units (`setupH_mPts_of_proved`). A draw's proved units include its closure, so under a law with a closure `m_pts` can
 differ between draws of the same size.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

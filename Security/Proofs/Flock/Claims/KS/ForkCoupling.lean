@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.KS.FnFork
-import Proofs.Flock.Claims.KS.LiveMix
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.KS.FnFork
+public import Proofs.Flock.Claims.KS.LiveMix
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The fork's coin coupling at a simulator of uniform functions
@@ -19,6 +21,8 @@ it at `fnAt`, a tape of uniform functions of the live coins' history read throug
 * `forkCoinCoupling_plain`: the coupling at the deployed plain verifier `V false`, at `Claims.Bridge.Live.fnAt` with
   the live coins `LCoin 65536` (`live_fnAt_eq`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

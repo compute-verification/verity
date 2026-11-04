@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.LigeritoCoins
-import Mathlib.Analysis.MeanInequalities
+module
+
+public import Proofs.Flock.Soundness.LigeritoCoins
+public import Mathlib.Analysis.MeanInequalities
 
 /-!
 # Ligerito's stratified queries (`Flock.Ligerito`)
@@ -13,6 +15,8 @@ positions (`prCoin_positions_miss_le`):
 * within one summand the blocks partition the positions, so AM–GM bounds the product of the
   blocks' miss probabilities by `(1 − δ)^{2^c}`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

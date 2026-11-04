@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Round1
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
 
 /-!
 # The masked prover's third message: table `0` rep `0`'s outer zerocheck point
@@ -15,6 +17,8 @@ third body is that squeeze's frame of a transcript whose pending bytes are empty
   after the link's coin where rep `0` of table `0` is the first stream and its extra claims return.
 * `sessionPZk_pv_round2`, `sessionPZk_go_round2`: the session's first three bodies, and its third at the pure session.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

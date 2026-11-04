@@ -1,16 +1,18 @@
-import Proofs.Flock.Claims.Recursion.DeployedBringsLam
-import Proofs.Flock.Claims.Recursion.NextRRows
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.RowsCover
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedBringsLam
+public import Proofs.Flock.Claims.Recursion.NextRRows
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.RowsCover
 
 /-!
 # The deployed brings' setup count from the verifier's own refusals
@@ -39,6 +41,8 @@ the run at most `nS x · 17716871168` (`setupCalls_deployedB_le_cap`), and at `n
 parts are at most `4096` wherever one staged part sets up: they are one a statement of `RecVStar.statements` at the
 verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps (`nS_le_staged`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

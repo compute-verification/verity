@@ -1,5 +1,7 @@
-import Definitions.Pouw.Guarantees.Barrier
-import Proofs.Pouw.Barrier.Proofs
+module
+
+public import Definitions.Pouw.Guarantees.Barrier
+public import Proofs.Pouw.Barrier.Proofs
 
 /-!
 # Proofs of the degenerate-input barrier's guarantee
@@ -7,6 +9,8 @@ import Proofs.Pouw.Barrier.Proofs
 One theorem `Pouw.SecurityProofs.Barrier.G : Pouw.Guarantees.Barrier.G` per guarantee, which is the theorem in
 `Pouw.Barrier.Proofs` that proves the same statement under its old name.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Barrier
 

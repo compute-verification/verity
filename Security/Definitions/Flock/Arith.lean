@@ -1,9 +1,11 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Algebra.Ring.Hom.Defs
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Data.Nat.Bitwise
-import Mathlib.LinearAlgebra.Matrix.Defs
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Field.Basic
+public import Mathlib.Algebra.Ring.Hom.Defs
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.LinearAlgebra.Matrix.Defs
 
 /-!
 # The arithmetic the verifier uses
@@ -17,6 +19,8 @@ verifier (`Flock.Field.*`, `verity/ml/flock/verifier/README.md`) instantiates th
 model uses. `Arith.Correct` lists the mathematical facts the soundness proof needs about them;
 they are facts about concrete functions, to be proved for the GHASH instance, not assumptions.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

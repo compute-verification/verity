@@ -3,8 +3,13 @@ The `--zk` verifier (`Flock.Zk`) over the hash oracle (`Flock.With.Hashes`): `Zk
 every hash call the oracle's, the inner proof's `τ` commitment and its pads' Merkle paths included, and `Zk.verifyWith h`
 runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text.
 -/
-import Flock.With.Verify
-import Flock.Zk
+module
+
+public import Flock.With.Verify
+public import Flock.Zk
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Zk
 
@@ -369,7 +374,7 @@ def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : 
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
-    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
     verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
   simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 

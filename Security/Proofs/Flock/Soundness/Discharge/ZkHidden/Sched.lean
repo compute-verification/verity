@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
-import Proofs.Flock.Level3.ArithFacts
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
+public import Proofs.Flock.Level3.ArithFacts
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # `ZkSchedOK`: `Zk.schedule`'s facts at a statement the `--zk` shape check passes
@@ -10,6 +15,8 @@ import Proofs.Flock.Level3.ArithFacts
 * The inner code: `len` is at most `400` (`m ≤ 35`, `kLog ≤ m`, `k0 ≤ 6`), so `innerN ≤ 2^13`; it is a power of two,
   so `w.lo mod innerN` is uniform (level3's `lo_balanced`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

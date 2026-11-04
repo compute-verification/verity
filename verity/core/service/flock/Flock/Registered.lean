@@ -4,8 +4,14 @@ registered value (a program's weights, constants and tables, committed once at r
 leaves, or a served tree's rows under its port's `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves), opened against
 the verifier's own registered roots at the positions its own program reads.
 -/
-import Flock.Canon
-import Flock.HmRow
+module
+
+public import Flock.Canon
+public import Flock.HmRow
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace Registered

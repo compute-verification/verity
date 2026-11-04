@@ -1,9 +1,11 @@
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.VBridge.Family.Files
-import Proofs.Flock.VBridge.Family.Commits
-import Proofs.Flock.VBridge.Family.Tape
-import Proofs.Flock.VBridge.Algebra.Schedule
+module
+
+public import Proofs.Flock.VBridge.Family.Rep
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.VBridge.Family.Files
+public import Proofs.Flock.VBridge.Family.Commits
+public import Proofs.Flock.VBridge.Family.Tape
+public import Proofs.Flock.VBridge.Algebra.Schedule
 
 /-!
 # The family's joins
@@ -28,6 +30,8 @@ At a family whose `rep₀` is that, the joins between the family's parts hold:
   elements (`FoldsOk`);
 * `coins_of` (`Coins`): `CoinsShaped` reads only the rounds' sizes, which are `verifierRows`' (`CoinsAgree`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
