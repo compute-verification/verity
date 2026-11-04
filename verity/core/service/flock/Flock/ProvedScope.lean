@@ -352,11 +352,11 @@ theorem circuitOf_eq (tags : Tags) (file : ByteArray) (tables : List (String × 
 
 theorem circuitOf_hidden {tags : Tags} (hh : tags.hiddenOutputs = true) (file : ByteArray)
     (tables : List (String × ByteArray)) : circuitOf tags file tables = HmOut.parseCommit tags file tables := by
-  rw [circuitOf_eq, if_pos hh]
+  simp only [circuitOf_eq, hh, ↓reduceIte]
 
 theorem circuitOf_plain {tags : Tags} (hh : tags.hiddenOutputs = false) (file : ByteArray)
     (tables : List (String × ByteArray)) : circuitOf tags file tables = HmRow.parse tags file tables := by
-  rw [circuitOf_eq, if_neg (by simp [hh])]
+  simp only [circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte]
 
 /-- At hidden outputs, the circuit `HmOut.parse` reads (a flat statement's: it refuses a templated one's tags) is the one
 `circuitOf` reads. -/
