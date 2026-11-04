@@ -115,12 +115,12 @@ def segmentDevice : Accounting.Device Unit := ⟨0, 2 ^ 19 * 512, fun _ => 0, 0,
 def segmentParams : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
 /-- **The honest lemma of `WipeSurvivorBound`: its hypotheses hold for an honest session.** The parameters of a session
-of 1 to `MAX_READS` reads, with no egress, are certified at `eps = 2^-128` and `foreign_bits` the threshold
-`foreignBits` at `r = ratio k`, with their reads, `memory_bits` and ratio. The honest strategy on any device whose store
-holds the fill has its fill the labels' `n · 512` bits, its egress in a set of `2^0` strings, and meets the observed
-event on every run at the count of no egress. -/
+of 1 to `MAX_READS` reads (`NeZero q.k`, as `WipeSurvivorBound` takes the labels' count), with no egress, are certified
+at `eps = 2^-128` and `foreign_bits` the threshold `foreignBits` at `r = ratio k`, with their reads, `memory_bits` and
+ratio. The honest strategy on any device whose store holds the fill has its fill the labels' `n · 512` bits, its egress
+in a set of `2^0` strings, and meets the observed event on every run at the count of no egress. -/
 def WipeSurvivorBoundHonest : Prop :=
-  (∀ q : StreamedWipe.Params, 1 ≤ q.k → q.k ≤ WipeProtocol.MAX_READS →
+  (∀ (q : StreamedWipe.Params) [NeZero q.k], q.k ≤ WipeProtocol.MAX_READS →
       WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, WipeProtocol.foreignBits q (WipeProtocol.ratio q.k), q.k,
         WipeProtocol.memoryBits q, WipeProtocol.ratio q.k⟩) ∧
     ∀ {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (n k : ℕ)
