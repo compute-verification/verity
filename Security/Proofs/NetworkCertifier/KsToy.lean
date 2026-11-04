@@ -397,10 +397,18 @@ theorem noHash_E_of {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Samp
       exact noHash_flatMapRP _ (fun _ => noHash_flatMapRP _ (fun _ => hu _ _ _ _ _ _) _) _
     · trivial
 
-theorem ksNotD_noHash (decode : List (ℕ × Unit) → List Unit) (x : Msg) (r₀ : Fin ((ksNotD Coin).V.k x) → Coin)
-    (c : (Claims.Sampling.E (ksNotD Coin) decode).C x) :
-    NoHash ((Claims.Sampling.E (ksNotD Coin) decode).ext x r₀ c) :=
-  noHash_E_of (ksNotD Coin) decode (noHash_unitExt (ksNotD Coin) (fun _ _ => ⟨_, rfl⟩) decode) x r₀ c
+/-- At a commitment whose openings make no call, the sampling extractor logs no call of its own. -/
+theorem ownLog_E {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Sampling.Deploy Coin Col T)
+    (hCm : ∀ roots o, ∃ b, D.commit.opens roots o = .ret b) (decode : List (ℕ × Col) → List T) (H : Msg → Msg)
+    (x : Msg) (run : (Fin (D.V.k x) → Coin) → Trace) (r₀ : Fin (D.V.k x) → Coin)
+    (c : (Claims.Sampling.E D decode).C x) :
+    ownLog H run ((Claims.Sampling.E D decode).ext x r₀ c) = [] :=
+  ownLog_noHash H run _ (noHash_E_of D decode (noHash_unitExt D hCm decode) x r₀ c)
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem ksNotD_opens (roots : List Msg) (o : Opening Bool) :
+    ∃ b, (ksNotD Coin).commit.opens roots o = .ret b :=
+  ⟨decide (o.val = decide (0 < o.pos)), rfl⟩
 
 theorem ksNotD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
     (Bext H (ksNotD Coin).V (Claims.Sampling.E (ksNotD Coin) decode) Unit silentP x).Pr H = 0 := by
@@ -408,7 +416,7 @@ theorem ksNotD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit
   rw [dite_eq_left (show 0 < (ksNotD Coin).V.k x from Nat.one_pos)]
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
-    simp [ownLog_noHash _ _ _ (ksNotD_noHash _ _ _ _), findColl])]
+    simp [ownLog_E (ksNotD Coin) ksNotD_opens, findColl])]
   exact Pr_false
 
 theorem ksNotD_btap (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
@@ -416,7 +424,7 @@ theorem ksNotD_btap (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit
       (fun _ => frameTops) Unit silentP x).Pr H = 0 := by
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
-    simp only [Btap, ownLog_noHash _ _ _ (ksNotD_noHash _ _ _ _)]
+    simp only [Btap, ownLog_E (ksNotD Coin) ksNotD_opens]
     simp [tapLog, ksNotD, leakD, notCm, OC.eval, frameTops, findColl])]
   exact Pr_false
 
@@ -425,7 +433,7 @@ theorem ksNotD_breg (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit
       (fun _ => badReg) Unit silentP x).Pr H = 0 := by
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
-    simp only [Breg, ownLog_noHash _ _ _ (ksNotD_noHash _ _ _ _)]
+    simp only [Breg, ownLog_E (ksNotD Coin) ksNotD_opens]
     simp [regLog, ksNotD, leakD, notCm, OC.eval, badReg, findColl])]
   exact Pr_false
 
