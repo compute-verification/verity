@@ -1,5 +1,6 @@
 import PouwPearlPlus
 import Definitions.Pouw.PearlC.Unscale
+import Properties.Pouw.Commit
 
 /-!
 # Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
@@ -167,11 +168,37 @@ def WorkIsTheCredit : Prop :=
 
 /-! ## The trees -/
 
-/-- **An opening binds its position's value, or SHA-512 collides**: two openings of one position of one hm96 tree, both
-accepted against its root, open one value, or two distinct messages have one compiled SHA-512. -/
+/-- The messages `sha512/row-seg/v1` hashes for the row `row`: each 1024-byte segment's under its first block, then the outer
+one over their digests. -/
+def segHashed (row : ByteArray) : List ByteArray :=
+  let l := 8 * row.size
+  let segs := (Flock.HmRow.segShape l).1
+  let inner := (List.range segs.size).map fun j =>
+    Flock.HmRow.segmentPrefix j segs.size segs[j]!.1 ++ row.extract (1024 * j) (1024 * j + (segs[j]!.1 + 7) / 8)
+  inner ++ [inner.foldl (fun acc m => acc ++ Flock.Sha512.hash m) (Flock.HmRow.rowPrefixSeg l)]
+
+/-- What SHA-512 hashes when `RowsDomain.verify` checks the opening `o` in the hm96 tree `d`, from the value up: the
+preimage's row digest's messages (none in a tile tree, whose preimage is the digest), the hm96 leaf's salt-digest and leaf
+inputs, the tree leaf's frame, and the frame of each node on its path. -/
+def rowsHashed (d : RowsDomain) (o : LeafOpening) : List ByteArray :=
+  let pre := o.value.extract 0 (o.value.size - HM96_SALT)
+  let y := o.value.extract (o.value.size - HM96_SALT) o.value.size
+  let x := if d.digests then pre else Flock.HmRow.segDigest (8 * pre.size) pre
+  let lf := Flock.Hm96.Default512.leaf x y
+  (if d.digests then [] else segHashed pre) ++
+    [Flock.Hm96.Default512.saltPrefix ++ y,
+     Flock.Hm96.Default512.leafPrefix ++ Flock.Hm96.Default512.commitString x y,
+     frameBytes "leaf" [d.frame.id, natBytes o.position, natBytes o.position, Flock.HmRow.ROW_SCHEMA_SEG.toUTF8, lf]] ++
+    Properties.Pouw.Commit.pathFrames d.frame o.position (d.frame.leaf o.position Flock.HmRow.ROW_SCHEMA_SEG lf) o.path
+
+/-- **An opening binds its position's value, or SHA-512 collides on the run's own messages**: two openings of one position
+of one hm96 tree, both accepted against its root, open one value, or two different messages, one hashed in checking each
+opening, have one SHA-512 digest. -/
 def OpeningBinds : Prop :=
-  ∀ (d : Except String RowsDomain) (root : ByteArray) (schema : String) (o o' : LeafOpening), o.position = o'.position →
-    opens d root schema o = true → opens d root schema o' = true →
-      o.value = o'.value ∨ ∃ x y : ByteArray, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
+  ∀ binding owner count digests (d : RowsDomain) (root : ByteArray) (schema : String) (o o' : LeafOpening),
+    rowsDomain binding owner count HM96 digests = .ok d → o.position = o'.position →
+    opens (.ok d) root schema o = true → opens (.ok d) root schema o' = true →
+      o.value = o'.value ∨
+        ∃ x ∈ rowsHashed d o, ∃ y ∈ rowsHashed d o', x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
 end Properties.Pouw.PearlPlus
