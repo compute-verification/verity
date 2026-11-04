@@ -12,6 +12,7 @@ salt, reads the server's key, or runs the service.
 * `Committed`: a table as the service committed it: its session, index, domain id, leaf count, schema, root and tag (`ref`, the
   269-byte table ref) and every leaf's ``b ‖ c``, the tree's levels rebuilt here from them (leaf ``row_leaf(D, i, tree_leaf(K, bc),
   schema)``, frame-v3-sha512) and refused unless their root is the service's: verity_vllm never registers a root of its own.
+  `Committed.of` reads one back from its ref and ``b ‖ c`` (a window's, on a sample).
 * `Registration`: what the service appended to the ZK server's record for the session: its number ``n``, the epoch's session count
   ``m``, the table refs and the record itself (whose tag only the server can check).
 * `refs_file`: what `flock-circuit --zk --salt-refs` reads on a sample: the table refs of the tables a statement reads, then one row
@@ -123,6 +124,16 @@ class Committed:
         return (self.session + struct.pack(">I", self.index) + self.domain + struct.pack(">Q", self.n)
                 + bytes([SCHEMAS.index(self.schema)]) + self.root + self.tag)
 
+    @classmethod
+    def of(cls, ref: bytes, bcs: Sequence[bytes] = ()) -> Committed:
+        """The table ``ref`` names, read back (a window's ``served_rows/w<k>.json`` on a sample): with ``bcs``, every leaf's
+        ``b ‖ c``, its tree rebuilt and refused unless its root is the ref's."""
+        if len(ref) != REF or ref[140] >= len(SCHEMAS):
+            raise ValueError(f"a table ref is {REF} bytes naming one of {len(SCHEMAS)} schemas, not {len(ref)} bytes")
+        (j,), (n,) = struct.unpack(">I", ref[64:68]), struct.unpack(">Q", ref[132:140])
+        c = cls(ref[:64], j, ref[68:132], SCHEMAS[ref[140]], n, ref[141:205], ref[205:])
+        return _held(c, bcs, "the table ref") if bcs else c
+
     def path(self, i: int) -> tuple[bytes, ...]:
         """Leaf ``i``'s frame-v3 path: its siblings, leaf level first."""
         if not 0 <= i < self.n or not self.levels:
@@ -132,6 +143,16 @@ class Committed:
             out.append(level[i ^ 1])
             i >>= 1
         return tuple(out)
+
+
+def _held(c: Committed, bcs: Sequence[bytes], what: str) -> Committed:
+    """``c`` with its leaves' ``b ‖ c`` and the tree rebuilt from them, refused unless that tree's root is ``c``'s."""
+    if len(bcs) != c.n or any(len(bc) != BC for bc in bcs):
+        raise Refused(f"{what}: {len(bcs)} b ‖ c for a table of {c.n} leaves, {BC} bytes each")
+    lv = tree(c.domain, c.schema, bcs)
+    if lv[-1][0] != c.root:
+        raise Refused(f"{what}: the tree over its b ‖ c has root {lv[-1][0].hex()[:16]}…, not the root {c.root.hex()[:16]}… named")
+    return dataclasses.replace(c, bcs=tuple(bytes(bc) for bc in bcs), levels=lv)
 
 
 @dataclass(frozen=True)
@@ -231,12 +252,8 @@ class Session:
                     raise Refused(f"table {j}: the value service answered {' '.join(words)[:80]!r}, not its root, tag and {t.n} leaves")
                 root, tag = _hex(words[0], DIGEST, "root"), _hex(words[1], DIGEST, "tag")
                 raw = _exact(f, BC * t.n)
-                bcs = tuple(raw[BC * i:BC * (i + 1)] for i in range(t.n))
-                lv = tree(t.domain, t.schema, bcs)
-                if lv[-1][0] != root:
-                    raise Refused(f"table {j}: the tree over the service's b ‖ c has root {lv[-1][0].hex()[:16]}…, not the root "
-                                  f"{root.hex()[:16]}… it answered")
-                c = Committed(s, j, t.domain, t.schema, t.n, root, tag, bcs, lv)
+                c = _held(Committed(s, j, t.domain, t.schema, t.n, root, tag), [raw[BC * i:BC * (i + 1)] for i in range(t.n)],
+                          f"table {j} as the service answered it")
                 if sink is not None:
                     sink(c)
                     c = dataclasses.replace(c, bcs=(), levels=())
