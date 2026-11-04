@@ -74,7 +74,7 @@ def discharged() -> dict:
              for n, p in OR.PREMISES.items()}
     return {"is": OR.DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
             "premises": found, "rests_on": {g: {"assumptions": []} for g in OR.RESTS_ON}, "standing": OR.STANDING,
-            "open": []}
+            "open": [], "unread": []}
 
 
 def write_lock(f: Path, given: dict[str, list[str] | None] | None = None) -> None:
@@ -313,6 +313,24 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
     assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == list(OR.PREMISES)
+
+
+@pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])
+def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it_would_discharge_is_open(
+        tmp_path, lock, monkeypatch, text, error):
+    """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread`` with why
+    and reads the other lock, so each premise only it would discharge is open and the figure of record charges the
+    cap, never a crash."""
+    discharges = [t for p in OR.PREMISES.values() for t in p["discharged_by"]]
+    write_lock(lock, dict.fromkeys(discharges))
+    props = tmp_path / "properties-lean-audit.json"
+    if text is not None:
+        props.write_text(text)
+    monkeypatch.setattr(OR, "LOCKS", (lock, props))
+    of = held_both(tmp_path / "out")["bound"]["of_record"]
+    assert (of["open"], of["K"]) == (list(OR.PREMISES), K + 2 ** 23 + 1)
+    (why,) = of["premises"]["unread"]
+    assert why.startswith(f"{props}: {error}: ")
 
 
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):

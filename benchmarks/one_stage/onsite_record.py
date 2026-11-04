@@ -508,8 +508,15 @@ def premises(locks: Sequence[Path]) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
     no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
     guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
-    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists."""
-    listed = {g: v for lock in locks for g, v in json.loads(lock.read_text())["guarantees"].items()}
+    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists. A lock that can't be read
+    lists nothing, and ``unread`` names it with why."""
+    listed: dict[str, Any] = {}
+    unread: list[str] = []
+    for lock in locks:
+        try:
+            listed |= json.loads(lock.read_text())["guarantees"]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            unread.append(f"{lock}: {type(e).__name__}: {e}")
     found, open_ = {}, []
     for name, p in PREMISES.items():
         missing = [t for t in p["discharged_by"] if t not in listed]
@@ -523,7 +530,7 @@ def premises(locks: Sequence[Path]) -> dict[str, Any]:
     open_ += sorted({a for r in rests.values() for a in r.get("assumptions", ()) if a not in covered}
                     | {g for g, r in rests.items() if "missing" in r})
     return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
-            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_}
+            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_, "unread": unread}
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:
