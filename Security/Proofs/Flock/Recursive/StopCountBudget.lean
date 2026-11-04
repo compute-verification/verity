@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.StopCountStream
+import all Init.Data.Repr
 
 /-!
 # A stream's sessions left unreleased, at most its failure budget
