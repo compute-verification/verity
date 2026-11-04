@@ -1,6 +1,7 @@
 import Properties.Pouw.PearlPlus
 import Properties.Pouw.PearlPlus.Witnesses
 import Proofs.Properties.Pouw.Commit
+import Std.Data.String.ToNat
 
 /-!
 # Pearl+'s properties say something
@@ -335,8 +336,10 @@ theorem refusedBeforeTheCoin_nontrivial :
 /-! ## `LoadedGivesUp`, `PlanMeans` and `AcceptMeans`
 
 The honest pass loads in the kernel once `load` is unfolded down to the salt coin's hm96 leaf, whose mask at its zero salt
-is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`): the kernel computes the rest, the
-coin's opening, the salt, the weights' and records' roots, and `plan`'s commitment and draw on that pass. -/
+is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`), to the salt's and the draw's `derive`,
+whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the weight ids' `String.toNat?`, whose value on digits
+is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the weights' and records' roots, and
+`plan`'s commitment and draw on that pass. -/
 
 namespace Witness
 
@@ -354,6 +357,32 @@ theorem mask_eq_maskOr (salt : ByteArray) : Flock.Hm96.Default512.mask salt = ma
 theorem eq_ok_of_toOption {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
   cases e <;> simp_all [Except.toOption]
 
+/-- `String.toNat?`, with its value on a string of digits given: the kernel reads this in its place, since it can't run
+`String.toNat?`'s slice iteration. -/
+def toNatOr (s : String) : Option Nat :=
+  if s.toList ≠ [] ∧ ∀ c ∈ s.toList, c.isDigit = true then some (Nat.ofDigitChars 10 s.toList 0) else s.toNat?
+
+theorem toNat?_eq_toNatOr (s : String) : s.toNat? = toNatOr s := by
+  unfold toNatOr
+  split
+  · next h =>
+    rw [String.toNat?_eq_some_ofDigitChars (String.isNat_of_isDigit (fun h' => h.1 (by simp [h'])) h.2),
+      List.filter_eq_self.2 fun c hc => by
+        have : c ≠ '_' := by rintro rfl; exact absurd (h.2 _ hc) (by decide)
+        simpa using this]
+  · rfl
+
+/-! `derive` sorts its context by key with `Array.qsort`, whose recursion the kernel can't unfold: `cbv` sorts the two
+contexts the witnesses derive under, the epoch salt's and the run draw's. -/
+
+theorem qsort_salt (x y z : Part) :
+    ([("epoch", x), ("coins", y), ("weights", z)].toArray.qsort fun a b => decide (a.1 < b.1)) =
+      #[("coins", y), ("epoch", x), ("weights", z)] := by
+  cbv
+
+theorem qsort_run (x : Part) : ([("run", x)].toArray.qsort fun a b => decide (a.1 < b.1)) = #[("run", x)] := by
+  cbv
+
 deriving instance DecidableEq for Matmul, UnitRecord, Scheme, Pass, Plan
 
 end Witness
@@ -365,7 +394,8 @@ weights' root, the salt is the coin's, and its records keep the caps and are the
 theorem loadedGivesUp_honest : load honestCoins honestManifest = .ok honestPass := by
   apply eq_ok_of_toOption
   simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
-    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq, saltOf, key?, FlockSoundness.Randomness.derive,
+    qsort_salt, toNat?_eq_toNatOr]
   decide +kernel
 
 /-- A `load` that accepts every manifest takes a record of one 1 × 1 × 1 call with two voluntary A rows, over V-EX's cap
@@ -378,7 +408,8 @@ theorem loadedGivesUp_nontrivial :
 theorem planMeans_honest :
     plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1⟩ := by
   apply eq_ok_of_toOption
-  simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
+  simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest, PouwCheck.PearlPlus.drawKey, key?,
+    FlockSoundness.Randomness.derive, qsort_run]
   decide +kernel
 
 /-- A `plan` that accepts every run with `acceptAllPlan` gives a root that is not the run commitment of its passes, a
