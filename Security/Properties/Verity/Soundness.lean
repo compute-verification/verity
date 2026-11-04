@@ -16,8 +16,7 @@ with the errors summed over its subprotocols. `Soundness` is it at onsite, from 
 (`Vocab.SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote's composite of record
 (`Core.Remote.V1.protocol`, `verity/remote/v1`), from its three (sampled proofs, PoUW, which at remote is Pearl+'s run
-verdict and its claim in MACs at the credit its check published, and the inference-only policy), where Pearl+'s check
-accepts only runs whose every drawn tile passed (`Properties.Pouw.PearlPlus.AcceptMeans`). They are proved by
+verdict and its claim in MACs at the credit its check published, and the inference-only policy). They are proved by
 `Properties.Composition` (a composite's acceptance is its components' and its record's) and the union bound over one
 strategy in one game.
 
@@ -53,15 +52,15 @@ def Soundness : Prop :=
     V.SampledProofsSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
       V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
-/-- **Soundness at remote's verifier of record: onsite's statement restricted to remote's subprotocols.** Where
-Pearl+'s check accepts only runs whose every drawn tile passed (`Properties.Pouw.PearlPlus.AcceptMeans`, a guarantee the
-lock lists), if sampled proofs, PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles
-at the credit Pearl+'s check published) and the inference-only policy each meet their target at remote, then the
-probability that remote's compiled verifier (`verity/remote/v1`) accepts files that passed the commit phase's check
-while one of their claims fails is at most their three errors at that strategy summed. -/
+/-- **Soundness at remote's verifier of record: `SoundnessOf` at `verity/remote/v1`.** If sampled proofs, PoUW
+(`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit Pearl+'s check
+published) and the inference-only policy each meet their target at remote, then the probability that remote's compiled
+verifier accepts files that passed the commit phase's check while one of their claims fails is at most their three
+errors at that strategy summed. Discharging `V.PouwSound .remote` reads Pearl+'s properties in
+`Properties.Pouw.PearlPlus` (`AcceptMeans`, proved as `acceptMeans`, and `WorkIsTheCredit`, `DrawIsOnItsStreams` and
+`CoinBytesGiveUniformTickets`, unproved); that is the Pearl+ target's proof, not this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    Properties.Pouw.PearlPlus.AcceptMeans →
-      V.SampledProofsSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
+    V.SampledProofsSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
 
 end Verity
