@@ -46,9 +46,10 @@ caps aren't those; ``circuits`` lists each tied audit's circuit files, public, b
 certifier's verdict (`LINE` in verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
-`PREMISES` discharged by theorems in Security's locks that take no named assumption but a standing one, `STANDING`, and
-each guarantee it rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what
-K counts, `COUNTS`), and while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
+`PREMISES` discharged by theorems in Security's locks, each at the statement `DISCHARGES` pins, taking no named
+assumption but a standing one (`STANDING`) or one its pin names and no premise that is open; and each guarantee it
+rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what K counts,
+`COUNTS`), and while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
 execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
@@ -235,8 +236,10 @@ RESTS_ON: dict[str, dict[str, Any]] = {
 #: each premise the tight K rests on, by the name ``open`` gives it: what it says, and the theorems that discharge it at
 #: the deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open)
 PREMISES: dict[str, dict[str, Any]] = {
-    "wires-fit": {"is": "ScopeAcc's wires part, BoundaryGates.Fits at the tied audit's statements: the decoder link, and "
-                        "the period check running Circuit.check",
+    "wires-fit": {"is": "ScopeAcc whole at the tied audit's statements: the sampling scope (Scope, the sampled verifier's, "
+                        "which its scope check gives where ScopeMatches holds of the deployment) and the layout's fit "
+                        "(BoundaryGates.Fits, every clause), through the decoder link and the period check running "
+                        "Circuit.check; what each discharge takes of the deployment is its pin's (`DISCHARGES`)",
                   "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
                                     "Properties.NetworkCertifier.circuitWiresFit",
                                     "Properties.NetworkPeriod.rowsWiresChecked")},
@@ -308,6 +311,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "lock",
                            "discharged_by": ()},
 }
+#: each theorem of `PREMISES`' ``discharged_by`` that has been read, by its name in `LOCKS`, as `RESTS_ON` gives a
+#: guarantee: ``statement``, its statement's digest among the lock's reads, and ``takes``, each antecedent of it that the
+#: deployment must meet, by its Prop's name or its binder's, with the premise, standing assumption or term of what K
+#: counts that names it. A Property's statement may take a deployment's premise inline, where the lock records no
+#: assumption (`ScanScopeAcc` takes `StmtFlattens` and `ScopeMatches` of the deployment it quantifies), so a discharge
+#: counts only at the statement pinned here
+DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
 STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's",
@@ -318,7 +328,9 @@ STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifi
 COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the cells the network certifier's "
                             "run gives the client: SenderDecodes's decoder half, PeriodLeakAccepted's hdz"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
-             "is in Security's lock with no named assumption but a standing one (`STANDING`), and open while none is "
+             "is in Security's lock at the statement `DISCHARGES` pins (``unpinned``, with the lock's digest, where it "
+             "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "
+             "its pins take is discharged (``takes``), so no premises discharge each other; and open while none is "
              "named; each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
              "whose hypotheses and antecedents it names (``takes``); and each named assumption the lock gives such a "
              "guarantee that is neither standing nor named there, by its own name. What K counts (`COUNTS`) is no "
@@ -715,13 +727,14 @@ def statement(lock: Mapping[str, Any], g: str) -> str | None:
 
 def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
-    no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
-    guarantee of `RESTS_ON` with its named assumptions, its statement's digest and what it takes (``restated`` where
-    that digest isn't the one `RESTS_ON` read, `RESTATED`), what K counts (``counts``, `COUNTS`), and ``open``: each
-    premise not discharged, then each named
-    assumption of a guarantee of `RESTS_ON` neither standing nor taken by name, and each such guarantee no lock lists or
-    one lists restated. A lock that can't be read lists nothing, and ``unread`` names it, by its path under ``root``
-    (the tree) where it is one, with why."""
+    no lock lists (``missing``), those one lists at a statement `DISCHARGES` doesn't pin (``unpinned``, each with the
+    lock's digest), the named assumptions of those one lists that don't stand and their pins don't take (``assumes``)
+    and the premises their pins take (``takes``), each guarantee of `RESTS_ON` with its named assumptions, its
+    statement's digest and what it takes (``restated`` where that digest isn't the one `RESTS_ON` read, `RESTATED`),
+    what K counts (``counts``, `COUNTS`), and ``open``: each premise not discharged, then each named assumption of a
+    guarantee of `RESTS_ON` neither standing nor taken by name, and each such guarantee no lock lists or one lists
+    restated. A lock that can't be read lists nothing, and ``unread`` names it, by its path under ``root`` (the tree)
+    where it is one, with why."""
     listed: dict[str, Any] = {}
     stated: dict[str, str | None] = {}
     unread: list[str] = []
@@ -729,17 +742,28 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
         try:
             doc = json.loads(lock.read_text())
             listed |= doc["guarantees"]
-            stated |= {g: statement(doc, g) for g in RESTS_ON if g in doc["guarantees"]}
+            stated |= {g: statement(doc, g) for g in doc["guarantees"]
+                       if g in RESTS_ON or any(g in p["discharged_by"] for p in PREMISES.values())}
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             name = lock.relative_to(root) if lock.is_relative_to(root) else lock
             unread.append(f"{name}: {type(e).__name__}: {e.strerror if isinstance(e, OSError) else e}")
-    found, open_ = {}, []
+    found, ready = {}, {}
     for name, p in PREMISES.items():
-        missing = [t for t in p["discharged_by"] if t not in listed]
-        assumes = sorted({a for t in p["discharged_by"] if t in listed for a in listed[t]["assumptions"]} - set(STANDING))
-        found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing, "assumes": assumes}
-        if missing or assumes or not p["discharged_by"]:
-            open_.append(name)
+        pins = {t: DISCHARGES.get(t) or {"statement": None, "takes": {}} for t in p["discharged_by"]}
+        missing = [t for t in pins if t not in listed]
+        unpinned = {t: stated.get(t) for t, pin in pins.items()
+                    if t in listed and (pin["statement"] is None or stated.get(t) != pin["statement"])}
+        assumes = sorted({a for t, pin in pins.items() if t in listed for a in listed[t]["assumptions"]
+                          if a not in pin["takes"]} - set(STANDING))
+        takes = sorted({v for pin in pins.values() for v in pin["takes"].values()} & set(PREMISES))
+        found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing,
+                       "unpinned": unpinned, "assumes": assumes, "takes": takes}
+        if not (missing or unpinned or assumes or not p["discharged_by"]):
+            ready[name] = set(takes)
+    done: set[str] = set()
+    while new := {n for n, t in ready.items() if n not in done and t <= done}:
+        done |= new
+    open_ = [n for n in PREMISES if n not in done]
     rests: dict[str, Any] = {}
     for g, r in RESTS_ON.items():
         if g not in listed:
