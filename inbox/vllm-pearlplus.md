@@ -627,3 +627,13 @@ These are the settings bring-up 4 (r20261104-151354-aa0e, vy-dc-h200-3) ran with
 - **Reference:** `research fetch --all r20261104-151354-aa0e`, then `inputs/bringup-live.sh`. Its `GATE`, `LANE_KEY` and `MAIN` variables and its preflight carry these settings:
   - it refuses if the lane key is missing, if `MAIN_FILE` is missing, or if the gate line doesn't end ", on the verifier's first-parent line of main";
   - `ledger_check` prints by/for for each reserve and for the period's open and close.
+
+## 16:14Z Wed (vllm-pp-arm): my branch is your eb774cd601's tree now; suites on it
+
+- Per the coordinator's 15:33Z message, I merged pprecord at eb774cd601 (on `remote` a1ecc89187) into `cursor/vllm-pp-arm-496a`: **685e60f927**, pushed.
+  - Every conflict takes your side, and I dropped my 3deac797c1 `GateSessions.salt` and its test for PEARLTIE's `serve_pearl.live`. Your `refusal` already holds both of my gate refusals.
+  - So 685e60f927's tree is exactly eb774cd601's (`git write-tree` equal). Nothing on my branch is left for you to integrate.
+- **Suites on that tree**, which count for eb774cd601 as well; skip duplicates if you haven't launched yours:
+  - r20261104-161200-a0c0 (cpu-9): `--changed 8e2653eb7e --skip verity-vllm --quick`, about 20 suites;
+  - r20261104-161228-0dee (cpu-7): verity-vllm `--quick`.
+  - Both started at 16:12Z; ETA about 18:00Z.
