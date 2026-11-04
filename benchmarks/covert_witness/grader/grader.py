@@ -22,7 +22,7 @@ one it reads beside (`CAPTURE`).
 
 What it reads (`read`, "grader-products/v1"):
 
-- the step's matrix products (`Circuit.products`): one row per mm or bmm occurrence, lowered to `LinearRef_v1` cells, with
+- the step's matrix products (`Cells.products`): one row per mm or bmm occurrence, lowered to `LinearRef_v1` cells, with
   its phase (forward, backward or optimizer), MACs, outputs and output wires, those of the cells whose two operands depend on
   θ′ (the start's weights and the optimizer's state and scalars: `*_both`), the operands' and outputs' word widths as the
   circuit wires them, and its dims, the tokens' among them; the dots other ops are lowered to (`DotRef_v1`) are rows of
@@ -418,12 +418,12 @@ def _check_products(p: _Program, code) -> None:
                           f"derive the step with step_program's training rules")
 
 
-class Circuit:
-    """A step Program's circuit as the products bound reads it, root node by root node: which nodes depend on θ′ (`dep`:
-    the start's weights, the optimizer's state and scalars, and every node computed from them), which the loss is
-    computed from (`forward`), which read the optimizer's state (`opt`), and each multiply-add cell (`MAC_CELLS`): its
-    occurrence, instances, MACs and outputs, whether each of its two operands depends on θ′, and the operands' and the
-    outputs' word widths, from the cell Definition's signature."""
+class Cells:
+    """A step Program's multiply-add cells as the products bound reads its circuit, root node by root node: which nodes
+    depend on θ′ (`dep`: the start's weights, the optimizer's state and scalars, and every node computed from them), which
+    the loss is computed from (`forward`), which read the optimizer's state (`opt`), and each multiply-add cell
+    (`MAC_CELLS`): its occurrence, instances, MACs and outputs, whether each of its two operands depends on θ′, and the
+    operands' and the outputs' word widths, from the cell Definition's signature."""
 
     def __init__(self, p: _Program) -> None:
         self.p = p
@@ -581,7 +581,7 @@ def read(h: Handover, code) -> dict:
     step, structure = _Program(h.step, "step"), _Program(h.structure, "structure")
     _same_step(step, structure)
     _check_products(step, code)
-    rows = Circuit(step).products(structure)
+    rows = Cells(step).products(structure)
     return {"format": READ,
             "handover": {"path": str(h.path), "run": h.doc["run"]["id"], "frontend": h.doc["frontend"]["commit"],
                          **{k: {"digest": h.doc[k]["digest"], "batch": h.doc[k]["batch"]} for k in ("step", "structure")}},
