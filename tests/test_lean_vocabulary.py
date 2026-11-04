@@ -66,11 +66,7 @@ CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", 
             "Transcript", "Hash", "Signature",
             "Site", "Layout", "Hardware", "Machine", "Node", "Card", "Link", "Registration", "Registry", "Period",
             "Window", "Session", "Block", "Verdict", "Outcome", "Answer", "Record", "Ledger", "Opening", "Challenger",
-            "Certificate", "Store", "Placement", "Extractor", "Simulator")
-#: What a second declaration of a concept loses, said in its failure.
-WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
-                    "can open a hiding commitment to any trace, so it meets any contract",
-       "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
+            "Certificate", "Store", "Placement")
 #: The concepts that are propositions, so a `def … : Prop` of their name defines them too.
 PROPOSITIONS = ("Collision",)
 SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
@@ -97,7 +93,6 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Device": (),
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
     "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/core/protocols/sampled_proofs/service.py::Draw"),
-    "Extractor": (f"{CORE}Interaction.lean::Claims.Extractor",),
     "Gate": (),
     "Hardware": (),
     "Hash": (),
@@ -125,7 +120,6 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Registry": (),
     "Session": (),
     "Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/ml/crypto/lms.py::Signature"),
-    "Simulator": (f"{CORE}Interaction.lean::Claims.Simulator",),
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
@@ -136,6 +130,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
 CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
+#: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
+CONCEPTS += ("Extractor", "Simulator")
+CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
+CANONICAL["Simulator"] = (f"{CORE}Interaction.lean::Claims.Simulator",)
+#: What a second declaration of a concept loses, said in its failure.
+WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
+                    "can open a hiding commitment to any trace, so it meets any contract",
+       "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
