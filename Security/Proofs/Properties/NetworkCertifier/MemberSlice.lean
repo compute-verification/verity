@@ -1,4 +1,5 @@
 import Proofs.Properties.NetworkScan.Causal
+import Proofs.Properties.Nci.BodiesOk.ForReads
 
 /-!
 # The member-precise walk lemma
