@@ -10,7 +10,8 @@ the wire-wrong proof blocks, in place of the faulty set. It follows from `KS_of`
 proof block passes widened from correct (`correctOk`) to correct with the wire of each wired gate it holds or reads
 right (`wiredOk`): `KSBy_of` at that check, whose failing set is the incorrect set (`faultyBy_wiredOk`).
 `SessionWires` is `SessionOpensBy` at that check: a drawn proof block's session reveals openings that make it correct
-and open each wired gate it holds or reads, and that gate's writer, to one value. With no wires the incorrect set is
+and open each wired gate it holds or reads to its writer's value: a constant's own, any other writer's opened to the
+same value. With no wires the incorrect set is
 the faulty set (`incorrect_none`), and `KS` gives `KSWired` (`ksWired_none`).
 -/
 
@@ -22,7 +23,7 @@ open Claims Claims.Sampling Finset
 right (`WireRight`) at the statement's wiring `wires s`. -/
 def wiredOk (wires : AuditStatement → ℕ → Option ℕ) : BlockCheck := fun s u val ι =>
   correctOk s u val ι ∧
-    ∀ g, (g ∈ u ∨ ∃ x ∈ u, g ∈ (s.prog.gates[x]?.map BGate.reads).getD []) → WireRight (wires s) val g
+    ∀ g, (g ∈ u ∨ ∃ x ∈ u, g ∈ (s.prog.gates[x]?.map BGate.reads).getD []) → WireRight s.prog (wires s) val g
 
 /-- A slot fails the wired check exactly when it is faulty or wire-wrong. -/
 theorem faultyBy_wiredOk_iff {wires : AuditStatement → ℕ → Option ℕ} {H : Msg → Msg} {Cm : CommitmentScheme Bool}
@@ -92,8 +93,9 @@ section Hyps
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 /-- **A drawn proof block's session shows it correct and its wired rows right**: `SessionOpensBy` at the wired check.
-Its session reveals openings under which the proof block is correct, and each wired gate it holds or reads and that
-gate's writer are opened to one value. With no wires it is `SessionOpens`. -/
+Its session reveals openings under which the proof block is correct, and each wired gate it holds or reads is opened to
+its writer's value (`WireRight`): a constant writer's own, any other writer's opened to the same value. With no wires it
+is `SessionOpens`. -/
 def SessionWires (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
     (wires : AuditStatement → ℕ → Option ℕ) : Prop :=
   SessionOpensBy H D iroots (wiredOk wires)

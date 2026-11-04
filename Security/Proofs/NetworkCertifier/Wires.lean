@@ -202,7 +202,7 @@ theorem resolveWires_ingress (hwf : lay.WiresFit C k) {ins ins' : List (List Boo
   refine valOver_congr_inp C free w fun g' hdep => ?_
   cases hw' : lay.wires g' with
   | none =>
-    have hni : ∀ t < k, g' ∉ lay.ingress t := fun t ht hm => (hwf.1 g w hw).2.2.2.2 t ht g' hm hdep
+    have hni : ∀ t < k, g' ∉ lay.ingress t := fun t ht hm => (hwf.1 g w hw).2.2.2 t ht g' hm hdep
     rw [resolveWires_of_none hw', resolveWires_of_none hw', inputOf_of_not_ingress lay hlen a hni,
       inputOf_of_not_ingress lay hlen' a hni]
   | some w' => exact ih g' (by simp [hw'])
