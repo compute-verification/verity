@@ -8,11 +8,8 @@ import Proofs.Flock.Claims.Sampling.Cost
 
 `Compiled.Bits` and `Compiled.Efficient` each fail at a toy instance, on the toy statement of `Witnesses.Sampling`.
 
-* Every proof system's extractor reruns at most `1 + m′·K` times in expectation, its strict bound (`arg_rerunsExp`, from
-  `Arg.reruns_le`). It is the only expected bound at every `A`: `E^rep`'s expected `1 + m′·k` reads `k`, a statement's,
-  which a bound over shapes can't.
 * `sksL` (`Witnesses.SamplingGeneric`) accepts every run while no witness is in its relation at `δ = 0`, and there
-  `λ > 0` at no expected reruns of the proof system's: `Compiled.Bits_fails`.
+  `λ > 0`: `Compiled.Bits_fails`.
 * `effL`: a compiled verifier over `findA`, a proof system whose verifier accepts after one round and whose extractor
   assembles `()` at once, with its one proof block's session seen as accepted, under a commitment whose opening check
   makes one SHA-512 call (`callCm`) that the compiled verifier counts as none. Every run is accepted, so the compiled
@@ -20,8 +17,8 @@ import Proofs.Flock.Claims.Sampling.Cost
   bound `0`: `Compiled.Efficient_fails`.
 
 The lock's `meets` witnesses of these claims are `twoSessions_meets` (the contract with two sampled sessions) and
-`twoCosts_meets`: the proof system's expected reruns and the opening checks' count hold at `twoA` and `twoL`, so
-`CompilerBits` and `CompilerEfficient` read antecedents that hold together.
+`twoOpenCalls_meets`: the opening checks' count holds at `twoL`, so `CompilerBits` and `CompilerEfficient` read
+antecedents that hold together.
 -/
 
 namespace Claims.Witness.SamplingGeneric
@@ -29,18 +26,6 @@ namespace Claims.Witness.SamplingGeneric
 open Claims.SamplingGeneric
 open Claims.Sampling (AuditStatement Opening CommitmentScheme lamLin forkOn waitAccC flatMapRP ownLog)
 open Claims.Witness.Sampling (toyStmt sksD_noR slack_le_two)
-
-/-! ## Every proof system's extractor's expected reruns -/
-
-/-- **A proof system's extractor reruns at most `1 + m′·K` times in expectation**, its strict bound
-(`Arg.reruns_le`). -/
-theorem arg_rerunsExp {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (H : Msg → Msg) :
-    A.RerunsExpLe H fun s => ((1 + A.waits s * A.cap s : ℕ) : ℝ) := by
-  intro x Ω P ω
-  have hs : ∀ s : (Fin (A.V.k x) → Coin) × A.E.C x,
-      ((Extractor.eval H P A.E x ω s.1 s.2).2.2 : ℝ) ≤ ((1 + A.waits (A.shape x) * A.cap (A.shape x) : ℕ) : ℝ) :=
-    fun s => by exact_mod_cast A.reruns_le H x Ω P ω s.1 s.2
-  exact (Ex_mono hs).trans (Ex_const _).le
 
 /-! ## `Compiled.Bits` fails at `sksL` -/
 
@@ -65,8 +50,14 @@ theorem sksL_γ (x : Msg) : (sksL Coin).γ x = 0 := by
   rw [h, mul_zero, mul_zero]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem sksL_work (x : Msg) : (sksL Coin).work (fun _ => 0) x ≤ 2 ^ 100 := by
-  have he : (sksL Coin).es (fun _ => 0) x = 0 := maxBelow_zero _
+/-- `sksL`'s one proof block's shape makes no wait, so its session's expected reruns are its replay. -/
+theorem sksL_es (x : Msg) : (sksL Coin).es x = 1 := by
+  show max ((1 : ℝ) + ((0 : ℕ) : ℝ) * ((0 : ℕ) : ℝ)) 0 = 1
+  exact (max_eq_left (by norm_num)).trans (by norm_num)
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem sksL_work (x : Msg) : (sksL Coin).work x ≤ 2 ^ 100 := by
+  have he := sksL_es (Coin := Coin) x
   have hk : (sksL Coin).k x = 2 ^ 40 * 3 := rfl
   unfold Compiled.work
   rw [he, hk, show (sksL Coin).nPU x = 1 from rfl, show (sksL Coin).openCalls x = 0 from rfl]
@@ -74,23 +65,23 @@ theorem sksL_work (x : Msg) : (sksL Coin).work (fun _ => 0) x ≤ 2 ^ 100 := by
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_lam_pos (x : Msg) :
-    0 < lamLin ((sksL Coin).κ 0 x) ((sksL Coin).γ x) 1 ((sksL Coin).work (fun _ => 0) x) := by
+    0 < lamLin ((sksL Coin).κ 0 x) ((sksL Coin).γ x) 1 ((sksL Coin).work x) := by
   have hκ := sksL_κ (Coin := Coin) x
   have hκ0 := (sksL Coin).κ_pos le_rfl x
   have hw := sksL_work (Coin := Coin) x
-  have hw0 := (sksL Coin).work_pos (fun _ => 0) x
+  have hw0 := (sksL Coin).work_pos x
   have h3 : Real.logb 2 3 < 2 := by
     rw [Real.logb_lt_iff_lt_rpow (by norm_num) (by norm_num)]; norm_num
   have h1 : Real.logb 2 3 < Real.logb 2 (1 / (sksL Coin).κ 0 x) := by
     refine Real.logb_lt_logb (by norm_num) (by norm_num) ?_
     rw [lt_div_iff₀ hκ0]; linarith
   have hγ : Real.logb 2 ((sksL Coin).γ x) = 0 := by rw [sksL_γ, Real.logb_zero]
-  have hW : Real.logb 2 (2 * 1 * (sksL Coin).work (fun _ => 0) x) ≤ 101 := by
+  have hW : Real.logb 2 (2 * 1 * (sksL Coin).work x) ≤ 101 := by
     rw [Real.logb_le_iff_le_rpow (by norm_num) (by positivity)]
     norm_num; linarith
   unfold lamLin
   have := lt_min (lt_min h1 (show Real.logb 2 3 < 255.5 - Real.logb 2 ((sksL Coin).γ x) / 2 by rw [hγ]; linarith))
-    (show Real.logb 2 3 < 256 - Real.logb 2 (2 * 1 * (sksL Coin).work (fun _ => 0) x) by linarith)
+    (show Real.logb 2 3 < 256 - Real.logb 2 (2 * 1 * (sksL Coin).work x) by linarith)
   linarith
 
 theorem sksL_expectedCR (H : Msg → Msg) (x : Msg) :
@@ -99,21 +90,21 @@ theorem sksL_expectedCR (H : Msg → Msg) (x : Msg) :
   rw [sksL_bext]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-/-- **`Compiled.Bits` fails** at `sksL`, at `δ = 0` and no expected reruns of the proof system's: the silent prover is
-accepted, no witness is in the relation, and `λ > 0`. -/
-theorem compiledBits_fails (H : Msg → Msg) : ¬ (sksL Coin).Bits H (fun _ => 0) := by
+/-- **`Compiled.Bits` fails** at `sksL`, at `δ = 0`: the silent prover is accepted, no witness is in the relation, and
+`λ > 0`. -/
+theorem compiledBits_fails (H : Msg → Msg) : ¬ (sksL Coin).Bits H := by
   intro h
   have hp : PrBad H (sksL Coin).V (Claims.Sampling.R H (sksL Coin).commit (sksL Coin).parse (sksL Coin).partition 0)
       (sksL Coin).E [] silentP = 1 :=
     prBad_accV H _ _ [] silentP (sksD_noR (Coin := Coin) H 0 le_rfl [])
   have h2 : PrBad H (sksL Coin).V (Claims.Sampling.R H (sksL Coin).commit (sksL Coin).parse (sksL Coin).partition 0)
       (sksL Coin).E [] silentP ≤ (1 : ℕ) * (2 : ℝ) ^ (-lamLin ((sksL Coin).κ 0 []) ((sksL Coin).γ []) 1
-        ((sksL Coin).work (fun _ => 0) [])) :=
+        ((sksL Coin).work [])) :=
     h 0 le_rfl [] (sksL_scope []) Unit silentP 1 le_rfl (calls_silentP_accV (Coin := Coin) H [])
       (strictBirthday_B_accV (Coin := Coin) H silentP []) (sksL_expectedCR H [])
   rw [hp, Nat.cast_one, one_mul] at h2
   have : (2 : ℝ) ^ (-lamLin ((sksL Coin).κ 0 []) ((sksL Coin).γ []) 1
-      ((sksL Coin).work (fun _ => 0) [])) < 1 :=
+      ((sksL Coin).work [])) < 1 :=
     Real.rpow_lt_one_of_one_lt_of_neg (by norm_num) (by linarith [sksL_lam_pos (Coin := Coin) []])
   linarith
 
@@ -233,10 +224,9 @@ theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) 
   | simp [findA, toyA, Arg.ext, ERep, Compiled.view, effL, firstWait, waitAcc, serve, viewing, RP.bind, ownLog,
       Claims.Sampling.checkRevealed, flatMapRP, Claims.Sampling.ofOC, callCm]
 
-/-- **`Compiled.Efficient` fails** at `effL`, at no expected reruns of the proof system's: every run is accepted, so
-the compiled extractor reaches its first inner run's extraction, whose opening check makes a SHA-512 call of its own,
-while the own-call bound is `0`. -/
-theorem compiledEfficient_fails (H : Msg → Msg) : ¬ (effL Coin).Efficient H (fun _ => 0) := by
+/-- **`Compiled.Efficient` fails** at `effL`: every run is accepted, so the compiled extractor reaches its first inner
+run's extraction, whose opening check makes a SHA-512 call of its own, while the own-call bound is `0`. -/
+theorem compiledEfficient_fails (H : Msg → Msg) : ¬ (effL Coin).Efficient H := by
   rintro ⟨-, -, h⟩
   have c : (effL Coin).E.C [] := Classical.arbitrary _
   have h1 := h [] Unit silentP () (fun _ => default) c
@@ -249,25 +239,19 @@ theorem compiledEfficient_fails (H : Msg → Msg) : ¬ (effL Coin).Efficient H (
 
 end Efficient
 
-/-! ## The cost premises hold together -/
+/-! ## The opening checks' count holds beside the contract -/
 
 section Meets
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- `twoL`'s opening checks make no call: `trueCm`'s opening is its value. -/
-theorem twoL_openCalls (H : Msg → Msg) : (twoL Coin).OpenCallsLe H := by
+/-- **The opening checks' count holds at `twoL`** (`CompilerBits`' and `CompilerEfficient`'s premise beyond the
+contract): `trueCm`'s opening is its value, so checking it makes no call. With `twoSessions_meets`, `CompilerBits` and
+`CompilerEfficient` read antecedents that hold together. -/
+theorem twoOpenCalls_meets (H : Msg → Msg) : (twoL Coin).OpenCallsLe H := by
   intro x s _ u v w
   exact Nat.le_of_eq rfl
-
-/-- **The cost premises hold at `twoA` and `twoL`** (`CompilerBits`' and `CompilerEfficient`'s beyond the contract):
-`twoA`'s extractor reruns at most `1 + m′·K` times in expectation, and `twoL`'s opening checks make at most the calls
-it counts. With `twoSessions_meets`, `CompilerBits` and `CompilerEfficient` read antecedents that hold together. -/
-theorem twoCosts_meets (H : Msg → Msg) :
-    (twoA Coin).RerunsExpLe H (fun s => ((1 + (twoA Coin).waits s * (twoA Coin).cap s : ℕ) : ℝ)) ∧
-      (twoL Coin).OpenCallsLe H :=
-  ⟨arg_rerunsExp _ H, twoL_openCalls H⟩
 
 end Meets
 
@@ -279,12 +263,12 @@ namespace Claims.SamplingGeneric
 
 /-- **`Compiled.Bits` fails** at some compiled verifier. -/
 theorem Compiled.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (A : Arg Coin) (L : Compiled Coin A) (e : A.Sh → ℝ), ¬ L.Bits H e :=
-  ⟨_, _, _, Witness.SamplingGeneric.compiledBits_fails H⟩
+    ∃ (A : Arg Coin) (L : Compiled Coin A), ¬ L.Bits H :=
+  ⟨_, _, Witness.SamplingGeneric.compiledBits_fails H⟩
 
 /-- **`Compiled.Efficient` fails** at some compiled verifier. -/
 theorem Compiled.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (A : Arg Coin) (L : Compiled Coin A) (e : A.Sh → ℝ), ¬ L.Efficient H e :=
-  ⟨_, _, _, Witness.SamplingGeneric.compiledEfficient_fails H⟩
+    ∃ (A : Arg Coin) (L : Compiled Coin A), ¬ L.Efficient H :=
+  ⟨_, _, Witness.SamplingGeneric.compiledEfficient_fails H⟩
 
 end Claims.SamplingGeneric

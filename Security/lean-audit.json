@@ -2486,7 +2486,7 @@
     "meets": [
      "Claims.Flock.decoder_meets_plain",
      "Claims.Flock.decoder_meets_zk",
-     "Claims.Witness.SamplingGeneric.twoCosts_meets",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
    },
@@ -2495,7 +2495,7 @@
     "meets": [
      "Claims.Flock.decoder_meets_plain",
      "Claims.Flock.decoder_meets_zk",
-     "Claims.Witness.SamplingGeneric.twoCosts_meets",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
    },
@@ -2566,7 +2566,6 @@
    "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
-   "Claims.SamplingGeneric.Arg.RerunsExpLe": "a helper the claims read: the proof system's expected reruns, at most a bound, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.CompilerBits": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerBits`)",
    "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)",
@@ -6582,7 +6581,7 @@
    "assumptions": [],
    "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
   },
-  "Claims.Witness.SamplingGeneric.twoCosts_meets": {
+  "Claims.Witness.SamplingGeneric.twoOpenCalls_meets": {
    "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.twoSessions_meets": {

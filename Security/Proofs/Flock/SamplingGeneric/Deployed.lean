@@ -9,7 +9,7 @@ at its deployed decoder (`Compiled _ (Arg.ofFlock D.flock)`), at the roots a run
 values (`iroots`, which the frozen record leaves to its hypotheses). Its verifier, parser, scope check, partition,
 commitment, draw layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
 are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots the frozen hypotheses read); a proof
-block's shape is the record's inner waits and truncation and its session's rounds (`sh`); and the bounds on its
+block's shape is the record's inner waits, truncation and `N₀` and its session's rounds (`sh`); and the bounds on its
 session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight (`κb`, `γb`). At every `D`:
 
 * its proof blocks, scope, `k` and `K` are `D`'s (`ofDeploy_nPU`, `ofDeploy_scope`, `ofDeploy_k`, `ofDeploy_cap`), and
@@ -63,8 +63,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 /-- **A frozen sampled record as a compiled sampled verifier over Flock**, at its deployed decoder and the roots a run
 shows for a proof block's interior values: `D`'s verifier, parser, scope check, partition, commitment, draw layout,
 sessions, reveal, opening count, reference prover and completeness error; its sample the checked units' first `n_PU`;
-a proof block's shape the record's inner waits and truncation and its session's rounds; the bounds on its session's
-errors `κ_F` and Flock's `γ` at those rounds and the record's weight. -/
+a proof block's shape the record's inner waits, truncation and `N₀` and its session's rounds; the bounds on its
+session's errors `κ_F` and Flock's `γ` at those rounds and the record's weight. -/
 noncomputable def ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) :
     Compiled Coin (Arg.ofFlock D.flock) where
   V := D.V
@@ -74,7 +74,7 @@ noncomputable def ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg
   commit := D.commit
   stage2 := D.stage2
   checked x r := (D.checked x r).take (Claims.Sampling.nPU D x)
-  sh x u := (D.innerWaits x, D.innerCap x, (D.rounds x u).card)
+  sh x u := (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
   κb x _ := Claims.Sampling.κF D x
   γb x u := 16 * (Real.sqrt (2 * ((D.rounds x u).card : ℝ) * D.weight x) + (D.rounds x u).card) ^ 2
   rounds := D.rounds
@@ -210,8 +210,9 @@ theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr
       unfold Claims.Flock.Deploy.k Claims.Sampling.Deploy.innerK
       rw [hN]
     refine ⟨xS, P', ?_, ?_, ?_, hcard, fun r' hr' => ?_, fun r' hr' => ?_⟩
-    · show (D.flock.waits xS, D.flock.cap xS, D.flock.V.k xS) = (D.innerWaits x, D.innerCap x, (D.rounds x u).card)
-      rw [hw, hc, hcard]
+    · show (D.flock.waits xS, D.flock.cap xS, D.flock.V.k xS, D.flock.N₀ xS) =
+        (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
+      rw [hw, hc, hcard, hN]
     · show Claims.Flock.κ D.flock xS ≤ Claims.Sampling.κF D x
       unfold Claims.Flock.κ Claims.Sampling.κF
       rw [hk, hw, hc]
@@ -314,7 +315,8 @@ theorem compiled_iroots : (compiled F c iroots).iroots = iroots := rfl
 theorem compiled_commit : (compiled F c iroots).commit = commit c := rfl
 
 theorem compiled_sh (x : Msg) (u : ℕ) :
-    (compiled F c iroots).sh x u = (Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, (c.rounds x u).card) :=
+    (compiled F c iroots).sh x u =
+      (Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, (c.rounds x u).card, c.innerN₀ x) :=
   rfl
 
 /-- **The opening checks' count**, from the reveal count (`openCallsLe_deployOf`). -/

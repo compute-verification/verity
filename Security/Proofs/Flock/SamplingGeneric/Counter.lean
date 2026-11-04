@@ -11,11 +11,10 @@ calls than `openCalls` (`not_ownLe_openCalls`).
 
 `L₀ n oc` is the compiled verifier it is read at: one proof block, a verifier of one round that accepts, a proof system
 of one round whose extractor replays the judged run and returns its witness, a sample of `n` copies of the block, a
-reveal of one opening whose check is one SHA-512 call, and `openCalls = oc`. `L₀ 1 oc` meets the contract (`sessions₀`)
-and the proof system's expected reruns are its replay (`A₀_runsExp`); its extractor's own calls are `k²` (`ownLog_E₀`),
-against the bound `k²·0` at `oc = 0`. They are counted at any compiled verifier: at an accepted run, the outer body's
-at the kept outer runs (`Compiled.length_ownLog_E`), `k` of them when every run accepts
-(`Compiled.length_outerList_all`).
+reveal of one opening whose check is one SHA-512 call, and `openCalls = oc`. `L₀ 1 oc` meets the contract
+(`sessions₀`); its extractor's own calls are `k²` (`ownLog_E₀`), against the bound `k²·0` at `oc = 0`. They are counted
+at any compiled verifier: at an accepted run, the outer body's at the kept outer runs (`Compiled.length_ownLog_E`), `k`
+of them when every run accepts (`Compiled.length_outerList_all`).
 -/
 
 namespace Claims.SamplingGeneric
@@ -103,9 +102,6 @@ def A₀ : Arg Unit where
 /-- `A₀`'s extractor: the replay, then its witness if the replay accepted. -/
 theorem A₀_ext (x : Msg) (r₀ : Fin (A₀.V.k x) → Unit) (c : A₀.EC (A₀.shape x)) :
     A₀.ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
-
-theorem A₀_Eext (x : Msg) (r₀ : Fin (A₀.V.k x) → Unit) (c : A₀.E.C x) :
-    A₀.E.ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
 
 /-- **The compiled verifier**: `V₁`, the statement `s₀` and partition `P₀` at every message, a sample of `n` copies of
 the one proof block, each session the whole run at its own statement, a reveal of one opening, and `openCalls = oc`. -/
@@ -214,20 +210,6 @@ theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
       simp at h⟩⟩
   opens _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hR := False.elim hR
 
-/-- `A₀`'s extractor reruns once, its replay. -/
-theorem A₀_eval_runs (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (A₀.V.k x) → Unit)
-    (c : A₀.E.C x) : (A₀.E.eval H P x ω r₀ c).2.2 = 1 := by
-  show ((A₀.E.ext x r₀ c).eval H (run H P A₀.V x ω)).2.2 = 1
-  rw [A₀_Eext]
-  by_cases h : (run H P A₀.V x ω r₀).seen.out = .acc <;> simp [RP.eval, h]
-
-/-- **The proof system's expected reruns are its replay**: one. -/
-theorem A₀_runsExp (H : Msg → Msg) : A₀.RerunsExpLe H (fun _ => 1) := by
-  intro x Ω P ω
-  have h1 : ∀ s : (Fin (A₀.V.k x) → Unit) × A₀.E.C x, ((A₀.E.eval H P x ω s.1 s.2).2.2 : ℝ) = 1 := fun s => by
-    rw [A₀_eval_runs]; exact Nat.cast_one
-  simp only [h1, Ex_const, le_refl]
-
 /-! ## Its extractor's own calls -/
 
 /-- At runs that all accept, a sampled proof block's extraction is the replay, served as one rerun, then the check of
@@ -301,7 +283,7 @@ theorem not_ownLe_openCalls (H : Msg → Msg) :
   simp only [hb, hm, mul_zero, mul_one] at h3
   exact absurd h3 (Nat.not_le.2 (Nat.mul_pos hk hk))
 
-theorem not_efficient_openCalls (H : Msg → Msg) : ¬ (L₀ 1 0).Efficient H (fun _ => 0) :=
+theorem not_efficient_openCalls (H : Msg → Msg) : ¬ (L₀ 1 0).Efficient H :=
   fun h => not_ownLe_openCalls H h.2.2
 
 /-- `L₀ 1 0`'s sample has no repeats. -/

@@ -27,9 +27,10 @@ from the session transfer and the session's fork (`SamplingGeneric/Session.lean`
 `KSOf`'s deterministic half, a failed extraction giving the failure event or a `Bext` collision (`split`,
 `SamplingGeneric/Assemble.lean`: `ksOf`). So **`CompilerKS` is proved** (`compilerKS`), and with it Flock's instance
 (`flockKS`) and the count form (`compilerKSCount`, `SamplingGeneric/Count.lean`). **`CompilerEfficient` is proved**
-(`compilerEfficient`, `SamplingGeneric/Efficient.lean`): every proof system's extractor is `E^rep`, so its strict
-reruns and own calls are bounded at every proof system (`Arg.reruns_le`, `Arg.own_le`) and only its expected reruns
-are a premise. `CompilerBits` follows from `CompilerKS` and `CompilerEfficient`'s expected-reruns and own-calls bounds
+(`compilerEfficient`, `SamplingGeneric/Efficient.lean`): every proof system's extractor is `E^rep` at numbers its
+shape fixes, so its strict and expected reruns and its own calls are bounded at every proof system (`Arg.reruns_le`,
+`Arg.rerunsExp_le`, `Arg.own_le`), and the opening checks' count is its only premise beyond the contract.
+`CompilerBits` follows from `CompilerKS` and `CompilerEfficient`'s expected-reruns and own-calls bounds
 (`SamplingGeneric/Bits.lean`), so **`CompilerBits` is proved** (`compilerBits`). Their own-call bounds read the
 opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter.not_ownLe_openCalls`,
 `SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and
