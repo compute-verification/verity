@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.AtFlockRecovers
 public import Proofs.Flock.RecGeneric.AtFlockTerms
+public import Proofs.Flock.RecGeneric.AtFlockContract
 
 /-!
 # L1 at Flock, with no hypothesis left
@@ -9,7 +10,8 @@ public import Proofs.Flock.RecGeneric.AtFlockTerms
 `RecoversLinkOn` at every compiled record, bound record, outer deployment, caps and set of statements
 (`recoversLinkOn`): F9a (`recoversLinkOn_of`) at F6's three term comparisons (`forkPlansLeBinnerV`, `capPlanIsFCI`,
 `conflictPlanIsF0I`), the last two at F1 (`ivStarOfBound`). With L1 proved, `ksLinkOnFlock` is `KSLinkOn` from
-`RecoversLinkOn`'s other premises.
+`RecoversLinkOn`'s other premises. F7 at the deployment holds with no hypothesis (`contractDense_deployed`): F1's
+two facts at the deployed bound are `ivStarOfBound` and `openViewOfBound`.
 -/
 
 @[expose] public section
@@ -43,5 +45,10 @@ theorem ksLinkOnFlock (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     hC
 
 end Instance
+
+/-- **F7 at the deployment** (`ContractDense`), with no hypothesis: `contractDense` at F1 (`ivStarOfBound`,
+`openViewOfBound`). -/
+theorem contractDense_deployed : ContractDense :=
+  contractDense (ivStarOfBound _) (openViewOfBound _)
 
 end Claims.RecGeneric
