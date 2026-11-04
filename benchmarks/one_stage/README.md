@@ -221,8 +221,9 @@ negatives.
   run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
-  whose sources the record states, beside its figure over one execution phase, and its share of a weights copy and of
-  the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
+  whose sources the record states, beside its figure over one execution phase, and its share of one copy of the
+  weights a deployment protects (the census adversary model's as published, a stated parameter with its census line),
+  beside it of the demo's served model's (Llama-3.2-1B), and of the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
   the figure of record's: K as the period's check states it only where its Lean verdict held both checks the tight
   ℓ_{a,j} rests on (each tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its
   advice) and none of its premises is open: each is discharged by theorems `Security/lean-audit.json` or
@@ -230,9 +231,17 @@ negatives.
   device's), and no premise about our own Python stands. While
   one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
   them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
-  the tied compute audits' free inputs (no advice length and no cap is in them), beside it each audit's registered
-  advice length ℓ_a as a cap, in no term of K, and `--advice-charge` states a test
-  run's measurement beside the bound as that run's.
+  the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
+  the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
+  `--advice-charge` states a test
+  run's measurement beside the bound as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
+  units with each wire read inside its session needs (the committed values and openings of every sampled unit and of
+  the units that write what it reads, the registration, the live draw and its receipt, and the public files), by
+  where each is and whether the run wrote each public one, and how each must be kept: past the week after the run,
+  never only on the served node, the public ones in custody and the serve dir's, witness, in a private copy off the
+  node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
+  off `$OUT`; `REPROOF_COPY` and `REPROOF_LISTING` in `served_verdicts.sh`) names the copy and checks each serve-dir
+  input against the listing by its path alone.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run

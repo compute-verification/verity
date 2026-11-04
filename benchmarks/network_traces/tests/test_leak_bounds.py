@@ -10,10 +10,12 @@ K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lea
 - a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
 - the datacenter's links are the census's reference datacenter's machines, and the world's are the adversary resource
   model's compute in machines of the datacenter's GPUs;
-- a share is of one copy of the weights, labelled with what it is;
+- a share is of one copy of the weights, the deployment's (the adversary resource model's as published) unless a
+  caller names another, labelled with what it is;
 - ε is the scans' δ summed, m·δ_scan over the period's sampling blocks and the links.
 
-At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the weights. A window class
+At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the demo's served model's
+weights, though not the deployment's. A window class
 stands in for its scan class and its T, and the calculator refuses what it can't count."""
 
 from __future__ import annotations
@@ -173,15 +175,20 @@ def test_the_census_sets_the_datacenter_and_the_world():
         18_550_229 * LB.per_link(W63, RATE, "week", "anchors", T=32).bits, rel=1e-12)
 
 
-def test_a_share_is_of_one_bf16_copy_and_says_so():
-    assert LB.WEIGHTS == LB.Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
+def test_a_share_is_of_one_copy_of_the_weights_a_deployment_protects_and_says_so():
+    """By default a share is of the adversary resource model's weights as published (the census's ``weights_bytes``),
+    labelled with the model and its datatypes; the demo's served model is a copy a caller names, labelled as that."""
+    world = next(d for d in json.loads((LB.CENSUS / "adversary.json").read_text()) if d["role"] == "reference")
+    assert LB.WEIGHTS == LB.protected() and LB.WEIGHTS.bits == 8 * world["weights_bytes"] == 8 * 864_704_792_696
+    assert LB.WEIGHTS.label.startswith("DeepSeek-V4-Pro as published, 1.6T parameters (FP4 + FP8 mixed")
+    assert LB.SERVED == LB.Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
     one = LB.link(W63, RATE, T=32)
     for got in (LB.per_link(W63, RATE, "week", "registered", T=32), LB.datacenter([one] * 3, "week", "registered"),
                 LB.world(one, "week", "registered", Fraction(1, 100))):
         assert got.weights == LB.WEIGHTS.label and got.share == got.bits / LB.WEIGHTS.bits
-    int8 = LB.Weights(1_235_814_400 * 8, "an int8 copy")
-    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=int8)
-    assert got.weights == "an int8 copy" and got.share == 2 * LB.per_link(W63, RATE, "week", "registered", T=32).share
+    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=LB.SERVED)
+    assert got.weights == LB.SERVED.label and got.share == pytest.approx(
+        LB.WEIGHTS.bits / LB.SERVED.bits * LB.per_link(W63, RATE, "week", "registered", T=32).share, rel=1e-15)
 
 
 def test_eps_is_the_scans_delta_summed():
@@ -200,14 +207,14 @@ def test_eps_is_the_scans_delta_summed():
     assert LB.world(one, "week", "registered").eps == 18_550_229 * Fraction(189_000, 2 ** 20)
 
 
-def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_weights():
+def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_served_models_weights():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
     faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
     jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
     caps = n * 189_000 * 2 * 128 * clog2(KO1.KO + 2)
     anchors = n * 189_000 * LB.link(KO1, 0, T=32).entries * (33 + KO1.KO * KO1.IDB)
-    assert LB.fmax(one / n) == 15 and faulty > LB.WEIGHTS.bits
+    assert LB.fmax(one / n) == 15 and LB.SERVED.bits < faulty < LB.WEIGHTS.bits
     assert floor.bits == pytest.approx(faulty + jitter + caps + anchors)
     assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter + caps + anchors
 

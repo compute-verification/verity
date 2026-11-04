@@ -301,8 +301,10 @@ The scale:
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate. A
   datacenter's and the world's links are each pooled at δ / links. The world's requests past its links' rate are
   uncertified, and no row counts them.
-- The weights are one copy of Llama-3.2-1B in BF16 (`leak_bounds.WEIGHTS`), whatever the links. The served checkpoint
-  is int8, so every share names the copy it is of.
+- The weights are one copy of the weights a deployment protects (`leak_bounds.WEIGHTS`), whatever the links: the
+  adversary resource model's (`benchmarks/census/adversary.json`, DeepSeek-V4-Pro as published), so every share names
+  the copy it is of. The demo's served model (Llama-3.2-1B in BF16, `leak_bounds.SERVED`) is a share a caller states
+  beside it.
 
 FILE has both readings of the free inputs. `prog` as registered is the record's K. `prog` only at its anchored entries
 is what the generator-form lowering would give if it registers `prog` everywhere but its anchors, and is not the

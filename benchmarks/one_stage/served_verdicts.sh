@@ -91,7 +91,9 @@
 #     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
 #     then writes the onsite demo's record
 #     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
-#     monitoring period, and beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below);
+#     monitoring period, beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below, and
+#     the re-proof inputs, the serve dir's and $OUT's files a later re-proof of the sampled units needs, with
+#     REPROOF_COPY's copy of the serve dir's, NODE:/PATH, checked against REPROOF_LISTING, its listing kept off $OUT);
 #     its ONSITE line gates nothing.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
@@ -1237,7 +1239,9 @@ left=0
 comp=0
 [ -n "$DEFER" ] || [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] \
-  || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} 2>&1 | publish_lines
+  || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
+       ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \
+       2>&1 | publish_lines
 measure
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] \
