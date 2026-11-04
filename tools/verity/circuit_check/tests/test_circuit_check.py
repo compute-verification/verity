@@ -230,6 +230,20 @@ def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
     assert TG.is_call("Const32[0x00000000]_v2") and TG.is_call("GatherI32x16_v2")
 
 
+def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatch):
+    """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
+    registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
+    from verity.ml.definitions import boolean
+
+    asked: list[str] = []
+    monkeypatch.setattr(boolean, "made_on_demand", asked.append)
+    words = ["GatherI32x16_v1", "Const32[0x00000000]_v1", "GatherI32x129280_v1", "F32Add_v1"]
+    for order in (words, words[::-1]):
+        asked.clear()
+        assert TG.on_demand_boolean_families(set(order)) == set()
+        assert asked == sorted(words), asked
+
+
 #: one Definition target for each way `is_call` decides: a vocabulary kind's family, a template's, a Boolean version one of their
 #: bindings certifies, a word composite and a Boolean one outside the Boolean table's bound, and a primitive
 DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHead_v2{D=8}": "certified",
@@ -255,7 +269,8 @@ def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkey
             "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
 
     def strip(rep):
-        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
+        return {**{k: v for k, v in rep.items() if k != "prologue_s"},
+                "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
 
     assert strip(fast) == strip(full)
     assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
@@ -604,6 +619,37 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
 
 
+def test_the_partition_cuts_a_call_once(monkeypatch):
+    """`partition` checks the cut `word.unit_rule` made of the whole Definition (its ``graphs``) rather than cutting it again: one
+    `word.Graph` of it, and the record and failures of cutting it twice; a Definition cut member by member (`word.separable`) is
+    cut whole once, by `partition` alone."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions import word as W
+    from verity.ml.definitions.registry import prims as P
+
+    real_rule, cuts = W.unit_rule, []
+
+    class Counted(W.Graph):
+        def __init__(self, fn, *a, **k):
+            cuts.append(fn.id)
+            super().__init__(fn, *a, **k)
+
+    monkeypatch.setattr(W, "Graph", Counted)
+    chained = _composite("CircuitCheckCutOnce", (_f32x2(), Value(32)),
+                         lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
+    rope = TG.definition(BOOL_RECOMPUTE)
+    assert W.separable(chained) is None and W.separable(rope) is not None
+    for fn, q_word, twice in ((chained, 1, 2), (rope, 2, 1), (rope, 1, 1)):
+        cuts.clear()
+        once = _partition(fn, q_word)
+        assert cuts.count(fn.id) == 1, fn.id
+        with monkeypatch.context() as m:
+            m.setattr(W, "unit_rule", lambda *a, graphs=None, **k: real_rule(*a, **k))
+            cuts.clear()
+            assert _partition(fn, q_word) == once and cuts.count(fn.id) == twice, fn.id
+    assert once[1] == [f"partition/gate-recomputed {rope.id} (1120 gate(s))"]
+
+
 def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
     """`Q_call` v1 beside `Q_word`: a Boolean Call's proof blocks, committed bits and the values two proof blocks compute
     (reported); a Call with
@@ -888,8 +934,23 @@ def test_a_proof_blocks_export_counts_its_circuit_types():
         C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
         return C
 
-    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
-                                                      "shared_across_types": 0}
+    want = {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4, "shared_across_types": 0}
+    assert CK._export_counts(build, "test unit") == want == CK._export_counts(build, "test unit", build())
+
+
+def test_a_proof_blocks_export_is_evaluated_against_the_circuit_it_is_handed():
+    """`checks._export_counts` given the circuit ``build`` made (`template_lowering` hands it `_traced`'s) evaluates the
+    export's types against that circuit: one that computes something else is refused."""
+    from verity_flock import gf2
+
+    def build(xor: bool = False):
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [x ^ y if xor else C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    with pytest.raises(AssertionError, match="disagree with its circuit"):
+        CK._export_counts(build, "test unit", build(xor=True))
 
 
 def _lowering_pin(e: dict) -> dict:
