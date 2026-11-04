@@ -24,9 +24,7 @@ theorem sum_range'_getElem! {α : Type} [Inhabited α] (St : Array α) (f : α �
   apply List.ext_getElem (by simp)
   intro i h1 _
   simp only [List.length_map, List.length_range'] at h1
-  first
-    | simp [List.getElem_range', getElem!_pos St i h1]
-    | simp [List.getElem_range', h1]
+  simp [List.getElem_range', getElem!_pos St i h1]
 
 /-- **`stratifiedWith` on `take` draws its strata's `k`s**: a run that returns a draw `D` returns as many units as its
 strata's draws sum to. -/
