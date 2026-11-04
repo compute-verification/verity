@@ -18,7 +18,13 @@ in scope).
   committed form's error is `0`: `Compiled.KSReg_fails`, at `δ = 0`.
 
 The lock's `meets` witnesses of these claims are Flock's decoder bounds at its deployed records
-(`Claims.Flock.decoder_meets_plain`, `_zk`), the checkable antecedent `FlockKS` and `FlockKSReg` read at Flock.
+(`Claims.Flock.decoder_meets_plain`, `_zk`), the checkable antecedent `FlockKS` and `FlockKSReg` read at Flock, and
+`twoSessions_meets`: the contract `Compiled.Sessions` holds with two sampled sessions.
+
+* `twoA`: a proof system whose verifier accepts the one empty message, every witness in its relation, at errors `0`.
+* `twoL`: a compiled verifier over `twoA` that samples both proof blocks of a two-input statement (`twoStmt`, partition
+  `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
+  `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
 -/
 
 namespace Claims.Witness.SamplingGeneric
@@ -31,17 +37,23 @@ open Claims.Witness.Sampling (NoHash ownLog_noHash noHash_bind noHash_waitAccC n
 
 /-! ## The toy instances -/
 
-/-- The proof system whose verifier accepts after one round, whose relation is empty and whose extractor gives up, at
-errors `0`. -/
-noncomputable def toyA (Coin : Type) : Arg Coin where
+/-- The proof system whose verifier accepts after one round, whose relation is empty and whose extractor makes no wait,
+at errors `0`. -/
+def toyA (Coin : Type) : Arg Coin where
   Sh := Unit
   shape _ := ()
   V := accV Coin
   rounds _ := 1
+  wf _ := rfl
   W := Unit
   R _ _ := False
-  EC _ := Unit
-  ext _ _ _ := .ret none
+  Op := Unit
+  opens _ := []
+  assemble _ _ := (none, 0)
+  check _ _ := false
+  waits _ := 0
+  k _ := 0
+  cap _ := 0
   κ _ := 0
   γ _ := 0
 
@@ -292,6 +304,284 @@ theorem compiledKSReg_fails (H : Msg → Msg) : ¬ (sksL Coin).KSReg H := by
   norm_num at h2
 
 end Claims
+
+/-! ## Two sampled sessions meet the contract -/
+
+/-- Two input gates, both returned. -/
+def twoProg : Claims.Sampling.Prog := ⟨[.input, .input], [0, 1]⟩
+
+/-- The program, drawn `all`. -/
+def twoStmt : AuditStatement := ⟨[], twoProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
+
+/-- One class of one stratum of two proof blocks, `{0}` and `{1}`. -/
+def twoPart : Claims.Sampling.Partition := ⟨[[[[0], [1]]]]⟩
+
+/-- The commitment whose openings of `true` pass and of `false` fail, with no call: two openings that pass open one
+value, so it binds at every hash. -/
+def trueCm : Claims.Sampling.CommitmentScheme Bool := ⟨fun _ o => .ret o.val, fun _ _ _ => []⟩
+
+/-- A session's decision on the prover's messages: accept the one empty message. -/
+def sesOut (as : List Msg) : Out := if as = [[]] then .acc else .rej
+
+/-- The sessions' verifier: one round, accepting the empty message, with no call. -/
+def sesV (Coin : Type) : Verifier Coin := ⟨fun _ => 1, fun _ as _ => .ret (sesOut as)⟩
+
+/-- The compiled verifier: two rounds, session `u`'s at round `u`, accepting when both messages are empty. -/
+def twoV (Coin : Type) : Verifier Coin :=
+  ⟨fun _ => 2, fun _ as _ => .ret (if as.length < 2 then .msg [] else if as = [[], []] then .acc else .rej)⟩
+
+/-- The proof system the sessions run: `sesV`, every witness in the relation, at errors `0`; its extractor waits for
+no accepted rerun and assembles the witness. -/
+def twoA (Coin : Type) : Arg Coin where
+  Sh := Unit
+  shape _ := ()
+  V := sesV Coin
+  rounds _ := 1
+  wf _ := rfl
+  W := Unit
+  R _ _ := True
+  Op := Unit
+  opens _ := []
+  assemble _ _ := (some (), 0)
+  check _ _ := true
+  waits _ := 1
+  k _ := 0
+  cap _ := 1
+  κ _ := 0
+  γ _ := 0
+
+/-- Session `u` of a run of `twoV`: the run's `u`-th message, decided as `sesV` decides it. -/
+def twoSession (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
+  v.msgs[u]?.map fun m => ([], ⟨[(m.1, sesOut [m.1])], sesOut [m.1]⟩)
+
+/-- The compiled verifier over `twoA` that samples both proof blocks, block `u`'s session at round `u`, under
+`trueCm`, a session's witness revealing its block's input as `true`. -/
+def twoL (Coin : Type) : Compiled Coin (twoA Coin) where
+  V := twoV Coin
+  parse _ := some twoStmt
+  scopeCheck _ := true
+  partition _ := some twoPart
+  commit := trueCm
+  stage2 _ := Finset.univ
+  checked _ _ := [0, 1]
+  sh _ _ := ()
+  κb _ _ := 0
+  γb _ _ := 0
+  rounds _ u := if h : u < 2 then {⟨u, h⟩} else ∅
+  session _ u v := twoSession u v
+  iroots _ _ _ := []
+  reveal s u _ _ := [(s.roots, ⟨u, true, []⟩)]
+  openCalls _ := 0
+  Tape := Unit
+  P _ := silentP
+  δc _ _ := 0
+
+section Two
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+/-- A prover's history against `twoV` before round `u`: none before round `0`, its first message before round `1`. -/
+def twoHist (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : ℕ → List (Msg × Msg)
+  | 0 => []
+  | _ + 1 => [(((P.next x [] ω).eval H).1, [])]
+
+/-- Its message at round `u`. -/
+def twoMsg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) : Msg :=
+  ((P.next x (twoHist H P x ω u) ω).eval H).1
+
+/-- Session `u`'s prover: the prover at its history before round `u`. -/
+def twoP (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) : Prover Unit :=
+  ⟨fun _ _ _ => P.next x (twoHist H P x ω u) ω⟩
+
+/-- `twoV`'s decision on two messages. -/
+def twoOut (a b : Msg) : Out := if [a, b] = [[], []] then .acc else .rej
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem twoL_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((twoL Coin).V.k x) → Coin) :
+    (run H P (twoL Coin).V x ω r).seen =
+      ⟨[(twoMsg H P x ω 0, .msg []), (twoMsg H P x ω 1, twoOut (twoMsg H P x ω 0) (twoMsg H P x ω 1))],
+        twoOut (twoMsg H P x ω 0) (twoMsg H P x ω 1)⟩ := by
+  by_cases h : [twoMsg H P x ω 0, twoMsg H P x ω 1] = [[], []]
+  · simp only [twoMsg, twoHist] at h ⊢
+    simp [run, twoL, twoV, stepWith, OC.eval, Trace.seen, twoOut, h]
+  · simp only [twoMsg, twoHist] at h ⊢
+    simp [run, twoL, twoV, stepWith, OC.eval, Trace.seen, twoOut, h]
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem twoA_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) (xS : Msg)
+    (ρ : Fin ((twoA Coin).V.k xS) → Coin) :
+    (run H (twoP H P x ω u) (twoA Coin).V xS () ρ).seen =
+        ⟨[(twoMsg H P x ω u, sesOut [twoMsg H P x ω u])], sesOut [twoMsg H P x ω u]⟩ ∧
+      (run H (twoP H P x ω u) (twoA Coin).V xS () ρ).vLog = [] := by
+  by_cases h : [twoMsg H P x ω u] = [[]]
+  · simp only [twoMsg] at h ⊢
+    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Trace.seen, sesOut, h]
+  · simp only [twoMsg] at h ⊢
+    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Trace.seen, sesOut, h]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem twoL_parse {x : Msg} {s : AuditStatement} (h : (twoL Coin).parse x = some s) : s = twoStmt :=
+  (Option.some.inj h).symm
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem twoL_partition {s : AuditStatement} {P : Claims.Sampling.Partition} (h : (twoL Coin).partition s = some P) : P = twoPart :=
+  (Option.some.inj h).symm
+
+theorem twoPart_blocks : twoPart.blocks = [[0], [1]] := rfl
+
+/-- The toy is in the sampling scope. -/
+theorem inScope_two : Claims.Sampling.InScope twoPart twoStmt := by
+  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
+    ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_⟩
+  · rcases g with _ | _ | g
+    · simp [twoStmt, twoProg] at hx
+      subst hx
+      simp [Claims.Sampling.BGate.reads] at hi
+    · simp [twoStmt, twoProg] at hx
+      subst hx
+      simp [Claims.Sampling.BGate.reads] at hi
+    · simp [twoStmt, twoProg] at hx
+  · refine ⟨rfl, ?_⟩
+    simp [twoStmt, twoPart, Claims.Sampling.OneStage.WellFormed]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem twoL_scope (x : Msg) : (twoL Coin).Scope x := ⟨twoStmt, twoPart, rfl, rfl, inScope_two⟩
+
+theorem two_Pa (B : Finset ℕ) :
+    twoStmt.design.Pa twoPart B = if Claims.Sampling.window 0 2 B = ∅ then 1 else 0 := by
+  simp [Claims.Sampling.Design.Pa, twoStmt, twoPart, Claims.Sampling.classesPa, Claims.Sampling.OneStage.Pa]
+
+theorem two_Pa_nonneg (B : Finset ℕ) : 0 ≤ twoStmt.design.Pa twoPart B := by
+  rw [two_Pa]
+  split_ifs <;> norm_num
+
+/-- Block `u` is correct where its input's value is committed. -/
+theorem two_correct {u : ℕ} (hu : u < 2) (val : ℕ → Option Bool) (ι : ℕ → Bool) (hv : val u = some true) :
+    twoProg.Correct (twoProg.refIn [u] val ι) [u] := by
+  intro g hg
+  rw [List.mem_singleton] at hg
+  subst hg
+  have hb : twoProg.Boundary [g] g = true := by
+    interval_cases g <;> decide
+  have hg : twoProg.gates[g]? = some .input := by
+    interval_cases g <;> rfl
+  have hr : twoProg.refIn [g] val ι g = some true := by
+    simp [Claims.Sampling.Prog.refIn, hb, hv]
+  refine ⟨fun x hx i hi => ?_, fun _ => ⟨true, hr, ?_⟩⟩
+  · rw [hg] at hx
+    cases hx
+    simp [Claims.Sampling.BGate.reads] at hi
+  · rw [Claims.Sampling.Prog.runIn, hg]
+    simpa [Claims.Sampling.BGate.val] using hr
+
+/-- `twoA` is knowledge sound at errors `0`: at an accepted run its extractor assembles the one witness, which is in
+the relation. -/
+theorem twoA_KS (H : Msg → Msg) : (twoA Coin).KS H := by
+  intro x Ω _ _ P
+  have hf : ∀ s : Ω × (Fin ((twoA Coin).V.k x) → Coin) × (twoA Coin).E.C x,
+      ¬ ((run H P (twoA Coin).V x s.1 s.2.1).out = .acc ∧
+        ¬ (twoA Coin).R.ext x ((twoA Coin).E.eval H P x s.1 s.2.1 s.2.2).1) := by
+    rintro s ⟨hacc, hR⟩
+    apply hR
+    have hacc' : (run H P (twoA Coin).V x s.1 s.2.1).seen.out = .acc := hacc
+    have hfin : List.finRange 1 = [(0 : Fin 1)] := rfl
+    simp only [Extractor.eval, Arg.E, Arg.ext, ERep, RP.eval, hacc', if_true]
+    simp [twoA, hfin, firstWait, waitAcc, RP.bind, RP.eval, Rel.ext]
+  have h0 : PrBad H (twoA Coin).V (twoA Coin).R (twoA Coin).E x P = 0 := by
+    unfold PrBad
+    rw [Pr_congr fun s => iff_false_intro (hf s)]
+    exact Pr_false
+  rw [h0]
+  simp [twoA]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem trueCm_binds (H : Msg → Msg) : (twoL Coin).commit.Binds H := by
+  intro roots o o' _ hne ho ho'
+  have h1 : o.val = true := ho
+  have h2 : o'.val = true := ho'
+  exact absurd (h1.trans h2.symm) hne
+
+/-- `twoL` meets the contract at every hash. -/
+theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
+  draws := by
+    intro x s P hs hP _ B hB
+    obtain rfl := twoL_parse hs
+    obtain rfl := twoL_partition hP
+    rw [twoPart_blocks] at hB
+    refine ⟨fun _ => twoStmt.design.Pa twoPart B, fun _ => two_Pa_nonneg B, fun r => ?_, (Ex_const _).le⟩
+    by_cases h0 : B = ∅
+    · subst h0
+      have h1 : twoStmt.design.Pa twoPart ∅ = 1 := by rw [two_Pa]; simp [Claims.Sampling.window]
+      rw [h1]
+      exact Pr_le_one _
+    · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 h0
+      have hv2 := Finset.mem_range.1 (hB hv)
+      have hn : ∀ d : Fin ((twoL Coin).V.k x) → Coin,
+          ¬ ∀ u ∈ (twoL Coin).checked x (forkOn ((twoL Coin).stage2 x) r d), u ∉ B := by
+        intro d hall
+        refine hall v ?_ hv
+        show v ∈ [0, 1]
+        interval_cases v <;> simp
+      rw [Pr_congr fun d => iff_false_intro (hn d), Pr_false]
+      exact two_Pa_nonneg B
+  slots _ _ := le_rfl
+  refuses x _ _ _ _ _ := twoL_scope x
+  interior _ _ _ _ _ _ _ := rfl
+  fixed _ _ _ _ := ⟨Finset.subset_univ _, fun _ => rfl⟩
+  runs := by
+    intro x Ω P ω r u hu
+    have hu2 : u < 2 := by
+      change u ∈ [0, 1] at hu
+      simp at hu
+      omega
+    refine ⟨[], twoP H P x ω u, rfl, le_rfl, le_rfl, ?_, fun r' _ hacc => ?_, fun r' _ => ⟨?_, ?_⟩⟩
+    · show 1 = (if h : u < 2 then ({⟨u, h⟩} : Finset (Fin 2)) else ∅).card
+      rw [dif_pos hu2, Finset.card_singleton]
+    · have ho : twoOut (twoMsg H P x ω 0) (twoMsg H P x ω 1) = .acc :=
+        (congrArg Seen.out (twoL_run H P x ω r')).symm.trans hacc
+      have hm : twoMsg H P x ω 0 = [] ∧ twoMsg H P x ω 1 = [] := by simpa [twoOut] using ho
+      have hs : sesOut [twoMsg H P x ω u] = .acc := by
+        interval_cases u <;> simp [sesOut, hm.1, hm.2]
+      exact (congrArg Seen.out (twoA_run H P x ω u [] ((twoL Coin).coinsOf x u [] r')).1).trans hs
+    · change twoSession u (run H P (twoL Coin).V x ω r').seen = _
+      rw [twoL_run, (twoA_run H P x ω u [] _).1]
+      interval_cases u <;> rfl
+    · intro q hq
+      rw [(twoA_run H P x ω u [] _).2] at hq
+      cases hq
+  opens := by
+    intro x s P Ω Pv ω r u xS vS w hs hP _ _ hu _ _
+    obtain rfl := twoL_parse hs
+    obtain rfl := twoL_partition hP
+    have hu2 : u < 2 := by
+      change u ∈ [0, 1] at hu
+      simp at hu
+      omega
+    refine ⟨[u], by rw [twoPart_blocks]; interval_cases u <;> rfl, fun val ι hq => ?_⟩
+    have hv := (hq (twoStmt.roots, ⟨u, true, []⟩) (List.mem_singleton_self _) rfl).1 rfl
+    exact two_correct hu2 val ι hv
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- The silent prover is accepted. -/
+theorem twoL_silent (H : Msg → Msg) (r : Fin ((twoL Coin).V.k []) → Coin) :
+    (run H silentP (twoL Coin).V [] () r).out = .acc := by
+  have h0 : twoMsg H silentP [] () 0 = [] := rfl
+  have h1 : twoMsg H silentP [] () 1 = [] := rfl
+  have ho : (run H silentP (twoL Coin).V [] () r).seen.out = .acc := by
+    rw [twoL_run, h0, h1]
+    simp [twoOut]
+  exact ho
+
+end Two
+
+/-- **Two sampled sessions meet the contract** (`twoL`, at every hash): over a knowledge-sound proof system (`twoA`)
+with a binding commitment, a compiled verifier that samples both proof blocks of a statement in scope, each block's
+session at its own round, meets `Compiled.Sessions`, and the silent prover is accepted. So `CompilerKS`,
+`CompilerKSReg` and `CompilerKSCount` read antecedents that hold with more than one sampled session. -/
+theorem twoSessions_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    (twoA Coin).KS H ∧ (twoL Coin).commit.Binds H ∧ (twoL Coin).Sessions H ∧ (twoL Coin).Scope [] ∧
+      ∀ r, (twoL Coin).checked [] r = [0, 1] ∧ (run H silentP (twoL Coin).V [] () r).out = .acc :=
+  ⟨twoA_KS H, trueCm_binds H, twoL_sessions H, twoL_scope [], fun r => ⟨rfl, twoL_silent H r⟩⟩
 
 end Claims.Witness.SamplingGeneric
 
