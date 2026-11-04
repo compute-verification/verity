@@ -14,13 +14,14 @@ public import Proofs.Flock.ZkAny.RelayReg
 public import Proofs.Flock.ZkAny.RelayStay
 public import Proofs.Flock.ZkAny.RelayRound
 public import Proofs.Flock.ZkAny.RelayFold
+public import Proofs.Flock.ZkAny.RelayMask
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
 before the `Finish` held to the unswitched prover, the deployed relay's release held to the session's schedule, its
 model frames held to the model's messages, what it reads at the model's `Hello` and `Commit` as the model's, its
 release per outcome, read through `ZKOut`, and the loop's frames between a session's requests: each rep's frame
-written by its own rounds and coins alone, its session's entry and salts kept, each round at `placeOf`'s place, and
-the frame its run on the loop's requests to it. -/
+written by its own rounds and coins alone, its session's entry and salts kept, each round at `placeOf`'s place, the
+frame its run on the loop's requests to it, and its masking state the model's but for `stopped`. -/
 
 @[expose] public section
