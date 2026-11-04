@@ -19,7 +19,7 @@ __device__ __forceinline__ uint64_t s512_bswap(uint64_t x) { return sx::bswap64(
 
 __device__ __forceinline__ void s512_iv(uint64_t st[8]) { sx::iv(st); }
 
-__device__ __forceinline__ void s512_compress(uint64_t st[8], uint64_t w[16]) { sx::compress<0, 0>(st, w); }
+__device__ __forceinline__ void s512_compress(uint64_t st[8], uint64_t w[16]) { sx::compress<0, 1>(st, w); }
 
 // the digest's 64 bytes, big-endian words (out 8-byte aligned: tree nodes are at 64-byte strides)
 __device__ __forceinline__ void s512_out(const uint64_t st[8], uint8_t* out) {
