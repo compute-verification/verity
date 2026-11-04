@@ -168,9 +168,9 @@ theorem parse_builds {name : String} {l : HmNets.Laid} {useful : ℕ} {ig og : G
   have hu : useful = l.useful := (Net.ofRows_ok h').2.2.2.1
   exact ConcreteNet.parse_netLs hw (hra.trans hu) (hrb.trans hu) h
 
-theorem sha_tok : ConcreteNet.Tok "sha512x3" := ⟨by decide, by unfold FlockVBridge.Names.NoWs; decide⟩
+theorem sha_tok : ConcreteNet.Tok "sha512x3" := ⟨by decide, by simp [FlockVBridge.Names.NoWs]⟩
 
-theorem hm_tok : ConcreteNet.Tok "hm96" := ⟨by decide, by unfold FlockVBridge.Names.NoWs; decide⟩
+theorem hm_tok : ConcreteNet.Tok "hm96" := ⟨by decide, by simp [FlockVBridge.Names.NoWs]⟩
 
 /-- The verifier's `sha512x3` net, as `FixedNetsBuild` has it build. -/
 def shaNet : Net :=
