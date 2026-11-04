@@ -1,4 +1,4 @@
-"""`research goals`: Daniel's Goals page (the console's /admin/goals), read and written with this agent's Cursor identity.
+"""`research goals`: the Goals page (the console's /admin/goals), read and written with this agent's Cursor identity.
 
   research goals show [--json]               every goal by due date: when, status, title, tags, id, what it waits on
   research goals set ID [--title T] [--status on-track|off-track|done] [--due D] [--owner HANDLE] [--tag T ...]
@@ -8,14 +8,15 @@
   research goals confirm ID                  writes it again unchanged: its owner still stands by it
   research goals done ID                     marks it done
   research goals remove ID
+  research goals priority ID 1|2|3|clear     sets its priority (anyone may), or clears it back to the derived one
   research goals replace FILE.json           the whole page: exactly the goals in FILE (a JSON list)
 
 The plan is one graph of goals. A goal is an outcome with one owner: a one-line title of at most eight words, a due
-date (2026-11-05, the end of that day, or 2026-11-05T10:00-08:00), a status (will it be true by then?), tags from the
+date, a day meaning its end or a time with its offset such as 2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the
 site's fixed list of projects, and a Markdown description of what exactly will be true and where it stands, which never
 restates the fields. A goal nothing waits on is tier 1, a project; a piece of one is tier 2 and any step below it tier
 3; --tier overrides that. What a goal waits on is links only: the narrowest goal that blocks it, due
-before it, or an ask of Daniel's (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
+before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
 --blockers. The site checks every write and answers which field is wrong. --url points the command at another server;
 the token's audience stays the route's.
 """
@@ -54,7 +55,7 @@ class Route:
                 try:
                     message = json.loads(e.read(65536)).get("message")
                 except (ValueError, AttributeError):
-                    message = None
+                    message = "an answer that isn't the site's JSON"
                 raise RouteError(f"{what}: refused: {message or 'a bad request'}", 400) from None
             raise RouteError(route_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -176,7 +177,6 @@ def main(argv: list[str], route: Route | None = None) -> int:
     pr = sub.add_parser("priority", help="set a goal's priority (anyone may), or clear it back to the derived one")
     pr.add_argument("id")
     pr.add_argument("level", choices=["1", "2", "3", "clear"])
-    pr.add_argument("--by", required=True, metavar="LANE", help="your lead's handle, shown as who set it")
     sub.add_parser("replace").add_argument("file")
     ns = p.parse_args(argv)
     route = route or Route(ns.url)
@@ -197,8 +197,8 @@ def main(argv: list[str], route: Route | None = None) -> int:
             print(f"research goals: removed {ns.id}")
             return 0
         if ns.cmd == "priority":
-            route.call({"priority": {"id": ns.id, "priority": None if ns.level == "clear" else int(ns.level)}, "by": ns.by})
-            print(f"research goals: {ns.id}'s priority is {'derived again' if ns.level == 'clear' else ns.level}, set by {ns.by}")
+            route.call({"priority": {"id": ns.id, "priority": None if ns.level == "clear" else int(ns.level)}})
+            print(f"research goals: {ns.id}'s priority is {'derived again' if ns.level == 'clear' else ns.level}, set by this agent")
             return 0
         current = _find(route.call(), ns.id)
         if ns.cmd == "set":

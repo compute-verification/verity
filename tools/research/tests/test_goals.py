@@ -124,10 +124,10 @@ def test_the_command_line_refuses_what_the_site_would(argv):
 
 def test_priority_sets_or_clears_a_goal_s_priority_as_its_own_write():
     fake = Fake([GOAL])
-    assert goals.main(["priority", "demos/both", "1", "--by", "top"], fake) == 0
-    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": 1}, "by": "top"}
-    assert goals.main(["priority", "demos/both", "clear", "--by", "top"], fake) == 0
-    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": None}, "by": "top"}
+    assert goals.main(["priority", "demos/both", "1"], fake) == 0
+    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": 1}}
+    assert goals.main(["priority", "demos/both", "clear"], fake) == 0
+    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": None}}
     stored = GOAL | {"priority": 1, "prioritySet": True, "prioritySetBy": "top", "prioritySetAt": "2026-11-04T21:40:00.000Z"}
     fake = Fake([stored])
     assert goals.main(["set", "demos/both", "--title", "Reworded"], fake) == 0
