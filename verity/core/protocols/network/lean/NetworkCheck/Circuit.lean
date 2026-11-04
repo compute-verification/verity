@@ -16,7 +16,8 @@ of their description (AGENTS.md "Design rules"), never per unit:
   nodes the record's templates in order, each a batch of the record's units, each argument one whole root input node of
   its own (a batch of `Input<w>` gates) mapped over axis 0 at its parameter's leaves, no input node read twice, every
   input gate a template's parameter, and the root returning every template node's outputs, in order. The Program is
-  laid out as C-Flock's decoder lays one out, within its resolution's walk (`NciCheck.Desc`), and topological.
+  laid out as C-Flock's decoder lays one out, within its resolution's walk (`NciCheck.Desc`), and topological, and no
+  two of its definitions share a key (`keysUnique`).
 * **The wires** (`SampledProofs.Wires.check`), with the templates' rows read off their Definitions (`templateOf`,
   `interface.layout`); each wire's reader row is its writer's output field bit for bit, each side in leaves of one
   width, the widths equal or one of them a Boolean-profile port's 1 (`leavesOk`). A writer's leaf is a gate its
@@ -68,13 +69,23 @@ def inputGates (prog : Flock.Program.Prog) : Nat :=
       if d.prim && (Flock.Program.inputId? d.key).isSome then x.members * SampledProofs.Bits.defWidth d else 0
     | none => 0) 0
 
+/-- No two of the Program's definitions share a key. -/
+def keysUnique (P : Flock.Program.Prog) : Bool :=
+  (P.defs.foldl (fun (seen, ok) d => (seen.insert d.key (), ok && !seen.contains d.key))
+    (({} : Std.HashMap String Unit), true)).2
+
+#guard keysUnique { defs := #[{ (default : Flock.Program.Defn) with key := "A_v1" },
+    { (default : Flock.Program.Defn) with key := "B_v1" }], index := {}, root := 0, programFn := "", sha512 := .empty } &&
+  !keysUnique { defs := #[{ (default : Flock.Program.Defn) with key := "A_v1" },
+    { (default : Flock.Program.Defn) with key := "A_v1" }], index := {}, root := 0, programFn := "", sha512 := .empty }
+
 end NetworkCheck.Period
 
 namespace NetworkCheck.Circuit
 
 open Lean (Json toJson)
 open Flock.Program (Prog Defn Ty)
-open NetworkCheck.Period (isStr templateNodes inputArg inputGates)
+open NetworkCheck.Period (isStr templateNodes inputArg inputGates keysUnique)
 open SampledProofs.Bits (bitsOf fieldsOf)
 
 abbrev Wire := SampledProofs.Wires.Wire
@@ -666,7 +677,8 @@ def refusalWhy (e : SampledProofs.Wires.Refusal) : String :=
     | some i => s!" (wire {i})"
     | none => ""
 
-/-- **The circuit record's checks**: record `record` read against Program `P` (`recordOf`) is its population program
+/-- **The circuit record's checks**: no two of Program `P`'s definitions share a key (`keysUnique`), so a lookup by key
+reads the one definition; record `record` read against `P` (`recordOf`) is its population program
 (`populationOk`); its wires pass `SampledProofs.Wires.check`, each reader row its writer's output field bit for bit
 (`leavesOk`); its declarations are well formed and fill no row a
 wire or another declaration fills (`declRects`, `apart`); and `order` ranks every wire's writers below its readers
@@ -674,6 +686,8 @@ wire or another declaration fills (`declRects`, `apart`); and `order` ranks ever
 writers below its readers, so it ends at a computed gate or a free or registered input. On acceptance, the record as
 read against `P` and its wires' summary, which `countsOf` counts at any held parameters (`check`). -/
 def checked (P : Prog) (record order : Json) : Except String (Stated × SampledProofs.Wires.Summary) := do
+  unless keysUnique P do
+    throw "the Program has two definitions of one key, which a lookup by key reads as one"
   let r ← recordOf P record
   unless populationOk P r do
     throw "the Program is not the record's population program: its root template nodes the record's templates, each a \
@@ -700,6 +714,13 @@ registered parameters the verifier pinned whose window root the audit's registra
 def check (P : Prog) (record order pins : Json) : Except String Counts := do
   let (r, s) ← checked P record order
   pure (countsOf r s (← heldOf pins))
+
+/- A decoded Program's keys are its descriptor's `definitions` keys, so none repeats; a Program built with one twice is
+refused before its record is read. -/
+#guard match checked { defs := #[{ (default : Defn) with key := "A_v1" }, { (default : Defn) with key := "A_v1" }],
+    index := {}, root := 0, programFn := "", sha512 := .empty } .null .null with
+  | .error e => e == "the Program has two definitions of one key, which a lookup by key reads as one"
+  | .ok _ => false
 
 /-- The circuit record's digest, `interface.circuit_bytes`: SHA-512 of its canonical JSON and a newline, in hex. -/
 def digest (record : Json) : Except String String := do

@@ -940,16 +940,6 @@ def readsEntriesFn (j : Json) : Except String Json := do
   return .bool (readsEntries x (← Flock.J.nat j "o" ctx) (← Flock.J.nat j "t0" ctx) (← Flock.J.nat j "every" ctx)
     (← Flock.J.nat j "E" ctx) ks)
 
-/-- No two of the Program's definitions share a key. -/
-def keysUnique (P : Flock.Program.Prog) : Bool :=
-  (P.defs.foldl (fun (seen, ok) d => (seen.insert d.key (), ok && !seen.contains d.key))
-    (({} : Std.HashMap String Unit), true)).2
-
-#guard keysUnique { defs := #[{ (default : Flock.Program.Defn) with key := "A_v1" },
-    { (default : Flock.Program.Defn) with key := "B_v1" }], index := {}, root := 0, programFn := "", sha512 := .empty } &&
-  !keysUnique { defs := #[{ (default : Flock.Program.Defn) with key := "A_v1" },
-    { (default : Flock.Program.Defn) with key := "A_v1" }], index := {}, root := 0, programFn := "", sha512 := .empty }
-
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
 registered Program (`program`, its SHA-512), with no two definitions of one key (`keysUnique`) and no template keyed
 as an input (`Flock.Program.isInputId`), so the template query (`Flock.TemplateQuery.evaluate`, which finds a
