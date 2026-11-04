@@ -95,11 +95,12 @@ PouwCheck).
 
 ``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
-that document gives them, the epoch's ``DIR/coins.json``, that document's draws, and the verifier's coin record it wrote
-(``DIR/coin.json``), which pins the Lean's source to the Python's (`lean_argv`, the one place the Lean's command line is
-written). It holds the Lean's printout to the Python's verdict on every field both give (`LEAN_HELD`: the verdict, its
-reason and refusal, the run's commitment and source, each opened tile's verdict, and an accepted run's work), and to the
-same W where the Lean names one. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
+that document gives them, the epoch's ``DIR/coins.json``, that document's draws, the verifier's coin record it wrote
+(``DIR/coin.json``), which pins the Lean's source to the Python's, the W ``verify --tie`` held the passes to, and, on a live
+session's coins, ``--of-record``, under which the Lean takes only a challenger draw (`lean_argv`, the one place the Lean's
+command line is written). It holds the Lean's printout to the Python's verdict on every field both give (`LEAN_HELD`: the
+verdict, its reason and refusal, the run's commitment and source, each opened tile's verdict, and an accepted run's work),
+and its ``tie`` to the Python's: the same W, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
 printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
 line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
@@ -555,11 +556,15 @@ def arm(args: argparse.Namespace) -> int:
     return 0
 
 
-def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None) -> list[str]:
+def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
+              of_record: bool = False) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
-    the draws and the verifier's coin record, which pins the Lean's source to the one the Python drew (PR #7221's
-    ``--coins COINS --draws T --record RECORD MANIFEST...``). W (`tie`) is not passed: #7221's executable takes none yet."""
-    return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), *map(str, manifests)]
+    the draws and the verifier's coin record, which pins the Lean's source to the one the Python drew, the window record W
+    (`tie`) the passes are held to where there is one, and ``--of-record`` (`of_record`, a run on a live session's coins),
+    under which the Lean takes only a challenger draw: ``--coins COINS --draws T --record RECORD [--tie W] [--of-record]
+    MANIFEST...``."""
+    return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record),
+            *(["--tie", str(tie)] if tie is not None else []), *(["--of-record"] if of_record else []), *map(str, manifests)]
 
 
 def lean_answer(got: dict) -> dict:
@@ -614,8 +619,12 @@ def lean(args: argparse.Namespace) -> int:
     if not exe.is_file():
         return done(f"no Lean executable at {exe}", 2)
     rec["exe_sha256"] = hashlib.sha256(exe.read_bytes()).hexdigest()
+    try:
+        live = isinstance(VR.epoch_coins(passes / "coins.json"), VR.LiveCommitment)
+    except (OSError, TypeError, ValueError) as e:
+        return done(f"the epoch's coins can't be read: {type(e).__name__}: {e}", 2)
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
-                            Path(doc["tie_record"]) if doc.get("tie_record") else None)
+                            Path(doc["tie_record"]) if doc.get("tie_record") else None, of_record=live)
     try:
         p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
@@ -635,7 +644,7 @@ def lean(args: argparse.Namespace) -> int:
     if got.get("drawn") not in (None, doc["draws"]):
         differ.append("drawn")
     tie = answer["tie"]
-    if tie is not None and (not isinstance(tie, dict) or tie.get("record") != (doc.get("tie") or {}).get("record")):
+    if (tie is not None and not isinstance(tie, dict)) or (tie or {}).get("record") != (doc.get("tie") or {}).get("record"):
         differ.append("tie")
     rec["differ"] = differ
     if differ:

@@ -8,11 +8,11 @@ H100 record's -h3 scheme at k = 128 in 16 x 16 tiles), the commands after it the
 fixed, and ``lean``, which writes the Lean's answer to the piece's ``pearlplus-lean.json`` only where it is the Python's.
 
 The compose's earlier conditions (the live salt session, the lane's period and reserve, the live draw and its published
-coin, the window's registration) are `test_served_verdicts._pearlplus_piece`'s stand-ins, since #7221's executable takes
-no live coins; Pearl+'s answer, W and the Lean's answer are this run's. The row then reaches the Lean condition and reads
-the Lean's answer: without one it names none; with it, it is PoUW's verdict of record with the Lean's work where the
-Lean holds the passes to W, and else names the Lean's W, the condition after its run, source and verdict (#7221's head
-prints no W yet).
+coin, the window's registration) are `test_served_verdicts._pearlplus_piece`'s stand-ins, since this toy's coins are an
+in-process challenger's and its draw the node's (a live run is `pearlplus_local_e2e.py`'s); Pearl+'s answer, W and the
+Lean's answer are this run's. The Lean is given W (``--tie W``) and holds the passes to it, the warm-up's round among
+the coin record's dropped. The row then reaches the Lean condition and reads the Lean's answer: without one it names
+none; with it, it is PoUW's verdict of record with the Lean's work and W.
 
 What it catches that the pouw suite's stand-in tests can't: #7221's command line and printout as they are, so a head that
 changes either fails here."""
@@ -78,9 +78,10 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
                   str(node / S.PEARLPLUS_LEAN)])
     check = json.loads((node / SP.LEAN_CHECK).read_text())
     assert rc == 0 and check["differ"] == [] and check["reason"] is None, check
-    assert check["argv"][-2:] == [str(a), str(b)] and check["lean"]["drawn"] in (None, 16)
+    assert check["argv"][-4:] == ["--tie", str(wfile), str(a), str(b)] and check["lean"]["drawn"] in (None, 16)
     lean = json.loads((node / S.PEARLPLUS_LEAN).read_text())
     assert (lean["verdict"], lean["commitment"], lean["source"]) == ("accept", answer["commitment"], SOURCE.hex())
+    assert lean["tie"] == answer["public"]["tie"] and lean["tie"]["record"] == w
     assert lean["work"] == answer["public"]["work"] and len(lean["verdicts"]) > 16
 
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -103,11 +104,6 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     assert before["verdict"] == "missing" and f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]
     shutil.copyfile(node / S.PEARLPLUS_LEAN, piece / S.PEARLPLUS_LEAN)
     got = row()
-    if (lean.get("tie") or {}).get("record") == w:
-        assert (got["protocol"], got["verdict"], got["commitment"]) == (S.PEARLPLUS_PROTOCOL, "accept", answer["commitment"])
-        assert got["quantity"]["work"] == {k: lean["work"][k] for k in ("credited", "credited_tiles", "macs", "rho", "epsilon")}
-        assert got["answer"]["profile"]["lean"]["tie"]["record"] == w
-    else:
-        assert (got["verdict"], got["development"]["piece"]) == ("missing", "pearlplus"), got
-        assert got["why"].startswith(f"{S.DEV_VERDICT}: the Lean verdict doesn't hold the passes to Pearl+'s window "
-                                     f"record W {w[:16]}..."), got["why"]
+    assert (got["protocol"], got["verdict"], got["commitment"]) == (S.PEARLPLUS_PROTOCOL, "accept", answer["commitment"]), got
+    assert got["quantity"]["work"] == {k: lean["work"][k] for k in ("credited", "credited_tiles", "macs", "rho", "epsilon")}
+    assert got["answer"]["profile"]["lean"]["tie"]["record"] == w

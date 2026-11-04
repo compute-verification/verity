@@ -2,9 +2,10 @@
 records its command line and prints what a test gives it) over a served run ``verify`` judged: two honest passes of one
 epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 draws on the node's draw, its coins fixed.
 
-The step runs the executable on the passes that run's document names, the epoch's coins, its draws and its coin record
-(PR #7221's command line), and writes the Lean's answer, W at ``tie``, only where the Lean's printout is the Python's on
-every field #7221's difftest holds (`LEAN_HELD`), its ``drawn`` the draws and its W, where it names one, the Python's.
+The step runs the executable on the passes that run's document names, the epoch's coins, its draws, its coin record, the W
+``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and writes the Lean's
+answer, W at ``tie``, only where the Lean's printout is the Python's on every field #7221's difftest holds (`LEAN_HELD`),
+its ``drawn`` the draws and its W the Python's (or none on both).
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
 check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``."""
@@ -126,6 +127,32 @@ def test_the_lean_verdicts_w_is_the_answers_tie_and_must_be_the_pythons(run, tmp
         assert rc == 0 and answer["tie"]["record"] == W, kw
     rc, answer, check = lean(tmp_path, verify, d, stub(tmp_path, printout(doc, tie=W), 0))
     assert (rc, answer, check["differ"]) == (2, None, ["tie"])
+    rc, answer, check = lean(tmp_path, v, d, stub(tmp_path, printout(doc), 0))
+    assert (rc, answer, check["differ"]) == (2, None, ["tie"])
+
+
+def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(run, tmp_path):
+    """The W ``verify --tie`` named goes to the Lean as ``--tie W``, and a run on a live session's coins (``coins.json`` of
+    `window.LIVE_SCHEME`) adds ``--of-record``; both before the passes, which stay last."""
+    import shutil
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    d, verify, doc = run
+    (wfile := tmp_path / "w.json").write_text("{}")
+    (v := tmp_path / "verify.json").write_text(json.dumps({**doc, "tie_record": str(wfile), "tie": {"record": W}}))
+    exe = stub(tmp_path, printout(doc, tie={"record": W, "tables": 8}), 0)
+    passes = [str(Path(p["manifest"])) for p in json.loads((d / "served.json").read_text())["passes"]]
+    rc, _answer, check = lean(tmp_path, v, d, exe)
+    head = [str(exe), "--coins", str(d / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN)]
+    assert rc == 0 and check["argv"] == [*head, "--tie", str(wfile), *passes]
+    (live := tmp_path / "live").mkdir()
+    shutil.copytree(d, live, dirs_exist_ok=True)
+    coins = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, lambda n: b"\1" * n).commitment
+    (live / "coins.json").write_text(json.dumps(coins.to_json()))
+    rc, _answer, check = lean(tmp_path, v, live, exe)
+    head = [str(exe), "--coins", str(live / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN)]
+    assert check["argv"] == [*head, "--tie", str(wfile), "--of-record", *passes]
 
 
 def test_an_agreeing_rejection_is_written_and_the_lean_exit_code_must_be_its_verdicts(run, tmp_path):
