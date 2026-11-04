@@ -1,6 +1,8 @@
-import Mathlib.Data.Fintype.BigOperators
-import Proofs.Pouw.Dimension.H100WProofs
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Proofs.Pouw.Dimension.H100WProofs
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
 
 /-!
 # Proofs of H-1T's γ corollary
@@ -10,6 +12,8 @@ otherwise fixed joint salt (`place`) recovers unit `u`'s word on `s`, and leaves
 credited words of different units that are equal are then both constant, and a word equal to a free value is constant
 or a raw XOF word of its own unit: `DistinctLiveH1T` excludes all three. The bound is `distinctLiveMH100` at `ε = 0`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 

@@ -2,8 +2,14 @@
 The byte tags of the circuit statement (PROTOCOL.md §16.5), as a parameter: every string here is hashed into Σ or the
 statement digest, or matched byte for byte against the pinned files, so each version of the circuit prover's statement is one value.
 -/
-import Lean.Data.Json
-import Flock.Hm96
+module
+
+public import Lean.Data.Json
+public import Flock.Hm96
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

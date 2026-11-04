@@ -1,12 +1,16 @@
-import Definitions.Pouw.NCP.Protocol
-import Definitions.Pouw.NCP.Witness
-import Definitions.Pouw.Assumptions.NCP.Assumptions
-import Definitions.Pouw.Barrier.Defs
-import Definitions.Pouw.Game.Params
+module
+
+public import Definitions.Pouw.NCP.Protocol
+public import Definitions.Pouw.NCP.Witness
+public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Definitions.Pouw.Barrier.Defs
+public import Definitions.Pouw.Game.Params
 
 /-!
 # NCP's game instance: pinned statements (trusted)
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.GamePinned
 

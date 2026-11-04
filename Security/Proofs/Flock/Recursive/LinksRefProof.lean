@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.LinksRef
-import Proofs.Flock.VBridge.RecLink
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.Claims.Recursion.VStarParts
+module
+
+public import Proofs.Flock.Recursive.LinksRef
+public import Proofs.Flock.VBridge.RecLink
+public import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+public import Proofs.Flock.Claims.Recursion.MoreSlots
+public import Proofs.Flock.Claims.Recursion.VStarParts
 
 /-!
 # A link part's unit at each instance: the reference step
@@ -21,6 +23,8 @@ import Proofs.Flock.Claims.Recursion.VStarParts
   (`expected W`, `linkValue_slot`), so the two rows are equal or SHA-512 collides (`linkOut_bind`, `out_or_coll`).
   Two u16 lists with one byte string are equal (`bytesOf_inj`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 

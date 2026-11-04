@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Layout
-import Proofs.Flock.Soundness.Audit.FlockLinked
+module
+
+public import Proofs.Flock.Soundness.Binding.Layout
+public import Proofs.Flock.Soundness.Audit.FlockLinked
 
 /-!
 # The decoder's bits, read at fixed addresses
@@ -19,6 +21,8 @@ one fact per column:
 `rowAt` and `saltAt` are arguments that depend on the draw, the registration, the unit and the commit string only: the
 readers are fixed before the witness is (a reader that chose its values would discharge nothing).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

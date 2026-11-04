@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
 
 /-!
 # `A1_cost` in the closed scalar pipe (trusted statements)
@@ -24,6 +26,8 @@ pipe whose outputs include `|S|` non-final checked words has at least `cÂ·|S| âˆ
 The model's definitions are in `Pouw.Dimension.PipeModel`; `A1_cost`, `A1_cost_quad`, `A1_nonquad` and the lifting's
 `LiftMinRank` and `LiftMinRankL5e` are in the assumptions module `Pouw.Dimension.PipeAssumptions`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

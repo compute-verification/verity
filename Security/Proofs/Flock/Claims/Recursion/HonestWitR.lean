@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployHonest
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployHonest
 
 /-!
 # Recursion completeness on the honest run, at its own statement
@@ -15,6 +17,8 @@ consequence of the run accepting:
 `vstar_complete_run_setup_at` is `vstar_complete_run_setup` at the run, from those two, with no inner-acceptance
 hypothesis: `InnerAccepts` was read only by the two builder facts.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.RateAudit.Sketch
+module
+
+public import Mathlib
+public import Proofs.Accounting.RateAudit.Sketch
 
 /-!
 # Signs of rank `r`: the tensor-core sketch's fiber is at most `256^(32 − r)`
@@ -10,6 +12,8 @@ hold `rank` independent ones (`exists_linearIndependent'`); two such contents th
 them too, so the contents of a fiber are told apart by their other `32 − rank` bytes (`card_fiber_le`). The guarantees
 are `Accounting.SecurityProofs.SketchRankFiber` and `RateAuditTensorSketchRank`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

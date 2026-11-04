@@ -7,11 +7,17 @@ the callees, each definition's form and nodes (form, callee, members), and the r
 be a `call` or `batch` of a listed template (matched by the descriptor id written in the program's bytes); each call is one unit
 and each batch member one unit, in node then member order; every listed template has at least one unit; no width rule.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.Program
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.Program
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.TemplateQuery
 

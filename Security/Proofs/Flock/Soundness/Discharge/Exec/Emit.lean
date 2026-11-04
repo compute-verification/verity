@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.Soundness.Refine.Frames
 
 /-!
 # The frames a run emits (R11b)
@@ -15,6 +17,8 @@ round: the round retained the pending bytes and the squeeze's header, when the s
 * The transcript's steps (`label_emitted`, `absorbF_emitted`, …, `squeeze_emitted`, `sample_emitted`) and loops
   (`forIn_emitted`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

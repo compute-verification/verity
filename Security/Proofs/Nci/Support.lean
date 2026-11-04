@@ -1,4 +1,6 @@
-import Proofs.Nci.Chain
+module
+
+public import Proofs.Nci.Chain
 
 /-!
 # Incompressibility in support form gives the draft's
@@ -11,6 +13,8 @@ between `novelReads(R)` and `novelReads(R) + b_w + b_a` (`exists_charge_window`)
 subset's charge by `novelReads(R)`, a contradiction: `activationsIncompressible_of_support`. With it, the reads Lemmas
 1 and 2 give (`iu_reads`) rest on support form (`IuReads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

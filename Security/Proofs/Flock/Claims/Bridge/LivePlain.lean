@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.LiveZk
-import Proofs.Flock.Soundness.Discharge.Tables.Session
+module
+
+public import Proofs.Flock.Claims.Bridge.LiveZk
+public import Proofs.Flock.Soundness.Discharge.Tables.Session
 
 /-!
 # The live plain session decided by flock-verify, and the old salted transfer
@@ -17,6 +19,8 @@ the outcome is written as, every SHA-512 call of the verdict an oracle query (`H
 
 As in `LiveZk`, the setup reads `setupOf`'s pure SHA-512, a function of what the verifier reads.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.LivePlain
 

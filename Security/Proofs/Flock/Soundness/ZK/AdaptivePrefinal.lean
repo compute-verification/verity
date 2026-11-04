@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ZK.Refusal
-import Proofs.Flock.Soundness.ZK.Adaptivity
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.Refusal
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Zero knowledge: Lemma C, the pre-final views against an adaptive verifier
@@ -30,6 +32,8 @@ messages on witness `w`, randomness `ω` and the leaves it commits; and in world
 tables' randomness read from `(ω, U)` through a map `e c` with fibers of one size (the tables at `c`'s coins open
 coin-dependent positions, so their randomness types vary with `c`, and `e c` keeps the part they read).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

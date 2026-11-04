@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
-import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
-import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
 /-!
 # One sampled session with registered reads, without `--zk`
@@ -11,3 +13,5 @@ file. `Checked`: the registered check at an accepted hidden-output outcome of on
 unit's layout (`checked_of_acceptsRH`) and the template instance's (`checked_of_acceptsRHI`). The headlines over what
 the verifier accepts are `FailClosed.PlainRegistered`'s.
 -/
+
+@[expose] public section

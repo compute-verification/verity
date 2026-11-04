@@ -1,6 +1,8 @@
-import Definitions.Nci.Assumptions
-import Definitions.Core.Partition
-import Definitions.Nci.Reads
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Core.Partition
+public import Definitions.Nci.Reads
 
 /-!
 # The inference-only policy's guarantee in reads form
@@ -11,6 +13,8 @@ and read little, not only one that witnesses compliance, so it applies to divisi
 an actual circuit), where the cap `k` on an inference block's fresh input comes from memory and links rather than from
 the policy.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Capability.Information
-import Definitions.Core.Guarantees.Formalism
+module
+
+public import Definitions.Nci.Assumptions.Capability.Information
+public import Definitions.Core.Guarantees.Formalism
 
 /-!
 # Local bounds: budgets, from information
@@ -12,6 +14,8 @@ information premise into a **budget** on what every block holds, the form the st
 * `StatHeldBudget`: statistical, by counting views: `k + Λ`, with no decoder and no time budget.
 * `RecoveredBudget`: from a recoverable hard source, a budget on a block's eligible outputs.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

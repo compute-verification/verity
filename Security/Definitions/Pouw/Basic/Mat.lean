@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Ring.Int
-import Mathlib.Data.Int.Basic
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.Ring.Int
+public import Mathlib.Data.Int.Basic
 
 /-!
 # Integer matrices, ranges and int32 arithmetic (trusted)
@@ -10,6 +12,8 @@ dimension, and every correctness check ranges over the unit's rows and columns. 
 the honest reference's int32 arithmetic is modelled by `wrap32` (two's-complement wraparound) after every
 multiply-add and every addition.
 -/
+
+@[expose] public section
 
 namespace Pouw
 
