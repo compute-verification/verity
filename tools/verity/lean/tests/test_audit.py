@@ -2903,10 +2903,14 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
     there, owned by the owner of the guarantees that read them. A named assumption is declared in `assumptions_module`,
-    a module the build has: one declared elsewhere fails until a person moves it or lists it as open, and one premise
-    listed under both kinds fails."""
+    a module the build or a package it requires has (`Security/Properties` names `Security`'s, which none of its modules
+    may import): one declared elsewhere fails until a person moves it or lists it as open, and one premise listed under
+    both kinds fails."""
     assert [x.code for x in A.judge({**POLICY, "assumptions_module": "P.Nowhere"}, facts(), FILES, update=True)[0]] == [
         "assumptions.module", "open.unlisted"]
+    assert "assumptions.module" not in [x.code for x in A.judge({**POLICY, "assumptions_module": "P.Nowhere"},
+                                                                facts() | {"source_modules": ["P.Nowhere"]}, FILES,
+                                                                update=True)[0]]
     pol = recorded()
     assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},

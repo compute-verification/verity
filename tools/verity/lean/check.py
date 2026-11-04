@@ -1352,9 +1352,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
     if (home := policy.get("assumptions_module")) is not None and home not in set(facts["modules"]) | set(
-            facts.get("graph") or {}):
-        fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which the "
-                             f"build has no module of; name the one module the named assumptions are declared in"))
+            facts.get("graph") or {}) | set(facts.get("source_modules") or ()):
+        fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
+                             f"neither the build nor the packages it requires has a module of; name the one module the "
+                             f"named assumptions are declared in"))
     kept, premised, unfolds, recorded, compared, listed, homes = {}, {}, {}, set(), set(), listed_premises(policy), {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
@@ -3852,6 +3853,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         except ValueError as e:
             rep["failures"].append(Failure("lift", None, f"lift: {e}"))
         return reported(rep)
+    facts["source_modules"] = sorted(module_files(pkg))
     fails, new = judge(current, facts, files, update, owner)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
