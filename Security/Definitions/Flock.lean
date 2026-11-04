@@ -26,6 +26,7 @@ import Definitions.Flock.Compiled
 import Definitions.Flock.HoloCompiled
 import Definitions.Flock.Game.Lock
 import Definitions.Flock.Game.Seq
+import Definitions.Flock.Game.Tape
 import Definitions.Flock.Game.Prob
 import Definitions.Flock.Game.Batch
 import Definitions.Flock.ZK.Table
