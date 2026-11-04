@@ -79,17 +79,15 @@ section Arrays
 variable {α : Type} [Inhabited α]
 
 theorem singleton_get (x : α) : (#[x])[0]! = x := by
-  first
-    | (simp; done)
-    | (rw [getElem!_pos #[x] 0 (by simp)]; rfl)
+  simp
 
 theorem push_get (s : Array α) (o : α) (q : ℕ) (hq : q ≤ s.size) :
     (s.push o)[q]! = if q = s.size then o else s[q]! := by
   by_cases h : q = s.size
   · subst h
-    rw [if_pos rfl, getElem!_pos (s.push o) s.size (by simp)]
+    rw [ite_eq_left rfl, getElem!_pos (s.push o) s.size (by simp)]
     exact Array.getElem_push_eq
-  · rw [if_neg h, getElem!_pos (s.push o) q (by simp; omega), getElem!_pos s q (by omega)]
+  · rw [ite_eq_right h, getElem!_pos (s.push o) q (by simp; omega), getElem!_pos s q (by omega)]
     exact Array.getElem_push_lt (by omega)
 
 theorem rev_get (xs : Array α) (g : ℕ) (hg : g < xs.size) : xs.reverse[g]! = xs[xs.size - 1 - g]! := by
@@ -116,10 +114,7 @@ theorem step_ok {w : ℕ} {a b : List ℕ} {d : ℕ} (h : Rule.step w a b = .ok 
 theorem groupStepTotal_nan (wd : ℕ) (ze : ℤ) (acc : Value) (ps : List Value)
     (h : (acc :: ps).any Value.isNaN = true) : groupStepTotal wd ze acc ps = .nan := by
   unfold groupStepTotal
-  first
-    | (simp only [h, ↓reduceIte]; done)
-    | exact if_pos h
-    | simp [h]
+  simp only [h, ↓reduceIte]
 
 /-- An atom with a NaN code steps every word to NaN, whose exponent field is 255. -/
 theorem step_nan (w : ℕ) (x : AtomIn) (hx : ¬ Freeze.FiniteAtom x) : Skip.step w x = 0x7FFFFFFF := by
@@ -137,7 +132,8 @@ theorem step_nan (w : ℕ) (x : AtomIn) (hx : ¬ Freeze.FiniteAtom x) : Skip.ste
     · rcases hl with h | h <;> simp [productTotal, h, Value.isNaN]
   show packValue (groupStepTotal 14 (-139) (fp32Value w)
     ((((List.ofFn x.1).zip (List.ofFn x.2)).take 32).map fun c => productTotal c.1 c.2)) = 0x7FFFFFFF
-  rw [groupStepTotal_nan _ _ _ _ hv] <;> rfl
+  rw [groupStepTotal_nan _ _ _ _ hv]
+  rfl
 
 theorem rowAtoms_length {k : ℕ} (a b : Fin k → Code) : (rowAtoms a b).length = k / 32 := List.length_ofFn
 
@@ -155,7 +151,8 @@ theorem atomRel_chunk {k : ℕ} (a b : Fin k → Code) (g j : ℕ) (hg : g < ((r
   intro w
   dsimp only
   rw [hx, Words.atom, atomIsTheStep w _ _, WordsSim.slice_code Array.size_ofFn hA rfl hn,
-    WordsSim.slice_code Array.size_ofFn hB rfl hn] <;> rfl
+    WordsSim.slice_code Array.size_ofFn hB rfl hn]
+  rfl
 
 theorem forall₂_range {γ δ : Type} {R : γ → δ → Prop} (f : ℕ → γ) :
     ∀ l : List δ, (∀ j (hj : j < l.length), R (f j) l[j]) → List.Forall₂ R ((List.range l.length).map f) l
@@ -199,10 +196,7 @@ theorem stepWord_zero : AccumProofs.StepWord 0 := ⟨by norm_num, by decide, Wor
 
 theorem promote_some {w : ℕ} {t y : ℚ} (hy : wordQ w = some y) :
     Pouw.PearlC.promote (some t) w = some (rnAdd t y) := by
-  first
-    | (simp only [Pouw.PearlC.promote, hy]; done)
-    | (unfold Pouw.PearlC.promote; rw [hy])
-    | simp [Pouw.PearlC.promote, hy]
+  simp only [Pouw.PearlC.promote, hy]
 
 /-- The check's FP32 add is the semantics' on any two finite words. -/
 theorem addAgrees : ∀ a b : ℕ, (wordQ a).isSome → (wordQ b).isSome →
@@ -245,9 +239,9 @@ theorem promote_ok {T w o : ℕ} (h : Rule.promote T w = .ok o) :
     refine ⟨t, y, ht, hy, ?_, TileCircuit.promoteWord_wordQ ht hy hp⟩
     rw [← ho]
     by_cases h0 : Evaluate.Fp32.f32AddV2 T w = 0x80000000
-    · rw [if_pos (by simp [h0])]
+    · rw [ite_eq_left (by simp [h0])]
       exact stepWord_zero
-    · rw [if_neg (by simpa using h0)]
+    · rw [ite_eq_right (by simpa using h0)]
       exact ⟨hlt, h0, WordsSim.finite?_of he⟩
 
 /-! ## Masks: `Rule.masked` is every mask's `Skip.wordIn` -/
@@ -486,7 +480,8 @@ theorem groupWord_bound (g : List AtomIn) (hfin : ∀ x ∈ g, Freeze.FiniteAtom
   have ht := Freeze.tame_inWord g (by omega) hfin 4 (by omega)
   have he : Freeze.inWord g 4 = groupWord g := by
     unfold Freeze.inWord
-    rw [List.take_of_length_le (by omega)] <;> rfl
+    rw [List.take_of_length_le (by omega)]
+    rfl
   rw [he] at ht
   rcases ht with h0 | ⟨tc, htc, -, -, hexp⟩
   · exact ⟨0, by rw [h0]; exact Freeze.wordQ_zero, by norm_num⟩
@@ -497,7 +492,8 @@ theorem inTotal_succ (gs : List (List AtomIn)) (p : ℕ) (hp : p < gs.length) :
     Skip.inTotal gs (p + 1) = Pouw.PearlC.promote (Skip.inTotal gs p) (groupWord (gs.getD p [])) := by
   unfold Skip.inTotal
   rw [List.take_add_one, List.getElem?_eq_getElem hp, Option.toList_some, List.foldl_append,
-    List.getD_eq_getElem gs [] hp] <;> rfl
+    List.getD_eq_getElem gs [] hp]
+  rfl
 
 theorem total_eq_inTotal (gs : List (List AtomIn)) : Pouw.PearlC.total gs = Skip.inTotal gs gs.length := by
   rw [Freeze.total_eq_foldl]
@@ -573,10 +569,10 @@ theorem length_filter_range (q : ℕ → Bool) : ∀ n : ℕ,
     rw [List.range_succ, List.filter_append, List.length_append, length_filter_range q n, Finset.range_add_one,
       Finset.filter_insert]
     by_cases hq : q n = true
-    · rw [if_pos hq, Finset.card_insert_of_notMem]
+    · rw [ite_eq_left hq, Finset.card_insert_of_notMem]
       · simp [hq]
       · simp
-    · rw [if_neg hq]
+    · rw [ite_eq_right hq]
       simp [hq]
 
 theorem count_shift (q : ℕ → Bool) (P : ℕ → Prop) {_ : DecidablePred P} (M : ℕ)
@@ -620,7 +616,8 @@ theorem rowAtoms_prefix {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Mat
   · simp only [rowAtoms, List.length_ofFn, List.length_take]
     omega
   · intro t h1 h2
-    simp only [rowAtoms, List.getElem_ofFn, List.getElem_take] <;> rfl
+    simp only [rowAtoms, List.getElem_ofFn, List.getElem_take]
+    rfl
 
 /-- The H100 record's ticket on the first `128·g` columns is the total after `g` groups. -/
 theorem ticket_prefix {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code)
@@ -715,7 +712,8 @@ theorem keep_iff (hK : KeyIsTheValue) (gs : List (List AtomIn)) (g : ℕ) (hg : 
   have e3 : (Skip.laterWords gs g).foldl Pouw.PearlC.promote
       (Pouw.PearlC.promote (Skip.inTotal gs g) (Skip.wordIn (gs.getD g []) m)) =
         laterFrom gs (g + 1) (keyVal (Rule.key o)) := by
-    rw [← hT, ht, ← hw, promote_some hy, ← Option.some.inj (hov.symm.trans hv)] <;> rfl
+    rw [← hT, ht, ← hw, promote_some hy, ← Option.some.inj (hov.symm.trans hv)]
+    rfl
   unfold Skip.keeps
   rw [decide_eq_true_iff, e3, e2]
   exact hband (Rule.key o) hk1 hk2
@@ -814,9 +812,9 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
       refine ⟨_, rfl, by rw [Array.size_push, hs], fun q hq' => ?_⟩
       rw [push_get s o q (by omega), hs]
       by_cases hqp : q = p + 1
-      · rw [if_pos hqp, hqp, inTotal_succ gs p (by omega), ← (hq p le_rfl).2, ht, promote_some hy]
+      · rw [ite_eq_left hqp, hqp, inTotal_succ gs p (by omega), ← (hq p le_rfl).2, ht, promote_some hy]
         exact ⟨hso, hov⟩
-      · rw [if_neg hqp]
+      · rw [ite_eq_right hqp]
         exact hq q (by omega)
   have hTs := (hT.2 _ le_rfl).1
   have hTv : wordQ totals[k / 128]! = Pouw.PearlC.total gs := by
@@ -846,11 +844,11 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
         omega
       · rw [push_get s.2.2 _ q (by omega), hs]
         by_cases hqp : q = p + 1
-        · rw [if_pos hqp, hqp, show k / 128 - (p + 1) = k / 128 - 1 - p by omega]
+        · rw [ite_eq_left hqp, hqp, show k / 128 - (p + 1) = k / 128 - 1 - p by omega]
           exact hnew
-        · rw [if_neg hqp]
+        · rw [ite_eq_right hqp]
           exact hb q (by omega)
-      · rw [push_get s.2.2 _ (p + 1) (by omega), if_pos hs.symm]
+      · rw [push_get s.2.2 _ (p + 1) (by omega), ite_eq_left hs.symm]
   have hrev : ∀ g < k / 128, KeyBand gs (g + 1) bnd.2.2.reverse[g]! := by
     intro g hg
     rw [rev_get _ g (by rw [hB.1]; omega), hB.1]
@@ -897,13 +895,13 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
           obtain rfl := WordsSim.pure_ok hr2
           refine ⟨_, rfl, ?_⟩
           rw [hc2, show 4 * p + (jj + 1) = 4 * p + jj + 1 by omega, Finset.range_add_one, Finset.filter_insert,
-            if_pos (hu.2 hb), Finset.card_insert_of_notMem]
+            ite_eq_left (hu.2 hb), Finset.card_insert_of_notMem]
           simp
         · rename_i hb
           obtain rfl := WordsSim.pure_ok hr2
           refine ⟨_, rfl, ?_⟩
           rw [hc2, show 4 * p + (jj + 1) = 4 * p + jj + 1 by omega, Finset.range_add_one, Finset.filter_insert,
-            if_neg (fun h' => hb (hu.1 h'))])
+            ite_eq_right (fun h' => hb (hu.1 h'))])
     refine ⟨_, rfl, ?_⟩
     rwa [show 4 * p + 4 = 4 * (p + 1) by ring] at hinner
   refine ⟨?_, ?_⟩
@@ -911,7 +909,7 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
   -- the later promotions into a +0 total
   · rw [← hz]
     unfold laterZeroPromos
-    rw [if_neg (show ¬ devH100.G = 0 by decide), show devH100.G = 4 from rfl, show (32 : ℕ) * 4 = 128 from rfl]
+    rw [ite_eq_right (show ¬ devH100.G = 0 by decide), show devH100.G = 4 from rfl, show (32 : ℕ) * 4 = 128 from rfl]
     refine count_shift _ _ (k / 128) ?_
     intro g hg
     have hq := hT.2 (g + 1) (by omega)
