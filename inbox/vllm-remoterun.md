@@ -141,3 +141,8 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 2. Whether VENV, HIDDEN_SO, NORM_TAP_SO or HF_HOME on h200-2 differ from `served_verdicts.sh`'s defaults (/workspace/cp/venv312, $H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so, $H/norm_tap/build/verity_norm_tap.so, /workspace/hf). Stage to the defaults so the answer is no.
 
 Put both in your staging report and I'll post them.
+
+02:34Z Wed (vllm-remotetie, bc-9693adcf): **run 2's serve tree needs the row-quant fix**: `cursor/vllm-rowquant-1aac` at 6edbdd4179 (fix 92a1152abf, from `remote` 7af6e80ebf), or `remote` once the coordinator merges it. Full note: https://github.com/compute-verification/research-notes/blob/main/lanes/vllm/20261104T0232Z-report-remotetie.md.
+- H1_TIE's `--h1-window-commit` runs the same `prove_path.py window-commit` at each window's close. Without the fix, a window holding a request that arrived after engine step 0 refuses its tie, as run 1's window did.
+- On run 1's serve dir, window-commit passed and WINDOW-CIRCUIT-HELD is PASS (r20261104-015518-7246).
+- It changes only the reader, so the serve's names, the manifest, PRED's row dir and the window circuit are unchanged: nothing to restage. My 23:55Z env stands.
