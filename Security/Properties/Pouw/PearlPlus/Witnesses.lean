@@ -889,11 +889,38 @@ def testGram : Array (Array Nat) := #[
     0xc332d800, 0x42dd8000, 0xc0038000, 0xc2b7f800, 0xc2a89800, 0x42abbc00, 0x420d1800, 0x43127400]]
 
 /-- The test pass's fixed operand's noise: seed_B, F_A, F_B and G as the Python derives them (`pearl_c.seed_b`, and
-`_basis` and `gram` at v1's line norm `LINE_NORM_V1`, `Words.NORM_F`'s), and F_A's and F_B's columns. It is given, not
-derived: `TileAcceptMeans` ranges over every noise, the deployed check's (`fixedNoise` of the pass's salt and B's root,
-`noiseOf`) is one instance and this test noise another. -/
+`_basis` and `gram` at v1's line norm `LINE_NORM_V1`, `Words.NORM_F`'s), and F_A's and F_B's columns: `fixedNoise` of the
+test pass's salt and B's root at k = 128, the noise `check` derives for it (`noiseOf`). -/
 def testNoise : Words.FixedNoise :=
   { seedB := testSeedB, fa := testFa, fb := testFb, faCols := (Array.range R).map (Words.column testFa),
     fbCols := (Array.range R).map (Words.column testFb), gram := testGram }
+
+/-- The test pass's manifest, a test instance's (`"instance": {"k_min": 128, "tile": [1, 1]}`): what `load` reads of it,
+its salt coin the epoch's opened after the test weights' root. -/
+def testManifest : Lean.Json := Lean.Json.mkObj [
+  ("schema", .str MANIFEST_SCHEMA),
+  ("scheme", .str NAME),
+  ("instance", Lean.Json.mkObj [("k_min", .num 128), ("tile", .arr #[.num 1, .num 1])]),
+  ("coins", Lean.Json.mkObj [("scheme", .str SCHEME), ("epoch", .num 0), ("root", .str honestCoinsRoot)]),
+  ("salt_opening", Lean.Json.mkObj [("epoch", .num 0), ("label", .str "salt"), ("after", .str (hex testWeightsRoot)),
+    ("coin", .str (hex ⟨Array.replicate 32 0x11⟩)), ("salt", .str (hex ⟨Array.replicate 192 0⟩)),
+    ("path", .arr #[.str honestCoinSibling])]),
+  ("salt", .str (hex testSalt)),
+  ("weights", Lean.Json.mkObj [("0", Lean.Json.mkObj [("root", .str (hex testRootB)), ("k", .num 128),
+    ("excluded_b", .arr #[])])]),
+  ("matmuls", .arr #[Lean.Json.mkObj [("index", .num 0), ("m", .num 1), ("k", .num 128), ("n", .num 1), ("weight", .num 0),
+    ("real_rows", .num 1), ("k_kept", .num 128), ("excluded_a", .arr #[]), ("root_a", .str (hex testRootA))]]),
+  ("records_root", .str (hex testRecordsRoot)),
+  ("commitment", Lean.Json.mkObj [("root", .str (hex testTranscriptRoot)), ("count", .num 1)])]
+
+/-- A run of the test pass at one draw on the verifier's source, read as a test instance's, so it credits nothing. -/
+def testRun : Input :=
+  { coins := honestCoins, manifests := [testManifest], draws := 1, source := some honestSource, testInstance := true }
+
+/-- The test pass's honest prover: the test tile's openings, whatever tile is asked. -/
+def testOpener (_pass _tile : Nat) : Except String TileOpening := .ok testOpening
+
+/-- `testRun`'s plan: the test pass, its run commitment, the verifier's source, and the one tile its one draw names. -/
+def testPlan : Plan := ⟨[testPass], runCommitment [testPass], honestSource, [(0, 0)], 1, [(0, 0)]⟩
 
 end Properties.Pouw.PearlPlus

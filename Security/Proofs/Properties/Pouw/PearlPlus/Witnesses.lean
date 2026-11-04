@@ -15,12 +15,15 @@ three different SHA-512 digests, neither open one value nor collide (`openingBin
 the kernel, one declaration each, once the hm96 mask of their zero salt is known to be zero (`Witness.mask_zero`), since
 the mask's tables are too large for it to build.
 
-`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans` and
-`TileAcceptMeans` have both witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest` ones are at one honest
-pass of the deployed scheme (`honestPass`, loaded from `honestManifest`): `load` reads it, `plan` draws its one tile, and
-`check` accepts its run at no draws, since a drawn tile is replayed on the noise `check` derives itself (`fixedNoise`),
-past what one kernel computation reaches. `TileAcceptMeans`' `honest` one is the tile of a test pass (`testPass`, k = 128,
-1 × 1 tiles) at a test noise (`testNoise`): the property ranges over every noise, and the deployed one is another instance.
+`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans`,
+`TileAcceptMeans` and `WorkIsTheCredit` have both witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest`
+ones are at one honest pass of the deployed scheme (`honestPass`, loaded from `honestManifest`): `load` reads it, `plan`
+draws its one tile, and `check` accepts its run at no draws, since a drawn tile of the deployed scheme is replayed on the
+noise `check` derives itself (`fixedNoise` at k = 1,024), past what the kernel reaches. A drawn tile's are at a test
+instance (`testPass`, k = 128, 1 × 1 tiles, its run `testRun`): `check` loads the pass, draws its tile, derives its noise
+(`testNoise`) and passes the tile on it (`acceptMeans_drawn`). `TileAcceptMeans`' `honest` ones are that tile on the test
+noise and on the noise `check` derives for it (`tileAcceptMeans_derived`). `WorkIsTheCredit`'s are the credit both runs
+publish: the honest pass's at no draws, and the test pass's at one, a test instance's, crediting nothing.
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -420,15 +423,19 @@ theorem planMeans_nontrivial : ¬ (acceptAllPlan.root = runCommitment acceptAllP
   rw [runCommitment, Commit.taggedSize] at this
   exact absurd this (by decide)
 
+/-- `plan` takes the honest pass's run at no draws: no tile to open. -/
+theorem Witness.plan_honestRun0 :
+    plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, []⟩ := by
+  apply eq_ok_of_toOption
+  simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
+  decide +kernel
+
 /-- `check` accepts the honest pass's run at no draws: its pass loads, and it excludes no row, so no tile is opened. A
-drawn tile is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k noise lines and R²
-FP32 chains of k = 1,024), past what one kernel computation reaches. -/
+drawn tile of the deployed scheme is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k
+noise lines and R² FP32 chains of k = 1,024), past what the kernel reaches; `acceptMeans_drawn` is a drawn tile's, of a
+test instance at k = 128. -/
 theorem acceptMeans_honest : (check (honestRun 0) noOpening).accept = true := by
-  have h : plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, []⟩ := by
-    apply eq_ok_of_toOption
-    simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
-    decide +kernel
-  simp only [check, h]
+  simp only [check, plan_honestRun0]
   decide +kernel
 
 /-- A verdict that accepts every run (`acceptAllCheck`) holds no plan, so none whose tiles it opened. -/
@@ -755,10 +762,10 @@ end Witness
 /-- The test tile passes `checkTile` at the test noise: its call is in the scheme's domain, its A row, its B row and its
 leaf open against the test pass's roots, the words formed from its rows are its leaf's, its rows keep the per-row rules,
 and its credited cell's replayed inert work is within the inert-work bound. `TileAcceptMeans` ranges over every
-noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root (`noiseOf`), one instance, and this is
-another, the test noise `testNoise`, given rather than derived (deriving it is 2k = 256 noise lines and 32 × 32 FP32
-chains of k = 128). Each check is its own kernel computation (`Witness.checkTile_eq_outcome`), the formed words and the
-checked words given as the Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
+noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root (`noiseOf`), and the test noise
+`testNoise` is given here as the Python derives it, and derived in `Witness.test_noise` (`tileAcceptMeans_derived`). Each
+check is its own kernel computation (`Witness.checkTile_eq_outcome`), the formed words and the checked words given as the
+Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
 theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = .pass :=
   checkTile_eq_outcome (bound := none) test_tile test_domain test_covers test_opensA test_opensB test_opensLeaf rfl
     test_encode test_checked test_leaf test_rows test_cap test_y
@@ -787,5 +794,336 @@ theorem tileKeepsTheCap_nontrivial :
     decide +kernel
   rw [h] at this
   cases this
+
+
+/-! ## A drawn tile: `AcceptMeans` and `WorkIsTheCredit` at a test instance
+
+`check` accepts `testRun`, the test pass's run at one draw read as a test instance's: `load` reads the test pass from its
+manifest, `plan` draws its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
+test noise (`Witness.test_noise`), and passes the tile on it (`tileAcceptMeans_honest`). The noise is 2k = 256 noise lines
+and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, and the replay and the
+noise are proved over their steps as parameters (`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never
+reduces a step of unknown arguments. -/
+
+namespace Witness
+
+theorem mapM_ok_of_zip {α β : Type} [DecidableEq β] {f : α → Except String β} :
+    ∀ (l : List α) (o : List β), l.length = o.length →
+      (l.zip o).all (fun p => decide ((f p.1).toOption = some p.2)) = true → l.mapM f = .ok o
+  | [], [], _, _ => rfl
+  | x :: l, y :: o, hn, h => by
+    simp only [List.zip_cons_cons, List.all_cons, Bool.and_eq_true, decide_eq_true_eq] at h
+    rw [List.mapM_cons, eq_ok_of_toOption h.1, mapM_ok_of_zip l o (by simpa using hn) h.2]
+    rfl
+  | [], _ :: _, hn, _ => absurd hn (by simp)
+  | _ :: _, [], hn, _ => absurd hn (by simp)
+
+/-- An array's `mapM` gives `o` where each element's step gives `o`'s at its place. -/
+theorem arr_mapM_ok {α β : Type} [DecidableEq β] {f : α → Except String β} (a : Array α) (o : Array β)
+    (hn : a.size = o.size)
+    (h : (a.toList.zip o.toList).all (fun p => decide ((f p.1).toOption = some p.2)) = true) : a.mapM f = .ok o := by
+  rw [Array.mapM_eq_mapM_toList, mapM_ok_of_zip _ _ (by simpa using hn) h]
+  rfl
+
+/-- `l.all P` from its first `c` chunks of `w` and the rest. -/
+theorem all_of_chunks {α : Type} (P : α → Bool) (l : List α) (w : Nat) :
+    ∀ c, (∀ i < c, ((l.drop (w * i)).take w).all P = true) → (l.drop (w * c)).all P = true → l.all P = true
+  | 0, _, h => by simpa using h
+  | c + 1, hs, h => all_of_chunks P l w c (fun i hi => hs i (by omega)) (by
+      rw [← List.take_append_drop w (l.drop (w * c)), List.all_append, hs c (by omega), List.drop_drop,
+        show w * c + w = w * (c + 1) by rw [Nat.mul_succ], h]
+      rfl)
+
+/-- `Words.fixedNoise`'s body with its steps (seed_B, a basis, a chain) as parameters. -/
+def fixedNoiseWith (SB : ByteArray → ByteArray → ByteArray)
+    (BA : ByteArray → Nat → Nat → Words.Reject (Array (Array Nat))) (CH : Array Nat → Array Nat → Words.Reject Nat)
+    (salt rootB : ByteArray) (k : Nat) : Words.Reject Words.FixedNoise := do
+  let sb := SB salt rootB
+  let fa ← BA sb 0 k
+  let fb ← BA sb 1 k
+  let faCols := (Array.range R).map (Words.column fa)
+  let fbCols := (Array.range R).map (Words.column fb)
+  let gram ← fbCols.mapM fun fbp => faCols.mapM fun faq => CH fbp faq
+  return ⟨sb, fa, fb, faCols, fbCols, gram⟩
+
+theorem fixedNoise_eq_fixedNoiseWith (salt rootB : ByteArray) (k : Nat) :
+    Words.fixedNoise salt rootB k = fixedNoiseWith Words.seedB Words.basis Words.chain salt rootB k := rfl
+
+theorem fixedNoiseWith_ok {SB : ByteArray → ByteArray → ByteArray}
+    {BA : ByteArray → Nat → Nat → Words.Reject (Array (Array Nat))} {CH : Array Nat → Array Nat → Words.Reject Nat}
+    {salt rootB sb : ByteArray} {k : Nat} {fa fb gram : Array (Array Nat)}
+    (hsb : SB salt rootB = sb) (hfa : BA sb 0 k = .ok fa) (hfb : BA sb 1 k = .ok fb)
+    (hg : ((Array.range R).map (Words.column fb)).mapM (fun fbp => ((Array.range R).map (Words.column fa)).mapM
+      fun faq => CH fbp faq) = .ok gram) :
+    fixedNoiseWith SB BA CH salt rootB k =
+      .ok ⟨sb, fa, fb, (Array.range R).map (Words.column fa), (Array.range R).map (Words.column fb), gram⟩ := by
+  simp only [fixedNoiseWith, hsb, hfa, hfb, hg, bind, Except.bind, pure, Except.pure]
+
+theorem basis_eq (sb : ByteArray) (side k : Nat) :
+    Words.basis sb side k = (Array.range k).mapM fun t => Words.sampleLine (Words.lineKey sb) side 1 t Words.NORM_F :=
+  rfl
+
+theorem test_seedB : Words.seedB testSalt testRootB = testSeedB := by decide +kernel
+
+theorem test_keyB' : Words.lineKey testSeedB = lineKeyB := test_keyB
+
+theorem test_fa0 : ((((List.range 128).zip testFa.toList).drop (16 * 0)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa1 : ((((List.range 128).zip testFa.toList).drop (16 * 1)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa2 : ((((List.range 128).zip testFa.toList).drop (16 * 2)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa3 : ((((List.range 128).zip testFa.toList).drop (16 * 3)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa4 : ((((List.range 128).zip testFa.toList).drop (16 * 4)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa5 : ((((List.range 128).zip testFa.toList).drop (16 * 5)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa6 : ((((List.range 128).zip testFa.toList).drop (16 * 6)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa7 : ((((List.range 128).zip testFa.toList).drop (16 * 7)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 0 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb0 : ((((List.range 128).zip testFb.toList).drop (16 * 0)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb1 : ((((List.range 128).zip testFb.toList).drop (16 * 1)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb2 : ((((List.range 128).zip testFb.toList).drop (16 * 2)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb3 : ((((List.range 128).zip testFb.toList).drop (16 * 3)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb4 : ((((List.range 128).zip testFb.toList).drop (16 * 4)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb5 : ((((List.range 128).zip testFb.toList).drop (16 * 5)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb6 : ((((List.range 128).zip testFb.toList).drop (16 * 6)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fb7 : ((((List.range 128).zip testFb.toList).drop (16 * 7)).take 16).all
+    (fun p => decide ((Words.sampleLine lineKeyB 1 1 p.1 Words.NORM_F).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram0 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 0)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram1 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 1)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram2 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 2)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram3 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 3)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram4 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 4)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram5 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 5)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram6 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 6)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_gram7 : (((((Array.range R).map (Words.column testFb)).toList.zip testGram.toList).drop
+    (4 * 7)).take 4).all (fun p => decide ((((Array.range R).map (Words.column testFa)).mapM fun faq =>
+      Words.chain p.1 faq).toOption = some p.2)) = true := by
+  decide +kernel
+
+theorem test_fa : Words.basis testSeedB 0 128 = .ok testFa := by
+  rw [basis_eq, test_keyB']
+  apply arr_mapM_ok _ _ (by decide +kernel)
+  rw [Array.toList_range]
+  refine all_of_chunks _ _ 16 8 (fun i hi => ?_) (by decide +kernel)
+  match i, hi with
+  | 0, _ => exact test_fa0
+  | 1, _ => exact test_fa1
+  | 2, _ => exact test_fa2
+  | 3, _ => exact test_fa3
+  | 4, _ => exact test_fa4
+  | 5, _ => exact test_fa5
+  | 6, _ => exact test_fa6
+  | 7, _ => exact test_fa7
+
+theorem test_fb : Words.basis testSeedB 1 128 = .ok testFb := by
+  rw [basis_eq, test_keyB']
+  apply arr_mapM_ok _ _ (by decide +kernel)
+  rw [Array.toList_range]
+  refine all_of_chunks _ _ 16 8 (fun i hi => ?_) (by decide +kernel)
+  match i, hi with
+  | 0, _ => exact test_fb0
+  | 1, _ => exact test_fb1
+  | 2, _ => exact test_fb2
+  | 3, _ => exact test_fb3
+  | 4, _ => exact test_fb4
+  | 5, _ => exact test_fb5
+  | 6, _ => exact test_fb6
+  | 7, _ => exact test_fb7
+
+theorem test_gram : ((Array.range R).map (Words.column testFb)).mapM (fun fbp =>
+    ((Array.range R).map (Words.column testFa)).mapM fun faq => Words.chain fbp faq) = .ok testGram := by
+  apply arr_mapM_ok _ _ (by decide +kernel)
+  refine all_of_chunks _ _ 4 8 (fun i hi => ?_) (by decide +kernel)
+  match i, hi with
+  | 0, _ => exact test_gram0
+  | 1, _ => exact test_gram1
+  | 2, _ => exact test_gram2
+  | 3, _ => exact test_gram3
+  | 4, _ => exact test_gram4
+  | 5, _ => exact test_gram5
+  | 6, _ => exact test_gram6
+  | 7, _ => exact test_gram7
+
+/-- The test noise is the fixed operand's noise `check` derives for the test pass: seed_B of its salt and B's root, F_A
+and F_B at the line norm, and G. -/
+theorem test_noise : Words.fixedNoise testSalt testRootB 128 = .ok testNoise := by
+  rw [fixedNoise_eq_fixedNoiseWith]
+  exact fixedNoiseWith_ok test_seedB test_fa test_fb test_gram
+
+theorem test_noiseOf : noiseOf testPass 0 = .ok testNoise := by
+  have hs : testPass.salt = testSalt := rfl
+  have hr : (testPass.weightRoots.lookup testPass.records[0]!.matmul.weight).getD ByteArray.empty = testRootB := rfl
+  have hk : testPass.records[0]!.matmul.k = 128 := rfl
+  have h : Words.fixedNoise testPass.salt ((testPass.weightRoots.lookup testPass.records[0]!.matmul.weight).getD
+      ByteArray.empty) testPass.records[0]!.matmul.k = .ok testNoise := by
+    rw [hs, hr, hk]
+    exact test_noise
+  unfold noiseOf
+  rw [test_tile]
+  exact h
+
+/-- `replay`'s body with the noise's derivation and the tile check as parameters. -/
+def replayWith (fixedNoise : ByteArray → ByteArray → Nat → Except String Words.FixedNoise)
+    (checkTile : Pass → Except String Words.FixedNoise → Nat → TileOpening → TileOutcome)
+    (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
+  let mut noise : List ((Nat × Nat) × Task (Except String Words.FixedNoise)) := []
+  let mut tasks : Array (Task TileVerdict) := #[]
+  for (i, tid) in pl.todo do
+    let p := pl.passes[i]!
+    let some (pos, _, _) := p.tile? tid
+      | tasks := tasks.push (.pure ⟨i, tid, .fail "tile does not match the verifier's own enumeration"⟩)
+    let u := p.records[pos]!.matmul
+    let t ← match noise.lookup (i, u.weight) with
+      | some t => pure t
+      | none =>
+        let rootB := (p.weightRoots.lookup u.weight).getD ByteArray.empty
+        let t := Task.spawn fun _ => fixedNoise p.salt rootB u.k
+        noise := ((i, u.weight), t) :: noise
+        pure t
+    tasks := tasks.push <| t.map fun wn =>
+      match opener i tid with
+      | .error e => ⟨i, tid, .fail s!"the prover's files don't open it: {e}"⟩
+      | .ok o => ⟨i, tid, checkTile p wn tid o⟩
+  return tasks.toList.map Task.get
+
+theorem replay_eq_replayWith (pl : Plan) (opener : Nat → Nat → Except String TileOpening) :
+    replay pl opener = replayWith Words.fixedNoise checkTile pl opener := rfl
+
+/-- The replay of a plan of one tile, of its first pass: that tile's outcome on the noise derived for it. -/
+theorem replayWith_one {FN : ByteArray → ByteArray → Nat → Except String Words.FixedNoise}
+    {CT : Pass → Except String Words.FixedNoise → Nat → TileOpening → TileOutcome} {pl : Plan}
+    {opener : Nat → Nat → Except String TileOpening} {tid pos : Nat} {p : Pass} {rows cols : List Nat}
+    {o : TileOpening} {wn : Except String Words.FixedNoise} {out : TileOutcome}
+    (hl : pl.todo = [(0, tid)]) (hp : pl.passes[0]! = p) (ht : p.tile? tid = some (pos, rows, cols))
+    (hn : FN p.salt ((p.weightRoots.lookup p.records[pos]!.matmul.weight).getD ByteArray.empty)
+      p.records[pos]!.matmul.k = wn)
+    (ho : opener 0 tid = .ok o) (hc : CT p wn tid o = out) :
+    replayWith FN CT pl opener = [⟨0, tid, out⟩] := by
+  subst hc
+  simp only [replayWith, hl, List.forIn_cons, List.forIn_nil, hp, ht, List.lookup_nil, Task.map, Task.spawn, hn, ho]
+  rfl
+
+theorem test_load : load honestCoins testManifest = .ok testPass := by
+  apply eq_ok_of_toOption
+  simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
+    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq, saltOf, key?, FlockSoundness.Randomness.derive,
+    qsort_salt, toNat?_eq_toNatOr]
+  decide +kernel
+
+theorem test_plan : plan testRun = .ok testPlan := by
+  apply eq_ok_of_toOption
+  simp only [plan, testRun, List.mapM_cons, List.mapM_nil, test_load, PouwCheck.PearlPlus.drawKey, key?,
+    FlockSoundness.Randomness.derive, qsort_run]
+  decide +kernel
+
+theorem test_replay : replay testPlan testOpener = [⟨0, 0, .pass⟩] := by
+  have hs : testPass.salt = testSalt := rfl
+  have hr : (testPass.weightRoots.lookup testPass.records[0]!.matmul.weight).getD ByteArray.empty = testRootB := rfl
+  have hk : testPass.records[0]!.matmul.k = 128 := rfl
+  rw [replay_eq_replayWith]
+  exact replayWith_one (p := testPass) rfl rfl test_tile (by rw [hs, hr, hk]; exact test_noise) rfl
+    tileAcceptMeans_honest
+
+end Witness
+
+/-- The test tile passes `checkTile` on the noise `check` derives for it (`noiseOf`, the noise `AcceptMeans` reads
+`TileAcceptMeans` at), which is the test noise (`Witness.test_noiseOf`). -/
+theorem tileAcceptMeans_derived : checkTile testPass (noiseOf testPass 0) 0 testOpening = .pass := by
+  rw [test_noiseOf]
+  exact tileAcceptMeans_honest
+
+/-- `check` accepts the test pass's run at one draw, read as a test instance's: the pass loads, the draw names its one tile,
+the prover opens it, and it passes on the noise the replay derives. -/
+theorem acceptMeans_drawn : (check testRun testOpener).accept = true := by
+  simp only [check, test_plan, test_replay] <;> rfl
+
+/-- The honest pass's run at no draws publishes its credit at Pearl's assumption at t = 0 and X_O = 0. -/
+theorem workIsTheCredit_honest : (check (honestRun 0) noOpening).accept = true ∧
+    (check (honestRun 0) noOpening).work = some (testCredit false (creditAtAssumption [honestPass] 0 0 DELTA)) := by
+  refine ⟨acceptMeans_honest, ?_⟩
+  simp only [check, plan_honestRun0] <;> rfl
+
+/-- The test pass's run at one draw publishes its credit at t = 1 and X_O = 0, which, a test instance's, credits
+nothing. -/
+theorem workIsTheCredit_drawn : (check testRun testOpener).accept = true ∧
+    (check testRun testOpener).work = some (testCredit true (creditAtAssumption [testPass] 1 0 DELTA)) := by
+  refine ⟨acceptMeans_drawn, ?_⟩
+  simp only [check, test_plan, test_replay] <;> rfl
+
+/-- A verdict that accepts every run (`acceptAllCheck`) publishes no work. -/
+theorem workIsTheCredit_nontrivial : ∀ c, ¬ ((acceptAllCheck emptyRun noOpening).work = some c) := by
+  intro c h
+  cases h
 
 end Properties.Pouw.PearlPlus
