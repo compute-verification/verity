@@ -9,7 +9,10 @@ import contextlib
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 from dataclasses import replace
 from fractions import Fraction
@@ -223,6 +226,34 @@ def test_h200_session_runs_the_tables_shapes():
     assert '-lgc exit $?" > "$O/clock.txt"' in sh and "kill \"$smi\"'" in sh
 
 
+@pytest.mark.parametrize("needed, volunteer, step, rc", [
+    ("yes reject", None, "1", "ship rc 2"), ("yes reject", "device", "device", "ship rc 2"),
+    ("yes reject", "0", "0", "volunteer refused rc 2"), ("no uncredited", None, "0", "ship rc 2"),
+    ("no uncredited", "1", "1", "ship rc 2"), ("", None, None, "volunteer-needed rc 2")])
+def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_its_cap(tmp_path, needed, volunteer, step, rc):
+    """h200.sh asks ``served_passes.py volunteer-needed --verdict pass`` (a stand-in here) before the ship is unpacked:
+    while the verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap, VOLUNTEER defaults to 1 and
+    one that skips the give-up stops the session; once that verdict credits such a row nothing it defaults to 0, and any
+    other answer stops the session too.  The stand-in ship is missing, so a session the guard lets through stops there."""
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    (tree / "benchmarks" / "pouw" / "pearl_c_sm90").mkdir(parents=True)
+    shutil.copy(HERE / "h200.sh", tree / "benchmarks" / "pouw" / "pearl_c_sm90")
+    (sp := tree / "benchmarks" / "pouw" / "pearl_c_vllm" / "served_passes.py").parent.mkdir(parents=True)
+    sp.write_text('import os, sys\nassert sys.argv[1:] == ["volunteer-needed", "--verdict", "pass"], sys.argv\n'
+                  'print(os.environ["NEEDED"])\nsys.exit(0 if os.environ["NEEDED"] else 2)\n')
+    (tree / "venv" / "bin").mkdir(parents=True)
+    (tree / "venv" / "bin" / "python").symlink_to(sys.executable)
+    out.mkdir()
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"),
+           "VERITY_BENCH_VENV": str(tree / "venv"), "NEEDED": needed, **({} if volunteer is None else {"VOLUNTEER": volunteer})}
+    r = subprocess.run(["bash", "benchmarks/pouw/pearl_c_sm90/h200.sh"], cwd=tree, env=env, capture_output=True, text=True,
+                       check=False)
+    lines = (out / "rc.txt").read_text().splitlines()
+    assert r.returncode == 2 and len(lines) == 1 and lines[0].startswith(rc), r.stdout + r.stderr
+    said = out / "volunteer-needed.txt"
+    assert (said.read_text() if said.exists() else None) == (step and f"volunteer-needed: {needed}; VOLUNTEER={step}\n")
+
+
 def test_slowdowns_divide_by_the_fastest_stock_call_its_graph_and_the_plain_gemm_apart():
     """A row's slowdowns: over the fastest stock arm that ran eagerly, over the fastest of their graphs, and over the fastest
     plain arm, eager or graphed; a plain arm is never the stock divisor, and a divisor no arm of its kind ran is None."""
@@ -401,30 +432,31 @@ def test_whole_times_decodes_forward_captured_serial_deferred_and_as_served_besi
     hashing arms' passes, and one of each from poisoned outputs, commit alike."""
     T, run, weights, xs, stock = _whole_setup(monkeypatch)
     row = T.whole(run, weights, xs, stock, reps=3)
-    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0, "pearlc-served": 2.25,
+    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0,
+                         "pearlc-served-unsplit": 3.0, "pearlc-served": 2.25, "pearlc-served-shared": 2.25,
                          "pearlc-whole-nohash": 3.0, "cutlass": 0.75, "triton": 1.5}
     assert row["ms_per_call"]["pearlc-deferred"] == 1.0 and row["calls"] == 3 and row["m"] == 16
     assert row["layers"] == 1 and row["ms_per_layer"] == row["ms"]
     assert row["shapes"] == [[24, 4], [8, 4], [16, 4]]
-    assert row["saving"] == {"pearlc-deferred": {"vs_calls": 1 - 3 / 5.25, "vs_whole": 1 - 3 / 4.5},
-                             "pearlc-served": {"vs_calls": 1 - 2.25 / 5.25, "vs_whole": 1 - 2.25 / 4.5}}
+    assert row["saving"] == {nm: {"vs_calls": 1 - row["ms"][nm] / 5.25, "vs_whole": 1 - row["ms"][nm] / 4.5} for nm in T.SAVING}
     assert row["fastest_stock"] == "cutlass" and row["slowdown"]["pearlc-deferred"] == 4.0
-    assert row["slowdown"]["pearlc-served"] == 3.0
+    assert row["slowdown"]["pearlc-served"] == row["slowdown"]["pearlc-served-shared"] == 3.0
     assert row["stock_graphed"] == {"cutlass": True, "triton": False, "deepgemm": False}
     assert set(row["stock_errors"]) == {"triton", "deepgemm"} and len(row["runs"]["triton"]) == 3
-    assert row["pass_end_ms"] == {"pearlc-calls": 0.125, "pearlc-whole": 0.125, "pearlc-deferred": 0.125,
-                                  "pearlc-served": 0.125, "pearlc-whole-nohash": 0}
+    assert row["pass_end_ms"] == {**dict.fromkeys(list(T.WHOLE)[:-1], 0.125), "pearlc-whole-nohash": 0}
     assert row["commitments_equal"] and row["poisoned_equal"] and "commitments" not in row
     assert row["commitment"]["units"] == 3 * T.INNER and row["commitment"]["screened_rows"] == 16 * 3 * T.INNER
     begins = [e for e in run.log if e[0] == "begin"]
-    served = tuple(sorted(T.SERVED))
+    unsplit, served = ("whole_defer", "whole_fork_stats"), tuple(sorted(T.SERVED))
+    shared = tuple(sorted((*T.SERVED, "whole_pd_shared")))
     assert begins == [("begin", (True, ()), True, ()), ("begin", (True, ("whole_defer",)), True, ("whole_defer",)),
-                      ("begin", (True, served), True, served), ("begin", (False, ()), False, ())]
+                      ("begin", (True, unsplit), True, unsplit), ("begin", (True, served), True, served),
+                      ("begin", (True, shared), True, shared), ("begin", (False, ()), False, ())]
     at = run.log.index(begins[1])
     assert run.log[at - 1][0] == "end_pass" and run.log[at + 1:at + 4] == [("call", w, 16, True) for w in (7, 5, 6)]
     assert run.log[at + 4] == ("end", ((7, 16), (5, 16), (6, 16))) and run.log[at + 5][0] == "end_pass"
     poisons = [i for i, e in enumerate(run.log) if e == ("poison",)]
-    assert len(poisons) == 4 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
+    assert len(poisons) == 6 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
     assert run.log[poisons[1] + 1:poisons[1] + 1 + T.INNER] == [("replay", ((7, 16), (5, 16), (6, 16)))] * T.INNER
     assert (run.hashing, run.options()) == (True, ())
 

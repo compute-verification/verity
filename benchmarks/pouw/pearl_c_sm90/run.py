@@ -356,6 +356,9 @@ HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
 #: PD_MAX_ROWS rows and k of at most PD_MAX_K (its 192 threads: two warps of pairs a 32 segments, and two more); its paired
 #: compressions take PD_PAIR_SMEM bytes of dynamic shared memory, and PD_GROUP's tiles PD_G a CTA (hash_decode.cuh's)
 PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851, 979), 256, 64 * 256, 2 * 8 * 3080, 4, 64, 128
+#: the shared memory the driver reserves a CTA, beside its own: an SM holds a CTA's opt-in most and one reserve (sm_90's
+#: 228 KiB, sm_120's 100 KiB)
+CTA_RESERVED_SMEM = 1024
 #: each served variant's PD_STAMP twin (the same code, its phases' global timer and SM clock into p13, `Pipeline.stamps`),
 #: and the stamps' layout: PD_SLOTS (timer, clock) pairs of u64 a row, a row a pd_commit CTA and the tail's after them
 PD_STAMP, PD_SLOTS = 32, 16
@@ -389,24 +392,31 @@ def pd_variant(m_real: int, n: int, k: int) -> int | None:
 def pd_setup(dev) -> None:
     """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), the
     dynamic shared memory of each served pd_commit and pd_tree and of their stamp twins (`pd_smem`, `pd_tree_smem`), with
-    PD_WHOLE all a CTA may take beside its static, so no side lane's CTA shares its SMs, and pl_levels' (its two pairs')."""
+    PD_WHOLE all a CTA may take beside its static, so no side lane's CTA shares its SMs; the same launches' under
+    `Pipeline.pd_shared` (`pd_smem_shared`, `pd_tree_smem_shared`), half an SM's beside its static and reserve, so two of
+    their CTAs share an SM and a third doesn't; and pl_levels' (its two pairs')."""
     if getattr(dev, "pd_smem", None):
         return
     if not getattr(dev, "rs_heads", False):
         dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
         dev.rs_heads = True
     dev.launch("pd_heads", 1, 32)
-    optin, smem = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {"pd_commit": {}, "pd_tree": {}}
+    optin = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev)
+    smem = {f: {} for f in ("pd_commit", "pd_tree", "pd_commit_shared", "pd_tree_shared")}
     for v in (*PD_SERVED, *PD_STAMPED):
-        for f in smem:
+        for f in ("pd_commit", "pd_tree"):
             fn = dev.fn(f"{f}_{v}")
-            smem[f][v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
-            if smem[f][v] < PD_PAIR_SMEM:
-                raise RuntimeError(f"{f}_{v} gets {smem[f][v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
-            dev.ck("cuFuncSetAttribute", fn, MAX_DYN, smem[f][v])
+            static = dev.get("cuFuncGetAttribute", SHARED_SIZE, fn)
+            smem[f][v] = optin - static if v & PD_WHOLE else PD_PAIR_SMEM
+            smem[f"{f}_shared"][v] = (optin - CTA_RESERVED_SMEM) // 2 - static
+            for x in (f, f"{f}_shared"):
+                if smem[x][v] < PD_PAIR_SMEM:
+                    raise RuntimeError(f"{x} {v} gets {smem[x][v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
+            dev.ck("cuFuncSetAttribute", fn, MAX_DYN, max(smem[f][v], smem[f"{f}_shared"][v]))
     dev.ck("cuFuncSetAttribute", dev.fn(f"pl_levels_{PL_VARIANT}"), MAX_DYN, PD_PAIR_SMEM)
     dev.sync()
     dev.pd_smem, dev.pd_tree_smem = smem["pd_commit"], smem["pd_tree"]
+    dev.pd_smem_shared, dev.pd_tree_smem_shared = smem["pd_commit_shared"], smem["pd_tree_shared"]
 
 
 def nonce_args(nonce: int) -> tuple[int, int]:
@@ -530,6 +540,10 @@ class Pipeline:
     #: pd_tiles takes PD_GROUP's tiles, PD_G a CTA, at every pd shape (the same leaves on a quarter of the CTAs): a whole
     #: capture's tile hashing beside A's tree, whose CTA and pd_commit's each hold an SM whole
     tiles_group = False
+    #: pd_commit and pd_tree launched in half an SM's dynamic shared memory (`pd_setup`'s ``pd_smem_shared``) in place of
+    #: PD_WHOLE's: the same code, which uses PD_PAIR_SMEM of it whatever the launch gives, so the same bytes, with two of
+    #: their CTAs (or one and a side lane's) on an SM
+    pd_shared = False
     #: where `reads_bf16`, a call's BF16 rows (address, rows: contiguous, k halves each) that pd_commit's mode 1 (`rows_a`)
     #: reads in xa's place, its rows past them zero, so xa (their widening) needn't be written before it: the same words
     rows_bf16: tuple[int, int] | None = None
@@ -730,7 +744,8 @@ class Pipeline:
         rows = self.rows_bf16 if mode == 1 else None
         if rows is not None and not self.reads_bf16():
             raise RuntimeError("rows_bf16 is set on a pipeline whose pd_commit doesn't read BF16 rows (`reads_bf16`)")
-        d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
+        smem = (d.pd_smem_shared if self.pd_shared else d.pd_smem)[v]
+        d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), smem,
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
                     kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], self.stamps,
                     *((0, rows[0]) if rows else ())),
@@ -741,7 +756,7 @@ class Pipeline:
         padding rows' E_A lines under it (rows m_real..m - 1, where there are any)."""
         d, b, kk, v = self.dev, self.b, self.keys, self.pd_a | (PD_STAMP if self.stamps else 0)
         ea = b["ea_codes"] if self.m_real < self.m and self.fillers else 0
-        d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
+        d.launch(f"pd_tree_{v}", 1, 128, (d.pd_tree_smem_shared if self.pd_shared else d.pd_tree_smem)[v],
                  p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], ea, self.stamps),
                  i=(self.m_real, 0, 0, self.m))
 
@@ -982,7 +997,8 @@ POISON = 0xA5
 
 def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     """hash_decode.cuh's served launches on `pipe`'s buffers (its C~ and U computed), each variant of PD_SERVED (`commit_a`,
-    then `hash_leaf`; also `split_a`'s `rows_a` and `tree_seed_a` in its place, ``/split``) and each stamp twin of
+    then `hash_leaf`; also `split_a`'s `rows_a` and `tree_seed_a` in its place, ``/split``; and each of those with
+    pd_commit and pd_tree in half an SM's shared memory, ``/shared``, `Pipeline.pd_shared`) and each stamp twin of
     PD_STAMPED (``pd_V``, with stamps), after every output in PD_OUTPUTS is poisoned, against the fixture's bytes; the
     counter left zero.  The no-write control, the poison with no launch, must fail every output."""
     count, stamps, res = dev.alloc(16), dev.alloc(PD_STAMP_BYTES), {}
@@ -997,18 +1013,20 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
         return {"pd@domain": {"ok": False, "why": f"{(pipe.m_real, pipe.n, pipe.k)} is outside pd's domain"}}
     forms = [(None, None, ())]
     split = make(True)
-    forms += [(whole, (v, at, ""), ("commit_a", "hash_leaf")) for at in (0, stamps) for v in PD_SERVED]
-    forms += [(split, (v, 0, "/split"), ("rows_a", "tree_seed_a", "hash_leaf")) for v in PD_SERVED]
+    forms += [(whole, (v, at, False, ""), ("commit_a", "hash_leaf")) for at in (0, stamps) for v in PD_SERVED]
+    forms += [(split, (v, 0, False, "/split"), ("rows_a", "tree_seed_a", "hash_leaf")) for v in PD_SERVED]
+    forms += [(p_, (v, 0, True, f"{tag}/shared"), names) for p_, tag, names in (
+        (whole, "", ("commit_a", "hash_leaf")), (split, "/split", ("rows_a", "tree_seed_a", "hash_leaf"))) for v in PD_SERVED]
     for p_, form, names in forms:
         for x in PD_OUTPUTS:
             dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
         if p_ is not None:
-            v, p_.stamps, tag = form
+            v, p_.stamps, p_.pd_shared, tag = form
             p_.pd = v
             steps = {nm: fn for nm, _, fn in p_.steps()}
             for nm in names:
                 steps[nm]()
-            p_.stamps = 0
+            p_.stamps, p_.pd_shared = 0, False
         dev.sync()
         label = None if p_ is None else f"pd_{v | (PD_STAMP if form[1] else 0)}{tag}"
         for x in PD_OUTPUTS:
