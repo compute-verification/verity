@@ -1,5 +1,7 @@
 import CoreComposites
 import Properties.Composition
+import Properties.Pouw.PearlPlus
+import Properties.Pouw.PearlPlusDraw
 import Properties.Flock.Circuit.CircuitOf
 import Definitions.Accounting.JointLive
 import Definitions.Core.Blocks
@@ -74,13 +76,15 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s; remote has no tie beyond the record),
+  at onsite PoUS and PoUB-P2 on one store and at remote Pearl+'s run on the policy's record, `AcceptTied`'s),
   and `a`'s compiled component's acceptance of its own case.
   The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates at onsite and MACs at remote.** At onsite, gates of the committed circuit the play computed after
-  their window's coin, over the period's windows (`computed`), with no pricing. At remote, Pearl+'s claim is that the
-  MACs its run verdict credits (`credited`, its published `credited`) are at most the MACs the play computed on the
-  served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited cells' MACs (`macs`).
+  their window's coin, over the period's windows (`computed`), with no pricing. At remote, Pearl+'s claim reads the
+  credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
+  MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
+  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the draw's `ε` it published: the
+  tolerant audit's event (`Pouw.GγSampledTol`) with no drawn tile credited nothing.
 
 Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
@@ -88,7 +92,7 @@ verdict at `k` accepts while its claim fails is at most its error there. `Verity
 (`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the circuit file), `place`, `programDigest` and
-`registered`, `rounds` and `coinsRead`, `extract`, the finders and the forgers, `computed`, `credited` and `macs`, `world` (the runs PoUS,
+`registered`, `rounds` and `coinsRead`, `extract`, the finders and the forgers, `computed` and `macs`, `world` (the runs PoUS,
 PoUB-P2 and the network certifier realize), the declaration's registered inputs and the policy's budgets, the wipe at the
 period's boundary and the run read as its game, and `certOf`, `foreignBits`, `signatures`, `delta`, `epsForge` and
 `loss` (what the composite publishes, functions of the parameters alone).
@@ -144,7 +148,8 @@ def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
   | .remote => Remote.V1.tied
 
-/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, none beyond the record. -/
+/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, Pearl+'s run on the policy's
+record. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => [Onsite.store]
   | .remote => Remote.V1.ties
@@ -202,10 +207,21 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
   ∃ P, component k a = some P ∧ CaseAccepts k P s
 
+/-- **The credit Pearl+'s check publishes in what the prover sent remote**: the three byte strings decode, Pearl+'s
+case decodes under the parameters remote names for it, and Pearl+'s check on the blobs sent accepts it with the credit
+`w` (`PouwCheck.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
+def PearlPlusCredits (s : Sent) (w : PouwCheck.PearlPlus.Credit) : Prop :=
+  ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components .remote) ps ev,
+    x.2.2.id = PouwCheck.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
+      (canonicalJson x.2.1.params.toUTF8 >>= PouwCheck.PearlPlus.Protocol.paramsOf) = .ok p ∧
+      PouwCheck.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
+      PouwCheck.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
+      PouwCheck.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
+
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
 record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
-remote, none) each named one value (`Properties.Composition.Tied`). -/
+remote, Pearl+'s run on the policy's record) each named one value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧
@@ -359,8 +375,6 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   forger_signed : ∀ a θ F c σ, (forger a θ F c σ).signed.length ≤ signatures θ
   computed : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) →
     Exchange → Finset (Fin (read (namedFile (programDigest θ) F)).circuit.N)
-  /-- the MACs Pearl+'s run verdict credits in the play's answer, its published `credited` -/
-  credited : Exchange → ℕ
   /-- the MACs the play computed on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s
   rule at its credited cells' MACs (Pearl's Assumption 1) -/
   macs : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) →
@@ -475,13 +489,17 @@ network certifiers), whose window and capacity account are the parameters' (`wor
 own coins choose neither. The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not a period claim: the
-MACs its run verdict credits are at most the MACs the play computed on the run's tiles (`credited`, `macs`). -/
+tolerant audit's event (`Pouw.GγSampledTol`) at the credit Pearl+'s check published (`PearlPlusCredits`), the play
+computing at least `(1 − γ)(1 − u(X_O)) · W` MACs on the run's tiles (`macs`), where `W` is the run's claimed MACs (its
+`macs`), `γ` the cap's share `ρ` and `u(X_O)` the miss table's value at the draws on tiles credited nothing, which is `0`
+since Pearl+'s check rejects a drawn tile that fails, so `u(0)`, its `epsilon`. -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
   | .pouw, o => match k with
     | .onsite => (V.live .onsite θ F c).Holds (V.certOf θ) σ .pouw o
-    | .remote => V.credited o ≤ V.macs θ F c σ o
+    | .remote => ∃ w, PearlPlusCredits o.sent w ∧
+        (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
@@ -555,8 +573,18 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
 def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
 /-- **PoUW's target**: at onsite, at least `W` gates of the committed circuit computed after their window's coin; at
-remote, Pearl+'s, the MACs its run verdict credits at most the MACs the play computed on the run's tiles. -/
+remote, Pearl+'s, at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit its check published. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
+
+/-- **PoUW's target at remote, on what Pearl+'s check means**: where its published work is the run's credit at Pearl's
+assumption (`Properties.Pouw.PearlPlus.WorkIsTheCredit`), it accepts only runs whose every drawn tile passed
+(`AcceptMeans`), its draw is `Pouw.Ticket`'s law on its streams (`DrawIsOnItsStreams`) and the coin bytes give uniform
+tickets (`CoinBytesGiveUniformTickets`), PoUW meets its target at remote. Each is a statement about Pearl+'s code that its
+piece proves, a hypothesis here until it does. -/
+def PearlPlusSound : Prop :=
+  Properties.Pouw.PearlPlus.WorkIsTheCredit → Properties.Pouw.PearlPlus.AcceptMeans →
+    Properties.Pouw.PearlPlus.DrawIsOnItsStreams → Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets →
+      V.PouwSound .remote
 
 /-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.Complies`
 at the published `Γ` and `α`. -/

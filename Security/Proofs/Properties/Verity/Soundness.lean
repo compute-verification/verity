@@ -30,7 +30,8 @@ The witnesses of each of the three theorems are at the idle deployment (`Propert
 composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_subprotocols_honest`,
 `remote_soundness_of_subprotocols_honest`), and its conclusion fails at `Idle.exact` for a verifier that accepts everything
 (`soundness_at_of_targets_nontrivial`, `soundness_of_subprotocols_nontrivial`, `remote_soundness_of_subprotocols_nontrivial`): there
-every error is `0` and PoUW's claim fails on every play of the files that pass the commit phase's check.
+every error is `0` and PoUW's claim fails on every play after the empty commitment, at files that pass the commit
+phase's check.
 -/
 
 namespace Verity
@@ -118,11 +119,11 @@ theorem soundness_of_subprotocols : Soundness := by
   exacts [hS, hW, hI, hP, hB, hN, hX]
 
 theorem remote_soundness_of_subprotocols : RemoteSoundness := by
-  intro ι α _ d V hS hW hI
+  intro ι α _ d V hwork hmeans hdraw hcoins hS hW hI
   refine soundness_at_of_targets ι α d V .remote fun a ha => ?_
   cases a
   · exact hS
-  · exact hW
+  · exact hW hwork hmeans hdraw hcoins
   · exact hI
   all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
@@ -168,13 +169,14 @@ theorem soundness_honest_of {ι α : Type} [Fintype α] {d : Device ι} (V : Voc
 strategy on whose every play the claim of one of composite `k`'s subprotocols fails, and errors summing below one. -/
 theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
-    (hreg : V.Registered θ F) (a : Subprotocol) (ha : a ∈ subprotocols k) (hfail : ∀ o, ¬ V.Holds k θ F c σ a o)
+    (hreg : V.Registered θ F) (a : Subprotocol) (ha : a ∈ subprotocols k)
+    (hfail : ∀ log (e : ByteArray × Array ByteArray), ¬ V.Holds k θ F c σ a ⟨θ, F, c, log, e.1, e.2⟩)
     (hlt : ∑ a ∈ subprotocols k, V.error a θ F c σ < 1) :
     ¬ V.SoundnessFor k fun _ => True := by
   intro h
   have h1 := prob_play_eq_one (V.rounds θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧ ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o)
-    (fun _ _ => ⟨trivial, hreg, a, ha, hfail _⟩) σ
+    (fun log e => ⟨trivial, hreg, a, ha, hfail log e⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
@@ -352,17 +354,22 @@ theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c 
   rw [if_pos ⟨le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
-/-- At `exact`, PoUW's claim fails on every play: at onsite it certifies one gate computed, at remote Pearl+'s verdict
-credits one MAC, and no play computes either. -/
-theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c))
-    (o : Exchange) : ¬ exact.Holds k θ F c σ .pouw o := by
+/-- At `exact`, PoUW's claim fails on every play after the empty commitment: at onsite it certifies one gate computed,
+which no play computes, and at remote no credit is published, since the empty commitment is no binding of the
+components' digests. -/
+theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
+    (σ : Game.Strategy (exact.game θ F .empty)) (log : List Release) (e : ByteArray × Array ByteArray) :
+    ¬ exact.Holds k θ F .empty σ .pouw ⟨θ, F, .empty, log, e.1, e.2⟩ := by
   intro h
   cases k
   · change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf θ F).N)) : ℕ) : ℝ) at h
     simp at h
     norm_num at h
-  · change (1 : ℕ) ≤ 0 at h
-    exact Nat.not_succ_le_zero 0 h
+  · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := h
+    have h64 : ¬ ByteArray.empty.size = 64 := by decide
+    change Composition.decodeCommitment ByteArray.empty = .ok c' at hc
+    rw [Composition.decodeCommitment, if_neg h64] at hc
+    cases hc
 
 /-- At `exact`, the conclusion at composite `k` fails for a verifier that accepts everything, at the files that are the
 parameters (`ByteArray.empty`, the one committed file), for the honest prover. -/
@@ -371,7 +378,7 @@ theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw
   have h0 : ∑ a ∈ subprotocols k, exact.error a .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty) = 0 :=
     Finset.sum_eq_zero fun a _ => error_exact a _ _ _ _
   exact soundness_nontrivial_of exact k .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
-    ⟨.empty, by simp, rfl⟩ .pouw hk (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
+    ⟨.empty, by simp, rfl⟩ .pouw hk (pouw_fails k _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
 end Idle
 
@@ -406,12 +413,12 @@ idle deployment whose errors are all `0`. -/
 theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
   Idle.nontrivial_at .onsite (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
 
-/-- **`RemoteSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled remote
-composite. -/
+/-- **`RemoteSoundness`'s honest lemma**: its three targets hold at the idle deployment's compiled remote composite,
+PoUW's on any of Pearl+'s properties. -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
+    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PearlPlusSound ∧
       Idle.unbounded.InferenceOnlySound .remote :=
-  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+  ⟨Idle.target_unbounded _ _, fun _ _ _ _ => Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
 /-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
 the idle deployment whose errors are all `0`. -/
