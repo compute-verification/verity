@@ -256,7 +256,7 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
     simp (config := { zeta := false }) only [hj] at hp
     obtain ⟨_, hte, -⟩ := except_bind_ok hp; cases hte
   | ok hd0 =>
-  simp (config := { zeta := false }) only [hj, pure_bind, jpB] at hp
+  simp (config := { zeta := false }) only [hj, jpB] at hp
   refine ⟨Flock.norm hd0, by simp only [headerOf, hnl, htx, hj, Except.toOption, Option.map_some], ?_⟩
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) pctx at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨_, -, hp⟩ := hh)
@@ -287,7 +287,7 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
       simp (config := { zeta := false }) only at hp
       extract_lets (config := { underBinder := false, onlyGivenNames := true }) refs jpS at hp
       replace hp := ite_throw_ok hp
-      simp (config := { zeta := false }) only [jpS, pure_bind] at hp
+      simp (config := { zeta := false }) only [jpS] at hp
       exact ⟨_, rfl, hp⟩
   simp (config := { zeta := false }) only [jpT] at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨_, -, hp⟩ := hh)
