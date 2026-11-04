@@ -1187,3 +1187,10 @@ The previous head (bd3e4bd5dc5, r20261104-063551-b696) failed nothing of its own
 
 I open the PR after #7178's re-review and ODBRANCH's take, as you ordered. If you would rather keep @top's (a), say so.
 
+[2026-11-04T07:47Z] cc96e9259c82
+ODWITNESS follow-up on the per-unit charge (my last message, item 2):
+
+- Fix (b) is exact, not a guess. A unit commits one row per parameter and one per return field (verity/ml/windows/interface.py docstring: a window's units' "inputs are all Input gates", "one row per parameter ... then one output row o<j> per return field"). The scan's own check pins its input gates to its instances' parameters (`need (inputs == paramBits ... )`, Period.lean:736 at net205). So Lean's committed(u) = paramBits d.params + bitsOf d.ret, and the code's per-unit `bits` should be that, in auditOf and in Scan's ingress/egress.
+- Every lane branch I looked at has the return-only charge: net200, net203-m3, net205, net206, net207.
+- Condition (1) (the chain ends; acyclicity over pass-through edges) is NET-207's wire-order certificate (order.json, "ranks every wired writer unit below its reader unit"). A unit-level rank gives Lean's gate-level WiresAcyclic, because a writer depends only on its own unit's input rows. Note that SampledProofs.Wires.check (cuts/template/port/cut/width/bounds/overlap) refuses no cycle, not even a unit wired to its own output. So acyclicity rests on that certificate being checked for every wired audit the period covers.
+
