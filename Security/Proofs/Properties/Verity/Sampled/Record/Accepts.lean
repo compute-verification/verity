@@ -334,6 +334,96 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
     · rename_i hvd
       exact ⟨s, rd, B, record, _, hs, if_throw_ok hpl, hrd, hB, hu, hvd⟩
 
+/-- **v2's acceptance bounds the lengths its length refusal reads** (`fitsWhy` at `WORD`): `A`'s circuit and public
+files, its lookup tables (their number, names and bytes) and its program, and the printed text of the verifier's
+partition object and registered reads (`printedSize`), each under `2^64`. -/
+theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
+    (hn : Names A o p bs) :
+    A.I.circuitFile.size < 2 ^ 64 ∧ A.I.publicFile.size < 2 ^ 64 ∧ A.I.tables.length < 2 ^ 64 ∧
+      (∀ t ∈ A.I.tables, t.1.toUTF8.size < 2 ^ 64 ∧ t.2.size < 2 ^ 64) ∧ (∀ b ∈ A.I.program, b.size < 2 ^ 64) ∧
+      _root_.SampledProofs.OneStageZk.printedSize p.own.partition < 2 ^ 64 ∧
+      (∀ j ∈ p.own.registered, _root_.SampledProofs.OneStageZk.printedSize j < 2 ^ 64) := by
+  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at hacc
+  dsimp only at hacc
+  split at hacc
+  case h_1 => cases hacc
+  rename_i R hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  unfold _root_.SampledProofs.OneStageZk.run at hR
+  simp only [hn.tags] at hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨cB, hcB, hR⟩ := bind_ok hR
+  obtain ⟨pB, hpB, hR⟩ := bind_ok hR
+  obtain rfl : cB = A.I.circuitFile := Except.ok.inj (hcB.symm.trans hn.circuit)
+  obtain rfl : pB = A.I.publicFile := Except.ok.inj (hpB.symm.trans hn.pub)
+  obtain ⟨_, hfw, -⟩ := bind_ok hR
+  split at hfw
+  · cases hfw
+  rename_i hf
+  have hf' : _root_.SampledProofs.OneStageZk.fitsWhy _root_.SampledProofs.OneStageZk.WORD A.I.circuitFile
+      A.I.publicFile A.I.tables A.I.program (some p.own.partition) p.own.registered = none := by
+    rw [← hn.tables, hn.program]
+    exact hf
+  have hW : _root_.SampledProofs.OneStageZk.WORD = 2 ^ 64 := rfl
+  unfold _root_.SampledProofs.OneStageZk.fitsWhy at hf'
+  try rw [hW] at hf'
+  split_ifs at hf' with h1 h2 h3 h4 h5 h6 h7
+  all_goals first | (cases hf'; done) | skip
+  refine ⟨Nat.lt_of_not_le h1, Nat.lt_of_not_le h2, Nat.lt_of_not_le h3, ?_, ?_, ?_, ?_⟩
+  · intro t ht
+    have hno : ¬ (decide (2 ^ 64 ≤ t.1.utf8ByteSize) || decide (2 ^ 64 ≤ t.2.size)) = true :=
+      fun hx => h4 (List.any_eq_true.2 ⟨t, ht, hx⟩)
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_le] at hno
+    exact hno
+  · intro b hb
+    rw [Option.mem_def] at hb
+    rw [hb] at h5
+    simpa using h5
+  · simpa using h6
+  · intro j hj
+    rw [Option.mem_def] at hj
+    rw [hj] at h7
+    simpa using h7
+
+/-- **The session's statement fits its length words** where v2 accepts reading `A`'s and `o`'s inputs (`Names`), and
+the draw file `d` and the verifier's own partition object and registered file (`o`'s bytes) are each under `2^64`
+bytes: v2's length refusal gives the rest (`lengths_of_accepts`). Where `o`'s bytes are the printed text of what v2
+reads of them, `lengths_of_accepts` bounds those too. -/
+theorem fits_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
+    (hn : Names A o p bs) {d : Msg} (hd : d.length < 2 ^ 64) (hpart : o.partition.size < 2 ^ 64)
+    (hreg : ∀ b ∈ o.registered, b.size < 2 ^ 64) : Fits A o d := by
+  obtain ⟨hc, hp, htl, ht, hpr, -, -⟩ := lengths_of_accepts hacc hn
+  refine ⟨?_, hc, hp, htl, ht, ?_, ?_, ?_, hpr, ?_, ?_, ?_, ?_, hreg, ?_⟩
+  · show _root_.SampledProofs.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64
+    decide
+  · show (1 : ℕ) < 2 ^ 64
+    decide
+  · intro b hb
+    cases hb
+    show d.toArray.size < 2 ^ 64
+    rw [List.size_toArray]
+    exact hd
+  · intro b hb
+    cases hb
+    exact hpart
+  · intro n hn
+    cases hn
+  · intro n hn
+    cases hn
+  · intro n hn
+    cases hn
+  · intro n hn
+    cases hn
+  · intro n hn
+    cases hn
+
 end Accepts
 
 /-! ## The session's statement, as flock-verify reads it -/
