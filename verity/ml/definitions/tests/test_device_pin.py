@@ -1,4 +1,4 @@
-"""The device pins (`verity_vllm/pins/`): the cc 9.0 device's probed cuBLAS routes are the eager Build's default routes off the
+"""The device pins (`registry/device_pins/`): the cc 9.0 device's probed cuBLAS routes are the eager Build's default routes off the
 GLM-5.3 capture's shapes, a route is never read for an M the probe did not run, and a pin is found by its device's reported name."""
 from __future__ import annotations
 
