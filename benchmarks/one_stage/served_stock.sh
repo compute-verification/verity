@@ -12,7 +12,10 @@
 # serve.json, advice_trace.jsonl (the scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl,
 # the client's record of load j, and load-<j>.timings.json, its per-request send, first-token and done times. The trace and
 # the load's records hold request values, so they stay there: once the endpoint stops, `served_overhead.py metrics` reads
-# them on the node and $OUT/<lifetime>/overhead.json gets its aggregate alone, which `served_overhead.py table --stock`
+# them on the node. The aggregate holds the load's request and token counts, which are private too, so it also stays on the
+# node, as SERVE_ROOT/runs/RUN/<lifetime>/overhead.json, beside the full load lines (SERVE_ROOT/runs/RUN/stock.txt), and
+# `served_overhead.py table --stock --public` reads it there and publishes ratios alone. $OUT gets only status lines and
+# that directory's path (private.txt), which a reader of the control's run record
 # reads beside the composed run's $OUT/serve/overhead.json. WARM lifetimes (default 1) run first as warm-<i>,
 # so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
 # took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts
@@ -32,6 +35,7 @@ export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CU
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
+PRIV=$ROOT/runs/${RESEARCH_RUN_ID:-local}; mkdir -p "$PRIV"; export PRIV
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 
 serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its LOADS loads, the endpoint stopped
@@ -40,7 +44,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
-  mkdir -p "$D" "$OUT/$1"
+  mkdir -p "$D"
   cd "$TREE/integrations/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \
@@ -64,15 +68,16 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
       --prompt-range "$PROMPTS" --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" \
       > "$D/load-$j.log" 2>&1 || rc=$?
     echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | sed -E 's/, prompts .*//' | cut -c1-300)" \
-      | tee -a "$OUT/stock.txt"
+      >> "$PRIV/stock.txt"
+    echo "$1 LOAD $j: exit $rc" | tee -a "$OUT/stock.txt"
   done
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   echo "$1: stopped (exit $?)" | tee -a "$OUT/stock.txt"
-  # this lifetime's aggregate, whole; `table` reads it beside the composed run's whole one, its serve dir's
+  # this lifetime's aggregate, whole, kept on the node; `table` reads it beside the composed run's whole one, its serve dir's
   # private/out/serve/overhead.json on its node (its published $OUT/serve/overhead.json holds no load's counts, tokens or span)
-  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/$1/overhead.json" 2> "$D/overhead.err" \
-    || { echo "$1: no aggregate: $(cut -c1-300 "$D/overhead.err")" | tee -a "$OUT/stock.txt"; rm -f "$OUT/$1/overhead.json"; rc=12; }
+  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$D/overhead.json" 2> "$D/overhead.err" \
+    || { echo "$1: no aggregate" | tee -a "$OUT/stock.txt"; cut -c1-300 "$D/overhead.err" >> "$PRIV/stock.txt"; rm -f "$D/overhead.json"; rc=12; }
   return "$rc"
 }
 reps() {
@@ -83,6 +88,7 @@ reps() {
 }
 
 if [ "${1:-}" = reps ]; then reps; exit $?; fi
+echo "$PRIV" > "$OUT/private.txt"
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } | tee "$OUT/machine.txt"
 for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
 command -v gpu-lease >/dev/null || { echo "PREFLIGHT: no gpu-lease on this node" | tee -a "$OUT/stock.txt"; exit 3; }
