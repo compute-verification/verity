@@ -739,6 +739,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "program_file": out / "program.json"},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
+    summary["link_points"] = link_points(drawn_law, n_all, members)
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      **tie(a)).to_json()
@@ -756,6 +757,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
                                                 "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
+                                                "vus_per_block": mm["st"]["meta"].get("vus_per_block"),
                                                 **({"cached": kept[mm["m"].template]} if mm["m"].template in kept else {})}
                              for mm in members if mm["circuit"].parent == mm["st"]["dir"]})
     if not all(v["ok"] for v in checks.values()):
@@ -1081,11 +1083,32 @@ def _once(paths: Sequence[Path]) -> list[Path]:
     return out
 
 
-def v2_members(members: Sequence[tuple[int, int, int, Any]]) -> dict:
-    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(k, base, n, own)``: each member
-    ``m<k>``'s units ``[base, base + n)`` and its statement's ``own`` inputs, its circuit digest, registered file and
+def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
+    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(k, base, n, g, own)``: each
+    member ``m<k>``'s units ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose
+    link points the registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and
     registered circuit record, all fixed before the draw."""
-    return {"members": {f"m{k}": {**own, "units": [[base, base + n]]} for k, base, n, own in members}}
+    return {"members": {f"m{k}": {**own, "units": [[base, base + n]], "vus_per_block": g}
+                        for k, base, n, g, own in members}}
+
+
+def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
+    """The per-member registration's `link-points` (`link_points.refused`) over the window's staged members, each its
+    units ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest
+    and most drawn units under the drawn law (the draw's every-unit fallback included), or why it refuses them all.
+    Recorded here; v2's per-member registration refuses (`Registration.check`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
+
+    ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
+    try:
+        if why := CC.law_problem(law, population):
+            raise ValueError(why)
+        bounds = LP.bounds(law, population, ms)
+    except ValueError as e:
+        return {"members": len(ms), "error": str(e)}
+    return {"members": len(ms), "refused": [
+        {"member": f"m{mm['k']}", "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": lo, "most": hi}
+        for mm, (_, g), (lo, hi) in zip(members, ms, bounds) if LP.nbl(g, lo) != LP.nbl(g, hi)]}
 
 
 def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | str:
@@ -1118,7 +1141,8 @@ def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | 
     if len(members) == 1:
         return {"proofs": own(members[0]), "statements": [(None, proof(done[0]))], "tables": tables,
                 "interfaces": interfaces}
-    return {"proofs": v2_members([(mm["k"], mm["m"].base, mm["m"].n, own(mm)) for mm in members]),
+    return {"proofs": v2_members([(mm["k"], mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
+                                  for mm in members]),
             "statements": [(f"m{got['mm']['k']}", proof(got)) for got in done], "tables": tables,
             "interfaces": interfaces}
 
