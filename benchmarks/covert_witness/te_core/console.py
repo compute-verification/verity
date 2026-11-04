@@ -179,10 +179,20 @@ def write(src: Path, out: Path) -> dict[str, dict]:
 
 
 def put(p: dict) -> str:
+    """PUT `p` (module docstring); refused before any request where a trace the ledger shares among its records was
+    changed in place since it was read (te_core.ledger's `changed_traces`), since every record sharing it changed."""
     import urllib.error
     import urllib.request
 
+    from . import ledger
+
+    changed = ledger.changed_traces()
+    if changed:
+        raise SystemExit(f"console.put {p['id']}: {changed} of the ledger's shared traces changed in place after it "
+                         f"read them, so every record sharing them changed and this panel doesn't hold; find the "
+                         f"reader that writes into a record's formalism.trace and make it copy first")
     from research.slack import oidc_token
+
     req = urllib.request.Request(f"{PANELS_URL}/{p['id']}", body(p), method="PUT",  # noqa: S310 (a fixed https URL)
                                  headers={"Authorization": f"Bearer {oidc_token(PANELS_URL)}",
                                           "Content-Type": "application/json"})
