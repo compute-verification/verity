@@ -102,3 +102,19 @@ PEARLCAP, CMP-327 ca34 (r20261103-140949-ca34, f592 passes): as served (23 A + 8
 [2026-11-04T19:20Z] 1d67f0cf3749
 PEARLCAP: pushed cursor/pearlplus-forming-1de3 at 5f285271917, the forming term (CMP-325) and band rule (CMP-327) together, stacked on #7221 dd9f749967e (its head). No passing forming-only sha: the Lean check at 00eb2d1 found my forming edit to Properties.Pouw.PearlPlus TileKeepsTheCap did not elaborate (mapM pattern lambda); fixed in 5f28527. Python: pouw benchmarks at 790fbaf pass but for #7221 test_pearl_c_vllm_lean:92 (tie field); pearlplus_lean fails only #7221 read guard (run_result.py, settings.py, test_pearl_c_sm90_prefill.py undeclared in its pyproject inputs) -- both PEARLLEAN-side. Lean check at 5f28527 running: Security/Properties r20261104-191856-abfd, pearlplus r20261104-191946-cd11; I report when they land.
 
+[2026-11-04T19:21Z] 52e8209160d9
+PEARLLEAN: #7221 is now at 99de0d9535e (pushed). I merged PEARLWTIE's cursor/pearlplus-lean-live-tie-1de3 as a fast-forward, which brings #7277's 50a763e8 with its PouwCommit.fieldIs compares unchanged (Load.lean 147/150/189/226 and Coins.lean). That covers steps 1, 2 and 3 of CMP-331. Step 4, PEARLCAP's forming term and band rule, is still to come, so this head isn't final yet.
+
+Runs:
+- The difftest at dd9f749967e on vy-nebius-cpu-1, r20261104-181111-b93e: 11 of 11 passed, including both recorded H200 cases (run and control, 46 min). Lean = Python on every case, the new test_a_served_runs_tile_and_salt among them. The run's rc of 1 is my job script's cleanup trap failing (rm -rf on the fetched read-only tree), not pytest.
+- The same difftest on cpu-5, r20261104-175718-dbce: 9 CPU cases passed and the 2 recorded cases were skipped, because cpu-5's store has no remote configured.
+- At 99de0d9535e, I built pouw_pearlplus locally (197 jobs, clean), and Properties.Pouw.PearlPlus elaborates on it with a probe: PlanMeans and WorkIsTheCredit carry CMP-328's one-salt and tile conjuncts and testCredit, and OpeningBinds uses only propext, Classical.choice and Quot.sound. Note for proofs: plan now goes through PEARLWTIE's afterTie, so GSJOINT's derivations of tile64 and index_inj from plan unfold through it.
+- The Security/Properties Lean check at 324ca639256, r20261104-165236-bb28: the build passed (9588 jobs) and the kernel replay accepted with only the three allowed axioms. It reported 76 lock failures, and none names Pearl+: 71 are record drift in guarantees this branch doesn't touch (Flock, RemoteAudit, NCI, CoreProtocol, SampledProofs), 3 are missing witnesses on Lead.Commit, and 2 are VStar reads. All of #7221's Lean is new files, and no locked guarantee reads them. The run was then cancelled at its 5400 s timeout, 4296 s of it spent waiting on the Proofs side.
+
+Next: I'm rerunning the recorded H200 difftest at 99de0d9535e on cpu-1, since live coins changed load, and I'll merge PEARLCAP's commits when you send their sha.
+
+Friction:
+- --on auto puts jobs on cpu-5, whose `research data fetch` fails with "no manifest locally (no remote configured)".
+- This VM's ~/.research/runs disk sat at the 1.5 GB floor until about 18:30Z.
+- RESEARCH_NOTES_TOKEN isn't set here, so my draft note (lanes/compute-accounting/20261103T2345Z-draft-pearlplus-lean-check.md) isn't synced.
+
