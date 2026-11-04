@@ -621,9 +621,10 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
     """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
-    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
-    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
-    than `16 · b`, and Lean's public is the mirror's."""
+    Program's units commits, its parameters and its return, read off the Program, not a proof block's 16-bit public
+    output: over honest clock-form periods whose audits' stand-in units take a 16-bit parameter and return 8 to 320
+    bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
+    mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)

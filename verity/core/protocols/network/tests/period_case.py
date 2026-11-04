@@ -221,7 +221,7 @@ class Params:
 class Scan:
     """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
     entries, `_wired`, whose free inputs a link-window's term counts, `_tied_audits`), the bits one ingress and one
-    egress instance commit, and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
+    egress instance commit (its parameters and its return), and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
     steps: int
     free: int
     ingress: int
@@ -526,9 +526,10 @@ AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "st
 
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
-    each committing its template's return; a root with no template refused; its free inputs the Program's input gates
-    (`input_gates`), never a parameter, or, with its window's circuit record, wire order and the verifier's pins, the
-    record's count (`_record_count`); its slot entries' templates (`ENTRY_IDS`) with their closure digests. It reads
+    each committing its template's parameters and return; a root with no template refused; its free inputs the
+    Program's input gates (`input_gates`), never a parameter, or, with its window's circuit record, wire order and the
+    verifier's pins, the record's count (`_record_count`); its slot entries' templates (`ENTRY_IDS`) with their closure
+    digests. It reads
     the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it,
     refuses no descriptor this module writes."""
     if not isinstance(a, dict) or sorted(a) not in AUDIT_FORMS:
@@ -538,8 +539,8 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
-    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in nodes
-             if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    units = [(_members(x), sum(bits_of(t) for _, t in d["body"]["params"]) + bits_of(d["body"]["ret_type"]))
+             for x in nodes if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
@@ -659,7 +660,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
-    return Scan(T, 0, bits_of(bf["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety))
+    return Scan(T, 0, max([bits(bf["params"]), *(bits(b["params"]) for _, b in later)]) + bits_of(bf["ret_type"]),
+                bits(be["params"]) + bits_of(be["ret_type"]), L * nb * bits_of(ety))
 
 
 def params(j) -> Params:
@@ -1586,8 +1588,8 @@ def _unit_sig(S):
     return (("x", Array(1, U16)),), Array(S.OUT, BYTE)
 
 
-#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof block's 16-bit public output (`OUT` = 2) or more
-#: or fewer, each one gate.
+#: A compute audit's stand-in unit: it returns `OUT` bytes, a proof block's 16-bit public output (`OUT` = 2) or more
+#: or fewer, each one gate, and commits its 16-bit parameter besides.
 AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_sig,
                                  lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
 #: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.

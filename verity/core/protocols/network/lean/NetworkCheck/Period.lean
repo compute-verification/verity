@@ -35,8 +35,9 @@ state, by root and domain, which the scan's units read and register as its trans
 
 each compute audit's monitoring period (`steps`, `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of
 the window's population program, which must decode (`Flock.Program.decode`) with a template in its root: the audit's
-proof blocks are the root's template instances, and each commits its template's return, the outputs it computes that
-other proof blocks or the client read, which can be wider than a proof unit's 16-bit public output; each network
+proof blocks are the root's template instances, and each commits its template's parameters and return, its input gates
+and the outputs it computes that other proof blocks or the client read, which can be wider than a proof unit's 16-bit
+public output; each network
 certifier connection's cell cap over the period (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
@@ -210,9 +211,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 with `b` the audit's bound on faulty proof blocks at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
 `⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` proof blocks, which holds the sets a `subset:k` or a stratified
 sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
-`faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks commits (its template's return,
-`bitsOf`: the committed values `faultyBits` counts, the outputs a faulty proof block computes and other proof blocks or
-the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
+`faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks commits (its template's parameters
+and return, `paramBits` and `bitsOf`: the committed values `faultyBits` counts, a faulty proof block's input gates and
+the outputs it computes that other proof blocks or the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
 of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
 needs none of them. `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`:
 their exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics
@@ -248,9 +249,10 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   0, as it registers the rows, its `prog` is
   those audits' output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`: the egress tie
   moves the free term from the scan's `prog` to the tied audit's inputs), `steps` T, `faulty_bits`
-  `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
-  egress instance's (its u16 and row): each instance's committed values (`faultyBits`), the outputs it computes and
-  other proof blocks or the client read. `b` is its answer's `bound` (over its sample's strata, `countBound`), 0 when every
+  `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's parameter and return bits (its row, state and slot
+  entries, the more of bucket 0's and a later bucket's, and its verdict u16, state and view) and `b_eg` an egress
+  instance's (its parameters, and its u16 and row): each instance's committed values (`faultyBits`), its input gates
+  and the outputs it computes that other proof blocks or the client read. `b` is its answer's `bound` (over its sample's strata, `countBound`), 0 when every
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`:
   `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to
@@ -366,8 +368,8 @@ def Schedule.caps (s : Schedule) (windows : Nat) : Array Nat :=
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
 (none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
-term counts, `tiedAudits`), the bits one ingress and one egress instance commit (its return: the outputs other
-units read or the client receives, and its verdict), and its slot entries' bits (`E_w`: `lanes · T / every` entries of
+term counts, `tiedAudits`), the bits one ingress and one egress instance commit (its parameters, its input gates, and
+its return: the outputs other units read or the client receives, and its verdict), and its slot entries' bits (`E_w`: `lanes · T / every` entries of
 its `prog` ports' type), all a tied audit's wrong units can set. -/
 structure Scan where
   steps : Nat
@@ -665,7 +667,8 @@ before bucket a: the entry of an audit's `registered`, or of the scan's, whose v
 def stateValue : String := "verity/certifier/scan-state/v1"
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
-canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
+canonical bytes): its units are its root's template instances, each committing its template's parameters and return
+(`paramBits`, `bitsOf`); a root with no
 template is refused. Its free inputs are counted here and never read from the parameters: the Program's input gates
 (`inputGates`), or, where the audit carries its window's circuit record, the order of its wires and the verifier's
 pins, what `NetworkCheck.Circuit.check` counts free after checking the record against the Program (its input gates
@@ -687,7 +690,7 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | .error e => throw s!"{ctx}: program: {e}"
   let some root := prog.defs[prog.root]? | throw s!"{ctx}: program: no root"
   let templates := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
-    | some d => if d.prim then none else some (x.members, bitsOf d.ret)
+    | some d => if d.prim then none else some (x.members, paramBits d.params + bitsOf d.ret)
     | none => none
   if templates.isEmpty then throw s!"{ctx}: program: no template"
   let slots := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
@@ -832,8 +835,9 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       boundary bucket t reads (NetworkCheck.Period.readsEntries)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
-  pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret,
-         entries := s.lanes * nb * bitsOf ety }
+  pure { steps := T, free := 0,
+         ingress := max (paramBits df.params) ((later.map fun (_, d) => paramBits d.params).getD 0) + bitsOf df.ret,
+         egress := paramBits de.params + bitsOf de.ret, entries := s.lanes * nb * bitsOf ety }
 
 def paramsOf (j : Json) : V Params := do
   match j with
