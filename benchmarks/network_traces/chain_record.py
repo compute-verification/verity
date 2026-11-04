@@ -734,8 +734,6 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                              "pooled_share": {d: b.share for d, b in pooled.items()},
                              "per_period": per.bits, "per_period_share": per.share, "eps": str(per.eps),
                              "per_link_window": link.bits(link.block_s, reading)})
-    free = {reading: {"link_window": f["block"], "request": f["request"]}
-            for reading, f in ((r, link.free(r)) for r in LB.READINGS)}
     split = "; ".join(f"the {scope}'s F = {LB.fmax(d / links[scope])} at δ = {float(d):g}"
                       for scope in SCOPES[1:] for d in LB.DELTAS)
     return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
@@ -746,7 +744,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"connections_per_block": link.connections, "cell": link.cell,
                       "schedules_per_block": link.connections * link.cell,
-                      "cells_per_block": link.connections * link.cell, "cap_per_block": link.cap, "free": free,
+                      "cells_per_block": link.connections * link.cell, "cap_per_block": link.cap,
+                      "free_per_block": {r: link.free(r) for r in LB.READINGS},
                       "faulty": 0,
                       "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
@@ -762,7 +761,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "served, as its rows form does",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
-                "per-sampling-block and per-request terms at the run's request rate",
+                "per-sampling-block terms times the period's sampling blocks, whatever the requests served",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
                 f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "
