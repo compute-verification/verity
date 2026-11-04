@@ -7,6 +7,7 @@ public import Proofs.Properties.Verity.Recursive.PartStatement
 public import Proofs.Flock.Claims.Recursion.DeployChecked
 public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 public import Proofs.Flock.Soundness.Refine.Walk
+import all Init.Data.String.Defs
 
 /-!
 # The compiled component's refusals, as `acc_of_accepts` reads them (`Refusals`)

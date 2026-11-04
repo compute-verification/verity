@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.FirewallTemplate
 public import Proofs.Flock.Recursive.FirewallLive
+import all Lean.Data.Json.Basic
 
 /-!
 # The live firewall at any requests
