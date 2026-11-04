@@ -2162,8 +2162,8 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
     with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none; `--moved`
     carries an entry to its guarantee's new name. A property `shape.properties` holds is the shape rule's; a frozen one
-    is judged here. A witness `witnesses` or `claims.witnesses` names is that rule's, and `--update` drops its entries.
-    An entry with no reason fails."""
+    is judged here. A witness `witnesses` or `claims.witnesses` names is that rule's: it neither fails nor offends, and
+    `--update` keeps its entries while their premises still offend. An entry with no reason fails."""
     why = "inline when the rule came"
     pol, f = inlined(premise("P.f n\n    = 3", "Eq"), premise("P.g n = 4", "Eq"))
     allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}, "P.ahead": {"x = y": why}}
@@ -2189,13 +2189,34 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
         "premises": ["P.Assumptions"], "inline": {"P.SecurityProofs.T": allow["P.t"], "P.ahead": allow["P.ahead"]}}}
     for named in ({"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}},
                   {"claims": {"modules": ["P.Claims"], "witnesses": {"P.C": {"fails": "P.n", "meets": ["P.t"]}}}}):
-        assert A.inline_failures(held | named, grown) == ([], {"P.ahead": {"x = y": why}}, {})
+        assert A.inline_failures(held | named, grown) == ([], {"P.ahead": {"x = y": why}, "P.t": {"P.f n = 3": why}}, {})
     prop = {"function": "P.f", "outcome": "none"}
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}}}, grown) == []
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}, "frozen": {"P.t": "frozen: open"}}}, grown) == \
         ["guarantees.inline-hypothesis"]
     assert inline_codes(pol | {"shape": {"inline": {"P.t": {"P.f n = 3": " "}}}}, grown) == ["shape.inline-form"]
     assert inline_codes(pol | {"shape": {"inline": ["P.t"]}}, grown) == ["shape.inline-form"]
+
+
+def test_update_keeps_a_held_guarantees_inline_entry_while_its_statement_prints_it():
+    """A guarantee a witness entry or an unfrozen property holds keeps through `--update` each `shape.inline` entry its
+    statement still prints, and drops the rest, so the check without `--update` passes on the updated lock, and still
+    does once a merge leaves the guarantee unheld (its witness entry gone, its property frozen). The lock `--update`
+    wrote used to lack them, and every records PR put them back by hand."""
+    why = "inline when the rule came"
+    pol, f = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))
+    inline = {"P.t": {"P.f n = 3": why, "P.k n = 6": why, "P.h n = 5": why}}
+    witness = {"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}}
+    prop = {"function": "P.f", "outcome": "none"}
+    for lock, unheld in ((pol | witness | {"shape": {"inline": inline}}, lambda p: p | {"witnesses": {}}),
+                         (pol | {"shape": {"properties": {"P.t": prop}, "inline": inline}},
+                          lambda p: p | {"shape": p["shape"] | {"frozen": {"P.t": "frozen: open"}}})):
+        fails, out = A.judge(lock, f, FILES, update=True)
+        assert [x for x in fails if "inline" in x.code] == []
+        assert out["shape"]["inline"] == {"P.t": {"P.f n = 3": why, "P.k n = 6": why}}
+        assert inline_codes(out, f) == [] and inline_codes(unheld(out), f) == []
+        assert inline_codes(unheld(lock | {"shape": lock["shape"] | {"inline": {}}}), f) == [
+            "guarantees.inline-hypothesis"]
 
 
 INLINE_G = "import Control.Defs\n\ndef Control.Guarantees.G : Prop := ∀ n : Nat, 0 < n → Control.double n = 5 → True\n"

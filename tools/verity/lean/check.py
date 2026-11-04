@@ -2020,10 +2020,11 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     the offenders when the rule came) lists it. A property `shape.properties` holds (not under `shape.frozen`) is left to
     the shape rule, which holds each hypothesis it takes to its acceptance, a premise or a shared field, and a witness
     `claims.witnesses` or `witnesses` names (`claim_witnesses`) to that rule's form: what it takes is the deployment's
-    facts, not what a guarantee rests on, and `--update` drops its entries. A closed
-    hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
-    still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
-    the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
+    facts, not what a guarantee rests on. A closed hypothesis of the statement as written is the hypotheses rule's.
+    `--update` keeps an entry only while its premise still offends, a held guarantee's too (what holds it is the lock's,
+    which a merge can change, and `merge.py`'s `held` and the queue's `lock_drops` keep a premise its statement prints),
+    and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so the map only
+    shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
     guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
     spec = policy.get("shape") or {}
     allow = spec.get("inline", {})
@@ -2040,15 +2041,15 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
     for g in sorted(guarantees):
         pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}
-        if g in held:
-            continue
         if pin.get("kind") != "theorem" or "inline" not in pin:
             if old:
                 kept[g] = old
             continue
         if pin["inline"] is None:
-            fails.append(Failure("guarantees.inline-unread", g, f"guarantees: {g}'s inline hypotheses could not be read "
-                                 f"(`Facts.lean`'s `inlineOf` failed on its statement): make it read this statement's form"))
+            if g not in held:
+                fails.append(Failure("guarantees.inline-unread", g, f"guarantees: {g}'s inline hypotheses could not be "
+                                     f"read (`Facts.lean`'s `inlineOf` failed on its statement): make it read this "
+                                     f"statement's form"))
             if old:
                 kept[g] = old
             continue
@@ -2063,10 +2064,12 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
             if not (p.get("closed") and p.get("outer")) and not p.get("range")
             and not named(p.get("head")) and not named(p.get("unfolded"))
             and statements.get(p.get("head"), g) == g))
-        if bad:
-            offenders[g] = bad
         if still := {b: old[b] for b in bad if b in old}:
             kept[g] = still
+        if g in held:
+            continue
+        if bad:
+            offenders[g] = bad
         if new := [b for b in bad if b not in old]:
             fails.append(Failure("guarantees.inline-hypothesis", g, f"guarantees: {g} takes "
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
