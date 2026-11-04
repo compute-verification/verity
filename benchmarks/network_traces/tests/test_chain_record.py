@@ -513,9 +513,10 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     json.dumps(doc)
     rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
     week = {p: rows["week", "link", p] for p in ("registered", "anchors")}
-    lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 128 * 7
+    lw, cap = 604_800 / 3.2, 2 * 128 * 7
     assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * 1_121 + cap + 32)
+    assert doc["terms"]["free_per_block"] == {"registered": 8 * 1_136, "anchors": 8 * 1_121}
+    assert week["anchors"]["per_link_window"] == pytest.approx(8 * 1_121 + cap + 32)
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
