@@ -17,7 +17,7 @@ namespace Pouw.PearlPlus.Bridge
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
 /-- Tile `tid` of pass `p` is audit tile `g` of `U`'s layout: the same unit, shape and weight, rows and columns. -/
-def TileOf (p : Pass) (tid : ℕ) (U : Workload) (g : ℕ) : Prop :=
+def TileOf (p : Pass) (tid : ℕ) (U : Pouw.PearlC.Workload) (g : ℕ) : Prop :=
   ∃ pos rows cols, p.tile? tid = some (pos, rows, cols) ∧
     g < (auditTiling 64 64 U.layout).NT ∧
     (auditTiling 64 64 U.layout).unit g = p.records[pos]!.matmul.index ∧
@@ -29,7 +29,7 @@ def TileOf (p : Pass) (tid : ℕ) (U : Workload) (g : ℕ) : Prop :=
 
 /-- The tile's openings are unit `u`'s commitment `c`: its A rows are `c`'s activation rows and its B rows the weight's
 (each word below `2^32`), and its leaf is the digest of `c`'s ticket and useful words on the tile. -/
-def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Workload) (u : ℕ) (c : Commit) : Prop :=
+def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (u : ℕ) (c : Pouw.PearlC.Commit) : Prop :=
   ∀ pos rows cols, p.tile? tid = some (pos, rows, cols) →
     o.a.map (fun x => openedValue x.value) = rows.map (rowBytesOf c.act (U.layout.shape u).k) ∧
     o.b.map (fun x => openedValue x.value) = cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k) ∧
@@ -45,12 +45,12 @@ commitment `c`, and that `checkTile` passes on its weight's noise, has every wor
 values, or SHA-512 collides. -/
 def TilePassGivesTheWords : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (p : Pass) (tid : ℕ)
-    (o : TileOpening) (U : Workload) (g : ℕ) (c : Commit),
+    (o : TileOpening) (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
     TileOf p tid U g → bytesNat p.salt = saltOf s →
     bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
       rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
-      (protocolH3 saltOf rootOf ρ : Protocol Q R S).weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
+      (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
         (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
     checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = none →

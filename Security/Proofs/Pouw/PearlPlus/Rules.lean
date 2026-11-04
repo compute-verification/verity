@@ -31,9 +31,9 @@ def RowsAreTheRules : Prop :=
 /-- **(c) A word's replayed debit is the game's**: where `word_debit` is a value on a word's two rows of codes, its flagged
 atoms are `Skip.unitFlags`' and its later promotions into a +0 total are `laterZeroPromos`' at the H100 record. -/
 def DebitIsTheReplay : Prop :=
-  ∀ {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (j : Fin n) (f z : ℕ),
+  ∀ {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Pouw.Fp8Atom.Code) (B : Matrix (Fin n) (Fin k) Pouw.Fp8Atom.Code) (i : Fin m) (j : Fin n) (f z : ℕ),
     Rule.wordDebit (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (f, z) →
-      f = ((Finset.range (k / 32)).filter fun t => Skip.unitFlags A B i j t = true).card ∧
-        z = laterZeroPromos devH100 A B i j
+      f = ((Finset.range (k / 32)).filter fun t => Pouw.PearlC.Skip.unitFlags A B i j t = true).card ∧
+        z = Pouw.PearlC.laterZeroPromos Pouw.PearlC.devH100 A B i j
 
 end Pouw.PearlPlus.Bridge

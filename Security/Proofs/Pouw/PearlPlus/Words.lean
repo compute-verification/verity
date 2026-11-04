@@ -32,11 +32,11 @@ def semH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) :
     fun _ _ _ _ _ => ⟨fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0⟩) saltOf rootOf
 
 /-- Pearl+'s protocol at the H100 record under rev1, at the deployed semantics and cap `ρ`. -/
-noncomputable def protocolH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) : Protocol Q R S :=
+noncomputable def protocolH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) : Pouw.PearlC.Protocol Q R S :=
   pearlCProtocolDevRev1 devH100 (semH3 saltOf rootOf) ρ
 
 /-- Pearl+'s audit tiles at the H100 record under rev1, at the deployed semantics and cap `ρ`. -/
-noncomputable def tilesH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) : TileRules Q R S :=
+noncomputable def tilesH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) : Pouw.PearlC.TileRules Q R S :=
   pearlCTilesDevRev1 devH100 (semH3 saltOf rootOf) ρ
 
 /-- A row of FP32 words as values, the way `wordsVal` reads a committed row. -/
@@ -56,7 +56,7 @@ tile's rows and columns in the unit, every weight row of its columns passing the
 that are the commitment's activation rows and the weight's rows, and the check's noise, operands and checked words
 values (no rejection): each word of a row that passes the rules has the reference ticket and useful values. -/
 def WordsAreTheSemantics : Prop :=
-  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops)
     (ch : Words.Checked),
     bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.wid u) →
@@ -72,7 +72,7 @@ def WordsAreTheSemantics : Prop :=
     ∀ x < rows.length, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act
         rows[x]! →
       ∀ z < cols.length,
-        wordQ ((ch.c[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Protocol Q R S).ticket H s U u act rows[x]! cols[z]! ∧
-          wordQ ((ch.u[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Protocol Q R S).useful H s U u act rows[x]! cols[z]!
+        wordQ ((ch.c[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket H s U u act rows[x]! cols[z]! ∧
+          wordQ ((ch.u[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful H s U u act rows[x]! cols[z]!
 
 end Pouw.PearlPlus.Bridge
