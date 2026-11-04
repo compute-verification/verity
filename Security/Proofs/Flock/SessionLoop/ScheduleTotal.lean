@@ -41,7 +41,7 @@ def ScheduleTotal (x : Msg) : Prop :=
   ∀ (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ)),
     schedSoFar t (k % 2) dom xs hs cr.pop = .ok sched →
     (∀ i (h : i < sched.size), i < cr.size → (cr[i]!).size = sched[i].2) →
-    (let I := FlockComplete.piopRoundsZk spec sts[k / 2]! + t.sch.k0 + 2
+    (let I := FlockComplete.piopRoundsZk spec sts[k / 2]! + t.sch.k0 + 2;
       I + 1 < cr.size →
         _root_.Flock.Zk.rhoIndependent (⟨(cr[I]!)[0]!, (cr[I]!)[1]!⟩, ⟨(cr[I + 1]!)[0]!, (cr[I + 1]!)[1]!⟩) = true) →
     ∃ s, schedSoFar t (k % 2) dom xs hs cr = .ok s
