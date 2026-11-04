@@ -583,13 +583,16 @@ def test_subset_bound():
 
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
     """Each rehearsal strategy its own check must refuse is one negative, keyed by the strategy and no gate run's id,
-    refused only where every gate run that tried it refused it."""
+    refused only where every gate run that tried it refused it; those it accepts (`certifier_serve.ACCEPTED`: token
+    and byte pend the egress tie) are none."""
+    assert set(cr.REHEARSAL_ACCEPTS) == set(n2.cs.ACCEPTED), "set REHEARSAL_ACCEPTS to certifier_serve.ACCEPTED"
     job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
     steps = _steps(tmp_path, job)
     steps.scan = steps.warden_run = None
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
-         "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
+         "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted",
+                        "byte": "accepted"}}]}))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5

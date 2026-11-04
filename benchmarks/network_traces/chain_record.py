@@ -38,8 +38,8 @@
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members and the rehearsal's own check on each strategy it must refuse (``rehearsal/<strategy>``, no gate run's
-  id: refused only where every gate run that tried it refused it); token, which that check lets through, pends the
-  egress tie (`scan_service.EgressTie`). d1's K (`pooled_k`) counts the served units' compute audits
+  id: refused only where every gate run that tried it refused it); token and byte, which that check lets through, pend
+  the egress tie (`scan_service.EgressTie`). d1's K (`pooled_k`) counts the served units' compute audits
   (``--audit``: each window's sample and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at
   each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
@@ -124,9 +124,9 @@ WARDEN_STUBBED = (
 WARDEN_K = ("no audit of record reads an advice, so l_a,j carries none and this report has no advice term: the "
             "period's K is network-period check's (NetworkCheck.Period's rows form, which charges each request's "
             "schedule at its lane's cap; --period-answer), and per monitoring period leak's")
-#: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the egress
-#: tie refuses
-REHEARSAL_ACCEPTS = ("honest", "token")
+#: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's and byte's changed bytes only the
+#: egress tie refuses
+REHEARSAL_ACCEPTS = ("honest", "token", "byte")
 #: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
 SCAN_ACCEPTS = ("honest", "block")
 #: a proof block's outputs, at most 16 bits: an incorrect proof block's leak
@@ -414,8 +414,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
 
 def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
     """`scan_zk.py prove`'s summary: accepted when the honest and block rounds' windows are accepted (`SCAN_ACCEPTS`),
-    every other round's (chain, forged) refused, no witness piece found at the verifier leaked (`leak_scan.scan`; every
-    find, in a summary that doesn't judge them), and scan_zk's own ``ok`` holds."""
+    every other round's (`scan_zk.ROUNDS`: chain, tampered, unread) refused, no witness piece found at the verifier
+    leaked (`leak_scan.scan`; every find, in a summary that doesn't judge them), and scan_zk's own ``ok`` holds."""
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",

@@ -107,7 +107,7 @@ DELTA_KEYS = frozenset({"0.5", "9.54e-07"})
 #: the negatives the chain's report counts (`chain_record.report`), each by its name: a rehearsal's tampers but those
 #: its own check accepts (``rehearsal/<tamper>``), N2's members but honest (``n2/<member>``) and the scan's rounds but
 #: those whose window is accepted (``scan/<round>``)
-NEGATIVES = frozenset({*(f"rehearsal/{t}" for t in ("late", "extra", "drop", "byte")),
+NEGATIVES = frozenset({*(f"rehearsal/{t}" for t in ("late", "extra", "drop")),
                        *(f"n2/{m}" for m in ("tampered", "extra", "late", "other_subset")),
                        *(f"scan/{r}" for r in ("chain", "tampered", "unread"))})
 #: a scan round's member names (`scan_zk.members_of`): its link-windows' (``first``, ``last``, link-window ``w``'s
