@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.OpeningsCanon
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.OpeningsCanon
 
 /-!
 # A drawn proof block's openings are canonical at public inputs (`Bridge.OpeningsCanonTargetV5`, proved)
@@ -17,6 +19,8 @@ proof block's public gates:
   word's bit in the population's public file (`HiddenExec.keyProgHP_gate`, `keyGateP_pub`);
 * `Bridge.openingsCanonV5 : Bridge.OpeningsCanonTargetV5`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

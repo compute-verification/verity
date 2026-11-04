@@ -15,7 +15,7 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. A lane's days (`LEDGER`,
+or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. A lane's days (`LEDGER`,
 `DAY`: `declared_day`) are a declaration in the ledger before the opens of each day it names, then a declaration
 malformed, v1 or in a session, a day declared twice, an open on a day its lane hasn't declared or on no day, and the day
 of a window no session opens, a v1 open's or a dayless one's. The pins log's
@@ -372,7 +372,7 @@ PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
 #: those for a key that signs a ledger too: 32 leaves, room for a ledger's entries at increasing leaves on either side of
 #: its session's record
 LEDGER_PARAMS = [(1, 6), (2, 6), (4, 6)]
-HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
+HOSTS = ["host-a", "auditor.example", "h", "A_1"]
 
 
 @functools.cache
@@ -708,7 +708,7 @@ class Ledger:
     its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
     `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
     open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
-    withheld session (`withheld: true`).  The older v1 session is drawn unless `v1` says.  When `declare`, `s`'s lane
+    withheld session (`withheld: true`).  The older v1 session is chosen at random unless `v1` says.  When `declare`, `s`'s lane
     declares its days (`declare_days`)."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
@@ -734,7 +734,7 @@ class Ledger:
         queues = [named]
         for tag in ("o-1", "o-2")[:rng.randint(0, 2)]:
             sid, done = self.sid(tag), rng.random() < 0.8
-            events, _ = self.session_events(sid, _window(rng), f"vy-challenger-1.{sid}", rng.choice(LANES))
+            events, _ = self.session_events(sid, _window(rng), f"challenger-host.{sid}", rng.choice(LANES))
             queues.append(events + [("end", sid, {"closed": done, "complete": done and rng.random() < 0.8,
                                                   "files": {}, "rc": 0})])
         if self.two_step and rng.random() < 0.5:
@@ -745,7 +745,7 @@ class Ledger:
             self.events.append(q.pop(0))
         self.period_open = None
         if period is not None or rng.random() < 0.5:
-            self.period_open = {"by": "vy-admin", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
+            self.period_open = {"by": "operator", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), "lane": self.lane,
                                 "period": rng.choice(PERIODS)}
             first = self.index("reserve" if self.two_step else "open", s.id)
@@ -756,7 +756,7 @@ class Ledger:
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
         if v1 or v1 is None and rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
-            self.v1 = [{"host": "vy-challenger-1", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
+            self.v1 = [{"host": "challenger-host", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
                         "pinned": rng.randbytes(20).hex(), "port": 7811, "window": old},
                        {"closed": True, "files": {}, "rc": 0}]
             self.events = [("open", "v1-0", self.v1[0]), ("end", "v1-0", self.v1[1])] + self.events
@@ -778,9 +778,9 @@ class Ledger:
         return Ch.day_of(start)
 
     def declaration_body(self, lane: str, day: int, start: str) -> dict:
-        """Lane `lane`'s declaration of `day`, by the lane or by vy-admin for it, at a time no later than `start`'s day."""
+        """Lane `lane`'s declaration of `day`, by the lane or by an operator for it, at a time no later than `start`'s day."""
         rng = self.rng
-        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body = rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
         body.update(blocks=rng.choice([[], ["b0"], ["unit/0", "unit/1"], [rng.choice(NOTES)]]), day=day,
                     declared_utc=rng.choice([start, "1970-01-01T00:00:00Z", f"{start[:10]}T00:00:00Z"]),
                     pinned=rng.randbytes(20).hex(), program=rng.randbytes(64).hex())
@@ -788,7 +788,7 @@ class Ledger:
 
     def declare_days(self) -> None:
         """`s`'s lane declares each day an open of it after the declarations opens on (each dated first), together at a
-        drawn place after any v1 entry and before `s`'s open; sometimes the lane, or another that never opens, declares a
+        random place after any v1 entry and before `s`'s open; sometimes the lane, or another that never opens, declares a
         later day after every entry."""
         rng, lane = self.rng, self.opened.get("for") or self.opened["by"]
         at = rng.randint(2 if self.v1 else 0, self.index("open", self.s.id))
@@ -809,7 +809,7 @@ class Ledger:
         body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
                 "key_sha512": hashlib.sha512(self.s.pub if public is None else public).hexdigest(),
                 "port": self.rng.choice([7811, 7812])}
-        body.update(self.rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}, {"by": lane, "for": ""}]))
+        body.update(self.rng.choice([{"by": lane}, {"by": "operator", "for": lane}, {"by": lane, "for": ""}]))
         if self.rng.random() < 0.3:
             body["started_utc"] = "2026-10-20T09:45:48Z"
         if self.rng.random() < 0.2:
@@ -823,7 +823,7 @@ class Ledger:
     def reserve_body(self, lane: str) -> dict:
         rng = self.rng
         start, minutes = rng.choice(STARTS), rng.choice([1, 30, 720, rng.randint(1, 720)])
-        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body = rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
         body.update(peer=rng.choice(PEERS), scheme=rng.choice(SCHEMES), epoch=rng.choice([0, 1, 7]),
                     families=[[rng.choice(LABELS), rng.randint(1, 4)]], minutes=minutes, started_utc=start,
                     expires_utc=Ch.later(start, minutes))
@@ -1162,7 +1162,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                               {"files": _body(files, **{rng.choice(Ch.SEALED_FILES): DROP})}])
             j["ledger"] = lg.lines(edit=_body_edit(end, **bad))
         case "second-open":
-            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "vy-challenger-1.x",
+            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "challenger-host.x",
                                                                                        "other")))
             j["ledger"] = lg.lines(events)
         case "reused-leaf":
@@ -1306,7 +1306,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                     other = {0: False, 1: True}.get(v, v + 1)
             j["ledger"] = lg.lines(edit=_body_edit(o, **{k: other}))
         case "opened-by":
-            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "vy-Admin", None, 5, ["x"],
+            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "Operator", None, 5, ["x"],
                                                                             DROP])))
         case "open-late":
             start, expiry = reserve["started_utc"], reserve["expires_utc"]
@@ -1334,7 +1334,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
         case "declared-twice":
             b = rng.choice(lg.declarations)
             k = next(k for k, (_, _, x) in enumerate(events) if x is b)
-            who = {"by": b["for"], "for": DROP} if "for" in b else {"by": "vy-admin", "for": b["by"]}
+            who = {"by": b["for"], "for": DROP} if "for" in b else {"by": "operator", "for": b["by"]}
             again = _body(b, **rng.choice([{}, {"program": rng.randbytes(64).hex()}, who]))
             events.insert(rng.randint(k + 1, len(events)), ("declaration", None, again))
             j["ledger"] = lg.lines(events)
@@ -1480,7 +1480,7 @@ def session_case(rng: random.Random, name: str) -> Any:
             j["window"] = _window(rng)
         case "other-host":
             o = lg.index("open", s.id)
-            host = rng.choice([h for h in HOSTS if h != s.host] + [f"vy-challenger-1.{s.id}"])
+            host = rng.choice([h for h in HOSTS if h != s.host] + [f"challenger-host.{s.id}"])
             j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e["body"].update(host=host)))
         case "unsealed-log":
             j["ledger"] = lg.lines(edit=_entry_edit(end, lambda e: e["body"]["files"].update(

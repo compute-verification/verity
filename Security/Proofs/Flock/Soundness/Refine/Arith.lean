@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Tapes
-import Proofs.Flock.Soundness.Refine.Exec
-import Proofs.Flock.Soundness.Refine.Plays
+module
+
+public import Proofs.Flock.Soundness.Refine.Tapes
+public import Proofs.Flock.Soundness.Refine.Exec
+public import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # Element seams: the executable's arithmetic is the model's
@@ -11,6 +13,8 @@ the verifier uses (`fOf_add`, `fOf_mul`, `fOf_inv`). This file adds what the pha
 is a sum (`fOf_dot`), the weight arrays have 64 entries, reading a coin as `getD` or `!` agrees, and the zerocheck
 vector `pinned ++ r_outer` is the model's `zcVector`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

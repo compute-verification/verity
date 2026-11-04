@@ -465,7 +465,7 @@ PoUW has other guarantees, outside protocol soundness.
 ## The remote protocol in Lean
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
-site. It composes three subprotocols, sampled proofs' one-stage audit (v1), PoUW's period check
+site. It composes three subprotocols, sampled proofs (one-stage v2 or the recursive audit), PoUW's period check
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
 policy and the one-stage audit commit to one record and every window of the period names it as its Commit record
@@ -473,23 +473,26 @@ policy and the one-stage audit commit to one record and every window of the peri
 
 - **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. The composed statement, `Verity.Soundness`, is
-  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v1, which takes
-  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself and reads the
-  challenger's signed coins, joins once onsite and remote move to it and the composite switches.
+  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol's one-stage form is v2,
+  which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed coins; one-stage v1,
+  which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance to
+  `SampledKSLiveV3`'s event.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
   `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
-  `CoinsConfidential` and `OneClock`, are onsite's and prose only (`verity/core/protocols/sampled_proofs/README.md`).
+  (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
+  onsite's (`verity/core/protocols/sampled_proofs/README.md`): `CoinsConfidential`, the named Prop
+  `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
+  `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
   Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
   `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
   reads coins only from that log (`VerifierReadsLog`). Under them a sample drawn with a logged coin misses a set fixed
-  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
-  `CoinsConfidential` and `OneClock`, no `.lean`
-  file defines either. Network certifiers and memory challengers are onsite's.
+  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
+  remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
+  challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.

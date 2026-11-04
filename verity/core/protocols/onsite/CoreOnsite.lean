@@ -1,9 +1,9 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
 accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs
-(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the form its params name: one-stage v1's audit, or the
-recursive audit, V*'s compiled check run on the recursive session's parts, which the caller hands in as blobs; one-stage
-v2, the audit on the proofs themselves, is not onsite's until the composites switch to it), the
+(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the form its params name: one-stage v2's audit on
+the proofs themselves, or the recursive audit, V*'s compiled check run on the recursive session's parts, each on the
+blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is refused), the
 inference-only policy (`NciCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
@@ -14,28 +14,44 @@ by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Proto
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
-answer. The policy's commitment and sampled proofs' are the run's registration record (in either form, v1's), and both
+answer. The policy's commitment and sampled proofs' are the run's registration record (in either form, the one-stage
+one), and both
 must commit to the same one: two records' digests reject onsite whatever the subprotocols answer. PoUS and the remote bandwidth audit must
 also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Onsite composes it for the run of record of 28 Oct only, as an exception to
-everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
-private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
-15:00Z on 28 Oct.
+fresh-input bits) in the clear. Onsite composes it for one run of record only, as an exception to
+everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
+padded profile) replaces it.
 -/
-import CoreComposition.Blobs
-import CoreComposition.Cases
-import CoreComposition.Tie
-import MemoryChallenger.WipeProtocol
-import NciCheck.Protocol
-import NetworkCheck.Period
-import PousCheck.RunProtocol
-import PouwCheck.Period
-import RemoteAudit.P2Protocol
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
-import VStarRecursive.Sampled
+module
+
+public import CoreComposition.Blobs
+public import CoreComposition.Cases
+public import CoreComposition.Tie
+public import MemoryChallenger.WipeProtocol
+public import NciCheck.Protocol
+public import NetworkCheck.Period
+public import PousCheck.RunProtocol
+public import PouwCheck.Period
+public import RemoteAudit.P2Protocol
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
+public import VStarRecursive.Sampled
+meta import CoreComposition.Blobs
+meta import CoreComposition.Cases
+meta import CoreComposition.Tie
+meta import MemoryChallenger.WipeProtocol
+meta import NciCheck.Protocol
+meta import NetworkCheck.Period
+meta import PousCheck.RunProtocol
+meta import PouwCheck.Period
+meta import RemoteAudit.P2Protocol
+meta import SampledProofs.OneStage
+meta import SampledProofs.OneStageZk
+meta import VStarRecursive.Sampled
+
+@[expose] public section
 
 namespace Core.Onsite
 

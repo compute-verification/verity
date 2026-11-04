@@ -1,6 +1,8 @@
-import Definitions.Pouw.Dither
-import Definitions.Pouw.Assumptions.Dither
-import Definitions.Pouw.Assumptions.ShaRealize
+module
+
+public import Definitions.Pouw.Dither
+public import Definitions.Pouw.Assumptions.Dither
+public import Definitions.Pouw.Assumptions.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
@@ -24,6 +26,8 @@ The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dith
 * `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
   from the floor to `WorkSound`'s conclusion.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Dither
 
@@ -112,8 +116,8 @@ Open (stated so the red team can aim at them):
   detection rate's `p`, and which committed values are words, differ, and `WorkSoundNoFold` is not v3.2's statement.
   Until it is restated at v3.2's words, ACCEL's PROTOCOL.md prices `η` at the measured `p ≤ 2.8e-5` and the fleet
   pool's `ζ` at `2^-16`;
-* `G` is any accelerator here. The card instance reads it as the card model's machine at a card's θ with its
-  floors, prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the dither bits and counting
+* `G` is any accelerator here. The card instance reads it as the card model's machine at a card's θ (its table,
+  `Accel.Card`), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the dither bits and counting
   `K = E_in + E_out` (which holds only while the dither bits stay streamed), and makes the hosts and DPUs resources
   of `G` (that they are all the processors the cards reach is `PeriodInventory`, held until it is decided whether
   they are devices of the period). -/

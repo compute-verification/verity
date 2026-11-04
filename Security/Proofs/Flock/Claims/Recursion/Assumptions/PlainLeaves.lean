@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Complete.Walk
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Complete.Walk
 
 /-!
 # Flock's admission of plain leaves
@@ -8,6 +10,8 @@ The one fact the recursion's deployed stop takes of its inner statement (`ZKStop
 some concrete inner statement passes the checked reader, is small enough for Flock's completeness, and is in Flock's
 scope and true. `DeployChecked.lean` proves what follows from it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

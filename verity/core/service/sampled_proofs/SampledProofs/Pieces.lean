@@ -21,6 +21,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
   (`Slots.select`);
+* `file_population`: why the registration's population over a program and query is not a public file's units in order
+  (`FilePart.why`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -45,7 +47,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
   `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
   close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
-  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, infra's
+  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
   published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
@@ -65,21 +67,28 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
-import SampledProofs.OneStage
-import SampledProofs.Slots
-import SampledProofs.Service
-import SampledProofs.Run
-import SampledProofs.Stream
-import SampledProofs.Fleet
-import SampledProofs.Hello
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerTrees
-import SampledProofs.Produced
-import SampledProofs.HiddenDraw
-import SampledProofs.PartitionRef
-import SampledProofs.WiresDrawn
+module
+
+public import SampledProofs.OneStage
+public import SampledProofs.Slots
+public import SampledProofs.FilePart
+public import SampledProofs.Service
+public import SampledProofs.Run
+public import SampledProofs.Stream
+public import SampledProofs.Fleet
+public import SampledProofs.Hello
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.Produced
+public import SampledProofs.HiddenDraw
+public import SampledProofs.PartitionRef
+public import SampledProofs.WiresDrawn
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Pieces
 
@@ -571,6 +580,7 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("file_population", FilePart.piece),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),

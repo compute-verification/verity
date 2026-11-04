@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.RegLevels.SrcOpened
-import Proofs.Flock.VBridge.Runs.Lg
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcOpened
+public import Proofs.Flock.VBridge.Runs.Lg
 
 /-!
 # n7's levels: R's Ligerito run's contexts are its levels (`ConssAt`)
@@ -10,6 +12,8 @@ G's `Conss.ligerito_conss` is a statement about the symbolic run (`LM Lin`), and
 gives `ConssAt` wherever V*'s Ligerito over F returns zero residuals at a `fast100` schedule (`levelTie_of_lig`'s
 hypotheses).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

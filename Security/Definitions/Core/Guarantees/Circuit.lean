@@ -1,7 +1,11 @@
-import Definitions.Core.Partition
-import Definitions.Core.Declaration
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Core.Declaration
 
 /-! # What correct units establish about a circuit, for gates of any width -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

@@ -1,5 +1,7 @@
-import RemoteAudit.Protocol
-import Properties.RemoteAudit.Line
+module
+
+public import RemoteAudit.Protocol
+public import Properties.RemoteAudit.Line
 
 /-!
 # The bandwidth component accepts only what the memory line is stated on (`RemoteAudit.Protocol`)
@@ -29,6 +31,8 @@ commitment decodes to the node's registration, and the parameters and the log to
 windows a draw and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a log
 that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Component
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDrawRCols
-import Proofs.Flock.Claims.Recursion.LastBindsDeployed
-import Proofs.Flock.Claims.Recursion.RecRecord
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRCols
+public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
 # The deployed reader's columns as the bound record reads them
@@ -21,6 +23,8 @@ which an accepting decision's checks fix to the last message's (`checksAtJ_ok`).
 * `plainVerdictAtJK_of_runIVR`: there `nextR` decides, and `plainVerdictAtJK id` holds at its live outcome wherever
   the deployed columns of the run look up no column off `C` at table 0 (`plainVerdictAtJK_of_nextR_cols`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

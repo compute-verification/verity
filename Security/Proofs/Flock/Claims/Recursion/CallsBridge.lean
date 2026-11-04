@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LastColsDeployed
-import Proofs.Flock.Claims.Recursion.RepBindProof
+module
+
+public import Proofs.Flock.Claims.Recursion.LastColsDeployed
+public import Proofs.Flock.Claims.Recursion.RepBindProof
 
 /-!
 # The calls half where a proof file differs
@@ -17,6 +19,8 @@ same rounds and coins. They split at their proof files:
 
 `RecDeploy.plainCallsBindOrSlack_of_proofs` reduces `PlainCallsBindOrSlack` to `PlainCallsOfProofs`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

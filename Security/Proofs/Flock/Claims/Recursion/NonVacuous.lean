@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.VerdictRun
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.DeployOuter
-import Proofs.Flock.Claims.Recursion.BindsDeployed
-import Proofs.Flock.Claims.KS.PlainR
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRun
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.KS.PlainR
 
 /-!
 # `RecursiveKS`'s premise at `nextR`, from the verdict's rows
@@ -44,6 +46,8 @@ decoded proofs accept.
 Its owner's lowering fact (`hlowP`) holds at every dense compiled statement, and with it the verdict is only ever asked
 at a dense inner statement.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

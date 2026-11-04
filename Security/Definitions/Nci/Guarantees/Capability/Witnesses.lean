@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Capability.Budgets
-import Definitions.Nci.Guarantees.Capability.Incidence
-import Definitions.Nci.Guarantees.Capability.Dependency
-import Definitions.Nci.Capability.Toy
+module
+
+public import Definitions.Nci.Guarantees.Capability.Budgets
+public import Definitions.Nci.Guarantees.Capability.Incidence
+public import Definitions.Nci.Guarantees.Capability.Dependency
+public import Definitions.Nci.Capability.Toy
 
 /-!
 # Local bounds: their witnesses
@@ -11,10 +13,10 @@ Each local bound has two witnesses at the toy instance (`Nci.Capability.Toy`), l
 * `XHonest`: the bound's premises, every one, hold together at the toy, at the parameters its conclusion is read at;
 * `XNontrivial`: its conclusion fails at the toy where a premise is dropped, so the conclusion is not a tautology.
 
-A bound over a covering or a partition that concludes an order (the incidence and operand caps, the caps from
-dependency, `RecoveredBudget`) is of the lock's `exclusion` kind: its `XNontrivial` states, at the toy, each of the
-bound's other premises, the dropped premise's failure and the bound's. `HeldBudget` and `StatHeldBudget` conclude a
-budget (`HeldPriceAtMost`), and their `XNontrivial` is that budget's failure alone.
+Each bound over a covering or a partition (the incidence and operand caps, the caps from dependency, and the three
+budgets) is of the lock's `exclusion` kind: its `XNontrivial` states, at the toy, each of the bound's other premises,
+the dropped premise's failure and the bound's. `HeldBudget` drops description hardness and `StatHeldBudget` min-entropy
+hardness, at items priced above what the toy's values carry.
 
 The structural premises (`HeldPriceAtMost`, `SlotsRead`, the incidence, `Consumers.Upstream`, `OverlapWeights`,
 `RequiresState`) are proved at the toy. So are the information premises. Description and source hardness hold at
@@ -23,6 +25,8 @@ Each honest witness also proves its parameter spent: at deficit or ambiguity `0`
 decoder `M` describes `11`, an honest run's value, in one bit, and its recovery program spends one bit picking the
 source. Min-entropy hardness holds at deficit `0` for the product's value, a uniform bit.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
@@ -40,20 +44,28 @@ def HeldBudgetHonest : Prop :=
       ∃ e : List Bool, e.length ≤ 3 ∧ Evaluates M () 0 R1 e fun u T => selectionBits T (U u) σ) ∧
     Assumptions.DescriptionHard R1 (Y2 2) M () 0 1 ∧ ¬ Assumptions.DescriptionHard R1 (Y2 2) M () 0 0
 
-/-- **`HeldBudget`'s conclusion can fail**: with the value of gates `2` and `3` priced six bits, above every
-description of it, the proof block holds more than `k + ⌈log₂ B⌉ + aBlk + Λ = 5`. -/
+/-- **`HeldBudget`'s conclusion fails without description hardness**: the partition and the three-bit evaluators hold
+as in its honest witness; with the value of gates `2` and `3` priced six bits, description hardness fails at deficit
+`1`, since `M` describes `11` in one bit; and the proof block holds more than `k + ⌈log₂ B⌉ + aBlk + Λ = 5`. -/
 def HeldBudgetNontrivial : Prop :=
-  ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1)
+  R1.P.IsCK R1.d 2 1 ∧
+    (∀ (U : Fin R1.B → Finset (Fin 1)) (σ : Fin 1 → Finset (Fin R1.d.D.N)),
+      (∀ u, (∀ i ∈ U u, σ i ∈ (Y2 6).cells i) ∧ ∀ i ∈ U u, σ i ⊆ holds R1.d.D (R1.P.gates u)) →
+      ∃ e : List Bool, e.length ≤ 3 ∧ Evaluates M () 0 R1 e fun u T => selectionBits T (U u) σ) ∧
+    ¬ Assumptions.DescriptionHard R1 (Y2 6) M () 0 1 ∧
+    ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1)
 
 /-- **`StatHeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `Λ = 0`, the token drawn
 uniformly and the product's value priced one bit. -/
 def StatHeldBudgetHonest : Prop :=
   R1.P.IsCK R1.d 2 1 ∧ (∀ a ∈ μ.support, R1.Honest a) ∧ Assumptions.MinEntropyHard R1 (Y 1) μ 0
 
-/-- **`StatHeldBudget`'s conclusion can fail**: with the product's value priced three bits, more than its one bit of
-entropy, the proof block holds more than `k + Λ = 1`. -/
+/-- **`StatHeldBudget`'s conclusion fails without min-entropy hardness**: the partition and the honest support hold as
+in its honest witness; with the product's value priced three bits, more than its one bit of entropy, min-entropy
+hardness fails at deficit `0`; and the proof block holds more than `k + Λ = 1`. -/
 def StatHeldBudgetNontrivial : Prop :=
-  ¬ HeldPriceAtMost R1 (Y 3) (((1 : ℕ) : ℝ) + 0)
+  R1.P.IsCK R1.d 2 1 ∧ (∀ a ∈ μ.support, R1.Honest a) ∧ ¬ Assumptions.MinEntropyHard R1 (Y 3) μ 0 ∧
+    ¬ HeldPriceAtMost R1 (Y 3) (((1 : ℕ) : ℝ) + 0)
 
 /-- **`RecoveredBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, the evaluator `[1, 1, 1]`
 (`aBlk = 3`), the value of gates `2` and `3` as the source (`ℓz = 2`, `δ = 1`) and one eligible output per block

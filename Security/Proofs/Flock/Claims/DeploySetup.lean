@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Committed
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Bridge.Committed
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The masked chain's setup parameter (`KS.ZkSetup`)
@@ -11,6 +13,8 @@ of it as fields. `S₀` is `deployZk`'s (`insOf`, `setupOf`, the checks as they 
 `FlockDeploy.KS.Gen` over a `[ZkSetup]`, text unchanged: inside `KS.Gen` a name resolves to its `KS.Gen` copy first. Every
 copy is its original at `S₀` by `rfl`, so each original keeps its statement and is the copy at `S₀`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

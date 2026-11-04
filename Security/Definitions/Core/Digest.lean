@@ -1,3 +1,5 @@
+module
+
 /-!
 # Digests
 
@@ -7,6 +9,8 @@ A digest is 64 bytes: SHA-512's whole output (the one-hash rule), and the width 
 the advice root (`Verity.Advice`) and the hash area, which re-exports it as `Hash.Digest`. The verifier's code has its
 own, `Flock.Digest`, as bytes.
 -/
+
+@[expose] public section
 
 namespace Verity
 

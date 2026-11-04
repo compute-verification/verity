@@ -270,7 +270,7 @@ def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np
 
 def _side(job):
     device, rows, idx, side, seed_e, seed_b, k, e = job
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device])
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device], hashing="h0")
     return s._side(rows, idx, side, seed_e, seed_b, k, e)
 
 

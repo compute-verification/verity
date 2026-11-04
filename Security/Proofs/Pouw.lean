@@ -1,206 +1,204 @@
-import Proofs.Pouw.AttnNoise
-import Proofs.Pouw.Barrier
-import Proofs.Pouw.Barrier.Proofs
-import Proofs.Pouw.BudgetAbort
-import Proofs.Pouw.Copy
-import Proofs.Pouw.Credit
-import Proofs.Pouw.Deadline
-import Proofs.Pouw.EndToEndWindow.Statement
-import Proofs.Pouw.Eps1
-import Proofs.Pouw.Dither
-import Proofs.Pouw.DitherWitness
-import Proofs.Pouw.DitherInstance
-import Proofs.Pouw.DitherSelected
-import Proofs.Pouw.Dimension.CausalProofs
-import Proofs.Pouw.Dimension.EmbedProofs
-import Proofs.Pouw.Dimension.ForestProofs
-import Proofs.Pouw.Dimension.Fp8MmaProofs
-import Proofs.Pouw.Dimension.H100CiteProofs
-import Proofs.Pouw.Dimension.H100DenseProofs
-import Proofs.Pouw.Dimension.H100FloorProofs
-import Proofs.Pouw.Dimension.H100FragProofs
-import Proofs.Pouw.Dimension.H100LoopFreeProofs
-import Proofs.Pouw.Dimension.H100MeasuredProofs
-import Proofs.Pouw.Dimension.H100PeakTcProofs
-import Proofs.Pouw.Dimension.H100Proofs
-import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.LiftProofs
-import Proofs.Pouw.Dimension.Lifting
-import Proofs.Pouw.Dimension.MinRankProofs
-import Proofs.Pouw.Dimension.MixingProofs
-import Proofs.Pouw.Dimension.OpenPipeProofs
-import Proofs.Pouw.Dimension.PipeProofs
-import Proofs.Pouw.Dimension.Proofs
-import Proofs.Pouw.Dimension.RouteUPipeProofs
-import Proofs.Pouw.Dimension.RouteUProofs
-import Proofs.Pouw.Exact
-import Proofs.Pouw.Fp8Atom.Checks
-import Proofs.Pouw.Fp8Atom.Checks.Ada
-import Proofs.Pouw.Fp8Atom.Checks.Add
-import Proofs.Pouw.Fp8Atom.Checks.C00
-import Proofs.Pouw.Fp8Atom.Checks.C01
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.Fp8Atom.H1TBoundedStaging
-import Proofs.Pouw.Fp8Atom.H1TChecks
-import Proofs.Pouw.Fp8Atom.H1TCrossLateStaging
-import Proofs.Pouw.Fp8Atom.H1TFlipProofs
-import Proofs.Pouw.Fp8Atom.H1TGammaProofs
-import Proofs.Pouw.Fp8Atom.H1TGapStaging
-import Proofs.Pouw.Fp8Atom.H1TProofs
-import Proofs.Pouw.Fp8Atom.H1TRunningProofs
-import Proofs.Pouw.Fp8Atom.H1TShiftStaging
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.Fp8Atom.H1TTileProofs
-import Proofs.Pouw.Fp8Atom.Proofs
-import Proofs.Pouw.FpG1
-import Proofs.Pouw.FpG1.H1
-import Proofs.Pouw.Game
-import Proofs.Pouw.HiddenCredit
-import Proofs.Pouw.H1Zy
-import Proofs.Pouw.LiveCredit
-import Proofs.Pouw.M1
-import Proofs.Pouw.MerkleExtract
-import Proofs.Pouw.OnsiteFreed
-import Proofs.Pouw.Salt
-import Proofs.Pouw.Salt.Witness
-import Proofs.Pouw.ShaRealize
-import Proofs.Pouw.ShaRealizeWitness
-import Proofs.Pouw.Milestone
-import Proofs.Pouw.NCP
-import Proofs.Pouw.NCP.ChainProofs
-import Proofs.Pouw.NCP.ExtraIdentityProofs
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.NCP.Proofs
-import Proofs.Pouw.NCP.RelationProofs
-import Proofs.Pouw.NCP.RelationWitness
-import Proofs.Pouw.NCP.RouteUProofs
-import Proofs.Pouw.NCP.RouteUWordProofs
-import Proofs.Pouw.NCP.WordProofs
-import Proofs.Pouw.Period
-import Proofs.Pouw.Period.Accept
-import Proofs.Pouw.Period.Honest
-import Proofs.Pouw.Period.Sort
-import Proofs.Pouw.PeriodJ10RStrata
-import Proofs.Pouw.PeriodJ10RStrata.Honest
-import Proofs.Pouw.PeriodJ10R
-import Proofs.Pouw.PeriodJ10R.Honest
-import Proofs.Pouw.PeriodJ10R.Nontrivial
-import Proofs.Pouw.PeriodJ10R.Stratum
-import Proofs.Pouw.ServedValues
-import Proofs.Pouw.ServedValues.Honest
-import Proofs.Pouw.PearlC
-import Proofs.Pouw.PearlC.AccumProofs
-import Proofs.Pouw.PearlC.AtomErr
-import Proofs.Pouw.PearlC.Cap
-import Proofs.Pouw.PearlC.CapLoopGamma
-import Proofs.Pouw.PearlC.ChainCapKernelGamma
-import Proofs.Pouw.PearlC.ChainCapLoopGamma
-import Proofs.Pouw.PearlC.ChainOnlyGamma
-import Proofs.Pouw.PearlC.Completeness
-import Proofs.Pouw.PearlC.DeadlineWitness
-import Proofs.Pouw.PearlC.DeviceCapGamma
-import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-import Proofs.Pouw.PearlC.DeviceChainCapGamma
-import Proofs.Pouw.PearlC.DeviceFp4Gamma
-import Proofs.Pouw.PearlC.DeviceGamma
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
-import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gamma
-import Proofs.Pouw.PearlC.DeviceSm120Gamma
-import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
-import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
-import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
-import Proofs.Pouw.PearlC.EncChecks
-import Proofs.Pouw.PearlC.FlockTile
-import Proofs.Pouw.PearlC.Forming
-import Proofs.Pouw.PearlC.FormingP
-import Proofs.Pouw.PearlC.Fp4ChainOnlyGamma
-import Proofs.Pouw.PearlC.Fp4Checks
-import Proofs.Pouw.PearlC.Fp4Freeze
-import Proofs.Pouw.PearlC.Fp4HotGamma
-import Proofs.Pouw.PearlC.Fp4IssueGamma
-import Proofs.Pouw.PearlC.Freeze
-import Proofs.Pouw.PearlC.FreezeP
-import Proofs.Pouw.PearlC.FreezePPure
-import Proofs.Pouw.PearlC.Game
-import Proofs.Pouw.PearlC.Gamma
-import Proofs.Pouw.PearlC.HiddenGamma
-import Proofs.Pouw.PearlC.HiddenTileGame
-import Proofs.Pouw.PearlC.HonestWords
-import Proofs.Pouw.PearlC.Instance
-import Proofs.Pouw.PearlC.KernelWrefGamma
-import Proofs.Pouw.PearlC.Peel
-import Proofs.Pouw.PearlC.PeelExactChecks
-import Proofs.Pouw.PearlC.PeelExactProofs
-import Proofs.Pouw.PearlC.PeelExactProofsP
-import Proofs.Pouw.PearlC.PeelFp4Checks
-import Proofs.Pouw.PearlC.PeelFp4Proofs
-import Proofs.Pouw.PearlC.Rev1Witness
-import Proofs.Pouw.PearlC.RowCircuit
-import Proofs.Pouw.PearlC.Row4Words
-import Proofs.Pouw.PearlC.RowPrimChecks
-import Proofs.Pouw.PearlC.RowCapAtGamma
-import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.RowSeedFragment
-import Proofs.Pouw.PearlC.RowSeedGamma
-import Proofs.Pouw.PearlC.RowSeedKGamma
-import Proofs.Pouw.PearlC.RowSeedSkip
-import Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma
-import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
-import Proofs.Pouw.PearlC.ServedRev1Gamma
-import Proofs.Pouw.PearlC.Sm120Checks
-import Proofs.Pouw.PearlC.TTOutW1RowSeed
-import Proofs.Pouw.PearlC.Tile4Circuit
-import Proofs.Pouw.PearlC.TileCapRev1Gamma
-import Proofs.Pouw.PearlC.TileCheck
-import Proofs.Pouw.PearlC.TileCircuit
-import Proofs.Pouw.PearlC.TileProtocol
-import Proofs.Pouw.PearlC.TileValues
-import Proofs.Pouw.PearlC.TileGamma
-import Proofs.Pouw.PearlC.TileUOnlyGamma
-import Proofs.Pouw.PearlC.UOnlyGamma
-import Proofs.Pouw.PearlC.UOnlyLoopGamma
-import Proofs.Pouw.PearlC.W1BudgetAbort
-import Proofs.Pouw.PearlC.W1Checks
-import Proofs.Pouw.PearlC.W1Priced
-import Proofs.Pouw.PearlC.W1Stop
-import Proofs.Pouw.PearlC.W1Tabulate
-import Proofs.Pouw.PearlC.WholeCircuit
-import Proofs.Pouw.PearlC.TileCheck8
-import Proofs.Pouw.PearlC.TileCheck8Words
-import Proofs.Pouw.PearlC.TileCheck4
-import Proofs.Pouw.PearlC.TileCheck4Words
-import Proofs.Pouw.PearlC.Block4Sem
-import Proofs.Pouw.PearlC.RowStats
-import Proofs.Pouw.PearlC.PeelExists
-import Proofs.Pouw.PearlC.PeelExists4
-import Proofs.Pouw.PearlC.TileCheckWords
-import Proofs.Pouw.Pool
-import Proofs.Pouw.PoolWitness
-import Proofs.Pouw.Prob
-import Proofs.Pouw.QTree
-import Proofs.Pouw.Receipt
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.RelativeSecurity
-import Proofs.Pouw.RelativeSecurityGuarantees
-import Proofs.Pouw.RelativeSecurityJ10R
-import Proofs.Pouw.SakLb
-import Proofs.Pouw.Sampling
-import Proofs.Pouw.Sanity
-import Proofs.Pouw.ServedFreed
-import Proofs.Pouw.ServedFreed.Honest
-import Proofs.Pouw.ServedWork
-import Proofs.Pouw.ServedWork.Honest
-import Proofs.Pouw.SteinerRigidity
-import Proofs.Pouw.Theorem1
-import Proofs.Pouw.TileBound.AlignedExact
-import Proofs.Pouw.TileBound.Fp8
-import Proofs.Pouw.TileBound.Fp8Depth
-import Proofs.Pouw.TileBound.Proofs
-import Proofs.Pouw.TileBound.WinogradStrassen
-import Proofs.Pouw.TileBound.Witness
-import Proofs.Pouw.Window
-import Proofs.Pouw.Witness
+module
+
+public import Proofs.Pouw.AttnNoise
+public import Proofs.Pouw.Barrier
+public import Proofs.Pouw.Barrier.Proofs
+public import Proofs.Pouw.BudgetAbort
+public import Proofs.Pouw.Copy
+public import Proofs.Pouw.Credit
+public import Proofs.Pouw.Deadline
+public import Proofs.Pouw.EndToEndWindow.Statement
+public import Proofs.Pouw.Eps1
+public import Proofs.Pouw.Dither
+public import Proofs.Pouw.DitherWitness
+public import Proofs.Pouw.DitherInstance
+public import Proofs.Pouw.DitherSelected
+public import Proofs.Pouw.Dimension.CausalProofs
+public import Proofs.Pouw.Dimension.EmbedProofs
+public import Proofs.Pouw.Dimension.ForestProofs
+public import Proofs.Pouw.Dimension.Fp8MmaProofs
+public import Proofs.Pouw.Dimension.H100CiteProofs
+public import Proofs.Pouw.Dimension.H100DenseProofs
+public import Proofs.Pouw.Dimension.H100FloorProofs
+public import Proofs.Pouw.Dimension.H100FragProofs
+public import Proofs.Pouw.Dimension.H100LoopFreeProofs
+public import Proofs.Pouw.Dimension.H100MeasuredProofs
+public import Proofs.Pouw.Dimension.H100PeakTcProofs
+public import Proofs.Pouw.Dimension.H100Proofs
+public import Proofs.Pouw.Dimension.H100WProofs
+public import Proofs.Pouw.Dimension.Lifting
+public import Proofs.Pouw.Dimension.MinRankProofs
+public import Proofs.Pouw.Dimension.MixingProofs
+public import Proofs.Pouw.Dimension.OpenPipeProofs
+public import Proofs.Pouw.Dimension.PipeProofs
+public import Proofs.Pouw.Dimension.Proofs
+public import Proofs.Pouw.Dimension.RouteUPipeProofs
+public import Proofs.Pouw.Dimension.RouteUProofs
+public import Proofs.Pouw.Exact
+public import Proofs.Pouw.Fp8Atom.Checks
+public import Proofs.Pouw.Fp8Atom.Checks.Ada
+public import Proofs.Pouw.Fp8Atom.Checks.Add
+public import Proofs.Pouw.Fp8Atom.Checks.C00
+public import Proofs.Pouw.Fp8Atom.Checks.C01
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+public import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+public import Proofs.Pouw.Fp8Atom.H1TBoundedStaging
+public import Proofs.Pouw.Fp8Atom.H1TChecks
+public import Proofs.Pouw.Fp8Atom.H1TCrossLateStaging
+public import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+public import Proofs.Pouw.Fp8Atom.H1TGammaProofs
+public import Proofs.Pouw.Fp8Atom.H1TGapStaging
+public import Proofs.Pouw.Fp8Atom.H1TProofs
+public import Proofs.Pouw.Fp8Atom.H1TRunningProofs
+public import Proofs.Pouw.Fp8Atom.H1TShiftStaging
+public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+public import Proofs.Pouw.Fp8Atom.H1TTileProofs
+public import Proofs.Pouw.Fp8Atom.Proofs
+public import Proofs.Pouw.FpG1
+public import Proofs.Pouw.FpG1.H1
+public import Proofs.Pouw.Game
+public import SampledProofs.HiddenDraw
+public import Proofs.Pouw.H1Zy
+public import Proofs.Pouw.LiveCredit
+public import Proofs.Pouw.M1
+public import Proofs.Pouw.MerkleExtract
+public import Proofs.Pouw.OnsiteFreed
+public import Proofs.Pouw.Salt
+public import Proofs.Pouw.Salt.Witness
+public import Proofs.Pouw.ShaRealize
+public import Proofs.Pouw.ShaRealizeWitness
+public import Proofs.Pouw.Milestone
+public import Proofs.Pouw.NCP
+public import Proofs.Pouw.NCP.ChainProofs
+public import Proofs.Pouw.NCP.ExtraIdentityProofs
+public import Proofs.Pouw.NCP.GameProofs
+public import Proofs.Pouw.NCP.Proofs
+public import Proofs.Pouw.NCP.RelationProofs
+public import Proofs.Pouw.NCP.RelationWitness
+public import Proofs.Pouw.NCP.RouteUProofs
+public import Proofs.Pouw.NCP.RouteUWordProofs
+public import Proofs.Pouw.NCP.WordProofs
+public import Proofs.Pouw.Period
+public import Proofs.Pouw.Period.Accept
+public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.PeriodJ10RStrata
+public import Proofs.Pouw.PeriodJ10RStrata.Honest
+public import Proofs.Pouw.PeriodJ10R
+public import Proofs.Pouw.PeriodJ10R.Honest
+public import Proofs.Pouw.PeriodJ10R.Nontrivial
+public import Proofs.Pouw.PeriodJ10R.Stratum
+public import Proofs.Pouw.ServedValues
+public import Proofs.Pouw.ServedValues.Honest
+public import Proofs.Pouw.PearlC
+public import Proofs.Pouw.PearlC.AccumProofs
+public import Proofs.Pouw.PearlC.AtomErr
+public import Proofs.Pouw.PearlC.Cap
+public import Proofs.Pouw.PearlC.CapLoopGamma
+public import Proofs.Pouw.PearlC.ChainCapKernelGamma
+public import Proofs.Pouw.PearlC.ChainCapLoopGamma
+public import Proofs.Pouw.PearlC.ChainOnlyGamma
+public import Proofs.Pouw.PearlC.Completeness
+public import Proofs.Pouw.PearlC.DeadlineWitness
+public import Proofs.Pouw.PearlC.DeviceCapGamma
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+public import Proofs.Pouw.PearlC.DeviceChainCapGamma
+public import Proofs.Pouw.PearlC.DeviceFp4Gamma
+public import Proofs.Pouw.PearlC.DeviceGamma
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
+public import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gamma
+public import Proofs.Pouw.PearlC.DeviceSm120Gamma
+public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
+public import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
+public import Proofs.Pouw.PearlC.EncChecks
+public import Proofs.Pouw.PearlC.FlockTile
+public import Proofs.Pouw.PearlC.Forming
+public import Proofs.Pouw.PearlC.FormingP
+public import Proofs.Pouw.PearlC.Fp4ChainOnlyGamma
+public import Proofs.Pouw.PearlC.Fp4Checks
+public import Proofs.Pouw.PearlC.Fp4Freeze
+public import Proofs.Pouw.PearlC.Fp4HotGamma
+public import Proofs.Pouw.PearlC.Fp4IssueGamma
+public import Proofs.Pouw.PearlC.Freeze
+public import Proofs.Pouw.PearlC.FreezeP
+public import Proofs.Pouw.PearlC.FreezePPure
+public import Proofs.Pouw.PearlC.Game
+public import Proofs.Pouw.PearlC.Gamma
+public import Proofs.Pouw.PearlC.HiddenGamma
+public import Proofs.Pouw.PearlC.HiddenTileGame
+public import Proofs.Pouw.PearlC.HonestWords
+public import Proofs.Pouw.PearlC.Instance
+public import Proofs.Pouw.PearlC.KernelWrefGamma
+public import Proofs.Pouw.PearlC.Peel
+public import Proofs.Pouw.PearlC.PeelExactChecks
+public import Proofs.Pouw.PearlC.PeelExactProofs
+public import Proofs.Pouw.PearlC.PeelExactProofsP
+public import Proofs.Pouw.PearlC.PeelFp4Checks
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+public import Proofs.Pouw.PearlC.Rev1Witness
+public import Proofs.Pouw.PearlC.RowCircuit
+public import Proofs.Pouw.PearlC.Row4Words
+public import Proofs.Pouw.PearlC.RowPrimChecks
+public import Proofs.Pouw.PearlC.RowCapAtGamma
+public import Proofs.Pouw.PearlC.RowSeedCode
+public import Proofs.Pouw.PearlC.RowSeedFragment
+public import Proofs.Pouw.PearlC.RowSeedGamma
+public import Proofs.Pouw.PearlC.RowSeedKGamma
+public import Proofs.Pouw.PearlC.RowSeedSkip
+public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+public import Proofs.Pouw.PearlC.ServedRev1Gamma
+public import Proofs.Pouw.PearlC.Sm120Checks
+public import Proofs.Pouw.PearlC.Tile4Circuit
+public import Proofs.Pouw.PearlC.TileCapRev1Gamma
+public import Proofs.Pouw.PearlC.TileCircuit
+public import Proofs.Pouw.PearlC.TileValues
+public import Proofs.Pouw.PearlC.TileGamma
+public import Proofs.Pouw.PearlC.TileUOnlyGamma
+public import Proofs.Pouw.PearlC.UOnlyGamma
+public import Proofs.Pouw.PearlC.UOnlyLoopGamma
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+public import Proofs.Pouw.PearlC.W1Checks
+public import Proofs.Pouw.PearlC.W1Priced
+public import Proofs.Pouw.PearlC.W1Stop
+public import Proofs.Pouw.PearlC.W1Tabulate
+public import Proofs.Pouw.PearlC.WholeCircuit
+public import Proofs.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.TileCheck8Words
+public import Proofs.Pouw.PearlC.TileCheck4
+public import Proofs.Pouw.PearlC.TileCheck4Words
+public import Proofs.Pouw.PearlC.Block4Sem
+public import Proofs.Pouw.PearlC.RowStats
+public import Proofs.Pouw.PearlC.PeelExists
+public import Proofs.Pouw.PearlC.PeelExists4
+public import Proofs.Pouw.PearlC.TileCheckWords
+public import Proofs.Pouw.Pool
+public import Proofs.Pouw.PoolWitness
+public import Proofs.Pouw.Prob
+public import Proofs.Pouw.QTree
+public import Proofs.Pouw.Receipt
+public import Proofs.Pouw.Reduction
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurityFork
+public import Proofs.Pouw.RelativeSecurityGuarantees
+public import Proofs.Pouw.RelativeSecurityJ10R
+public import Proofs.Pouw.SakLb
+public import Proofs.Pouw.Sampling
+public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.ServedFreed
+public import Proofs.Pouw.ServedFreed.Honest
+public import Proofs.Pouw.ServedWork
+public import Proofs.Pouw.ServedWork.Honest
+public import Proofs.Pouw.SteinerRigidity
+public import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.TileBound.AlignedExact
+public import Proofs.Pouw.TileBound.Fp8
+public import Proofs.Pouw.TileBound.Fp8Depth
+public import Proofs.Pouw.TileBound.Proofs
+public import Proofs.Pouw.TileBound.WinogradStrassen
+public import Proofs.Pouw.TileBound.Witness
+public import Proofs.Pouw.Window
+public import Proofs.Pouw.Witness
 
 /-!
 # PoUW's proofs
@@ -211,3 +209,5 @@ named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw
 (`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
 are in `Definitions.Pouw`.
 -/
+
+@[expose] public section

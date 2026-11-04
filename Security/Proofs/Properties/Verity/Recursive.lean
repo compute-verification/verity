@@ -1,21 +1,24 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Bridge.CircuitOf
-import VStarRecursive
-import Properties.Verity.Game
-import Proofs.Properties.Verity.Soundness
-import Proofs.Properties.Verity.Recursive.BaseSetup
-import Proofs.Properties.Verity.Recursive.Compiled
-import Proofs.Properties.Verity.Recursive.Numbers
-import Proofs.Properties.Verity.Recursive.Names
-import Proofs.Properties.Verity.Recursive.PartStatement
-import Proofs.Properties.Verity.Recursive.PartVerdict
-import Proofs.Properties.Verity.Recursive.SetupChecks
-import Proofs.Properties.Verity.Recursive.ScheduleRun
-import Proofs.Properties.Verity.Recursive.Refusals
-import Proofs.Properties.Verity.Recursive.Assumptions
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.KappaEpsCap
+public import Proofs.Flock.Bridge.CircuitOf
+public import VStarRecursive
+public import Properties.Verity.Game
+public import Proofs.Properties.Verity.Soundness
+public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Properties.Verity.Recursive.Compiled
+public import Proofs.Properties.Verity.Recursive.Numbers
+public import Proofs.Properties.Verity.Recursive.Names
+public import Proofs.Properties.Verity.Recursive.PartStatement
+public import Proofs.Properties.Verity.Recursive.PartVerdict
+public import Proofs.Properties.Verity.Recursive.SetupChecks
+public import Proofs.Properties.Verity.Recursive.ScheduleRun
+public import Proofs.Properties.Verity.Recursive.Refusals
+public import Proofs.Properties.Verity.Recursive.Assumptions
 
 /-!
 # Sampled proofs' recursive configuration: the component's property and its target
@@ -45,20 +48,23 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
     the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
     finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session
-    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus
-    the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'`
-    (`Vocab.cost`), with no call model.
+    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus the
+    knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-174.95}, t' · 2^{-λ})` at a statement at the
+    deployment's tables, `t' · 2^{-λ}` elsewhere) plus the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a
+    defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
   session's projection) with the draw's miss, the deployment's reading of a witness (`hread`) and its collision from
   two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
-  states it with `RecursiveKS` and `λ₂ ≥ 100` discharged (`SampledProofsRecursive`).
+  states it with `RecursiveKS`, the call bounds and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until C-Flock's spec is extracted.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 
@@ -476,27 +482,26 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
      RefusalsOf.transcript_of_compiled hacc hshow.1,
      RefusalsOf.rows_of_compiled hacc hrows⟩
 
-/-- **Sampled proofs' one-stage form is v1**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
-accepts, the evidence is one-stage too and v1's live check (`SampledProofs.OneStage.protocol`'s, `checkLive`) accepts the
-same commitment and evidence with the same public output and profile, whatever the blobs. So what is proved of v1's
-acceptance (`Properties.Challenger.oneStage_check_of_accept`, `acceptMeans`, the sampled proofs bound) holds of the
-composed component's one-stage branch. -/
-theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+/-- **Sampled proofs' one-stage form is v2**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
+accepts, the evidence is one-stage too and v2 (`SampledProofs.OneStageZk.checkBlobs`) accepts the same commitment,
+evidence and blobs with the same public output and profile. So what is proved of v2's acceptance (`acceptMeans` at the
+coins it read, the sampled proofs bound) holds of the composed component's one-stage branch. -/
+theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
     {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStage.protocol.check p₀ c e₀ = .accept pub prof := by
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
   cases e with
   | inl e₀ => exact ⟨e₀, rfl, h⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
-theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStage.Params}
+theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params}
     {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
     {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.protocol.checkBlobs
       (show VStar.Recursive.Sampled.protocol.Params from Sum.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStage.protocol.check p₀ c e₀ = .accept pub prof :=
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
   sampled_oneStage_accepts h
 
 /-! ## The target -/
@@ -579,6 +584,11 @@ outer sessions. The worst case (`cap = 2^256` reruns a wait) would put the bindi
 past one at every circuit. -/
 noncomputable def runs (x : Msg) : ℕ :=
   Claims.Recursion.NI q.D q.I x * (1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).k)
+
+/-- **The deployment's tables at `x`**: `RecDeploy.OneTableAt` at the brings `recordAt` stages from,
+`{ deployedB q.b with tr := recTr … }`. -/
+def OneTable (x : Msg) : Prop :=
+  RecDeploy.OneTableAt { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } x
 
 end Dep
 
@@ -720,12 +730,23 @@ def FinderCR (S : SessionIn V q k θ F c σ)
     ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
 
-/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus `BitsLin2On`'s
-`t' · 2^{-λ}`, plus the binding term, the file's wire bits times `√(E[bindBudget] / 2^256)` over pairs of draws. -/
+open Classical in
+/-- **The knowledge-soundness term at a draw's statement `x`**, from `t'`: `BitsLin2On`'s `t' · 2^{-λ}`, and where `x`
+is at the deployment's tables (`OneTable`) the least of it and route 2C's split bound `κ + t' · ε` (`BitsLin2KOn`), with
+`κ = 2^{-167.7}` once a session and `ε = 2^{-174.95}` once per SHA-512 call (`RecDeploy.kappa_eps_oneTable_cap`, at the
+call caps every accepted statement meets). -/
+noncomputable def ksAt (S : SessionIn V q k θ F c σ) (lam : ℝ) (x : Msg) : ℝ :=
+  if q.OneTable x then min (2 ^ (-(167.7 : ℝ)) + q.tCost V S * 2 ^ (-(174.95 : ℝ))) (q.tCost V S * 2 ^ (-lam))
+  else q.tCost V S * 2 ^ (-lam)
+
+/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus the
+knowledge-soundness term averaged over the draws (`ksAt`), plus the binding term
+`√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its units and the budget averaged over
+pairs of draws. -/
 noncomputable def delta (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
-  ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
-    (∑ g, (V.circuitOf θ F).w g : ℕ) *
-      Real.sqrt (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)))
+  ENNReal.ofReal (δs + Claims.Ex (fun ξ => q.ksAt V S lam (S.x ξ)) +
+    Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
+      (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))))
 
 open Classical in
 /-- **The error at the strategy's session `S`**, the shared `condError FinderCR δ := if FinderCR then δ else ⊤`

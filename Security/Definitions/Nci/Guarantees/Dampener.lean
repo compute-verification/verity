@@ -1,6 +1,8 @@
-import Definitions.Nci.Dampener
-import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Assumptions.Baseline
+module
+
+public import Definitions.Nci.Dampener
+public import Definitions.Nci.Assumptions.Threads
+public import Definitions.Nci.Assumptions.Baseline
 
 /-!
 # The compute dampener: the guarantees
@@ -27,6 +29,8 @@ guarantee or of the model's accounting:
 also discharges the declared computation's with `ThreadedThrottled`, and `DampenerThreadedSlots` with
 `ThreadedThrottledSlots`, weights charged per parameter slot.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

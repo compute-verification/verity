@@ -2,9 +2,17 @@
 JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
 integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs
 
@@ -47,6 +55,17 @@ def field? (j : Json) (k : String) : Option Json := (j.getObjVal? k).toOption
 
 /-- Python's `d.get(k)`: a missing key reads as `null`. -/
 def getD (j : Json) (k : String) : Json := (field? j k).getD Json.null
+
+/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
+check that compares with it can't be proved. -/
+def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+
+example : jsonStrIs (getD (Json.mkObj [("label", .str "draw")]) "label") "draw" = true := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .str "other")]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .arr #[.str "draw"])]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .null)]) "label") "" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("after", .str "draw")]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.str "draw") "label") "draw" = false := by decide
 
 def entries : Json → Array (String × Json)
   | .obj kvs => kvs.toArray

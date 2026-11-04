@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfiltration
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
-import Proofs.Flock.Soundness.Audit.Partitioning.Witness
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfiltration
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
+public import Proofs.Flock.Soundness.Audit.Partitioning.Witness
 
 /-!
 # Optimal partitioning
@@ -14,3 +16,5 @@ every draw law: free compute (`ConverseExact` to `UnequalCost`), exfiltration as
 is in `Partitioning.Model`, the statements in `Partitioning.Guarantees`, their proofs in `Partitioning.SecurityProofs`,
 and instances showing they are not vacuous in `Partitioning.Witness`. They read only the Flock-free part of `Audit`.
 -/
+
+@[expose] public section
