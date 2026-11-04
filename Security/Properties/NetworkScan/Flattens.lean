@@ -16,10 +16,11 @@ program's outputs.
 * `jointOf ms`, `Flattens ms C`: the members' joint program, and `C` being it.
 * `FilesOf P fs`: one circuit file a template of the Program `P`, in order, each one Bits lays out as its template
   (`SampledProofs.Bits.check`).
-* `vusOf`, `vbase`, `MembersOf P fs ms`: template `i`'s instances fill VUs of its own, `upv` a VU, from `vbase i`, and
-  the members hold every VU once, each member one template's circuit file over VUs of that template's.
-* `instPos`: the claims position of a bit of template `i`'s instance `t`, at its member, unit and copy, and past the
-  joint program where nothing places it.
+* `MembersOf P fs rs ms`: the members hold each unit of the template query's population once (its ranges `rs`, as
+  `Flock.TemplateQuery.evaluate` gives them, a unit an instance), each member one template's circuit file over units
+  the code locates at that template's node (`Flock.TemplateQuery.locate`).
+* `instPos`: the claims position of a bit of template `i`'s instance `t`, at the unit the code locates there and its
+  member, and past the joint program where nothing places it.
 * `wordBit`: the port word and bit of a field's bit, each field whole u16 words, packed 16 bits a word.
 -/
 
@@ -28,6 +29,7 @@ namespace Properties.NetworkScan
 open SampledProofs.Bits (LGate Members keyProg prog base)
 open NetworkCheck.Period (templateNodes bitsOf)
 open NetworkCheck.Circuit (templateDef)
+open Flock.TemplateQuery (TRange locate population)
 
 /-- **A Boolean-profile gate as a sampling gate** (`Claims.Sampling.BGate`), constructor for constructor, its reads
 shifted by `b`. -/
@@ -64,34 +66,29 @@ def FilesOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
   fs.length = (templateNodes P).length ∧ ∀ i < fs.length,
     SampledProofs.Bits.check (fs.getD i default) P (templateDef P ((templateNodes P).getD i 0)).key = none
 
-/-- **Template `i`'s VUs** at its circuit file `fs[i]`: its template node's members, `upv` a VU, rounded up. -/
-def vusOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) (i : ℕ) : ℕ :=
-  let upv := (fs.getD i default).upv
-  (((P.defs[P.root]!).body.nodes[(templateNodes P).getD i 0]!).members + upv - 1) / upv
-
-/-- **The VUs before template `i`'s**: template `i`'s are `vbase i`, …, `vbase (i + 1) − 1`. -/
-def vbase (P : Flock.Program.Prog) (fs : List Flock.Circuit) (i : ℕ) : ℕ := ((List.range i).map (vusOf P fs)).sum
-
-/-- **The members of `P`'s audit** at its templates' circuit files `fs`: together they hold each of the templates' VUs
-once, and each is one template's circuit file over VUs of that template's. -/
-def MembersOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) (ms : Members) : Prop :=
-  List.Perm (ms.flatMap (·.2.toList)) (List.range (vbase P fs fs.length)) ∧
+/-- **The members of `P`'s audit** at its templates' circuit files `fs` and the ranges `rs` of the template query over
+`P` (`Flock.TemplateQuery.evaluate`, the population as the sampled verifier reads it: each call and each batch member
+of a template one unit, in root node order): together they hold each of the population's units once
+(`Flock.TemplateQuery.population`), and each is one template's circuit file over units the code locates at that
+template's node (`Flock.TemplateQuery.locate`). -/
+def MembersOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) (rs : Array TRange) (ms : Members) : Prop :=
+  List.Perm (ms.flatMap (·.2.toList)) (List.range (population rs)) ∧
     ∀ m < ms.length, ∃ i < fs.length, (ms.getD m default).1 = fs.getD i default ∧
-      ∀ v ∈ (ms.getD m default).2.toList, vbase P fs i ≤ v ∧ v < vbase P fs (i + 1)
+      ∀ v ∈ (ms.getD m default).2.toList, (locate rs v).map (·.1) = some ((templateNodes P).getD i 0)
 
 /-- **The claims position of a bit of template `i`'s instance `t`** in the members' joint program, at `pos`, its
-position in a member's program (of the member's circuit file and units, and the instance's unit and copy): instance `t`
-is copy `t % upv` of VU `vbase i + t / upv`, unit `u` of the first member whose VUs hold it at `u`. Where no member holds
-the VU or `pos` places nothing, it is the joint program's length, a position past its gates: no gate, so neither an
-input nor an output, and a layout that reaches it fits nothing. -/
-def instPos (P : Flock.Program.Prog) (fs : List Flock.Circuit) (ms : Members) (i t : ℕ)
-    (pos : Flock.Circuit → ℕ → ℕ → ℕ → Option ℕ) : ℕ :=
-  let upv := (fs.getD i default).upv
-  let v := vbase P fs i + t / upv
+position in a member's program (of the member's circuit file and units, and the instance's unit): instance `t` is the
+unit the code locates at template `i`'s node and member `t` (`Flock.TemplateQuery.locate` over the template query's
+ranges `rs`), unit `u` of the first member whose units hold it at `u`. Where no member holds it or `pos` places nothing,
+it is the joint program's length, a position past its gates: no gate, so neither an input nor an output, and a layout
+that reaches it fits nothing. -/
+def instPos (P : Flock.Program.Prog) (rs : Array TRange) (ms : Members) (i t : ℕ)
+    (pos : Flock.Circuit → ℕ → ℕ → Option ℕ) : ℕ :=
+  let k := (templateNodes P).getD i 0
   let inMember := fun (m : ℕ) =>
     let ci := ms.getD m default
-    ((List.range ci.2.size).find? (ci.2.getD · 0 == v)).bind fun u =>
-      (pos ci.1 ci.2.size u (t % upv)).map (base ms m + ·)
+    ((List.range ci.2.size).find? fun u => (locate rs (ci.2.getD u 0)).any fun l => l.1 == k && l.2.1 == t).bind
+      fun u => (pos ci.1 ci.2.size u).map (base ms m + ·)
   ((List.range ms.length).findSome? inMember).getD (jointOf ms).gates.length
 
 /-- **Bit `β` of field `π`** among the fields `ts`, each whole u16 words (`NetworkCheck.Circuit.templateOf`: an input

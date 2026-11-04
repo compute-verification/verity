@@ -12,15 +12,16 @@ fill. The sampled audit reads the wires through its layout (`NetTiming.BoundaryG
 reads its writer's value, so it is no free input, and the record's count (`Counts.free`) leaves it out.
 
 **The circuit** is the audit's members' joint program (`Properties.NetworkScan.jointOf`), at the templates' circuit
-files `fs`, each laid out by Bits as its template (`FilesOf`), and the members `ms` over them (`MembersOf`): every unit's
-gates, returning every unit's output copy bits. **The wires** are Bits' (`SampledProofs.Bits.wiresOf`): each source
-bit to the first claims position at its commitment position, compared at the partition's VUs, the writer's output bit
-where a unit writes it and else the first copy.
+files `fs`, each laid out by Bits as its template (`FilesOf`), and the members `ms` over the population of the template
+query the sampled verifier applies, its ranges `rs` (`Flock.TemplateQuery.evaluate`, a unit an instance; `MembersOf`):
+every unit's gates, returning every unit's output copy bits. **The wires** are Bits' (`SampledProofs.Bits.wiresOf`):
+each source bit to the first claims position at its commitment position, compared at the partition's VUs, the writer's
+output bit where a unit writes it and else the first copy.
 
 **The registered rows** (`regGates`) are the reader rows of the registered reads of a held parameter and of the table
 reads and openings of a table over one, the rows `countsOf` counts as `registered`, bit for bit: bit `β` of a template's
-port at its instance `u` (`portGates`) is its port word's bit (`wordBit`), at the instance's unit and copy of its member
-(`instPos`, `SampledProofs.Bits.inBit`).
+port at its instance `u` (`portGates`) is its port word's bit (`wordBit`), at copy 0 of the unit the code locates at the
+instance, in its member (`instPos`, `SampledProofs.Bits.inBit`).
 
 * `CircuitCounts`: an accepted record's `free` is at least the circuit's free inputs outside its registered rows.
 * `Properties.NetworkPeriod.RowsWiresChecked`: the period check (`NetworkCheck.Period`) charges each audit the free
@@ -33,8 +34,8 @@ port at its instance `u` (`portGates`) is its port word's bit (`wordBit`), at th
 `NetTiming.Guarantees.PeriodLeakAccepted` takes each statement's layout and registered inputs (`reg`) as parameters and
 counts `#(freeInputs \ reg)`. These compose with it at the record a statement's registration binds by digest
 (`window.circuit`) and its pins' held parameters `held`: layouts whose wires are `wiresOf ms` and
-`reg := regGates P fs ms r held`, so `CircuitCounts` bounds that count by the record's `free`, and the registration's
-openings (`RegOpens`) are owed at exactly `regGates P fs ms r held`.
+`reg := regGates P rs ms r held`, so `CircuitCounts` bounds that count by the record's `free`, and the registration's
+openings (`RegOpens`) are owed at exactly `regGates P rs ms r held`.
 
 `CircuitCounts` says its conclusion (`CircuitCountsAt`) of every record `check` accepts, and so is its property of any
 circuit check `chk` (`CircuitCountsOf`), which the nontrivial lemma states false at `acceptAllCircuit`, a check that
@@ -63,48 +64,51 @@ def portWidth (P : Prog) (r : Stated) (tid port : String) : ℕ :=
   | none => 0
 
 /-- **The claims positions of bits `a … a + n − 1` of template `tid`'s port `port` at its instance `u`**, in the
-members' joint program: each bit's port word and bit (`wordBit`, over the template's parameters) at the instance's
-unit and copy (`instPos`, `SampledProofs.Bits.inBit`). None where the record names no template node `tid` or it has no
-parameter `port`. -/
-def portGates (P : Prog) (fs : List Flock.Circuit) (ms : Members) (r : Stated) (tid port : String) (u a n : ℕ) :
-    List ℕ :=
+members' joint program: each bit's port word and bit (`wordBit`, over the template's parameters) at copy 0 of the unit
+the code locates at the instance, among the template query's ranges `rs` (`instPos`, `SampledProofs.Bits.inBit`). None
+where the record names no template node `tid` or it has no parameter `port`. -/
+def portGates (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ms : Members) (r : Stated) (tid port : String)
+    (u a n : ℕ) : List ℕ :=
   match nodeOf P r tid with
   | none => []
   | some k => match portParam P k port, (templateNodes P).findIdx? (· == k) with
     | some (π, _), some i =>
       let ps := (templateDef P k).params.toList.map (·.2)
       (List.range n).map fun β =>
-        instPos P fs ms i u fun c m v q => inBit c m v q (wordBit ps π (a + β)).1 (wordBit ps π (a + β)).2
+        instPos P rs ms i u fun c m v => inBit c m v 0 (wordBit ps π (a + β)).1 (wordBit ps π (a + β)).2
     | _, _ => []
 
 /-- **The registered rows' gates** at the held parameters `held` (`heldOf`): each registered read of a held parameter's
 reader rows (its pattern's reader indices, `Wire.readerAt`, each row its port's bits over its cut), and each port of
 each table read and opening of a table over a held parameter, whole, at each of its units: the rows `countsOf` counts as
 `registered`, bit for bit. -/
-def regGates (P : Prog) (fs : List Flock.Circuit) (ms : Members) (r : Stated) (held : List String) : Finset ℕ :=
+def regGates (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ms : Members) (r : Stated) (held : List String) :
+    Finset ℕ :=
   let reg := r.registered
   let pinned := (reg.tables.filter (held.contains ·.param)).map (·.name)
   let whole := fun (tid p : String) (start n : ℕ) =>
-    (List.range n).flatMap fun v => portGates P fs ms r tid p (start + v) 0 (portWidth P r tid p)
+    (List.range n).flatMap fun v => portGates P rs ms r tid p (start + v) 0 (portWidth P r tid p)
   ((reg.reads.filter (held.contains ·.param)).flatMap (fun x =>
       let row := portWidth P r x.pat.reader x.pat.port / r.wiring.cutsOf x.pat.reader x.pat.port
       (List.range x.pat.units).flatMap fun i =>
-        portGates P fs ms r x.pat.reader x.pat.port (x.pat.readerAt i).1 ((x.pat.readerAt i).2 * row) row) ++
+        portGates P rs ms r x.pat.reader x.pat.port (x.pat.readerAt i).1 ((x.pat.readerAt i).2 * row) row) ++
     (reg.roots.filter (pinned.contains ·.table)).flatMap (fun x => whole x.reader x.port x.start x.units) ++
     (reg.openings.filter (pinned.contains ·.table)).flatMap (fun o =>
       o.ports.flatMap fun p => whole o.reader p o.start o.units)).toFinset
 
 /-- What `CircuitCounts` says of a record its check accepted against `P` with the count `c`: wherever `P` is what
 C-Flock decodes from `bytes`, at the record `recordOf` reads, the held parameters `heldOf` reads off `pins`, `P`'s
-templates' circuit files `fs` (`FilesOf`) and its audit's members `ms` over them (`MembersOf`), at a layout whose wires
-are Bits' (`wiresOf`) and with no ingress before `k`, the members' joint program's free inputs outside the registered
-rows (`regGates`) number at most `c.free`. -/
+templates' circuit files `fs` (`FilesOf`), the ranges `rs` with which the template query over `tids` accepts `P`
+(`Flock.TemplateQuery.evaluate`) and its audit's members `ms` over them (`MembersOf`), at a layout whose wires are Bits'
+(`wiresOf`) and with no ingress before `k`, the members' joint program's free inputs outside the registered rows
+(`regGates`) number at most `c.free`. -/
 def CircuitCountsAt (P : Prog) (record pins : Json) (c : Counts) : Prop :=
-  ∀ (bytes : ByteArray) (r : Stated) (held : List String) (fs : List Flock.Circuit) (ms : Members) {L S : ℕ}
-    (lay : NetTiming.BoundaryGates L S) (k : ℕ),
+  ∀ (bytes : ByteArray) (r : Stated) (held : List String) (fs : List Flock.Circuit) (tids : Array String)
+    (rs : Array Flock.TemplateQuery.TRange) (ms : Members) {L S : ℕ} (lay : NetTiming.BoundaryGates L S) (k : ℕ),
     Flock.Program.decode bytes = .ok P → recordOf P record = .ok r → heldOf pins = .ok held → FilesOf P fs →
-    MembersOf P fs ms → lay.wires = wiresOf ms → (∀ t < k, lay.ingress t = []) →
-    (NetTiming.freeInputs (jointOf ms) lay k \ regGates P fs ms r held).card ≤ c.free
+    Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs → MembersOf P fs rs ms → lay.wires = wiresOf ms →
+    (∀ t < k, lay.ingress t = []) →
+    (NetTiming.freeInputs (jointOf ms) lay k \ regGates P rs ms r held).card ≤ c.free
 
 /-- `CircuitCounts` of the circuit check `chk`: `CircuitCountsAt` of every record `chk` accepts, at its count. -/
 def CircuitCountsOf (chk : Prog → Json → Json → Json → Except String Counts) : Prop :=
@@ -112,7 +116,8 @@ def CircuitCountsOf (chk : Prog → Json → Json → Json → Except String Cou
 
 /-- **An accepted record's free count bounds its circuit's free inputs.** If `NetworkCheck.Circuit.check` accepts the
 record `record` against the Program `P` C-Flock decodes, with the pins `pins` and the count `c`, then at `P`'s
-templates' circuit files (`FilesOf`) and its audit's members over them (`MembersOf`), and every layout whose wires are
+templates' circuit files (`FilesOf`) and its audit's members over the template query's population (`MembersOf`, at the
+ranges `Flock.TemplateQuery.evaluate` gives), and every layout whose wires are
 Bits' (`wiresOf`) with no ingress before `k`, the free inputs of the members' joint program (`NetTiming.freeInputs`: its
 input gates, neither ingress nor wired) outside the rows the record's reads of held parameters fill (`regGates`)
 number at most `c.free`, the bits of the input rows no wire or registered read fills. -/
