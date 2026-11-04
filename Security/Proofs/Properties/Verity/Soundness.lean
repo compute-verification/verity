@@ -119,11 +119,11 @@ theorem soundness_of_subprotocols : Soundness := by
   exacts [hS, hW, hI, hP, hB, hN, hX]
 
 theorem remote_soundness_of_subprotocols : RemoteSoundness := by
-  intro ι α _ d V hwork hmeans hdraw hcoins hS hW hI
+  intro ι α _ d V _ hS hW hI
   refine soundness_at_of_targets ι α d V .remote fun a ha => ?_
   cases a
   · exact hS
-  · exact hW hwork hmeans hdraw hcoins
+  · exact hW
   · exact hI
   all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
@@ -413,12 +413,13 @@ idle deployment whose errors are all `0`. -/
 theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
   Idle.nontrivial_at .onsite (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
 
-/-- **`RemoteSoundness`'s honest lemma**: its three targets hold at the idle deployment's compiled remote composite,
-PoUW's on any of Pearl+'s properties. -/
+/-- **`RemoteSoundness`'s honest lemma**: its three targets hold at the idle deployment's compiled remote composite.
+`AcceptMeans`, the hypothesis on Pearl+'s check, is its own guarantee's statement, proved
+(`Properties.Pouw.PearlPlus.acceptMeans`). -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PearlPlusSound ∧
+    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
       Idle.unbounded.InferenceOnlySound .remote :=
-  ⟨Idle.target_unbounded _ _, fun _ _ _ _ => Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
 /-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
 the idle deployment whose errors are all `0`. -/

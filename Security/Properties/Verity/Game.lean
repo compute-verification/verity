@@ -1,7 +1,6 @@
 import CoreComposites
 import Properties.Composition
 import Properties.Pouw.PearlPlus
-import Properties.Pouw.PearlPlusDraw
 import Properties.Flock.Circuit.CircuitOf
 import Definitions.Accounting.JointLive
 import Definitions.Core.Blocks
@@ -575,16 +574,6 @@ def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k 
 /-- **PoUW's target**: at onsite, at least `W` gates of the committed circuit computed after their window's coin; at
 remote, Pearl+'s, at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit its check published. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
-
-/-- **PoUW's target at remote, on what Pearl+'s check means**: where its published work is the run's credit at Pearl's
-assumption (`Properties.Pouw.PearlPlus.WorkIsTheCredit`), it accepts only runs whose every drawn tile passed
-(`AcceptMeans`), its draw is `Pouw.Ticket`'s law on its streams (`DrawIsOnItsStreams`) and the coin bytes give uniform
-tickets (`CoinBytesGiveUniformTickets`), PoUW meets its target at remote. Each is a statement about Pearl+'s code that its
-piece proves, a hypothesis here until it does. -/
-def PearlPlusSound : Prop :=
-  Properties.Pouw.PearlPlus.WorkIsTheCredit → Properties.Pouw.PearlPlus.AcceptMeans →
-    Properties.Pouw.PearlPlus.DrawIsOnItsStreams → Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets →
-      V.PouwSound .remote
 
 /-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.Complies`
 at the published `Γ` and `α`. -/
