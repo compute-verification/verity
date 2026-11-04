@@ -19,7 +19,9 @@ import torch
 from conftest import LF, STEP, STRUCTURE
 
 import grader as G
+from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.program import is_input
 from verity_vllm.program.frontend.train_step import primitives
 
 aten = torch.ops.aten
@@ -65,9 +67,12 @@ def _program(d, key: str, edit) -> dict:
     return desc
 
 
-def _not_a_step(d) -> None:
-    desc = _program(d, "step", lambda desc: desc["annotations"].pop("train_step"))
-    _record(d, lambda doc: doc["step"].update(annotations=hashlib.sha512(canonical_json(desc["annotations"])).hexdigest()))
+def _annotated(edit):
+    """An edit of the step Program's annotations, the record naming the annotations as edited."""
+    def go(d) -> None:
+        desc = _program(d, "step", lambda desc: edit(desc["annotations"]))
+        _record(d, lambda doc: doc["step"].update(annotations=hashlib.sha512(canonical_json(desc["annotations"])).hexdigest()))
+    return go
 
 
 #: an edit of a hand-over, and what the grader's refusal of it says
@@ -75,7 +80,7 @@ REFUSALS = {
     "format": (lambda d: _record(d, lambda doc: doc.update(format="grader-handover/v0")), "isn't a grader hand-over"),
     "run": (lambda d: _record(d, lambda doc: doc["run"].pop("id")), "the hand-over's run has no 'id'"),
     "checkpoint": (lambda d: _record(d, lambda doc: doc["run"]["checkpoints"][0].update(steps=0)), "with at least one step"),
-    "frontend": (lambda d: _record(d, lambda doc: doc["frontend"].pop("commit")), "the hand-over's frontend has no 'commit'"),
+    "frontend": (lambda d: _record(d, lambda doc: doc["frontend"].update(commit="")), "the hand-over's frontend has no 'commit'"),
     "registered": (lambda d: _record(d, lambda doc: doc["registered"].pop()), "theta as registered isn't the step Program's"),
     "batch": (lambda d: _record(d, lambda doc: doc["step"].update(batch=[2])), r"batch shape \[2\] isn't two sizes"),
     "tokens": (lambda d: _record(d, lambda doc: doc["structure"].update(batch=[2, 5])), "share a token-indexed size"),
@@ -83,7 +88,9 @@ REFUSALS = {
     "digest": (lambda d: _program(d, "step", lambda desc: desc.update(extra=1)), "the step Program's digest is"),
     "annotations": (lambda d: _program(d, "structure", lambda desc: desc["annotations"].update(extra=1)),
                     "the structure Program's annotations aren't the ones the hand-over names"),
-    "derived": (_not_a_step, "the step Program isn't a training step the frontend derived"),
+    "derived": (_annotated(lambda ann: ann.pop("train_step")), "the step Program isn't a training step the frontend derived"),
+    "inputs": (_annotated(lambda ann: ann["correspondence"]["inputs"].pop()),
+               "the step Program's correspondence doesn't name its \\d+ input nodes"),
 }
 
 
@@ -226,11 +233,13 @@ def test_each_class_is_priced_at_its_primitives_boolean_prices() -> None:
 
 @pytest.mark.slow
 def test_circuit_size_on_the_tiny_step(steps) -> None:
-    """|C| of the tiny f32 step: each root class at its primitives' Boolean prices, the matrix products' LinearRef_v1 rows among
-    them, and the primitives with no Boolean version left out by name."""
-    prog = steps().program
-    C = G.circuit_size(prog)
+    """|C| of the tiny f32 step, read off its hand-over as `read` reads it: each root class at its primitives' Boolean prices,
+    the matrix products' LinearRef_v1 rows among them, the primitives with no Boolean version left out by name (but the
+    inputs', which |C| doesn't count), and the same |C| as the step Program's before it was handed over."""
+    s = steps()
+    C = G.circuit_size(G.load_handover(s.path).step)
     assert C["gates"] == sum(r["gates"] for r in C["classes"]) > 0 and C["ands"] == sum(r["ands"] for r in C["classes"])
     assert all(r["gates"] > 0 for r in C["classes"] if r["class"].startswith(G.CELL))
-    prices = G.boolean_prices(primitives(prog))
+    prices = G.boolean_prices({pid: fn for pid, fn in primitives(s.program).items() if not is_input(fn)})
     assert set(C["unpriced_word_gates"]) == {pid for pid, p in prices.items() if p["boolean"] is None}
+    assert G.priced(census(s.program), prices) == C

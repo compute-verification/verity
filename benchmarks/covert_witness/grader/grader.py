@@ -126,6 +126,21 @@ def _batch_ok(step: list, structure: list) -> None:
                       f"grader can't tell which dims are the tokens': {fix}")
 
 
+def _input_names(decoded, role: str) -> list[str]:
+    """The names of a decoded Program's input nodes, which its encoding doesn't hold: the program function's inputs as its
+    `correspondence` annotation names them, each one input node, the root's first."""
+    from verity.ml.circuits.program import is_input
+
+    nodes = decoded.root.body.nodes
+    names = decoded.annotations["correspondence"].get("inputs")
+    n_in = sum(1 for nd in nodes if is_input(nd.fn))
+    if not (isinstance(names, list) and len(names) == n_in and all(isinstance(n, str) for n in names)
+            and all(is_input(nd.fn) for nd in nodes[:n_in])):
+        raise Refused(f"the {role} Program's correspondence doesn't name its {n_in} input nodes, one input each, the "
+                      f"root's first: {DERIVE}")
+    return names
+
+
 def load_handover(path: Path) -> Handover:
     """The hand-over at `path` (its directory or its handover.json), checked: its format and fields, each Program file's
     digest and annotations against the record, both Programs a frontend step (`step_program`'s annotations), theta as
@@ -181,9 +196,13 @@ def load_handover(path: Path) -> Handover:
         except Exception as e:
             raise Refused(f"the {key} Program doesn't decode here ({type(e).__name__}: {str(e)[:300]}): read it at a "
                           f"commit that has every Definition it calls, registered before the grader reads it") from e
-    names = [decoded["step"].root.body.nodes[i].name for i in sorted(decoded["step"].root.theta)]
-    if sorted(registered) != sorted(names):
-        extra, missing = sorted(set(registered) - set(names)), sorted(set(names) - set(registered))
+    inputs = _input_names(decoded["step"], "step")
+    _input_names(decoded["structure"], "structure")
+    theta = sorted(decoded["step"].root.theta)
+    names = [inputs[i] for i in theta if isinstance(i, int) and 0 <= i < len(inputs)]
+    reg = [n for n in registered if isinstance(n, str)]
+    if len(reg) != len(registered) or len(names) != len(theta) or sorted(reg) != sorted(names):
+        extra, missing = sorted(set(reg) - set(names)), sorted(set(names) - set(reg))
         raise Refused(f"theta as registered isn't the step Program's theta (registered only: {extra[:5]}, the "
                       f"Program's only: {missing[:5]}): register the step Program's theta, or derive the step from "
                       f"the model whose weights were registered")
@@ -292,7 +311,6 @@ class _Program:
 
     def __init__(self, decoded, role: str) -> None:
         import torch
-        from verity.ml.circuits.program import is_input
 
         self.role = role
         root = decoded.root
@@ -300,12 +318,12 @@ class _Program:
         ann = decoded.annotations
         corr = ann["correspondence"]
         self.layout = ann["train_step"]
-        n_in = self.n_in = sum(1 for nd in nodes if is_input(nd.fn))
+        self.names = _input_names(decoded, role)
+        n_in = self.n_in = len(self.names)
         occs, calls = self.occs, self.calls = corr["occurrences"], corr["calls"]
         if len(calls) != len(nodes) - n_in:
             raise Refused(f"the {role} Program's correspondence has {len(calls)} calls for its {len(nodes) - n_in} "
                           f"root calls: {DERIVE}")
-        self.names = [nd.name for nd in nodes[:n_in]]
         self.theta = sorted(root.theta)
         self.leaves = [nodes[i].out.leaves for i in range(n_in)]
         self.ops, self.aten = [], []
