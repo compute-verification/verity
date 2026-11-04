@@ -2,7 +2,7 @@
 
     resolve(program, correspondence, occurrence, live, observation=None) -> ValueRef
 
-is a PURE function of its arguments: the Program (`Program`: the request component's calls per request-relative step), the runtime
+is a PURE function of its arguments: the Program (`ProgramCalls`: the request component's calls per request-relative step), the runtime
 correspondence (`Correspondence`: `owning_module(call)`, `return_slot(call, port)`, `arg_slot(call, i)` -- today an adapter over the
 descriptor annotations of `instances.json.gz`, `DescriptorCorrespondence`; the runtime-correspondence namespace exposes the same three
 functions), the occurrence, and the LIVE correspondence state (`LiveState`: per request its prefill steps / sampling events seen / the
@@ -89,7 +89,7 @@ class Correspondence(Protocol):
     def arg_slot(self, call: Any, i: int) -> str | None: ...
 
 
-class Program(Protocol):
+class ProgramCalls(Protocol):
     """The Program side of resolution: its calls per request-relative step, in Program order."""
 
     def calls_at(self, step: int) -> list[Any]: ...
@@ -206,7 +206,7 @@ class DescriptorCorrespondence:
 
 
 class ComponentProgram:
-    """A request component Program (derived `instances.json.gz` doc) as `Program`: calls per request-relative step in Program order.
+    """A request component Program (derived `instances.json.gz` doc) as `ProgramCalls`: calls per request-relative step in Program order.
     `at(step, site, slot)` indexes the calls of one (step, site, slot) once, through the correspondence -- the lookup `resolve` makes."""
 
     def __init__(self, inst: dict[str, Any], corr: DescriptorCorrespondence | None = None):
@@ -439,7 +439,7 @@ def attribute_request(obs: OB.ValueObservation, live: LiveState) -> tuple[str | 
 # ------------------------------------------------------------------------------------------------------------------ resolve
 
 
-def resolve(program: Program | None, correspondence: Correspondence | None, occurrence: OB.RuntimeOccurrence, live: LiveState,
+def resolve(program: ProgramCalls | None, correspondence: Correspondence | None, occurrence: OB.RuntimeOccurrence, live: LiveState,
             observation: OB.ValueObservation | None = None) -> ValueRef:
     """The Program value `occurrence` observes.  Pure: reads `program`, `correspondence`, `live`; mutates none of them (the caller
     advances `live` with the result).  With no `program` / `correspondence` the request-relative identity is still resolved (request,
@@ -472,7 +472,7 @@ def resolve(program: Program | None, correspondence: Correspondence | None, occu
     return ValueRef(rid, step, occurrence.site, occurrence.slot, ordinal, occurrence.rank, call, how, tuple(problems))
 
 
-def _calls_at(program: Program, correspondence: Correspondence, step: int, site: str, slot: str) -> list[Any]:
+def _calls_at(program: ProgramCalls, correspondence: Correspondence, step: int, site: str, slot: str) -> list[Any]:
     at = getattr(program, "at", None)
     if at is not None and getattr(program, "corr", None) is correspondence:
         return at(step, site, slot)
