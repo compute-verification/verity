@@ -427,3 +427,60 @@ def test_two_files_landing_at_one_path_fail(toy):
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clash")
     with pytest.raises(SystemExit, match="two files would land at one path"):
         M.main(["--map", str(MAP), "--root", str(toy)])
+
+
+PROSE = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK server", "firewalled": "zk_served",
+                                             "escape": "acceptance probability", "DrawnUnit": "SampledBlock"}})
+
+
+@pytest.mark.parametrize("path, old, new", [
+    ("a.py",
+     '"""Each draw is fresh; the firewall serves it."""\nDRAW = b"draw"\n\n\ndef draw(n):\n'
+     '    # a draw of n coins, as `draw` gives; unit_draw, .draw, draw.py, --draw, draw(\n    return f"draw {n}" + draw_one(n)\n',
+     '"""Each sample is fresh; the ZK server serves it."""\nDRAW = b"draw"\n\n\ndef draw(n):\n'
+     '    # a sample of n coins, as `draw` gives; unit_draw, .draw, draw.py, --draw, draw(\n    return f"draw {n}" + draw_one(n)\n'),
+    ("L.lean",
+     '/-- A draw of the firewall. -/\ndef draw : Nat := 1 -- the draw\n#eval s!"draw {draw}"\n/- nested /- draw -/ escape -/\n',
+     '/-- A sample of the ZK server. -/\ndef draw : Nat := 1 -- the sample\n#eval s!"draw {draw}"\n'
+     '/- nested /- sample -/ acceptance probability -/\n'),
+    ("n.md",
+     "A draw (`draw()`), [draw](draw.md) and https://x/draw; a firewalled escape; a DrawnUnit.\n\n```\ndraw\n```\n",
+     "A sample (`draw()`), [sample](draw.md) and https://x/draw; a firewalled acceptance probability; a DrawnUnit.\n\n"
+     "```\ndraw\n```\n"),
+    ("s.sh",
+     "#!/bin/bash\n# a draw\necho \"draw\" 'draw'\ndraw() { :; }\ncat <<X\ndraw\nX\n",
+     "#!/bin/bash\n# a sample\necho \"draw\" 'draw'\ndraw() { :; }\ncat <<X\ndraw\nX\n"),
+    ("k.cu",
+     '// a draw\nconst char *s = "draw"; /* the draw */ int draw = 1;\n',
+     '// a sample\nconst char *s = "draw"; /* the sample */ int draw = 1;\n'),
+    ("x.json", '{"draw": "a draw"}\n', '{"draw": "a draw"}\n'),
+])
+def test_a_prose_map_renames_only_words_in_prose(path, old, new):
+    """Under `scope = "prose"` a word is renamed in a comment, a docstring or Markdown's text, and nowhere else: not in code,
+    a string, backticks, a link target, a fence, a heredoc or a data file, nor as part of a name, a path, a flag, a call or a
+    constant; and a word whose new word is a name (`zk_served`) stays."""
+    assert PROSE.sub(old, path) == new
+
+
+def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, capsys):
+    """A prose move renames no path and no declaration, and leaves a file a JSON pin records for the pin's command."""
+    (toy / "tools/verity/check").mkdir(parents=True)
+    (toy / "tools/verity/check/pins.py").write_text(
+        "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+        '    path: str\n    key: str | None\n    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""),)\n')
+    (toy / ".gitignore").write_text("__pycache__/\n")
+    (toy / "fix").mkdir()
+    (toy / "fix/vec.json").write_text(json.dumps({"inputs": {"pinned.md": "00"}}) + "\n")
+    (toy / "pinned.md").write_text("The prover gateway.\n")
+    (toy / "prose.toml").write_text('scope = "prose"\n\n[words]\n"warden" = "certifier"\n"prover gateway" = "firewall"\n')
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "a pin")
+    lock = (toy / "Sec/lean-audit.json").read_text()
+    assert M.main(["--map", str(toy / "prose.toml"), "--root", str(toy), "--moves"]) == 0
+    assert json.loads(capsys.readouterr().out) == {}
+    assert M.main(["--map", str(toy / "prose.toml"), "--root", str(toy)]) == 0
+    assert git(toy, "diff", "--cached", "--name-status").split() == ["M", "CHANGELOG.md", "M", "README.md"]
+    assert (toy / "README.md").read_text() == "The firewall; `w/warden/grid.py`.\n"
+    assert (toy / "CHANGELOG.md").read_text() == "- the certifier landed\n"
+    assert (toy / "pinned.md").read_text() == "The prover gateway.\n"
+    assert (toy / "Sec/lean-audit.json").read_text() == lock
