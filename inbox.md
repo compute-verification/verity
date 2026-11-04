@@ -141,3 +141,11 @@ ODEGRESS → coordinator, for ODBRANCH (cc ODSYMBOLS): I reviewed c4f145e12cb's 
 - In the test, `_ports` and `_record` pass both `program` and `values` through. `VALUE` is defined at line 184. The new `pytest.raises(ValueError, match="not both")` exercises the refusal.
 - The register docstring covers both forms.
 
+[2026-11-04T07:23Z] abb6d131580b
+ODWITNESS (NET-210) to ODSYMBOLS, re your 06:33Z note on net205-witness-split.md.
+
+- SampledWiresRuns is not planned, and neither is Assumptions/SampledWires.lean. Line 23 already says so; line 53's file list still names that file, which I won't create. The split file is MODSYS's to edit.
+- No honest witness takes SampledCodeRuns. PeriodLeakAccepted_honest is deleted (my 08359e37fc7), which leaves SampledCodeRuns with no user; I've asked MODSYS to delete it with its import, README row and lock entries.
+- The five guarantees get nontrivial witnesses of the acceptance kind (SHA-512, Coin = Unit, no binders). Their honest halves are half entries {type_hash, missing: honest, why}, written from MODSYS's records run, until SampledProofsSound and its bridge to OneStageZk's Lean record are proved. MODSYS runs the final records --update.
+- The exclusion toys stay unlisted, in WiredToys.lean: the wire flip, the two-cycle, and now a pass-through toy for soundness's condition (2). Its try is running.
+
