@@ -1817,6 +1817,7 @@ if a[0] == "compiler":
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
 if a[0] == "window-circuit":
+    open(os.environ["ORDER"] + ".circuit", "w").write("\\n".join(a))
     out.write_text("{{}}")
     print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
 else:
@@ -2091,6 +2092,7 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
                         "verifier's own window-circuit record: PASS")
+    assert "--pearl-tables" not in (tmp_path / "order.circuit").read_text().split("\n")
 
 
 #: the flags naming the challenger whose coins records_audit's audit takes
@@ -2517,10 +2519,14 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
 
 def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records_audits_tie(tmp_path):
     """V3c makes no commit of its own: it holds the piece's R to W (chained right after it), and audits it tied to W with
-    no prefix (Pearl+'s values are W's own names) at stratified:1 on a port a sampled block, saying the audit's tie."""
+    no prefix (Pearl+'s values are W's own names) at stratified:1 on a port a sampled block, saying the audit's tie. The
+    verifier's own window-circuit record it holds the commit's circuit to is the circuit cut at Pearl+'s linears."""
     _pearl_tied_commit(tmp_path)
     rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
     assert rc == 0 and "window-commit" not in order and "audit" in order, (lines, order)
+    circuit = (tmp_path / "order.circuit").read_text().split("\n")
+    assert circuit[circuit.index("--pearl-tables") + 1] == "pearl-c-h100-v1-h3", circuit
+    assert any(x.startswith(f"WINDOW-CIRCUIT class {W63K4}, cut at Pearl+'s linears: ") for x in lines), lines
     w = REG.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
                                f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
@@ -2549,6 +2555,12 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
     ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "WINDOW_STEPS": "16"},
      "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window "
      "is one full window of fixed length: LOAD=fixed (not fixed) and WINDOW_STEPS the class's outputs, 4 (not 16)"),
+    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "PROMPTS": "16:24"},
+     "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its "
+     "slots' requests of its prompt's ids each: SLOTS 8 (not 8) and PROMPTS 32:32 (not 16:24)"),
+    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "SLOTS": "4"},
+     "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its "
+     "slots' requests of its prompt's ids each: SLOTS 8 (not 4) and PROMPTS 32:32 (not 32:32)"),
     ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "PEARLC_CHALLENGER_GATE": GATE},
      "PREFLIGHT: under PEARLPLUS_TIE serve-openai's Pearl+ arm (serve_pearl) draws each window's coins in-process and "
      f"takes no gate: set PEARLC_CHALLENGER_GATE empty (it is {GATE})"),
