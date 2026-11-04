@@ -67,8 +67,8 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.
-  4. The period's link-window is the scan's (``answers.json``'s one window): every audited request's release and
-     streamed ids lie in it, else reject.
+  4. The period's execution phase is the scan's (the one entry of ``answers.json``'s ``windows``): every audited
+     request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and

@@ -57,7 +57,8 @@ and the bits (the prover's own record, kept on its node).
 **The judge** (`judge`): an attack's served rehearsal (`certifier_piece.py front --attack`, its OUT's
 ``session.json`` and `SPAN`, and the serve dir it kept the run in) read as the attack's verdict (`verdict`): the network
 certifier's check's outcome, and the piece's steps 1 and 2 (`bound`) on the requests the endpoint recorded for the run,
-the front's warm-ups aside: each carrying the run's release, and each carrying no run's that the endpoint received
+the front's warm-ups aside (every list in its ``warmup.json``: ``--warmup``'s and ``--stop-prompt``'s): each carrying
+the run's release, and each carrying no run's that the endpoint received
 (``times.received``) while the front ran, by the node's clock (`SPAN`), so a request around the network certifier is
 read wherever its Commit period falls and another front's never. ``ok`` when both are the attack's and the piece names
 the attack's reason.
@@ -484,7 +485,7 @@ def judge(name: str, front: Path, serve_dir: Path) -> dict:
     session = json.loads((front / "session.json").read_text())
     span = json.loads((front / SPAN).read_text())
     warm = front / "warmup.json"
-    skip = {r["user"] for r in json.loads(warm.read_text())["requests"]} if warm.is_file() else set()
+    skip = {r["user"] for rs in json.loads(warm.read_text()).values() for r in rs} if warm.is_file() else set()
     return verdict(name, session, bound(serve_dir.resolve(), session, (span["start_unix"], span["end_unix"]), skip))
 
 
