@@ -46,8 +46,8 @@ verdicts.txt), None where it has none. A public whose terms don't sum to K, or t
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
 `PREMISES` discharged by theorems in Security's locks that take no named assumption but a standing one, `STANDING`, and
-each guarantee it rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names), and
-while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
+each guarantee it rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what
+K counts, `COUNTS`), and while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
 execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
@@ -205,8 +205,8 @@ LOCKS = (ROOT / "Security" / "lean-audit.json", ROOT / "Security" / "Properties"
 #: a guarantee's named assumptions, never the antecedents its statement takes, so each gives ``statement``, the digest
 #: of its statement among the lock's reads (`statement`) at which it was read, None where none was, and ``takes``, each
 #: hypothesis, antecedent and condition its good event reads that the deployed code must meet, by its Prop's name or,
-#: stated inline, its binder's, with the premise (`PREMISES`) or standing assumption (`STANDING`) that names it.
-#: Parameters the record states (δ ≥ 0) aren't listed
+#: stated inline, its binder's, with the premise (`PREMISES`), standing assumption (`STANDING`) or term of what K counts
+#: (`COUNTS`) that names it. Parameters the record states (δ ≥ 0) aren't listed
 RESTS_ON: dict[str, dict[str, Any]] = {
     "NetTiming.SecurityProofs.PeriodLeakAccepted": {
         "statement": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531",
@@ -214,7 +214,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
-                  "hfit": "schedules-held", "hs": "sender-decodes", "hdz": "sender-decodes",
+                  "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodLeakRegistered": {
         "statement": "79ebe236812c4d1257a7dd6dfc7dbc9816c7d1846745f64dce1596c5ebd20034",
@@ -222,7 +222,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
-                  "NetTiming.SenderDecodes": "sender-decodes", "NetTiming.ScopeAcc": "wires-fit",
+                  "NetTiming.SenderDecodes": "schedules-covered", "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodLeakTied": {
         "statement": None,
@@ -248,23 +248,21 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
                       "discharged_by": ()},
     "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
-                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",)},
+                   "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
     "circuit-held": {"is": "RowsCircuitHeld: each tied audit's Program the class circuit the period registers",
-                     "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",)},
+                     "discharged_by": ("Properties.NetworkPeriod.phaseCircuitHeld",)},
     "rows-state-held": {"is": "RowsStateHeld: each tied audit's state read at row a ≥ 1 committed where the scan's o1 of "
-                              "unit a − 1 is, under the scan's state root, and so the scan's own state read at unit a. "
-                              "Open until the theorem that the period check's acceptance gives it is named",
-                        "discharged_by": ()},
+                              "unit a − 1 is, under the scan's state root, and so the scan's own state read at unit a",
+                        "discharged_by": ("Properties.NetworkPeriod.phaseStateHeld",)},
     "rows-prog-wired": {"is": "RowsProgWired: the scan's prog read at lane l, leaf b committed where its tied audit's slot "
-                              "entry of chunk l, leaf b is, under that audit's entries root. Open until the theorem that "
-                              "the period check's acceptance gives it is named",
-                        "discharged_by": ()},
+                              "entry of chunk l, leaf b is, under that audit's entries root",
+                        "discharged_by": ("Properties.NetworkPeriod.phaseProgWired",)},
     "rows-ties-ordered": {"is": "RowsTiesOrdered: the phase's layout, each statement's wires and the ties, fits its joint "
                                 "Program (BoundaryGates.Fits): acyclic, and no step's egress depending on a later step's "
-                                "ingress. Open until the theorem that the period check's acceptance gives it is named",
-                          "discharged_by": ()},
+                                "ingress",
+                          "discharged_by": ("Properties.NetworkPeriod.phaseTiesOrdered",)},
     "shared-roots-parsed": {"is": "SharedRootsParsed: at the deployment, two gates the registrations commit at one "
                                   "position under one root open to one value, or their H calls collide; the sampled "
                                   "leg's bridge proves it of the deployed parse. Open until that theorem is named",
@@ -292,10 +290,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                              "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
                              "certifier's code is named",
                        "discharged_by": ()},
-    "sender-decodes": {"is": "SenderDecodes, PeriodLeakAccepted's hs and hdz: each secret K counts runs on a schedule the "
-                             "network certifier may run, and a decoder recovers it from the client's view of the server "
-                             "side. Open until a theorem gives it or it is stated as what K counts",
-                       "discharged_by": ()},
+    "schedules-covered": {"is": "SenderDecodes's schedule half, PeriodLeakAccepted's hs: each secret K counts runs on a "
+                                "schedule of Ss, whose number k_sched counts, so Ss must hold every schedule the deployed "
+                                "network certifier can run (its own admission, at the case's caps). Open until it is "
+                                "stated of the network certifier's code and a theorem gives it; the decoder half is what "
+                                "K counts (`COUNTS`)",
+                          "discharged_by": ()},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
                                  "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
@@ -312,12 +312,17 @@ PREMISES: dict[str, dict[str, Any]] = {
 STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's",
             "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
                                   "network certifier (a listed physical premise, the auditor's placement)"}
+#: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
+#: discharges, so none is open
+COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the cells the network certifier's "
+                            "run gives the client: SenderDecodes's decoder half, PeriodLeakAccepted's hdz"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
              "is in Security's lock with no named assumption but a standing one (`STANDING`), and open while none is "
              "named; each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
              "whose hypotheses and antecedents it names (``takes``); and each named assumption the lock gives such a "
-             "guarantee that is neither standing nor named there, by its own name. No premise about our own Python "
-             "stands: soundness is in Lean or rests on an auditor-trusted device")
+             "guarantee that is neither standing nor named there, by its own name. What K counts (`COUNTS`) is no "
+             "premise. No premise about our own Python stands: soundness is in Lean or rests on an auditor-trusted "
+             "device")
 #: why a guarantee of `RESTS_ON` is open at a statement other than the one it names
 RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
             "name each in its takes, and pin the lock's digest")
@@ -686,7 +691,8 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
     no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
     guarantee of `RESTS_ON` with its named assumptions, its statement's digest and what it takes (``restated`` where
-    that digest isn't the one `RESTS_ON` read, `RESTATED`), and ``open``: each premise not discharged, then each named
+    that digest isn't the one `RESTS_ON` read, `RESTATED`), what K counts (``counts``, `COUNTS`), and ``open``: each
+    premise not discharged, then each named
     assumption of a guarantee of `RESTS_ON` neither standing nor taken by name, and each such guarantee no lock lists or
     one lists restated. A lock that can't be read lists nothing, and ``unread`` names it, by its path under ``root``
     (the tree) where it is one, with why."""
@@ -721,7 +727,8 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
                     | {g for g, x in rests.items() if "missing" in x or "restated" in x})
     return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees "
                                      "and reads",
-            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_, "unread": unread}
+            "premises": found, "rests_on": rests, "standing": STANDING, "counts": COUNTS, "open": open_,
+            "unread": unread}
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:

@@ -75,6 +75,8 @@ UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
 UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
 ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
+#: the theorem that discharges the free-input count's premise
+(COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
 
 
 def discharged() -> dict:
@@ -84,7 +86,7 @@ def discharged() -> dict:
              for n, p in OR.PREMISES.items()}
     return {"is": OR.DISCHARGE,
             "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees and reads",
-            "premises": found, "standing": OR.STANDING, "open": [], "unread": [],
+            "premises": found, "standing": OR.STANDING, "counts": OR.COUNTS, "open": [], "unread": [],
             "rests_on": {g: {"assumptions": [], "statement": r["statement"], "takes": r["takes"]}
                          for g, r in OR.RESTS_ON.items()}}
 
@@ -311,6 +313,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
                                                        "takes": RESTS_ON[UNPINNED[0]]["takes"]}
     assert rec["periods_tight"]["conditional_on"] == [*OR.PREMISES, *UNPINNED]
+    assert of["premises"]["counts"] == OR.COUNTS and not set(OR.COUNTS) & set(of["open"])
     assert rec["periods_tight"]["run"]["bits"] == K
     assert all(f in OR.PREMISES["sampled-leg-bridge"]["is"]
                for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns", "ListWithin", "Binds"))
@@ -322,7 +325,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({}, []),
     ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
     ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
-    ({"Properties.NetworkCertifier.circuitCounts": None}, ["free-count"]),
+    ({COUNTED: None}, ["free-count"]),
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
     ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
     ({ACCEPTED: ["Accounting.Covered"]}, []),
@@ -343,7 +346,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     p = of["premises"]["premises"]
     assert p["held-performed"]["assumes"] == (["NetTiming.Assumptions.SampledCodeRuns"] if "held-performed" in open_
                                               else [])
-    assert p["free-count"]["missing"] == (["Properties.NetworkCertifier.circuitCounts"] if "free-count" in open_ else [])
+    assert p["free-count"]["missing"] == ([COUNTED] if "free-count" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"])))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
 
@@ -367,7 +370,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
     """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread``, by its path
     in the tree and with why, and reads the other lock, so only the premise whose discharge that lock alone would list
     is open and the figure of record charges the cap, never a crash."""
-    write_lock(lock, {"Properties.NetworkCertifier.circuitCounts": None})
+    write_lock(lock, {COUNTED: None})
     props = tmp_path / "tree" / "Security" / "Properties" / "lean-audit.json"
     props.parent.mkdir(parents=True)
     if text is not None:
@@ -429,14 +432,15 @@ def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_st
     lock = json.loads((OR.ROOT / "Security" / "lean-audit.json").read_text())
     assert ACCEPTED in lock["guarantees"]
     for g, r in OR.RESTS_ON.items():
-        assert set(r["takes"].values()) <= set(OR.PREMISES) | set(OR.STANDING), g
+        assert set(r["takes"].values()) <= set(OR.PREMISES) | set(OR.STANDING) | set(OR.COUNTS), g
         if g not in lock["guarantees"]:
             continue
         got = OR.statement(lock, g)
         assert got is not None and got == r["statement"], (
             f"{g}'s statement in Security/lean-audit.json is {got}, not {r['statement']}, the one onsite_record.RESTS_ON "
             f"names what it takes at: read its hypotheses, antecedents and the conditions its good event reads again, "
-            f"name each in its takes with the premise (PREMISES) or standing assumption (STANDING) that covers it, and "
+            f"name each in its takes with the premise (PREMISES), standing assumption (STANDING) or term of what K "
+            f"counts (COUNTS) that covers it, and "
             f"pin {got}")
         assert set(lock["guarantees"][g]["assumptions"]) <= set(r["takes"]) | set(OR.STANDING), g
 
