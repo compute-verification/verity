@@ -9,7 +9,7 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   draws from the operating system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
-  (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
+  (`Drive.openStepM`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
   `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then the inner proof's: the frame's own round
   (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
   (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. At a round the finish has not computed,
@@ -32,7 +32,9 @@ loop's frames and the request alone.
 
 So every coin a frame takes is the loop's own reading of the auditor's answer, and every round in a device round's place
 is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins: the opening's are
-`Drive.opening`'s, which feeds `Drive.openStep` the same coins (`Drive.Step.feed`).
+`Drive.opening`'s, which feeds `Drive.openStep`, the loop's `Drive.openStepM` but for what it ends with, the same coins
+(`Drive.Step.feed`). What it ends with, the opening's switched vectors and batched basis (`Finish.Memo`), the rep's
+proof reads back (`ownOf`) rather than computing them again.
 -/
 import Flock.Firewall.Drive
 
@@ -65,8 +67,9 @@ structure Rep where
   st : Frame.State := {}
   alg : Array (ByteArray × Nat) := #[]
   coins : Array (Array F128) := #[]
-  /-- the rep's opening, at its next round (`Drive.openStep`) -/
-  opening : Option (Drive.Step Unit) := none
+  /-- the rep's opening, at its next round (`Drive.openStepM`); once it ended, until the inner proof's first round, what
+  it computed that the rep's proof reads back (`ownOf`) -/
+  opening : Option (Drive.Step Memo) := none
   /-- the opening ended: every round after it is the inner proof's -/
   opened : Bool := false
   /-- the round last released was the opening's, whose coins go to it too -/
@@ -180,7 +183,7 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slot
   | _ => err s!"a request `{line.trim}`"
 
 /-- What stands in rep `p`'s next round's place, the coins it squeezes, and `p` after, at the loop's salts `salts`: the
-algebraic phase's scheduled round, then the opening's (`Drive.openStep` begun at its first round, then at the round its
+algebraic phase's scheduled round, then the opening's (`Drive.openStepM` begun at its first round, then at the round its
 last coins asked for), then none (and no coins). -/
 def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.Level0) (s : Release) (p : Rep)
     (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
@@ -195,7 +198,7 @@ def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.L
       | throw s!"table {p.table} rep {p.rep}'s opening before its salts for levels ≥ 1"
     let t ← tabOfLevel0 (Setup.ofCircuit st) l0
     let xs := Drive.extras st (Drive.linkPoints st c)
-    p := { p with opening := some (Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
+    p := { p with opening := some (Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
   match p.opening with
   | some (.ask c n _) => return (.sched c, n, { p with toOpening := true })
   | some (.done _) => return (.own, 0, { p with opened := true, opening := none })
@@ -352,7 +355,8 @@ def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) 
 what it holds the rep's requests to: the algebraic phase's values the frame took at their pads (`Frame.absorbed`'s order,
 the rest `0`), the extra claims at the session's link points (`Drive.extras`, as `placeOf` opens with them), the coins
 the stream answered each of the rep's rounds so far, and whether those cover every round of its algebraic phase (`alg`,
-known once its first round came). -/
+known once its first round came); and once the rep's opening ended, until its inner proof's first round, what the opening
+computed that the rep's proof reads back (`Finish.Own.memo`). -/
 def ownOf (R : Sessions) (L0 : Level0.Slots) (i r : Nat) (root : ByteArray) : Except String Finish.Own := do
   let some sl := L0.slots.find? (·.l0.root == root) | throw s!"table {i}: a level 0 the session loop did not draw"
   let some (sid, name) := sl.bound | throw s!"table {i}: a level 0 no session's Commit carries"
@@ -363,7 +367,8 @@ def ownOf (R : Sessions) (L0 : Level0.Slots) (i r : Nat) (root : ByteArray) : Ex
   let some (_, p) := R.find sid i r | throw s!"a request of table {i} rep {r}, whose frame the loop has not started"
   let vals := (p.cfg.order.zip p.vals).foldl (fun v (k, x) => v.set! k x) (Array.replicate (p.cfg.lay.zp 64) 0)
   return { draws := p.draws, vals, xs := Drive.extras st (Drive.linkPoints st c), coins := p.coins,
-           algebraEnded := !p.alg.isEmpty && p.alg.size ≤ p.coins.size }
+           algebraEnded := !p.alg.isEmpty && p.alg.size ≤ p.coins.size,
+           memo := match p.opening with | some (.done m) => some m | _ => none }
 
 /-- **What the loop tells the prover of table `i`'s rep `r`** in the live session named `name`, for the request line
 `line` on `ch`, past the session's `Commit`: `place NAME I R` is answered by its next round's place (`placeOf`), `alg N`
