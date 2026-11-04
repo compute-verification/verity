@@ -814,12 +814,17 @@ def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
 
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
-         v3c: Path | None = None) -> SimpleNamespace:
+         v3c: Path | None = None, outputs: dict[int, Sequence[int]] | None = None) -> SimpleNamespace:
     """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
     link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
-    egress link-window (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`)."""
+    egress link-window (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`).
+
+    The chain's outputs are each connection's ids as the network certifier's egress carries them, or with ``outputs``
+    the compute's committed ones by the connection's stream ordinal (the ingress order `warden_chain.io` numbers its
+    records by; none for a connection it lacks): ``unrendered`` is then the egress buckets whose rendering of those
+    outputs isn't the network certifier's row, where an egress tie on them is refused."""
     t0 = time.time()
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
@@ -829,14 +834,16 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     got = synthetic(out, setup, windows) if run is None else warden_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
     ingress, egress = ([x for w in got.sides[s] for x in w.cells.rows] for s in ("ingress", "egress"))
+    committed = got.outputs if outputs is None else {q: tuple(xs) for q, xs in outputs.items()}
     try:
-        ch = traffic.chain(cls, ingress, egress, got.outputs)
+        ch = traffic.chain(cls, ingress, egress, committed)
     except (ValueError, KeyError) as e:
         raise SystemExit(f"the scan refuses link-windows {windows}' rows: {e!r} (the scan reads warden-form id "
                          "requests at its class, answered id-form: warden_serve.py rehearse --ids)")
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
     void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
-    if bad != void:
+    unrendered = [] if outputs is None else [t for t in bad if t not in void]
+    if [t for t in bad if t not in unrendered] != void:
         raise SystemExit(f"egress buckets {bad} don't compute the warden's rows from the views their ingress buckets "
                          f"wrote, and the warden failed a connection in buckets {void}")
     if void != got.fail_buckets:
@@ -862,8 +869,8 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
             if s.live:
                 admitted.setdefault(s.q, s.admitted)
     return SimpleNamespace(setup=setup, chain=ch, T=T, G=group, windows=windows, params=got.params,
-                           session=got.session, source=got.source, run_id=got.run_id, outputs=got.outputs,
-                           sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
+                           session=got.session, source=got.source, run_id=got.run_id, outputs=committed,
+                           unrendered=unrendered, sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
                            block_sets=[block_set(heads, got.session, j) for j in range(cls.NR)],
                            unread=_unread(cls, ch, heads, got.session),
                            tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),

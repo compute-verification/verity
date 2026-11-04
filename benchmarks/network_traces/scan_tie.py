@@ -6,7 +6,7 @@ by Flock `prove --zk` behind the ZK server, delivered, and decided by `EgressTie
 the verifier's registered reads); `EgressTie.tie` reads the verdict off the stream's outcomes.
 
     python benchmarks/network_traces/scan_tie.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|w63k4|test] [--warden-run RUN] [--port P] [--proof-deadline S]
+        [--class w63|w63k4|test] [--warden-run RUN [--outputs FILE]] [--port P] [--proof-deadline S]
 
 * **The rounds** (`ROUNDS`): ``honest``, the network certifier's rows as it signed them, accepted; ``tampered``, the
   phase's egress with one token's id changed in one `DATA` cell and the phase re-signed (scan_zk's `_tamper`: a
@@ -14,7 +14,12 @@ the verifier's registered reads); `EgressTie.tie` reads the verdict off the stre
   no row of the signed root. Each round is a stream of its own on the verifier's OS coins.
 * **The trace** is a stand-in for the compute audit's registration (`COMPUTE`): this driver commits the scan's
   `SCAN_STATE` and each lane's slot entries itself, as `G.Registered` rows of the trace's chain under fresh salts. What
-  it shows is the tie to a trace so registered, not that the compute audit registered it.
+  it shows is the tie to a trace so registered, not that the compute audit registered it. The chain's outputs are the
+  ids the network certifier's egress carries, so the trace renders that egress whatever it is; with ``--outputs`` (a
+  JSON object of each connection's committed output ids by its stream ordinal, as `warden_chain.io`'s records number
+  them) they are the compute's, and where those don't render the network certifier's rows (scan_zk `link`'s
+  ``unrendered``: a relay that rewrote or added an id) the honest round is refused at the egress statement too
+  (`expected`).
 * **The prover's trees**: ``scan/view`` and ``scan/last`` (S_{T−1}), each under fresh salts.
 * **What the verifier receives** (`verifier_dir`) is scanned as scan_zk scans its rounds (`scan_zk.received`) for
   every proof block's input and output rows but the public ``o0`` and every salt but ``o0``'s, less what is public
@@ -49,6 +54,12 @@ COMPUTE = hashlib.sha512(b"scan_tie.py: the stand-in compute audit's program").h
 CHALLENGER = "scan_tie.py on the verifier's OS coins"
 #: each round's expected verdict: accepted, or refused naming exactly these statements
 ROUNDS = {"honest": (True, ()), "tampered": (False, ("egress",))}
+
+
+def expected(at: SimpleNamespace, name: str) -> tuple[bool, tuple[str, ...]]:
+    """Round `name`'s expected verdict: `ROUNDS`', but the honest round is refused at the egress statement where the
+    committed outputs don't render the network certifier's rows (``at.unrendered``)."""
+    return ROUNDS["tampered"] if name == "honest" and at.unrendered else ROUNDS[name]
 
 
 def log(msg: str) -> None:
@@ -191,23 +202,25 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
             "stage_s": round(time.time() - t0, 1)}
 
 
-def host_read(name: str, staged: dict[str, dict]) -> list[str]:
+def host_read(name: str, staged: dict[str, dict], refused: bool) -> list[str]:
     """Where a round's staged statements aren't what its expected verdict needs: every output the tree's row it is read
-    as, but the egress o1 of the tampered round, which must differ at one proof block or more."""
+    as, but the egress o1 of a round expected refused, which must differ at one proof block or more."""
     bad = []
     for k, m in staged.items():
         off = dict(m["off"])
-        if name == "tampered" and m["template"] == "egress":
+        if refused and m["template"] == "egress":
             if not off.pop("o1", None):
-                bad.append(f"{k}: the tampered round's egress o1 is the signed rows'")
+                bad.append(f"{k}: the {name} round's egress o1 is the signed rows'")
         if off:
             bad.append(f"{k}: outputs {off} aren't the rows their reads open")
     return bad
 
 
-def tie_of(out: Path, setup, warden_run: Path | None = None, proof_deadline: float = 6 * 3600.0) -> SimpleNamespace:
-    """The execution phase (`one_link` of scan_zk's `link`), its egress tie and the stand-in trace."""
-    at = one_link(SZ.link(out / "warden", warden_run, setup, 1), out / "warden")
+def tie_of(out: Path, setup, warden_run: Path | None = None, proof_deadline: float = 6 * 3600.0,
+           outputs: dict[int, list[int]] | None = None) -> SimpleNamespace:
+    """The execution phase (`one_link` of scan_zk's `link`, its chain of `outputs` when given), its egress tie and the
+    stand-in trace."""
+    at = one_link(SZ.link(out / "warden", warden_run, setup, 1, outputs=outputs), out / "warden")
     if at.void or at.tampered is None:
         raise SystemExit(f"the run's execution phase is void (FAIL buckets {at.void}): the egress tie proves a served "
                          "one")
@@ -236,7 +249,7 @@ def stage_round(M, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, 
     res = {"registration": reg.digest, "sampled": len(draw.units),
            "staged": {k: {x: m[x] for x in ("n", "base", "ands", "k_log", "off", "stage_s")}
                       for k, m in staged.items()}}
-    bad = host_read(name, staged)
+    bad = host_read(name, staged, not expected(at, name)[0])
     if bad:
         raise SystemExit(f"{name}: the host's read of the staged statements isn't the round's: {bad}")
     log(f"{name}: registered {reg.digest[:16]}, every one of {tie.N} proof blocks sampled; staged "
@@ -301,7 +314,7 @@ def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespac
     blobs = {k: x for m in staged.values() for k, x in m["blobs"].items()}
     rec = SZ.received(M.a8, vdir, inst, blobs, set(blobs), sr.public)
     inst.unlink()
-    want_ok, want_refused = ROUNDS[name]
+    want_ok, want_refused = expected(at, name)
     res.update({"late": None if late is None else str(late), "verify_s": verify_s,
                 "outcome": {"accepted": outcome.accepted, "public": outcome.public},
                 "verdict": {x: verdict.get(x) for x in ("accepted", "decided_by", "refused", "digest", "public")},
@@ -318,13 +331,21 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SZ.SETUPS[a.setup]
-    t = tie_of(out, setup, a.warden_run, a.proof_deadline)
+    outputs = None
+    if a.outputs is not None:
+        try:
+            outputs = {int(q): [int(x) for x in xs] for q, xs in json.loads(a.outputs.read_text()).items()}
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            raise SystemExit(f"--outputs {a.outputs}: not a JSON object of id lists by stream ordinal: {e}")
+    t = tie_of(out, setup, a.warden_run, a.proof_deadline, outputs)
     at, tie, tr = t.at, t.tie, t.tr
     summary = {"source": at.source, "setup": setup.name, "link": tie.link, "T": tie.T, "N": tie.N,
                "members": [{"name": m.name, "template": m.template, "base": m.base, "n": len(m.units)}
                            for m in tie.members],
                "spec": tie.spec.digest(), "program": tie.partition["program"],
                "trace": {"of": "the stand-in compute audit's registration (scan_tie.py commits it, COMPUTE)",
+                         "outputs": "the network certifier's egress ids" if outputs is None else str(a.outputs),
+                         "unrendered": at.unrendered,
                          "state": tr.state.root.hex(), "progs": [p.root.hex() for p in tr.progs]},
                "tampered": {"bucket": at.tampered.bucket, "key": at.tampered.key_of}, "dry": bool(a.dry), "rounds": {}}
     M = WZ._one_stage()
@@ -366,6 +387,8 @@ def main(argv=None) -> int:
     p.add_argument("--class", dest="setup", choices=sorted(SZ.SETUPS), default=SZ.W63K4.name)
     p.add_argument("--warden-run", type=Path, help="a warden_serve run's directory (as scan_zk.py's): its execution "
                                                    "phase 0 in place of the synthetic run's")
+    p.add_argument("--outputs", type=Path, help="the compute's committed output ids by stream ordinal (JSON), the "
+                                                "trace's in place of the network certifier's egress ids")
     a = ap.parse_args(argv)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")

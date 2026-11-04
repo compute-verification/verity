@@ -520,6 +520,23 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert sz.wired(h.rounds["honest"]) == []
 
 
+def test_committed_outputs_that_dont_render_the_network_certifiers_egress_leave_its_buckets_unrendered(tmp_path):
+    """With the compute's committed outputs (`link(outputs=…)`) the scan's chain renders them: the ids the network
+    certifier's egress carries render its every row, while one id other than the egress carries (a relay that rewrote
+    it), one fewer (a relay that added an id cell before the trailer) or none for a connection (one the relay answered
+    itself) leaves `unrendered` the buckets where the egress isn't the rendering, where an egress tie on them is
+    refused."""
+    at = sz.link(tmp_path / "own", setup=sz.TEST)
+    assert at.unrendered == [] and sz.link(tmp_path / "same", setup=sz.TEST, outputs=at.outputs).unrendered == []
+    q, xs = next((q, xs) for q, xs in sorted(at.outputs.items()) if len(xs) > 1)
+    rest = {k: v for k, v in at.outputs.items() if k != q}
+    for name, outputs in (("token", {**rest, q: (xs[0] ^ 1, *xs[1:])}), ("pad", {**rest, q: xs[:-1]}),
+                          ("extra", rest)):
+        off = sz.link(tmp_path / name, setup=sz.TEST, outputs=outputs)
+        assert off.unrendered and set(off.unrendered) <= set(range(at.T)) and off.void == [], (name, off.unrendered)
+        assert off.outputs == {k: tuple(v) for k, v in outputs.items()}, name
+
+
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the

@@ -1,7 +1,8 @@
 """scan_tie's statements of the egress tie (`scan_service.EgressTie`) at the certifier tests' class: one registration a
 round, every proof block sampled, the four statements (``first``, ``ingress`` with the phase's `IngressScanBucket`
 blocks but the last, ``last``, ``egress``) staged on the verifier's own registered reads, every output the row its read
-opens, but the tampered round's egress ``o1`` at the one bucket whose token the re-signed phase changed; and Lean's
+opens, but the tampered round's egress ``o1`` at the one bucket whose token the re-signed phase changed, and the
+honest round's on committed outputs one token off the egress at the buckets they don't render; and Lean's
 statement setup (`flock-verify statement`, the verifier's checks before any proof) accepts every statement but the
 tampered egress, which it refuses at that port, and refuses an ingress statement whose S_t chain is broken in its public
 file. Nothing here proves (`scan_tie.py prove` does, on a node)."""
@@ -65,6 +66,22 @@ def test_each_round_is_one_registration_every_block_sampled_each_statement_as_it
     assert not any(tampered[k]["off"] for k in ("first", "ingress", "last"))
     assert got["honest"].heads.ingress == got["tampered"].heads.ingress
     assert got["honest"].heads.egress.root != got["tampered"].heads.egress.root
+
+
+@pytest.mark.slow
+def test_the_honest_round_on_committed_outputs_one_token_off_is_off_only_at_the_egress_o1(rounds, tmp_path):
+    """With the compute's committed outputs one id other than the network certifier's egress carries (``--outputs``, a
+    relay that rewrote a token), the trace renders the committed outputs: the honest round is expected refused at the
+    egress statement (`expected`), and its staging is off only at the egress o1 of the buckets they don't render."""
+    t, _ = rounds
+    q, xs = next((q, xs) for q, xs in sorted(t.at.outputs.items()) if xs)
+    off = st.tie_of(tmp_path, SZ.TEST, outputs={**t.at.outputs, q: (xs[0] ^ 1, *xs[1:])})
+    assert off.at.unrendered and st.expected(off.at, "honest") == (False, ("egress",))
+    M = WZ._statement()
+    got = st.stage_round(M, off.tie, off.at, off.tr, st.stagers(M, off.tie, tmp_path / "stagers"), "honest",
+                         tmp_path / "honest", 2.0 ** -20).staged
+    assert got["egress"]["off"] == {"o1": [off.tie.T + b for b in off.at.unrendered]}
+    assert not any(got[k]["off"] for k in ("first", "ingress", "last"))
 
 
 @pytest.mark.slow
