@@ -16,7 +16,8 @@ any other token that reads as a repository path but isn't one is in `NOT_PATHS` 
 A backticked bare file name of source code (`probe.py`, `run.sh`, `hash.c`: an extension in `_NAME`) is checked too.
 Prose names a file by its bare name wherever it lives (a README names its own directory's files and its neighbours'),
 so the name exists when some tracked file has it; a script that was deleted, or never landed, has none. A name of
-two or more capitalized segments before its extension (`Loop.RepSrc.h`) is a dotted Lean name, not a file.
+three or more dotted segments, one before the last capitalized (`Loop.RepSrc.h`, or `coin_tree.Rules.h`: a namespace,
+a structure and its field), is a dotted Lean name, not a file.
 """
 from __future__ import annotations
 
@@ -76,7 +77,7 @@ _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+-]*:")
 _SKIP = re.compile(r"[*<>{}$|@\\]")
 _LINE = re.compile(r":\d+(-\d+)?$")
 _NAME = re.compile(r"^[\w.+-]+\.(py|sh|c|h|cc|cpp|cu|cuh|rs|lean)$")
-_LEAN_NAME = re.compile(r"^(?:[A-Z]\w*\.){2,}\w+$")
+_LEAN_NAME = re.compile(r"^(?=(?:\w+\.){2,}\w+$)(?:\w+\.)*[A-Z]\w*\.")
 
 
 @functools.cache
@@ -188,14 +189,14 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
                               "`tools/x/tests/fixtures/big/a.bin` `test_a.py:3` `b.py::f` `gone.sh`, `out.json` `x`"),
         "tools/x/CHANGELOG.md": "`tools/gone.py`",
         "Security/A.lean": ('def s := "`tools/gone.py`"\n/-- `tools/x/` and\n`tools/lean_gone.py` -/\n'
-                            "def t := 1 -- `x.lean`, `Loop.RepSrc.h`, `Gone.lean`\n"),
+                            "def t := 1 -- `x.lean`, `Loop.RepSrc.h`, `coin_tree.Rules.h`, `Gone.lean`, `a.b.h`\n"),
     }
     assert documents(files) == ["README.md", "Security/A.lean", "tools/x/README.md"]
     assert dead_paths(tree, read=docs.__getitem__) == [
         ("README.md", 1, "verity/moved/c.py"),
         ("README.md", 1, "tools/gone.py"), ("README.md", 1, "tools/x/gone.md"), ("README.md", 1, "pods/nebius/"),
         ("README.md", 1, "verity/primitives/gone.py"), ("Security/A.lean", 3, "tools/lean_gone.py"),
-        ("Security/A.lean", 4, "x.lean"), ("Security/A.lean", 4, "Gone.lean"),
+        ("Security/A.lean", 4, "x.lean"), ("Security/A.lean", 4, "Gone.lean"), ("Security/A.lean", 4, "a.b.h"),
         ("tools/x/README.md", 1, "tests/test_b.py"),
         ("tools/x/README.md", 1, "gone.md"),
         ("tools/x/README.md", 1, "gone.sh")]
