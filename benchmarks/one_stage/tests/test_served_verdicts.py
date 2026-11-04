@@ -941,9 +941,9 @@ def live(monkeypatch, tmp_path):
 def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys, live):
     """``pearlplus``: Pearl+'s own served run, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
     session's, is accepted with that verdict's line and credit and its shares (the timed passes' MACs and their credit at
-    θ over the timed call's wall), and its row in the record stays missing with its own reason, its passes not the window
-    sampled proofs audited, so the record composes pending; the pieces' line says it's a development run's, and names
-    the session."""
+    θ over the timed call's wall), and its row in the record stays missing, naming the first condition of record it fails
+    (a compose with no key pin), so the record composes pending; the pieces' line says it's a development run's, and
+    names the session."""
     calls, args = live
     served, verified = _pearlplus_run()
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **args)
@@ -959,11 +959,12 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert doc["shares"]["credit"] == {"rho": "1/100", "epsilon": "1/100", "delta": "1/100", "draws": 459}
     assert (tensor["declared_linears"], tensor["credited"]) == (6000 / rho / 2.0, 5300 / rho / 2.0)
     row = S.piece_row("work", tmp_path / "pieces")
-    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.PEARLPLUS_WHY, "accept")
+    why = f"{S.DEV_VERDICT}: the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"
+    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and line["development"] == {"PoUW": "accept"}
-    assert line["missing"]["PoUW"] == S.PEARLPLUS_WHY and BR.check(rec) == {}
-    assert rec["composed"]["onsite"]["reason"].startswith(f"sampled proofs: accept; PoUW: {S.PEARLPLUS_WHY}; ")
+    assert line["missing"]["PoUW"] == why and BR.check(rec) == {}
+    assert rec["composed"]["onsite"]["reason"].startswith(f"sampled proofs: accept; PoUW: {why}; ")
     got = S.pieces(tmp_path, 1, tmp_path / "again", env={"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""})
     assert "POUW (development run, credits nothing) " in capsys.readouterr().out
     assert (got["pouw"]["verdict"], got["pouw"]["passes"], got["pouw"]["credited"]) == ("accept", 4, False)
@@ -1320,6 +1321,135 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     doc = S.pearlplus(tmp_path / "gated", served, verified, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt")
     assert (doc["verdict"], doc["why"]) == ("reject", S.PEARLPLUS_WHY_IN_PROCESS)
     assert doc["reasons"] == ["coins: in-process, not a live session on the gate, so nothing checks them"]
+
+
+PEARL_W = "d7" * 64
+PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
+
+
+def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record") -> tuple[Path, Path, str, str]:
+    """Pearl+'s accepted piece as `served_pearlplus.sh` leaves it, every condition of record met unless ``case`` breaks
+    one: its live session checked (`live`), the session's tree and the auditor's ledger as the gate gave them (the lane's
+    own reserve in its open Pearl-C period), its coin published, Pearl+'s verdict tied to W, the window's registration R
+    chained after W and its audit tied to W, and the Lean verdict on the same run. Returns the pieces dir, the sampled
+    proofs dir, the compose's key pin and lane."""
+    from verity.core.protocols.sampled_proofs import remote
+
+    served, verified = _pearlplus_run()
+    answer = {"protocol": S.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "c1" * 64,
+              "public": {"work": verified["answer"]["public"]["work"], "unit": "MAC",
+                         **({} if case == "untied" else {"tie": {"record": PEARL_W, "tables": 6}})},
+              "profile": {"delta": "1/100", "draws": 459, "source": "5e" * 32}}
+    piece = tmp_path / "pieces" / "pouw"
+    piece.mkdir(parents=True)
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record())
+    S.coin(rec, piece, "r1", research=["research"], put=_put(NODE_PUT)[0])
+    doc = S.pearlplus(piece, served, {**verified, "answer": answer}, coin=piece / S.COIN_PUT, **live[1])
+    assert (doc["verdict"], doc["reasons"]) == ("accept", [])
+    doc.update({"in-process coins": {"coin_source": "in-process"},
+                "session refused": {"coins": {**doc["coins"], "check": {**doc["coins"]["check"],
+                                                                         "reason": "pass 2: coin: bad"}}},
+                "unpublished coin": {"coin": None}}.get(case, {}))
+    (piece / S.DEVELOPMENT).write_text(json.dumps(doc))
+    (piece / S.PEARLPLUS_ANSWER).write_text(json.dumps(answer))
+    (piece / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "120m"}))
+    (piece / "session" / SID / "out").mkdir(parents=True)
+    (piece / "session" / SID / "out" / remote.KEY).write_text(json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}))
+    opens = {"no period": [], "H1 period": [{"kind": "period-open", "body": {"period": "p-h1", "lane": "vllm", "cap": 4,
+                                                                            "circuit": "c1" * 64, "draw_k": 27, "rows": 64}}]}
+    ledger = opens.get(case, [{"kind": "period-open", "body": {"period": "p-pc", "lane": "vllm", "cap": 2,
+                                                                "circuit": "c1" * 64}}])
+    by = {"reserved for": {"by": "vy-admin", "for": "vllm"}}.get(case, {"by": "vllm"})
+    ledger += [] if case == "no reserve" else [{"kind": "reserve", "session": SID, "body": by}]
+    (piece / "ledger.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ledger))
+    lean = {"verdict": "accept", "reason": None, "refused": None, "commitment": "c1" * 64, "source": "5e" * 32,
+            "drawn": 459, "verdicts": [], "work": PEARL_LEAN_WORK, "tie": {"record": PEARL_W}}
+    lean.update({"Lean rejects": {"verdict": "reject", "reason": "the live session's coins are out of scope"},
+                 "Lean other run": {"commitment": "c2" * 64}, "Lean untied": {"tie": None},
+                 "Lean credits nothing": {"work": {**PEARL_LEAN_WORK, "credited": 0}},
+                 "Lean other epsilon": {"work": {**PEARL_LEAN_WORK, "epsilon": "1/50"}}}.get(case, {}))
+    if case != "no Lean":
+        (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
+    audit = tmp_path / "audit"
+    (audit / "windows" / "rank0").mkdir(parents=True)
+    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
+        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {"tie": {"record": PEARL_W}}))
+    if case != "node draw":
+        monkeypatch.setattr(S, "pearlplus_live_draw", lambda record, piece_dir, key: None)
+    pin = "00" * 64 if case == "other key" else None if case == "no pin" else hashlib.sha512(PUBLIC).hexdigest()
+    return piece.parent, audit, pin, "kernels" if case == "other lane" else "vllm"
+
+
+def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verdict_of_record(tmp_path, monkeypatch,
+                                                                                             capsys, live):
+    """Pearl+'s accepted piece whose live coins the compose holds to its pin, whose session the lane reserved under its own
+    gate key in its open Pearl-C period, whose passes are tied to the window sampled proofs audited, and which the Lean
+    `PouwCheck.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
+    Pearl+'s answer with the Lean's work, and remote's record composes accept with W_cert that work."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    assert (row["protocol"], row["verdict"], row["commitment"], row["delta"]) == (S.PEARLPLUS_PROTOCOL, "accept",
+                                                                                  "c1" * 64, "1/100")
+    assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
+    profile = row["answer"]["profile"]
+    assert (profile["lane"], profile["key_sha512"], profile["period"], profile["session"]) == ("vllm", pin, "p-pc", SID)
+    assert profile["lean"]["work"] == PEARL_LEAN_WORK and row["piece"]["piece"] == "pearlplus" and "development" not in row
+    (tmp_path / "serve").mkdir()
+    assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+                   str(audit), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+                   "--product", "remote", "--key-sha512", pin, "--lane", lane]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("accept", "accept", {})
+    assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
+    assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+
+
+@pytest.mark.parametrize("case, why", [
+    ("in-process coins", "its epoch's coins come from 'in-process', not a live session on the auditor host's challenger"),
+    ("session refused", "the live session's check refused its passes: pass 2: coin: bad"),
+    ("no pin", "the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"),
+    ("other key", "the live session's challenger key is not the compose's pin: the challenger key at "),
+    ("node draw", S.PEARLPLUS_NODE_DRAW),
+    ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
+    ("no reserve", f"the piece's ledger holds no reserve of the live session {SID}"),
+    ("reserved for", "the live session was reserved by vy-admin for lane vllm, not under the lane's own gate key"),
+    ("other lane", "the live session was reserved under lane vllm's gate key, not lane kernels's own"),
+    ("no period", "the live session joined no period of lane vllm"),
+    ("H1 period", "the live session joined period p-h1, H1's (its open commits draw_k, rows): a Pearl-C salt session is "
+                  "credited in a Pearl-C period alone"),
+    ("untied", "Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so nothing "
+               "ties them to the window"),
+    ("R not after W", f"the window's registration R is chained after {'ab' * 8}..., not right after Pearl+'s window "
+                      f"record W {PEARL_W[:16]}..."),
+    ("audit untied", f"the window's records audit is not tied to Pearl+'s window record W {PEARL_W[:16]}... "
+                     "(records_audit --tie W)"),
+    ("no Lean", f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
+    ("Lean rejects", "the Lean PouwCheck.PearlPlus verdict is reject: the live session's coins are out of scope"),
+    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {'5e' * 8}..., not Pearl+'s verdict's run "
+                       "and source"),
+    ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),
+    ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
+    ("Lean other epsilon", "the Lean verdict's ε '1/50' is not the reference's '1/100'"),
+])
+def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_development_piece_naming_it(
+        tmp_path, monkeypatch, live, case, why):
+    """Each condition of record broken alone leaves Pearl+'s accepted piece a development one: its row missing with its
+    document, its ``why`` the development verdict and the condition, in `pearlplus_of_record`'s order, so remote's record
+    composes pending and names it."""
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
+    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
+    assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
+    _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",
+                                  run="r", servers={"work": ("vy-dc-h200", "real")}, product="remote")
+    assert (line["composed"], line["verdicts"]["PoUW"], line["missing"]["PoUW"]) == ("pending", S.DEV_VERDICT, row["why"])
+    assert rec["legs"]["pouw"] is None
 
 
 def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
@@ -2450,10 +2580,12 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
-    assert json.loads((tmp_path / "order.record").read_text()) == [
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[:-4] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200"]
+    assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
 
