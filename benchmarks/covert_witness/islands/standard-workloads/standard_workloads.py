@@ -1,12 +1,12 @@
 """The console's training panel `training/standard-workloads`: the standard covert workloads (te_core.workloads'
 names: standard, diloco, rl, inference, lora and distill), each a small real run from a registered start, measured by
-this te_core and priced by te_core.formalism at the console's default and the registered serving block.
+te_core and priced by te_core.formalism at the console's default and the registered serving block.
 
-    python -m te_core.standard_workloads --out DIR [--rows FILE] [--publish]
+    python islands/standard-workloads/standard_workloads.py --out DIR [--rows FILE] [--publish]
 
 `--rows` (default `ROWS`, the island's rows.json) gives the stored traces (the island's trace.py output, chosen steps
-of the runs, refused unless traced by a te_core from `TRACED_SINCE` to this one, a step traced more than once read
-from the newest te_core's trace) and a row per workload and measured
+of the runs, refused unless traced by a te_core from `TRACED_SINCE` to the one it runs on, a step traced more than once
+read from the newest te_core's trace) and a row per workload and measured
 dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
 them (`about`, and a `note`), `last_untraced` where the trace can't reach the run's last step (why, in its
 `input_status`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
@@ -67,10 +67,14 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import VERSION, algorithm_policy, annotate, console, formalism, panels, policy
-from .gates import of_log
-from .ledger import Ledger, ingest
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy
+from te_core.gates import of_log
+from te_core.ledger import Ledger, ingest
+
+HERE = Path(__file__).resolve().parent
+CW = HERE.parents[1]
 NAME = "standard-workloads"
 PANEL = f"training/{NAME}"
 COLUMNS = ["workload", "model", "dials", "run", "rho_inputs", "input_status", "rho_default", "rho_console", "reading",
@@ -86,11 +90,11 @@ SENSITIVITIES = (*formalism.CELL_SENSITIVITIES, "token_form", "decoding_form")
 #: the `rho_inputs` cell's keys, algorithm_policy.rho_inputs' in its order, each with its `input_status`; the cell holds
 #: te_core.panels' `FRESH` beside them, whose input is `products`
 KEYS = ("C_gates", *panels.PACKED, *algorithm_policy.SPLIT)
-#: the first te_core whose traces this one's formalism reads whole: their entries and partial and gradient cuts
+#: the first te_core whose traces te_core.formalism reads whole: their entries and partial and gradient cuts
 TRACED_SINCE = "4.4"
 #: the one bound's fields each row's details keep at both points
 BOUND = ("terms", "max", "binding", "unmeasured", "sensitivities")
-ROWS = Path(__file__).resolve().parents[1] / "islands" / NAME / "rows.json"
+ROWS = HERE / "rows.json"
 FP4 = "float4_e2m1fn_x2"
 GEMMS = ("mm", "addmm", "bmm")
 #: each column's te_core quantities (algorithm_policy's `LABELLED`, and the two 4.x terms)
@@ -157,8 +161,8 @@ def _version(v: str) -> tuple[int, ...]:
 
 def traces(arts: list[str]) -> dict[str, dict[int, dict]]:
     """Each run's traced steps in `arts` (the island's trace.py output), each with its art and the te_core that traced
-    it, refused unless that is `TRACED_SINCE` to this one; a step traced in more than one art is the newest te_core's
-    trace (of equal ones, the later art's)."""
+    it, refused unless that is `TRACED_SINCE` to the one it runs on; a step traced in more than one art is the newest
+    te_core's trace (of equal ones, the later art's)."""
     out: dict[str, dict[int, dict]] = {}
     for art in arts:
         root = fetch(art)
@@ -178,14 +182,13 @@ def commits(publish: bool = False) -> tuple[str, str, str]:
     """This checkout's commit, the integrator's branch (pin.py's `BRANCH`) and its commit this one builds on (their
     merge base on origin), the commits at 10 characters, which the panel's source names; with `publish`, refused where
     te_core or the island has uncommitted changes, which neither commit holds."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from pin import BRANCH, git
 
     head, base = git("rev-parse", "HEAD"), git("merge-base", "HEAD", f"origin/{BRANCH}")
     if head.returncode or base.returncode:
         raise SystemExit(f"{PANEL}: no merge base of HEAD and origin/{BRANCH}: git fetch origin {BRANCH} and build "
                          f"again")
-    dirty = git("status", "--porcelain", "--", str(Path(__file__).resolve().parent), str(ROWS.parent)).stdout.split()
+    dirty = git("status", "--porcelain", "--", str(CW / "te_core"), str(HERE)).stdout.split()
     if publish and dirty:
         raise SystemExit(f"{PANEL}: not PUT, since te_core or islands/{NAME} has uncommitted changes, which the "
                          f"source's commit doesn't hold: commit them and publish again")
@@ -469,8 +472,7 @@ def source(revs: tuple[str, str, str]) -> str:
     """The panel's source: the command at this checkout's commit, and the integrator's branch and commit it builds on
     (`revs`, `commits`'s)."""
     head, branch, base = revs
-    return (f"python -m te_core.{NAME.replace('-', '_')} at {head} (te_core {VERSION}, on {branch} at {base}; "
-            f"islands/{NAME})")
+    return f"python islands/{NAME}/{Path(__file__).name} at {head} (te_core {VERSION}, on {branch} at {base})"
 
 
 def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> tuple[dict, list[dict]]:
@@ -544,7 +546,7 @@ def refused(p: dict) -> list[str]:
 
 def emptied(p: dict, served: dict | None) -> list[str]:
     """Why `p` mustn't replace the panel the route serves (`served`): a version switch never empties a populated
-    panel, so every run it serves stays a row, and a te_core newer than this one keeps it."""
+    panel, so every run it serves stays a row, and a te_core newer than the one it runs on keeps it."""
     if not served:
         return []
     run, te = (served["columns"].index(c) for c in ("run", "te_core"))
@@ -573,7 +575,7 @@ def main(argv=None) -> int:
     (tables / f"{NAME}.json").write_text(json.dumps(p | {"details": details}, indent=1, allow_nan=False) + "\n")
     art = algorithm_policy.store(tables, {"what": f"{PANEL} uncut, each row's labels, parts, and formalism.at, "
                                                   f"published and the one bound at both points "
-                                                  f"(te_core.standard_workloads)", "rows": len(p["rows"]),
+                                                  f"(islands/{NAME}/{Path(__file__).name})", "rows": len(p["rows"]),
                                           "source": p["source"]}) if a.publish else None
     q = p | {"note": note(p, art)}
     (cons / f"{NAME}.json").write_bytes(console.body(q))

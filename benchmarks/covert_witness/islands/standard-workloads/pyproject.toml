@@ -1,0 +1,10 @@
+# The standard-workloads island's panel builder (standard_workloads.py, `training/standard-workloads`). Not a package: it
+# runs from `benchmarks/covert_witness/` as `python islands/standard-workloads/standard_workloads.py`, and its tests run
+# here as a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/islands/standard-workloads`) on CPU torch.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["../.."]
+
+[tool.verity.tests]
+# The builder prices with te_core, which it imports from benchmarks/covert_witness.
+inputs = ["benchmarks/covert_witness/te_core"]

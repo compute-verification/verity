@@ -1,4 +1,4 @@
-"""te_core.standard_workloads builds `training/standard-workloads`: a row per workload and measured dial setting, whose
+"""standard_workloads.py builds `training/standard-workloads`: a row per workload and measured dial setting, whose
 ρ is formalism.published's under the builder's `READING`, A (with its binding kind, what it rests on and its kinds as
 published gives them, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
 infinite) at the console's default (rho_default and rho_console) and the registered serving block (rho_served), whose
@@ -8,6 +8,7 @@ run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; it
 the panel keeps to the panels route's limits, a cell up to 4,096 characters, and never replaces a served panel with one
 that drops its runs."""
 import dataclasses
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -17,12 +18,17 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import VERSION, algorithm_policy, console, formalism, panels, policy
-from te_core import standard_workloads as SW
 from te_core.gates import of_log, per_mac
 
+#: the builder, loaded from its file: on sys.path, the island's directory would hide the standard library's trace
+#: module behind the island's trace.py
+_SPEC = importlib.util.spec_from_file_location("standard_workloads",
+                                               Path(__file__).resolve().parents[1] / "standard_workloads.py")
+SW = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(SW)
 #: a distillation run's row as the builder measured it from the store: the rows file's row, the run's quantities at its
 #: last checkpoint (formalism.Measured), its start's shape, what it read, and the panel's cells it gave
-PINNED = Path(__file__).parent / "standard_workloads" / "distill.json"
+PINNED = Path(__file__).parent / "fixtures" / "distill.json"
 #: the commits a test build's source names (`commits`'s: this checkout's, the integrator's branch and its commit)
 REVS = ("c0ffee0000", "integrator", "facade0000")
 U, R = 16, 4
@@ -89,8 +95,8 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     pinned = dict(zip(SW.COLUMNS, fx["cells"]))
     assert {k: v for k, v in cells.items() if k != "te_core"} == {k: v for k, v in pinned.items() if k != "te_core"}
     assert cells["te_core"] == VERSION
-    assert p["source"] == (f"python -m te_core.standard_workloads at c0ffee0000 (te_core {VERSION}, on integrator at "
-                           f"facade0000; islands/standard-workloads)")
+    assert p["source"] == (f"python islands/standard-workloads/standard_workloads.py at c0ffee0000 (te_core {VERSION}, "
+                           f"on integrator at facade0000)")
     inputs, st = json.loads(cells["rho_inputs"]), json.loads(cells["input_status"])
     assert [k for k in inputs if k != panels.FRESH] == list(SW.KEYS) and list(st) == [*SW.KEYS, "products"]
     assert inputs[panels.FRESH] == formalism.fresh_per_c(m) is None
