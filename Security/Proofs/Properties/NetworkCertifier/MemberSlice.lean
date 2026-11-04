@@ -20,7 +20,9 @@ wire between two members of one template needs.
 * `act_node`, `act_not_input`: a member's activation lies in its node's gates, so no input node's gate is in it;
 * `InM`, `closure_member`, `depends_member`: at a batch whose every argument is one input node's leaves
   (`NetworkCheck.Period.inputArg`), the gates of member `m`'s activation and those its own references resolve to hold
-  what they read in a flattening (`Properties.NetworkScan.Flattens`), so whatever such a gate depends on is among them.
+  what they read in a flattening (`Properties.NetworkScan.Flattens`), so whatever such a gate depends on is among them;
+* `wiresAcyclic_of`: so the wires are acyclic when a rank on members falls along each wire, its writer an out leaf of
+  a member, and a wired gate is in `InM` only at the member whose own reference reads it.
 -/
 
 namespace Properties.NetworkCertifier
@@ -263,9 +265,14 @@ theorem run_slice {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
 
 end
 
-/-- **The member-precise walk lemma.** -/
-theorem memberSliceReads : MemberSliceReads := by
-  intro bytes P hdec hov hbl k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
+/-- What the walk reads of a Program C-Flock decodes, topological and laid out: its root a composite, every activation's
+body `Resolve.BodyOk`, every composite's body laid out, and the root's input nodes called with no arguments. -/
+theorem facts_of {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
+    (hbl : NciCheck.Desc.bodiesLaidOut P = true) :
+    (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) ∧
+      (∀ d < P.defs.size, Walk.LaidOut P d) ∧
+      ∀ k < (P.defs[P.root]!).body.nodes.size, NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
+        ((P.defs[P.root]!).body.nodes[k]!).args = #[] := by
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
@@ -273,9 +280,15 @@ theorem memberSliceReads : MemberSliceReads := by
   have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
     obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
     exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
-  obtain ⟨-, hL, -, -⟩ := Walk.bodiesLaidOut_spec P hbl
-  obtain ⟨r, hinv', hb, hres⟩ := gate_below P ⟨hr, hrp⟩ hB hL hk hm hc hg1 hg2 hgate a ha
-  rcases run_slice P ⟨hr, hrp⟩ hB hL (k := k) (m := m) rfl hf _ _ _ hinv' hb hres with
+  obtain ⟨-, hL, -, hinp⟩ := Walk.bodiesLaidOut_spec P hbl
+  exact ⟨⟨hr, hrp⟩, hB, hL, hinp P.root hr hrp⟩
+
+/-- **The member-precise walk lemma.** -/
+theorem memberSliceReads : MemberSliceReads := by
+  intro bytes P hdec hov hbl k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
+  obtain ⟨hroot, hB, hL, -⟩ := facts_of hdec hov hbl
+  obtain ⟨r, hinv', hb, hres⟩ := gate_below P hroot hB hL hk hm hc hg1 hg2 hgate a ha
+  rcases run_slice P hroot hB hL (k := k) (m := m) rfl hf _ _ _ hinv' hb hres with
     h | ⟨i, j, hi, hj, n', hn', h⟩
   · exact Or.inl h
   · exact Or.inr ⟨i, j, hi, hj, Flock.Steps.run_mono hn' h⟩
@@ -324,6 +337,18 @@ theorem closure_member {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : 
     rw [this] at hyo
     simp at hyo
 
+omit hroot hL in
+/-- Out leaf `j` of a root batch is of member `j / L`, `L` the callee's out leaves. -/
+theorem out_member {ke j : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
+    (hbatch : ((P.defs[P.root]!).body.nodes[ke]!).form = .batch)
+    (hj : j < ((P.defs[P.root]!).body.nodes[ke]!).out.leaves) :
+    j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves < ((P.defs[P.root]!).body.nodes[ke]!).members := by
+  have hBr : Resolve.BodyOk P P.root := hB P.rootScope (good_root P)
+  obtain ⟨-, -, -, hdown, -⟩ := hBr.1 ke hk
+  have hdn := hdown j hj
+  simp only [hbatch] at hdn
+  rw [Resolve.bs_members _ (Or.inl hbatch)]; exact hdn.1
+
 /-- **An out leaf of a member lands in `InM`**: leaf `j` of root node `ke`, a batch of a composite, resolves only to a
 gate of `InM` at member `j / L`, `L` the callee's out leaves. -/
 theorem lands_member {ke j a : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
@@ -336,10 +361,8 @@ theorem lands_member {ke j a : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size
   obtain ⟨-, -, -, hdown, -⟩ := hBr.1 ke hk
   have hdn := hdown j hj
   simp only [hbatch] at hdn
-  obtain ⟨hdn1, -, hdn3⟩ := hdn
-  have hm : j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves <
-      ((P.defs[P.root]!).body.nodes[ke]!).members := by
-    rw [Resolve.bs_members _ (Or.inl hbatch)]; exact hdn1
+  obtain ⟨-, -, hdn3⟩ := hdn
+  have hm := out_member P hB hk hbatch hj
   have hgA : Resolve.Good P (P.child P.rootScope ke
       (j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves)) :=
     Resolve.good_child P (good_root P) hk rfl hcomp hm rfl
@@ -405,5 +428,37 @@ theorem depends_member {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : 
   depends_closed C (InM P k m) (closure_member P hroot hB hL hdec hov hbl C hF hk hm hcomp hbatch hargs hinp) hd hw
 
 end
+
+/-- **The wires are acyclic when a rank on members falls along each wire.** In a flattening `C` of a Program C-Flock
+decodes, topological and laid out, let `unit g` be the member, (root node, index), whose own reference reads the wired
+gate `g`, and let each wire's writer be out leaf `j` of a root batch `ke` of a composite whose arguments are input
+nodes' leaves, member `j / L` ranking below `unit g`. If a wired gate is in `InM` only at its own member, then
+whatever a writer depends on is in its member's `InM` (`lands_member`, `depends_member`), so a wired gate it depends on
+is of that member, and `rk ∘ unit` falls along every wire. -/
+theorem wiresAcyclic_of {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
+    (hbl : NciCheck.Desc.bodiesLaidOut P = true) (C : Claims.Sampling.Prog) (hF : Flattens P C)
+    (wires : ℕ → Option ℕ) (unit : ℕ → ℕ × ℕ) (rk : ℕ × ℕ → ℕ)
+    (hwr : ∀ g w, wires g = some w → ∃ ke j, ke < (P.defs[P.root]!).body.nodes.size ∧
+      (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).prim = false ∧
+      ((P.defs[P.root]!).body.nodes[ke]!).form = .batch ∧
+      (∀ b ∈ ((P.defs[P.root]!).body.nodes[ke]!).args, (inputArg P b).isSome = true) ∧
+      j < ((P.defs[P.root]!).body.nodes[ke]!).out.leaves ∧ resolve P P.rootScope ⟨false, ke, j⟩ = .ok w ∧
+      rk (ke, j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves) < rk (unit g))
+    (hrd : ∀ g', wires g' ≠ none → ∀ k m, k < (P.defs[P.root]!).body.nodes.size →
+      m < ((P.defs[P.root]!).body.nodes[k]!).members →
+      (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
+      ((P.defs[P.root]!).body.nodes[k]!).form = .batch →
+      (∀ b ∈ ((P.defs[P.root]!).body.nodes[k]!).args, (inputArg P b).isSome = true) →
+      InM P k m g' → (k, m) = unit g') :
+    ∃ r : ℕ → ℕ, ∀ g w g', wires g = some w → wires g' ≠ none → NetTiming.Depends C g' w → r g' < r g := by
+  obtain ⟨hroot, hB, hL, hinp⟩ := facts_of hdec hov hbl
+  refine ⟨fun g => rk (unit g), fun g w g' hw hg' hd => ?_⟩
+  obtain ⟨ke, j, hk, hcomp, hbatch, hargs, hj, hres, hlt⟩ := hwr g w hw
+  have hm := out_member P hB hk hbatch hj
+  have hgm := depends_member P hroot hB hL hdec hov hbl C hF hk hm hcomp hbatch hargs hinp
+    (lands_member P hroot hB hL hk hcomp hbatch hj hres) hd
+  show rk (unit g') < rk (unit g)
+  rw [← hrd g' hg' ke _ hk hm hcomp hbatch hargs hgm]
+  exact hlt
 
 end Properties.NetworkCertifier.MemberSliceProof
