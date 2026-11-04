@@ -222,7 +222,9 @@ negatives.
   `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
   far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
   verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict
-  over all of them (`served_passes.py verify`, `--over-cap` from `PEARLPLUS_OVER_CAP`), and writes the piece through
+  over all of them (`served_passes.py verify`, `--over-cap` from `PEARLPLUS_OVER_CAP`; its coin, where the lane's gate is
+  set, a draw session's of its own there, reserved as the lane's first reserve after its Pearl-C period closed, right
+  before the draw, and opened on the run's commitment, `bench_arm.LiveDraw`), and writes the piece through
   `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
   (`served_shares.pearlplus_shares`), and why it credits nothing.
 

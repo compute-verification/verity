@@ -125,8 +125,9 @@ one salt session joins it) and circuit the SHA-512 of ``DIR/pearlplus-descriptor
 served window's circuit record (served_verdicts.sh's PEARLPLUS-CIRCUIT, the circuit cut at Pearl+'s linears that step 3's
 window-circuit writes), byte for byte; without it, `pearlplus_descriptor` (Pearl+'s protocol, ``--scheme`` and
 ``--cubin``'s SHA-512), which names no model. Its answer goes in ``DIR/period.json``; ``pearlplus-period close`` closes it
-once the serve's session has ended, before the verifier's draw, which joins no period. ``coin``: the verifier's coin record published the moment it is drawn (`coin`), ``--run-dir`` naming the run's
-Attempt as its custody where no put preserves it.
+once the serve's session has ended (the untied piece's right before the verifier's draw), and the draw, which joins no
+period, must be the lane's first reserve after the close. ``coin``: the verifier's coin record published the moment it is
+drawn (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -1407,6 +1408,7 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
     from verity.core.protocols.sampled_proofs import challenger as Ch
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity_vllm.protocols.pouw.h1 import window as PHW
 
     if record.get("schema") != COIN_KIND:
         return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its draw"
@@ -1421,12 +1423,9 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
     except PHC.CoinError as e:
         return f"the draw session's challenger key is not the compose's pin: {e}"
     entries = [json.loads(x) for x in lines]
-    closed = next((i for i, e in enumerate(entries) if e.get("kind") == "period-close"
-                   and (e.get("body") or {}).get("period") == period), None)
-    if closed is None:
+    closed, after = PHW.after_close(lines, lane, period)
+    if not closed:
         return f"the piece's ledger doesn't close the Pearl-C period {period}, so no draw follows it"
-    after = next((e for e in entries[closed + 1:] if e.get("kind") == "reserve"
-                  and ((e.get("body") or {}).get("for") or (e.get("body") or {}).get("by")) == lane), None)
     if after is None or after.get("session") != sid:
         return (f"the draw session {sid} is not lane {lane}'s first reserve after its Pearl-C period {period} closed "
                 f"(that is {None if after is None else after.get('session')}): a draw is taken once")

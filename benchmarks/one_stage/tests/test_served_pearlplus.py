@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -174,16 +175,10 @@ SERVED = ["volunteer-needed", "pearl_c_sm90.sh", "serve"]
 CHECKED = ["verify", "lean"]
 
 
-@pytest.mark.parametrize("needed, volunteer, steps", [
-    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("yes reject", "", ["volunteer-needed"]),
-    ("no uncredited", None, [*SERVED, *CHECKED, "pearlplus"]),
-    ("no uncredited", "", [*SERVED, *CHECKED, "pearlplus"]),
-    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("", None, ["volunteer-needed"]),
-])
-def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_skipped_then(tmp_path, needed, volunteer, steps):
+def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
+    """The untied piece on window 3 in a toy tree whose served_passes.py, served_verdicts.py, debit.py and setup each note
+    their argv in ``calls``, ``volunteer-needed`` answering `needed`: a function running it under more environment, which
+    returns its exit code, its output and the calls in order."""
     tree, d, p, calls = tmp_path / "tree", tmp_path / "serve", tmp_path / "piece", tmp_path / "calls"
     one = tree / "benchmarks" / "one_stage"
     one.mkdir(parents=True)
@@ -213,7 +208,20 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         r = subprocess.run(["bash", "benchmarks/one_stage/served_pearlplus.sh", str(d), "3", str(p)], cwd=tree,
                            env={**env, **more}, capture_output=True, text=True, check=False)
         return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in calls.read_text().splitlines()]
+    return run
 
+
+@pytest.mark.parametrize("needed, volunteer, steps", [
+    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "", ["volunteer-needed"]),
+    ("no uncredited", None, [*SERVED, *CHECKED, "pearlplus"]),
+    ("no uncredited", "", [*SERVED, *CHECKED, "pearlplus"]),
+    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("", None, ["volunteer-needed"]),
+])
+def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_skipped_then(tmp_path, needed, volunteer, steps):
+    d, run = tmp_path / "serve", _untied(tmp_path, needed, volunteer)
     rc, said, got = run()
     flags = {"volunteer": "--device", "retain": "--volunteer", "pearlplus": "--volunteer"}
     names = []
@@ -234,3 +242,15 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         asked = {c["argv"][0]: c["argv"] for c in got if c["tool"] == "served_passes.py"}
         assert rc == 0 and asked["volunteer-needed"] == ["volunteer-needed", "--over-cap", "reject"], said
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
+
+
+def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw(tmp_path):
+    """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
+    right before verify draws, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
+    fills, refuses every other reserve of the lane, so none comes between its close and the draw, which a compose takes
+    only as the lane's first reserve after the close."""
+    rc, said, got = _untied(tmp_path, "yes reject")(PEARLC_CHALLENGER_GATE="ssh gate")
+    names = [" ".join(c["argv"][:2]) if c["argv"][:1] == ["pearlplus-period"] else
+             c["argv"][0] if c["tool"] in ("served_passes.py", "served_verdicts.py") else c["tool"] for c in got]
+    assert rc == 0 and names == ["volunteer-needed", "pearl_c_sm90.sh", "pearlplus-period open", "serve", "debit.py",
+                                 "volunteer", "retain", "pearlplus-period close", *CHECKED, "pearlplus"], said
