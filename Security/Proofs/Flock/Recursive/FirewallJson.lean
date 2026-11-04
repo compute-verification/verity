@@ -1,6 +1,7 @@
 module
 
 public import Flock.Firewall
+import all Init.Data.Repr
 
 /-!
 # A plain value's text parses back to it
