@@ -235,8 +235,8 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
         "Open circuit/rep0": lambda s: s["streams"]["circuit/rep0"].update(at=1),
         "round 0": lambda s: s["rounds"][0].update(n=5),
         "round 1": lambda s: s["rounds"][1].update(commits=2),
-        "round 2": lambda s: s["rounds"][2].update(level0=0, tops=[2]),
-        "Finish's rounds": lambda s: s["rounds"].append({**s["rounds"][2], "k": 3}),
+        "round 2": lambda s: s["rounds"][2].update(level0=0),
+        "Finish's rounds": lambda s: (s["rounds"].append({**s["rounds"][2], "k": 3}), s["streams"]["circuit/rep0"].update(rounds=4)),
     }
     for what, edit in cases.items():
         s = json.loads(json.dumps(SCHEDULE))
