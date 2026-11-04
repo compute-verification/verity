@@ -24,8 +24,8 @@ the deployed sampled verifier, each a hypothesis to discharge there.
 * `BlockCheck`, `FaultyBy`, `faultyBy`, `RBy`, `SessionOpensBy`: **a check on each proof block**. The argument reads of the faulty
   set and of `SessionOpens` only a check on a proof block's committed and interior values. At `correctOk` they are
   `faulty`, `R` and `SessionOpens`; a protocol that checks more of a sampled proof block states KS at its own check.
-* `splitBy`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
-  the extractor's own calls collide (`CommitmentScheme.Binds`).
+* `splitBy`, `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails`
+  holds or the extractor's own calls collide (`CommitmentScheme.Binds`); `split` is `splitBy` at `correctOk`.
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
   (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(2·n_PU + 1)`), the draw law and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
@@ -372,6 +372,13 @@ theorem faultyBy_wrong {Ok : BlockCheck} {H : Msg → Msg} {Cm : CommitmentSchem
   have hlt' : v < P.blocks.length := mem_range.1 hlt
   have hget : P.blocks[v]? = some P.blocks[v] := List.getElem?_eq_getElem hlt'
   exact ⟨P.blocks[v], hget, fun hc => hf ⟨_, hget, ι, hc⟩⟩
+
+/-- **A faulty unit is wrong at any interior values**: at slot `v` of the faulty set, whatever interior values `ι`, its
+proof block `b` is not correct on `ref_ι` (`faultyBy_wrong` at `correctOk`). -/
+theorem faulty_wrong {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
+    (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
+    ∃ b, P.blocks[v]? = some b ∧ ¬ s.prog.Correct (s.prog.refIn b (w.val H Cm s) ι) b :=
+  faultyBy_wrong (Ok := correctOk) hv ι
 
 /-! ## What the deployed sampled verifier is taken to do -/
 
@@ -742,6 +749,15 @@ theorem splitBy (Ok : BlockCheck) {H : Msg → Msg} {D : Deploy Coin Col T} [Dec
     rw [hb, Option.some.injEq] at hb'
     subst hb'
     exact hnc hcorr
+
+/-- **The split**: `splitBy` at `correctOk`, where the faulty set at the check is `faulty` and the relation `R`. -/
+theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero Col] (decode : List (ℕ × Col) → List T)
+    (δ : ℝ) (iroots : Msg → Seen → ℕ → List Msg) (hbind : D.commit.Binds H) (hopens : SessionOpens H D iroots)
+    (hfix : InteriorFixed H D iroots) (hrefuse : Refuses H D) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) (hacc : (run H P D.V x ω r₀).out = .acc)
+    (hfail : ¬ (R H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x ω r₀ c).1) :
+    Fails H D decode δ x (run H P D.V x ω) c ∨ OwnColl H (E D decode) P x ω r₀ c :=
+  splitBy correctOk decode δ iroots hbind hopens hfix hrefuse x P ω r₀ c hacc hfail
 
 end Split
 

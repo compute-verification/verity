@@ -327,8 +327,7 @@ theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGa
       rw [resolveWires_of_none hw']
       exact hinp g w g' hw hdep hg'i hw' hnf'
     | some w' =>
-      have hlt := Finset.card_lt_card
-        (wiredBelow_ssubset (List.getElem?_eq_some_iff.1 hg'i).1 (by simp [hw']) (hr g w g' hw (by simp [hw']) hdep))
+      have hlt := card_wiredBelow_lt_of_depends hwf hr hw hw' hdep
       exact ih g' w' hw' (by omega) hnf'
 
 /-! ## The ingress -/

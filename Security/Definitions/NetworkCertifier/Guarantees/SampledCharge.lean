@@ -6,10 +6,10 @@ import Definitions.NetworkCertifier.Guarantees.SampledAudit
 # The sampled audit's charge: the leak bound when step proof blocks are sampled
 
 Theorem 3's bounds on `constantRate` (`Guarantees`) count runs that the Program accepts exactly. A sampled
-audit gives that only at `δ ≥ miss(1)`, where no unit may be faulty. At a smaller `δ` it gives `Accepted` by the
-circuit's Program (`circuitProgram`) with advice also held at the faulty proof blocks' committed gates
+audit gives that only at `δ ≥ miss(1)`, where no proof block may be incorrect. At a smaller `δ` it gives `Accepted` by
+the circuit's Program (`circuitProgram`) with advice also held at the incorrect proof blocks' committed gates
 (`SampledAuditAccepted`, `Guarantees/SampledAudit`). `EncardAccSeqsSampledLe` counts those runs: the charge adds the
-faulty proof blocks' committed bits and `log2` of the number of possible faulty sets.
+incorrect proof blocks' committed bits and `log2` of the number of possible incorrect sets.
 
 **Composed with `SampledAuditAccepted`.** On the statements in its scope, which include that the layout fits the program
 (`BoundaryGates.Fits`), an accepted audit meets `RAcc δ` except with probability `δ + ε_ks + ε_bind` over the selection.
@@ -45,11 +45,11 @@ set_option linter.unusedVariables false
 
 /-- **The leak bound under a sampled audit.** Take the circuit's Program of `C` over a layout `lay` that fits it up to
 the horizon `n`, a partition `P` and a design `d`. The observation sequences of length `n`, with jitter below `D`, that
-are accepted with some possible faulty set at `δ` (`AccSeqsSampled`) number at most
+are accepted with some possible incorrect set at `δ` (`AccSeqsSampled`) number at most
 `2^c · #faultySets · 2^β · D^n`. Here the inputs other than the ingress range over `As`, at most `2^c` values, and each
-possible faulty set's proof blocks commit at most `β` bits (`faultyBits`). That is
-`c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits. At `δ ≥ miss(1)` no non-empty faulty set
-is possible, and the bound is `c + n·log2 D`, as when the Program is accepted exactly. -/
+possible incorrect set's proof blocks commit at most `β` bits (`faultyBits`). That is
+`c + log2 #(incorrect sets) + Σ_{v incorrect} committed bits + n·log2 D` bits. At `δ ≥ miss(1)` no non-empty
+incorrect set is possible, and the bound is `c + n·log2 D`, as when the Program is accepted exactly. -/
 def EncardAccSeqsSampledLe : Prop :=
   ∀ {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay.Fits C n)
     (δ : ℝ) (As : Set (ℕ → Bool)) (c : ℕ) (hAs : As.encard ≤ ((2 ^ c : ℕ) : ℕ∞)) (β : ℕ)
@@ -60,7 +60,7 @@ def EncardAccSeqsSampledLe : Prop :=
 /-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`.** At every deployment `D` of the sampled
 verifier, every public layout `lay` at whose wiring sampling at the incorrect set holds (`KSWired`, which is
 `Claims.Sampling.KS` with no wires) and horizon `k` of its statements, `δ ≥ 0`, a
-decoder that lists every trace within Flock's radius, and `β` bounding each possible faulty set's committed bits
+decoder that lists every trace within Flock's radius, and `β` bounding each possible incorrect set's committed bits
 (`faultyBits`), on the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`: except with that probability, every observation sequence of length `k` with
