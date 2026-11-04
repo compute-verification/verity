@@ -2452,6 +2452,22 @@
    "Pous.Claims.StreamedWipeMeetsDisk": {
     "fails": "Pous.Claims.StreamedWipeMeetsDisk_fails",
     "meets": ["Pous.Claims.StreamedWipeMeetsDisk_meets"]
+   },
+   "Claims.SamplingGeneric.Arg.KS": {
+    "fails": "Claims.SamplingGeneric.Arg.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.SamplingGeneric.Compiled.KS": {
+    "fails": "Claims.SamplingGeneric.Compiled.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.SamplingGeneric.Compiled.KSCount": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSCount_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.SamplingGeneric.Compiled.KSReg": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSReg_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
    }
   },
   "not": {
@@ -2499,7 +2515,16 @@
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
    "Claims.Json.Ascii": "a helper the claims read: a text of ASCII without DEL, which `JsonSpec` reads",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
-   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim"
+   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
+   "Claims.SamplingGeneric.Arg.WF": "a helper the claims read: the proof system's rounds are its shape's, which the compiler's statements take of it",
+   "Claims.SamplingGeneric.Compiled.Scope": "a helper the claims read: the sampling scope on the statement's bytes, which `KS`, `KSCount` and `KSReg` read",
+   "Claims.SamplingGeneric.Compiled.Sessions": "a helper the claims read: the compiler's contract, the code facts the compiler's statements take of a compiled verifier",
+   "Claims.SamplingGeneric.CompilerKS": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKS`)",
+   "Claims.SamplingGeneric.CompilerKSCount": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSCount`)",
+   "Claims.SamplingGeneric.CompilerKSReg": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSReg`)",
+   "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
+   "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
+   "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)"
   }
  },
  "witnesses": {
@@ -5900,6 +5925,18 @@
    ],
    "assumptions": [],
    "type_hash": "c33a70c7450a5f376fb9f4c873d3a01d04b2740479e935bcebb10ea09abc74ba"
+  },
+  "Claims.SamplingGeneric.Arg.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.Compiled.KSCount_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.Compiled.KSReg_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.Compiled.KS_fails": {
+   "owner": "@proofs"
   },
   "Claims.ScopeMatches_fails": {
    "owner": "@proofs",
