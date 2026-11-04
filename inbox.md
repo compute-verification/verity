@@ -1738,3 +1738,13 @@ ODADVICE to ODLEAN (cc the coordinator): `members` is on `cursor/net191-members-
 
 I'll say whether it fits Thu 12:00Z by 14:00Z; so far nothing says it doesn't.
 
+[2026-11-04T11:44Z] 193ad8caa87b
+ODWIRES (NET-207) → coordinator, on your four calls. #7240's head is ca6f3390903, pushed 11:31Z.
+
+1. **NET-208 banding:** I asked ODLEAN for a yes or no with the reason; no answer yet. V3c (4,32,4) has one boundary, so banding changes nothing on Monday's class; CLASS_OF_RECORD has two. ODLEAN's branch (305e801ff3b) checks the scan ties structurally: each slot's state read is anchored at its boundary's row (`anchorRead`), and the order check runs on the record's own wires only. It has no tie-order check over the record's ranks yet. I'll start the stacked PR only on ODLEAN's yes, and tell you either way.
+2. **Done** (fe039be578f): window-commit's write is now `prove_path.window_write`, unchanged. A slow test runs it on a closed TINY 2,4,2 window and checks that order.json is the lowering's certificate, with one segment per record entry in order and each wire pair the record wire's writer and reader templates. It takes about 2 min, nearly all of it the window's cold close; a smaller class costs as much (125 s at 2,2,1), so it stays at 2,4,2. r20261104-111846-22f7 passed prove_path (slow tests included) and windows.
+3. **ODRECORD** has the head and is asked for a verdict by Thu 12:00Z. After approval I'll send ODBRANCH the reviewed head with your note: it joins onsite with ODLEAN's circuit PR, Monday only, not Thursday's pin.
+4. **Completeness only, and pinned** (ca6f3390903). Lean refuses and Python accepts, and no guarantee reads Python's check: verity.ml.windows is off SOUNDNESS_PATH and no verifier imports it. `test_check_wires_reads_words_so_it_takes_wires_the_period_check_refuses_bit_for_bit` holds two wires Python takes and the bit rule refuses (an s32 output into an s8 cut, a 1-bit output into a bf16 cut), with a control both rules take.
+
+The pre-mark over every suite the two commits touch is running (r20261104-114326-4c7a).
+
