@@ -4,11 +4,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
         [--prompts 4] [--prompt-ids 24 | --prompt-ids LO:HI] [--tokens 4] [--vocab 128000] [--scan-class w63k4]
         [--height 10] [--minutes M] [--bucket-ms MS] [--warmup N] [--stop-prompt N] [--attack NAME [--attack-nth K]]
-    python certifier_piece.py piece SERVE_DIR WINDOW DIR [--lean EXE] [--draw K] [--chain-cmd CMD]
+    python certifier_piece.py piece SERVE_DIR WINDOW DIR [--lean EXE] [--rows EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
-    python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--draw K] [--class w63k4]
+    python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--rows EXE] [--draw K] [--class w63k4]
         [--chain-cmd CMD] [CR_K=V ...]
-    python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE]
+    python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
     python certifier_piece.py relay --listen PORT --to PORT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -48,14 +48,21 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   the scan's cells and delay and the front's tick (`attack_relay`), its log the prover's under
   SERVE_DIR/`PRIVATE`/attacks; `attacks.py judge` reads the outcome. Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
-  form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
+  form): accept only when ``network-rows check`` accepted the network certifier's records, the chain accepted and
+  ``network-period check`` accepted the period, whose answer it then is.
   1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
      passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
      late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
      reject, and the refusal names the network certifier's own check's problems (`rehearsed`). One whose certified
      egress holds a cell that is neither an id-form cell nor a `FAIL`, bytes the server sent that are no output's, is a
-     reject.
+     reject. Its records are then audited as rows (`rows_check`): `warden_chain.rows_audit_case` of the run, checked
+     by ``network-rows`` (``--rows``, else built in verity/core/protocols/network/lean; `NetworkCheck.RowsAudit`,
+     `ROWS`), which holds each record to its certified head and each certificate to the network certifier's key in its
+     session, then runs the certifier program's rows audit (`NetworkCertifier.Rows.audit`): every egress row must be
+     the one the schedule the records show renders, so cells cut, clocked or ordered otherwise are refused. Its reject
+     is the piece's, with its reason's numbers as N. The case's files go to a 0700 scratch directory beside the
+     unpacked run, removed once the check has answered, so the records reach no hold.
   2. The audited Commit period's requests are certified ones (`bind`): each one's user names one of the network
      certifier's certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with
      the same prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one
@@ -91,7 +98,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   kind scan finds, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
   refuses, releasing nothing
   from the hold: DIR keeps only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which
-  `served_verdicts.py` reads as the certifier missing. Each step it runs (the build, the chain, the check and the leak
+  `served_verdicts.py` reads as the certifier missing. Each step it runs (the builds, the checks, the chain and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
   SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
   ended, so a step never outlives the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof
@@ -143,6 +150,8 @@ import served_session as SS  # noqa: E402
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
 PROTOCOL = "verity/certifier/v0"
+#: the protocol ``network-rows`` answers, step 1's rows audit of the network certifier's records
+ROWS = "verity/network-rows/v1"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
 PREMISE = "trusted-host"
 #: the front's public outcome, copied beside the kept fetch
@@ -593,13 +602,14 @@ def run_chain(keep: Path, run: str, draw: int | None, sets: list[str], cmd: str 
         return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
-def period_exe(lean: str | None) -> str:
-    if lean:
-        return lean
-    got = captured(["lake", "build", "network-period"], cwd=LEAN_DIR)
-    exe = LEAN_DIR / ".lake" / "build" / "bin" / "network-period"
+def lean_exe(name: str, given: str | None) -> str:
+    """``given``, else the executable ``name`` of `LEAN_DIR`, built here."""
+    if given:
+        return given
+    got = captured(["lake", "build", name], cwd=LEAN_DIR)
+    exe = LEAN_DIR / ".lake" / "build" / "bin" / name
     if got.returncode or not exe.is_file():
-        raise NotRun(f"lake build network-period (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
+        raise NotRun(f"lake build {name} (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
     return str(exe)
 
 
@@ -609,6 +619,29 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
         return SP.lean_check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
+
+
+def rows_check(exe: str, run: Path) -> None:
+    """Step 1's rows audit of the network certifier run ``run`` (module docstring) by ``network-rows`` ``exe``:
+    `Rejected` on its reject, `NotRun` where the case can't be read or the check gives no `ROWS` accept or reject."""
+    import scan_period as SP
+    import warden_chain as WC
+    try:
+        case = WC.rows_audit_case(run)
+    except (SystemExit, OSError, KeyError, ValueError) as e:
+        raise NotRun(f"the network certifier's rows case: {type(e).__name__}: {e}") from None
+    scratch = Path(tempfile.mkdtemp(dir=run.parent, prefix="rows-"))
+    try:
+        got = SP.lean_check(exe, case, scratch, run=captured)
+    except (SystemExit, OSError, ValueError) as e:
+        raise NotRun(f"network-rows check: {type(e).__name__}: {e}") from None
+    finally:
+        rm(scratch)
+    if got.get("protocol") != ROWS or got.get("verdict") not in ("accept", "reject"):
+        raise NotRun(f"network-rows answered no {ROWS} accept or reject: {json.dumps(got)[:400]}")
+    if got["verdict"] == "reject":
+        why = re.sub(r"[0-9]+", "N", str(got["reason"]))
+        raise Rejected(f"the network certifier's records, audited as rows: {why}")
 
 
 def case_of(warden: Path, scan: Path, v3c: Path | None = None) -> dict:
@@ -656,12 +689,12 @@ def publish(chain_out: Path, d: Path) -> None:
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, int], int] | None,
-           check: Callable[[dict, Path], dict] | None,
+           check: Callable[[dict, Path], dict] | None, rows: Callable[[Path], None],
            case: Callable[[Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
-    ``chain`` is given KEEP, the run and the run's link-windows, or is None to read the report
-    of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
-    chain step). `NotRun` when a step can't run."""
+    ``rows`` is step 1's rows audit of the network certifier run (`rows_check`); ``chain`` is given KEEP, the run and
+    the run's link-windows, or is None to read the report of the chain the split's chain step ran; ``check`` None stops
+    once the chain accepted, with no answer (the split's chain step). `NotRun` when a step can't run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -670,6 +703,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     try:
         unpacked, warden = unpack(keep / run / "fetch.tar.gz")
         rehearsed(warden)
+        rows(warden)
         try:
             io = WC.io(warden)
             dep, params = WC.deployment(warden)
@@ -836,9 +870,10 @@ def piece(a: argparse.Namespace) -> int:
         return 2
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
-        exe = period_exe(a.lean)
+        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, a.set), a.chain_cmd)  # noqa: E731
-        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
+        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p),
+                      rows=lambda run: rows_check(rows, run))
     try:
         got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
@@ -868,8 +903,11 @@ def chain_step(a: argparse.Namespace) -> int:
     try:
         sets = v3c_scan(v3c, a.scan_class, a.set)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, sets), a.chain_cmd)  # noqa: E731
-        got = settle(serve_dir, d, "CERTIFIER_TIMEOUT",
-                     lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None))
+
+        def step(hold: Path) -> tuple[dict | None, Path | None]:
+            rows = lean_exe("network-rows", a.rows)
+            return decide(serve_dir, a.window, hold, chain=chain, check=None, rows=lambda run: rows_check(rows, run))
+        got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
         return refuse(d, str(e))
     if got is not None:
@@ -892,9 +930,9 @@ def period_step(a: argparse.Namespace) -> int:
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         if not (d / CHAINED).is_file():
             raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
-        exe = period_exe(a.lean)
+        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
         return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
-                      case=v3c_case(v3c))
+                      rows=lambda run: rows_check(rows, run), case=v3c_case(v3c))
     try:
         got = settle(serve_dir, d, "CERTIFIER_PERIOD_TIMEOUT", step)
     except NotRun as e:
@@ -937,6 +975,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("window", type=int)
     q.add_argument("dir", type=Path)
     q.add_argument("--lean", help="network-period, built (else built here)")
+    q.add_argument("--rows", help="network-rows, built (else built here)")
     q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN CR_K=V ...")
     q.add_argument("set", nargs="*", help="CR_K=V")
@@ -946,6 +985,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("window", type=int)
         q.add_argument("dir", type=Path)
         q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
+        q.add_argument("--rows", help="network-rows, built (else built here)")
     q = sub.choices["chain"]
     q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--class", dest="scan_class", default=V3C_SCAN_CLASS,

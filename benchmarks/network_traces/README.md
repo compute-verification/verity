@@ -108,9 +108,11 @@ and the gate's fetch is kept in the serve dir's `private/certifier`. A request's
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's network certifier path on that fetch, which opens no
 endpoint records or advice, its run dir and quarantine private beside the fetch, and answers with `network-period check`
-on the rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted,
-every request of the audited Commit period is a certified one inside that execution phase and carries the network
-certifier's run in its release, every certified request is exactly one served request, and the Lean check accepts;
+on the rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network
+certifier's records pass `network-rows check` (each record held to its certified head, then the certifier program's rows
+audit, which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of
+the audited Commit period is a certified one inside that execution phase and carries the network certifier's run in its
+release, every certified request is exactly one served request, and the Lean check accepts;
 beside that answer goes its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a
 served window). Only the protocol rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's
 check didn't pass (each request late, say, a connection the network certifier failed closed) or a step that can't run,

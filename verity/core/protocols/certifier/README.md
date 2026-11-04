@@ -273,7 +273,10 @@ package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/
 from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
 what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
 `lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
-`window_charge.reference_window`.
+`window_charge.reference_window`. Its `NetworkCertifier.Rows` is the active network certifier's records as rows and their
+audit, the code form of `RecordRows` over the network certifier's lanes with `warden.audit` its reference, which
+`network-rows` (`verity/core/protocols/network`) runs on a run's certified records; no proof ties it to `RecordRows`
+yet.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:

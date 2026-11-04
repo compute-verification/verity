@@ -427,7 +427,8 @@ def received(r: dict) -> float | None:
 
 def piece_of(warden: Path, rows: list[dict] | Callable[[str], list[dict]]) -> dict:
     """The piece's steps 1 and 2 on the network certifier run `warden` (`certifier_piece.rehearsed`, then
-    `certifier_piece.bind` of the endpoint's requests `rows`, or of those `rows` gives for the run's id):
+    `certifier_piece.bind` of the endpoint's requests `rows`, or of those `rows` gives for the run's id), less step 1's
+    rows audit, which holds the network certifier's own records to their schedule and so judges no relay's play:
     ``{"verdict": "bound" | "reject" | "missing", "why"}``."""
     try:
         CP.rehearsed(warden)

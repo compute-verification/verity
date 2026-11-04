@@ -184,10 +184,10 @@ and never served (`onsite.SIMULATED` lists what the lab leaves unmet). In each z
 (`certifier_piece.relay`, the `tunnel` role) stands in for the gate's ssh tunnel to the node's port; and the front
 (`certifier_piece.py front --gate local`) runs in the certifier's namespace, so its network certifier and the gate's
 client are on the zone's boundary and every answer crosses the zone's uplink. The serve dirs, which hold the gate's
-fetch and its witness, stay under `--keep`, private and outside `--out`. The piece (`certifier_piece.py piece`: the
-chain, then `network-period`) runs on each zone's serve dir at the endpoint's one Commit period, with the chain's scan at
-the class the front's gate ran (w63k4 by default). With no compute audit of the window (V3c), the period check refuses
-the honest case at the wiring. `record` writes `record.json` and `record.md`: each zone's verdicts (the gate's check,
+fetch and its witness, stay under `--keep`, private and outside `--out`. The piece (`certifier_piece.py piece`:
+`network-rows` on the network certifier's records, the chain, then `network-period`) runs on each zone's serve dir at
+the endpoint's one Commit period, with the chain's scan at the class the front's gate ran (w63k4 by default). With no
+compute audit of the window (V3c), the period check refuses the honest case at the wiring. `record` writes `record.json` and `record.md`: each zone's verdicts (the gate's check,
 the chain's, the period check's) and its K in `PeriodLeakAccepted`'s terms (k_sched, k_fail, and ℓ_a,j, k_skip,j and
 T_j·log2 d_jit over m execution phases, ℓ_a,j being the period check's `scans[j].free`), per week, month and year,
 for each zone, the lab's zones summed, the census's datacenter and the world, each marked with what it rests on
