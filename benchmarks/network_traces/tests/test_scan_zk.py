@@ -662,9 +662,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
     ins = {tp: sum(b for _, b in ports[tp][0]) for tp in ports}
+    # the Boolean profile's types: each leaf one bit, so a port's 16-bit words are its bits
     assert PC.params(p).scan == PC.Scan(
-        T, 0, max(ins["first"], ins["ingress"] if T > 1 else 0) + 16 + bits["first"]["o1"] + bits["first"]["o2"],
-        ins["egress"] + 16 + bits["egress"]["o1"], E * bits["first"]["prog0"])
+        T, 0, PC.vu_bits(1, max(ins["first"], ins["ingress"] if T > 1 else 0) + 16 + bits["first"]["o1"]
+                         + bits["first"]["o2"]),
+        PC.vu_bits(1, ins["egress"] + 16 + bits["egress"]["o1"]), E * bits["first"]["prog0"])
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))

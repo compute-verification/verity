@@ -5,6 +5,7 @@ import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 import NetworkCheck.RecordsBytes
 import NetworkCheck.Circuit
+import NetworkCheck.CircuitFile
 import NetworkCheck.Period
 import NetworkCheck.LinkWindow
 
@@ -39,4 +40,10 @@ identity hash (`Identity.Tagged`).
 the population program, the wires, the registered reads, the wire order and the count of free input bits. Beyond the
 above it imports NCI's layout checks (`NciCheck.Desc`), the sampled audit's wires (`SampledProofs.Wires`) and Bits' leaf
 widths (`SampledProofs.Bits`).
+-/
+
+/-!
+`NetworkCheck.CircuitFile` reads a circuit file in chunks, hashing it whole and parsing only its header, for the period's
+check with its listed circuit files (`NetworkCheck.Period.protocolWith`, `network-period check … CIRCUIT…`), which
+holds each to its template with `SampledProofs.Bits.check`.
 -/

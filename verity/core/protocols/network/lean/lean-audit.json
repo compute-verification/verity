@@ -3,7 +3,7 @@
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point: Core.Protocol.main of NetworkCheck.Period.protocol, or, given circuit files, of NetworkCheck.Period.protocolWith on the files NetworkCheck.CircuitFile.read reads, audited under NetworkCheck",
   "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn), audited under NetworkCheck"
  },
  "runs": {
@@ -34,6 +34,11 @@
    "except": [],
    "why": "a compute audit's circuit check is code: C-Flock's program decoder (the population program and its gates), NCI's description-sized layout checks, the sampled audit's wires, Bits' leaf widths and canonical JSON (the record's digest), no Mathlib and nothing of Security"
   },
+  "NetworkCheck.CircuitFile": {
+   "imports": ["Flock.Hash", "Flock.HmRow", "Flock.JsonParse", "Flock.Tags"],
+   "except": [],
+   "why": "reading a circuit file is code: C-Flock's SHA-512 over the file's chunks, its circuit header and META parsers, no Mathlib and nothing of Security"
+  },
   "NetworkCheck.Period": {
    "imports": [
     "NetworkCheck.Check",
@@ -43,10 +48,12 @@
     "Flock.Public",
     "Flock.WindowRecord",
     "NciCheck.Desc",
-    "Flock.RegKnown"
+    "Flock.RegKnown",
+    "Flock.HmRow",
+    "SampledProofs.Bits"
    ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain), the window record's digest, NCI's description-sized layout checks (the scan's layout read off its description) and C-Flock's hm96 leaf of a value at known content (the scan's state's row 0, the empty state, `stateEmpty`), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain), the window record's digest, NCI's description-sized layout checks (the scan's layout read off its description), C-Flock's hm96 leaf of a value at known content (the scan's state's row 0, the empty state, `stateEmpty`) and its partition digest (a circuit record's, `recordPartition`), and Bits' check of a circuit file against its template (`fileWhy`), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],

@@ -115,6 +115,10 @@ ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 ROWS_PARAMS_KEYS = ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan",
                     "schedule", "session", "windows"]
+#: `rowsListedKeys`: the rows form's, with the scan's listed circuit files
+ROWS_LISTED_KEYS = sorted([*ROWS_PARAMS_KEYS, "scan_circuits"])
+#: `Flock.HmRow.PARTITION_V1`: the partition rule a circuit record's digest and a listed file's META partition are under
+PARTITION_V1 = "verity/partition/v1"
 SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
@@ -312,6 +316,22 @@ def bits_of(t) -> int:
     if kind == "Array":
         return t[1] * bits_of(t[2])
     return sum(bits_of(f if kind == "Tuple" else f[1]) for f in t[1])
+
+
+def words_of(t) -> int:
+    """`wordsOf`: a descriptor type's leaves' 16-bit words, ⌈w / 16⌉ a leaf of w bits."""
+    kind = t[0]
+    if kind == "Value":
+        return -(-t[1] // 16)
+    if kind == "Array":
+        return t[1] * words_of(t[2])
+    return sum(words_of(f if kind == "Tuple" else f[1]) for f in t[1])
+
+
+def vu_bits(upv: int, words: int) -> int:
+    """`vuBits`: what a wrong VU of `upv` template instances of `words` 16-bit words each is charged, and its unit's
+    gates 0 and 1."""
+    return upv * 16 * words + 2
 
 
 def program_sha512(desc: dict) -> str:
@@ -521,34 +541,101 @@ def input_gates(j: dict) -> int:
                if defs[k := callees[x["fn"]]]["form"] == "primitive" and (m := INPUT_ID.fullmatch(k)))
 
 
-AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "steps"])
+AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "steps"],
+               ["circuit", "circuits", "order", "pins", "program", "steps"])
+
+
+@dataclasses.dataclass(frozen=True)
+class Listed:
+    """`Listed`: what an audit's or the scan's listed circuit files are held to: its Program's SHA-512 and Definitions'
+    keys, its root templates' charges (`charges_of`: descriptor id, members and words), each one's file's SHA-512, in
+    order, and for an audit its circuit record's partition digest (`record_partition`)."""
+    program: str
+    keys: frozenset[str]
+    templates: tuple[tuple[str, int, int], ...]
+    files: tuple[str, ...]
+    partition: str | None
+
+
+@dataclasses.dataclass(frozen=True)
+class Listing:
+    """`Listing`: each audit's listed files (None for one that lists none) and the scan's (`scan_circuits`)."""
+    audits: tuple[Listed | None, ...] = ()
+    scan: Listed | None = None
+
+    @property
+    def listed(self) -> bool:
+        return any(x is not None for x in self.audits) or self.scan is not None
+
+
+def charges_of(j: dict) -> list[tuple[str, int, int]]:
+    """`chargesOf`: each root template's descriptor id, members and the 16-bit words one instance commits, its
+    parameters' and its return's (`words_of`)."""
+    defs, callees = j["definitions"], j["callees"]
+    return [(k, _members(x), sum(words_of(t) for _, t in d["body"]["params"]) + words_of(d["body"]["ret_type"]))
+            for x in defs[j["root"]]["body"]["nodes"] if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
+
+
+def _listed(j: dict, fs, ctx: str, partition: str | None) -> Listed:
+    """`listedOf`: a listing `[{"sha512", "template"}, …]` of a file each of the Program's root templates, in order."""
+    ts = charges_of(j)
+    got = []
+    for f in _of(fs, list, ctx):
+        _exactly(f, ["sha512", "template"], f"{ctx}: a file")
+        if not DIGEST.fullmatch(_of(f["sha512"], str, ctx)):
+            raise D.Reject(f"{ctx}: a file's sha512 is not a SHA-512 digest")
+        got.append((_of(f["template"], str, ctx), f["sha512"]))
+    if [t for t, _ in got] != [t for t, _, _ in ts]:
+        raise D.Reject(f"{ctx}: the files' templates are not the Program's root templates in order, a file each")
+    return Listed(program_sha512(j), frozenset(j["definitions"]), tuple(ts), tuple(d for _, d in got), partition)
+
+
+def partition_digest(obj: dict) -> str:
+    """`Flock.HmRow.partitionDigest`, hex: SHA-512 of `verity/partition/v1`, a zero byte and the canonical object."""
+    return hashlib.sha512(PARTITION_V1.encode() + b"\0" + D.canonical(obj).encode()).hexdigest()
+
+
+def record_partition(c, ctx: str) -> str:
+    """`recordPartition`: a circuit record's `verity/partition/v1` digest of its program and query, which must be its
+    own `partition`."""
+    d = partition_digest({"format": PARTITION_V1, "program": c.get("program"), "query": c.get("query")})
+    if c.get("partition") != d:
+        raise D.Reject(f"{ctx}: its partition is not the {PARTITION_V1} digest of its program and query")
+    return d
 
 
 def _audit(a, ctx: str) -> Audit:
-    """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
-    each committing its template's parameters and return; a root with no template refused; its free inputs the
-    Program's input gates (`input_gates`), never a parameter, or, with its window's circuit record, wire order and the
-    verifier's pins, the record's count (`_record_count`); its slot entries' templates (`ENTRY_IDS`) with their closure
-    digests. It reads
-    the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it,
-    refuses no descriptor this module writes."""
+    """`auditOf`: `_audit_listed`'s audit, without its listed files."""
+    return _audit_listed(a, ctx)[0]
+
+
+def _audit_listed(a, ctx: str) -> tuple[Audit, Listed | None]:
+    """`auditWith`: the layout terms and the Program's descriptor, whose root's template instances are the audit's
+    units, each charged `vu_bits` at one instance a VU of its template's parameters' and return's words; a root with no
+    template refused; its free inputs the Program's input gates (`input_gates`), never a parameter, or, with its
+    window's circuit record, wire order and the verifier's pins, the record's count (`_record_count`); its slot entries'
+    templates (`ENTRY_IDS`) with their closure digests; and with its record, its listed circuit files (`_listed`), the
+    record's partition its program's and query's (`record_partition`). It reads the descriptor's root nodes, signatures
+    and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module
+    writes."""
     if not isinstance(a, dict) or sorted(a) not in AUDIT_FORMS:
-        raise D.Reject(f"{ctx}: an object whose keys are {AUDIT_FORMS[0]} or {AUDIT_FORMS[1]}")
+        raise D.Reject(f"{ctx}: an object whose keys are {AUDIT_FORMS[0]}, {AUDIT_FORMS[1]} or {AUDIT_FORMS[2]}")
     steps, j = _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
-    units = [(_members(x), sum(bits_of(t) for _, t in d["body"]["params"]) + bits_of(d["body"]["ret_type"]))
-             for x in nodes if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    units = charges_of(j)
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
     free, state_free, record, circuit = (input_gates(j), None, None, None) if "circuit" not in a else \
         _record_count(a, f"{ctx}: circuit")
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries, record,
-                 circuit, state_free)
+    listed = _listed(j, a["circuits"], f"{ctx}: circuits", record_partition(a["circuit"], f"{ctx}: circuit")) \
+        if "circuits" in a else None
+    return Audit(free, steps, program_sha512(j), sum(n for _, n, _ in units), max(vu_bits(1, w) for _, _, w in units),
+                 entries, record, circuit, state_free), listed
 
 
 def _record_count(a: dict, ctx: str) -> tuple[int, int, tuple[str, tuple[tuple[str, str], ...]], Stated]:
@@ -660,16 +747,31 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
-    return Scan(T, 0, max([bits(bf["params"]), *(bits(b["params"]) for _, b in later)]) + bits_of(bf["ret_type"]),
-                bits(be["params"]) + bits_of(be["ret_type"]), L * nb * bits_of(ety))
+    words = lambda ps: sum(words_of(t) for _, t in ps)  # noqa: E731
+    return Scan(T, 0, vu_bits(1, max([words(bf["params"]), *(words(b["params"]) for _, b in later)])
+                               + words_of(bf["ret_type"])),
+                vu_bits(1, words(be["params"]) + words_of(be["ret_type"])), L * nb * bits_of(ety))
 
 
 def params(j) -> Params:
+    """`paramsOf`: `params_listed`'s parameters, a listing of circuit files refused (only `check_with` reads one)."""
+    p, listing = params_listed(j)
+    if listing.listed:
+        raise D.Reject("the period lists circuit files, which only network-period check PARAMS COMMITMENT EVIDENCE "
+                       "CIRCUIT… reads")
+    return p
+
+
+def params_listed(j) -> tuple[Params, Listing]:
+    """`paramsWith`: the parameters, and the circuit files each audit lists and, in the rows form, the scan's
+    (`scan_circuits`)."""
     if not isinstance(j, dict):
         raise D.Reject("the object: not an object")
-    if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS):
-        raise D.Reject(f"the object: the keys must be {PARAMS_KEYS} or {ROWS_PARAMS_KEYS}, not {sorted(j)}")
-    audits = [_audit(a, "an audit") for a in _of(j["audits"], list, "audits")]
+    if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS, ROWS_LISTED_KEYS):
+        raise D.Reject(f"the object: the keys must be {PARAMS_KEYS}, {ROWS_PARAMS_KEYS} or {ROWS_LISTED_KEYS}, not "
+                       f"{sorted(j)}")
+    read = [_audit_listed(a, "an audit") for a in _of(j["audits"], list, "audits")]
+    audits = [a for a, _ in read]
     cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
     first = _nat(j["first"], "first")
     jitter = _nat(j["jitter"], "jitter")
@@ -708,8 +810,9 @@ def params(j) -> Params:
         raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
                        f"schedule can carry, not these {len(cells)}")
-    return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
-                  schedule, scan, circuit)
+    listed = _listed(j["scan"], j["scan_circuits"], "scan_circuits", None) if "scan_circuits" in j else None
+    return (Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
+                   schedule, scan, circuit), Listing(tuple(x for _, x in read), listed))
 
 
 def _registration(j, ctx: str) -> dict:
@@ -1333,6 +1436,201 @@ def check(p: Params, c: Commitment, e) -> tuple:
 def reference(case) -> dict:
     return P.answer(ID, case, params=params, commitment=commitment, evidence=evidence, check=check,
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
+
+
+# --- the listed circuit files --------------------------------------------------------------------------------------------
+
+#: `build`'s `audit-listed`: the record-form audit's template instances a VU in its listed circuit file
+LISTED_UPV = 2
+#: a flat circuit file's head and META `format`, its statement and its blocks' keyword (`Flock.Tags.circuit`)
+CIRCUIT_FORMAT, CIRCUIT_STATEMENT, CIRCUIT_BLOCK = "flock-circuit", "verity/flock-circuit", "CIRCUIT"
+WORD = 128
+
+
+@dataclasses.dataclass(frozen=True)
+class CircuitHeader:
+    """What `NetworkCheck.CircuitFile.read` reads of a circuit file: its SHA-512, META, units per VU and leaf maps, and
+    its unit net's header (`headerNet`): its constant's column, input words and port groups, each `(col, words,
+    bits)`; and whether META's `out_net` is the unit."""
+    sha512: str
+    meta: dict
+    upv: int
+    leaves_in: list
+    leaves_out: list
+    const: int
+    in_words: int
+    in_groups: list[tuple[int, int, list[int]]]
+    out_groups: list[tuple[int, int, list[int]]]
+    out_unit: bool
+
+
+def _header_net(line: str) -> tuple[int, int, list, list]:
+    """`headerNet`: a `flock-ir-unit/v2` net's header line's constant, input words and port groups."""
+    h = line.split()
+    if not h or h[0] != "flock-ir-unit/v2" or not all(x.isdigit() for x in h[2:]):
+        raise D.Reject("not a flock-ir-unit/v2 circuit")
+
+    def groups(at: int) -> tuple[list, int]:
+        out = []
+        for _ in range(int(h[at])):
+            col, words, n = (int(x) for x in h[at + 1:at + 4])
+            if words & (words - 1) or col % words:
+                raise D.Reject("flock-ir-unit/v2: a port group is not an aligned power of two of words")
+            out.append((col, words, [int(x) for x in h[at + 4:at + 4 + n]]))
+            at += 3 + n
+        return out, at + 1
+    ins, at = groups(4)
+    outs, end = groups(at)
+    useful, const = int(h[2]), int(h[3])
+    in_words = ins[-1][0] + ins[-1][1] if ins else 0
+    if end != len(h) or not outs or const + 1 != useful or in_words * WORD > const:
+        raise D.Reject("flock-ir-unit/v2: not a header headerNet reads")
+    return const, in_words, ins, outs
+
+
+def read_circuit(text: str) -> CircuitHeader:
+    """`NetworkCheck.CircuitFile.read`: a flat circuit file's SHA-512, its META and each block's net header, no net's
+    rows; a file it can't read is refused (`D.Reject`)."""
+    lines = text.split("\n")
+    if not lines[0].startswith(CIRCUIT_FORMAT + " ") or len(lines) < 2 or not lines[1].startswith("META "):
+        raise D.Reject(f"not a {CIRCUIT_FORMAT} file with a META line")
+    meta = json.loads(lines[1][5:])
+    if meta.get("format") != CIRCUIT_FORMAT or meta.get("statement") != CIRCUIT_STATEMENT:
+        raise D.Reject(f"META: not {CIRCUIT_STATEMENT}")
+    nets, i = {}, 2
+    while i < len(lines) and lines[i]:
+        kw, name, n = lines[i].split()
+        if kw != CIRCUIT_BLOCK or not 0 < int(n) or i + int(n) >= len(lines):
+            raise D.Reject("a block is truncated")
+        nets[name] = _header_net(lines[i + 1])
+        i += 1 + int(n)
+    if "unit" not in nets or meta.get("out_net", "unit") not in nets:
+        raise D.Reject("no unit circuit, or META's out_net is no circuit")
+    return CircuitHeader(hashlib.sha512(text.encode()).hexdigest(), meta, _nat(meta.get("units_per_vu"), "META"),
+                         meta["leaves_in"], meta["leaves_out"], *nets["unit"], meta.get("out_net", "unit") == "unit")
+
+
+def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | None:
+    """`SampledProofs.Bits.check` on a file's header: why Bits doesn't lay it out as `template`, or None."""
+    n_in = min(c.in_words * WORD, c.const)
+    gi = c.in_groups[0][2] if c.in_groups else []
+    go = c.out_groups[0][2] if c.out_groups else []
+    outs = [x for u in c.leaves_out for x in u]
+    out_col = (c.out_groups[0][0] if c.out_groups else 0) * WORD
+    if template not in keys:
+        return "the circuit file's template is no Definition of the Program"
+    if c.upv == 0:
+        return "the circuit file's unit holds no template instance"
+    if any(b != 16 for b in gi + go):
+        return "a port of the circuit file's unit is not one 16-bit word"
+    if len(c.leaves_in) != c.upv or len(c.leaves_out) != c.upv or any(
+            len(c.leaves_in[k]) != len(gi) or len(c.leaves_out[k]) != len(go) for k in range(c.upv)):
+        return "the circuit file's leaf maps are not one per template instance over its unit's ports"
+    if len(set(outs)) != len(outs):
+        return "the circuit file's unit returns an output word twice"
+    if n_in != c.in_words * WORD:
+        return "the circuit file's unit net has its constant among its input words"
+    if not c.out_unit:
+        return "the circuit file returns its outputs from a net other than its unit"
+    if not all(n_in <= out_col + 16 * j + t < c.const for u in c.leaves_out for j in range(len(u)) for t in range(16)):
+        return "a returned output bit of the circuit file's unit sits on no computed row"
+    return None
+
+
+def _listing_files(listing: Listing) -> list[tuple[str, bool, Listed, int]]:
+    """`Listing.files`: every listed file in the order given, each audit's by index, then the scan's."""
+    owners = [(f"audit {i}", False, x) for i, x in enumerate(listing.audits) if x is not None]
+    owners += [("the scan", True, listing.scan)] if listing.scan is not None else []
+    return [(w, s, x, k) for w, s, x in owners for k in range(len(x.files))]
+
+
+def circuits_why(listing: Listing, files: list[CircuitHeader]) -> str | None:
+    """`circuitsWhy`: why the files are not the period's listed circuit files, or None (`fileWhy`, the first in order:
+    its SHA-512, META's `program_sha512`, an audit's file's META partition, `bits_why`, whole VUs, the scan's at one
+    instance a VU)."""
+    want = _listing_files(listing)
+    if len(files) != len(want):
+        return f"the period lists {len(want)} circuit files, not the {len(files)} given"
+    for (what, scan, x, k), c in zip(want, files):
+        t, members, _ = x.templates[k]
+        at, part = f"{what}'s circuit file for {t}", c.meta.get("partition")
+        if c.sha512 != x.files[k]:
+            return f"{at}: its SHA-512 is not its listing's"
+        if c.meta.get("program_sha512") != x.program:
+            return f"{at}: META program_sha512 is not the {what}'s Program's SHA-512"
+        if x.partition is not None and not (isinstance(part, dict) and part.get("rule") == PARTITION_V1
+                                            and part.get("digest") == x.partition):
+            return f"{at}: META partition is not {PARTITION_V1} at its circuit record's digest"
+        if (why := bits_why(c, x.keys, t)) is not None:
+            return f"{at}: {why}"
+        if members % c.upv:
+            return f"{at}: its {members} template instances are not whole VUs of {c.upv}"
+        if scan and c.upv != 1:
+            return f"{at}: {c.upv} template instances a VU, not 1"
+    return None
+
+
+def charged(p: Params, listing: Listing, files: list[CircuitHeader]) -> Params:
+    """`charged`: each listed audit's units its VUs, its templates' members over their files' `units_per_vu`, and its
+    bits the most a wrong VU is charged (`vu_bits`)."""
+    at, audits = 0, []
+    for a, x in zip(p.audits, listing.audits):
+        if x is None:
+            audits.append(a)
+            continue
+        upvs = [c.upv for c in files[at:at + len(x.files)]]
+        at += len(x.files)
+        audits.append(dataclasses.replace(a, units=sum(n // u for (_, n, _), u in zip(x.templates, upvs)),
+                                          bits=max(vu_bits(u, w) for (_, _, w), u in zip(x.templates, upvs))))
+    return dataclasses.replace(p, audits=tuple(audits))
+
+
+def check_with(files: list[CircuitHeader], pl: tuple[Params, Listing], c: Commitment, e) -> tuple:
+    """`checkWith`: the files held to the listing (`circuits_why`), then `check` at what they charge (`charged`)."""
+    p, listing = pl
+    if (why := circuits_why(listing, files)) is not None:
+        return REJECT, f"circuit files: {why}"
+    return check(charged(p, listing, files), c, e)
+
+
+def reference_with(case: dict, texts: list[str]) -> dict:
+    """`network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…`'s answer with the circuit files `texts`, in order
+    (`protocolWith`); a file it can't read (`read_circuit`) refuses the period (`refusing`)."""
+    files, why = [], None
+    for i, t in enumerate(texts):
+        try:
+            files.append(read_circuit(t))
+        except D.Reject as x:
+            why = f"circuit files: circuit file {i}: {x}"
+            break
+    if why is None:
+        chk = lambda pl, c, e: check_with(files, pl, c, e)  # noqa: E731
+    else:
+        chk = lambda *_: (REJECT, why)  # noqa: E731
+    return P.answer(ID, case, params=params_listed, commitment=commitment, evidence=evidence, check=chk,
+                    digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
+
+
+def circuit_file(program: str, partition: str | None, upv: int = LISTED_UPV, **meta) -> str:
+    """A flat circuit file of `NetworkCheck.CircuitFile`'s toy unit net (one input word of two 16-bit ports, its output
+    word on computed rows) at `upv` template instances a VU, each its own output word, META binding the Program's
+    SHA-512 `program` and, given one, the `verity/partition/v1` digest `partition`; `meta` overrides META's keys. The
+    period's check reads only its SHA-512 and header."""
+    net = ["flock-ir-unit/v2 toy 146 145 1 0 1 2 16 16 1 1 1 1 16"] + [
+        f"1 {i} 1 {i}" if i < 32 else "0 0" if i < 128 else f"2 {i - 128} {i - 112} 1 145" if i < 144
+        else "1 128 1 145" if i == 144 else "1 145 1 145" for i in range(146)]
+    m = {"format": CIRCUIT_FORMAT, "statement": CIRCUIT_STATEMENT, "units_per_vu": upv,
+         "leaves_in": [[2 * k, 2 * k + 1] for k in range(upv)], "leaves_out": [[k] for k in range(upv)],
+         "program_sha512": program, **({"partition": {"rule": PARTITION_V1, "digest": partition}} if partition else {})}
+    return "\n".join([f"{CIRCUIT_FORMAT} toy", "META " + json.dumps(m | meta, separators=(",", ":")),
+                      f"{CIRCUIT_BLOCK} unit {len(net)}", *net]) + "\n"
+
+
+def listed_files(case: dict, upv: int = LISTED_UPV, **meta) -> list[str]:
+    """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each
+    audit's Program's SHA-512 and its record's partition digest."""
+    return [circuit_file(program_sha512(a["program"]), record_partition(a["circuit"], ""), upv, **meta)
+            for a in case["params"]["audits"] if "circuits" in a for _ in a["circuits"]]
 
 
 # --- the generator --------------------------------------------------------------------------------------------------------
@@ -2270,9 +2568,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
             outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots))
-        recorded, bits = i == a and m.startswith("audit-record"), m == "audit-record-bits"
+        listed = i == a and m == "audit-listed"
+        recorded, bits = i == a and m.startswith("audit-record") or listed, m == "audit-record-bits"
         if recorded:
-            desc, units = json.loads(record_audit(bits)[0]), RECORD_UNITS[bits]
+            desc, units = json.loads(record_audit(bits)[0]), RECORD_UNITS[bits] // (LISTED_UPV if listed else 1)
         elif anchors and in_class:
             desc = json.loads(anchor[0])
         prog = program_sha512(desc)
@@ -2323,6 +2622,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 held = r.choice([hashlib.sha512(b"another circuit record").hexdigest(), held.upper(), None])
             rec["window"] |= {"circuit": held} | ({"registered_roots": roots} if roots else {})
             record = {"circuit": json.loads(doc), "order": json.loads(order), "pins": pins}
+            if listed:
+                text = circuit_file(prog, record_partition(record["circuit"], ""))
+                record["circuits"] = [{"sha512": hashlib.sha512(text.encode()).hexdigest(), "template": t}
+                                      for t, _, _ in charges_of(desc)]
         elif anchors and in_class:
             _, doc, order = (json.loads(x) for x in anchor)
             if misanchor and i == ties[first + t]["audit"]:

@@ -11,8 +11,10 @@ what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import shutil
+import subprocess
 import types
 from collections import Counter
 from fractions import Fraction
@@ -569,9 +571,10 @@ def test_each_lanes_prog_is_its_own_chunk():
 
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
-    compute audit's output), an ingress and an egress instance's committed bits (their parameters, the more of bucket
-    0's and a later bucket's for ingress, and their returns: a u16 with the state and view, or with the row), and its
-    slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
+    compute audit's output), what an ingress and an egress instance is charged (`vu_bits` at one instance a VU of their
+    parameters' words, the more of bucket 0's and a later bucket's for ingress, and their returns': a u16 with the
+    state and view, or with the row, each one-bit leaf a 16-bit word), and its slot entries' bits (lanes · T / every
+    entries of its `prog` ports' width); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
     or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
@@ -583,7 +586,7 @@ def test_the_scan_is_read_off_its_program(server):
         state, prog, view, words = PC._scan_widths(desc)
         s, T, row = p.schedule, p.schedule.window, WR.row_bytes(p.schedule)
         ins = 8 * row + (state if T > 1 else 0) + s.lanes * prog
-        assert p.scan == PC.Scan(T, 0, ins + 16 + state + view, 16 * words + 16 + 8 * row,
+        assert p.scan == PC.Scan(T, 0, PC.vu_bits(1, ins + 16 + state + view), PC.vu_bits(1, 16 * words + 16 + 8 * row),
                                  s.lanes * (T // s.every) * prog), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
@@ -623,11 +626,11 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
-    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
-    Program's units commits, its parameters and its return, read off the Program, not a proof block's 16-bit public
-    output: over honest clock-form periods whose audits' stand-in units take a 16-bit parameter and return 8 to 320
-    bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
-    mirror's."""
+    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most one of its Program's
+    units is charged, `vu_bits` at one instance a VU of its parameters' and its return's 16-bit words, read off the
+    Program, not a proof block's 16-bit public output: over honest clock-form periods whose audits' stand-in units take
+    a 16-bit parameter and return 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more than
+    `16 · b`, and Lean's public is the mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)
@@ -639,6 +642,75 @@ def test_a_wide_unit_is_charged_its_committed_bits(server):
         verdict, got = D.replay(PORT, case, server)
         assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
     assert wide
+
+
+def _check_files(exe: Path, d: Path, case: dict, texts: list[str]) -> dict:
+    """`network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` on the case's files and the circuit files `texts`:
+    its answer, its exit status its verdict's."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "params.json").write_text(D.canonical(case["params"]))
+    (d / "commitment").write_bytes(bytes.fromhex(case["commitment"]))
+    (d / "evidence").write_bytes(bytes.fromhex(case["evidence"]))
+    for i, t in enumerate(texts):
+        (d / f"circuit-{i}").write_text(t)
+    p = subprocess.run([str(exe), "check", *(str(d / n) for n in ("params.json", "commitment", "evidence")),
+                        *(str(d / f"circuit-{i}") for i in range(len(texts)))], capture_output=True, text=True)
+    out = json.loads(p.stdout)
+    assert p.returncode == {ACCEPT: 0, REJECT: 1, UNDECIDED: 2}[out["verdict"]], (p.returncode, p.stderr)
+    return out
+
+
+def _relisted(case: dict, texts: list[str]) -> dict:
+    """The case with its audits' listings naming the files `texts`, in order, by their SHA-512."""
+    params, it = json.loads(json.dumps(case["params"])), iter(texts)
+    for a in params["audits"]:
+        for f in a.get("circuits", []):
+            f["sha512"] = hashlib.sha512(next(it).encode()).hexdigest()
+    return case | {"params": params}
+
+
+def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
+    """A record-form audit that lists its circuit file (`audit-listed`: its template's 8 instances at
+    `LISTED_UPV` = 2 a VU, its answer over 4 VUs) is accepted by `network-period check … CIRCUIT` with the mirror's
+    public, its units its VUs and each wrong one charged `vu_bits(2, words)`; with no files, or through `serve`, Lean
+    and the mirror refuse its parameters, as only the check given its files reads a listing; and each set of files
+    that is not the listing's is refused by both: a file of another SHA-512, a file too many, META naming another
+    Program or another partition, a unit returning one output word twice (`SampledProofs.Bits.check`), and instances
+    that are not whole VUs. A file at one instance a VU passes, and the audit's answer over 4 VUs is then not its 8."""
+    exe = D.build(LEAN, "network-period")
+    for n in range(4):
+        case = build("audit-listed", n, small=n % 2 == 0)
+        texts = PC.listed_files(case)
+        out = PC.reference_with(case, texts)
+        assert out["verdict"] == ACCEPT, (n, out)
+        p, listing = PC.params_listed(case["params"])
+        i, x = next((i, x) for i, x in enumerate(listing.audits) if x is not None)
+        ((_, members, words),) = x.templates
+        charged = PC.charged(p, listing, [PC.read_circuit(t) for t in texts]).audits[i]
+        assert (members, charged.units, charged.bits) == (PC.RECORD_UNITS[False], 4, 2 * 16 * words + 2), (n, charged)
+        term = out["public"]["audits"][i]
+        assert (term["units"], term["faulty_bits"]) == (4, term["wrong_units"] * charged.bits), (n, term)
+        got = _check_files(exe, tmp_path / f"{n}-accept", case, texts)
+        assert (got["verdict"], got.get("public")) == (ACCEPT, out["public"]), (n, got)
+        verdict, served = D.replay(PORT, case, server)
+        assert verdict == REJECT and "lists circuit files" in json.loads(served)["reason"], (n, served)
+        assert reference(case)["reason"].startswith("params:"), (n, reference(case))
+        assert "lists circuit files" in _check_files(exe, tmp_path / f"{n}-none", case, [])["reason"]
+        program = PC.program_sha512(case["params"]["audits"][i]["program"])
+        refusals = [
+            (case, PC.listed_files(case, note="another file"), "is not its listing's"),
+            (case, texts * 2, "circuit files"),
+            (None, PC.listed_files(case, program_sha512=hashlib.sha512(b"another").hexdigest()), "program_sha512"),
+            (None, PC.listed_files(case, partition={"rule": PC.PARTITION_V1, "digest": program}), "META partition"),
+            (None, PC.listed_files(case, leaves_out=[[0], [0]]), "returns an output word twice"),
+            (None, PC.listed_files(case, 3), "are not whole VUs of 3"),
+            (None, PC.listed_files(case, 1), "not its Program's")]
+        for k, (c, files, fragment) in enumerate(refusals):
+            c = c or _relisted(case, files)
+            mirror = PC.reference_with(c, files)
+            assert mirror["verdict"] == REJECT and fragment in mirror["reason"], (n, k, mirror)
+            got = _check_files(exe, tmp_path / f"{n}-{k}", c, files)
+            assert got["verdict"] == REJECT and fragment in got["reason"], (n, k, got)
 
 
 #: The refusals that hold a compute audit to its Program, in either form, each with what Lean's reason and the

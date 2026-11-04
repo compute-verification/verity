@@ -26,6 +26,9 @@ supplies each of the statement's quantities as at most the check's number:
   (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block, every
   slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
 
+`AcceptsWith` is what the period check with its listed circuit files accepts (`checkWith`): the files held to their
+listing, and `check` at the VUs they count and the bits a wrong VU is charged (`charged`).
+
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
 state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
@@ -91,6 +94,14 @@ def RowsKBoundsCount : Prop :=
         2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
         charged).K
+
+/-- **The period check with its listed circuit files accepts** (`network-period check PARAMS COMMITMENT EVIDENCE
+CIRCUIT…`, `protocolWith`): given the files `fs`, each its SHA-512 and header in `Listing.files`' order, `checkWith`
+accepts the parameters `p` (with the files they list), the commitment `c` and the evidence `e`. It holds the files to
+the listing (`circuitsWhy`) and checks the period at the VUs and bits they charge (`charged`). -/
+def AcceptsWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :
+    Prop :=
+  ∃ (pub : Public) (prof : Profile), checkWith fs p c e = .accept pub prof
 
 /-- What `RowsProgWired` says of a period its check accepted: in the rows form, each link-window's scan's registration
 is wired to the audits' slot entries (`wired`). -/
