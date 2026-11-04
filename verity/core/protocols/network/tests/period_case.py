@@ -291,6 +291,18 @@ def _sync_set(j) -> SyncSet:
     return SyncSet(tuple(deltas), tuple(rhos))
 
 
+def rows_wf(s: WardenParams, windows: int) -> bool:
+    """`rowsWf`: a cell's B bytes are under 2^32, so its payload's length is a u32, and the period's
+    `lanes · windows · window` connections, the k-th at ordinal k + 1, have distinct u32 ordinals."""
+    return s.cell_bytes < U32 and s.lanes * windows * s.window < U32
+
+
+def rows_wf_refusal(s: WardenParams, windows: int) -> str:
+    return (f"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = "
+            f"{s.lanes * windows * s.window} connections and a cell's {s.cell_bytes} bytes must each be under 2^32, or "
+            "two frames could encode alike (rowsWf)")
+
+
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' fields, each a positive integer, B past a cell's header, and B, S and T u32s."""
     _exactly(j, SCHEDULE_KEYS, "schedule")
@@ -704,6 +716,8 @@ def params(j) -> Params:
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
+    if schedule is not None and not rows_wf(schedule, windows):
+        raise D.Reject(rows_wf_refusal(schedule, windows))
     if schedule is not None and list(cells) != schedule.caps(windows):
         raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
@@ -1300,6 +1314,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
             findings.append(f)
     if any(f.delta != scans[0][0].delta for f, _ in scans):
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
+    if p.schedule is not None and not rows_wf(p.schedule, p.windows):
+        findings.append(Finding(REJECT, rows_wf_refusal(p.schedule, p.windows)))
     charged = {}
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)

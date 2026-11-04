@@ -744,6 +744,32 @@ def test_the_rows_forms_caps_are_the_schedules(server):
     assert len(w63k4.caps(1)) == 128 and sum(clog2(c + 1) for c in w63k4.caps(1)) == 384
 
 
+def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
+    """The rows form refuses a period whose `lanes · windows · window` connections, the k-th at ordinal k + 1, aren't
+    distinct u32s, or whose cell's B bytes aren't under 2^32 (`rowsWf`): its frames could not name every connection or
+    every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
+    before its caps, which a period that long could never list, by Lean and the mirror alike, and the honest period's
+    schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
+    mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
+    fragment = "rows format: a frame's ordinal and payload length are u32s"
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        p = PC.params(case["params"])
+        per = p.schedule.lanes * p.schedule.window
+        over = -(-PC.U32 // per)
+        assert PC.rows_wf(p.schedule, p.windows) and PC.rows_wf(p.schedule, (PC.U32 - 1) // per), (n, per)
+        assert not PC.rows_wf(p.schedule, over), (n, per)
+        broken = case | {"params": case["params"] | {"windows": over}}
+        assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
+        empty = dataclasses.replace(p, audits=(), windows=0)
+        for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
+            q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], []))
+            assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
