@@ -178,6 +178,35 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
 
 
+def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
+    """The rows form holds each link-window's tied audits to the class circuit, the parameters' `circuit`: a period
+    whose every tied audit is registered under it passes, and Lean accepts it with the mirror's public, whose `held`
+    names `circuit` and `free`; each way the hold can fail (`PC.UNHOLDS`: the aimed link-window's tied audit registered
+    under another Program, or the parameters' `circuit` another digest) Lean and the mirror refuse by name; and a mirror
+    that skips the hold accepts what Lean refuses."""
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        c = PC.commitment(bytes.fromhex(case["commitment"]))
+        tied = [i for reg in c.windows for i in PC._tied_audits(c.audits, reg)]
+        assert tied and all(c.audits[i]["program"] == case["params"]["circuit"] for i in tied), (n, c.audits)
+        out = reference(case)
+        assert out["verdict"] == ACCEPT and out["public"]["held"] == ["circuit", "free"], (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    unhold = PC.UNHOLDS
+    for u in unhold:
+        monkeypatch.setattr(PC, "UNHOLDS", (u,))
+        for n in range(3):
+            case = build("rows-circuit-swapped", n, small=n % 2 == 0)
+            assert PC.UNHELD in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNHELD in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNHOLDS", unhold)
+    monkeypatch.setattr(PC, "_held", lambda p, audits, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-circuit-swapped", n, small=True), server, PC.UNHELD)
+
+
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
     """The scan reads each lane's Programs' rows (`scan/prog<j>`) from a compute audit's output, so the rows form
     refuses, in Lean and in the mirror and by name, each way a link-window's tie can fail at every lane
