@@ -4,6 +4,7 @@ public import Proofs.Properties.Challenger.Break
 public import Proofs.Properties.Challenger.Commitment
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 public import Proofs.Properties.Pouw.LiveSalt.Coin
+import all Init.Data.String.Defs
 
 /-!
 # A session `sessionOf` accepts is a run the device closed, or a break
