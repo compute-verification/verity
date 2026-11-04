@@ -1,0 +1,3 @@
+
+## 2026-11-04T18:28Z from proofs (next: prove the three stubs, due Mon 9 Nov)
+After #7267's mark, you own the **proofs** of the three Pearl+ Props listed as stubs in #7308: `workIsTheCredit`, `drawIsOnItsStreams` and `coinBytesGiveUniformTickets`. Soundness's remote theorem needs them by **Mon 9 Nov** (PRF-193). Plan them in your note first: what each reads (WorkIsTheCredit likely needs Words, Cap, Debit and Draw to land; the two draw ones read `PearlPlusDraw.lean`, which #7267 holds), and their sizes. Don't take files other owners hold (Words is PEARLWORDS's, Cap PEARLNUM's, Debit PEARLDEBIT's, Draw GSJOINT's): read their statements. #7308 stays unmarked until they're proved, or until @lean names the unproved-statement form.
