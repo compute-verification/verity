@@ -2629,7 +2629,34 @@
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
-   "Claims.Sampling.Prog.Unread": "a helper the claims read: an input no gate reads and the program doesn't return, which `Partition.Partitions` leaves out"
+   "Claims.Sampling.Prog.Unread": "a helper the claims read: an input no gate reads and the program doesn't return, which `Partition.Partitions` leaves out",
+   "Claims.RecGeneric.AccAt": "a helper the claims read: some run of the compiled verifier accepts the statement, which gates the contract's two V* facts",
+   "Claims.RecGeneric.Comp.Replays": "a helper the claims read: the contract's code fact that E_O gives witnesses only on accepted runs, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.Refuses": "a helper the claims read: the contract's code fact that an accepted run parses, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.InnerRounds": "a helper the claims read: the contract's code fact that Π_in's rounds are the compiled verifier's first, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.RoundsMargin": "a helper the claims read: the contract's code fact on an accepted run's rounds, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.Gives": "a helper the claims read: E_O's witnesses on an accepted run, which the contract's facts read",
+   "Claims.RecGeneric.Comp.CallsTrue": "a helper the claims read: the contract's code fact that the searched evaluations are true ones, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.OwnTrue": "a helper the claims read: the contract's code fact that the compiled verifier's own evaluations are true ones, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.CallsLogColl": "a helper the claims read: the contract's code fact that Open(Π_in, S)'s calls are searched, which `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.ForksBind": "a helper the claims read: V*'s binding across forks, a part of the compiler's contract that `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.InnerAcceptsColl": "a helper the claims read: V* computing Open(Π_in, S) on accepted runs, a part of the compiler's contract that `CompositionKS` reads",
+   "Claims.RecGeneric.Comp.Contract": "a helper the claims read: the compiler's contract at a statement, which `CompositionKS` and `CompilerKS` take",
+   "Claims.RecGeneric.Comp.OuterKSAt": "a helper the claims read: E_O's knowledge soundness at a statement, which `CompositionKS` takes",
+   "Claims.RecGeneric.Compiled.Stages": "a helper the claims read: Π_out's sessions' contract: staged statements read only the staging rounds, which `CompilerKS` reads",
+   "Claims.RecGeneric.Compiled.Shapes": "a helper the claims read: Π_out's sessions' contract: staged statements have their sessions' shapes, which `CompilerKS` reads",
+   "Claims.RecGeneric.Compiled.Bounded": "a helper the claims read: Π_out's sessions' contract: the sessions' errors within their bounds, which `CompilerKS` reads",
+   "Claims.RecGeneric.Compiled.Fits": "a helper the claims read: Π_out's sessions' contract: the sessions end by the last round, which `CompilerKS` reads",
+   "Claims.RecGeneric.Compiled.Accepts": "a helper the claims read: Π_out's sessions' contract: an accepted run shows each session accepting, which `CompilerKS` reads",
+   "Claims.RecGeneric.Compiled.Runs": "a helper the claims read: Π_out's sessions' contract: each session runs Π_out's verifier, which `CompilerKS` reads",
+   "Claims.RecGeneric.Compiled.Sessions": "a helper the claims read: Π_out's sessions' contract, the code facts `CompilerKS` takes of a compiled verifier",
+   "Claims.RecGeneric.Proto.WF": "a helper the claims read: what the recursion reads of Π_in's error terms, which `CompositionKS` and `CompilerKS` take",
+   "Claims.RecGeneric.Proto.KSAbortLin": "a helper the claims read: Π_in's knowledge soundness against aborting provers, which `CompositionKS` and `CompilerKS` take",
+   "Claims.RecGeneric.Proto.LastCoinFree": "a helper the claims read: Π_in's last step reading no last coin, which `CompositionKS` and `CompilerKS` take",
+   "Claims.RecGeneric.Server.Binds": "a helper the claims read: the server's binding, which `CompositionKS` and `CompilerKS` take",
+   "Claims.RecGeneric.Server.Opens": "the server's completeness (a commitment opens to its row), which no soundness claim takes; the hm96 server meets it (`OpensOfBound`)",
+   "Claims.RecGeneric.RunFinder.ReadsLe": "a helper the claims read: a run finder's reads per bad run, which `Proto.WF` reads",
+   "Claims.RecGeneric.RunFinder.MadeLe": "a helper the claims read: a run finder's expected runs made, which its collision bound (`ExpectedCR`) reads"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -2638,7 +2665,9 @@
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
-   "Claims.ZKOutLeak": "Claims.zkOutLeak"
+   "Claims.ZKOutLeak": "Claims.zkOutLeak",
+   "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
+   "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS"
   }
  },
  "witnesses": {
@@ -2780,6 +2809,14 @@
   "Claims.zkOutLeak": {
    "honest": ["Claims.Witness.SamplingGeneric.zkOutLeak_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial"
+  },
+  "Claims.RecGeneric.compositionKS": {
+   "honest": ["Claims.RecGeneric.compositionKS_honest"],
+   "nontrivial": "Claims.RecGeneric.compositionKS_nontrivial"
+  },
+  "Claims.RecGeneric.compilerKS": {
+   "honest": ["Claims.RecGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.RecGeneric.compilerKS_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3487,7 +3524,7 @@
    "Proofs.Flock.Soundness": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.VBridge": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until its spec is extracted",
-   "Proofs.Flock.RecGeneric": "the generic recursion's statements and their instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
+   "Proofs.Flock.RecGeneric": "the generic recursion's proofs and its instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEnd": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until its spec is extracted",
@@ -5931,6 +5968,24 @@
    ],
    "assumptions": [],
    "type_hash": "6357c43f3a417a4aa07cd4a55d4bf45876e2ab47f0ddce2c02107612c69f6ba4"
+  },
+  "Claims.RecGeneric.compilerKS": {
+   "owner": "@proofs"
+  },
+  "Claims.RecGeneric.compilerKS_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.RecGeneric.compilerKS_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.RecGeneric.compositionKS": {
+   "owner": "@proofs"
+  },
+  "Claims.RecGeneric.compositionKS_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.RecGeneric.compositionKS_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.Sampling.Binding_fails": {
    "owner": "@proofs",
