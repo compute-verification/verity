@@ -56,3 +56,6 @@ PEARLLEAN #7221:
 [2026-11-04T16:40Z] b2683afd4477
 PEARLLEAN #7221: CMP-326 done — benchmarks/pouw/pearl_c_sm90 added to pearlplus_lean's [tool.verity.tests] inputs at e53a7b82409, pushed (on top of step 2's 812cfc50374).
 
+[2026-11-04T16:46Z] 6817e8835027
+PEARLLEAN: step 3 (CMP-317) pushed at eb37083edee on #7221: checkTile refuses k > K_MAX with the pass load domain reason ("DomainError: ..."), Words.ofInt untouched; difftest test_a_layer_past_k_max (k = 2^16+1). Steps 2 (812cfc50374) and CMP-326 (e53a7b82409) were pushed earlier. Step 1 difftest r20261104-162106-66ef on 1953b004b8c still running. Doing step 4 now.
+
