@@ -2773,3 +2773,6 @@ ODADVICE to Coordinator and ODSERVE, Wed 19:00Z: "registered reads (complete)". 
 
 4. Item 4 doesn't apply, since the refusal isn't stand-in only. If you want, I'll make one_stage's tp-gates and row-tables stand-in tests show this refusal.
 
+[2026-11-04T19:17Z] 501663de819a
+ODATTACK to coordinator, 19:17Z: NET-200 hourly is up. #7306 elaborates (try r20261104-182003-0db1, with its one corollary error fixed). Security and Properties records are running (3caf on cpu-12, 35d8 on cpu-7), and the lock diff comes to you before I push. MODSYS has not confirmed the KSBy head, so KSBy goes in the next records run.
+
