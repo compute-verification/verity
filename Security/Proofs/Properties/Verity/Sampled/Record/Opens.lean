@@ -18,9 +18,10 @@ make the unit's proof block correct wherever the values carry those that open (`
   the unit (`TableSetup`); none where it doesn't set up. The openings are computed from the witness; only the table's
   setup is chosen, and it is unique (`DrawSetupZHJP.table_congr`). At most one per committed wire (`revealsLe`).
 * **What the record takes beside acceptance**:
-  * `SessionIns`: wherever flock-verify reads the session's statement at a draw file that fits its length words, the
-    reading is `--zk` at `A`'s inputs, with no public input words, and sets up as `A`'s session at the draw file's JSON.
-    v2's names give it (`sessionIns_of`, through `read_sess`);
+  * `Names`, v2's reads of the registered file and `A`'s partition object as v2's: through them, wherever flock-verify
+    reads the session's statement at a draw file that fits its length words, the reading is `--zk` at `A`'s inputs,
+    with no public input words, and sets up as `A`'s session at the draw file's JSON (`SessionIns`, `sessionIns_of`
+    through `read_sess`);
   * `KeptFits`: every draw file the draw file round keeps fits the statement's length words (`Fits`);
   * `ProvedIn`: every unit the coins draw is one the kept draw file proves, below the population. v2 credits the
     public file's `units.indices` of the instances the draw names (`provedOf`), so this holds where those indices are
@@ -352,9 +353,13 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) {u : Fin A.n} {J : Json} {kd : 
 
 /-- **`SessionOpens` at the record**, at SHA-512: on an accepted run, a checked unit's session's Flock witness reveals
 (`revealRec`) openings such that values carrying those that open under the statement's roots make the unit's proof block
-correct, whatever its interior values. -/
-theorem sessionOpens (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hc1 : A.I.count = 1)
-    (hins : SessionIns A o) (hfits : KeptFits A o) (hpr : ProvedIn A o) (he : e.reveal = revealRec A)
+correct, whatever its interior values. Where v2 reads `A`'s and `o`'s inputs (`Names`, with v2's reads and partition
+object), flock-verify reads the session as `A`'s (`sessionIns_of`). -/
+theorem sessionOpens (o : Own) (e : Ext) {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
+    (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false) {rd : _root_.SampledProofs.OneStageZk.Reads}
+    (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd)
+    (hpart : A.I.partition = some p.own.partition) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hc1 : A.I.count = 1)
+    (hfits : KeptFits A o) (hpr : ProvedIn A o) (he : e.reveal = revealRec A)
     (iroots : Msg → Seen → ℕ → List Msg) : SessionOpens FlockDeploy.sha512 (record A o e) iroots := by
   intro x s Pt Ω P ω r u xS vS wF hs hPt _ hacc hu hsess hchk
   obtain ⟨⟨i, hi⟩, hq⟩ := hu
@@ -367,7 +372,8 @@ theorem sessionOpens (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) 
   rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2] at hsess
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hsess)
   rw [record_flockParse] at hchk
-  obtain ⟨J, hJ, st, hst, hshape, hsat⟩ := session_lowers A o hc1 hins hfits hdOk hchk
+  obtain ⟨J, hJ, st, hst, hshape, hsat⟩ :=
+    session_lowers A o hc1 (sessionIns_of hn hpl hrd hc1 hpart) hfits hdOk hchk
   obtain ⟨hun, hne, hy⟩ := session_table A o hc1 hpr hdOk hJ hst hshape hud
   refine ⟨Flock.Bridge.blockOf A.P A.κ ⟨u, hun⟩,
     Flock.Bridge.blocks_partOf_getElem? A.P (Flock.Bridge.nsOf_sum A.hpop) ⟨u, hun⟩, fun val ι hval => ?_⟩
