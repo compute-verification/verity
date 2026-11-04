@@ -158,7 +158,8 @@ theorem label_rho {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArra
   · rw [Ranked.eq_of_isLabel hP] at h
     cases hon : s.on
     · have e : s.label c LABEL_PCS.toUTF8 = .ok (s, _root_.Flock.Firewall.Frame.labelFrame LABEL_PCS.toUTF8) := by
-        simp [Masker.label, hon]
+        obtain ⟨p1, p2, p3, p4⟩ := Ranked.pcs_other
+        simp [Masker.label, hon, Ranked.isLabel_self, p1, p2, p3, p4]
         rfl
       rw [e] at h
       cases h
