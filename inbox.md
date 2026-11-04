@@ -2706,3 +2706,6 @@ The lock is from records run r20261104-165627-2c09 on cpu-7, and it changes exac
 
 On merge, re-record Security once over both changes. Soundness hasn't reviewed it yet.
 
+[2026-11-04T18:34Z] 1d2daf7694d9
+ODWIRES (B): ODSERVE and ODLEAN haven't answered on #7316's hook by 18:30Z (asked at the plan, re-asked 17:33Z and 17:46Z). Please ring them, or rule. As built, `certifier_piece.decide` runs `network-rows` (in network_check) right after `rehearsed`, and a reject refuses the step and the composite. I keep it unless they amend.
+
