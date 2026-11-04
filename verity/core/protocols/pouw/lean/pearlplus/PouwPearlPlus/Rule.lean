@@ -14,7 +14,8 @@ After a tile's openings and digest pass, the record decides it, in `check_opened
   debit (`word_debit`) is 40 units per flagged atom (32 MACs and a quarter of a promotion add) and 32 per later promotion
   into a +0 total; P3's forming term is `pearl_c_debit.forming_elements`'s stub, 0.
 * **The served y** (`check_y`), on a call that commits one: each real row of the tile opens against the call's y root, and
-  its word at column j is `RN_bf16(RN(RN(U · RN(1/α_A)) · RN(1/α_B)))` widened, `pearl_c_u.y`.
+  its word at column j is `RN_bf16(RN(RN(U · RN(1/α_A)) · RN(1/α_B)))` widened, `pearl_c_u.y`: `unscale`, the copy of the
+  served y's Definition (`Pouw.PearlC.unscale`, `PearlCUnscale_v1` at `BIAS` off), where each step stays finite.
 
 A debit replay that leaves the finite range raises in the Python (`P.Reject`, uncaught by `verify_passes`); here it refuses
 the tile, `the debit replay: …`.
@@ -208,17 +209,29 @@ where
             s!"{if widen == 1 then "" else toString widen}ρ·its credited cells' credit)")
       return none
 
-/-- `pearl_c_u.y`: the served BF16 y from U and its row's and column's α, `none` where it leaves the finite range. -/
+/-- The FP32 word of 1.0. Must equal `Pouw.PearlC.UNSCALE_ONE`. -/
+def UNSCALE_ONE : Nat := 0x3F800000
+
+/-- `PearlCUnscale_v1`'s word at `BIAS` off, the kernels' epilogue: RN_bf16(RN_f32(RN_f32(U · RN_f32(1/α_A)) · RN_f32(1/α_B))).
+Must equal `Pouw.PearlC.unscale`. -/
+def unscale (u alphaA alphaB : Nat) : Nat :=
+  f32ToBf16RnBits (f32MulV2 (f32MulV2 u (f32DivV2 UNSCALE_ONE alphaA)) (f32DivV2 UNSCALE_ONE alphaB)) BF16_NAN_F2FP
+
+/-- `pearl_c_u.y`: the served BF16 y from U and its row's and column's α, `unscale`, `none` where a step leaves the finite
+range (the pin's `NonFinite`: either FP32 product, or the BF16 word). -/
 def yOf (u alphaA alphaB : Nat) : Option Nat :=
-  let one := 0x3F800000
-  let t := f32MulV2 u (f32DivV2 one alphaA)
-  if (t >>> 23) &&& 0xFF == 0xFF then none
-  else
-    let w := f32MulV2 t (f32DivV2 one alphaB)
-    if (w >>> 23) &&& 0xFF == 0xFF then none
-    else
-      let out := ((w + 0x7FFF + ((w >>> 16) &&& 1)) >>> 16) &&& 0xFFFF
-      if out &&& 0x7FFF ≥ 0x7F80 then none else some out
+  let t := f32MulV2 u (f32DivV2 UNSCALE_ONE alphaA)
+  let w := f32MulV2 t (f32DivV2 UNSCALE_ONE alphaB)
+  let out := unscale u alphaA alphaB
+  if (t >>> 23) &&& 0xFF == 0xFF || (w >>> 23) &&& 0xFF == 0xFF || out &&& 0x7FFF ≥ 0x7F80 then none else some out
+
+/-- Four cells of Pearl+'s y as the H200 stored it (r20261103-053659-36f1's decode pass, matmul 0 at k = n = 2,048, tile 5),
+(U, α_A, α_B, y): `verity/core/protocols/pouw/tests/test_pouw_pearl_c_u.py`'s `H200_Y`. -/
+def H200_Y : List (Nat × Nat × Nat × Nat) :=
+  [(0x478391C0, 0x426D4BA7, 0x448F000E, 0x3F7E), (0xC78DF380, 0x4275FF63, 0x44965964, 0xBF7C),
+   (0x47BB95B0, 0x426E5313, 0x448643AF, 0x3FC0), (0xC81016D0, 0x42757555, 0x4495D9AA, 0xC000)]
+
+theorem yOf_h200 : H200_Y.all (fun (u, a, b, y) => yOf u a b == some y) = true := by decide
 
 /-- `check_y`'s word check: row x of the tile's real rows (`words` its opened FP32 words, the call's whole width) against
 the tile's U. -/
