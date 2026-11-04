@@ -29,6 +29,9 @@ reads it:
 (`Sessions.err`), the hybrid over the sessions in turn. `GenericSessionsZKCost`: its simulator makes at most `n` times
 the session simulator's calls, so it is counted where the session simulator is.
 
+`GenericRecursiveSessionsZK` and `GenericRecursiveSessionsZKCost` are Z1 and Z1-cost at the release of a first part
+(`FirstPart`) and these sessions (`ZkRelease.ofSessions`).
+
 Statements only: definitions, no proofs.
 -/
 
@@ -204,6 +207,43 @@ noncomputable def err (H : Msg → Msg) (εS : (x : Msg) → Msg → S.WS → (�
 
 end Sessions
 
+/-- **A release's first part**, whose outer witness is in `WO`: `ZkRelease`'s rounds of leaves in their frames, the
+workers' values, the outer statement and the outer witness, without the outer phase. -/
+structure FirstPart (W : Type) (Lv : Leaves) (WO : Type) where
+  nh : Msg → ℕ
+  nl : Msg → ℕ → ℕ
+  frame : Msg → List (Msg × Out) → List Msg → OC Msg
+  Ωp : Msg → Type
+  [pFin : ∀ x, Fintype (Ωp x)]
+  [pNe : ∀ x, Nonempty (Ωp x)]
+  msg : W → (x : Msg) → Ωp x → List (Msg × Msg) → OC (List Msg)
+  xo : Msg → List (Msg × Out) → Msg
+  wo : W → (x : Msg) → Ωp x → (Fin (∑ i ∈ Finset.range (nh x), nl x i) → Lv.Salt) → List (Msg × Out) → WO
+
+attribute [instance] FirstPart.pFin FirstPart.pNe
+
+/-- **The release whose outer phase is the sessions in turn**: the first part `F`, then the layout `L`'s composed
+prover, relation, outcome and simulator. -/
+def ZkRelease.ofSessions {W : Type} {Lv : Leaves} {S : ZkSess} (F : FirstPart W Lv (ℕ → S.WS)) (L : Sessions S) :
+    ZkRelease W Lv where
+  nh := F.nh
+  nl := F.nl
+  frame := F.frame
+  Ωp := F.Ωp
+  msg := F.msg
+  ko := L.ko
+  xo := F.xo
+  WO := ℕ → S.WS
+  wo := F.wo
+  RO := L.RO
+  NO x := S.tapes x (L.n x)
+  ΩO _ := Unit
+  PO := L.PO
+  St := List (Option S.StS)
+  outO := L.outO
+  CO x := S.coins x (L.n x)
+  progO := L.progO
+
 end Claims.RecGeneric
 
 namespace Flock.Guarantees
@@ -231,5 +271,30 @@ def GenericSessionsZKCost : Prop :=
   ∀ (H : Msg → Msg) (S : ZkSess) (L : Sessions S) (cS : Msg → ℕ),
     (∀ x xs o (c : S.CS x) ask, ((S.progS x xs o c).eval H ask).2 ≤ cS x) →
       ∀ x xO o (c : S.coins x (L.n x)) ask, ((L.progO x xO o c).eval H ask).2 ≤ L.n x * cS x
+
+/-- **Z1 at an outer phase of sessions** (from Z1 and Z1-S): where the leaves hide within `δ`, the sessions are zero
+knowledge per outcome within `ε_S` and make up the outer phase's rounds, the release of the first part `F` and the
+sessions in turn is zero knowledge per outcome at every witness, at its simulator given the released outcome, within
+`ZkRelease.err` at the composed error `Sessions.err`: each session's error at `V*` after the real prefix, averaged over
+the first part where the server releases and over the earlier sessions' tapes, plus `δ` per leaf of the first part. -/
+def GenericRecursiveSessionsZK : Prop :=
+  ∀ (H : Msg → Msg) {W : Type} (Lv : Leaves) (S : ZkSess) (L : Sessions S) (F : FirstPart W Lv (ℕ → S.WS))
+    (εS : (x : Msg) → Msg → S.WS → (Θ : Type) → VStar Θ → Θ → S.StS → ℝ) (δ : ℝ),
+    Lv.Hides δ → S.ZK H εS → L.Shaped →
+      ZKOut (ZkRelease.ofSessions F L).N (ZkRelease.ofSessions F L).Ω H (ZkRelease.ofSessions F L).k
+        (ZkRelease.ofSessions F L).prover (fun _ _ => True) (ZkRelease.ofSessions F L).outcome
+        (ZkRelease.ofSessions F L).sim ((ZkRelease.ofSessions F L).err H (L.err H εS) δ)
+
+/-- **Z1-cost at an outer phase of sessions** (from Z1-cost and Z1-S-cost): where each frame makes at most `c_F(x)`
+calls and the session simulator at most `c_S(x)`, the release's simulator given the outcome makes at most
+`n_h(x)·(c_F(x) + 1) + k_O(x)` calls at the refusal and `n_h(x)·(c_F(x) + 1) + n(x)·c_S(x)` at an outer outcome. -/
+def GenericRecursiveSessionsZKCost : Prop :=
+  ∀ (H : Msg → Msg) {W : Type} (Lv : Leaves) (S : ZkSess) (L : Sessions S) (F : FirstPart W Lv (ℕ → S.WS))
+    (cF cS : Msg → ℕ),
+    (∀ x pre ls, ((F.frame x pre ls).eval H).2.length ≤ cF x) →
+    (∀ x xs o (c : S.CS x) ask, ((S.progS x xs o c).eval H ask).2 ≤ cS x) →
+    ZKMal.SimCostLe H ((ZkRelease.ofSessions F L).sim.given none) (fun x => F.nh x * (cF x + 1) + L.ko x) ∧
+      ∀ o, ZKMal.SimCostLe H ((ZkRelease.ofSessions F L).sim.given (some o))
+        (fun x => F.nh x * (cF x + 1) + L.n x * cS x)
 
 end Flock.Guarantees

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.RecGeneric.ZKSessions
-public import Proofs.Flock.RecGeneric.ZKProof
+public import Proofs.Flock.RecGeneric.ZKCost
 
 /-!
 # Z1-S's proof
@@ -17,7 +17,9 @@ its outcome and goes on, the rest's real runs are bounded by the rest's simulato
 Averaged over session `i`'s tape at each of the rest's simulator coins, session `i`'s zero knowledge, against `V*` after
 the messages so far, swaps its real run for its simulator's at its error. The errors add exactly (`Sessions.errAt`).
 
-`Flock.SecurityProofs.GenericSessionsZK` is Z1-S and `Flock.SecurityProofs.GenericSessionsZKCost` Z1-S-cost.
+`Flock.SecurityProofs.GenericSessionsZK` is Z1-S and `Flock.SecurityProofs.GenericSessionsZKCost` Z1-S-cost; Z1 and
+Z1-cost at a release whose outer phase is the sessions follow (`Flock.SecurityProofs.GenericRecursiveSessionsZK`,
+`Flock.SecurityProofs.GenericRecursiveSessionsZKCost`).
 -/
 
 @[expose] public section
@@ -347,3 +349,19 @@ open Claims Claims.RecGeneric in
 /-- **Z1-S-cost** (`Flock.Guarantees.GenericSessionsZKCost`). -/
 theorem Flock.SecurityProofs.GenericSessionsZKCost : Flock.Guarantees.GenericSessionsZKCost :=
   fun H _ L cS hc x xO o c ask => L.csim_cost H cS hc x xO ask (L.n x) 0 o [] c
+
+open Claims Claims.RecGeneric in
+/-- **Z1 at an outer phase of sessions** (`Flock.Guarantees.GenericRecursiveSessionsZK`): Z1 at the release, its outer
+phase's zero knowledge from Z1-S. -/
+theorem Flock.SecurityProofs.GenericRecursiveSessionsZK : Flock.Guarantees.GenericRecursiveSessionsZK :=
+  fun H _ Lv S L F εS δ hHide hS hSh =>
+    Flock.SecurityProofs.GenericRecursiveZK H Lv (ZkRelease.ofSessions F L) (L.err H εS) δ hHide
+      (Flock.SecurityProofs.GenericSessionsZK H S L εS hS hSh)
+
+open Claims Claims.RecGeneric in
+/-- **Z1-cost at an outer phase of sessions** (`Flock.Guarantees.GenericRecursiveSessionsZKCost`): Z1-cost at the
+release, its outer simulator's calls from Z1-S-cost. -/
+theorem Flock.SecurityProofs.GenericRecursiveSessionsZKCost : Flock.Guarantees.GenericRecursiveSessionsZKCost :=
+  fun H _ Lv S L F cF cS hF hc =>
+    Flock.SecurityProofs.GenericRecursiveZKCost H Lv (ZkRelease.ofSessions F L) cF (fun x => L.n x * cS x) hF
+      (Flock.SecurityProofs.GenericSessionsZKCost H S L cS hc)
