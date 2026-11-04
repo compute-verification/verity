@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.TileDraw
+import Proofs.Flock.Claims.Prob
 import Proofs.Pouw.PearlC.TileGammaTol
 
 /-!
@@ -8,7 +9,7 @@ The run draws each tile by its own transcript's tickets (`drawTickets`): its dec
 on a blank one, scaled to integers by the lcm of the denominators. The game averages over the oracle and the salt each
 transcript's draw probability (`GγSampledDrawTol`).
 
-* `ex_le_add_pr`, `ex_mono`: an average over `(H, s)` of probabilities, each at most `δ` off an event `E` and at most
+* `ex_le_add_pr`: an average over `(H, s)` of probabilities, each at most `δ` off an event `E` and at most
   `δ + 1` on it, is at most `δ + Pr[E]`.
 * `ticketsOf_cast`, `lcm_den_pos`: a nonnegative weight's tickets are the lcm times the weight, and the lcm is positive.
 * `sampledOfGoodDrawTol`: for one oracle and salt, an accepted draw either has more than `u(X_O)` of the transcript's
@@ -23,11 +24,6 @@ transcript's draw probability (`GγSampledDrawTol`).
 namespace Pouw.PearlC
 
 open Finset _root_.Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-theorem ex_mono {α : Type} [Fintype α] {f f' : α → ℝ} (h : ∀ a, f a ≤ f' a) : Claims.Ex f ≤ Claims.Ex f' := by
-  unfold Claims.Ex
-  gcongr with a
-  exact h a
 
 /-- An average of values each at most `δ + 1`, and at most `δ` off `E`, is at most `δ + Pr[E]`. -/
 theorem ex_le_add_pr {α : Type} [Fintype α] (f : α → ℝ) (E : α → Prop) (δ : ℝ) (hδ : 0 ≤ δ)
@@ -236,7 +232,7 @@ theorem gammaSampledDraw_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
     GγSampledDraw CM P TR D Wd γ η := by
   intro U hU T hT q hq A hA dec t εs hεs
   classical
-  refine le_trans (ex_mono fun x => pr_mono fun c hc => ?_)
+  refine le_trans (Claims.Ex_mono fun x => pr_mono fun c hc => ?_)
     (h U hU T hT q hq A hA dec t _ _ (missBound_strict t εs hεs))
   obtain ⟨hacc, hTlt⟩ := hc
   have hdisj := (overCapTiles_disjoint P TR U x.1 x.2 (A.transcript U x.1 x.2)).mono_left
