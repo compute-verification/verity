@@ -2297,13 +2297,14 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     run = _deferred(tmp_path)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
-    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA"
+    names = ("K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA ONSITE "
+             "CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
         "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA,
-        "CR_SCAN_DELTA": "5.421010862427522e-20"}
+        "CR_SCAN_DELTA": "5.421010862427522e-20", "ONSITE": "", "CERTIFIER_CHAIN_CMD": "", "CERTIFIER_PERIOD_CMD": ""}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2341,8 +2342,8 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     """The follow-on, at the settings the deferral recorded: the copy held to the served node's sums, then no window
     circuit or commit of its own (the served node's record at the class, its tree's, and the commit H1 bound, held as
     there), V3c's audit and period, the final record about the served node from the pieces it read, and the composite,
-    told the served node, so each says it composed elsewhere. Another tree runs only under FOLLOW_ANY_TREE, which its
-    line names. $OUT names no window."""
+    told the served node, so each says it composed elsewhere; no onsite record, which the served node's run didn't
+    write. Another tree runs only under FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra)
     d, out = tmp_path / "serve", tmp_path / "out"
@@ -2364,7 +2365,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200"]
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
-    assert not _window_data(out, 7), _window_data(out, 7)
+    assert not (out / "registration.json").exists() and not _window_data(out, 7), _window_data(out, 7)
 
 
 FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, "
@@ -2446,6 +2447,85 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
 
 
+def test_a_deferral_carries_the_advice_registrations_public_form_into_the_follow_ons_out(tmp_path):
+    """The advice registration's public form the served node published ($OUT/registration.json, whose cap the onsite
+    record charges) goes with the deferral, listed and hashed with the follow-on's inputs, and into the follow-on's $OUT
+    as the served node wrote it."""
+    public = S.public_registration(REGISTRATION)
+    (tmp_path / "served-out").mkdir()
+    (tmp_path / "served-out" / "registration.json").write_text(json.dumps(public))
+    assert _deferred(tmp_path).returncode == 0
+    dd = tmp_path / "serve" / "private" / "deferred"
+    assert "private/deferred/registration.json" in (dd / "inputs.txt").read_text().splitlines()
+    assert "private/deferred/registration.json" in (dd / "inputs.sha256").read_text()
+    rc, lines, order, _limits = _follow(tmp_path)
+    assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert json.loads((tmp_path / "out" / "registration.json").read_text()) == public
+
+
+FAKE_ONSITE_RECORD = '''import json, os, sys
+open(os.environ["ORDER"], "a").write("onsite\\n")
+open(os.environ["ORDER"] + ".onsite", "w").write(json.dumps(sys.argv[1:]))
+print("ONSITE " + json.dumps({"written": "record/onsite.json"}))
+'''
+REPROOF = 'echo reproof >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.reproof"; echo "REPROOF COPY: {said}"; exit {rc}'
+
+
+@pytest.mark.parametrize("rc, said", [(0, "PASS"), (4, "FAIL (rsync)")])
+def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_with_its_copy_where_the_served_run_would(
+        tmp_path, rc, said):
+    """A deferral of a run that writes the onsite record (its certifier's front or piece set) records ONSITE, and its
+    follow-on runs REPROOF_CMD once V3c's audit is done, with the serve dir, the window and V3c's dir, its log in the
+    serve dir's private/ and its last line the REPROOF line; then the record and the composite, and last the onsite
+    record with REPROOF_COPY and REPROOF_LISTING, before $OUT is published. A copy that fails fails the follow-on, and
+    every record is still written."""
+    assert _deferred(tmp_path, CERTIFIER_FRONT="front").returncode == 0
+    d, out, listing = tmp_path / "serve", tmp_path / "out", tmp_path / "serve" / "private" / "reproof-listing.txt"
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    got, lines, order, _limits = _follow(tmp_path, REPROOF_CMD=REPROOF.format(said=said, rc=rc),
+                                         REPROOF_COPY="vy-nebius-cpu-3:/p/r1", REPROOF_LISTING=str(listing))
+    assert (got == 0) == (rc == 0) and order == ["audit", "period", "reproof", "record", "composite", "onsite"], order
+    assert (tmp_path / "order.reproof").read_text().split() == [str(d), "7", str(d / f"v3c-w7-{VTAG}")]
+    assert f"REPROOF (exit {rc}): REPROOF COPY: {said}" in lines and lines[-1].startswith("ONSITE ")
+    assert oct((d / "private" / "reproof.log").stat().st_mode & 0o777) == "0o600"
+    assert json.loads((tmp_path / "order.onsite").read_text()) == [
+        str(out), "--reproof-copy", "vy-nebius-cpu-3:/p/r1", "--reproof-listing", str(listing)]
+
+
+#: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session
+KEPT = ("private/certifier/r1/fetch.tar.gz", "private/certifier/r1/session.json")
+
+
+def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_and_its_period_check_to_the_follow_on(
+        tmp_path):
+    """With the network certifier in front, remote takes the split certifier's two commands, whose period case the onsite
+    record reads (remote's record drops the certifier). Its deferral carries both and the kept run the chain reads,
+    listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
+    period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
+    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces, and the onsite record last."""
+    d = tmp_path / "serve"
+    for f in (*KEPT, "private/certifier/attacks/relay.log"):
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        (d / f).write_text(f)
+    run = _deferred(tmp_path, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN, CERTIFIER_PERIOD_CMD=PERIOD)
+    assert run.returncode == 0, run.stderr
+    dd = d / "private" / "deferred"
+    assert [f for f in (dd / "inputs.txt").read_text().splitlines() if f.startswith("private/certifier/")] == list(KEPT)
+    assert all(f in (dd / "inputs.sha256").read_text() for f in KEPT)
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    rc, lines, order, limits = _follow(tmp_path)
+    pieces = tmp_path / "out" / "pieces" / "certifier"
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record", "composite", "onsite"], (lines, order)
+    assert limits == ["180m", "4h", "60m"]
+    assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
+    assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
+    record = json.loads((tmp_path / "order.record").read_text())
+    assert record[record.index("--pieces") + 1] == str(dd / "pieces")
+    assert not (pieces / "chain.log").exists() and (d / "private" / "pieces" / "certifier" / "period.log").exists()
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
@@ -2502,14 +2582,21 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
 
 
+SPLIT_NO_FRONT = ("PREFLIGHT: PRODUCT=remote runs the split certifier's CERTIFIER_CHAIN_CMD only with the network certifier "
+                  "in front, whose period case it writes: set CERTIFIER_FRONT, or unset it")
+
+
 @pytest.mark.parametrize("product, extra, line", [
     ("remote", {}, None),
     ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
-    ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
-     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CHAIN_CMD": "true"}, SPLIT_NO_FRONT),
     ("remote", {"CERTIFIER_CMD": "true"},
      "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
     ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS}, None),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS, "CERTIFIER_CHAIN_CMD": "true",
+                "CERTIFIER_PERIOD_CMD": "true"}, None),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS, "CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
     ("remote-network", {}, None),
     ("remote-network", {"CERTIFIER_CHAIN_CMD": "true", "CERTIFIER_PERIOD_CMD": "true"}, None),
     ("remote-network", {"POUS_CMD": "true"},
@@ -2520,8 +2607,9 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
     """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
     the preflight refuses any onsite piece's command set, before anything runs. The certifier's front is how a run's
-    requests are served, not a piece, so remote takes it. PRODUCT=remote-network takes the network certifier's commands
-    and refuses the other onsite pieces' as remote does."""
+    requests are served, not a piece, so remote takes it, and with it the split certifier's chain and period, which
+    write the period case the onsite record reads; without the front, remote refuses them. PRODUCT=remote-network takes
+    the network certifier's commands and refuses the other onsite pieces' as remote does."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)

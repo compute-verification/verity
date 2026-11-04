@@ -790,6 +790,27 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
     assert rec["of_record"] == {"holds": False, "missing": [], "not_accepting": ["onsite"]}
 
 
+def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_answer_and_else_the_drop(tmp_path):
+    """Remote's report drops the network certifier whatever its pieces hold; with the split certifier behind the front
+    its period check's answer, beside its case under OUT/pieces/certifier, is the verdict and the bound, as onsite's
+    report composes it."""
+    out = accepted(tmp_path)
+    report = json.loads((out / "record" / "verdicts.json").read_text())
+    report["protocols"]["communication"] = SV.dropped_row("communication", "remote")
+    (out / "record" / "verdicts.json").write_text(json.dumps(report))
+    rec = OR.record(out)
+    assert rec["verdicts"]["the network certifier"] == {
+        "verdict": "missing", "why": report["protocols"]["communication"]["why"],
+        "from": "record/verdicts.json protocols.communication"}
+    assert "missing" in rec["bound"]
+    (out / OR.CASE.parent / "answer.json").write_text(json.dumps(answer(PUBLIC)))
+    rec = OR.record(out)
+    assert rec["verdicts"]["the network certifier"] == {"protocol": OR.NETWORK, "verdict": "accept",
+                                                        "from": "pieces/certifier/answer.json"}
+    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
+    assert rec == OR.record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
+
+
 def test_a_run_with_no_window_report_writes_no_record(tmp_path, capsys):
     assert OR.main([str(tmp_path)]) == 1
     assert "record/verdicts.json is missing" in capsys.readouterr().err and not (tmp_path / "record").exists()
