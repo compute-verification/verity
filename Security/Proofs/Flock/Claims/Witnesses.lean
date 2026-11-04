@@ -4,6 +4,7 @@ import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
+import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
 import Proofs.Flock.Claims.Witnesses.RecursionLin
@@ -27,5 +28,6 @@ guarantees: `Stated` states the shared, Flock and sampling claims' failures over
 `Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`), and `BindingMeets` the
 sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). The ZK-recursion compiler's claims carry
 `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at the deployed record
-(`RecursionMeets`).
+(`RecursionMeets`). The generic sampled compiler's closed statements and `ZKOutLeak` are guarantees, and the lock's
+`witnesses` holds each to an honest and a nontrivial lemma (`SamplingGenericCompiler`).
 -/
