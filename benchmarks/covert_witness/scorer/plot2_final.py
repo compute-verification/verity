@@ -166,24 +166,25 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
 
 
 def note(cells: list[dict], art: str | None = None, tier: str | None = None) -> str:
-    """The panel's note within the route's `console.NOTE_MAX`: the split's cells by start, else their count."""
+    """The panel's note within the route's `console.NOTE_MAX`: the split's cells by start, else their count, and the
+    cut's words, else only that it is one; the headline's label and the art id stay whole."""
     split = {}
     for c in cells:
         if c["split"] == SEARCH:
             split.setdefault(c["start"], []).append(f"{c['g']:g}x")
     every = {c["start"]: [f"{x['g']:g}x" for x in cells if x["start"] == c["start"]] for c in cells}
     where = "; ".join(f"{s} {'all g' if gs == every[s] else ', '.join(gs)}" for s, gs in split.items())
+    count = f"{sum(c['split'] == SEARCH for c in cells)} of {len(cells)} cells"
     cut = "" if not tier else " Cut: coverage" + ("." if tier == "coverage" else " + per start, g" + (
         ", family" if tier == "family" else "") + ": (p, rho) front, best no.")
-    tail = f"{cut} Tables {art}." if art else cut
 
-    def text(where: str) -> str:
-        return ("Finals: a row per finals point and g. p = p_any, its reaching seeds' mean C over H, the least mean C "
-                "over every route; honest-only p in record. Search split (record says) where the search H-setter has "
-                f"no finished seed: {where}. rho_own from the search run's trace: the start's own session, "
-                f"{ap.OWN_K_LABEL}. S = p rho_own, none where unmeasured." + tail)
-    return next((t for t in (text(where), text(f"{sum(c['split'] == SEARCH for c in cells)} cells"))
-                 if len(t) <= console.NOTE_MAX), text("see record")[:console.NOTE_MAX])
+    def text(where: str, cut: str) -> str:
+        return ("Finals: a row per finals point, g. p = p_any: its reaching seeds' mean C over H, the least mean C of "
+                f"any route; honest p in record. Search split where the search H-setter has no finished seed: {where} "
+                f"(record says). rho_own from the search run's trace, the start's own session, {ap.OWN_K_LABEL}. "
+                "S = p rho_own, none where unmeasured." + cut + (f" Tables {art}." if art else ""))
+    tries = [(where, cut), (count, cut), (count, " Cut." if tier else "")]
+    return next((t for t in (text(*x) for x in tries) if len(t) <= console.NOTE_MAX), text(*tries[-1]))
 
 
 def cut(p: dict, cells: list[dict], art: str | None = None) -> dict:
