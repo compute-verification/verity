@@ -36,12 +36,15 @@ activation at most β(k), io-bound's red-team of (H), not its width.
 **The measured frontier**: the scorer's uncut algorithm-policy table (te_core.algorithm_policy), each run's first
 checkpoint reaching each gain (`reached` yes, p = C/H), every route but standard training's (`STANDARD`), each
 checkpoint measured as the scorer measured it (`scored`: its ledger record with the formalism block in the scorer's
-formalism.jsonl, te_core.formalism's `measure`) and priced at each policy by `published`, whose ρ at the console's
-policy is the table's own on every row (`check`). A record keeps its products at the dial's k alone, so at a policy's k
-off it the products term is unmeasured. Each priced row has the table's basis (`basis`): a row that is unmeasured,
-rests on a stub or is partial is never the least S. The row is the eligible one with the least S, else null S with
-why: no attack run at this size, none reached, or none with a full ρ at the policy, with the commonest reason the
-products term has no figure (`unpriced`: products not classified at the policy's k, where it is off the dial).
+formalism.jsonl, te_core.formalism's `measure`) and priced at each policy by `published`. Where the table is this
+te_core's, every row's ρ, binding and basis are the table's own at console (rho_console) and at grown (its headline
+rho_own, at the same c) (`check`, `TABLE`). A record keeps its products at the dial's k alone, so at a policy's k off it
+the products term is unmeasured. Each priced row has the table's basis (`basis`): a row that is unmeasured, rests on a
+stub or is partial is never the least S. A run that reached with no trace yet (te_core.algorithm_policy's `UNTRACED`)
+has the table's p and no ρ. The row is the eligible one with the least S; else, where only untraced runs reached, the
+one with the least p, its ρ and S null and basis `UNTRACED` (reached, not yet traced); else null S with why: no attack
+run at this size, none reached, or none with a full ρ at the policy, with the commonest reason the products term has no
+figure (`unpriced`: products not classified at the policy's k, where it is off the dial).
 """
 from __future__ import annotations
 
@@ -82,6 +85,10 @@ COLUMNS = ["start", "params_total", "params_nonembedding", "bits_per_byte", "sta
            "start_effective_compute_lo", "start_effective_compute_hi", "gain_target", "policy", "route", "p", "rho", "S",
            "binding_kind", "rests_on", "reading", "te_core", "traced_or_modelled", "run", "c_gates", "k_bits",
            "rho_products", "basis", "products_inputs"]
+#: each policy whose ρ the scorer's table holds, its columns that `check` compares: ρ, binding kind (None: no column),
+#: basis and c (None: the policy's c is the console's constant)
+TABLE = {"console": ("rho_console", "binding_kind", "basis_default", None),
+         "grown": ("rho_own", None, "basis_own", "own_c_gates")}
 #: what the products term read that `products_inputs` shows, where te_core.formalism's term gives it
 INPUTS = ("subset", "N", "O", "beta_w", "beta_x", "beta_k", "b_y", "F", "alpha", "K_thr", "macs_share", "k_classified")
 #: a standard step's affected gates: full training updates every weight, so every gate depends on θ'
@@ -260,12 +267,26 @@ def finite(v: float | None) -> float | None:
 
 
 def same(mine: float | None, theirs) -> bool:
-    """Whether a published ρ is the table's rho_console (null, "inf" or a number)."""
-    if mine is None or theirs is None:
-        return mine is None and theirs is None
+    """Whether a published ρ is the table's (null, "inf" or a number; a number column's null is also an infinite ρ,
+    which the basis beside it tells apart)."""
+    if theirs is None:
+        return mine is None or math.isinf(mine)
+    if mine is None:
+        return False
     if math.isinf(mine) or theirs == "inf":
         return math.isinf(mine) and theirs == "inf"
     return math.isclose(mine, float(theirs), rel_tol=1e-9)
+
+
+def compare(x: dict, pol: str, one: dict, b: str, c: float) -> dict:
+    """`check`'s entry for the table's row `x` at policy `pol`: the published ρ `one`, its basis `b` and c beside the
+    table's columns (`TABLE`)."""
+    rho, kind, base, gates = TABLE[pol]
+    theirs = [x[rho], x[kind] if kind else one["binding_kind"], x[base]] + ([x[gates]] if gates else [])
+    ok = (same(one["rho"], theirs[0]) and one["binding_kind"] == theirs[1] and b == theirs[2]
+          and (gates is None or math.isclose(c, x[gates], rel_tol=1e-12)))
+    return {"record": x["record"], "gain_target": x["gain_target"], "policy": pol, "rho": one["rho"],
+            "binding_kind": one["binding_kind"], "basis": b, "c": c, "table": theirs, "ok": ok}
 
 
 def standard(m: formalism.Measured | None, path: Path, c: float, k: float, run: str | None) -> dict:
@@ -312,10 +333,12 @@ def trace_runs(text: str | None) -> dict[str, str]:
     return dict(x.split("=", 1) for x in text.split(","))
 
 
-def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: str) -> tuple[dict, dict]:
-    """The panel and what it rests on: every candidate's ρ, binding and basis at the console's policy beside the
-    table's (`check`) where the table is this te_core's (else `check_skipped` says whose it is), and the candidates
-    the scorer's rows don't give (`missing`)."""
+def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: str,
+          art: str | None = None) -> tuple[dict, dict]:
+    """The panel and what it rests on: every candidate's ρ, binding and basis beside the table's at each policy it
+    holds (`check`, `TABLE`) where the table is this te_core's (else `check_skipped` says whose it is), the candidates
+    the scorer's rows don't give (`missing`) and the reached runs with no trace yet (`untraced`). `art` names the
+    tables in the source."""
     from te_core import algorithm_policy
 
     src = tables / "algorithm-policy" / "tables" / "algorithm-policy.json"
@@ -326,7 +349,9 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
     attacks = [r | {"name": by_label.get(r["start"])} for r in table(src)
                if r["data"] == "v3" and not str(r["method_key"]).startswith(STANDARD)]
     reached = [r for r in attacks if r["reached"] == "yes" and r["name"] in names]
-    versions = sorted({str(r["te_core"]) for r in reached})
+    untraced = [r for r in reached if r["basis_default"] == algorithm_policy.UNTRACED]
+    reached = [r for r in reached if r["basis_default"] != algorithm_policy.UNTRACED]
+    versions = sorted({str(r["te_core"]) for r in reached + untraced})
     compared = set(versions) <= {VERSION}
     rows_of = scored(tables, ledger, {checkpoint(r["record"]) for r in reached})
     shapes, measured, stub, why = policy.starts(), {}, {}, {}
@@ -351,11 +376,12 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
         own = step(json.loads(path.read_text())) if path.exists() else None
         for g in GAINS:
             cands = [r for r in reached if r["name"] == name and r["gain_target"] == g]
+            waiting = [r for r in untraced if r["name"] == name and r["gain_target"] == g]
             for pol, (c, k, bits) in policies(params).items():
                 at = base | {"gain_target": g, "policy": pol, "c_gates": finite(c), "k_bits": bits}
                 label = policy_label(pol, k, bits)
                 rows.append(labelled(at | standard(own, path, c, k, runs.get(name)), label))
-                best, bases = None, {}
+                best, bases = None, {algorithm_policy.UNTRACED: len(waiting)} if waiting else {}
                 for x in cands:
                     key = checkpoint(x["record"])
                     m = measured.get(key)
@@ -367,12 +393,8 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                         priced[(key, pol)] = one, basis(one, stub[key])
                     one, b = priced[(key, pol)]
                     bases[b] = bases.get(b, 0) + 1
-                    if pol == "console" and compared:
-                        check.append({"record": x["record"], "gain_target": g, "rho": one["rho"],
-                                      "binding_kind": one["binding_kind"], "basis": b,
-                                      "table": [x["rho_console"], x["binding_kind"], x["basis_default"]],
-                                      "ok": same(one["rho"], x["rho_console"]) and one["binding_kind"] ==
-                                      x["binding_kind"] and b == x["basis_default"]})
+                    if compared and pol in TABLE and TABLE[pol][0] in x:
+                        check.append(compare(x, pol, one, b, c))
                     if eligible(b) and finite(one["rho"]) is not None and x["p"] is not None:
                         rank = (x["p"] * one["rho"], x["p"], x["C_gates"])
                         if best is None or rank < best[0]:
@@ -384,34 +406,40 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                            "traced_or_modelled": "traced", "run": x["record"],
                            "rho_products": finite(one["terms"].get("fresh_products")), "basis": b,
                            "products_inputs": products_inputs(m, c, k)}
+                elif waiting and not cands:
+                    x = min(waiting, key=lambda r: (math.inf if r["p"] is None else r["p"], r["C_gates"]))
+                    row = {"route": x["method_key"], "p": finite(x["p"]), "rests_on": algorithm_policy.UNTRACED,
+                           "run": x["record"], "basis": algorithm_policy.UNTRACED}
                 elif name not in attempted or not cands:
                     row = {"route": NO_ATTACK if name not in attempted else "none reached"}
                 else:
+                    total = len(cands) + len(waiting)
                     count = ", ".join(f"{n} {b}" for b, n in sorted(bases.items(), key=lambda kv: -kv[1]))
                     off = unpriced(cands, priced, measured, pol, c, k)
                     row = {"route": "none with a full rho", "rests_on": (
-                        (f"{off[0]} on {off[1]} of the {len(cands)} reached ({count})" if off
-                         else f"{len(cands)} reached ({count})") +
+                        (f"{off[0]} on {off[1]} of the {total} reached ({count})" if off
+                         else f"{total} reached ({count})") +
                         ": a row that is unmeasured, rests on a stub or is partial is never the least S")}
                 rows.append(labelled(at | row, label))
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
          "kind": "table", "updated_at": stamp,
          "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; frontier: the "
-                   f"scorer's algorithm-policy table of {made}; steps traced in "
+                   f"scorer's algorithm-policy table of {made}{f' ({art})' if art else ''}; steps traced in "
                    f"{', '.join(sorted(set(runs.values()))) or 'no run'})",
          "note": note(), "columns": COLUMNS, "rows": [[r.get(c) for c in COLUMNS] for r in rows]}
     missing = sorted({r["record"] for r in reached if checkpoint(r["record"]) not in measured})
     skipped = None if compared else f"the table is training's slowdown code {', '.join(versions)}, not {VERSION}"
     return p, {"check": check, "check_skipped": skipped, "mismatches": [x for x in check if not x["ok"]],
-               "missing": missing, "unmeasured": {f"{r}@{s}": w for (r, s), w in why.items()}}
+               "missing": missing, "untraced": sorted({r["record"] for r in untraced}),
+               "unmeasured": {f"{r}@{s}": w for (r, s), w in why.items()}}
 
 
 def note() -> str:
-    return (f"Per size, gain and policy ({UNIT}): standard training (traced at full size, p = 1) and the measured "
-            "frontier's least S = p*rho over reached attacks, never a partial, stub or unmeasured row. Headline: grown, "
-            "the size's own 4,096-in 1,024-out session at k 65,536 (16-bit ids; rho at its packed k_bits is at least "
-            "this). Sensitivities: console (the 45M session), serving (k 1.6e6, its own 100,000-in session). 1B: the "
-            "console's reference size, no start.")
+    return (f"Per size, gain and policy ({UNIT}): standard training (traced at full size, p = 1) and the least S = "
+            "p*rho over reached attacks, never partial, stub or unmeasured; if only untraced runs reached, the least p, "
+            "rho null. Headline: grown, the size's own 4,096-in 1,024-out session at k 65,536 (rho at its packed "
+            "k_bits is at least this). Sensitivities: console (45M), serving (k 1.6e6, its own 100,000-in session). "
+            "1B: reference size, no start.")
 
 
 def main(argv=None) -> int:
@@ -426,6 +454,7 @@ def main(argv=None) -> int:
     b.add_argument("--steps", type=Path, required=True, help="trace's DIR")
     b.add_argument("--out", type=Path, required=True)
     b.add_argument("--trace-runs", default=None, help="RUN, or NAME=RUN,...: the run that traced each size")
+    b.add_argument("--art", default=None, help="the tables' art id, for the source")
     u = sub.add_parser("put")
     u.add_argument("file", type=Path)
     a = ap.parse_args(argv)
@@ -444,16 +473,16 @@ def main(argv=None) -> int:
 
     if a.cmd == "build":
         stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        p, info = build(a.tables, a.ledger, a.steps, trace_runs(a.trace_runs), stamp)
+        p, info = build(a.tables, a.ledger, a.steps, trace_runs(a.trace_runs), stamp, a.art)
         refused = console.refused(p)
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "size-scaling.json").write_bytes(console.body(p))
         (a.out / "check.json").write_text(json.dumps(info, indent=1, default=str) + "\n")
         print(f"{PANEL}: {len(p['rows'])} rows, {len(console.body(p))} bytes, note {len(p['note'])} characters; "
-              + (f"console check skipped: {info['check_skipped']}, " if info["check_skipped"] else
-                 f"console check {len(info['check'])} rows, {len(info['mismatches'])} mismatched, ") +
-              f"{len(info['missing'])} candidates not in the scorer's rows, {len(info['unmeasured'])} unmeasured"
-              + (f"; REFUSED: {refused}" if refused else ""))
+              + (f"check skipped: {info['check_skipped']}, " if info["check_skipped"] else
+                 f"check {len(info['check'])} rows at {', '.join(TABLE)}, {len(info['mismatches'])} mismatched, ") +
+              f"{len(info['missing'])} candidates not in the scorer's rows, {len(info['untraced'])} reached not yet "
+              f"traced, {len(info['unmeasured'])} unmeasured" + (f"; REFUSED: {refused}" if refused else ""))
         return 1 if refused or info["mismatches"] or len(console.body(p)) > console.BODY_MAX or \
             len(p["note"]) > console.NOTE_MAX else 0
     p = json.loads(a.file.read_text())
