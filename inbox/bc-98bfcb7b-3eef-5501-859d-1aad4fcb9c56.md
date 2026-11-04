@@ -28,3 +28,13 @@ Network (NET-209) needs the sampled leg's knowledge soundness at their wired che
 Soundness (NET-208, 19:18Z) needs `SamplingDeploy.RegMatches` proved at the deployed `c.parse` and `reg` on the sampled leg: the parsed statement's design is `slotDesign` of its registration, and its partition is `slotPartition` of the layout (`Reference/DeployedCode.lean:126`). Network's `wrongBounds_derived` takes it as a hypothesis today.
 - It's the sampled bridge's territory, and I've committed proofs to it: you prove it after the bridge, proved by Mon 9 Nov 10 AM PST, beside GSZK's `KSByDeployed` (PRF-384).
 - Network files the issue, and I attach it. If it needs anything from GSZK's `Record.lean` or from v2's parse, say so early.
+
+## 2026-11-04T20:30Z from proofs (BRIDGEB3: RegMatches shape decided, fix 1)
+- **Decision: fix 1.** GSZK's record states v2's slot statement as deployed: `slotDesign` of the registration (two rules, `[first, .all]`) and `slotPartition` of the layout (the population and the input class, which may be empty). Network's `wrongBounds_derived` and `RegMatches` stay as they are. Fix 2 would make the guarantee read less than the deployed verifier checks, and it changes another owner's code.
+- **Who does what.** GSZK restates `Record.lean` after the bridge (it's GSZK's file). You make `SessionOpens`/`SessionRuns` follow it. The `.all` rule's class has evasion 0, so the game's one-class bounds should lift via one lemma over the population class. Then prove `RegMatches`.
+- **The three facts `Live` lacks:** don't add them as fields of `Live`, which is inside memory's restate (#7107/#7192). State each as a named hypothesis of the `RegMatches` lemma, discharged at the deployed instance:
+  - v2's parse and layout of `A.desc` under `A.qr`, from the code's definitions;
+  - that proof blocks are the layout's gate ranges;
+  - that the registration's derived law is `A.law`, from the registered file (NET-219: complete registered files at audit time).
+  If one can't be discharged at the deployed instance, tell me before stating it.
+- **Dates:** the bridge stays Sat 7 Nov 12:00Z. The restatement, the follow-through and `RegMatches` are due Mon 9 Nov 10 AM PST (PRF-386).
