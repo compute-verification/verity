@@ -46,7 +46,10 @@ wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or
 at another root or domain, or none, `UNSTATES`), as is one whose units read their state off the chain
 (`state-misindexed`, `MISREADS`) and one whose row 0 isn't opened to the empty state (`state-unpinned`, `UNPINS`).
 The tied audits run one class circuit, a Program drawn once, whose SHA-512 is the parameters' `circuit` (`_held`), and
-a phase whose tied audit runs another, or under another `circuit`, is refused (`circuit-swapped`, `UNHOLDS`). In the
+a phase whose tied audit runs another, or under another `circuit`, is refused (`circuit-swapped`, `UNHOLDS`). The
+tied audits may be in the record form, each slot reading the scan's state at its anchor's row in the class circuit's
+record (`state-anchored`, `anchor_audit`), and a phase whose tied audit reads it elsewhere is refused
+(`state-misanchored`, `MISANCHORS`). In the
 clock form an audit may be in the record form (`audit-record`): its window's circuit record, wire order and the
 verifier's pins beside its Program (`record_audit`), its registration's window binding the record and recording each
 pin's root; refused where the window binds another record (`audit-record-circuit`) or records no pin's root
@@ -92,6 +95,7 @@ from verity.ml.commitments.frame_v3 import BitRowLeaf
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.crypto import lms
+from verity.ml.definitions.registry import io_shell
 from verity.ml.definitions.registry.sampling import bit_at
 from verity.ml.windows import interface as IF
 
@@ -165,7 +169,8 @@ class Audit:
     and what its Program gives: its SHA-512, its units (its root's template instances), the most bits one of them
     commits, and its slot entries' templates (`entries`: each root template node calling `SlotEntry_v1` or
     `SelectEntry_v1`, by descriptor id, members and closure digest, `slot_entry_digest`); with its window's circuit
-    record (`record`), the record's digest and the pins its count held, as (param, root) pairs."""
+    record (`record`), the record's digest and the pins its count held, as (param, root) pairs, and the record as
+    `anchored` reads it (`circuit`)."""
     free: int
     steps: int
     program: str
@@ -173,6 +178,16 @@ class Audit:
     bits: int
     entries: tuple[tuple[str, int, str], ...] = ()
     record: tuple[str, tuple[tuple[str, str], ...]] | None = None
+    circuit: Stated | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class Stated:
+    """`NetworkCheck.Circuit.Stated` as `anchored` reads it: each template's input rows' words, by descriptor id and
+    port, its cuts and its registered reads."""
+    rows: dict[str, dict[str, int]]
+    cuts: dict[str, dict[str, int]]
+    registered: IF.Registered
 
 
 @dataclasses.dataclass(frozen=True)
@@ -523,25 +538,31 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    free, record = (input_gates(j), None) if "circuit" not in a else _record_count(a, f"{ctx}: circuit")
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries, record)
+    free, record, circuit = (input_gates(j), None, None) if "circuit" not in a else \
+        _record_count(a, f"{ctx}: circuit")
+    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries, record,
+                 circuit)
 
 
-def _record_count(a: dict, ctx: str) -> tuple[int, tuple[str, tuple[tuple[str, str], ...]]]:
+def _record_count(a: dict, ctx: str) -> tuple[int, tuple[str, tuple[tuple[str, str], ...]], Stated]:
     """`auditOf`'s record form: a pin of the scan's state refused (no value the verifier fixes before the run), then the
     free inputs `NetworkCheck.Circuit.check` counts on the record, every pin's parameter held: `interface.input_count`'s,
     which is its count on a record it accepts. Its checks of the record against the Program and of the order are Lean's
     alone: this module writes no record either refuses. With the record's digest (`interface.circuit_bytes`) and the
-    pins."""
+    pins, and the record (`recordOf`), its templates' rows the catalog's Definitions' (`interface.layout`), which are
+    the Program's on a record Lean accepts."""
     pins = a["pins"]
     if not isinstance(pins, dict) or not all(isinstance(r, str) for r in pins.values()):
         raise D.Reject(f"{ctx}: pins are {{param: root}}")
     if SCAN_STATE in pins:
         raise D.Reject(f"{ctx}: a pin of {SCAN_STATE}: the scan's state is no value the verifier fixes before the run, "
                        "so its reads count free")
-    count = IF.input_count(a["circuit"], pins=pins, roots=pins)
-    digest = hashlib.sha512(IF.circuit_bytes(a["circuit"])).hexdigest()
-    return count["free"], (digest, tuple(sorted(pins.items())))
+    doc = a["circuit"]
+    count = IF.input_count(doc, pins=pins, roots=pins)
+    digest = hashlib.sha512(IF.circuit_bytes(doc)).hexdigest()
+    _wires, cuts, reg, _ingress = IF.declarations(doc)
+    rows = {t: dict(IF.layout(IF.resolve(t)).rows) for t, _n in doc["templates"]}
+    return count["free"], (digest, tuple(sorted(pins.items()))), Stated(rows, cuts, reg or IF.Registered({}))
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
@@ -1019,6 +1040,36 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
+def _anchor_digits(s: WardenParams, W: int) -> list[tuple[int, int]]:
+    """`anchorDigits`: the digits, slowest first, of the read a tied audit's slots make of the scan's state at their
+    anchors, `W` the reader port's words: unit l · nb + b from leaf b · every · W, a digit of radix 1 left out."""
+    return [d for d in ((s.lanes, 0), (s.window // s.every, s.every * W)) if d[0] != 1]
+
+
+def _anchor_read(s: WardenParams, c: Stated, x: IF.Read) -> bool:
+    """`anchorRead`: registered read `x` of the scan's state is whole rows of its reader's uncut input port of `W`
+    words, units [0, lanes · nb) from base 0, its digits less those of radix 1 `_anchor_digits`', of a parameter of
+    T · W leaves."""
+    W = c.rows.get(x.reader, {}).get(x.port)
+    return W is not None and c.cuts.get(x.reader, {}).get(x.port, 1) == 1 and x.at == 0 and x.cut == (0, 1) \
+        and x.base == 0 and [d for d in zip(x.radix, x.step) if d[0] != 1] == _anchor_digits(s, W) \
+        and c.registered.params.get(SCAN_STATE) == s.window * W
+
+
+def _anchored(s: WardenParams, a: Audit) -> bool:
+    """`anchored`: with its circuit record, each of the record's registered reads of `SCAN_STATE` is the anchors'
+    (`_anchor_read`) and no table is over it; with none, it states no read."""
+    c = a.circuit
+    return c is None or (all(_anchor_read(s, c, x) for x in c.registered.reads if x.param == SCAN_STATE)
+                         and not any(t.param == SCAN_STATE for t in c.registered.tables))
+
+
+def _unanchored(p: Params, audits: list[dict], reg: dict) -> list[int]:
+    """The audits tied to a link-window's scan (`_tied_audits`) that don't read its state at their slots' anchors
+    (`anchoredAt`'s exceptions)."""
+    return [i for i in _tied_audits(audits, reg) if i < len(p.audits) and not _anchored(p.schedule, p.audits[i])]
+
+
 def _held(p: Params, audits: list[dict], reg: dict) -> bool:
     """`held`: each audit the scan's `prog` is an output of (`_tied_audits`) is registered under the parameters' class
     circuit (`runsCircuit`), none with no class circuit."""
@@ -1117,14 +1168,19 @@ UNWIRED = "the scan's prog is no compute audit's slot entries"
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 MISREAD = "the scan's state reads are not its transitions' chain"
 UNPINNED = "the scan's state's row 0 is not the empty state"
+#: and its refusal of a tied audit reading the state off its slots' anchors, after the audit's number
+MISANCHORED = "reads the scan's state off its slots' anchors"
 
 
 def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
-    """`stateCheck`'s refusal of a link-window's scan: none when its state is tied (`_state_tied`) and its row 0
-    opened to the empty state (`_state_empty`)."""
+    """`stateCheck`'s refusal of a link-window's scan: none when its state is tied (`_state_tied`), its row 0
+    opened to the empty state (`_state_empty`) and its tied audits read it at their slots' anchors
+    (`_unanchored`)."""
     if not _state_tied(p, audits, reg):
         return UNSTATED if _state_read(p, reg) else MISREAD
-    return None if _state_empty(p, reg) else UNPINNED
+    if not _state_empty(p, reg):
+        return UNPINNED
+    return f"tied audit {off[0]} {MISANCHORED}" if (off := _unanchored(p, audits, reg)) else None
 #: `heldCheck`'s refusal, after its window's number.
 UNHELD = "the tied audit's window circuit is not the registered class circuit"
 #: `heldNames`: the checks of a tied audit the rows form holds, sorted, which its public names.
@@ -1282,7 +1338,8 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
     "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
-    "rows-state-unpinned": REJECT, "rows-circuit-swapped": REJECT,
+    "rows-state-unpinned": REJECT, "rows-state-anchored": ACCEPT, "rows-state-misanchored": REJECT,
+    "rows-circuit-swapped": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
@@ -1497,6 +1554,8 @@ UNIT_BYTES = (1, 2, 5, 40)
 #: Definition (`SLOT_ENTRY_PINS`' first), whose population of one member's descriptor is `fixtures/slot_entry.json`.
 SLOT_KEY = "SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}"
 SLOT_BINDING = {"KO": 2, "IDB": 17, "NP": 4, "STOP": ()}
+#: `SLOT_KEY` as Verity's catalog binds it (`interface.resolve`), a circuit record's template
+SLOT_ENTRY = bind(io_shell.SlotEntry, **SLOT_BINDING)
 #: The select entries' template of the cases' audits that select a slot's token: `SelectEntry_v1` at its smallest
 #: binding, a pinned Definition (`SELECT_ENTRY_PINS`' first) ending in the `SlotEntry_v1` that writes the read bit,
 #: whose population of one member's descriptor is `fixtures/select_entry.json`.
@@ -1578,6 +1637,59 @@ def record_audit() -> tuple[str, str, str]:
             D.canonical(order))
 
 
+#: The slot entries' port a rows-form tied audit's record reads the scan's state into.
+ENTRY_STATE = "state"
+
+
+@lru_cache(maxsize=None)
+def anchor_audit(n: int, lanes: int, every: int, T: int, idle: bool = False) -> tuple[str, str, str]:
+    """A rows-form tied audit's Program, circuit record and wire order, each canonical JSON: `n` units of `RECORD_GEMM`
+    and the slot entries' template of a slot each (`SLOT_ENTRY`, lanes · nb members, nb = T / every), the record
+    registering the scan's state (`SCAN_STATE`, T rows of its `ENTRY_STATE` port's W words) and reading it at the slots'
+    anchors, unit l · nb + b from row b · every (radix [lanes, nb], step [0, every · W]; `idle`: a digit of radix 1
+    between), the Program its population program and the order no segment and no wire."""
+    nb, W = T // every, dict(IF.layout(SLOT_ENTRY).rows)[ENTRY_STATE]
+    radix, step = ((lanes, 1, nb), (0, 1, every * W)) if idle else ((lanes, nb), (0, every * W))
+    reg = IF.Registered({SCAN_STATE: T * W}, reads=(IF.Read(SLOT_KEY, ENTRY_STATE, SCAN_STATE, 0, radix, 0, step),))
+    c = IF.Circuit("period-anchored", ((RECORD_GEMM, n), (SLOT_ENTRY, lanes * nb)), registered=reg)
+    order = {"format": "verity/wire-order/v1", "segments": [], "wires": []}
+    return (D.canonical(codec.encode_program(c.program()[0])), D.canonical(IF.descriptor_record(c, 1)),
+            D.canonical(order))
+
+
+def _misanchor(how: str, registered: dict, s: WardenParams) -> dict:
+    """`registered`, an `anchor_audit` record's, with its read of the scan's state put off the anchors as `how`
+    (`MISANCHORS`) says, `s` a schedule it needs (`misanchor_schedule`)."""
+    (x,), W = registered["reads"], registered["params"][SCAN_STATE] // s.window
+    if how == "late":
+        x = x | {"base": W}
+    elif how == "lane":
+        x = x | {"step": [W, *x["step"][1:]]}
+    elif how == "swapped":
+        x = x | {"radix": x["radix"][::-1], "step": x["step"][::-1]}
+    elif how == "output":
+        x = x | {"port": "o0"}
+    elif how == "params":
+        return registered | {"params": {SCAN_STATE: (s.window + 1) * W}}
+    else:
+        return registered | {"tables": [{"name": "state", "param": SCAN_STATE, "offset": 0, "words": W,
+                                         "rows": s.window}]}
+    return registered | {"reads": [x]}
+
+
+def misanchor_schedule(how: str, s: WardenParams) -> WardenParams:
+    """`s`, or a schedule beside it where `how` needs one to move its read off the anchors within the state: every 2
+    or more for a slot reading the row after its anchor's (`late`), two lanes too for lane 1's slots reading it
+    (`lane`), and two lanes and two boundaries to swap (`swapped`)."""
+    if how == "late" and s.every < 2:
+        return dataclasses.replace(s, window=2, every=2)
+    if how == "lane" and (s.lanes != 2 or s.every < 2):
+        return dataclasses.replace(s, lanes=2, window=2, every=2)
+    if how == "swapped" and (s.lanes < 2 or s.window // s.every < 2):
+        return dataclasses.replace(s, lanes=2, window=2, every=1)
+    return s
+
+
 def templates_of(desc: dict) -> list[tuple[str, str, int]]:
     """A Program's root's templates, in order, each its descriptor id, its Definition's id and its members: one-stage's
     strata, one a template, named by descriptor id."""
@@ -1616,6 +1728,11 @@ MISREADS = ("sin-leaf", "o1-leaf", "units", "swapped", "missing", "untyped")
 #: tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name, its
 #: salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
 UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
+#: How `rows-state-misanchored` puts its aimed link-window's tied audit's read of the scan's state off its slots'
+#: anchors while every tie, wiring, state and hold stays (`_misanchor`): each slot reading the row after its anchor's
+#: (`late`), lane 1's slots reading it (`lane`), the lanes' and the boundaries' digits swapped (`swapped`), a read of
+#: the slot entries' output (`output`), the state a parameter of T + 1 rows (`params`), or a table over it (`table`)
+MISANCHORS = ("late", "lane", "swapped", "output", "params", "table")
 
 
 def _state_tree(rp: random.Random, T: int, empty: bool = True) -> ADV.Committed:
@@ -1804,8 +1921,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # a rows link-window's own audit, and at times one no link-window ties, which may leave units undrawn
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
+    anchors = m in ("state-anchored", "state-misanchored")
+    misanchor = rp.choice(MISANCHORS) if m == "state-misanchored" else None
     if rows:
-        sched = bound = _small_schedule(r, small)
+        sched = bound = misanchor_schedule(misanchor, _small_schedule(r, small))
         widths = (r.randint(1, 3), r.randint(1, 4), r.randint(1, 3), r.randint(1, 2))
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes,
                                           every=sched.every))
@@ -1819,8 +1938,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # one slot entries' template per audit: one-stage names a template's ports by its descriptor id; an audit that
     # selects has select entries and scan slots, as a window circuit's last position reads its slots' occupancy
     owners = rp.sample(range(n_audits), n_windows) if rows else []
-    # the tied audits run one class circuit, so they all select, or none do
-    select = rows and (rp.random() < 0.5 or m == "tied-slots-sampled")
+    # the tied audits run one class circuit, so they all select, or none do; in the record form none do
+    select = rows and (rp.random() < 0.5 or m == "tied-slots-sampled") and not anchors
     selects = set(owners) if select else set()
     lanes = sched.lanes if rows else 0
     ties = {w: {"audit": i, "key": (k := SELECT_KEY if i in selects else SLOT_KEY), "chunks": [
@@ -2066,7 +2185,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     def shape_of(n: int, split: int | None, outs: list[int]) -> tuple[tuple[int, int], ...]:
         return ((n, outs[0]),) if split is None or split >= n else ((split, outs[0]), (n - split, outs[1]))
 
-    circuit = program_sha512(json.loads(audit_descriptor(
+    # `state-anchored` and `state-misanchored`: the class circuit's record, which every tied audit carries
+    anchor = anchor_audit(n_class, lanes, sched.every, sched.window, rp.random() < 0.5) if anchors else None
+    circuit = program_sha512(json.loads(anchor[0] if anchors else audit_descriptor(
         shape_of(n_class, class_split, class_outs), (slots + off,), unwire == "body", select, class_slots))) \
         if rows else None
     for i in range(n_audits):
@@ -2089,6 +2210,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         recorded = i == a and m.startswith("audit-record")
         if recorded:
             desc, units = json.loads(record_audit()[0]), RECORD_UNITS
+        elif anchors and in_class:
+            desc = json.loads(anchor[0])
         prog = program_sha512(desc)
         if not in_class:
             untied.append(prog)
@@ -2134,6 +2257,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 held = r.choice([hashlib.sha512(b"another circuit record").hexdigest(), held.upper(), None])
             rec["window"] |= {"circuit": held} | ({"registered_roots": roots} if roots else {})
             record = {"circuit": json.loads(doc), "order": json.loads(order), "pins": pins}
+        elif anchors and in_class:
+            _, doc, order = (json.loads(x) for x in anchor)
+            if misanchor and i == ties[first + t]["audit"]:
+                doc["registered"] = _misanchor(misanchor, doc["registered"], sched)
+            rec["window"] |= {"circuit": hashlib.sha512(IF.circuit_bytes(doc)).hexdigest()}
+            record = {"circuit": doc, "order": order, "pins": {}}
         if i == a and m == "audit-program":
             if r.random() < 0.5:
                 rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
