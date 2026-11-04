@@ -193,7 +193,8 @@
 # linears at K 2,048 alone, the form a period's guarantee covers. SERVE_ARGS carries no --protocols-config of its own.
 # PoUW's piece (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session,
 # ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line: MAIN_FILE's (a file, kept as
-# $OUT/main.txt; the gate's pin is a commit of `next`, so give `git rev-list --first-parent` of it), else MAIN_SHA's
+# $OUT/main.txt: `git rev-list --first-parent origin/main` of a fresh fetch, which PEARLPLUS_TIE's preflight requires
+# under a live Pearl+ gate, since the gate's pin need not be on this tree's own line), else MAIN_SHA's
 # (default the tree's HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
 # With H1_CIRCUITS too (a directory), before serve-openai starts (its startup reserves window 0's session, which joins
 # only a period already open), `served_verdicts.py program D/h1` writes the Program serve-openai will declare for REPO at
@@ -1415,6 +1416,8 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
       || { say "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset CERTIFIER_FRONT"; exit 3; }
     grep -q -- '"--pearl-passes"' "$TREE/benchmarks/prove_path/prove_path.py" \
       || { say "PREFLIGHT: PEARLPLUS_TIE needs window-commit's --pearl-passes, its circuit cut at Pearl+'s linears, which this tree's prove_path.py doesn't take"; exit 3; }
+    [ -z "$PEARLC_CHALLENGER_GATE" ] || [ -n "${MAIN_FILE:-}" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this tree's HEAD) need not hold: set MAIN_FILE to \`git rev-list --first-parent origin/main\` of a fresh fetch, sent with the run"; exit 3; }
     DEFER=$(short_of_memory) || DEFER=
     [ -z "$DEFER" ] || [ "$PRODUCT" = remote ] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }

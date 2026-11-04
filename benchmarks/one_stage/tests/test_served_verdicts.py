@@ -3148,6 +3148,17 @@ def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounte
     assert (rc, lines, order) == (3, [line], [])
 
 
+def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file(tmp_path):
+    """Under PEARLPLUS_TIE with a live Pearl+ gate the piece holds the gate's pin to main's first-parent line, which
+    MAIN_SHA's (by default the tree's own HEAD) need not hold: without MAIN_FILE the run is refused before anything runs,
+    naming where the line comes from."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, "PEARLC_CHALLENGER_GATE": GATE, "MAIN_FILE": None})
+    assert (rc, lines, order) == (3, [
+        "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this "
+        "tree's HEAD) need not hold: set MAIN_FILE to `git rev-list --first-parent origin/main` of a fresh fetch, sent "
+        "with the run"], [])
+
+
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
 
 
