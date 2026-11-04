@@ -511,8 +511,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
 
 def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
     """`scan_zk.py prove`'s summary: accepted when the honest and block rounds' windows are accepted (`SCAN_ACCEPTS`),
-    every other round's (chain, forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok``
-    holds."""
+    every other round's (chain, forged) refused, no witness piece found at the verifier leaked (`leak_scan.scan`; every
+    find, in a summary that doesn't judge them), and scan_zk's own ``ok`` holds."""
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -520,10 +520,11 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
     rounds = {}
     for name, r in (s.get("rounds") or {}).items():
         a = r.get("audit") or {}
+        got = a.get("received") or {}
         rounds[name] = {"accepted": a.get("accepted"), "window_accepted": a.get("window_accepted"),
                         "verdicts": a.get("verdicts"), "why": a.get("why"),
                         "wrong_units": (a.get("audit") or {}).get("wrong_units"), "ok": r.get("ok"),
-                        "leaked": (a.get("received") or {}).get("verifier_found") or []}
+                        "leaked": got.get("leaked", got.get("verifier_found")) or []}
     honest = rounds.get("honest") or {}
     wrong = ([f"{n}: window {'accepted' if v.get('window_accepted') else 'refused'}" for n, v in rounds.items()
               if bool(v.get("window_accepted")) != (n in SCAN_ACCEPTS)]

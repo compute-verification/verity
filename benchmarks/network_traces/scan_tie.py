@@ -308,13 +308,9 @@ def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespac
                 "tie": {"link": tied.link, "accepted": list(tied.accepted)}, "timing": timing, "received": rec,
                 "expected": outcome.accepted is want_ok and tied.accepted == (want_ok,)
                 and tuple(sorted(verdict.get("refused") or {})) == want_refused and SZ.unseen(rec)})
-    whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
     log(f"{name}: verdict {'accepted' if outcome.accepted else 'refused'} {verdict.get('refused') or ''}, "
-        f"tie {tied.accepted}; the verifier received {rec['verifier_bytes']} bytes, witness pieces found there: "
-        f"{rec['verifier_found'] or 'none'} (of {rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} "
-        f"sparse left out), rows shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of "
-        f"{whole['rows']}), control holds all {rec['control']['holds_all']}; "
-        f"{'as expected' if res['expected'] else 'UNEXPECTED'}")
+        f"tie {tied.accepted}; the verifier received {rec['verifier_bytes']} bytes, {SZ.finds(rec)}, control holds "
+        f"all {rec['control']['holds_all']}; {'as expected' if res['expected'] else 'UNEXPECTED'}")
     return res
 
 

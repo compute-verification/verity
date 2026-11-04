@@ -753,6 +753,28 @@ def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(t
     assert rec["whole_rows"]["control"]["missing"] == ["ingress-0 prog0 0"] and not sz.unseen(rec)
 
 
+def test_a_found_piece_fails_the_round_only_where_the_drivers_rule_reads_it_leaked(tmp_path):
+    """`received` judges each found piece by the zero-knowledge drivers' one rule (`leak_scan.scan`) and places it: one
+    in a file whose format isn't read is ``leaked`` and fails the round (`unseen`), while one found only in a public row
+    file (``pub-1.bin``, which the statement fixes) is ``structured`` and doesn't."""
+    state = hashlib.sha512(b"state").digest()[:32]
+    blobs = {"ingress-0 o1 0": state}
+    control = tmp_path / "inst.bin"
+    control.write_bytes(state)
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "proof.bin").write_bytes(b"\xff" + state[:16])
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["verifier_found"] == rec["leaked"] == ["ingress-0 o1 0 @0"] and not sz.unseen(rec)
+    assert rec["placed"] == {"ingress-0 o1 0 @0": [("proof.bin", 1, "file")]}
+    assert "leaked ['ingress-0 o1 0 @0']" in sz.finds(rec)
+    (vdir / "proof.bin").unlink()
+    (vdir / "pub-1.bin").write_bytes(state[:16])
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["verifier_found"] == ["ingress-0 o1 0 @0"] and rec["structured"] == {"ingress-0 o1 0 @0": "public"}
+    assert not rec["leaked"] and sz.unseen(rec)
+
+
 @pytest.mark.parametrize("name", sorted(sz.SETUPS))
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name):
     assert sz.main(["schedule", "--class", name]) == 0
