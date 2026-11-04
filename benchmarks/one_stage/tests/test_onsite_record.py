@@ -348,6 +348,9 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
     tags = OR.PREMISES["session-tags"]["is"]
     assert "circuitOf at Tags.circuit" in tags and "Tags.circuit.withCoins c" in tags
+    padding = OR.PREMISES["tied-padding-reads"]["is"]
+    assert all(x in padding for x in ("scan's circuit files whole", "to its header only", "never a difftest",
+                                      "CircuitCountsAt"))
 
 
 @pytest.mark.parametrize("given, open_", [

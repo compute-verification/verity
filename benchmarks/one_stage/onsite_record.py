@@ -311,6 +311,15 @@ PREMISES: dict[str, dict[str, Any]] = {
                          "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
                          "on units_per_vu, which the period check's circuit read gives once it refuses every other",
                    "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
+    "tied-padding-reads": {"is": "CircuitCounts' tied-audit half: that no unit of a tied audit's circuit file reads "
+                                 "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
+                                 "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
+                                 "reads each tied audit's file to its header only, so a file whose units read into "
+                                 "its padding isn't refused. Open, by this name, until a pass over each tied audit's "
+                                 "whole file computes its unit reads, and a proved Property, never a difftest, gives "
+                                 "that they are the parsed file's unitReads, in the lock as CircuitCountsAt's "
+                                 "tied-audit premise",
+                           "discharged_by": ()},
     "session-tags": {"is": "the read bitmap's bridge to the sampled sessions' tags: the period check counts each tied "
                            "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
                            "Tags.circuit, whole_circuit), where the bridge is definitional, while each session proves "
