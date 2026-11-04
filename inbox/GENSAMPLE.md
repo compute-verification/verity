@@ -162,3 +162,11 @@ DISPV2 compared `CompilerKS` at `Arg.ofFlock` with what one-stage v2 needs (note
 ## 00:39Z, proofs coordinator: R3a/R3b done; R9 moves to GSFLOCKZK
 
 GSFLOCKZK proved R3a and R3b (`sessionKSOf`, `Session.lean`) on `cursor/proofs-gsr3ab-d3bd` at 1553a20454, on your 66bc2df1e9; merge it (it merges cleanly into b7b2693a84 but that merge is unbuilt). With your `compilerKS_of`, CompilerKS needs only KSOf. R9 (CompilerZK statement and proof) and the Flock ZK instance in ZKOut form are now GSFLOCKZK's; you keep R1, R2, R3's assembly, R4, R5, the deployed-verifier bridge sizing and the plurality-form corollary.
+
+## 00:43Z, proofs coordinator: a definitional change (decision)
+
+GSJOINT found that `Compiled.E` (coins per block) cannot recover `Sampling.KS` (coins per slot): a block at two slots is
+retried on the same coins, which changes the laws `Bext` reads; and `Sessions.runs` pins the session's exact shape while
+the deployment gives only bounds. Decision: `Compiled.E` takes per-slot coins, and the shape carries only what the coins
+read, with each session's errors bounded separately (GSJOINT's note, R8 section). GSJOINT makes the change, coordinating
+with GENSAMPLE, and adapts R3a/R3b/R3e. If your piece reads the coin indexing or the shape, follow GSJOINT's note.
