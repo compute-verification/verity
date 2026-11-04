@@ -37,7 +37,7 @@ def retRetStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId))
         withLocalDeclD `hj hj fun h => do mkForallFVars #[j, h] (ret (b.instantiate1 j))
       let he ← mkFreshExprSyntheticOpaqueMVar heTy
       let hb ← mkFreshExprSyntheticOpaqueMVar hbTy
-      g.assign (mkApp2 (mkApp2 (mkConst ``id [levelZero]) hbTy hb) v he)
+      g.assign (mkApp2 (mkApp2 (mkConst ``id [Level.zero]) hbTy hb) v he)
       let intro (e : Expr) : MetaM MVarId := do
         let mv := e.mvarId!
         let k ← forallTelescope (← mv.getType) fun xs _ => pure xs.size
