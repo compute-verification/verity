@@ -18,7 +18,7 @@ their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 
-PoUB, the protocol over a node's registered store, goes by that name alone (``POUB_TERMS``; Daniel, 28 Oct) in every
+PoUB, the protocol over a node's registered store, goes by that name alone (``POUB_TERMS``, GLOSSARY) in every
 scanned file, PENDING's too, but the bandwidth audit's over PoUS's store and the archive's (``POUB_ELSEWHERE``). Its
 wire constants, domain tags, Lake targets and package path (`verity/remote-bandwidth/v0`, `remote-audit-difftest`,
 `remote_bandwidth`) are hyphenated or underscored, so this scan never reads them; they stay until PoUB's next version
