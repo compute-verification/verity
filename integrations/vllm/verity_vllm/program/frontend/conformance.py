@@ -2,13 +2,11 @@
 
     verity-vllm conformance [--out record.json]
 
-One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
-`not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
-definitions with recorded production divergences or derived Inputs — a structured `qualifications` list. The
-Input-gate qualifications (the `cos_sin_cache` table, typed-b1.md §5.2) are recorded here too, so that no
-summary of the B1/B0 programs can be produced from this record without them.
-
-The record is what typed-b1.md §3 states in prose; the two must agree (`tests/program/test_conformance_record.py`).
+One entry per registered definition (`Name_vN`): its status, the label its conformance text starts with (one of
+`verity.ml.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
+or derived Inputs — a structured `qualifications` list. The Input-gate qualifications (the `cos_sin_cache` table) are
+recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them
+(`tests/program/test_conformance_record.py`).
 """
 
 from __future__ import annotations
@@ -16,14 +14,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
 from verity_vllm.config import option
 from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
-
-STATUSES = ("exact-model-tested", "model-untested", "not-yet-established", "superseded",
-            # kinds of `ref_prims.py` whose semantics IS the evaluator's arithmetic;
-            # "exact" against torch CPU only over the tested domain recorded in `docs/data/ref-prims/`.
-            "reference-defined")
 
 # Structured qualifications on Input gates: which committed leaves are *not* checkpoint tensors and what their
 # registered source is. Counts are the correspondence records' (`corr-*.json`, `input_gate_records.weights`).
@@ -35,7 +28,7 @@ INPUT_QUALIFICATIONS = [
      "statement": "the Input gates of this table are 'rebuilt from the registered source' only if that source is the CUDA computation"},
 ]
 
-# Recorded production divergences (typed-b1.md §5), keyed by definition id.
+# Recorded production divergences, keyed by definition id.
 DIVERGENCES = {
     "RMSNormFusedCuda_v1": [
         {"where": "B1 t=1/layers.27/post_attention_layernorm.rmsnorm/port=0, word 629 of 1536", "ir": "0x3f04", "captured": "0x3f03",
@@ -75,21 +68,13 @@ NAN_CANONICALISATION = {
 }
 
 
-def status_of(conformance: str) -> str:
-    head = conformance.split(";")[0].split(":")[0].strip()
-    for s in STATUSES:
-        if head.startswith(s):
-            return s
-    return "not-yet-established"
-
-
 def record() -> dict:
     defs = {}
     for fid, d in sorted(REGISTRY.defs.items()):
         if getattr(d, "family", None) == "Const":
             continue
         entry = {"kind": "primitive" if isinstance(d, PrimitiveDefinition) else "composite",
-                 "status": status_of(d.conformance), "conformance": d.conformance}
+                 "status": conformance_label(d.conformance, fid), "conformance": d.conformance}
         if isinstance(d, CompositeDefinition):
             entry["statics"] = list(d.statics)
         if fid in DIVERGENCES:

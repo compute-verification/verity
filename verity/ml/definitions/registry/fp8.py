@@ -600,13 +600,3 @@ ServeFp8 = CompositeDefinition("ServeFp8", 1, b1.Serve.statics, H._reinstantiate
 ServeFp8.ported_from = b1.Serve  # type: ignore[attr-defined]
 LayerPreFp8.ported_from = b1.LayerPre  # type: ignore[attr-defined]
 LayerPostFp8.ported_from = b1.LayerPost  # type: ignore[attr-defined]
-
-FP8_COMPOSITES = [Fp8RowAbsMax, Fp8RowScale, Fp8ActQuant, DotE4m3, ScaledMmFp8Coordinate, ScaledMmFp8, QuantLinearFp8,
-                  LayerPreFp8, LayerPostFp8, ServeFp8]
-
-
-def set_conformance(status: dict[str, str]) -> None:
-    """Set conformance statuses from evidence (the port's expectations / conformance run / the tc-fp8 pin)."""
-    by_name = {d.name: d for d in FP8_COMPOSITES}  # the FP8 primitives' conformance is core's
-    for name, st in status.items():
-        by_name[name].conformance = st

@@ -279,13 +279,13 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"a tensor-parallel node's ranks joined at their collectives, predicted ahead of time by "
                                    f"verity_vllm.program.predict.node ({BUILDER_ID})",
-                               conformance="predicted: each rank's forward is its rank Program's (predict.build)", register=False)
+                               conformance="derived: predicted, each rank's forward is its rank Program's (predict.build)", register=False)
     sd = bind(defn, SRC=src_static)
     sd.set_body(body)
     node = CompositeDefinition("Node", 1, ("body",), lambda S: S.body.signature(),
                                lambda B, S, *args: B.call(S.body, *args, name="node"),
                                doc="a tensor-parallel node's Program function: its body, the ranks' forwards joined, called once",
-                               conformance="predicted: its body's", register=False)
+                               conformance="derived: predicted, its body's", register=False)
     program = Program(bind(node, body=sd), registered=theta, theta=theta)
     timings = {"body_s": round(t_body - t0, 3), "program_s": round(time.time() - t_body, 3)}
     desc = digest = None
