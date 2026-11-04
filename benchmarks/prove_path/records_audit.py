@@ -569,14 +569,20 @@ PEARL_CREDIT = ("W's roots are the ones Pearl+'s verdict credits (`served_passes
                 "proof hides")
 
 
-def declared_day(day: int | None, log: str | None, params: str | None) -> dict[str, Any]:
+def declared_day(day: int | None, log: str | None, params: str | None,
+                 w: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``--day N --day-log LOG``: the window's day and the declarations of the registration log the verifier holds (its
     view's, `registration.check_log` under ``--day-params``, by default the log's composite under an auditor of no sheets or
     keys), as one-stage's R2 takes them (a5's ``declared``); empty without ``--day``. ValueError where core's check refuses
-    the log."""
+    the log, and where the tied W (``--tie``) names a day's declaration (its window's ``day`` and ``declaration``,
+    `serve_day.Day.naming`) other than one of day N the log holds by digest, or names one and the audit has no ``--day``."""
+    named = {k: (w.get("window") or {}).get(k) for k in ("day", "declaration")} if isinstance(w, Mapping) else {}
     if day is None:
         if log or params:
             raise ValueError("--day-log and --day-params go with --day")
+        if any(v is not None for v in named.values()):
+            raise ValueError(f"the tied registration names day {named['day']}'s declaration, and the audit has no --day: "
+                             "R2 holds its window to that day with --day and --day-log")
         return {}
     if not log:
         raise ValueError("--day needs --day-log, the registration log whose declarations R2 reads")
@@ -585,6 +591,11 @@ def declared_day(day: int | None, log: str | None, params: str | None) -> dict[s
     got = G.check_log(p, (composite, entries))
     if got[0] != "accept":
         raise ValueError(f"--day-log {log}: core's check refuses it, {got[1]}")
+    if w is not None:
+        digests = {e.digest() for e in entries if isinstance(e, G.Declaration) and e.day == day}
+        if named["day"] != day or named["declaration"] not in digests:
+            raise ValueError(f"the tied registration names day {named['day']}'s declaration "
+                             f"{str(named['declaration'])[:16]}…, not one of day {day}'s in --day-log {log}")
     return {"day": day, "declarations": got[1]["declarations"]}
 
 
@@ -839,7 +850,8 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
-        tied, tie_pins = tie_of(doc, json.loads(Path(a.tie_file).read_text()) if a.tie_file else None, a.tie_prefix)
+        w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
+        tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix)
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
@@ -848,7 +860,7 @@ def audit(a: argparse.Namespace) -> int:
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
-        day = declared_day(a.day, a.day_log, a.day_params)
+        day = declared_day(a.day, a.day_log, a.day_params, w_tie)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
         (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True))
