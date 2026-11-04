@@ -2116,7 +2116,8 @@ def unwitnessed_entry(v) -> tuple[str, str | None] | None:
 
 
 #: what a guarantee's inline hypotheses may be instead (`inline_failures`), and what to do with any other
-INLINE_FIX = ("name it as a Prop in an Assumptions module and list it in the lock, or state it as a lock-listed guarantee's "
+INLINE_FIX = ("name it as a Prop and list it in the lock (under `open`, with the issue that discharges it and its due "
+              "date), or state it as a lock-listed guarantee's "
               "conclusion")
 
 
@@ -2170,9 +2171,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     `Guarantees` definition unfolded once, in each conjunct, past its leading `∀` over data and split at `∧`
     (`Facts.lean`'s `inline`; instance binders aside) is one of:
 
-    - a named assumption: its head, as written or past reducible unfolding, is listed under `assumptions`, an alias of
-      listed ones (`unfolding`), or a premise the premise rule lists (one of an `Assumptions` module or this repository's,
-      which fails `assumptions.unlisted-premise` until `--update` lists it);
+    - a named premise: its head, as written or past reducible unfolding, is listed under `assumptions` or `open`, an
+      alias of listed ones (`unfolding`), or a premise the premise rule lists (one declared in `assumptions_module` fails
+      `assumptions.unlisted-premise` until `--update` lists it, any other `open.unlisted` until its issue is given);
     - another lock-listed guarantee's statement: its head is the `Guarantees` definition that guarantee is lifted into,
       which the `reads` record holds;
     - a plain range: `0 < x`, `0 ≤ x`, `x ≤ 1`, `x ≤ y` (`<` alike), each side a bound variable or a numeral, or

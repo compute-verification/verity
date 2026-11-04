@@ -221,5 +221,6 @@ def test_the_inline_list_only_shrinks():
     got = {str(p.relative_to(ROOT)): sum(map(len, json.loads((p / "lean-audit.json").read_text()).get("shape", {})
                                              .get("inline", {}).values())) for p in lake_packages()}
     grown = {p: f"{n} > {INLINE.get(p, 0)}" for p, n in got.items() if n > INLINE.get(p, 0)}
-    assert not grown, (f"`shape.inline` grew in {grown}: it only shrinks; name the hypothesis as a Prop in an "
-                       f"Assumptions module and list it in the lock, or state it as a lock-listed guarantee's conclusion")
+    assert not grown, (f"`shape.inline` grew in {grown}: it only shrinks; name the hypothesis as a Prop and list it "
+                       f"in the lock (under `open`, with its issue and due date), or state it as a lock-listed "
+                       f"guarantee's conclusion")
