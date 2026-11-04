@@ -36,9 +36,6 @@ open Claims
 theorem histOf_eq (ms : List (Msg × Out)) : histOf ms = ZKMal.histOf ms := by
   unfold histOf ZKMal.histOf
   congr 1
-  funext p
-  obtain ⟨a, o⟩ := p
-  cases o <;> rfl
 
 theorem recGoesOn_cons_msg (a m : Msg) (τ : List (Msg × Out)) :
     Recursion.goesOn ((a, .msg m) :: τ) = Recursion.goesOn τ := by
@@ -117,7 +114,7 @@ theorem Ex_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (f : α �
   rw [Flock.FnFork.Ex_prod]
   congr 1
   funext a
-  exact Ex_const _
+  exact Ex_const (α := β) (f a)
 
 /-! ## The masked compiled verifier's honest run -/
 
@@ -125,16 +122,20 @@ namespace ZkCompiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : ZkArg Coin} (L : ZkCompiled Coin A)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem start_zero (x : Msg) : L.start x 0 = L.k₀ x := by simp [start]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem start_succ (x : Msg) (j : ℕ) : L.start x (j + 1) = L.start x j + L.n x j := by
   simp [start, Finset.sum_range_succ, add_assoc]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem start_mono (x : Msg) {i j : ℕ} (h : i ≤ j) : L.start x i ≤ L.start x j := by
   induction h with
   | refl => exact le_rfl
   | step _ ih => rw [L.start_succ]; omega
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- A round after the first part and before session `j` is in some earlier session. -/
 theorem locate (x : Msg) (len : ℕ) :
     ∀ j, L.k₀ x ≤ len → len < L.start x j → ∃ i < j, L.start x i ≤ len ∧ len < L.start x (i + 1)
@@ -160,17 +161,19 @@ def slot {x : Msg} (t : L.Tp x) (j : Fin (L.M x)) : A.Nonce × A.Rest := (t.1 j,
 
 variable {L} {H : Msg → Msg}
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem pm_say {w : Sampling.Wit} {x : Msg} (t : L.Tp x) {hist : List (Msg × Msg)} {m : Msg}
     (h : L.step x hist = .say m) : L.pm H w x t hist = m := by
   simp [pm, composed, h, OC.eval]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem pm_session {w : Sampling.Wit} {x : Msg} (t : L.Tp x) {hist : List (Msg × Msg)} {j : ℕ} {xS : Msg}
     {hS : List (Msg × Msg)} (h : L.step x hist = .session j xS hS) (hj : j < L.M x) :
     L.pm H w x t hist = (((A.P (L.wS H w x xS)).next xS hS (L.slot t ⟨j, hj⟩)).eval H).1 := by
   simp only [pm, composed, h, hj, ↓reduceDIte]
   exact oc_bind_eval_fst H _ _
 
-variable (hS : L.ZkSessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s)
+variable (hS : L.ZkSessions H) {x : Msg} {s : Sampling.AuditStatement} (hs : L.parse x = some s)
 include hS hs
 
 theorem pm_framing (w : Sampling.Wit) (t : L.Tp x) {hist : List (Msg × Msg)} (hl : hist.length < L.k₀ x) :
