@@ -193,7 +193,7 @@ _CANDIDATE = re.compile(rf"{_KEYWORD}\s+{_NAME}")
 _PY_CANDIDATE = re.compile(rf"class\s+(?:{_ALT})\b")
 _PY_HEADER = re.compile(r"^([ \t]*)(?:async[ \t]+)?(class|def)[ \t]+(\w+)", re.M)
 _DECL = re.compile(rf"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*{_MODS}{_KEYWORD}\s+{_NAME}", re.M)
-_SCOPE = re.compile(rf"^[ \t]*(?:{_MODS}(namespace|section)\b[ \t]*(\S*)|(mutual)\b|end\b)", re.M)
+_SCOPE = re.compile(rf"^[ \t]*(?:(?:@\[[^\]\n]*\][ \t]*)*{_MODS}(namespace|section)\b[ \t]*(\S*)|(mutual)\b|end\b)", re.M)
 _OPEN = re.compile(r"^[ \t]*open\s+((?:[\w.]+[ \t]+)*[\w.]+)", re.M)
 _PROTOCOL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*" + _MODS + r"(?:def|abbrev)\s+[^\n]*:\s*(?:Core\.)?Protocol\s+where\b",
                        re.M)
@@ -1246,6 +1246,33 @@ opaque Witness.Node : Nat
         ("Coins", "Pouw.Coins", 4), ("Prog", "Pouw.Prog", 6), ("Digest", "Pouw.Foo.Digest", 8), ("Op", "Pouw.Op", 11),
         ("Dag", "Pouw.Dag", 14), ("Hash", "Pouw.Hash", 16), ("Law", "Law", 18), ("Transcript", "Transcript", 19),
         ("Witness", "Witness", 20), ("Collision", "Sha512.Collision", 24)]
+
+
+def test_the_scan_reads_a_module_system_file():
+    """A file on Lean's module system: its header (`module`, `public import`, `public meta import`, `import all`) declares
+    nothing, and the `end` of an `@[expose] public section` closes that section, not the namespace around it."""
+    src = """module
+
+public import Security.Definitions.Core
+public meta import Lean.Elab
+import all Pouw.Coins
+
+namespace Pouw
+
+@[expose] public section
+
+public structure Coins where
+  bits : Nat
+
+end
+
+public meta def Gate (n : Nat) : Type := Fin n
+@[expose] public def Prog (n : Nat) : Type := Fin n
+
+end Pouw
+"""
+    assert [(c, h.key, h.line) for c, h in lean_definitions(src)[0]] == [
+        ("Coins", "Pouw.Coins", 11), ("Gate", "Pouw.Gate", 16), ("Prog", "Pouw.Prog", 17)]
 
 
 def test_the_scan_reads_python_classes():
