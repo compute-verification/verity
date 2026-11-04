@@ -247,7 +247,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own Build of
   each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
-  unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its drawn members' sessions run one at a time
+  unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its sampled members' sessions run one at a time
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time, each starting
   only while its memory estimate fits within `--audit-mem-gb` less the prover's reserve (`a5.LeanPool`).
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
