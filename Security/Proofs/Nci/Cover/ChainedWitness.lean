@@ -119,7 +119,7 @@ def onePerGate : Partition tcDecl.D 10 where
 theorem complies : Complies 1 2 tcDecl := by
   have hb : ∀ g, tcDecl.D.w g = 1 := by decide
   have hf : ∀ g, tcDecl.D.isInput g = false → (tcDecl.D.reads g).Nonempty := by decide
-  have hc : ∀ u, (onePerGate.gates u).card = 1 := by decide
+  have hc : ∀ u, (onePerGate.gates u).card ≤ 1 := by decide
   have hk : ∀ u, (tcDecl.unregistered (onePerGate.gates u)).card ≤ 2 := by decide
   exact ⟨10, onePerGate, ⟨⟨hb, hf⟩, hc, hk⟩⟩
 
