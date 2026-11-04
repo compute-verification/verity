@@ -31,20 +31,20 @@ private theorem portBits_eq (gs : Array Flock.Group) : SampledProofs.Bits.portBi
 
 private theorem portOf_eq (pc : Array (ℕ × ℕ)) (off : ℕ) : SampledProofs.Bits.portOf pc off = portOf pc off := rfl
 
+private theorem srcOf_ite (q : Prop) [Decidable q] (a b : SampledProofs.Bits.Src) :
+    srcOf (if q then a else b) = if q then srcOf a else srcOf b := by
+  by_cases h : q <;> simp [h]
+
 /-- **The bridge's source of copy `k`'s port `p`, bit `t`, is Bits'**, under `srcOf`. -/
 theorem srcAt_eq (c : Flock.Circuit) (k p t : ℕ) :
     Aliased.srcAt c k p t = srcOf (SampledProofs.Bits.srcAt c k p t) := by
   unfold Aliased.srcAt SampledProofs.Bits.srcAt
   rw [starts_eq]
   by_cases h1 : p < (c.unit.inGroups.getD 0 default).bits.size
-  · by_cases h2 : (c.leavesIn.getD k #[])[p]! < 0
-    · simp only [h1, h2, ite_true]
-      rfl
-    · simp only [h1, h2, ite_true, ite_false]
-      split_ifs <;> rfl
+  · simp only [h1, ite_true, srcOf_ite, srcOf]
   · simp only [h1, ite_false]
     split
-    · split_ifs <;> rfl
+    · simp only [srcOf_ite, srcOf]
     · split <;> rfl
 
 /-- **The bridge's key of stacked input `x` is Bits'**, under `srcOf`. -/
@@ -66,6 +66,12 @@ theorem srcOf_eq_iff {s : SampledProofs.Bits.Src} (hs : ∀ k p t, s ≠ .free k
 theorem srcOf_eq_zero {s : SampledProofs.Bits.Src} : srcOf s = .zero ↔ s = .zero := by
   cases s <;> simp [srcOf]
 
+private theorem find?_congr {α : Type} {p q : α → Bool} : ∀ {l : List α}, (∀ a ∈ l, p a = q a) →
+    l.find? p = l.find? q
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.find?_cons, List.find?_cons, h a (by simp), find?_congr (l := l) fun b hb => h b (by simp [hb])]
+
 private theorem finRange_map_val (n : ℕ) : (List.finRange n).map Fin.val = List.range n :=
   List.ext_getElem (by simp) fun i _ _ => by simp
 
@@ -81,8 +87,9 @@ theorem keyIdx_eq (c : Flock.Circuit) {B x : ℕ} (hx : x < B)
     rfl
   · rw [ite_eq_right_of_eq_false _ _ (eq_false h0), ite_eq_right_of_eq_false _ _ (eq_false (mt hz.1 h0)),
       ← finRange_map_val, List.find?_map]
-    congr 1
-    refine List.find?_congr fun i _ => ?_
-    simp only [Function.comp_apply, srcKey_eq c, srcOf_eq_iff hs]
+    refine congrArg (Option.map Fin.val) (find?_congr fun i _ => ?_)
+    show decide (SampledProofs.Bits.srcKey c i.val = SampledProofs.Bits.srcKey c x) =
+      decide (Aliased.srcKey c i.val = Aliased.srcKey c x)
+    rw [decide_eq_decide, srcKey_eq c i.val, srcKey_eq c x, srcOf_eq_iff hs]
 
 end Flock.Bridge
