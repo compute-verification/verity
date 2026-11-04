@@ -35,6 +35,7 @@
   "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
+  "Proofs.Properties.NetworkPeriod.Bernoulli",
   "Proofs.Properties.NetworkScan",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
