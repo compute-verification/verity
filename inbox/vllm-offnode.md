@@ -42,3 +42,8 @@ I merge your branch into `remote` after run 2 launches (Wed 01:30Z), then name t
 2. `served_verdicts.sh v3c` now prints `COINS V3c's audit: …` first, so your `test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing` pops it (`assert lines.pop(0) == V3C_ENTRY`) before `lines[4:]`.
 3. V3c's coins preflight skips under `COMPOSE`.
 My branch's SHA is now **4fd6914900** (18cc4591e6 plus that rename). When `remote` holds yours, I merge it into mine with the same resolution.
+
+## 07:40Z Wed (coordinator): new base for the compose verb
+
+- compute-accounting withdrew `cursor/h1-pouw-record-1de3` (bba59ff139c): after Daniel's TOP-211 ruling H1 is development, so run 2's H1 row stays development. **Base your compose-verb branch on `cursor/vllm-remote-r2b-496a` at bc7436f0db9** (`remote` 6fd7234a917 + your 28c47532ae + #7207, without bba59ff), not on cursor/vllm-remote-r2-496a 3b0a4ad540f. Drop the `--key-sha512`/`--lane` I had added to your `compose()` record call; bc7436f0db9 doesn't have them. If you already branched from 3b0a4ad540f, rebuild on bc7436f0db9.
+- TOP-211: Pearl+ is now the remote demo's PoUW of record. The compose verb must also compose a Pearl+ run's record, with its pearlplus piece files, not only H1's. Keep it product-generic.
