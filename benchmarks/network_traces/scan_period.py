@@ -6,7 +6,9 @@ and its Lean.
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+  and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
+  the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
+  the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
@@ -52,6 +54,7 @@ sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
+from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
@@ -107,7 +110,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
-    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
+    caps = WardenParams(**dep["params"]).caps(1)
+    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": caps,
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),

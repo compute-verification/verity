@@ -147,7 +147,9 @@ charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifi
 declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
 head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
 digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
-records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records. Its network
+records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records. Each
+connection's egress cell count, n + 1 for its request Program's n outputs, is the scan's to hold
+(`egress.EgressBucket`, whose proof opens only on the network certifier's row), not this proof block's. Its network
 verdict takes the link's egress tie (`network_verdict(egress=scan_service.Scans(…))`, the verifier's own: an
 `EgressTie` of this link, its certifier session and the schedule whose digest `WardenProfile` names, on this link's
 grid) and refuses an execution phase the tie doesn't accept, so a run whose egress differs from the committed trace by
@@ -180,9 +182,8 @@ Lean takes as an input rather than checks:
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
-The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
-ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
-through both to the verdict it recorded, and the properties of the Lean's verdict are
+The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. Every proving run of N2 recorded
+before the switch replayed through both to the verdict it recorded, and the properties of the Lean's verdict are
 `Security/Properties/NetworkCertifier/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the

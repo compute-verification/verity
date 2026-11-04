@@ -53,7 +53,11 @@ certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, 
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
-descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
+descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
+`cells` must be the schedule's caps over the period (`Schedule.caps`): `egress_cells` for each of the
+`lanes · m · window` connections the network certifier can carry in `m` link-windows, since it admits a connection at a
+bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
+included, is refused, so `K`'s schedules and cells terms are never read off caps that miss a connection. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
 its root batches one instance of a template whose parameters are `row` and a `prog<j>` a lane (`IngressScanFirst`,
 bucket 0), T − 1 of one whose are `row`, `sin` and the `prog<j>` (`IngressScanBucket`; none when T = 1), lane j's
@@ -221,8 +225,8 @@ verifier of record checks inside the answer (`LinkWindows.verify`, with C-Flock'
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier of record checks inside the
-answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
-`egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
+answer, and that the network certifier holds each lane to `egress_cells` cells with at most `lanes` connections live,
+which the caps read (`Schedule.caps`; `trusted-host`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
@@ -292,6 +296,12 @@ def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 
 /-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
+
+/-- The rows form's caps over `windows` link-windows (`WardenParams.caps`): `egressCells` for each of the
+`lanes · windows · window` connections the network certifier can carry, as at most `lanes` are live in a bucket and
+each is live in its admission bucket. -/
+def Schedule.caps (s : Schedule) (windows : Nat) : Array Nat :=
+  Array.replicate (s.lanes * (windows * s.window)) s.egressCells
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
 (none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
@@ -779,6 +789,11 @@ def paramsOf (j : Json) : V Params := do
       pure (Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s))
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
+  if let .rows s _ _ := form then
+    unless cells == s.caps windows do
+      throw s!"cells: the rows form's caps are egress_cells = {s.egressCells} for each of the lanes · windows · \
+        window = {s.lanes * (windows * s.window)} connections the schedule can carry (Schedule.caps), not these \
+        {cells.size}"
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
@@ -1502,6 +1517,11 @@ def clocksFn (j : Json) : Except String Json := do
 -- most 2 wrong units, which can set any entry: its link-window's term charges E_w = 896 bits beside its free inputs
 #guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
   #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 9088, 8 * 112)] #[] 1 1).K == 9088 + 896
+-- w63k4's schedule: 4 lanes over a 32-bucket link-window carry at most 128 connections, each capped at its 5 egress
+-- cells, so the schedules and the fail cells each charge 128 · ⌈log2 6⌉ = 384 bits a link-window
+#guard
+  let s : Schedule := ⟨100, 512, 27, 5, 16, 12, 47, 4, 4, 4, 32⟩
+  s.caps 1 == Array.replicate 128 5 && capsTerm (s.caps 1) == 384 && (s.caps 2).size == 256
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
 #guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
   ).eps.toString == "1/6"

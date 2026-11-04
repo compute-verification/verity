@@ -5,7 +5,8 @@
   decoder; the report's ε is that bound over the window's units;
 * a refusal of the records, a check before the sample that failed, an audit record that doesn't accept and advice fixed
   after the sample each reject by name, with no public outputs or profile;
-* an audit that left nothing behind is an error, not a verdict;
+* an audit that left nothing behind is an error, not a verdict, and so is one that opened the advice (``--opening``, a
+  development check), accepted or not;
 * an audit record decided at δ = 0.01 (a float in the record) is the exact ratio 1/100 in the profile.
 """
 from __future__ import annotations
@@ -102,6 +103,18 @@ def test_an_audit_that_left_nothing_is_an_error(tmp_path):
         I.answer(tmp_path, REG)
     with pytest.raises(RuntimeError, match="no audit record and no refusal"):
         I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}), REG)
+
+
+def test_an_audit_that_opened_the_advice_is_no_answer(tmp_path):
+    """The records audit's compile check ran (``--opening``): accepted or refused, `answer` makes no verdict of it."""
+    before = {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}
+    for name, compiled in (("ok", {"ok": True}), ("refused", {"ok": False})):
+        out = write(tmp_path / name, before | {"compile": compiled}, record(True))
+        assert I.opened(json.loads((out / "summary.json").read_text()))
+        with pytest.raises(RuntimeError, match=r"opened the advice \(records_audit.py audit --opening\)"):
+            I.answer(out, REG)
+    assert not I.opened(before | {"compile": None}) and I.answer(write(tmp_path / "c", before | {"compile": None},
+                                                                       record(True)), REG)["verdict"] == "accept"
 
 
 def test_an_audit_at_one_percent_is_the_exact_ratio(tmp_path):

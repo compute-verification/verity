@@ -524,6 +524,32 @@ def test_an_audit_is_held_to_its_program(server):
             assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (form, bad, out)
 
 
+def test_the_rows_forms_caps_are_the_schedules(server):
+    """The rows form's `cells` are the schedule's caps (`Schedule.caps`, `WardenParams.caps`): `egress_cells` for each
+    of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules and
+    cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for caps that miss its connections; no caps, one
+    connection short or over, and a cap below `egress_cells` are refused as parameters by Lean and the mirror alike;
+    and w63k4's schedule charges 384 bits for each over one link-window (Lean's `#guard`)."""
+    for n in range(4):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        p, out = PC.params(case["params"]), reference(case)
+        s = p.schedule
+        assert list(p.cells) == s.caps(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
+        term = s.lanes * p.windows * s.window * clog2(s.egress_cells + 1)
+        assert out["verdict"] == ACCEPT and term > 0, (n, out)
+        assert (out["public"]["schedules"], out["public"]["cells"]) == (term, term), (n, out["public"])
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        for bad in PC.bad_caps(case["params"]):
+            broken = case | {"params": bad}
+            assert reference(broken)["reason"].startswith("params: cells:"), (n, reference(broken))
+            verdict, got = D.replay(PORT, broken, server)
+            assert verdict == REJECT and json.loads(got)["reason"].startswith("params: cells:"), (n, bad, got)
+    w63k4 = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
+                         ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
+    assert len(w63k4.caps(1)) == 128 and sum(clog2(c + 1) for c in w63k4.caps(1)) == 384
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""

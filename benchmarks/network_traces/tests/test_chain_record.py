@@ -504,16 +504,19 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
-    assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
+    assert (doc["terms"]["connections_per_block"], doc["terms"]["cell"]) == (128, 7)
+    assert doc["terms"]["schedules_per_block"] == doc["terms"]["cells_per_block"] == 128 * 7
+    assert doc["terms"]["cap_per_block"] == 2 * 128 * 7
     assert (doc["terms"]["jitter_bound"], doc["terms"]["jitter_per_block"]) == (2, 32)
     assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
     assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
     json.dumps(doc)
     rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
     week = {p: rows["week", "link", p] for p in ("registered", "anchors")}
-    lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
-    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap) + 32)
+    lw, cap = 604_800 / 3.2, 2 * 128 * 7
+    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + cap))
+    assert doc["terms"]["free_per_block"] == {"registered": 8 * 1_136, "anchors": 8 * 1_121}
+    assert week["anchors"]["per_link_window"] == pytest.approx(8 * 1_121 + cap + 32)
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
@@ -525,6 +528,26 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
         cr.leak(run)
+    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "egress_cells": 7}}))
+    with pytest.raises(SystemExit, match="0 of scan_zk's classes have a schedule of 7 egress cells"):
+        cr.leak(run)
+
+
+def test_leak_counts_a_w63k4_run_at_w63k4s_class(tmp_path):
+    """The gate's ``--scan-class w63k4`` schedules 5 egress cells, and K is counted at that class (KO 4, KI 32), not
+    at w63's."""
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.W63K4.params)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 1, "requests": 4}}))
+    doc = cr.leak(run)
+    assert cr.run_class(sz.W63K4.params) == sz.W63K4.cls and cr.run_class(sz.W63.params) == sz.W63.cls
+    assert (doc["class"]["KO"], doc["class"]["KI"]) == (4, 32)
+    assert (doc["terms"]["cell"], doc["terms"]["connections_per_block"]) == (3, 128)
+    assert doc["terms"]["schedules_per_block"] == doc["terms"]["cells_per_block"] == 384
 
 
 def test_subset_bound():

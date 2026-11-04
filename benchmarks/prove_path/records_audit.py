@@ -614,7 +614,8 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
     ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
     circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
-    Program or another than the registration names, or its answer commits to another registration."""
+    Program or another than the registration names, or its answer commits to another registration; RuntimeError where
+    the audit opened the advice (`served_integrity.opened`: ``--opening``, a development check no period reads)."""
     import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
