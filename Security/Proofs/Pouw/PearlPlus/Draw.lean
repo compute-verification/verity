@@ -19,11 +19,12 @@ declaration is consistent with it (`goodDeclTiles`). This file reads the code's 
   (`decOf`). Its parts: `wref 1 k n` is `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and
   denominator, and the run's lcm fold is `Finset.lcm` over the tiles.
 * (d) Acceptance is the tolerant audit's (`acceptGivesTheAudit`): when the check accepts, every sample of the game on
-  tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over its cap, or SHA-512 collides on an opened tile.
-  A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration (`TilePassGivesTheDecl`), so it
-  is good within the game's cap and over the cap otherwise. The tile's weight rows passing the rules is a hypothesis
-  (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the check holds only credited B rows to the rules (an excluded row
-  must fail them and a voluntary one is unread), where `TileGood` reads every column.
+  tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over the inert-work bound (`overCapTiles`), or SHA-512
+  collides on an opened tile. A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration
+  (`TilePassGivesTheDecl`), so it is good within the game's inert-work bound (`capOK`) and over the bound otherwise.
+  The tile's weight rows passing the rules is a hypothesis (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the
+  check holds only credited B rows to the rules (an excluded row must fail them and a voluntary one is unread), where
+  `TileGood` reads every column.
 
 The run's layout (`RunLayout`) is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may
 set another tile), each record is a unit of the workload that the transcript commits, with the record's shape and
@@ -1169,13 +1170,14 @@ structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → Lis
 
 /-- **(d) Acceptance is the tolerant audit's**: at rules `P`, `TR` that read the deployed tiles, rules and words, when
 the check accepts a run laid out as the game's workload, every sample `c` of the game whose tiles the verdict opened
-(`DrawnOn`) is accepted by `AuditAcceptsTol` over `goodDeclTiles ∪ blankTiles`, with the over-cap tiles tolerated, under
-the records' declarations; or SHA-512 collides on two different messages of an opened tile, one hashed in digesting the
-words the check forms and one in digesting the commitment's words. -/
+(`DrawnOn`) is accepted by `AuditAcceptsTol` over `goodDeclTiles ∪ blankTiles`, with the tiles over the inert-work bound
+(`overCapTiles`) tolerated, under the records' declarations; or SHA-512 collides on two different messages of an opened
+tile, one hashed in digesting the words the check forms and one in digesting the commitment's words. -/
 def AcceptGivesTheAudit : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Pouw.PearlC.Protocol Q R S)
     (TR : TileRules Q R S) (H : Q → R) (s : S) (i : Input) (opener : ℕ → ℕ → Except String TileOpening) (pl : Plan)
-    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) {w : ℕ → ℕ} {t : ℕ} (c : Fin t → Ticket w (TR.tiling U.layout).NT),
+    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) {w : ℕ → ℕ} {t : ℕ}
+    (c : Fin t → Ticket w (TR.tiling U.layout).NT),
     TR.tiling = auditTiling 64 64 → TR.rowOK = (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK →
     P.ticket = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket →
     P.useful = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful →
