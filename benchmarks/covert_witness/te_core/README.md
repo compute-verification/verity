@@ -202,9 +202,9 @@ and the sensitivities it leaves out, a measured products term with what it rests
 default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). A row `published` marks partial (a valid
 kind unmeasured, so ρ is only a lower bound) has basis `partial`: the figure marks it with a caret up and the cut
-picks the partial rows among themselves, but none is in a cell, on the others' front or the least S. No row has
-basis `void`: every row reads the products term, max(1, ρ_HE), with its premises, so `voided` marks none, and the
-old figure's void Λ is only its sensitivity fresh_old.
+picks the partial rows among themselves, but none is in a cell, on the others' front or the least S. No row is
+void: every row reads the products term, max(1, ρ_HE), with its premises, and the old figure's void Λ is only its
+sensitivity fresh_old.
 `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
 build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
