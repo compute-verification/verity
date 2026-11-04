@@ -2112,6 +2112,8 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
 
 
 LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
+FOLLOW_COINS = ("a local development challenger session on cpu-6, the follow-on's node, where it runs V3c's audit, "
+                "not an auditor's (PP_CHALLENGER local)")
 @pytest.mark.parametrize("extra, coins", [
     ({}, LOCAL_COINS),
     ({"PP_CHALLENGER": "gate:research@auditor", "PP_PEER": "vy-dc-h200"},
@@ -2369,21 +2371,23 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         tmp_path, extra, tree):
     """The follow-on, at the settings the deferral recorded: the copy held to the served node's sums, then no window
     circuit or commit of its own (the served node's record at the class, its tree's, and the commit H1 bound, held as
-    there), V3c's audit and period, the final record about the served node from the pieces it read, and the composite,
-    told the served node, so each says it composed elsewhere; no onsite record, which the served node's run didn't
-    write. Another tree runs only under FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
+    there), the COINS line of its own audit's coins (its $OUT holds no other), V3c's audit and period, the final record
+    about the served node from the pieces it read, and the composite, told the served node, so each says it composed
+    elsewhere; no onsite record, which the served node's run didn't write. Another tree runs only under
+    FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra)
     d, out = tmp_path / "serve", tmp_path / "out"
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
-    assert lines[:2] == [
+    assert lines[:3] == [
         "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
         "serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
         "private/deferred/inputs.sha256): PASS",
         f"WINDOW-CIRCUIT class {W63K4}: the served node's record at the class (step 3's), from its tree's commit {SHA} "
-        f"{tree}; this node holds no row dir to count it from"]
-    assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
+        f"{tree}; this node holds no row dir to count it from",
+        f"COINS sampled proofs: {FOLLOW_COINS}; the other protocols' as the served node's COINS line names them"]
+    assert lines[3].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[4].endswith("PASS")
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
@@ -2478,7 +2482,8 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     assert json.loads((dd / "inference-only.json").read_text()) == verdict
     rc, lines, order, _limits = _follow(tmp_path)
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD",
+                                                    "COMPOSITE:"]
     assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
 
 

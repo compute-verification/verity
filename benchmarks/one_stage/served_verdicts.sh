@@ -159,7 +159,9 @@
 #     The tied V3c audit's δ stays sampled proofs' own; the network period reads that draw at its own δ_i.
 # Coins: sampled proofs' sample, V3c's audit's, is on a local development challenger session's coins where the audit runs
 # (`--challenger local`: the served node, or a deferral's follow-on) unless PP_CHALLENGER names the live challenger
-# (gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); the verifier draws none of its own. Its session is
+# (gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); the verifier draws none of its own. The COINS line
+# names them (`pp_coins`), and a follow-on, whose $OUT holds the record of record, says its own before its audit draws,
+# from its own PP_CHALLENGER. Its session is
 # pinned on the verifier's copy of main's first-parent line: PP_MAIN's, else MAIN_FILE's, else MAIN_SHA's in the tree,
 # kept as the serve dir's private/v3c-audit/main.txt. With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
@@ -900,6 +902,10 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
       "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
       "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c"
 }
+pp_coins() {  # sampled proofs' coins, V3c's audit's, as a COINS line names them: PP_CHALLENGER's, else local on $1
+  if [ "${PP_CHALLENGER:-local}" != local ]; then echo "the challenger $PP_CHALLENGER (peer ${PP_PEER:-?})"
+  else echo "a local development challenger session on $1, not an auditor's (PP_CHALLENGER local)"; fi
+}
 follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
   # step 6's audit, REPROOF_CMD, the final record, the composite and the onsite record, here rather than on the served node
   local rc vrc rec comp=0 rp=0 TPY=$TREE/.venv/bin/python pieces=$DEFER_DIR/pieces p
@@ -917,6 +923,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   say "WINDOW-CIRCUIT class $V3C: the served node's record at the class (step 3's), from its tree's commit $DEFERRED_TREE" \
       "$([ "$sha" = "$DEFERRED_TREE" ] && echo "(this tree's)" || echo "(this tree is $sha: FOLLOW_ANY_TREE)");" \
       "this node holds no row dir to count it from"
+  say "COINS sampled proofs: $(pp_coins "$(hostname -s), the follow-on's node, where it runs V3c's audit"); the other" \
+      "protocols' as the served node's COINS line names them"
   v3c_commit && v3c_proved; vrc=$?
   if [ -n "${REPROOF_CMD:-}" ]; then
     (umask 077; cd "$TREE" && bash -c "$REPROOF_CMD" _ "$D" "$K" "$VW" > "$D/private/reproof.log" 2>&1)
@@ -1153,13 +1161,8 @@ if [ -n "$H1_GATE" ]; then
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
-if [ "${PP_CHALLENGER:-local}" != local ]; then
-  COINS="the challenger $PP_CHALLENGER (peer ${PP_PEER:-?})"
-elif [ -n "$DEFER" ]; then
-  COINS="a local development challenger session on the follow-on's node, where step 6 defers V3c's audit, not an auditor's (PP_CHALLENGER local)"
-else
-  COINS="a local development challenger session on $(hostname -s), the served node, not an auditor's (PP_CHALLENGER local)"
-fi
+if [ -n "$DEFER" ]; then COINS=$(pp_coins "the follow-on's node, where step 6 defers V3c's audit")
+else COINS=$(pp_coins "$(hostname -s), the served node"); fi
 say "COINS ${LEAD}sampled proofs: $COINS; $H1_COINS; the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 
 # 0. B: the row's Build of record from its declared inputs, before the lease; the traced Build only its cross-check
