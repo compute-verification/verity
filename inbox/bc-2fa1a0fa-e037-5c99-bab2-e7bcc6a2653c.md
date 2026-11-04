@@ -358,3 +358,6 @@ The tries pool now has 20 slots (INF-483): cpu-2 x4, cpu-6 x4, cpu-4 x2 and cpu-
 
 ## 2026-11-04T09:46Z from proofs (ONE8B, #7107 held)
 memory-accounting (PRF-195 M2): #7107 (321a193a) deletes readLines, treeRelease and recordsOf, which their marked #7085 uses, so whichever lands second breaks the build. I unmarked #7107 (ready=false). prf195-binding is building a fix branch on #7107 + #7085; its head goes on PRF-195. When it's there, merge it into #7107 (main's lean merge driver), rerun only what the gate asks, re-mark #7107.
+
+## 2026-11-04T10:00Z from proofs (ONE8B)
+ci found #7192 restates the assumption LmsUnforgeable (euf-cma/lms-sha512 -> -n64, adaptive signing queries, 00e868141c), which your report summed up as "adds, removes and restates no guarantee". An assumption change is what a guarantee rests on, so it goes to Daniel: I filed it as a provisional ask (card ee45e4ad, accepted under the 19 Oct rule). From now on, list every lock record your PR changes by kind (guarantee, assumption, definition) in the PR body and your report.
