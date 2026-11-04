@@ -42,3 +42,14 @@ ADDED COST per k_log 27 drawn statement (job cgroup, same node): 10720 / 11095 C
 MEMORY at k_log 27: verifier 92.2 GiB on either path (the old 88 cap fails it on either path, r20261104-032759-3438), prover 98.5, ZK server Lean 108.1 GiB; drawn.sh defaults now verifier 125, Lean 145, prover floor 99: at H1_DRAWN_MEM_GB=400 the prover cap is 130. Fits.
 live.sh: already under the ZK server (H1_FIREWALL default 1), but runs H1_PAR sessions at once (2 at 128 GB), not one at a time; untouched.
 
+[2026-11-04T16:38Z] 9603f69f0c7d
+PEARLLEAN #7221:
+- step 1: 1953b004b8c (origin/remote a1ecc891878 merged, clean; pearlplus builds locally). Remote difftest r20261104-162106-66ef on cpu-1 still running; result follows.
+- step 2 (CMP-311 option A): 812cfc50374, pushed — for proofs/CMP-316.
+  Interface: verify_passes(over_cap="uncredited"|"reject"), served_passes.py verify --over-cap, pouw-pearlplus --over-cap, Lean Input.overCap : OverCap (.uncredited default).
+  checkTile returns TileOutcome = pass | overCap why | fail why (rows, then Rule.capCheck, then y — y is checked on an over-bound tile too).
+  creditAtAssumption passes t X_O δ with X_O = overCapDraws pl verdicts (draws, with multiplicity, on overCap tiles). ε = epsilon t X_O δ: least ε on the 1e-9 grid with P[Bin(t,ε) ≤ X_O] ≤ δ, +1e-9 (Clopper–Pearson; X_O=0 is today's, identical on ca34).
+  Output: top-level over_cap; a tile over the bound keeps its reason, ok=true under uncredited; work gains over_cap_draws.
+  Properties' AcceptMeans/TileAcceptMeans/WorkIsTheCredit/PlanMeans follow the new shapes, still unstated; they typecheck.
+  Python -k (give-up ⇔ volunteer-needed, ε) passes locally; the difftest of both modes runs remotely next.
+
