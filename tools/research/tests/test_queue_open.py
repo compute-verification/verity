@@ -298,8 +298,8 @@ def test_edit_of_a_body_without_the_pr_tools_markup_is_the_file_verbatim(tmp_pat
 
 
 def test_edit_sets_the_title_with_the_body_or_alone(tmp_path):
-    """`--title` was accepted and dropped without a word (CI-412): it reaches `gh pr edit` beside the body, or alone, which
-    leaves the body as it is."""
+    """`--title` was accepted and dropped without a word: it reaches `gh pr edit` beside the body, or alone, which leaves the
+    body as it is."""
     from research.queue import edit_pr
 
     gh = ViewGh("Lane ci\n\nold\n")
