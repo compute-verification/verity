@@ -14,7 +14,7 @@ stream has enqueued, nothing waiting on the host, and hands back a `Pending` who
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
 machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`) and its per-device state
-(`row_tables_device.Device`); nvcc is `pouw_device`'s.
+(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
 says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
@@ -131,8 +131,8 @@ def device_lib(arch: str) -> ctypes.CDLL:
     return dll
 
 
-def _device(torch: Any, device: Any) -> RTD.Device:
-    return RTD.Device.of(torch, device.index, device_lib, "rt_midstates", STREAMS)
+def _device(torch: Any, device: Any) -> RTD.DeviceLibrary:
+    return RTD.DeviceLibrary.of(torch, device.index, device_lib, "rt_midstates", STREAMS)
 
 
 @cache
