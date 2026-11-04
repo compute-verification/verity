@@ -137,7 +137,7 @@ end Honest
 /-! ## At the accepting verifier -/
 
 /-- A layout of one link of one slot, with no gate. -/
-def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
+def trivLay : BoundaryGates 1 1 := { egress := fun _ _ _ => (0, []), ingress := fun _ => [] }
 
 /-- One input gate and its negation, the negation returned. -/
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
@@ -149,7 +149,7 @@ def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩,
 def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
+def notLay : BoundaryGates 1 1 := { egress := fun _ _ _ => (1, []), ingress := fun _ => [0] }
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
@@ -169,7 +169,8 @@ theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   · simp [notStmt, notPart, Claims.Sampling.OneStage.WellFormed]
 
 theorem notLay_fits : notLay.Fits notProg 1 := by
-  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
+  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega),
+    wiresFit_none rfl _ _⟩
   · simp [notLay, slotGates] at hg
     subst hg
     decide
@@ -268,8 +269,10 @@ theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   obtain ⟨_, hrows, -⟩ := hacc 0 Nat.one_pos
   have hin : notLay.inputOf 1 [[false]] a 0 = false := rfl
   have h1 : (none : Option (List Bool)) =
-      rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 :=
+      rowOf (valOver notProg (resolveWires notProg notLay.wires (notLay.inputOf 1 [[false]] a) (fun _ => none)
+        notProg.gates.length) (fun _ => none)) (notLay.egress 0 0) 0 :=
     congrFun (congrFun hrows 0) 0
+  rw [resolveWires_nil (wires := notLay.wires) rfl] at h1
   have hrow : rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 =
       if valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none) 1 then
         some (([] : List ℕ).map (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)))
@@ -314,9 +317,10 @@ theorem SampledAuditAccepted_nontrivial (H : Msg → Msg) :
   have h1 := h 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _)
   have hscope : ScopeAcc (sksD Coin) (fun _ => trivLay) (fun _ => 0) [] :=
     ⟨sksD_scope [], toyStmt, rfl, fun t ht => absurd ht (Nat.not_lt_zero t), fun t ht => absurd ht (Nat.not_lt_zero t),
-      fun t ht => absurd ht (Nat.not_lt_zero t)⟩
+      fun t ht => absurd ht (Nat.not_lt_zero t), wiresFit_none rfl _ _⟩
   exact sksD_bound_fails (Coin := Coin) H (fun _ => [()]) _ _ []
-    (fun w ⟨s, P, hs, hP, hrel, _⟩ => sksD_noR (Coin := Coin) H 0 le_rfl [] w ⟨s, P, hs, hP, hrel⟩)
+    (fun w ⟨s, P, hs, hP, hrel, _⟩ => sksD_noR (Coin := Coin) H 0 le_rfl [] w
+      ⟨s, P, hs, hP, by unfold RelS; rw [← incorrect_none]; exact hrel⟩)
     (by linarith [sksD_κ (Coin := Coin) []]) (h1 [] hscope Unit silentP)
 
 /-- **`SampledLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `leakD`, at one step at `δ = 0`,
