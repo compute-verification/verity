@@ -126,3 +126,9 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 - `remote` is now 6fd7234a917: your row-quant fix 6edbdd4179 plus compute-accounting's ZK-server drawn route afefa592d2. The quick suites on it (92de) pass with 0 failures: verity-vllm 12,967 and pouw-benchmarks 1,243. Run 2 launches from it at about 07:00Z.
 - Your remaining 18ff suites: report only a red in your three files.
 - Next: proofs' PRF-373 fix on `remote` (completeness only over the ports the template declares registered, with the others bound to the window's roots), due around Wed 18:00Z. Rehearse it on run 1's window 0 with your dc0c setup.
+
+## 06:53Z Wed (coordinator): PRF-373 rehearsal, top priority now
+
+- Proofs' fix is **#7205** (base `remote`, head e25bf9fd). Reads files list a member's non-registered ports under `bound`, and Lean's `RegBound.check` accepts a port that is registered or bound. Proofs reruns T11 at about 07:30Z.
+- **Rehearse it on run 1's window 0** with your dc0c setup: a branch from `remote` 6fd7234a917 with #7205's commits, run read-only on vy-dc-h200, which has 193 GiB free. Report whether sampled members that read registered values (ScaledMmS8, Gemm_v2, RMSNorm, RoPE, Embedding, ScanSlots) now verify, plus any refusal. Mind the disk: the audit stages about 190 GiB, so delete your staging with `retention rm --approved-by @vllm` (approved in advance for your own dev staging) right after.
+- Don't push to `remote`. I apply #7205 there after your rehearsal passes.
