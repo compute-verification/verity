@@ -8,6 +8,7 @@ import ast
 import hashlib
 import importlib
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,7 +40,7 @@ CTX = {"device": None, "arch": "sm_90a"}
 
 def _built(tmp_path: Path, monkeypatch, body: bytes = b"\x7fELF a sent cubin") -> tuple[OA.PearlPlus, dict, Path]:
     cubin = tmp_path / "inputs" / "pearl_c_sm90.cubin"
-    cubin.parent.mkdir()
+    cubin.parent.mkdir(parents=True)
     cubin.write_bytes(body)
     monkeypatch.setenv(OA.CUBIN_ENV, str(cubin))
     arm = OA.PearlPlus()
@@ -59,7 +60,7 @@ def test_the_build_record_lists_the_sent_cubin_and_declares_the_verifier(tmp_pat
     body = b"\x7fELF a sent cubin"
     arm, rec, cubin = _built(tmp_path, monkeypatch, body)
     assert rec["binaries"] == [str(cubin)] and arm.cubin == cubin
-    assert rec["cubin"] == {"path": str(cubin), "sha256": hashlib.sha256(body).hexdigest(), "source": "sent"}
+    assert rec["cubin"] == {"path": str(cubin), "sha256": hashlib.sha256(body).hexdigest(), "source": "sent", "art": None}
     assert (rec["scheme"], rec["served"], rec["schedule"], rec["index"]) == ("pearl-plus", "pearl-c-h100-v1-h3", "serial", 0)
     v = A.check_verifier(arm.name, rec)
     assert v["per"] == "shape" and v["transcript"] == "transcripts/{arm}/{shape}/manifest.json"
@@ -67,6 +68,21 @@ def test_the_build_record_lists_the_sent_cubin_and_declares_the_verifier(tmp_pat
     [cmd] = v["commands"]
     assert cmd[:2] == ["{python}", "benchmarks/pouw/pearl_c_vllm/verify_run.py"] and (ROOT / cmd[1]).is_file()
     assert cmd[2:] == ["{transcript}", "--coins", "{dir}/coins.json", "--commit", "{commit}"]
+
+
+def test_the_cubin_of_record_is_one_art_by_its_bytes():
+    pin = OA.pinned()
+    assert set(pin) == {"art", "sha256", "bytes"}
+    assert re.fullmatch(r"art:[0-9a-f]{64}", pin["art"]) and re.fullmatch(r"[0-9a-f]{64}", pin["sha256"])
+    assert type(pin["bytes"]) is int and pin["bytes"] > 0
+
+
+def test_the_record_names_the_art_of_record_only_for_its_bytes(tmp_path, monkeypatch):
+    body = b"\x7fELF the cubin of record"
+    art = "art:" + "ab" * 32
+    monkeypatch.setattr(OA, "pinned", lambda: {"art": art, "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body)})
+    assert _built(tmp_path / "a", monkeypatch, body)[1]["cubin"]["art"] == art
+    assert _built(tmp_path / "b", monkeypatch, body + b"\0")[1]["cubin"]["art"] is None
 
 
 def test_the_record_keeps_the_path_the_door_sent(tmp_path, monkeypatch):

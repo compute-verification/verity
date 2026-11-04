@@ -5,7 +5,9 @@ one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the referen
 
 - **The cubin** is the file `$VERITY_BENCH_CUBIN` names (the art the door sent), listed in the build record's ``binaries``
   so the SASS gate passes it before anything is timed. Without it the arm builds one into the run's directory
-  (``build.sh`` with ``CUBIN_ONLY=1``), for development only (the record's ``cubin.source``).
+  (``build.sh`` with ``CUBIN_ONLY=1``), for development only (the record's ``cubin.source``). The cubin of record is
+  `PINNED`'s art (`pinned`), the one `verity bench overhead run --scheme pearl-plus --cubin ART` sends: the record's
+  ``cubin.art`` names it when the loaded bytes are its, and is None otherwise.
 - **The call** (`prepare`): one `PearlCDeviceRun` a weight (the operand set's B, BF16, read in place; its root and weight
   side at construction), whose served call (`gemm`, at call index `INDEX` in a pass of its own) makes the call's shape,
   pipeline and keys. `launch` is that call's device work on the harness's stream, into the buffers a served call at a
@@ -47,6 +49,8 @@ FAMILY = "fp8-e4m3-rowwise"
 ARCH = "sm_90a"
 #: where the door's cubin arrives (`verity_bench.overhead_node.CUBIN_ENV`)
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
+#: the cubin of record: its art id, sha256 and size (``cubin``)
+PINNED = HERE / "overhead_arm.json"
 #: the reference verifier, from the run's working directory (the source tree's root)
 VERIFY_RUN = "benchmarks/pouw/pearl_c_vllm/verify_run.py"
 #: the call index of every call the arm makes: the served reference's, whose keys the launch reads
@@ -73,6 +77,11 @@ def epsilon(m: int, n: int, k: int, card: str) -> dict:
     raise NotImplementedError(
         f"{SCHEME} has no ε at one linear ({m} x {n} x {k} on {card}): PoUW's ε is a window's sample's "
         "(verity.core.protocols.pouw.window.eps_at over the window's draws and credited work), not a linear's")
+
+
+def pinned() -> dict:
+    """The cubin of record, `PINNED`'s ``{"art", "sha256", "bytes"}``."""
+    return json.loads(PINNED.read_text())["cubin"]
 
 
 def cubin_of(env: Mapping[str, str], out_dir: Path, build=None) -> tuple[Path, str]:
@@ -137,9 +146,10 @@ class PearlPlus:
         if ctx["arch"] != ARCH:
             raise RuntimeError(f"{SCHEME} runs on {ARCH} (an H100 or H200), not {ctx['arch']}: time it with --card h200")
         cubin, source = cubin_of(os.environ, Path(ctx["out_dir"]))
-        self.cubin = cubin
+        self.cubin, sha, pin = cubin, sha256(cubin), pinned()
         return {"scheme": SCHEME, "served": SERVED, "binaries": [str(cubin)],
-                "cubin": {"path": str(cubin), "sha256": sha256(cubin), "source": source},
+                "cubin": {"path": str(cubin), "sha256": sha, "source": source,
+                          "art": pin["art"] if sha == pin["sha256"] else None},
                 "schedule": "serial", "graphs": False, "index": INDEX,
                 "host": "launch enqueues the call's device work; the served call's keys (native SHA-512 and a pinned "
                         "upload), the pass's bookkeeping and B's screen run once, in prepare",
