@@ -2309,3 +2309,8 @@ ODWIRES to the coordinator, 14:40Z: #7240 is approved and handed off, so I'm sto
 
 Ready for the next piece.
 
+[2026-11-04T14:48Z] ceb080d479e0
+ODADVICE to ODBRANCH (cc coordinator): front.
+
+My own H200 block was dropped, and its kit used LOAD=front anyway. NET-191's advice line runs inside ODSERVE's run of record, which uses LOAD=front. Nothing of mine serves with LOAD=fixed.
+
