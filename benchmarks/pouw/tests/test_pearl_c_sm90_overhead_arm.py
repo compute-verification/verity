@@ -8,6 +8,7 @@ import ast
 import hashlib
 import importlib
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -21,7 +22,9 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
+from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.protocol import Shape as Unit  # noqa: E402
+from verity.core.protocols.profile import WINDOW_DELTA  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 
 
@@ -167,9 +170,25 @@ def test_the_tiles_are_the_served_pipeline_s(m):
     assert OA.tiles_of(m, n) * R.NB == R.Pipeline.sizes(R.BM, n, k, OA.m16(m))["leaves"]
 
 
-def test_no_epsilon_at_one_linear_is_invented():
-    with pytest.raises(NotImplementedError, match="PoUW's ε is a window's sample's"):
+def test_without_a_window_of_record_no_epsilon_is_invented():
+    assert "window" not in json.loads(OA.PINNED.read_text())
+    with pytest.raises(LookupError, match="PoUW's ε is a window's sample's .* states no window of record"):
         OA.epsilon(8192, *LINEARS["o"], "h200")
+
+
+def test_epsilon_is_the_window_of_record_s_at_its_sample_at_every_linear(tmp_path, monkeypatch):
+    window = {"basis": "a stated window's sample", "card": "h200", "k": 27_713, "credited": 8 << 30, "work": 9 << 30}
+    pinned = tmp_path / "overhead_arm.json"
+    pinned.write_text(json.dumps(json.loads(OA.PINNED.read_text()) | {"window": window}))
+    monkeypatch.setattr(OA, "PINNED", pinned)
+    eps = Wd.eps_at(window["k"], WINDOW_DELTA, window["credited"], window["work"], 1)
+    for m in (16, 8192):
+        for n, k in LINEARS.values():
+            got = OA.epsilon(m, n, k, "h200")
+            assert (got["epsilon"], got["delta"]) == (float(eps), float(WINDOW_DELTA)) and 0 < eps < 1
+            assert got["basis"].startswith("a stated window's sample: window.eps_at(K=27713, δ, C=8589934592, W=9663676416")
+    with pytest.raises(ValueError, match="ran on the h200, not the rtx-pro-6000"):
+        OA.epsilon(8192, *LINEARS["o"], "rtx-pro-6000")
 
 
 def test_the_door_names_the_arm_and_its_epsilon_here(monkeypatch):
@@ -182,7 +201,7 @@ def test_the_door_names_the_arm_and_its_epsilon_here(monkeypatch):
         assert isinstance(getattr(importlib.import_module(mod), cls)(), A.BenchArm)
         eps = getattr(importlib.import_module(emod), fn)
         for n, k in LINEARS.values():
-            with pytest.raises(NotImplementedError):
+            with pytest.raises(LookupError):
                 eps(8192, n, k, "h200")
     finally:
         sys.modules.pop("overhead_arm", None)

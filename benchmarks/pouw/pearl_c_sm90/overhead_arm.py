@@ -23,6 +23,8 @@ one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the referen
   coin commitment beside it (``coins.json``). The no-write control is the same over the poisoned buffers.
 - **The stock scaling** (`FAMILY`) is rowwise: the chain multiplies A's and B's FP8 codes, each row under its own scale
   (``stats_s5``), and y is its words under A's row scales and B's (``ia_a``, ``ia_b``).
+- **ε** (`epsilon`) is the window of record's, at its sample (`PINNED`'s ``window``), the same at every linear; refused
+  while no window is stated.
 
 The arm imports `arm`, torch and the served path only where the harness runs it, so the door's node side can import it
 for `epsilon` alone.
@@ -50,7 +52,8 @@ FAMILY = "fp8-e4m3-rowwise"
 ARCH = "sm_90a"
 #: where the door's cubin arrives (`verity_bench.overhead_node.CUBIN_ENV`)
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
-#: the cubin of record: its art id, sha256 and size (``cubin``)
+#: the cubin of record (``cubin``: its art id, sha256 and size) and, once one is stated, the window of record `epsilon`
+#: reads (``window``)
 PINNED = HERE / "overhead_arm.json"
 #: the reference verifier, from the run's working directory (the source tree's root)
 VERIFY_RUN = "benchmarks/pouw/pearl_c_vllm/verify_run.py"
@@ -72,12 +75,23 @@ def verifier() -> dict:
 
 
 def epsilon(m: int, n: int, k: int, card: str) -> dict:
-    """Pearl+'s soundness error at one linear (m, n, k) on `card`, as the door records it beside γ: ``{"epsilon", "delta",
-    "basis"}``. Refused: PoUW's ε is a window's sample's (`verity.core.protocols.pouw.window.eps_at`, from the draws, δ
-    and the window's credited work), and no statement gives one linear's."""
-    raise NotImplementedError(
-        f"{SCHEME} has no ε at one linear ({m} x {n} x {k} on {card}): PoUW's ε is a window's sample's "
-        "(verity.core.protocols.pouw.window.eps_at over the window's draws and credited work), not a linear's")
+    """Pearl+'s soundness error beside γ at one linear (m, n, k) on `card`, as the door records it: ``{"epsilon", "delta",
+    "basis"}``. PoUW's ε is a window's sample's, not a linear's, so it is the window of record's at every linear:
+    `PINNED`'s ``window`` states the window (``basis``), the card it ran on, its sample's K and its credited and whole work
+    (C, W), and ε is `window.eps_at(K, δ, C, W, 1)` at the protocol's δ, as `credit.established` gives a window's. Refused
+    while no window is stated, and on another card than the window's."""
+    w = json.loads(PINNED.read_text()).get("window")
+    if w is None:
+        raise LookupError(f"{SCHEME} has no ε at {m} x {n} x {k} on {card}: PoUW's ε is a window's sample's "
+                          f"(window.eps_at), and {PINNED.name} states no window of record")
+    if w["card"] != card:
+        raise ValueError(f"the window of record ({w['basis']}) ran on the {w['card']}, not the {card}")
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.profile import WINDOW_DELTA
+
+    eps = Wd.eps_at(w["k"], WINDOW_DELTA, w["credited"], w["work"], 1)
+    return {"epsilon": float(eps), "delta": float(WINDOW_DELTA),
+            "basis": f"{w['basis']}: window.eps_at(K={w['k']}, δ, C={w['credited']}, W={w['work']}, 1) = {eps}"}
 
 
 def pinned() -> dict:
