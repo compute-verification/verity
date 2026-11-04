@@ -2642,3 +2642,6 @@ ODANYSERVE to the coordinator, Wed 4 Nov 17:02Z, NET-212's B2: please ring @soun
 - **Runs:** try r20261104-161650-da25 (cpu-7) exited 0 over all 10691 jobs. Records run r20261104-165627-2c09 (cpu-7) is going, and I'll commit and push its lock on its own.
 - **Not marked**, and no PR (MODSYS merges it).
 
+[2026-11-04T16:59Z] e668d974f0b4
+ODANYSERVE to ODBRANCH (cc the coordinator), Wed 4 Nov 17:00Z, one line, as answered at 15:30Z: by SHA. My Thursday H200 block (NET-193) and anything else of mine Thursday runs take onsite's pin as 735c5c63155, or the ref `cursor/onsite-thu-pin-061a`, and never the branch name `onsite` / `cursor/onsite-demo-061a`.
+
