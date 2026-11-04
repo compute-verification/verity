@@ -2,7 +2,9 @@ import Definitions.Nci.Cut
 import Proofs.Core.Circuit
 import Proofs.Nci.Covering
 import Proofs.Nci.LoomisWhitneyBase
+import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Analysis.SpecificLimits.Basic
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Mathlib.Combinatorics.SimpleGraph.Extremal.Turan
 import Mathlib.Data.Fintype.BigOperators
@@ -32,9 +34,14 @@ all its gates.
 5. **Algebra** (`real_step`): `N ≤ m k + V`, `V ≤ √(m Π O) + √(m Π ∑ |E|)` and `∑ |E| ≤ m k / b_y` give `bound`, and
    `slowdown` follows by cases on `m` against `N / (k + α)` (`slow_step`).
 
-`onePremise` bounds `π(S) ≤ |S ∩ W| |S ∩ X|` (`pi_le_card_mul`) and applies AM–GM (`amgm_bound`). `sharedArrays` uses
-`ab + ac + cb ≤ (a + b + c)² / 3` (`triangle_bound`), and `sharedArraysClique` the weighted Turán inequality
-(`weighted_turan`): Turán's theorem on the graph that replaces each array `r` by `|S ∩ A r|` copies (`blowUp`).
+`onePremise` bounds `π(S) ≤ |S ∩ W| |S ∩ X|` (`pi_le_card_mul`) and applies AM–GM (`amgm_bound`). With shared arrays,
+`u_r = β_r |S ∩ A r|` and `q ≤ β_r β_s` on each matmul's arrays give `q π(S) ≤ ∑ u_r u_s` over those pairs:
+`sharedArrays` bounds the sum by `(∑ u)² / 3` (`triangle_bound`), and `sharedArraysClique` by the weighted Turán
+inequality (`weighted_turan_real`), the limit of Turán's theorem on the graph that replaces each array `r` by `⌊n u_r⌋`
+copies (`blowUp`, `weighted_turan`).
+
+`he` and `heShared` put those bounds on `Π(k)`, and `b ≤ b_y` from (E) (`le_bY`, `alpha_le_of_exports`), into
+`bound` (`bound_of_le`), and take the slowdown from the bound so obtained (`slowdown_of_bound`).
 -/
 
 namespace Nci.SecurityProofs.Cut
@@ -474,13 +481,24 @@ theorem slow_step {N m L P O : ℝ} (hm : 0 ≤ m) (hL : 0 ≤ L) (hP : 0 ≤ P)
       rw [h4, div_le_iff₀ (mul_pos hL0 hs)]
       linarith
 
+/-- A bound `N ≤ m L + √(P m O)` gives `(c / n) (N / L - √(P O N) / L^{3/2}) ≤ m c / n`. -/
+theorem slowdown_of_bound {N m L P O c n : ℝ} (hm : 0 ≤ m) (hL : 0 ≤ L) (hP : 0 ≤ P) (hO : 0 ≤ O) (hc : 0 ≤ c)
+    (hn : 0 ≤ n) (h : N ≤ m * L + √(P * m * O)) : c / n * (N / L - √(P * O * N) / L ^ (3 / 2 : ℝ)) ≤ m * c / n :=
+  (mul_le_mul_of_nonneg_left (slow_step hm hL hP hO h) (div_nonneg hc hn)).trans_eq (by ring)
+
 theorem slowdown : Slowdown := by
   intro ι _ _ d W k m c P hk
-  have h := bound ι d W k m P hk
-  have hL : 0 ≤ (k : ℝ) + alpha d W k := add_nonneg (Nat.cast_nonneg k) (alpha_nonneg d W k)
-  have hs := slow_step (Nat.cast_nonneg m) hL (Nat.cast_nonneg (piMax d W k)) (Nat.cast_nonneg W.O) h
-  have hc : 0 ≤ (c / d.D.size d.D.computed : ℝ) := div_nonneg (Nat.cast_nonneg c) (Nat.cast_nonneg _)
-  exact (mul_le_mul_of_nonneg_left hs hc).trans_eq (by ring)
+  exact slowdown_of_bound (Nat.cast_nonneg m) (add_nonneg (Nat.cast_nonneg k) (alpha_nonneg d W k))
+    (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg c) (Nat.cast_nonneg _) (bound ι d W k m P hk)
+
+/-- `bound` with upper bounds on `α` and `Π(k)` in their places. -/
+theorem bound_of_le {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} {W : Work d.D ι} {k m : ℕ}
+    {P : Partition d.D m} (hk : ∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) {a p : ℝ} (ha : alpha d W k ≤ a)
+    (hp : (piMax d W k : ℝ) ≤ p) : (W.N : ℝ) ≤ m * (k + a) + √(p * m * W.O) := by
+  have h1 : (m : ℝ) * (k + alpha d W k) ≤ m * (k + a) := mul_le_mul_of_nonneg_left (by linarith) (Nat.cast_nonneg m)
+  have h2 : √(piMax d W k * m * W.O) ≤ √(p * m * W.O) := Real.sqrt_le_sqrt
+    (mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hp (Nat.cast_nonneg m)) (Nat.cast_nonneg _))
+  linarith [bound ι d W k m P hk]
 
 /-! ### Bounds on `Π(k)` -/
 
@@ -538,19 +556,17 @@ theorem amgm_bound {p q βw βx κ : ℝ} (hw : 0 < βw) (hx : 0 < βx) (hp : 0 
   rw [le_div_iff₀ (mul_pos (mul_pos zero_lt_four hw) hx)]
   nlinarith [sq_nonneg (βw * p - βx * q), mul_nonneg (sub_nonneg.2 h) (add_nonneg (hs.trans h) hs)]
 
+theorem sqrt_quarter {k βw βx b : ℝ} : √(k * (k ^ 2 / (4 * βw * βx)) / b) = √(k ^ 3 / (βw * βx * b)) / 2 := by
+  rw [show k * (k ^ 2 / (4 * βw * βx)) / b = k ^ 3 / (βw * βx * b) / 4 by ring,
+    Real.sqrt_div' _ (by norm_num : (0 : ℝ) ≤ 4), show (4 : ℝ) = 2 ^ 2 by norm_num,
+    Real.sqrt_sq (by norm_num : (0 : ℝ) ≤ 2)]
+
 theorem alpha_bound {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} (W : Work d.D ι) {k : ℕ}
     {βw βx : ℝ} (hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (4 * βw * βx)) :
     alpha d W k ≤ √(k ^ 3 / (βw * βx * W.bY)) / 2 := by
   unfold alpha
-  have hb := bY_nonneg W
-  calc √(k * piMax d W k / W.bY) ≤ √(k * (k ^ 2 / (4 * βw * βx)) / W.bY) :=
-        Real.sqrt_le_sqrt (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hpi (Nat.cast_nonneg k)) hb)
-    _ = √(k ^ 3 / (βw * βx * W.bY) / 4) := by
-        congr 1
-        ring
-    _ = √(k ^ 3 / (βw * βx * W.bY)) / 2 := by
-        rw [Real.sqrt_div' _ (by norm_num : (0 : ℝ) ≤ 4), show (4 : ℝ) = 2 ^ 2 by norm_num,
-          Real.sqrt_sq (by norm_num : (0 : ℝ) ≤ 2)]
+  exact (Real.sqrt_le_sqrt (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hpi (Nat.cast_nonneg k))
+    (bY_nonneg W))).trans_eq sqrt_quarter
 
 theorem onePremise : OnePremise := by
   intro ι _ _ d W k βw βx hw hx hshare hprem
@@ -562,22 +578,26 @@ theorem onePremise : OnePremise := by
       ((hprem S hS).trans (Nat.cast_le.2 hS)))
   exact ⟨hpi, alpha_bound W hpi⟩
 
-theorem triangle_bound {a b c β κ : ℝ} (hβ : 0 < β) (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 ≤ c)
-    (h : β * (a + b + c) ≤ κ) : a * b + a * c + c * b ≤ 4 / 3 * (κ ^ 2 / (4 * β ^ 2)) := by
-  have h0 : 0 ≤ β * (a + b + c) := mul_nonneg hβ.le (add_nonneg (add_nonneg ha hb) hc)
-  have h2 := mul_self_le_mul_self h0 h
-  have h1 : 3 * (a * b + a * c + c * b) ≤ (a + b + c) ^ 2 := by
-    nlinarith [sq_nonneg (a - b), sq_nonneg (b - c), sq_nonneg (a - c)]
-  have h3 : (a * b + a * c + c * b) * (3 * β ^ 2) ≤ β ^ 2 * (a + b + c) ^ 2 := by
-    have := mul_le_mul_of_nonneg_left h1 (sq_nonneg β)
-    linarith
-  have h4 : 4 / 3 * (κ ^ 2 / (4 * β ^ 2)) = κ ^ 2 / (3 * β ^ 2) := by ring
-  rw [h4, le_div_iff₀ (mul_pos three_pos (pow_pos hβ 2))]
-  nlinarith [h2, h3]
+/-- With `q ≤ β_a β_b, β_a β_c, β_c β_b`, `ab + ac + cb ≤ (β_a a + β_b b + β_c c)² / (3 q)`. -/
+theorem triangle_bound {a b c βa βb βc q κ : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 ≤ c) (hq : 0 < q)
+    (hab : q ≤ βa * βb) (hac : q ≤ βa * βc) (hcb : q ≤ βc * βb) (hs : 0 ≤ βa * a + βb * b + βc * c)
+    (h : βa * a + βb * b + βc * c ≤ κ) : a * b + a * c + c * b ≤ 4 / 3 * (κ ^ 2 / (4 * q)) := by
+  have h1 : q * (a * b + a * c + c * b) ≤ βa * a * (βb * b) + βa * a * (βc * c) + βc * c * (βb * b) := by
+    nlinarith [mul_le_mul_of_nonneg_right hab (mul_nonneg ha hb), mul_le_mul_of_nonneg_right hac (mul_nonneg ha hc),
+      mul_le_mul_of_nonneg_right hcb (mul_nonneg hc hb)]
+  have h2 : 3 * (βa * a * (βb * b) + βa * a * (βc * c) + βc * c * (βb * b)) ≤ (βa * a + βb * b + βc * c) ^ 2 := by
+    nlinarith [sq_nonneg (βa * a - βb * b), sq_nonneg (βb * b - βc * c), sq_nonneg (βa * a - βc * c)]
+  have h3 := mul_self_le_mul_self hs h
+  have h4 : 4 / 3 * (κ ^ 2 / (4 * q)) = κ ^ 2 / (3 * q) := by ring
+  rw [h4, le_div_iff₀ (mul_pos three_pos hq)]
+  nlinarith [h1, h2, h3]
 
 theorem sharedArrays : SharedArrays := by
   intro d W k A β hβ h00 h01 h10 h12 h22 h21 hprem
-  have hB : (0 : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * β ^ 2)) := by positivity
+  have hq : 0 < min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)) :=
+    lt_min (mul_pos (hβ 0) (hβ 1)) (lt_min (mul_pos (hβ 0) (hβ 2)) (mul_pos (hβ 2) (hβ 1)))
+  have hB : (0 : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)))) :=
+    mul_nonneg (by norm_num) (div_nonneg (sq_nonneg _) (mul_pos four_pos hq).le)
   refine piMax_le W hB fun S hS => ?_
   have hpi : W.pi S ≤ (S ∩ A 0).card * (S ∩ A 1).card + (S ∩ A 0).card * (S ∩ A 2).card +
       (S ∩ A 2).card * (S ∩ A 1).card := by
@@ -589,8 +609,12 @@ theorem sharedArrays : SharedArrays := by
   have hpi' : (W.pi S : ℝ) ≤ (S ∩ A 0).card * (S ∩ A 1).card + (S ∩ A 0).card * (S ∩ A 2).card +
       (S ∩ A 2).card * (S ∩ A 1).card := by
     exact_mod_cast hpi
-  have hk := (hprem S hS).trans (Nat.cast_le.2 hS)
-  exact hpi'.trans (triangle_bound hβ (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hk)
+  have hs : 0 ≤ β 0 * (S ∩ A 0).card + β 1 * (S ∩ A 1).card + β 2 * (S ∩ A 2).card :=
+    add_nonneg (add_nonneg (mul_nonneg (hβ 0).le (Nat.cast_nonneg _)) (mul_nonneg (hβ 1).le (Nat.cast_nonneg _)))
+      (mul_nonneg (hβ 2).le (Nat.cast_nonneg _))
+  exact hpi'.trans (triangle_bound (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hq (min_le_left _ _)
+    ((min_le_right _ _).trans (min_le_left _ _)) ((min_le_right _ _).trans (min_le_right _ _)) hs
+    ((hprem S hS).trans (Nat.cast_le.2 hS)))
 
 /-- The blow-up of `G`: each vertex `r` replaced by `z r` copies, copies adjacent when their vertices are. -/
 def blowUp {ρ : Type} (G : SimpleGraph ρ) (z : ρ → ℕ) : SimpleGraph (Σ r, Fin (z r)) := G.comap Sigma.fst
@@ -633,37 +657,148 @@ theorem weighted_turan {ι ρ : Type} [Fintype ι] [Fintype ρ] {G : SimpleGraph
         exact absurd h1 (he _).ne
   · exact SimpleGraph.mul_turanNumber_le.trans_eq (by rw [Fintype.card_sigma]; simp only [Fintype.card_fin])
 
-theorem clique_real {t σ κ k β ω : ℝ} (hβ : 0 < β) (hω : 1 ≤ ω) (hσ : 0 ≤ σ)
-    (ht : 2 * ω * t ≤ (ω - 1) * σ ^ 2) (hprem : β * σ ≤ κ) (hκ : κ ≤ k) :
-    t ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * β ^ 2)) := by
+open Filter Topology in
+/-- **The weighted Turán inequality, real weights.** The same for weights `u ≥ 0`: the limit of `weighted_turan` at
+`⌊n u⌋`, divided by `n²`. -/
+theorem weighted_turan_real {ι ρ : Type} [Fintype ι] [Fintype ρ] {G : SimpleGraph ρ} {ω : ℕ} (hω : 0 < ω)
+    (hG : G.CliqueFree (ω + 1)) (e : ι → ρ × ρ) (he : ∀ a, G.Adj (e a).1 (e a).2)
+    (hinj : ∀ a b, s((e a).1, (e a).2) = s((e b).1, (e b).2) → a = b) (u : ρ → ℝ) (hu : ∀ r, 0 ≤ u r) :
+    2 * ω * ∑ a, u (e a).1 * u (e a).2 ≤ (ω - 1) * (∑ r, u r) ^ 2 := by
+  have hω' : 1 ≤ ω := hω
+  have h1 : ((ω - 1 : ℕ) : ℝ) = ω - 1 := by rw [Nat.cast_sub hω', Nat.cast_one]
+  have hle : ∀ n : ℕ, 2 * ω * ∑ a, (⌊u (e a).1 * n⌋₊ / n : ℝ) * (⌊u (e a).2 * n⌋₊ / n) ≤
+      (ω - 1) * (∑ r, (⌊u r * n⌋₊ / n : ℝ)) ^ 2 := by
+    intro n
+    have hz : 2 * ω * ∑ a, (⌊u (e a).1 * n⌋₊ : ℝ) * ⌊u (e a).2 * n⌋₊ ≤ (ω - 1) * (∑ r, (⌊u r * n⌋₊ : ℝ)) ^ 2 := by
+      rw [← h1]
+      exact_mod_cast weighted_turan hG e he hinj fun r => ⌊u r * n⌋₊
+    have s1 : ∑ a, (⌊u (e a).1 * n⌋₊ / n : ℝ) * (⌊u (e a).2 * n⌋₊ / n) =
+        (∑ a, (⌊u (e a).1 * n⌋₊ : ℝ) * ⌊u (e a).2 * n⌋₊) / n ^ 2 := by
+      rw [sum_div]
+      exact sum_congr rfl fun a _ => by ring
+    have s2 : ∑ r, (⌊u r * n⌋₊ / n : ℝ) = (∑ r, (⌊u r * n⌋₊ : ℝ)) / n := by rw [sum_div]
+    rw [s1, s2, div_pow, ← mul_div_assoc, ← mul_div_assoc]
+    exact div_le_div_of_nonneg_right hz (sq_nonneg _)
+  have hv : ∀ r, Tendsto (fun n : ℕ => (⌊u r * n⌋₊ / n : ℝ)) atTop (𝓝 (u r)) := fun r =>
+    (tendsto_nat_floor_mul_div_atTop (hu r)).comp tendsto_natCast_atTop_atTop
+  exact le_of_tendsto_of_tendsto'
+    ((tendsto_finsetSum univ fun a _ => (hv (e a).1).mul (hv (e a).2)).const_mul (2 * (ω : ℝ)))
+    (((tendsto_finsetSum univ fun r _ => hv r).pow 2).const_mul ((ω : ℝ) - 1)) hle
+
+theorem clique_real {t T U σ k q ω : ℝ} (hq : 0 < q) (hω : 1 ≤ ω) (hσ : 0 ≤ σ) (ht : t ≤ T) (hqT : q * T ≤ U)
+    (hU : 2 * ω * U ≤ (ω - 1) * σ ^ 2) (hk : σ ≤ k) : t ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) := by
   have hω0 : 0 < ω := by linarith
   have e1 : 1 - 1 / ω = (ω - 1) / ω := by rw [sub_div, div_self hω0.ne']
-  have e2 : 2 * ((ω - 1) / ω) * (k ^ 2 / (4 * β ^ 2)) = (ω - 1) * k ^ 2 / (2 * ω * β ^ 2) := by ring
-  rw [e1, e2, le_div_iff₀ (mul_pos (mul_pos two_pos hω0) (pow_pos hβ 2))]
-  have h1 : 0 ≤ β * σ := mul_nonneg hβ.le hσ
-  have h2 := mul_self_le_mul_self h1 (hprem.trans hκ)
+  have e2 : 2 * ((ω - 1) / ω) * (k ^ 2 / (4 * q)) = (ω - 1) * k ^ 2 / (2 * ω * q) := by ring
+  have h2ωq : 0 ≤ 2 * ω * q := (mul_pos (mul_pos two_pos hω0) hq).le
+  rw [e1, e2, le_div_iff₀ (mul_pos (mul_pos two_pos hω0) hq)]
   have h3 : 0 ≤ ω - 1 := by linarith
-  nlinarith [mul_le_mul_of_nonneg_left h2 h3, mul_le_mul_of_nonneg_left ht (sq_nonneg β)]
+  nlinarith [mul_le_mul_of_nonneg_left (mul_self_le_mul_self hσ hk) h3, mul_le_mul_of_nonneg_left ht h2ωq,
+    mul_le_mul_of_nonneg_left hqT (mul_pos two_pos hω0).le]
 
 theorem sharedArraysClique : SharedArraysClique := by
-  intro ι ρ _ _ _ d W k ω G A e β hβ hω hG he hinj hsub hprem
+  intro ι ρ _ _ _ d W k ω G A e β q hω hG hadj hinj hsub hβ hq hqe hprem
   have hω' : 1 ≤ ω := hω
   have hω1 : (1 : ℝ) ≤ ω := Nat.one_le_cast.2 hω'
-  have hB : (0 : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * β ^ 2)) := by
+  have hB : (0 : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) := by
     have h1 : (0 : ℝ) ≤ 1 - 1 / ω := by
       rw [sub_nonneg, div_le_iff₀ (by linarith : (0 : ℝ) < ω)]
       linarith
-    exact mul_nonneg (mul_nonneg zero_le_two h1) (by positivity)
+    exact mul_nonneg (mul_nonneg zero_le_two h1) (div_nonneg (sq_nonneg _) (mul_pos four_pos hq).le)
   refine piMax_le W hB fun S hS => ?_
-  have hz := weighted_turan hG e he hinj fun r => (S ∩ A r).card
   have hpi : W.pi S ≤ ∑ a, (S ∩ A (e a).1).card * (S ∩ A (e a).2).card :=
     sum_le_sum fun a _ => Nat.mul_le_mul (card_le_card (inter_subset_inter_left (hsub a).1))
       (card_le_card (inter_subset_inter_left (hsub a).2))
-  have hN := (Nat.mul_le_mul le_rfl hpi).trans hz
-  have hR : 2 * (ω : ℝ) * W.pi S ≤ (ω - 1) * (∑ r, ((S ∩ A r).card : ℝ)) ^ 2 := by
-    have h1 : ((ω - 1 : ℕ) : ℝ) = ω - 1 := by rw [Nat.cast_sub hω', Nat.cast_one]
-    rw [← h1]
-    exact_mod_cast hN
-  exact clique_real hβ hω1 (sum_nonneg fun r _ => Nat.cast_nonneg _) hR (hprem S hS) (Nat.cast_le.2 hS)
+  have hpi' : (W.pi S : ℝ) ≤ ∑ a, ((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card := by
+    exact_mod_cast hpi
+  have hu : ∀ r, 0 ≤ β r * (S ∩ A r).card := fun r => mul_nonneg (hβ r) (Nat.cast_nonneg _)
+  have hT : 2 * (ω : ℝ) * ∑ a, β (e a).1 * (S ∩ A (e a).1).card * (β (e a).2 * (S ∩ A (e a).2).card) ≤
+      (ω - 1) * (∑ r, β r * (S ∩ A r).card) ^ 2 :=
+    weighted_turan_real hω hG e hadj hinj (fun r => β r * (S ∩ A r).card) hu
+  have hqT : q * ∑ a, ((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card ≤
+      ∑ a, β (e a).1 * (S ∩ A (e a).1).card * (β (e a).2 * (S ∩ A (e a).2).card) := by
+    rw [mul_sum]
+    refine sum_le_sum fun a _ => ?_
+    calc q * (((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card)
+        ≤ β (e a).1 * β (e a).2 * (((S ∩ A (e a).1).card : ℝ) * (S ∩ A (e a).2).card) :=
+          mul_le_mul_of_nonneg_right (hqe a) (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+      _ = β (e a).1 * (S ∩ A (e a).1).card * (β (e a).2 * (S ∩ A (e a).2).card) := by ring
+  exact clique_real hq hω1 (sum_nonneg fun r _ => hu r) hpi' hqT hT ((hprem S hS).trans (Nat.cast_le.2 hS))
+
+/-! ### The theorem of record -/
+
+/-- (E) at `b` gives `b ≤ b_y` once some `E(A)` is nonempty. -/
+theorem le_bY {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) {b : ℝ}
+    (hE : ∀ B ⊆ C.computed, b * (W.clear B).card ≤ kappa C B ((W.clear B).biUnion W.y)) (h : W.fed.Nonempty) :
+    b ≤ W.bY := by
+  rw [Work.bY, dite_eq_left h]
+  refine le_inf' h _ fun B hB => ?_
+  obtain ⟨-, hBc, hne⟩ := mem_filter.1 hB
+  exact (le_div_iff₀ (Nat.cast_pos.2 (card_pos.2 hne))).2 (hE B hBc)
+
+/-- With (E) at `b > 0`, `α ≤ √(k P / b)` for every `P ≥ Π(k)`. -/
+theorem alpha_le_of_exports {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} (W : Work d.D ι) {k : ℕ}
+    {b p : ℝ} (hb : 0 < b)
+    (hE : ∀ B ⊆ d.D.computed, b * (W.clear B).card ≤ kappa d.D B ((W.clear B).biUnion W.y))
+    (hp : (piMax d W k : ℝ) ≤ p) : alpha d W k ≤ √(k * p / b) := by
+  unfold alpha
+  by_cases h : W.fed.Nonempty
+  · have hbY := le_bY W hE h
+    have hp0 : (0 : ℝ) ≤ p := le_trans (Nat.cast_nonneg _) hp
+    refine Real.sqrt_le_sqrt ?_
+    calc (k : ℝ) * piMax d W k / W.bY ≤ k * p / W.bY :=
+          div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hp (Nat.cast_nonneg k)) (hb.le.trans hbY)
+      _ ≤ k * p / b := div_le_div_of_nonneg_left (mul_nonneg (Nat.cast_nonneg k) hp0) hb hbY
+  · rw [Work.bY, dite_eq_right h, div_zero, Real.sqrt_zero]
+    exact Real.sqrt_nonneg _
+
+theorem sqrt_scaled {s X : ℝ} (hs : 0 ≤ s) : √(s ^ 2 * X) = s * √X := by
+  rw [Real.sqrt_mul (sq_nonneg s), Real.sqrt_sq hs]
+
+theorem alphaHE_nonneg (k : ℕ) (q b : ℝ) : 0 ≤ alphaHE k q b :=
+  div_nonneg (Real.sqrt_nonneg _) zero_le_two
+
+theorem he : HE := by
+  intro ι _ _ d W k m c P βw βx b hw hx hb hshare hH hE hk
+  obtain ⟨hpi, -⟩ := onePremise ι d W k βw βx hw hx hshare hH
+  have hα : alpha d W k ≤ alphaHE k (βw * βx) b := (alpha_le_of_exports W hb hE hpi).trans_eq sqrt_quarter
+  have hp : (0 : ℝ) ≤ k ^ 2 / (4 * βw * βx) := div_nonneg (sq_nonneg _) (mul_pos (mul_pos four_pos hw) hx).le
+  have hk2 : (0 : ℝ) ≤ k / 2 := div_nonneg (Nat.cast_nonneg k) zero_le_two
+  have hN := bound_of_le hk hα hpi
+  have hs := slowdown_of_bound (Nat.cast_nonneg m) (add_nonneg (Nat.cast_nonneg k) (alphaHE_nonneg k (βw * βx) b))
+    hp (Nat.cast_nonneg W.O) (Nat.cast_nonneg c) (Nat.cast_nonneg (d.D.size d.D.computed)) hN
+  rw [show (k : ℝ) ^ 2 / (4 * βw * βx) * m * W.O = (k / 2) ^ 2 * (m * W.O / (βw * βx)) by ring,
+    sqrt_scaled hk2] at hN
+  rw [show (k : ℝ) ^ 2 / (4 * βw * βx) * W.O * W.N = (k / 2) ^ 2 * (W.O * W.N / (βw * βx)) by ring,
+    sqrt_scaled hk2] at hs
+  exact ⟨hN, hs⟩
+
+theorem heShared : HEShared := by
+  intro ι ρ _ _ _ d W k m c P G A e β q b hG hadj hinj hsub hβ hq hqe hb hH hE hk
+  have h3 : (0 : ℝ) ≤ 3 := by norm_num
+  have hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (3 * q) :=
+    (sharedArraysClique ι ρ d W k 3 G A e β q (by norm_num) hG hadj hinj hsub hβ hq hqe hH).trans_eq
+      (by push_cast; ring)
+  have hα : alpha d W k ≤ 2 / √3 * alphaHE k q b := by
+    refine (alpha_le_of_exports W hb hE hpi).trans_eq ?_
+    rw [show (k : ℝ) * (k ^ 2 / (3 * q)) / b = k ^ 3 / (q * b) / 3 by ring, Real.sqrt_div' _ h3, alphaHE]
+    ring
+  have hp : (0 : ℝ) ≤ k ^ 2 / (3 * q) := div_nonneg (sq_nonneg _) (mul_pos three_pos hq).le
+  have hF : (0 : ℝ) ≤ 2 / √3 := div_nonneg zero_le_two (Real.sqrt_nonneg _)
+  have hN := bound_of_le hk hα hpi
+  have hs := slowdown_of_bound (Nat.cast_nonneg m) (add_nonneg (Nat.cast_nonneg k)
+    (mul_nonneg hF (alphaHE_nonneg k q b))) hp (Nat.cast_nonneg W.O) (Nat.cast_nonneg c)
+    (Nat.cast_nonneg (d.D.size d.D.computed)) hN
+  have e1 : √((k : ℝ) ^ 2 / (3 * q) * m * W.O) = 2 / √3 * (k / 2 * √(m * W.O / q)) := by
+    rw [show (k : ℝ) ^ 2 / (3 * q) * m * W.O = k ^ 2 * (m * W.O / q / 3) by ring, sqrt_scaled (Nat.cast_nonneg k),
+      Real.sqrt_div' _ h3]
+    ring
+  have e2 : √((k : ℝ) ^ 2 / (3 * q) * W.O * W.N) = 2 / √3 * (k / 2 * √(W.O * W.N / q)) := by
+    rw [show (k : ℝ) ^ 2 / (3 * q) * W.O * W.N = k ^ 2 * (W.O * W.N / q / 3) by ring,
+      sqrt_scaled (Nat.cast_nonneg k), Real.sqrt_div' _ h3]
+    ring
+  rw [e1] at hN
+  rw [e2] at hs
+  exact ⟨hN, hs⟩
 
 end Nci.SecurityProofs.Cut
