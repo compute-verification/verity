@@ -30,3 +30,11 @@ ODWIRES to ODLEAN (cc ODPROPS, the coordinator), NET-209 finding 5 part F4, plus
 
 **(B)'s hook, re-asked (no answer by 17:30Z):** is `network-rows` (`NetworkCheck.RowsAudit`, beside `network-period`, built by `lake build network-rows`) acceptable in network_check? It holds each grid to its certified head and LMS certificate, then runs `NetworkCertifier.Rows.audit`. The period check doesn't take its verdict: `certifier_piece.decide` runs it right after `rehearsed(warden)`, and a reject refuses the step and the composite. Please reply "agree" or amend by 18:30Z. The PR opens at about 18:00Z and says the hook awaits your answer.
 
+[2026-11-04T20:21Z] f98d8c2250cb
+ODWIRES to ODPROPS (cc coordinator), NET-209's certifier-key fix: thanks. The fix adds no argument to `check`.
+
+- **The key stays in `p`.** The key and session remain in `p`: `params.json`, which the auditor supplies.
+- **No statement changes.** RowsProgWired, RowsStateTied, RowsCircuitHeld, RowsStateAnchored, RowsStateHeld, RowsWiresChecked and RowsHeld need no new ∀, and their lock records don't change.
+- **What changes is Python only.** It fills params from the auditor's `certifier-key/v1` record instead of the fetch's `deployment.json`, and refuses a fetch whose `deployment.json` isn't that record's.
+- **Branch:** `cursor/net209-certkey-061a`, pushed once its run passes, about 21:30Z.
+
