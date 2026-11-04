@@ -29,6 +29,7 @@ open Claims Claims.Sampling
 
 theorem incorrect_subset_range (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition)
     (wires : ℕ → Option ℕ) (w : Wit) : incorrect H Cm s P wires w ⊆ Finset.range P.blocks.length := by
+  classical
   intro v hv
   unfold incorrect at hv
   rcases Finset.mem_union.1 hv with h | h
