@@ -3,7 +3,7 @@ import Proofs.Pouw.PearlC.TileGamma
 /-!
 # The gap under the tolerant sampled audit, from TT_OUT per tile
 
-The tolerant audit accepts a sampled tile that is good, of a blank unit, or over its unnecessary-work bound
+The tolerant audit accepts a sampled tile that is good, of a blank unit, or over its inert-work bound
 (`overCapTiles`), and credits the last nothing.
 - An accepted run certifies `T ≥ (1 − g)·(S − u(X_O)·W)`, where `S` is the credit (the claimed work; the type `S` in
   the signatures below is the salt's), `W` is the layout's work, `g` is the gap (the statements' `γ`), `X_O` is the
@@ -26,7 +26,7 @@ namespace Pouw.PearlC
 
 open Finset _root_.Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- A tile over its unnecessary-work bound is neither good, whose bound holds, nor of a blank unit. -/
+/-- A tile over its inert-work bound is neither good, whose bound holds, nor of a blank unit. -/
 theorem overCapTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
     (s : S) (τ : Transcript) : Disjoint (goodTiles P TR U H s τ ∪ blankTiles TR U τ) (overCapTiles TR U H s τ) := by
   classical
@@ -219,7 +219,7 @@ theorem gammaSampledTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [
 
 /-- **The audit that accepts only checked tiles is the tolerant one's strict case**: `GγSampledTol` at the table
 `u 0 = ε_s`, `u x = 1` otherwise (`missBound_strict`) gives `GγSampled`, since a run every sample of which lands on a
-good or blank tile has none on a tile over its unnecessary-work bound. -/
+good or blank tile has none on a tile over its inert-work bound. -/
 theorem gammaSampled_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
     (h : GγSampledTol CM P TR D γ η) : GγSampled CM P TR D γ η := by
