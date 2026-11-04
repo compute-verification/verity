@@ -39,7 +39,9 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
   signs before any coin and at the close. Its signer signs before any coin the messages of the lines the request fixes,
   and at the close the run's record and close and the messages of the lines at the close, each what
   `Properties.Challenger.signedBy` lists, so at a vocabulary whose signer is the deployment's, the device's history at
-  each play signed what the play's signatures are on (`Binding.SignsPlay`).
+  each play signed what the play's signatures are on (`Binding.SignsPlay`). It signs at most `Q` messages in a play,
+  one per ledger line and the run's record and close (`Deployment.signatures`, `Deployment.signs_le`), the vocabulary's
+  `signs_le` at that signer.
 
 What a run holds beside its releases (its id and host, its layout, the coins and salts the play didn't release, how it
 ended, its lines' times and the ledger lines it signed) is the history's parameter (`RunSetup`), which a deployment
@@ -1024,6 +1026,26 @@ theorem signedBy_mono {h h' : History} {pk m : ByteArray} (hm : m ∈ Properties
   · obtain ⟨l, hl', hm⟩ := List.mem_filterMap.1 hm
     exact List.mem_append.2 (.inr (List.mem_filterMap.2 ⟨l, hl l hl', hm⟩))
 
+theorem length_flatMap_le {β γ : Type} (f : β → List γ) {n : ℕ} (hf : ∀ b, (f b).length ≤ n) :
+    ∀ l : List β, (l.flatMap f).length ≤ n * l.length
+  | [] => Nat.zero_le _
+  | b :: l => by
+    rw [List.flatMap_cons, List.length_append, List.length_cons, Nat.mul_succ, Nat.add_comm (n * _)]
+    exact Nat.add_le_add (hf b) (length_flatMap_le f hf l)
+
+/-- **A history signs under `pk` at most two messages per run and one per ledger line**
+(`Properties.Challenger.signedBy`): a run's record and close, and a line's entry. -/
+theorem signedBy_length (h : History) (pk : ByteArray) :
+    (Properties.Challenger.signedBy h pk).length ≤ 2 * (h.runs pk).length + (h.ledger pk).length := by
+  unfold Properties.Challenger.signedBy
+  rw [List.length_append]
+  refine Nat.add_le_add (length_flatMap_le _ (fun s => ?_) _) (List.length_filterMap_le _ _)
+  split
+  · exact Nat.zero_le _
+  · have ho : ∀ {γ : Type} (o : Option γ), o.toList.length ≤ 1 := fun o => by cases o <;> simp
+    rw [List.length_append]
+    exact Nat.add_le_add (ho _) (ho _)
+
 /-- **The run of the setup `s` that released `log`**, its release log its head and the lines the printer prints of
 `log` (`printLog`); none where it prints none. -/
 def printedRun (s : RunSetup) (log : List Release) : List Run :=
@@ -1035,6 +1057,10 @@ theorem printedRun_eq {s : RunSetup} {log : List Release} {lines : List String}
     (h : printLog s.time PrintState.init log = some lines) : printedRun s log = [runOf s log lines] := by
   simp only [printedRun, h]
 
+theorem printedRun_length (s : RunSetup) (log : List Release) : (printedRun s log).length ≤ 1 := by
+  unfold printedRun
+  split <;> simp
+
 /-- The public key of the parameters' challenger key (`Binding.keyOf`), the empty string where they name none. -/
 def pubOf (θ : ByteArray) : ByteArray := ((Binding.keyOf θ).map (·.pub)).getD .empty
 
@@ -1043,12 +1069,15 @@ the device's log, the bytes `b` the prover's close left to the device and its dr
 run's setup but for its key, its layout and its ledger lines, which `setupAt` sets: its session's id and host, its
 coins and salts by position where the play released none, how it ended and each line's time. `opens` are the auditor's
 ledger lines it signs before any coin, which the request fixes (the ledger's reserve and open, and the period's open),
-and `closes` the ones it signs at the close (the ledger's end and the period's close). `draws` are the bits it draws
-at the close, and `sign θ i m` its signature on `m` as its `i`-th in the play. -/
+and `closes` the ones it signs at the close (the ledger's end and the period's close), at most `ledgerLines θ` of
+them in a play (`ledger_le`). `draws` are the bits it draws at the close, and `sign θ i m` its signature on `m` as its
+`i`-th in the play. -/
 structure Deployment where
   run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup
   opens : ByteArray → ByteArray → List Json
   closes : ByteArray → ByteArray → List Release → ByteArray → List Bool → List Json
+  ledgerLines : ByteArray → ℕ
+  ledger_le : ∀ θ a log b ρ, (opens θ a).length + (closes θ a log b ρ).length ≤ ledgerLines θ
   draws : ByteArray → ℕ
   sign : ByteArray → ℕ → Hash.Msg → Hash.Msg
 
@@ -1077,6 +1106,33 @@ def signer (fs : ByteArray → Families) (θ : ByteArray) : Signer where
     (Properties.Challenger.signedBy ⟨fun _ => printedRun (P.setupAt fs θ a log b ρ) log,
       fun _ => P.closes θ a log b ρ⟩ (pubOf θ)).map (·.data.toList)
   sign := P.sign θ
+
+/-- **`Q` at the deployment**: the most messages its device signs in a play, one per ledger line it signs
+(`ledgerLines`) and the run's record and close. -/
+def signatures (θ : ByteArray) : ℕ := P.ledgerLines θ + 2
+
+/-- **The deployed device signs at most `Q` messages in a play** (`Vocab.signs_le`): before any coin at most one per
+line the request fixes, and at the close at most the printed run's record and close and one per line at the close
+(`signedBy_length`, `printedRun_length`). A vocabulary whose device is the deployment's has `signer := P.signer
+families`, `signatures := P.signatures` and `signs_le := P.signs_le families`, at which `logged_le_dev`'s tie is
+`rfl`. -/
+theorem signs_le (fs : ByteArray → Families) (θ a : ByteArray) (log : List Release) (b : ByteArray)
+    (ρ : List Bool) : ((P.signer fs θ).signs a log b ρ).length ≤ P.signatures θ := by
+  have h1 : (Properties.Challenger.signedBy ⟨fun _ => [], fun _ => P.opens θ a⟩ (pubOf θ)).length ≤
+      2 * ([] : List Run).length + (P.opens θ a).length :=
+    signedBy_length _ _
+  have h2 : (Properties.Challenger.signedBy ⟨fun _ => printedRun (P.setupAt fs θ a log b ρ) log,
+      fun _ => P.closes θ a log b ρ⟩ (pubOf θ)).length ≤
+      2 * (printedRun (P.setupAt fs θ a log b ρ) log).length + (P.closes θ a log b ρ).length :=
+    signedBy_length _ _
+  have h3 := printedRun_length (P.setupAt fs θ a log b ρ) log
+  have h4 := P.ledger_le θ a log b ρ
+  rw [List.length_nil] at h1
+  show ((Properties.Challenger.signedBy ⟨fun _ => [], fun _ => P.opens θ a⟩ (pubOf θ)).map (·.data.toList) ++
+      (Properties.Challenger.signedBy ⟨fun _ => printedRun (P.setupAt fs θ a log b ρ) log,
+        fun _ => P.closes θ a log b ρ⟩ (pubOf θ)).map (·.data.toList)).length ≤ P.ledgerLines θ + 2
+  rw [List.length_append, List.length_map, List.length_map]
+  omega
 
 end Deployment
 
