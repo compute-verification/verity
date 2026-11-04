@@ -1,9 +1,9 @@
 """`training/frontier-branches`, a retired console training panel (the console's are now `training/algorithm-policy`
-and `training/frontier-fit`, both PUT by te_core.algorithm_policy, and no refresh PUTs this one): held-out bits per byte
-against total training compute in Boolean gates, every line a frontier (at each loss, the least compute anything
-reached under that line's rules).
+and `training/frontier-fit`, both PUT by te_core.algorithm_policy, and nothing PUTs this one: it has no `--publish`, and
+te_core.console's `put` refuses its id): held-out bits per byte against total training compute in Boolean gates, every
+line a frontier (at each loss, the least compute anything reached under that line's rules).
 
-    python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
+    python -m te_core.panels frontier-branches --out DIR [--pretraining DIR]
                                                [te_core.rescore's ledger and quantities options]
 
 Its rows (`COLUMNS`) are the points of three kinds of curve, each on one data (`data`: `v3`, harness v3's OLMo 2 mix,
@@ -57,7 +57,7 @@ the frontier, each honest curve and each marked throttled curve keep their point
 every other throttled curve the most points (`POINTS`) that fit, the first to reach each of losses evenly spaced over
 its own span; where every candidate doesn't fit at the fewest points, the most that do, those on the most cells'
 curves first (`ranked`), the note saying how many, before the other curves' points go further apart. DIR gets
-`frontier-branches.json` (uncut, every data), `console/frontier-branches.json` (cut, which `--publish` PUTs) and
+`frontier-branches.json` (uncut, every data), `console/frontier-branches.json` (cut, for the evidence store) and
 `frontier-branches.png`, plotted from the cut rows at the marked cells.
 """
 from __future__ import annotations
@@ -525,7 +525,6 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="panel", required=True)
     fb = rescore.arguments(sub.add_parser(NAME, help="the frontier and its branches"))
-    fb.add_argument("--publish", action="store_true", help=f"PUT the cut panel to {console.PANELS_URL}/{PANEL}")
     fb.add_argument("--pretraining", type=Path, default=None,
                     help=f"the pretraining runs, a directory per run id (default {PRETRAINING}, fetched)")
     a = ap.parse_args(argv)
@@ -544,10 +543,6 @@ def main(argv=None) -> int:
     print(summary(info))
     print(f"{PANEL}: {len(p['rows'])} rows uncut; console {len(q['rows'])} rows, {len(console.body(q))} bytes, note "
           f"{len(q['note'])} characters -> {a.out}: {NAME}.json, console/{NAME}.json, {png.name}")
-    if a.publish:
-        status = console.put(q)
-        print(f"PUT {console.PANELS_URL}/{PANEL}: {status}")
-        return 0 if status.startswith("2") else 1
     return 0
 
 
