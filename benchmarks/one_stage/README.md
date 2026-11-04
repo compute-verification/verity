@@ -230,8 +230,9 @@ negatives.
   device's), and no premise about our own Python stands. While
   one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
   them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
-  the tied compute audits' free inputs (no advice length and no cap is in them), beside it each audit's registered
-  advice length ℓ_a as a cap, in no term of K, and `--advice-charge` states a test
+  the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
+  the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
+  `--advice-charge` states a test
   run's measurement beside the bound as that run's.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
