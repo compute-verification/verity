@@ -10,6 +10,8 @@ import Proofs.Flock.SamplingGeneric.Bits
 import Proofs.Flock.SamplingGeneric.Reg
 import Proofs.Flock.SamplingGeneric.Efficient
 import Proofs.Flock.SamplingGeneric.Counter
+import Proofs.Flock.SamplingGeneric.Deployed
+import Proofs.Flock.SamplingGeneric.Instance
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -36,6 +38,21 @@ the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `Exp
 against the incorrect set of the plurality trace the prover's tape fixes, follows from the sessions' bound and the
 rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so **`CompilerKSReg` is proved** (`compilerKSReg`),
 and with it Flock's (`flockKSReg`).
+
+A frozen sampled record at a decoder is a compiled verifier over Flock (`ofDeploy`, `SamplingGeneric/Deployed.lean`),
+over Flock's record with that decoder as the deployed one (`flockAt`, whose KS is the record's: `flockKS_at`): its
+opening count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_ofDeploy`), its errors are within
+`Claims.Sampling`'s, and it meets the contract where the record meets the frozen hypotheses `KS_of` reads
+(`sessions_ofDeploy`). At the deployed record `deployOf F c` (`SamplingDeploy.compiled`), four of those are facts about
+the sampled verifier's code (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the
+compiler's KS and committed form there take exactly them, Flock's KS at `F`, the commitment's binding and the sessions'
+runs, numbers and openings (`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`).
+
+`Claims.Sampling` is the compiler's instance there: at coupled coins `Sampling.E` and the compiled extractor at
+`ofDeploy` fail alike, with the same failure probability and `B_ext` (`SamplingGeneric/Instance.lean`:
+`samplingKS_of_flockKS`), so `Sampling.KS` follows from `Flock.KS`, the commitment's binding and the frozen hypotheses
+`sessions_ofDeploy` reads, with `ε_table ≥ 0` (`samplingKS`), and at the deployed record from the code's four facts
+with the sessions' runs, numbers and openings (`SamplingDeploy.samplingKS_deployOf`).
 -/
 
 namespace Claims.SamplingGeneric
@@ -94,4 +111,50 @@ theorem openCallsLe_of_deploy [Zero Col] {H : Msg → Msg} (D : Claims.Sampling.
   rw [hcommit, hreveal, hcalls]
   exact h x s hs u v w
 
+/-- **`Sampling.KS` from the compiler**: `flockKS` at `ofDeploy` (`samplingKS_of_flockKS`). -/
+theorem samplingKS [Zero Col] {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T}
+    (iroots : Msg → Seen → ℕ → List Msg) (hKS : Claims.Flock.KS H D.flock) (hbind : D.commit.Binds H)
+    (hopens : Claims.Sampling.SessionOpens H D iroots) (hfix : Claims.Sampling.InteriorFixed H D iroots)
+    (hdraw : Claims.Sampling.DrawLaw D) (hrefuse : Claims.Sampling.Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x)
+    (hdfix : Claims.Sampling.DrawFixed D) (hruns : Claims.Sampling.SessionRuns H D)
+    (hnum : Claims.Sampling.InnerNumbers D) : Claims.Sampling.KS H D :=
+  samplingKS_of_flockKS flockKS iroots hKS hbind hopens hfix hdraw hrefuse hε hdfix hruns hnum
+
 end Claims.SamplingGeneric
+
+namespace SamplingDeploy
+
+variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (c : Code)
+  (decode : List (ℕ × List FlockLevel3.GF128) → List T) (iroots : Claims.Msg → Claims.Seen → ℕ → List Claims.Msg)
+
+/-- **The compiler at the deployed record**: `Compiled.KS` of the deployed sampled verifier over Flock (`compiled`),
+from Flock's KS at `F` and its decoder's list bound, the commitment's binding, the code's four facts and the sessions'
+runs, numbers and openings (`flockKS` at `flockAt F decode`, `sessions_compiled`). -/
+theorem ks_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ decode) (hB : (commit c).Binds H) (hd : c.DrawLaw)
+    (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+    (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
+    (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c decode iroots).KS H :=
+  Claims.SamplingGeneric.flockKS H (Claims.SamplingGeneric.flockAt F decode) _
+    (Claims.SamplingGeneric.flockKS_at decode hKS) hlist hB
+    (sessions_compiled F c decode iroots H hd hr hi hf hruns hnum hopens)
+
+/-- **The committed form at the deployed record**: as `ks_compiled`, `KSReg` (`flockKSReg`). -/
+theorem ksReg_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ decode) (hB : (commit c).Binds H) (hd : c.DrawLaw)
+    (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+    (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
+    (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c decode iroots).KSReg H :=
+  Claims.SamplingGeneric.flockKSReg H (Claims.SamplingGeneric.flockAt F decode) _
+    (Claims.SamplingGeneric.flockKS_at decode hKS) hlist hB
+    (sessions_compiled F c decode iroots H hd hr hi hf hruns hnum hopens)
+
+/-- **`Sampling.KS` at the deployed record**: from Flock's KS at `F`, the commitment's binding, the code's four facts
+and the sessions' runs, numbers and openings (`samplingKS`). -/
+theorem samplingKS_deployOf (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F) (hB : (commit c).Binds H)
+    (hd : c.DrawLaw) (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+    (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
+    (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : Claims.Sampling.KS H (deployOf F c) :=
+  Claims.SamplingGeneric.samplingKS iroots hKS hB hopens hi hd hr (deployOf_εtable_nonneg F c) hf hruns hnum
+
+end SamplingDeploy
