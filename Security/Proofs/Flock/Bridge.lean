@@ -17,6 +17,7 @@ import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.BitsRows
+import Proofs.Flock.Bridge.BitsLower
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -32,7 +33,9 @@ verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lo
 parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
 (`Bridge.Assumptions.ServedFilesParse`). `BitsRows`: `SampledProofs.Bits`' stacked unit rows are a circuit's template
-instance rows (`Flock.Bridge.rowsAgree_circuitRows`). -/
+instance rows (`Flock.Bridge.rowsAgree_circuitRows`). `BitsLower`: where a Bits key program lays out a circuit and its
+units, the bridge's lowering, positions and proof blocks are Bits' (`Flock.Bridge.LaysOut.progOf_eq`,
+`Flock.Bridge.blockOf_eq`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
