@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.PeelExact
+module
+
+public import Definitions.Pouw.PearlC.PeelExact
 
 /-!
 # U's pinned order over a `Pipeline` (definitions only)
@@ -20,6 +22,8 @@ import Definitions.Pouw.PearlC.PeelExact
 
 This module imports no proofs, so the named protocol may read it.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExactP
 

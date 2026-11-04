@@ -1,8 +1,10 @@
-import Proofs.Properties.Verity.Recursive
-import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Recursion.BitsLin2
-import Proofs.Flock.Claims.Recursion.DeployFacts
-import Proofs.Core.Circuit
+module
+
+public import Proofs.Properties.Verity.Recursive
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.DeployFacts
+public import Proofs.Core.Circuit
 
 /-!
 # The target, proved: sampled proofs at the recursive configuration
@@ -23,6 +25,8 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   `√(E[bindBudget] / 2^256)`, since the two weights' product is the probability that two independent plays read the
   wire differently, which `hcoll` turns into the binding finder's collision (`weight_mul_le`).
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

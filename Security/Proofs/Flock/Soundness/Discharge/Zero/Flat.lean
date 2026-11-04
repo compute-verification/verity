@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Delta
+module
+
+public import Proofs.Flock.Soundness.Discharge.Zero.Delta
 
 /-!
 # A typed flat class's inputs that read the zero carry 0 (`hZero`, e2e)
@@ -11,6 +13,8 @@ when that column lies outside the block), and its forced-zero rows are each unit
   class. This is `hzr` of `UProg.zeroCols_of_classes` at that class, for every slot input that reads the zero.
 - `flat_zero_block`: so in every block of a witness satisfying the statement, that input carries 0.
 -/
+
+@[expose] public section
 
 open Flock
 

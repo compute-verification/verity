@@ -7,8 +7,14 @@ fixed notation unless the decimal point is more than 16 places right or 4 left o
 can't be read back as (`-0.0`, a float of 10¹⁶ or more, which `Flock.JsonParse.parse` reads as an integer) is written as
 the integer or `0.0`.
 -/
-import Lean.Data.Json
-import CoreProtocol.Ratio
+module
+
+public import Lean.Data.Json
+public import CoreProtocol.Ratio
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.PyJson
 

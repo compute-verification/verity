@@ -5,7 +5,12 @@ What a statement keeps without parsing its own output. The keyed coin tree a ses
 kept as `Flock.norm` of what `JsonParse.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
 puts the draw in, and the same canonical bytes (`publicDigest` hashes those).
 -/
-import Flock.HmRow
+module
+
+public import Flock.HmRow
+meta import Flock.HmRow
+
+@[expose] public section
 
 namespace Flock.Test.CoinsTree
 

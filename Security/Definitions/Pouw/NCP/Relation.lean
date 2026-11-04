@@ -1,5 +1,7 @@
-import Definitions.Pouw.NCP.Protocol
-import Definitions.Pouw.NCP.Word
+module
+
+public import Definitions.Pouw.NCP.Protocol
+public import Definitions.Pouw.NCP.Word
 
 /-!
 # Relation-free R, the reduction, and FinalOnly for NCP (trusted)
@@ -19,6 +21,8 @@ The NCP instance of the word model (`Pouw.NCP.Word`): `N` units of `m` rows shar
 `F₁` is shared, entries in `[−31, 32]`; each unit has `3k/16` checkpoints (depths `16, 32, …, 3k`) of `m·n` entries, in
 block-major order. The inputs `A u`, `B u` are arbitrary.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.Relation
 

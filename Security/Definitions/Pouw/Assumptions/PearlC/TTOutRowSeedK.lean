@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-import Definitions.Pouw.PearlC.DeviceKernelWref
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+public import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
 # Per-row seeds against the honest kernel's `W_ref` (trusted definitions; nothing assumed)
@@ -10,6 +12,8 @@ element (`DeviceKernelWref.lean`). These are (C2)'s per-row cap protocol and til
 TT_OUT reads the same game, and rev1's TT_OUT on the split workload bounds it as it does (C2)'s
 (`RowSeedKGamma.lean`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

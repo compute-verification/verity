@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwRows
-import Proofs.Flock.Claims.ZK.FinishSwSv
-import Proofs.Flock.Claims.ZK.InnerTauRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwRows
+public import Proofs.Flock.Claims.ZK.FinishSwSv
+public import Proofs.Flock.Claims.ZK.InnerTauRep
 
 /-!
 # `hinner` at the switched source
@@ -23,6 +25,8 @@ begins at `repSlot … (innerOff 0)`.
 * **`swSrcE_hinner_sv`**: `swSrcE_hinner` with `hsw` from `hpiop`'s switched vectors (`hpsv`): no premise on the
   firewall's runs is left.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

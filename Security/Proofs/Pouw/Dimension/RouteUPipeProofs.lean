@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.Dimension.RouteUPipe
-import Proofs.Pouw.Dimension.PipeProofs
-import Proofs.Pouw.Dimension.ForestProofs
-import Proofs.Pouw.Dimension.RouteUProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.RouteUPipe
+public import Proofs.Pouw.Dimension.PipeProofs
+public import Proofs.Pouw.Dimension.ForestProofs
+public import Proofs.Pouw.Dimension.RouteUProofs
 
 /-!
 # `A1_cost` in the closed scalar pipe on route U: proofs
@@ -13,6 +15,8 @@ import Proofs.Pouw.Dimension.RouteUProofs
   and with it `algBoundQuad8U`.
 * `a1CostWitnessU`, `pipeWitnessU`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.RouteUProofs
 
