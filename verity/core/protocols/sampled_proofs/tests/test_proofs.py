@@ -13,7 +13,8 @@ is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
 names them or not. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
-accepted session under another population is rejected (`population_why`). A registration whose partition object queries
+accepted session under another population is rejected (`population_why`); a circuit file whose units commit more than
+the widest class is refused (`unit_class_why`, fast tests). A registration whose partition object queries
 the program for another population is rejected at setup, by the v2 audit and by `verify` alike: the circuit file binds the
 digest of its own partition object.
 
@@ -105,6 +106,32 @@ def test_the_population_is_the_public_files_units_in_order(indices, strata, ok):
     assert (why is None) == ok, why
     if not ok:
         assert why.startswith("partition: "), why
+
+
+@pytest.mark.parametrize("in_words, const_pos, out_col, outs, bits", [
+    (1, 200, 1, [2], 32),
+    (1, 140, 1, [2, 0, 1], 24),
+    (2, 300, 0, [3], 0),
+    (0, 100, 0, [1, 1], 32),
+], ids=["among the computed rows", "cut at the constant", "on input columns", "two copies"])
+def test_a_units_returned_output_bits_are_its_output_columns_among_its_computed_rows(in_words, const_pos, out_col, outs,
+                                                                                    bits):
+    """`file_out_bits` (`FilePart.outBitsAt`) counts, per copy, the 16 columns an output leaf takes from its group's
+    first word that are computed rows: past the input columns, before the constant."""
+    assert PF.file_out_bits(in_words, const_pos, out_col, outs) == bits
+
+
+@pytest.mark.parametrize("srcs, out_bits, ok", [
+    (0, 0, True), (262_000, 144, True), (262_000, 145, False), (262_145, 0, False), (1, 262_144, False),
+], ids=["nothing", "the widest class", "a bit past it", "sources alone past it", "outputs and a source past it"])
+def test_a_circuit_file_unit_wider_than_the_widest_class_is_refused(srcs, out_bits, ok):
+    """`unit_class_why` (`FilePart.classWhy`) refuses a circuit file whose units' owned sources and returned output bits
+    together exceed `UNIT_CLASS_MAX`, naming the bits, and passes one whose units fit."""
+    why = PF.unit_class_why(srcs, out_bits)
+    assert (why is None) == ok, why
+    if not ok:
+        assert why == (f"partition: each of the circuit file's units commits {srcs + out_bits} bits, more than the "
+                       "widest class, 262144"), why
 
 
 def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:

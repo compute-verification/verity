@@ -948,6 +948,23 @@ def file_population(j):
     return {"why": PF.population_why(indices, strata)}
 
 
+def file_unit_class(j):
+    """`FilePart.classPiece` (`proofs.file_out_bits`, `proofs.unit_class_why`): the returned output bits a circuit
+    file's unit holds at its unit net's columns and its copies' output leaves, the bits it commits beside the sources it
+    owns, and why they fit no public size class."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    outs = j.get("outs")
+    if not (isinstance(outs, list) and all(map(_nat, outs))):
+        raise D.Reject("outs is not a list of natural numbers")
+    for k in ("in_words", "const_pos", "out_col", "srcs"):
+        if not _nat(j.get(k)):
+            raise D.Reject(f"{k} is not a natural number")
+    out = PF.file_out_bits(j["in_words"], j["const_pos"], j["out_col"], outs)
+    return {"bits": j["srcs"] + out, "out_bits": out, "why": PF.unit_class_why(j["srcs"], out)}
+
+
 def bound(j):
     j = _json(j)
     ss = j.get("strata") if isinstance(j, dict) else None
@@ -2664,6 +2681,29 @@ def file_populations(draw) -> dict:
 FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
                                                                                   JSON), package=PACKAGE)
 
+
+@st.composite
+def file_unit_classes(draw) -> dict:
+    """The file_unit_class piece's input: a unit net's input words, constant row and returned-output group, which puts
+    its copies' output leaves on input columns, computed rows or past the constant, and owned sources mostly few, else
+    within two bits of the widest class."""
+    j = {"const_pos": draw(st.integers(0, 1200)), "in_words": draw(st.integers(0, 4)),
+         "out_col": draw(st.integers(0, 10)), "outs": draw(st.lists(st.integers(0, 40), max_size=4))}
+    edge = P.UNIT_CLASS_MAX - PF.file_out_bits(j["in_words"], j["const_pos"], j["out_col"], j["outs"])
+    return {**j, "srcs": draw(st.one_of(st.integers(0, 600), st.integers(max(0, edge - 2), edge + 2)))}
+
+
+@st.composite
+def changed_unit_classes(draw) -> dict:
+    """A file_unit_class input with one field not a natural number."""
+    j = draw(file_unit_classes())
+    return {**j, draw(st.sampled_from(sorted(j))): draw(st.sampled_from([-1, "1", True, None, {"a": 1}]))}
+
+
+FILE_UNIT_CLASS = D.Port(PIECES, "file_unit_class", file_unit_class,
+                         st.one_of(file_unit_classes(), file_unit_classes(), changed_unit_classes(), JSON),
+                         package=PACKAGE)
+
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3342,7 +3382,7 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
-              (CHECK_PROVED, 300), (BOUND, 500),
+              (FILE_UNIT_CLASS, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
