@@ -674,10 +674,11 @@ file's (`flock-circuit --salt-refs REFS`, the service's address in `FC_FIREWALL_
 (`--salt-key`, `--commitments`; `FC_FIREWALL_SALT_KEY`, `FC_FIREWALL_COMMITMENTS`), the session loop serves no statement
 any of whose hm96 trees is not a table the server committed, at its domain, leaf count, schema and root
 (`Salts.checkStatement`: `refused WHY` before any session). Each leaf's `c` is the SHA-512 of its salt, so a witness passes
-only on the server's salts: one on salts of the stack's own stops at its `Finish` with no proof (`zk_value_salts`'s
-`kept`), and a statement the stack committed under its own salts is refused by the loop (`own`). That the salts stay hidden
-from the workers rests on the deployment: the key file is created its owner's alone, and the service and the loop run
-under the ZK server's own user, which no worker shares (the selftest runs them all under one).
+only on the server's salts: one on salts of the stack's own is rejected at its opening, where the value commitments'
+claims are checked (`zk_value_salts`'s `kept`), and a statement the stack committed under its own salts is refused by
+the loop (`own`). That the salts stay hidden from the workers rests on the deployment: the key file is created its
+owner's alone, and the service and the loop run under the ZK server's own user, which no worker shares (the selftest
+runs them all under one).
 
 ### 10.3 The rule, inner phase (`rec_live`)
 

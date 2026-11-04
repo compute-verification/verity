@@ -5578,7 +5578,8 @@ fn worker_pads_case(gpu: bool) -> Value {
 /// choosing; a refs file names the service's tables and every row. Three firewalled CPU sessions, each in a process of its
 /// own, the session loop given the server's key and the refs (`--salt-key`, `--commitments`):
 /// * `overwritten`: the prover takes the server's salts in place of the stack's (`--salt-refs`), and the session is accepted;
-/// * `kept`: the prover keeps the stack's salts, which open none of the service's commitments, and no proof leaves;
+/// * `kept`: the prover keeps the stack's salts, which open none of the service's commitments, and the auditor rejects the
+///   session at its opening, where the value commitments' claims are checked;
 /// * `own`: the staged file as the stack committed it, under salts of its own: the loop refuses the statement before any
 ///   session, since none of its roots carries the server's tag.
 ///
@@ -5691,7 +5692,8 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     let sessions = json!({
         "overwritten": {"ok": over["accepted"] == true && proofs(&over) > 0, "accepted": over["accepted"], "proofs": proofs(&over),
                         "why": over["why"], "error": over["error"], "refused": over["refused"]},
-        "kept": {"ok": over["accepted"] == true && kept["accepted"] != true && kept["error"].is_null() && proofs(&kept) == 0,
+        "kept": {"ok": over["accepted"] == true && kept["accepted"] == false && kept["error"].is_null()
+                     && kept["why"].as_str().is_some_and(|w| w.starts_with("opening: ")),
                  "accepted": kept["accepted"], "proofs": proofs(&kept),
                  "prover_stopped": kept["prover_stopped"].as_str().unwrap_or("").chars().take(200).collect::<String>(),
                  "why": kept["why"].as_str().unwrap_or("").chars().take(200).collect::<String>(), "error": kept["error"]},
@@ -5700,7 +5702,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     });
     let pass = service["ok"] == true && ["overwritten", "kept", "own"].iter().all(|k| sessions[k]["ok"] == true);
     Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's and the session is accepted; the stack's kept, \
-                                                 no proof; the stack's own commitments refused by the loop; a salt in a commit, a short \
+                                                 rejected at the opening; the stack's own commitments refused by the loop; a salt in a commit, a short \
                                                  refs file and a forged tag refused by the service",
               "service": service, "sessions": sessions, "pass": pass}))
 }
