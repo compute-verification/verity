@@ -632,7 +632,7 @@ theorem nat?_of_jeq_toJson {a : Json} {n : ℕ} (h : jeq a (Lean.toJson n) = tru
     cases hp2
     obtain rfl := same_num hs2
     obtain rfl := same_num hs1.symm
-    first | rfl | simp [nat?, int?, JsonNumber.fromNat]
+    rfl
   rw [toJson_canon] at hn
   cases hn
   obtain ⟨d, ds, hd, -, h9⟩ := digits_head n
