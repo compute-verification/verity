@@ -37,7 +37,7 @@ theorem setup_sha512Digests {I : Exec.Inputs} {own : Option ByteArray} {record :
   unfold Exec.setupOfP at hs
   rcases HiddenExec.setupTables_okHP ((ZkExec.zkTags_hiddenOutputs I).trans hh) hs with
     ⟨-, st, hst, rfl, -⟩ | ⟨h1, -⟩
-  · obtain ⟨-, hP⟩ := Hidden.setupHidden_specP hst
+  · obtain ⟨_, hP⟩ := Hidden.setupHidden_specP hst
     show st.tags.hm96Rows = true
     rw [hP.tagsEq]
     exact (ZkExec.zkTags_hm96Rows I).trans hr
