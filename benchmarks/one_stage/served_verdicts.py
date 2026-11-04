@@ -14,7 +14,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
                                  [--main FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-                              [--product P] [--deferred WHY] [--key-sha512 HEX] [--lane L]
+                              [--product P] [--deferred WHY] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -103,8 +103,9 @@ document carries the passes, that verdict's line and credit at Pearl's Assumptio
 (`PEARLPLUS_COINS`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`PEARLPLUS_WHY`:
 its passes are not the window sampled proofs audited). ``record`` composes an accepted one as PoUW's verdict of record
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
-open Pearl-C period, the window's registration chained after Pearl+'s window record, and the Lean
-`PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the first condition it fails.
+open Pearl-C period, the window's registration chained after Pearl+'s window record (the window tied to W under
+``--window-tie``, default ``--sampled-proofs``), and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its
+row stays missing, naming the first condition it fails.
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -1246,7 +1247,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
         return None, ("Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so "
                       "nothing ties them to the window")
     if sampled_proofs is None:
-        return None, "the compose names no window registration to tie W to (--sampled-proofs)"
+        return None, "the compose names no window registration to tie W to (--window-tie, else --sampled-proofs)"
     try:
         reg = json.loads((sampled_proofs / WINDOW_REGISTRATION).read_text())
         summary = json.loads((sampled_proofs / AUDIT_SUMMARY).read_text())
@@ -1563,6 +1564,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--lane", default="vllm", help="the lane whose own gate key Pearl+'s live session must be reserved "
                                                   "under, in its open period, for a verdict of record "
                                                   "(PEARLC_CHALLENGER_LANE)")
+    r.add_argument("--window-tie", type=Path, help="where Pearl+'s tie to the window is read for a verdict of record: the "
+                   "window tied to W, its windows/rank0/registration.json and its records audit's summary.json (default "
+                   "--sampled-proofs)")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -1685,7 +1689,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
-    got = {k: piece(k, a.pieces, run, sampled_proofs=a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
+    got = {k: piece(k, a.pieces, run, sampled_proofs=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
            for k in keys}
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
