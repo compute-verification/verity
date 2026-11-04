@@ -2435,7 +2435,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         if "cites" in text and text["cites"] != g:
             fails.append(Failure("domain.cites", d, f"domain: {d}'s entry cites {text['cites']!r}, which is no listed "
                                  f"guarantee whose statement is {d}" + (f" ({g}'s is)" if g else "") + ": cite that "
-                                 f"guarantee, or drop `cites`"))
+                                 "guarantee, or drop `cites`"))
         if who := uncovered(d):
             ws = (policy.get("witnesses") or {})
             fails.append(Failure("domain.uncovered", d, f"domain: {d} is a domain hypothesis of {', '.join(who)}, whose "
