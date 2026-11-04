@@ -6,8 +6,9 @@ the connections its schedule's caps count (other caps are the connections' error
 each monitoring period's node proved where the run's period covers it and else scaled from the run, and the
 datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
 by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or in
-the clock form, is the bound's error. The served run's advice charge stays out of the record, the registered width
-stands as its upper bound, and a test run's measurement is stated beside the bound as that run's. The run's `publish`
+the clock form, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
+its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
+the bound as that run's. The run's `publish`
 leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
 accepted."""
 from __future__ import annotations
@@ -133,7 +134,7 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert rec["bound"] == {"missing": "the network certifier's verdict is missing (CERTIFIER_CMD unset: the network "
                                        "certifier in front of the serving endpoint): only its accepted answer certifies K"}
     assert rec["periods"] == {"missing": "no bound"}
-    assert rec["advice_charge"] == {"served": OR.ADVICE, "registered": {"missing": "no bound"},
+    assert rec["advice_charge"] == {"served": OR.ADVICE, "charged": {"missing": "no bound"},
                                     "measured": {"missing": OR.NO_MEASUREMENT}}
     assert numbers({k: rec[k] for k in ("bound", "periods", "verdicts", "advice_charge")}) == []
     assert "window" not in rec and rec["tree"] is None
@@ -160,9 +161,9 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
-    assert rec["advice_charge"]["registered"] == {
-        "label": "registered width, an upper bound on the honest charge", "bits_per_phase": [9088],
-        "share": 9088 / K, "lean": "scans[i].free"}
+    assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
+                                               "lean": "scans[j].free"}
+    assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
 
 
 def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever_the_traffic(tmp_path):
@@ -314,7 +315,7 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
         "label": MEASURED["label"], "run": "toy-test", "from": str(f), "bits_per_commit_period": MEASURED["bits"],
         "bits_per_phase": MEASURED["phase_bits"], "commit_periods_measured": 2, "finishes": MEASURED["finishes"],
         "prompt_len": MEASURED["prompt_len"], "output_len": MEASURED["output_len"]}
-    assert (rec["advice_charge"]["served"], rec["advice_charge"]["registered"]["bits_per_phase"]) == (OR.ADVICE, [9088])
+    assert (rec["advice_charge"]["served"], rec["advice_charge"]["charged"]["bits_per_phase"]) == (OR.ADVICE, [9088])
     assert json.loads(capsys.readouterr().out.strip()[7:])["advice_measured_on"] == "toy-test"
     f.write_text(json.dumps(MEASURED | {"phase_bits": None, "by_phase": {"missing": "no clock"}}))
     assert OR.main([str(out), "--advice-charge", str(f)]) == 0

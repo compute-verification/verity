@@ -34,8 +34,9 @@ connections k_sched and k_fail count, every one the schedule can carry (`CONNECT
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the record
-(`ADVICE`, which says what hides it and what doesn't yet); ``registered`` is ℓ_{a,j}, the registered width each
-execution phase's term charges, an upper bound on the honest charge (`REGISTERED`), with its share of K; and
+(`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is ℓ_{a,j} as the bound charges each
+execution phase, with its share of K and its source (`CHARGED`: the tied compute audits' unregistered inputs, read off
+the period's parameters, with no advice length and no cap in them); and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
 clock), measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
@@ -94,7 +95,7 @@ PHASE_TERMS = {"\\ell_{a,j}": ("free",), "k_{skip,j}": ("faulty_sets", "faulty_b
 ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
-          "committed; the bound charges ℓ_{a,j}, the registered width")
+          "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
@@ -119,7 +120,12 @@ UNVALUED = ("δ_net is eps plus each execution phase's ε_ks, ε_bind and ε_tap
             "three, so δ_net has no number here")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
-REGISTERED = "registered width, an upper bound on the honest charge"
+CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
+           "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
+           "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
+           "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
+           "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
+           "cap_bits) nor |a_j| is in it")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
     "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
@@ -325,11 +331,11 @@ def lines(out: Path, name: str) -> list[str]:
         return []
 
 
-def registered(b: Mapping[str, Any]) -> dict[str, Any]:
-    """ℓ_{a,j}, each execution phase's registered width, and their share of K."""
+def charged(b: Mapping[str, Any]) -> dict[str, Any]:
+    """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), and their share of K."""
     free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
-    return {"label": REGISTERED, "bits_per_phase": free, "share": float(Fraction(sum(free), b["K"])),
-            "lean": "scans[i].free"}
+    return {"is": CHARGED, "bits_per_phase": free, "share": float(Fraction(sum(free), b["K"])),
+            "lean": "scans[j].free"}
 
 
 def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
@@ -337,7 +343,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
-    advice = {"served": ADVICE, "registered": {"missing": "no bound"}, "measured": measured(advice_charge)}
+    advice = {"served": ADVICE, "charged": {"missing": "no bound"}, "measured": measured(advice_charge)}
     rows = report.get("protocols") or {}
     found = composites(out)
     v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
@@ -371,7 +377,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except ValueError as e:
         return rec | {"bound": {"error": str(e)}, "periods": {"missing": "no bound"}}
     b["verdict_line"] = next((x for x in reversed(lines(out, "verdicts.txt")) if x.startswith(LINE)), None)
-    advice["registered"] = registered(b)
+    advice["charged"] = charged(b)
     b["period_s"] = None
     try:
         phase_s, connections = schedule(json.loads((out / CASE).read_text()), b["phases"])
