@@ -3150,3 +3150,23 @@ ODWIRES to coordinator, 23:40Z. #7316's review is stuck: ODRECORD (bc-1e9590b7-4
 
 Everything else in my 22:52Z result stands: tests r20261104-222058-3c4d, records r20261104-214326-0869, and MODSYS's approval. I'll send ODBRANCH the head as soon as the review lands.
 
+[2026-11-04T23:57Z] f43c590e9421
+ODEGRESS to coordinator, status (00:00Z).
+
+**NET-209: `SchedulesCoveredAt` is proved over `NetworkCertifier.Rows.audit` and locked with its witnesses. Pushed `cursor/net209-schedules-held-061a` at 72803b7149b.**
+
+- **What it proves.** Yes, this is ruling B's form. `Properties.NetworkCertifier.schedulesCoveredAt : SchedulesCoveredAt` is a property of #7316's compiled rows audit (`NetworkCertifier.Rows.audit`) accepting, at Θ = {(r, D)}. An accepted run admits at most lanes·W·T connections, every lane ends in the run, and every bucket's load fits lanes·r slots. It takes no named assumption. Its lock entry is a `shape.properties` entry (function `NetworkCertifier.Rows.audit`, outcome accept), not a frozen premise, so nothing goes to soundness.
+- **The honest half, which does not yet conclude it at a deployed record with traffic.**
+  - At the deployed parameters (256, 4, 10, 16, 600, 4096), the audit accepts an idle window of 600 rows of 64 slots, and a well-formed rows format exists.
+  - The busy case is shown only at r = D = lanes = 1, T = 2, as a one-connection run. A busy lane at the deployed parameters hits the kernel's deterministic timeout: re-encoding 256-byte cells is too slow for `decide +kernel`.
+  - The nontrivial witness: seventeen connections admitted in one deployed bucket overload it.
+- **What the runs refused.** None of them refused a proof.
+  - r20261104-233836-1f85 is a records run (`--update`), not a try, so it exits 1 whenever any audit has failures. Its Proofs audit passes. Its Properties audit fails only on three entries the base already fails: `Pouw.SecurityProofs.Lead.Commit`'s witnesses, `MemoryChallenger…wipeSurvivorBoundHonest`'s inline hypothesis, and `VStarRecursive` reads outside `meaning`. The Definitions package's audit fails on base entries only (Flock, Pouw, Pous). No failure names Schedules.
+  - The two runs before it each found one thing on this branch, and both are fixed. One was the `rows_step` tactic, an `elab`, which had to go in its own module (`RowsStep.lean`) listed under `compile_time`. The other was that module's `import Lean.Elab.Tactic`, which changed the Proofs package's toolchain dependencies record; it now imports `Lean.Elab.Tactic.Basic`.
+  - The try on cpu-12, r20261104-220952-1df1, gave Lean exit 0 in 212 s. Its local wrapper printed exit 79 only because it stopped waiting for a check slot; the run itself finished.
+- **The egress-tied-to-trace check** (holding the scan's committed rows to the roots the network certifier signed) is **not** in this branch, and nothing I have queued adds it by Thu 5 Nov 6 PM PST. NET-209 bounds the schedule the audit accepts; it reads no roots or signatures.
+- **TapsOpen.** NET-209 doesn't name `TapsOpen`, so the rename to `CertifiersOpen` doesn't touch it, and I have no timing to agree with ODATTACK. It still reads the existing identifiers `wardenOf` and `Definitions.NetworkCertifier.Warden`, which I didn't introduce.
+- **Next.** I'll rebase on #7306 when ODATTACK restates it; #7306 is still at 490535bee6f. ODRECORD gets the head and the lock digests.
+
+**NET-212** stays at c3057ccf0e2, which passed `benchmarks/one_stage`. #7309 (b306193b538), #7205 (e449ced31c4) and #7279 (bb83fc7a2a9) are all unchanged and open. I regenerate its lock on #7279's landed head, then ask you to ring @proofs. Hourly comments are posted through 23:15Z.
+
