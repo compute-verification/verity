@@ -242,16 +242,13 @@
    "long": "03:00Z coordinator",
    "measured_at": "d96d3c3dfc8",
    "gpu_min_per_seed": 926,
-   "label": "single seed: a rerun doesn't fit before the nodes end",
+   "label": "single seed, search split only: a rerun doesn't fit before the nodes end, and its submission wasn't kept, so it has no sealed evaluation",
    "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
    "by": "scorer",
    "reruns": [
     {
      "seed": "reached",
-     "node": "vy-nebius-3",
-     "queue_at": "08:00Z",
-     "ends_by": "08:45Z",
-     "launch": "CW_FINAL=1 python evaluate.py --split final from its measurement commit d96d3c3dfc8 over vy-nebius-3's copy /workspace/research/runs/r20261103-121552-4551/out (its E/ files; custody ends 12:15Z), the coordinator's 06:18Z ruling"
+     "skipped": "no sealed evaluation possible: evaluate.py reads the submission's E.bin (294434307 bytes, sha256 827de581b72f303cfccaf6354f8561cb4238c9b5d654203cfcb3cc539d557ea1), and candidate.sh at d96d3c3dfc8 keeps E.bin in OUT only up to 1 MB, so its only copies (sub/E.bin and the harness's E/) were in the scratch directory its EXIT trap removed at 02:34Z; vy-nebius-3's run directory and the local copy hold its sha, run.json and witness.json (search split valid, bpb 1.104978) but no E"
     }
    ]
   },
