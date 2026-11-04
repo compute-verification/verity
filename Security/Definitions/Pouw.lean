@@ -30,6 +30,7 @@ import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
+import Definitions.Pouw.KeyedLeaf
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs
@@ -138,6 +139,12 @@ The operand encodings, the int8 GEMM and its epilogue, and g1 on sm_120's record
 
 H1's sampled-leaf checks on words (`Combine`, `Lane`, `Tile`), as `verity/core/protocols/pouw/circuit/h1zy.py` builds
 them.
+
+## `KeyedLeaf`: the lead's keyed commitments
+
+A window's view, the key leaf and each instance's keyed digest (`Hash.Keyed`), and the two games its hiding reads, each
+with `A`'s distinguisher in it: hm96's hiding game and the keyed digest's game against a random function. Their
+statements are `Definitions.Pouw.Guarantees.KeyedLeaf`, proved in `Proofs.Pouw.Salt`.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 
