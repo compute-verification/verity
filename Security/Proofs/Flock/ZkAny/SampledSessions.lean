@@ -30,7 +30,7 @@ open Claims Verity Verity.Game Verity.ValueSalts Verity.Assumptions
 open scoped ENNReal
 
 /-- **The record a stack hands the loop** as registration `n`, at the key and sessions `p`. -/
-def recOf {K S Y V O T R : Type} (sv : Service K S Y V O T R) (n : ℕ) {m : ℕ} (v : V) (st : Stack K V S O T R m)
+def recOf {K S Ys V O T R : Type} (sv : Service K S Ys V O T R) (n : ℕ) {m : ℕ} (v : V) (st : Stack K V S O T R m)
     (p : K × (Fin m → S)) : RegistrationRecord S O T R :=
   sv.handed p.1 n v p.2 (st p.1 v (sv.views p.1 v p.2))
 
@@ -38,33 +38,33 @@ def recOf {K S Y V O T R : Type} (sv : Service K S Y V O T R) (n : ℕ) {m : ℕ
 sample `χ` and the earlier sessions' messages `b`: its statement `x`, its verifier `Vs` and the verifier's tape `θ`. At
 the registration's randomness `p`, the sample, the earlier sessions' randomness `π` and their messages: its prover's
 parameters `i` and its witness `w`. -/
-structure Sessions (Rec X P ι W A Θ : Type) where
-  x : (j : ℕ) → Rec → X → Tup (fun _ => List (Msg × Out)) j → Msg
-  Vs : (j : ℕ) → Rec → X → Tup (fun _ => List (Msg × Out)) j → VStar Θ
-  θ : (j : ℕ) → Rec → X → Tup (fun _ => List (Msg × Out)) j → Θ
-  i : (j : ℕ) → P → X → Tup (fun _ => A) j → Tup (fun _ => List (Msg × Out)) j → ι
-  w : (j : ℕ) → P → X → Tup (fun _ => A) j → Tup (fun _ => List (Msg × Out)) j → W
+structure Sessions (Rec Xs P ι W A Θ : Type) where
+  x : (j : ℕ) → Rec → Xs → Tup (fun _ => List (Msg × Out)) j → Msg
+  Vs : (j : ℕ) → Rec → Xs → Tup (fun _ => List (Msg × Out)) j → VStar Θ
+  θ : (j : ℕ) → Rec → Xs → Tup (fun _ => List (Msg × Out)) j → Θ
+  i : (j : ℕ) → P → Xs → Tup (fun _ => A) j → Tup (fun _ => List (Msg × Out)) j → ι
+  w : (j : ℕ) → P → Xs → Tup (fun _ => A) j → Tup (fun _ => List (Msg × Out)) j → W
 
 namespace Sessions
 
-variable {Rec X P ι W A Θ St : Type} (Q : Sessions Rec X P ι W A Θ)
+variable {Rec Xs P ι W A Θ St : Type} (Q : Sessions Rec Xs P ι W A Θ)
 
 /-- **Session `j`'s messages** at its own randomness `ω`: the prover `Pv` at the session's parameters and witness,
 against its verifier, at its statement, the record being `ρ p`. -/
-def rel (H : Msg → Msg) (Pv : ι → W → Msg → Prover A) (ρ : P → Rec) (p : P) (χ : X) (j : ℕ)
+def rel (H : Msg → Msg) (Pv : ι → W → Msg → Prover A) (ρ : P → Rec) (p : P) (χ : Xs) (j : ℕ)
     (π : Tup (fun _ => A) j) (b : Tup (fun _ => List (Msg × Out)) j) (ω : A) : List (Msg × Out) :=
   (runStar H (Pv (Q.i j p χ π b) (Q.w j p χ π b) (Q.x j (ρ p) χ b)) (Q.Vs j (ρ p) χ b) (Q.x j (ρ p) χ b) ω
     (Q.θ j (ρ p) χ b)).msgs
 
 /-- **Session `j`'s outcome**, read off its messages by `out` at its statement. -/
 def outc (out : Msg → List (Msg × Out) → St) (H : Msg → Msg) (Pv : ι → W → Msg → Prover A) (ρ : P → Rec) (p : P)
-    (χ : X) (j : ℕ) (π : Tup (fun _ => A) j) (b : Tup (fun _ => List (Msg × Out)) j) (ω : A) : St :=
+    (χ : Xs) (j : ℕ) (π : Tup (fun _ => A) j) (b : Tup (fun _ => List (Msg × Out)) j) (ω : A) : St :=
   out (Q.x j (ρ p) χ b) (Q.rel H Pv ρ p χ j π b ω)
 
 /-- **Session `j`'s simulator** at the record `ρ`, the sample and the earlier simulated messages `b`, given its outcome
 `o`: `Sm` given `o`, against the session's verifier, at its statement, its coins read through `eC`. -/
 def sim (Sm : SimOut St) (H : Msg → Msg) {CB : ℕ → Type} (eC : ∀ j ρ χ b, CB j ≃ Sm.C (Q.x j ρ χ b)) (ρ : Rec)
-    (χ : X) (j : ℕ) (_s : Tup (fun _ => St) j) (b : Tup (fun _ => List (Msg × Out)) j) (o : St) (c : CB j) :
+    (χ : Xs) (j : ℕ) (_s : Tup (fun _ => St) j) (b : Tup (fun _ => List (Msg × Out)) j) (o : St) (c : CB j) :
     List (Msg × Out) :=
   (Sm.given o).out H (Q.Vs j ρ χ b) (Q.θ j ρ χ b) (Q.x j ρ χ b) (eC j ρ χ b c)
 
@@ -78,14 +78,14 @@ protocol's `k` rounds, its error is at most `εS j` at each outcome, its simulat
 `eC`, and an ideal record of `v` is within `δ` of one of `v₀`, the audit's view at the sessions' outcomes `s` is
 `SampledAuditAny`'s bound, with the sessions' simulators run in turn (`Tup.sims`) and their errors added
 (`Tup.errs εS ℓ s`). -/
-theorem sampledAudit_zkOut {K S Y V O T R X ι W St N₀ Ω₀ Θ : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T]
-    [Fintype R] [Fintype X] [Fintype N₀] [Nonempty N₀] [Fintype Ω₀] [Nonempty Ω₀] {CB : ℕ → Type}
+theorem sampledAudit_zkOut {K S Ys V O T R Xs ι W St N₀ Ω₀ Θ : Type} [Fintype K] [Fintype S] [Fintype Ys] [Fintype T]
+    [Fintype R] [Fintype Xs] [Fintype N₀] [Nonempty N₀] [Fintype Ω₀] [Nonempty Ω₀] {CB : ℕ → Type}
     [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] {H : Msg → Msg} {k : Msg → ℕ}
     {Pv : ι → W → Msg → Prover (N₀ × Ω₀)} {Rl : Rel W} {out : Msg → List (Msg × Out) → St} {Sm : SimOut St}
     {ε : ι → (x : Msg) → W → (Θ' : Type) → VStar Θ' → Θ' → St → ℝ} {ok : ι → Prop}
     (hZ : ∀ i, ok i → ZKOut (fun _ => N₀) (fun _ => Ω₀) H k (Pv i) Rl out Sm (ε i))
-    (sv : Service K S Y V O T R) (n m : ℕ) (v v₀ : V) (st : Stack K V S O T R m) (k₀ : K) (ℓ : ℕ)
-    (Q : Sessions (RegistrationRecord S O T R) X (K × (Fin m → S)) ι W (N₀ × Ω₀) Θ)
+    (sv : Service K S Ys V O T R) (n m : ℕ) (v v₀ : V) (st : Stack K V S O T R m) (k₀ : K) (ℓ : ℕ)
+    (Q : Sessions (RegistrationRecord S O T R) Xs (K × (Fin m → S)) ι W (N₀ × Ω₀) Θ)
     (eC : ∀ j ρ χ b, CB j ≃ Sm.C (Q.x j ρ χ b)) (εS : ℕ → St → ℝ≥0∞) (δ : ℝ≥0∞) (hown : ZkServerOwnUser st)
     (hok : ∀ j p χ π b, ok (Q.i j p χ π b))
     (hR : ∀ j p χ π b, Rl (Q.x j (recOf sv n v st p) χ b) (Q.w j p χ π b))
@@ -93,12 +93,12 @@ theorem sampledAudit_zkOut {K S Y V O T R X ι W St N₀ Ω₀ Θ : Type} [Finty
     (hε : ∀ j p χ π b o, ENNReal.ofReal (ε (Q.i j p χ π b) (Q.x j (recOf sv n v st p) χ b) (Q.w j p χ π b) Θ
       (Q.Vs j (recOf sv n v st p) χ b) (Q.θ j (recOf sv n v st p) χ b) o) ≤ εS j o)
     (hδ : ∀ A, sv.ideal n m v A ≤ sv.ideal n m v₀ A + δ) (s : Tup (fun _ => St) ℓ)
-    (E : RegistrationRecord S O T R → X → Tup (fun _ => List (Msg × Out)) ℓ → Prop) :
-    prCoin (fun q : (K × (Fin m → S)) × X × Tup (fun _ => N₀ × Ω₀) ℓ =>
+    (E : RegistrationRecord S O T R → Xs → Tup (fun _ => List (Msg × Out)) ℓ → Prop) :
+    prCoin (fun q : (K × (Fin m → S)) × Xs × Tup (fun _ => N₀ × Ω₀) ℓ =>
         sv.admits q.1.1 (recOf sv n v st q.1) ∧
           Tup.outs (Q.outc out H Pv (recOf sv n v st) q.1 q.2.1) (Q.rel H Pv (recOf sv n v st) q.1 q.2.1) ℓ q.2.2 = s ∧
             E (recOf sv n v st q.1) q.2.1 (Tup.rels (Q.rel H Pv (recOf sv n v st) q.1 q.2.1) ℓ q.2.2)) ≤
-      m * (avg (fun q : X × Tup CB ℓ =>
+      m * (avg (fun q : Xs × Tup CB ℓ =>
           sv.ideal n m v₀ (fun ρ => E ρ q.1 (Tup.sims (Q.sim Sm H eC ρ q.1) ℓ s q.2)) +
             sv.prfAdvantage n m v (fun ρ => E ρ q.1 (Tup.sims (Q.sim Sm H eC ρ q.1) ℓ s q.2))) + δ) +
         sv.forgeAdvantage n m v (st k₀ v) + Tup.errs εS ℓ s := by

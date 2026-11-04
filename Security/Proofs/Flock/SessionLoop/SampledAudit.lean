@@ -53,7 +53,7 @@ messages, the probability that the loop admits the record and the audit shows `s
 average over the sample and the simulators' coins of `E` on an ideal record of `v₀` with the simulators' messages, plus
 the PRF gap there, plus `N·2δ₁`), plus the forge term, plus the sessions' errors at `s`. -/
 def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
-  ∀ {K S V O T R X Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Fintype X] {N : ℕ} {CB : ℕ → Type}
+  ∀ {K S V O T R Xs Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Fintype Xs] {N : ℕ} {CB : ℕ → Type}
     [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (sv : Service K S (Fin N → ZkView.Salt) V O T R)
     (Hc : ZkView.Bits × ByteArray → D) (dig : V → Fin N → ZkView.Bits) (g : (Fin N → D) → O),
     (∀ v y, sv.out v y = g fun i => Hc (dig v i + ZkView.My (y i), ZkView.saltHash (y i))) →
@@ -64,7 +64,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
       (src : Msg → Claims.Flock.Wit →
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
         ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-      (Q : Sessions (RegistrationRecord S O T R) X (K × (Fin m → S))
+      (Q : Sessions (RegistrationRecord S O T R) Xs (K × (Fin m → S))
         ((CoinLayer.session Loop.loopNr Masked.dataE).SwVals ×
           (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Worker) Claims.Flock.Wit
         (((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
@@ -83,8 +83,8 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
     (∀ j p χ π b o, ENNReal.ofReal (Loop.anyErr Masked.dataE (Q.i j p χ π b).1
         (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t (Q.x j (recOf sv n v st p) χ b)
         (Q.w j p χ π b) Θ (Q.Vs j (recOf sv n v st p) χ b) (Q.θ j (recOf sv n v st p) χ b) o) ≤ εS j o) →
-    ∀ (s : Tup (fun _ => Bool) ℓ) (E : RegistrationRecord S O T R → X → Tup (fun _ => List (Msg × Out)) ℓ → Prop),
-      prCoin (fun q : (K × (Fin m → S)) × X × Tup (fun _ =>
+    ∀ (s : Tup (fun _ => Bool) ℓ) (E : RegistrationRecord S O T R → Xs → Tup (fun _ => List (Msg × Out)) ℓ → Prop),
+      prCoin (fun q : (K × (Fin m → S)) × Xs × Tup (fun _ =>
           ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
             (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) ×
             (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Chk) ℓ =>
@@ -100,7 +100,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
                 (Tup.rels (Q.rel CoinOpen.shaH (fun i w _ => (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.proverD
                   (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).fillOf (fun x => refK x + 2) i.2 w)
                   (recOf sv n v st) q.1 q.2.1) ℓ q.2.2)) ≤
-        m * (avg (fun q : X × Tup CB ℓ =>
+        m * (avg (fun q : Xs × Tup CB ℓ =>
             sv.ideal n m v₀ (fun ρ => E ρ q.1 (Tup.sims (Q.sim (Loop.anySim Masked.dataE
               (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t) CoinOpen.shaH eC ρ q.1) ℓ s
                 q.2)) +
@@ -111,7 +111,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
           sv.forgeAdvantage n m v (st k₀ v) + Tup.errs εS ℓ s
 
 theorem SampledAuditAnyDeployed : Flock.Guarantees.SampledAuditAnyDeployed := by
-  intro K S V O T R X Θ D _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC εS hown hok hR
+  intro K S V O T R Xs Θ D _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC εS hown hok hR
     hk hε s E
   exact sampledAudit_zkOut
     (ok := fun i : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals ×
