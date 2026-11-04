@@ -113,6 +113,17 @@ def test_an_honest_pass(exe, tmp_path):
         assert works[0] == works[1] == works[2]
 
 
+def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
+    """The band rule on both sides: weight 1's row 20 fails liveness, so it is excluded and takes its block of 64 columns,
+    all 32 of the second call's.  That call has no ticket and no credit, its exclusion tile is opened and passes, and the
+    run's credited MACs are the first call's alone (its 19 credited rows x 16 columns at |K| = 128)."""
+    path = T.proved_pass(tmp_path, H100, bad_b=20)[0]
+    for rule in (None, *VR.OVER_CAP):
+        got = same(exe, [path], 16, over_cap=rule)
+        assert got["verdict"] == "accept" and got["work"]["over_cap_draws"] == 0
+        assert (got["work"]["macs"], got["work"]["credited_tiles"]) == (19 * 16 * 128, 2)
+
+
 def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
     """Under the zero key a credited row is over its row cap: under ``reject`` the run is rejected; under ``uncredited``
     (the default) it is accepted, each tile over its inert-work bound ok with its bound's reason and credited nothing,

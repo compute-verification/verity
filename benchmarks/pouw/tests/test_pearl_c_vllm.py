@@ -1041,7 +1041,7 @@ def honest_pass(tmp_path, request):
 
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
-                live: int | None = None, spike: float | None = None):
+                live: int | None = None, spike: float | None = None, bad_b: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -1052,7 +1052,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
     `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  With `spike`,
-    credited row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them."""
+    credited row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them.
+    With `bad_b`, that row of the second call's weight fails liveness as the first call's row 5 does, and is excluded."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
@@ -1063,6 +1064,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     if spike is not None:
         a0[9, 1] = np.float32(spike * np.sqrt(np.mean(a0[9, ::8].view(np.float32) ** 2))).view(np.uint32) & 0xFFFF0000
+    if bad_b is not None:
+        wrows[1][bad_b, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
@@ -1079,7 +1082,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={i0: 20})
-    assert records[0].excluded_a == (5,)
+    assert records[0].excluded_a == (5,) and (bad_b is None or records[1].excluded_b == (bad_b,))
     (tmp_path / "calls").mkdir(parents=True)
     (tmp_path / "weights").mkdir()
     weights = {}
