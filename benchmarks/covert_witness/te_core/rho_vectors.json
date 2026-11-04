@@ -36,175 +36,175 @@
 80000000,
 800000000
 ],
-"rule": "fresh_no_cell(c, k) = c \u00d7 fresh_per_c[k][0] (without whole cells), fresh_cell(c, k) = c \u00d7 fresh_per_c[k][1] (with them), and the term is fresh_cell (p_cell true); [null, null] where the term is void with no subset figure, which is computed, so rho's floor reads it as 1 where no other kind exceeds 1; null where fresh_per_c[k] is null (unmeasured) or k is off the dial",
+"rule": "term(c, k) = c \u00d7 fresh_per_c[k][1] (the products term), fresh_old(c, k) = c \u00d7 fresh_per_c[k][0] (the old figure, a sensitivity; null where it is unmeasured, or void with no subset figure); null where fresh_per_c[k] is null (the term unmeasured) or k is off the dial",
 "vectors": [
 {
 "C_gates": 30480169048499.0,
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -247,168 +247,168 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -451,168 +451,168 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -655,168 +655,168 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -859,201 +859,201 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 2869160.606477064,
 "fresh_no_cell": 163340.7608721462,
+"fresh_old": 2869160.606477064,
 "k": 65536,
-"term": 2869160.606477064,
+"term": 123810.72954620286,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 26.330113710873732,
 "fresh_no_cell": 1.4989683037175858,
+"fresh_old": 26.330113710873732,
 "k": 65536,
-"term": 26.330113710873732,
+"term": 1.1362035921650715,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 107848.1457597388,
 "fresh_no_cell": 6139.7741720272315,
+"fresh_old": 107848.1457597388,
 "k": 65536,
-"term": 107848.1457597388,
+"term": 4653.889913508133,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 2089282.2873691695,
 "fresh_no_cell": 130996.04587493495,
+"fresh_old": 2089282.2873691695,
 "k": 80000,
-"term": 2089282.2873691695,
+"term": 53734.921786108076,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 19.173217447764493,
 "fresh_no_cell": 1.2021428064276056,
+"fresh_old": 19.173217447764493,
 "k": 80000,
-"term": 19.173217447764493,
+"term": 0.4931221339367159,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 78533.49866604336,
 "fresh_no_cell": 4923.976935127473,
+"fresh_old": 78533.49866604336,
 "k": 80000,
-"term": 78533.49866604336,
+"term": 2019.8282606047883,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 778359.9495315672,
 "fresh_no_cell": 64339.656057094755,
+"fresh_old": 778359.9495315672,
 "k": 145568,
-"term": 778359.9495315672,
+"term": 0.0,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 7.142962277151958,
 "fresh_no_cell": 0.5904411402685111,
+"fresh_old": 7.142962277151958,
 "k": 145568,
-"term": 7.142962277151958,
+"term": 0.0,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 29257.57348721442,
 "fresh_no_cell": 2418.4469105398216,
+"fresh_old": 29257.57348721442,
 "k": 145568,
-"term": 29257.57348721442,
+"term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 800000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 800000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 800000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 8000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 8000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 8000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 80000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 80000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 80000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 800000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 800000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 800000000,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 }
 ],
 "fresh_per_c": {
 "145568": [
-1.198841361469159e-10,
-1.45031875952435e-09
+1.45031875952435e-09,
+0.0
 ],
 "65536": [
-3.043529794029401e-10,
-5.346109411418509e-09
+5.346109411418509e-09,
+2.306966382318612e-10
 ],
 "80000": [
-2.440850442912279e-10,
-3.892961472564257e-09
+3.892961472564257e-09,
+1.0012432571186088e-10
 ],
 "800000": [
 null,
-null
+0.0
 ],
 "8000000": [
 null,
-null
+0.0
 ],
 "80000000": [
 null,
-null
+0.0
 ],
 "800000000": [
 null,
-null
+0.0
 ]
 },
 "name": "the 45M start's dense step"
@@ -1061,15 +1061,14 @@ null
 ]
 },
 "fresh": {
-"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where every block does, a premise on the partition, which the attacker chooses; the term takes this premise",
-"fresh_no_cell": "sensitivity, without assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where a block may split a multiply cell, as a partition the attacker chooses may; the term assumes whole cells",
+"fresh_no_cell": "rests on P-width extended, false on honest circuits: sensitivity, the old fresh-products figure without assuming that blocks hold whole multiply cells (P-cell), where a block may split a multiply cell",
 "order": "chain",
 "p_cell": true,
-"rests_on": "theorem for this circuit (Loomis-Whitney), given that every value a block reads costs its full width (P-width, extended to what makes operands whole), elementwise steps don't fan out (P-match) and each output is summed along one chain (P-chain), given that blocks hold whole multiply cells (P-cell)",
+"rests_on": "rests on P-width extended, false on honest circuits: sensitivity, the old fresh-products figure, the Loomis-Whitney cap on the products of two operands both paid at their passed width, amortized over the partition with each subset's whole-making chains, on the best subset, given every value a block reads costs its full width (P-width), extended to every value a block reads while making operands whole, elementwise steps don't fan out (P-match), each output is summed along one chain (P-chain), P-share and the standard algorithm, given that blocks hold whole multiply cells (P-cell)",
 "vectors": [
 {
-"fresh_cell": 4138401.093369211,
 "fresh_no_cell": 219441.14652435452,
+"fresh_old": 4138401.093369211,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1096,13 +1095,12 @@ null
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 4138401.093369211,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 1436346.2975317435,
 "fresh_no_cell": 83822.25466981716,
+"fresh_old": 1436346.2975317435,
 "inputs": {
 "C_gates": 1e+18,
 "c": 254500000000000.0,
@@ -1129,13 +1127,12 @@ null
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 1436346.2975317435,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 330723.09063973086,
 "fresh_no_cell": 111674.98646481277,
+"fresh_old": 330723.09063973086,
 "inputs": {
 "C_gates": 1e+17,
 "c": 536681984163840.0,
@@ -1162,13 +1159,12 @@ null
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 330723.09063973086,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 4138401.093369211,
 "fresh_no_cell": 219441.14652435452,
+"fresh_old": 4138401.093369211,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1206,13 +1202,12 @@ null
 "order": "chain",
 "share": 0.81406875,
 "subset": null,
-"term": 4138401.093369211,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 3555338.03053515,
 "fresh_no_cell": 214429.8079620056,
+"fresh_old": 3555338.03053515,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1239,13 +1234,12 @@ null
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 3555338.03053515,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1272,7 +1266,6 @@ null
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": null,
 "void": {
 "diverged_fed": 1,
 "kept_macs_share": null,
@@ -1281,8 +1274,8 @@ null
 "why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
-"fresh_cell": 4138401.093369211,
 "fresh_no_cell": 219441.14652435452,
+"fresh_old": 4138401.093369211,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1325,7 +1318,6 @@ null
 "k_whole_min": 512,
 "of": 2
 },
-"term": 4138401.093369211,
 "void": {
 "diverged_fed": 1,
 "kept_macs_share": 0.999000999000999,
@@ -1334,8 +1326,8 @@ null
 "why": null
 },
 {
-"fresh_cell": 4138401.093369211,
 "fresh_no_cell": 219441.14652435452,
+"fresh_old": 4138401.093369211,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1378,13 +1370,12 @@ null
 "k_whole_min": 512,
 "of": 2
 },
-"term": 4138401.093369211,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 3613969.8081843527,
 "fresh_no_cell": 193089.97127249016,
+"fresh_old": 3613969.8081843527,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1422,13 +1413,12 @@ null
 "order": "chain",
 "share": 0.6491,
 "subset": null,
-"term": 3613969.8081843527,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 605705.8016963864,
 "fresh_no_cell": 234337.0524437246,
+"fresh_old": 605705.8016963864,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1455,13 +1445,12 @@ null
 "order": "chain",
 "share": 0.63185,
 "subset": null,
-"term": 605705.8016963864,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1476,13 +1465,12 @@ null
 "order": "chain",
 "share": 0.0,
 "subset": null,
-"term": 0.0,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 2869160.606477064,
 "fresh_no_cell": 163340.7608721462,
+"fresh_old": 2869160.606477064,
 "inputs": {
 "C_gates": 277159456773655.0,
 "c": 536681984163840.0,
@@ -1495,6 +1483,85 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 333
+},
+"he": {
+"candidates_macs": 184012505088.0,
+"gathered_macs": 939524096.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+5.333333333,
+16
+],
+"forward": false,
+"macs": 802160640.0,
+"width": [
+16,
+16
+],
+"wires": 50331648.0
+},
+{
+"b_y": 16,
+"beta": [
+5.333333333,
+16
+],
+"forward": true,
+"macs": 334233600.0,
+"width": [
+16,
+16
+],
+"wires": 20971520.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+5.333333333
+],
+"forward": false,
+"macs": 401080320.0,
+"width": [
+16,
+16
+],
+"wires": 25165824.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 85622784000.0,
+"width": [
+16,
+16
+],
+"wires": 2407530496.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 18182307840.0,
+"width": [
+16,
+16
+],
+"wires": 614465536.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 77510737920.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -2002,13 +2069,12 @@ null
 "rule": "k_whole",
 "threshold": 512.0
 },
-"term": 2869160.606477064,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": 4.484850111667032,
 "fresh_no_cell": 0.16952209465946383,
+"fresh_old": 4.484850111667032,
 "inputs": {
 "C_gates": 2.2928562232493144e+16,
 "c": 536681984163840.0,
@@ -2021,6 +2087,253 @@ null
 "dropped": 6,
 "dropped_macs_share": 0.026481674241787514,
 "of": 405
+},
+"he": {
+"candidates_macs": 1418189930496.0,
+"gathered_macs": 71940702208.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.484848485,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.15942029,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.371428571,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.371428571,
+3.2
+],
+"forward": true,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.577464789,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": false,
+"macs": 274609471488.0,
+"width": [
+16,
+16
+],
+"wires": 4294967296.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": true,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.15942029
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.577464789
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.777777778
+],
+"forward": false,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": false,
+"macs": 171630919680.0,
+"width": [
+16,
+16
+],
+"wires": 42949672960.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": true,
+"macs": 205957103616.0,
+"width": [
+16,
+16
+],
+"wires": 51539607552.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": false,
+"macs": 65970634752.0,
+"width": [
+16,
+16
+],
+"wires": 712507392.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": true,
+"macs": 26549157888.0,
+"width": [
+16,
+16
+],
+"wires": 654311424.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+3.2
+],
+"forward": false,
+"macs": 26549157888.0,
+"width": [
+16,
+16
+],
+"wires": 6488064.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 26579435520.0,
+"width": [
+16,
+16
+],
+"wires": 26597302272.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 32189054976.0,
+"width": [
+16,
+16
+],
+"wires": 32220512256.0
+}
+],
+"k": 65536.0,
+"r_step": 16,
+"self_macs": 6881280.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -2743,7 +3056,6 @@ null
 "rule": "e",
 "threshold": 0
 },
-"term": 4.484850111667032,
 "void": {
 "diverged_fed": 28,
 "kept_macs_share": 6.979990693345428e-05,
@@ -2752,8 +3064,8 @@ null
 "why": null
 },
 {
-"fresh_cell": 93.67109467503943,
 "fresh_no_cell": 31.645193708778624,
+"fresh_old": 93.67109467503943,
 "inputs": {
 "C_gates": 2.0812759310870224e+16,
 "c": 536681984163840.0,
@@ -2766,6 +3078,211 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 132
+},
+"he": {
+"candidates_macs": 1136287285248.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+1.26618705,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.26618705,
+3.2
+],
+"forward": true,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.526501767,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": false,
+"macs": 274609471488.0,
+"width": [
+16,
+16
+],
+"wires": 4294967296.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": true,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.526501767
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.777777778
+],
+"forward": false,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": false,
+"macs": 171630919680.0,
+"width": [
+16,
+16
+],
+"wires": 42949672960.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": true,
+"macs": 171630919680.0,
+"width": [
+16,
+16
+],
+"wires": 42949672960.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": false,
+"macs": 41835036672.0,
+"width": [
+16,
+16
+],
+"wires": 312213504.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": true,
+"macs": 14213185536.0,
+"width": [
+16,
+16
+],
+"wires": 268435456.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+3.2
+],
+"forward": false,
+"macs": 14213185536.0,
+"width": [
+16,
+16
+],
+"wires": 6946816.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 14213185536.0,
+"width": [
+16,
+16
+],
+"wires": 14227079168.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 20917518336.0,
+"width": [
+16,
+16
+],
+"wires": 20937965568.0
+}
+],
+"k": 65536.0,
+"r_step": 16,
+"self_macs": 0.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -3142,7 +3659,6 @@ null
 "rule": "e",
 "threshold": 0
 },
-"term": 93.67109467503943,
 "void": {
 "diverged_fed": 10,
 "kept_macs_share": 0.05641025641025643,
@@ -3151,8 +3667,8 @@ null
 "why": null
 },
 {
-"fresh_cell": 4138401.093369211,
 "fresh_no_cell": 219441.14652435452,
+"fresh_old": 4138401.093369211,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -3179,13 +3695,12 @@ null
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 4138401.093369211,
 "void": null,
 "why": null
 },
 {
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -3212,7 +3727,6 @@ null
 "order": "tree",
 "share": 0.7400625,
 "subset": null,
-"term": null,
 "void": null,
 "why": "unmeasured: the circuit declares its products summed in a tree, and the bound has the chain constant only (its premise that each output is summed along one chain (P-chain)); the chain figure is in the inputs, never the bound"
 }
@@ -3229,144 +3743,144 @@ null
 262144,
 524288
 ],
-"rule": "fresh_no_cell(c, k) = c \u00d7 fresh_per_c[k][0] (without whole cells), fresh_cell(c, k) = c \u00d7 fresh_per_c[k][1] (with them), and the term is fresh_cell (p_cell true); [null, null] where the term is void with no subset figure, which is computed, so rho's floor reads it as 1 where no other kind exceeds 1; null where fresh_per_c[k] is null (unmeasured) or k is off the dial; at each k of the console's grid (a session's input ids at 16 bits) and the serving block's, and at the console's c and the k's own (the 45M reference's session of k/16 input tokens and 1,024 output tokens; the serving block's c at its k)",
+"rule": "term(c, k) = c \u00d7 fresh_per_c[k][1] (the products term), fresh_old(c, k) = c \u00d7 fresh_per_c[k][0] (the old figure, a sensitivity; null where it is unmeasured, or void with no subset figure); null where fresh_per_c[k] is null (the term unmeasured) or k is off the dial; at each k of the console's grid (a session's input ids at 16 bits) and the serving block's, and at the console's c and the k's own (the 45M reference's session of k/16 input tokens and 1,024 output tokens; the serving block's c at its k)",
 "vectors": [
 {
 "C_gates": 277159456773655.0,
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 25843304.50285298,
 "fresh_no_cell": 709375.2325394077,
+"fresh_old": 25843304.50285298,
 "k": 16384,
-"term": 25843304.50285298,
+"term": 2636919.9752359996,
 "why": null
 },
 {
 "c": 160322480898048.0,
-"fresh_cell": 7720144.9177698055,
 "fresh_no_cell": 211910.9650113168,
+"fresh_old": 7720144.9177698055,
 "k": 16384,
-"term": 7720144.9177698055,
+"term": 787724.5088040704,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 8790057.372587621,
 "fresh_no_cell": 343662.3401171426,
+"fresh_old": 8790057.372587621,
 "k": 32768,
-"term": 8790057.372587621,
+"term": 729573.8138154482,
 "why": null
 },
 {
 "c": 266704383246336.0,
-"fresh_cell": 4368223.453426378,
 "fresh_no_cell": 170783.17359345898,
+"fresh_old": 4368223.453426378,
 "k": 32768,
-"term": 4368223.453426378,
+"term": 362562.0754709816,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 2869160.606477064,
 "fresh_no_cell": 163340.7608721462,
+"fresh_old": 2869160.606477064,
 "k": 65536,
-"term": 2869160.606477064,
+"term": 123810.72954620286,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 931230.5826627061,
 "fresh_no_cell": 73558.58446712031,
+"fresh_old": 931230.5826627061,
 "k": 131072,
-"term": 931230.5826627061,
+"term": 0.0,
 "why": null
 },
 {
 "c": 1305492370882560.0,
-"fresh_cell": 2265241.720555961,
 "fresh_no_cell": 178933.09943012646,
+"fresh_old": 2265241.720555961,
 "k": 131072,
-"term": 2265241.720555961,
+"term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 778359.9495315672,
 "fresh_no_cell": 64339.656057094755,
+"fresh_old": 778359.9495315672,
 "k": 145568,
-"term": 778359.9495315672,
+"term": 0.0,
 "why": null
 },
 {
 "c": 30087822237972,
-"fresh_cell": 43636.933024964696,
 "fresh_no_cell": 3607.052577541239,
+"fresh_old": 43636.933024964696,
 "k": 145568,
-"term": 43636.933024964696,
+"term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 262144,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 3758533883854848.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 262144,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 524288,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 1.2326299867938816e+16,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 524288,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 }
 ],
 "fresh_per_c": {
 "131072": [
-1.3706177333626332e-10,
-1.7351627409546453e-09
+1.7351627409546453e-09,
+0.0
 ],
 "145568": [
-1.198841361469159e-10,
-1.45031875952435e-09
+1.45031875952435e-09,
+0.0
 ],
 "16384": [
-1.3217794773652163e-09,
-4.815385137833032e-08
+4.815385137833032e-08,
+4.913375244642072e-09
 ],
 "262144": [
 null,
-null
+0.0
 ],
 "32768": [
-6.403463322000172e-10,
-1.637852141856911e-08
+1.637852141856911e-08,
+1.3594155111283214e-09
 ],
 "524288": [
 null,
-null
+0.0
 ],
 "65536": [
-3.043529794029401e-10,
-5.346109411418509e-09
+5.346109411418509e-09,
+2.306966382318612e-10
 ]
 },
 "name": "the 45M start's dense step"
@@ -3376,137 +3890,137 @@ null
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 39795651.46215308,
 "fresh_no_cell": 1083179.948224779,
+"fresh_old": 39795651.46215308,
 "k": 16384,
-"term": 39795651.46215308,
+"term": 4382587.248677105,
 "why": null
 },
 {
 "c": 160322480898048.0,
-"fresh_cell": 11888115.792272737,
 "fresh_no_cell": 323577.2798093421,
+"fresh_old": 11888115.792272737,
 "k": 16384,
-"term": 11888115.792272737,
+"term": 1309205.9752197003,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 13837635.414574308,
 "fresh_no_cell": 530550.3286830583,
+"fresh_old": 13837635.414574308,
 "k": 32768,
-"term": 13837635.414574308,
+"term": 1276252.10096446,
 "why": null
 },
 {
 "c": 266704383246336.0,
-"fresh_cell": 6876619.912221671,
 "fresh_no_cell": 263657.2539564852,
+"fresh_old": 6876619.912221671,
 "k": 32768,
-"term": 6876619.912221671,
+"term": 634234.1265375026,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 4749660.270885498,
 "fresh_no_cell": 257407.36342872275,
+"fresh_old": 4749660.270885498,
 "k": 65536,
-"term": 4749660.270885498,
+"term": 261450.31472125227,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 1583811.61908288,
 "fresh_no_cell": 122897.07699696475,
+"fresh_old": 1583811.61908288,
 "k": 131072,
-"term": 1583811.61908288,
+"term": 0.0,
 "why": null
 },
 {
 "c": 1305492370882560.0,
-"fresh_cell": 3852661.439435677,
 "fresh_no_cell": 298950.21848604485,
+"fresh_old": 3852661.439435677,
 "k": 131072,
-"term": 3852661.439435677,
+"term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 1334784.986389111,
 "fresh_no_cell": 109642.80242549404,
+"fresh_old": 1334784.986389111,
 "k": 145568,
-"term": 1334784.986389111,
+"term": 0.0,
 "why": null
 },
 {
 "c": 30087822237972,
-"fresh_cell": 74831.60341027776,
 "fresh_no_cell": 6146.867691471169,
+"fresh_old": 74831.60341027776,
 "k": 145568,
-"term": 74831.60341027776,
+"term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 483259.17110697256,
 "fresh_no_cell": 56555.968123601284,
+"fresh_old": 483259.17110697256,
 "k": 262144,
-"term": 483259.17110697256,
+"term": 0.0,
 "why": null
 },
 {
 "c": 3758533883854848.0,
-"fresh_cell": 3384398.9977026395,
 "fresh_no_cell": 396077.2464869564,
+"fresh_old": 3384398.9977026395,
 "k": 262144,
-"term": 3384398.9977026395,
+"term": 0.0,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 524288,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 },
 {
 "c": 1.2326299867938816e+16,
-"fresh_cell": null,
 "fresh_no_cell": null,
+"fresh_old": null,
 "k": 524288,
-"term": null,
-"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+"term": 0.0,
+"why": null
 }
 ],
 "fresh_per_c": {
 "131072": [
-2.289942286556173e-10,
-2.9511175441271546e-09
+2.9511175441271546e-09,
+0.0
 ],
 "145568": [
-2.042975275130941e-10,
-2.4871060064904723e-09
+2.4871060064904723e-09,
+0.0
 ],
 "16384": [
-2.01829012373574e-09,
-7.415127139800567e-08
+7.415127139800567e-08,
+8.166078567934888e-09
 ],
 "262144": [
-1.0538078376474009e-10,
-9.00457226750212e-10
+9.00457226750212e-10,
+0.0
 ],
 "32768": [
-9.885748810995865e-10,
-2.5783677900299912e-08
+2.5783677900299912e-08,
+2.3780416310282585e-09
 ],
 "524288": [
 null,
-null
+0.0
 ],
 "65536": [
-4.7962736038134e-10,
-8.850046044093605e-09
+8.850046044093605e-09,
+4.871605949817684e-10
 ]
 },
 "name": "s-t20's dense step at full size"
@@ -4746,6 +5260,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 145568.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 145568.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -4817,6 +5424,99 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 80000.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 80000.0,
 "kinds_macs": {
@@ -4890,6 +5590,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 800000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 800000.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -4961,6 +5754,99 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 8000000.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 8000000.0,
 "kinds_macs": {
@@ -5034,6 +5920,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 80000000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 80000000.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -5106,6 +6085,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 800000000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 800000000.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -5177,6 +6249,99 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -6527,6 +7692,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 145568.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 145568.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -6598,6 +7856,99 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 80000.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 80000.0,
 "kinds_macs": {
@@ -6671,6 +8022,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 800000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 800000.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -6742,6 +8186,99 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 8000000.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 8000000.0,
 "kinds_macs": {
@@ -6815,6 +8352,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 80000000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 80000000.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -6887,6 +8517,99 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 800000000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 800000000.0,
 "kinds_macs": {
 "attention": 0.0,
@@ -6958,6 +8681,99 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 226492416.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000216997,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+0.000216997
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000650974,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+0.015609756
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005206305,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -9017,6 +10833,337 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 145568.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 145568.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -9126,6 +11273,337 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 80000.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 80000.0,
 "kinds_macs": {
@@ -9237,6 +11715,337 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 800000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 800000.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -9346,6 +12155,337 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 8000000.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 8000000.0,
 "kinds_macs": {
@@ -9457,6 +12597,337 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 80000000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 80000000.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -9567,6 +13038,337 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 800000000.0,
+"r_step": null,
+"self_macs": 0.0
+},
 "k": 800000000.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -9676,6 +13478,337 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 2264924160.0,
+"gathered_macs": 318767104.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.139399806
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 108945408.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.046738072
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 50282496.0,
+"width": [
+16,
+16
+],
+"wires": 4194304.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 159227904.0,
+"width": [
+16,
+16
+],
+"wires": 67305472.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.139399806
+],
+"forward": false,
+"macs": 8380416.0,
+"width": [
+16,
+16
+],
+"wires": 65536.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 8388608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.015609756
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 196608.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.046738072
+],
+"forward": false,
+"macs": 33521664.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 58662912.0,
+"width": [
+16,
+16
+],
+"wires": 14680064.0
+},
+{
+"b_y": 16,
+"beta": [
+0.261287224,
+16
+],
+"forward": false,
+"macs": 25141248.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 0.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -13215,6 +17348,421 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.11176599
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.11176599
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 131072.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+1.97260274
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 917504.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.71641791
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.11176599,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.11176599,
+0.71641791
+],
+"forward": false,
+"macs": 2618880.0,
+"width": [
+16,
+16
+],
+"wires": 20480.0
+},
+{
+"b_y": 16,
+"beta": [
+0.11176599,
+1.97260274
+],
+"forward": false,
+"macs": 1047552.0,
+"width": [
+16,
+16
+],
+"wires": 8192.0
+},
+{
+"b_y": 16,
+"beta": [
+0.11176599,
+16
+],
+"forward": false,
+"macs": 5237760.0,
+"width": [
+16,
+16
+],
+"wires": 1310720.0
+},
+{
+"b_y": 16,
+"beta": [
+0.11176599,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.046738072
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.11176599
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.015609756
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.046738072
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 145568.0,
+"r_step": 4,
+"self_macs": 0.0
+},
 "k": 145568.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -13351,6 +17899,435 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.20221169
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 131072.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+1.97260274
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 917504.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.71641791
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+1.97260274
+],
+"forward": false,
+"macs": 1047552.0,
+"width": [
+16,
+16
+],
+"wires": 8192.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 1047552.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.20221169,
+0.71641791
+],
+"forward": false,
+"macs": 2618880.0,
+"width": [
+16,
+16
+],
+"wires": 20480.0
+},
+{
+"b_y": 16,
+"beta": [
+0.20221169,
+16
+],
+"forward": false,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 1048576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.046738072
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.139399806
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.015609756
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.046738072
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 80000.0,
+"r_step": 4,
+"self_macs": 0.0
 },
 "k": 80000.0,
 "kinds_macs": {
@@ -13489,6 +18466,337 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.020453819
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.020453819
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.020453819
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.020453819
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 131072.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+0.020453819
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+0.020453819
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+0.71641791
+],
+"forward": false,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 45056.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+1.97260274
+],
+"forward": false,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 32768.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+16
+],
+"forward": false,
+"macs": 11523072.0,
+"width": [
+16,
+16
+],
+"wires": 1835008.0
+},
+{
+"b_y": 16,
+"beta": [
+0.020453819,
+16
+],
+"forward": true,
+"macs": 6285312.0,
+"width": [
+16,
+16
+],
+"wires": 1310720.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.020453819
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.015609756
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.020453819
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 800000.0,
+"r_step": 4,
+"self_macs": 0.0
+},
 "k": 800000.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -13625,6 +18933,211 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.002047738
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002047738,
+0.002047738
+],
+"forward": false,
+"macs": 804519936.0,
+"width": [
+16,
+16
+],
+"wires": 77594624.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002047738,
+0.002047738
+],
+"forward": true,
+"macs": 402259968.0,
+"width": [
+16,
+16
+],
+"wires": 136314880.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002047738,
+0.71641791
+],
+"forward": false,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 45056.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002047738,
+1.97260274
+],
+"forward": false,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 32768.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002047738,
+16
+],
+"forward": false,
+"macs": 11523072.0,
+"width": [
+16,
+16
+],
+"wires": 1835008.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002047738,
+16
+],
+"forward": true,
+"macs": 7856640.0,
+"width": [
+16,
+16
+],
+"wires": 1441792.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.002047738
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.002047738
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 36864.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 8000000.0,
+"r_step": 4,
+"self_macs": 0.0
 },
 "k": 8000000.0,
 "kinds_macs": {
@@ -13763,6 +19276,197 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.000204797,
+0.000204797
+],
+"forward": false,
+"macs": 938606592.0,
+"width": [
+16,
+16
+],
+"wires": 79691776.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000204797,
+0.000204797
+],
+"forward": true,
+"macs": 402259968.0,
+"width": [
+16,
+16
+],
+"wires": 136314880.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000204797,
+0.71641791
+],
+"forward": false,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 45056.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000204797,
+1.97260274
+],
+"forward": false,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 32768.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000204797,
+16
+],
+"forward": false,
+"macs": 11523072.0,
+"width": [
+16,
+16
+],
+"wires": 1835008.0
+},
+{
+"b_y": 16,
+"beta": [
+0.000204797,
+16
+],
+"forward": true,
+"macs": 7856640.0,
+"width": [
+16,
+16
+],
+"wires": 1441792.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.000204797
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.000204797
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 36864.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 80000000.0,
+"r_step": 4,
+"self_macs": 0.0
+},
 "k": 80000000.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -13900,6 +19604,197 @@ null
 "dropped_macs_share": 0.0,
 "of": 0
 },
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+2.048e-05,
+2.048e-05
+],
+"forward": false,
+"macs": 938606592.0,
+"width": [
+16,
+16
+],
+"wires": 79691776.0
+},
+{
+"b_y": 16,
+"beta": [
+2.048e-05,
+2.048e-05
+],
+"forward": true,
+"macs": 402259968.0,
+"width": [
+16,
+16
+],
+"wires": 136314880.0
+},
+{
+"b_y": 16,
+"beta": [
+2.048e-05,
+0.71641791
+],
+"forward": false,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 45056.0
+},
+{
+"b_y": 16,
+"beta": [
+2.048e-05,
+1.97260274
+],
+"forward": false,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 32768.0
+},
+{
+"b_y": 16,
+"beta": [
+2.048e-05,
+16
+],
+"forward": false,
+"macs": 11523072.0,
+"width": [
+16,
+16
+],
+"wires": 1835008.0
+},
+{
+"b_y": 16,
+"beta": [
+2.048e-05,
+16
+],
+"forward": true,
+"macs": 7856640.0,
+"width": [
+16,
+16
+],
+"wires": 1441792.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+2.048e-05
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+2.048e-05
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 36864.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 800000000.0,
+"r_step": 4,
+"self_macs": 0.0
+},
 "k": 800000000.0,
 "kinds_macs": {
 "attention": 1610612736.0,
@@ -14036,6 +19931,449 @@ null
 "dropped": 0,
 "dropped_macs_share": 0.0,
 "of": 0
+},
+"he": {
+"candidates_macs": 1673527296.0,
+"gathered_macs": 274726912.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.00097694,
+0.230991338
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.002929464,
+0.139399806
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.005856855,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.007808188,
+0.015609756
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.007808188
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+0.015609756
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.015609756,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 131072.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.005856855
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 2097152.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+0.046738072
+],
+"forward": true,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+1.97260274
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.046738072,
+16
+],
+"forward": true,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 917504.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+0.71641791
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+0.077745384,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+0.046738072
+],
+"forward": false,
+"macs": 134086656.0,
+"width": [
+16,
+16
+],
+"wires": 67108864.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+1.97260274
+],
+"forward": false,
+"macs": 1047552.0,
+"width": [
+16,
+16
+],
+"wires": 8192.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": false,
+"macs": 1047552.0,
+"width": [
+16,
+16
+],
+"wires": 262144.0
+},
+{
+"b_y": 16,
+"beta": [
+0.139399806,
+16
+],
+"forward": true,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+0.71641791
+],
+"forward": false,
+"macs": 2618880.0,
+"width": [
+16,
+16
+],
+"wires": 20480.0
+},
+{
+"b_y": 16,
+"beta": [
+0.230991338,
+16
+],
+"forward": false,
+"macs": 2618880.0,
+"width": [
+16,
+16
+],
+"wires": 655360.0
+},
+{
+"b_y": 16,
+"beta": [
+0.246153846,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 393216.0
+},
+{
+"b_y": 16,
+"beta": [
+0.71641791,
+16
+],
+"forward": true,
+"macs": 5761536.0,
+"width": [
+16,
+16
+],
+"wires": 23068672.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.046738072
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+0.139399806
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 12582912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.97260274,
+16
+],
+"forward": true,
+"macs": 4190208.0,
+"width": [
+16,
+16
+],
+"wires": 16777216.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.015609756
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 12288.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+0.046738072
+],
+"forward": false,
+"macs": 3142656.0,
+"width": [
+16,
+16
+],
+"wires": 24576.0
+},
+{
+"b_y": 16,
+"beta": [
+3.037974684,
+16
+],
+"forward": false,
+"macs": 4713984.0,
+"width": [
+16,
+16
+],
+"wires": 18874368.0
+},
+{
+"b_y": 16,
+"beta": [
+3.358024691,
+16
+],
+"forward": false,
+"macs": 1571328.0,
+"width": [
+16,
+16
+],
+"wires": 6291456.0
+}
+],
+"k": 65536.0,
+"r_step": 4,
+"self_macs": 0.0
 },
 "k": 65536.0,
 "kinds_macs": {
@@ -14449,6 +20787,816 @@ null
 ]
 }
 },
+"products": {
+"rests_on": "theorem of record for this circuit: every partition into blocks of at most c gates, each reading at most k bits outside \u03b8, does N \u2264 m(k + \u03b1) + F\u00b7(k/2)\u00b7\u221a(mO)/\u03b2 of M's N MACs in its m blocks, \u03b1 = F\u00b7\u00bd\u00b7\u221a(k\u00b3/(\u03b2\u00b2\u00b7b_y)), so \u03c1 \u2265 (c/|C|)\u00b7(N/(k + \u03b1) \u2212 F\u00b7(k/2)\u00b7\u221a(ON)/\u03b2/(k + \u03b1)^1.5), floored at 1, O M's output wires; given these premises on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words with a cut of at most k bits from the unregistered inputs has a cut of at least \u03b2 bits a word, \u03b2 the least width M charges an operand: its width as the circuit passes it (a coded width where the capture records one), or \u03b2_eff = \u03b2/(1 + (K*/r)\u00b2), K* = \u00bd\u221a(k/\u03b2), for an operand the update reaches only through a bottleneck of rank r a row or column (an adapter's Ax, a broadcast vector, a frozen edge), with a product whose operand is below the \u03b2 M takes left out of M; (E) exports are wide: every gate set's cut to the outputs it alone feeds is at least b_y bits an output, b_y M's least output width; and the structure, which the product rows don't record: M's matmuls have distinct words, W and X disjoint, no two share both a w- and an x-word, and no four arrays are pairwise multiplied (a layer's forward, input-gradient and weight-gradient products share three: F = 2/\u221a3 where M holds a backward or optimizer product, else 1). M is the grader's: the products whose two operands both depend on the update, less one array times itself, a product reading a gather's rows, the positions sequences share, and the steps before the run's first update, which read registered weights",
+"rule": "for each t among the groups' least \u03b2 (above 0): M_t the groups whose every \u03b2 \u2265 t, N and O their MACs and output wires, b_y their least output width, F = 2/sqrt(3) where a group isn't a forward product, else 1, alpha = F/2 sqrt(k^3/(t^2 b_y)); term = max(0, max over t of (c/C_gates) (N/(k + alpha) - F (k/2) sqrt(O N)/t/(k + alpha)^1.5)), and its beta, b_y, F, alpha, N and O are the best t's; rho floors it at 1",
+"vectors": [
+{
+"F": 1.1547005383792517,
+"N": 442368000000000.0,
+"O": 9216000000000.0,
+"alpha": 98304.00000000001,
+"b_y": 16.0,
+"below_width": false,
+"beta": 16.0,
+"inputs": {
+"C_gates": 1000000000000000.0,
+"c": 1000000000000.0,
+"he": {
+"candidates_macs": 442368000000000.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16.0,
+"beta": [
+16.0,
+16.0
+],
+"forward": true,
+"macs": 221184000000000.0,
+"width": [
+16.0,
+16.0
+],
+"wires": 4608000000000.0
+},
+{
+"b_y": 16.0,
+"beta": [
+16.0,
+16.0
+],
+"forward": false,
+"macs": 221184000000000.0,
+"width": [
+16.0,
+16.0
+],
+"wires": 4608000000000.0
+}
+],
+"k": 49152.0,
+"r_step": null,
+"self_macs": 0.0
+},
+"k": 49152.0
+},
+"macs_share": 1.0,
+"name": "a forward and a backward product, k 49,152",
+"r_step": null,
+"rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+"term": 999999.9999999995,
+"why": null
+},
+{
+"F": 1.1547005383792517,
+"N": 1.00589824e+17,
+"O": 13288000000000.0,
+"alpha": 756744.5448322264,
+"b_y": 16.0,
+"below_width": true,
+"beta": 3.2,
+"inputs": {
+"C_gates": 1000000000000000.0,
+"c": 1000000000000.0,
+"he": {
+"candidates_macs": 1.00589824e+17,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16.0,
+"beta": [
+16.0,
+16.0
+],
+"forward": true,
+"macs": 589824000000000.0,
+"width": [
+16.0,
+16.0
+],
+"wires": 12288000000000.0
+},
+{
+"b_y": 16.0,
+"beta": [
+16.0,
+3.2
+],
+"forward": false,
+"macs": 1e+17,
+"width": [
+16.0,
+16.0
+],
+"wires": 1000000000000.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 0.0
+},
+"k": 65536.0
+},
+"macs_share": 1.0,
+"name": "a forward product beside one an adapter's rank-16 output reaches, the console's k",
+"r_step": null,
+"rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 3.2 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
+"term": 103996766.0848523,
+"why": null
+},
+{
+"F": 1.1547005383792517,
+"N": 103805091840.0,
+"O": 3021996032.0,
+"alpha": 151348.90896644528,
+"b_y": 16,
+"below_width": false,
+"beta": 16,
+"inputs": {
+"C_gates": 277159456773655.0,
+"c": 536681984163840.0,
+"he": {
+"candidates_macs": 184012505088.0,
+"gathered_macs": 939524096.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+5.333333333,
+16
+],
+"forward": false,
+"macs": 802160640.0,
+"width": [
+16,
+16
+],
+"wires": 50331648.0
+},
+{
+"b_y": 16,
+"beta": [
+5.333333333,
+16
+],
+"forward": true,
+"macs": 334233600.0,
+"width": [
+16,
+16
+],
+"wires": 20971520.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+5.333333333
+],
+"forward": false,
+"macs": 401080320.0,
+"width": [
+16,
+16
+],
+"wires": 25165824.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 85622784000.0,
+"width": [
+16,
+16
+],
+"wires": 2407530496.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 18182307840.0,
+"width": [
+16,
+16
+],
+"wires": 614465536.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 77510737920.0
+},
+"k": 65536.0
+},
+"macs_share": 0.5641197688730853,
+"name": "the 45M start's dense step",
+"r_step": null,
+"rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+"term": 123810.72954620286,
+"why": null
+},
+{
+"F": 1.1547005383792517,
+"N": 29157928992768.0,
+"O": 759687020544.0,
+"alpha": 151348.90896644528,
+"b_y": 16,
+"below_width": false,
+"beta": 16,
+"inputs": {
+"C_gates": 4.977290950238882e+16,
+"c": 536681984163840.0,
+"he": {
+"candidates_macs": 33112184586240.0,
+"gathered_macs": 687194767360.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+16
+],
+"forward": false,
+"macs": 1647656828928.0,
+"width": [
+16,
+16
+],
+"wires": 25769803776.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+16
+],
+"forward": true,
+"macs": 686523678720.0,
+"width": [
+16,
+16
+],
+"wires": 10737418240.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+1.777777778
+],
+"forward": false,
+"macs": 823828414464.0,
+"width": [
+16,
+16
+],
+"wires": 12884901888.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 19203335651328.0,
+"width": [
+16,
+16
+],
+"wires": 290461843456.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 9954593341440.0,
+"width": [
+16,
+16
+],
+"wires": 469225177088.0
+}
+],
+"k": 65536.0,
+"r_step": null,
+"self_macs": 77510737920.0
+},
+"k": 65536.0
+},
+"macs_share": 0.8805800449930078,
+"name": "s-t20's dense step at full size",
+"r_step": null,
+"rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+"term": 261450.31472125227,
+"why": null
+},
+{
+"F": 1.1547005383792517,
+"N": 58768490496.0,
+"O": 58817814528.0,
+"alpha": 151348.90896644528,
+"b_y": 16,
+"below_width": false,
+"beta": 16,
+"inputs": {
+"C_gates": 2.2928562232493144e+16,
+"c": 536681984163840.0,
+"he": {
+"candidates_macs": 1418189930496.0,
+"gathered_macs": 71940702208.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+0.484848485,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.15942029,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.371428571,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.371428571,
+3.2
+],
+"forward": true,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.577464789,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": false,
+"macs": 274609471488.0,
+"width": [
+16,
+16
+],
+"wires": 4294967296.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": true,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.15942029
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.577464789
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.777777778
+],
+"forward": false,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": false,
+"macs": 171630919680.0,
+"width": [
+16,
+16
+],
+"wires": 42949672960.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": true,
+"macs": 205957103616.0,
+"width": [
+16,
+16
+],
+"wires": 51539607552.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": false,
+"macs": 65970634752.0,
+"width": [
+16,
+16
+],
+"wires": 712507392.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": true,
+"macs": 26549157888.0,
+"width": [
+16,
+16
+],
+"wires": 654311424.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+3.2
+],
+"forward": false,
+"macs": 26549157888.0,
+"width": [
+16,
+16
+],
+"wires": 6488064.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 26579435520.0,
+"width": [
+16,
+16
+],
+"wires": 26597302272.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 32189054976.0,
+"width": [
+16,
+16
+],
+"wires": 32220512256.0
+}
+],
+"k": 65536.0,
+"r_step": 16,
+"self_macs": 6881280.0
+},
+"k": 65536.0
+},
+"macs_share": 0.04143908318080232,
+"name": "the s-t20 start's DoRA rank-16 step on all 42 matrices",
+"r_step": 16,
+"rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+"term": 0.0,
+"why": null
+},
+{
+"F": 1.1547005383792517,
+"N": 35130703872.0,
+"O": 35165044736.0,
+"alpha": 151348.90896644528,
+"b_y": 16,
+"below_width": false,
+"beta": 16,
+"inputs": {
+"C_gates": 2.0812759310870224e+16,
+"c": 536681984163840.0,
+"he": {
+"candidates_macs": 1136287285248.0,
+"gathered_macs": 0.0,
+"groups": [
+{
+"b_y": 16,
+"beta": [
+1.26618705,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.26618705,
+3.2
+],
+"forward": true,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.526501767,
+3.2
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": false,
+"macs": 274609471488.0,
+"width": [
+16,
+16
+],
+"wires": 4294967296.0
+},
+{
+"b_y": 16,
+"beta": [
+1.777777778,
+3.2
+],
+"forward": true,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.526501767
+],
+"forward": false,
+"macs": 34326183936.0,
+"width": [
+16,
+16
+],
+"wires": 536870912.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+1.777777778
+],
+"forward": false,
+"macs": 137304735744.0,
+"width": [
+16,
+16
+],
+"wires": 2147483648.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": false,
+"macs": 171630919680.0,
+"width": [
+16,
+16
+],
+"wires": 42949672960.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+3.2
+],
+"forward": true,
+"macs": 171630919680.0,
+"width": [
+16,
+16
+],
+"wires": 42949672960.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": false,
+"macs": 41835036672.0,
+"width": [
+16,
+16
+],
+"wires": 312213504.0
+},
+{
+"b_y": 16,
+"beta": [
+3.2,
+16
+],
+"forward": true,
+"macs": 14213185536.0,
+"width": [
+16,
+16
+],
+"wires": 268435456.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+3.2
+],
+"forward": false,
+"macs": 14213185536.0,
+"width": [
+16,
+16
+],
+"wires": 6946816.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": false,
+"macs": 14213185536.0,
+"width": [
+16,
+16
+],
+"wires": 14227079168.0
+},
+{
+"b_y": 16,
+"beta": [
+16,
+16
+],
+"forward": true,
+"macs": 20917518336.0,
+"width": [
+16,
+16
+],
+"wires": 20937965568.0
+}
+],
+"k": 65536.0,
+"r_step": 16,
+"self_macs": 0.0
+},
+"k": 65536.0
+},
+"macs_share": 0.030917096695605953,
+"name": "the s-t20 start's LoRA rank-16 step on every block's MLP",
+"r_step": 16,
+"rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+"term": 0.0,
+"why": null
+}
+]
+},
 "program": "islands/wildcard/train.py at 9460fcd228 on the tiny start, --batch 2 --micro 2 --warmup 1, traced at step 1 (te_core.capture.script)",
 "published": [
 {
@@ -14456,15 +21604,15 @@ null
 "c": 4925098176.0,
 "capture_code": null,
 "case": "dense",
-"fresh_subset": null,
 "k": 80000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 0.2613 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
 "rests_on": "Fit's construction",
 "rho": 1.0,
 "sensitivities": {
-"fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "reduction": 0.042688096126554144,
 "update": 5.1338660404755435e-06
 },
@@ -14481,15 +21629,15 @@ null
 "c": 20173202128896.0,
 "capture_code": null,
 "case": "dense",
-"fresh_subset": null,
 "k": 80000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 0.2613 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 8.35335685982954,
 "sensitivities": {
-"fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "reduction": 42.05663060357565,
 "update": 21.028315301787824
 },
@@ -14506,15 +21654,15 @@ null
 "c": 20173202128896.0,
 "capture_code": null,
 "case": "dense",
-"fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": true,
+"products_rests_on": null,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 6.866429960025952,
 "sensitivities": {
-"fresh_no_cell": null,
+"fresh_old": null,
 "reduction": 33.645304482860524,
 "update": 16.822652241430262
 },
@@ -14531,15 +21679,15 @@ null
 "c": 536681984163840.0,
 "capture_code": null,
 "case": "dense",
-"fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 0.2613 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 263.4961717397754,
 "sensitivities": {
-"fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "reduction": 0.0,
 "update": 0.0
 },
@@ -14556,15 +21704,15 @@ null
 "c": 536681984163840.0,
 "capture_code": null,
 "case": "lora",
-"fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 3.358 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 95.68434260057813,
 "sensitivities": {
-"fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "reduction": 0.0,
 "update": 0.0
 },
@@ -14581,15 +21729,15 @@ null
 "c": 20173202128896.0,
 "capture_code": null,
 "case": "adapter-live",
-"fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": null,
 "reading": "A",
 "rests_on": "unmeasured",
 "rho": null,
 "sensitivities": {
-"fresh_no_cell": null,
+"fresh_old": null,
 "reduction": 7.821017076702145,
 "update": 7.821017076702145
 },
@@ -14606,15 +21754,15 @@ null
 "c": 20173202128896.0,
 "capture_code": null,
 "case": "adapter-live",
-"fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 0.000217 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
 "rests_on": "no kind exceeds 1",
 "rho": 1.0,
 "sensitivities": {
-"fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "reduction": 11.933924982760843,
 "update": 11.933924982760843
 },
@@ -14627,96 +21775,68 @@ null
 "why": null
 },
 {
-"binding_kind": "fresh_products",
+"binding_kind": "token",
 "c": 536681984163840.0,
 "capture_code": null,
 "case": "dense, DoRA's void products",
-"fresh_subset": {
-"dropped": 28,
-"dropped_fed": [
-16.0,
-512.0,
-1024.0,
-1408.0
-],
-"dropped_macs_share": 0.9999302000930665,
-"e": 0,
-"k_whole_min": null,
-"of": 30,
-"rule": "e",
-"threshold": 0
-},
 "k": 65536.0,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
 "reading": "A",
-"rests_on": "theorem for this circuit (Loomis-Whitney), given that every value a block reads costs its full width (P-width, extended to what makes operands whole), elementwise steps don't fan out (P-match) and each output is summed along one chain (P-chain), given that blocks hold whole multiply cells (P-cell)",
-"rho": 2510.258141059264,
+"rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
+"rho": 263.4961717397754,
 "sensitivities": {
-"fresh_no_cell": 94.88482504717693,
+"fresh_old": 2510.258141059264,
 "reduction": 0.0,
 "update": 0.0
 },
 "terms": {
 "decoding": 263.4961717397754,
-"fresh_products": 2510.258141059264,
+"fresh_products": 0.0,
 "token": 263.4961717397754
 },
-"void": "the products count diverges; best subset 2.51e+03, keeping 0.00698% of the step's fresh multiplications",
-"why": "the products count diverges; best subset 2.51e+03, keeping 0.00698% of the step's fresh multiplications"
+"void": null,
+"why": null
 },
 {
 "binding_kind": "none",
 "c": 4925098176.0,
 "capture_code": null,
 "case": "dense, DoRA's void products",
-"fresh_subset": {
-"dropped": 28,
-"dropped_fed": [
-16.0,
-512.0,
-1024.0,
-1408.0
-],
-"dropped_macs_share": 0.9999302000930665,
-"e": 0,
-"k_whole_min": null,
-"of": 30,
-"rule": "e",
-"threshold": 0
-},
 "k": 65536.0,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "partial": false,
+"products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
 "reading": "A",
 "rests_on": "no kind exceeds 1",
 "rho": 1.0,
 "sensitivities": {
-"fresh_no_cell": 0.0008707523124667924,
+"fresh_old": 0.023036487448115702,
 "reduction": 52.10949234198504,
 "update": 0.006266926318939873
 },
 "terms": {
 "decoding": 0.999663180049092,
-"fresh_products": 0.023036487448115702,
+"fresh_products": 0.0,
 "token": 0.999663180049092
 },
-"void": "the products count diverges; best subset 0.023, keeping 0.00698% of the step's fresh multiplications",
-"why": "the products count diverges; best subset 0.023, keeping 0.00698% of the step's fresh multiplications"
+"void": null,
+"why": null
 }
 ],
-"published_rule": "Fit holds: rho_fit, binding fit. Else, where a kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured (no figure and not void): null, binding unmeasured, why naming it. Else: 1, binding none. A void fresh-products term is computed, its figure its best subset's (null where none has one), and void and why carry its reason.",
+"published_rule": "Fit holds: rho_fit, binding fit. Else, where a kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, binding unmeasured, why naming it. Else: 1, binding none. products_rests_on is the products term's own, with its beta and b_y, wherever it is measured.",
 "rests_on": {
 "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-"fresh_products": "theorem for this circuit: the Loomis-Whitney cap on the multiplications a block does of products whose two operands both depend on the update (fresh operands), amortized over the partition, on the best subset of those products (every product still counted in |C|), each operand and partial sum at its passed width, given these premises on the reference circuit: every value a block reads costs its full width (P-width), extended to every value a block reads while making operands whole (attention's and the optimizer's included); elementwise steps don't fan out (P-match): an entry's fan-out is at most its fan-in, checked on the traced step; each output is summed along one chain (P-chain), a chain of whole multiply cells, as training's slowdown code prices a matrix product; products share arrays only as a layer's forward, input-gradient and weight-gradient products do (P-share); and the standard multiplication algorithm; given that blocks hold whole multiply cells (P-cell), a premise on the partition",
+"fresh_products": "theorem of record for this circuit: every partition into blocks of at most c gates, each reading at most k bits outside \u03b8, does N \u2264 m(k + \u03b1) + F\u00b7(k/2)\u00b7\u221a(mO)/\u03b2 of M's N MACs in its m blocks, \u03b1 = F\u00b7\u00bd\u00b7\u221a(k\u00b3/(\u03b2\u00b2\u00b7b_y)), so \u03c1 \u2265 (c/|C|)\u00b7(N/(k + \u03b1) \u2212 F\u00b7(k/2)\u00b7\u221a(ON)/\u03b2/(k + \u03b1)^1.5), floored at 1, O M's output wires; given these premises on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words with a cut of at most k bits from the unregistered inputs has a cut of at least \u03b2 bits a word, \u03b2 the least width M charges an operand: its width as the circuit passes it (a coded width where the capture records one), or \u03b2_eff = \u03b2/(1 + (K*/r)\u00b2), K* = \u00bd\u221a(k/\u03b2), for an operand the update reaches only through a bottleneck of rank r a row or column (an adapter's Ax, a broadcast vector, a frozen edge), with a product whose operand is below the \u03b2 M takes left out of M; (E) exports are wide: every gate set's cut to the outputs it alone feeds is at least b_y bits an output, b_y M's least output width; and the structure, which the product rows don't record: M's matmuls have distinct words, W and X disjoint, no two share both a w- and an x-word, and no four arrays are pairwise multiplied (a layer's forward, input-gradient and weight-gradient products share three: F = 2/\u221a3 where M holds a backward or optimizer product, else 1). M is the grader's: the products whose two operands both depend on the update, less one array times itself, a product reading a gather's rows, the positions sequences share, and the steps before the run's first update, which read registered weights",
 "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them; a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
 },
-"rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' terms); 1 where every kind is computed and none has a figure (a void term with no subset figure is computed: it is in void); null where a kind isn't computed and none has a figure. Sensitivities are never in the max.",
+"rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' terms); 1 where every kind is computed and none has a figure; null where a kind isn't computed and none has a figure. Sensitivities are never in the max.",
 "schema": "te-core/rho-vectors/v3",
 "sensitivities": {
 "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, \u03b1 (x0 s + s*))) affected gates, \u03b1 the most affected gates a token has in any part, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
-"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where every block does, a premise on the partition, which the attacker chooses; the term takes this premise",
-"fresh_no_cell": "sensitivity, without assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where a block may split a multiply cell, as a partition the attacker chooses may; the term assumes whole cells",
+"fresh_no_cell": "rests on P-width extended, false on honest circuits: sensitivity, the old fresh-products figure without assuming that blocks hold whole multiply cells (P-cell), where a block may split a multiply cell",
+"fresh_old": "rests on P-width extended, false on honest circuits: sensitivity, the old fresh-products figure, the Loomis-Whitney cap on the products of two operands both paid at their passed width, amortized over the partition with each subset's whole-making chains, on the best subset, given every value a block reads costs its full width (P-width), extended to every value a block reads while making operands whole, elementwise steps don't fan out (P-match), each output is summed along one chain (P-chain), P-share and the standard algorithm, given that blocks hold whole multiply cells (P-cell)",
 "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it; a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
 "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (the trace's partial cut), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
 "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
@@ -16759,7 +23879,7 @@ null
 "share": 0.6520858971202714,
 "x0": 8.333582376964214e-05
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -16833,6 +23953,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 15050836295.943745,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 591872.0,
@@ -16884,14 +24019,14 @@ null
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 501.0542637591155,
 "reduction": 9.776271345877682,
 "token_form": 0.5483513212839408,
@@ -16931,7 +24066,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -17009,6 +24144,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 475949233855.143,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 800000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 591872.0,
@@ -17060,14 +24210,14 @@ null
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.9776271345877682,
 "token_form": 0.0,
@@ -17107,7 +24257,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -17184,6 +24334,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 15050836295943.744,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -17236,14 +24401,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.09776271345877682,
 "token_form": 0.0,
@@ -17283,7 +24448,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -17360,6 +24525,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 15050836295943.744,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -17412,14 +24592,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202717,
 "reduction": 0.14559388478968227,
 "token_form": 0.0,
@@ -17459,7 +24639,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -17536,6 +24716,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 475949233855143.0,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -17588,14 +24783,14 @@ null
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.014767038773668266,
 "token_form": 0.0,
@@ -17635,7 +24830,7 @@ null
 "share": 0.6520858971202714,
 "x0": 8.333582376964214e-05
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -17709,6 +24904,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 15050836295.943745,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 26624,
@@ -17760,14 +24970,14 @@ null
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 9.776271345877682,
 "token_form": 0.0,
@@ -17807,7 +25017,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -17885,6 +25095,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 475949233855.143,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 800000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 26624,
@@ -17936,14 +25161,14 @@ null
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.9776271345877682,
 "token_form": 0.0,
@@ -17983,7 +25208,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -18060,6 +25285,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 15050836295943.744,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -18112,14 +25352,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.09776271345877682,
 "token_form": 0.0,
@@ -18159,7 +25399,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -18236,6 +25476,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 15050836295943.744,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -18288,14 +25543,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202717,
 "reduction": 0.14559388478968227,
 "token_form": 0.0,
@@ -18335,7 +25590,7 @@ null
 "share": 0.6520858971202714,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -18412,6 +25667,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 226271232.0,
+"O": 25755648.0,
+"alpha": 475949233855143.0,
+"b_y": 16,
+"below_width": true,
+"beta": 0.000216997,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000000.0,
+"macs_share": 0.9990234375,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -18464,14 +25734,14 @@ null
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.014767038773668266,
 "token_form": 0.0,
@@ -18511,7 +25781,7 @@ null
 "share": 0.9996631800490919,
 "x0": 0.00034364702383247125
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -18591,6 +25861,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 25141248.0,
+"O": 6291456.0,
+"alpha": 12499602.061335018,
+"b_y": 16,
+"below_width": true,
+"beta": 0.261287224,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000.0,
+"macs_share": 0.011100260416666667,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 1712128.0,
@@ -18642,14 +25927,14 @@ null
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 146.76517300380573,
 "reduction": 42.05663060357565,
 "token_form": 13.115530738562539,
@@ -18689,7 +25974,7 @@ null
 "share": 0.9996631800490919,
 "x0": 0.08627081452593345
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -18769,6 +26054,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 25141248.0,
+"O": 6291456.0,
+"alpha": 395272123.5955435,
+"b_y": 16,
+"below_width": true,
+"beta": 0.261287224,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 800000.0,
+"macs_share": 0.011100260416666667,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 1712128.0,
@@ -18820,14 +26120,14 @@ null
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 14.306487096221096,
 "reduction": 4.2056630603575655,
 "token_form": 1.1988162915313898,
@@ -18867,7 +26167,7 @@ null
 "share": 0.9996631800490919,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -18946,6 +26246,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 25141248.0,
+"O": 6291456.0,
+"alpha": 12499602061.335018,
+"b_y": 16,
+"below_width": true,
+"beta": 0.261287224,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.011100260416666667,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -18998,14 +26313,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.999663180049092,
 "reduction": 0.4205663060357565,
 "token_form": 0.0,
@@ -19045,7 +26360,7 @@ null
 "share": 0.9996631800490919,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -19124,6 +26439,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 25141248.0,
+"O": 6291456.0,
+"alpha": 12499602061.335018,
+"b_y": 16,
+"below_width": true,
+"beta": 0.261287224,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.011100260416666667,
+"r_step": null,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 0.0,
@@ -19176,14 +26506,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490919,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.9996631800490918,
 "reduction": 0.42611088135947006,
 "token_form": 0.0,
@@ -19223,7 +26553,7 @@ null
 "share": 0.9996631800490919,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -19303,6 +26633,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 25141248.0,
+"O": 6291456.0,
+"alpha": 395272123595.5436,
+"b_y": 16,
+"below_width": true,
+"beta": 0.261287224,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000000.0,
+"macs_share": 0.011100260416666667,
+"r_step": null,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 0.0,
 "delta_bits": 1712128.0,
@@ -19354,14 +26699,14 @@ null
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.999663180049092,
 "reduction": 0.042688096126554144,
 "token_form": 0.0,
@@ -19401,7 +26746,7 @@ null
 "share": 0.9999300519868621,
 "x0": 0.08805491470908546
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -19482,6 +26827,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 1571328.0,
+"O": 6291456.0,
+"alpha": 972591.5156205457,
+"b_y": 16,
+"below_width": true,
+"beta": 3.358024691,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000.0,
+"macs_share": 0.0009389318021616541,
+"r_step": 4,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 5383159808.0,
 "delta_bits": 172032.0,
@@ -19533,14 +26893,14 @@ null
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
 "sensitivities": {
 "decoding_form": 1.000196951609222,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 134.7778543633552,
 "reduction": 4.15717585271444,
 "token_form": 11.857120347569653,
@@ -19580,7 +26940,7 @@ null
 "share": 0.9999300519868621,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -19661,6 +27021,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 1571328.0,
+"O": 6291456.0,
+"alpha": 30756044.223161574,
+"b_y": 16,
+"below_width": true,
+"beta": 3.358024691,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 800000.0,
+"macs_share": 0.0009389318021616541,
+"r_step": 4,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 5383159808.0,
 "delta_bits": 172032.0,
@@ -19712,14 +27087,14 @@ null
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
 "sensitivities": {
 "decoding_form": 0.9999300519868622,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.41571758527144403,
 "token_form": 0.0,
@@ -19759,7 +27134,7 @@ null
 "share": 0.9999300519868621,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -19839,6 +27214,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 1571328.0,
+"O": 6291456.0,
+"alpha": 972591515.6205457,
+"b_y": 16,
+"below_width": true,
+"beta": 3.358024691,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.0009389318021616541,
+"r_step": 4,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 5383159808.0,
@@ -19891,14 +27281,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
 "sensitivities": {
 "decoding_form": 0.9999300519868622,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.041571758527144405,
 "token_form": 0.0,
@@ -19938,7 +27328,7 @@ null
 "share": 0.9999300519868621,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -20018,6 +27408,21 @@ null
 "e": 0,
 "whole_chain": 1.0
 }
+},
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 1571328.0,
+"O": 6291456.0,
+"alpha": 972591515.6205457,
+"b_y": 16,
+"below_width": true,
+"beta": 3.358024691,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 8000000.0,
+"macs_share": 0.0009389318021616541,
+"r_step": 4,
+"rho": 0.0
 },
 "per_gate": {
 "decoder_gates": 5383159808.0,
@@ -20070,14 +27475,14 @@ null
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
 "sensitivities": {
 "decoding_form": 0.9999300519868621,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.041612355947581066,
 "token_form": 0.0,
@@ -20117,7 +27522,7 @@ null
 "share": 0.9999300519868621,
 "x0": 1.0
 },
-"fresh_products": {
+"fresh_old": {
 "capture": "4.12.9",
 "capture_code": null,
 "fresh_cell": 0.0,
@@ -20198,6 +27603,21 @@ null
 "whole_chain": 1.0
 }
 },
+"fresh_products": {
+"F": 1.1547005383792517,
+"N": 1571328.0,
+"O": 6291456.0,
+"alpha": 30756044223.161568,
+"b_y": 16,
+"below_width": true,
+"beta": 3.358024691,
+"capture": "4.12.9",
+"capture_code": null,
+"k_classified": 80000000.0,
+"macs_share": 0.0009389318021616541,
+"r_step": 4,
+"rho": 0.0
+},
 "per_gate": {
 "decoder_gates": 5383159808.0,
 "delta_bits": null,
@@ -20249,14 +27669,14 @@ null
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.14, reading A",
+"label": "training's slowdown code 4.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
 "sensitivities": {
 "decoding_form": 0.9999300519868622,
-"fresh_cell": 0.0,
 "fresh_no_cell": 0.0,
+"fresh_old": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.004197773273151105,
 "token_form": 0.0,
@@ -20272,7 +27692,7 @@ null
 "void": {}
 }
 ],
-"version": "4.12.14",
+"version": "4.13",
 "void_case": {
 "case": "dense, DoRA's void products",
 "measured": "dense",
