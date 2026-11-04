@@ -150,8 +150,8 @@ def CircuitWiresFitOf (chk : Prog → Json → Json → Json → Except String C
 /-- **An accepted record's wires fit its Program's circuit.** If `NetworkCheck.Circuit.check` accepts the record `record`
 with the order `order` against the Program `P` C-Flock decodes, then at every flattening `C` of `P`, a layout whose
 wires are the record's (`rowGates`) and with no ingress before `k` fits `copied P C` over `k` (`WiresFit`): each wired
-gate is an input and no ingress gate, its writer is a copy the circuit returns, no writer depends on an ingress gate,
-and some rank falls along every wire, a wired gate ranking above every wired gate its writer depends on. -/
+gate is an input and no ingress gate, its writer is a copy the circuit returns, and some rank falls along every wire, a
+wired gate ranking above every wired gate its writer depends on. -/
 def CircuitWiresFit : Prop :=
   ∀ (P : Prog) (record order pins : Json) (c : Counts),
     NetworkCheck.Circuit.check P record order pins = .ok c → CircuitWiresFitAt P record
