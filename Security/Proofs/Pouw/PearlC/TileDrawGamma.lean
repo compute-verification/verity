@@ -17,8 +17,10 @@ transcript's draw probability (`GγSampledDrawTol`).
   since a blank tile weighs nothing, its accepted good tiles carry at least `1 − u(X_O)` of the claimed work, at most `Ω`
   times their credit, and then TT_OUT's event holds.
 * `gammaSampledDrawTol`: `TTOutTile(γ₀)` gives `GγSampledDrawTol` at `γ = 1 − (1 − γ₀)/Ω` when a consistent
-  declaration's weight on a tile within its cap is at most `Ω` times the tile's credit. `gammaSampledDraw_of_tol`: the
-  audit that accepts only checked tiles is its case `u 0 = ε_s`, `u x = 1` otherwise (`missBound_strict`).
+  declaration's weight on a tile within its inert-work bound is at most `Ω` times the tile's credit.
+* `gammaSampledDrawTolThreshold_of_tol`: at the deployed table, `u 0 = ε_s` and `u x = 1` otherwise
+  (`missBound_strict`), it is `GγSampledDrawTolThreshold`. `gammaSampledDraw_of_threshold`: the audit that accepts only
+  checked tiles is that table's case (`gammaSampledDraw_of_tol`, the two composed).
 -/
 
 namespace Pouw.PearlC
@@ -223,17 +225,24 @@ theorem gammaSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
     rw [hact]
     exact hc0 U hU x.1 x.2 g (mem_range.mp hgr) c.act hgc.1
 
-/-- **The audit drawn as the run draws that accepts only checked tiles is the tolerant one's strict case**:
-`GγSampledDrawTol` at the table `u 0 = ε_s`, `u x = 1` otherwise (`missBound_strict`) gives `GγSampledDraw`, since a
-draw every sample of which lands on an accepted good tile or a blank one has none on a tile over its cap. -/
-theorem gammaSampledDraw_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+/-- **The tolerant audit drawn as the run draws at the deployed table**: `GγSampledDrawTol` at the threshold table
+`u 0 = ε_s`, `u x = 1` otherwise, a miss bound at `(1 − ε_s)^t` (`missBound_strict`). -/
+theorem gammaSampledDrawTolThreshold_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
     {Wd : Layout → ℕ → Decl → ℚ} {γ : ℝ} {η : ℕ → ℕ → ℝ} (h : GγSampledDrawTol CM P TR D Wd γ η) :
+    GγSampledDrawTolThreshold CM P TR D Wd γ η := fun U hU T hT q hq A hA dec t εs hεs =>
+  h U hU T hT q hq A hA dec t _ _ (missBound_strict t εs hεs)
+
+/-- **The audit drawn as the run draws that accepts only checked tiles is the tolerant one's strict case**:
+`GγSampledDrawTolThreshold` gives `GγSampledDraw`, since a draw every sample of which lands on an accepted good tile or
+a blank one has none on a tile over its inert-work bound. -/
+theorem gammaSampledDraw_of_threshold {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
+    {Wd : Layout → ℕ → Decl → ℚ} {γ : ℝ} {η : ℕ → ℕ → ℝ} (h : GγSampledDrawTolThreshold CM P TR D Wd γ η) :
     GγSampledDraw CM P TR D Wd γ η := by
   intro U hU T hT q hq A hA dec t εs hεs
   classical
-  refine le_trans (Claims.Ex_mono fun x => pr_mono fun c hc => ?_)
-    (h U hU T hT q hq A hA dec t _ _ (missBound_strict t εs hεs))
+  refine le_trans (Claims.Ex_mono fun x => pr_mono fun c hc => ?_) (h U hU T hT q hq A hA dec t εs hεs)
   obtain ⟨hacc, hTlt⟩ := hc
   have hdisj := (overCapTiles_disjoint P TR U x.1 x.2 (A.transcript U x.1 x.2)).mono_left
     (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2)) (Subset.refl _))
@@ -243,5 +252,13 @@ theorem gammaSampledDraw_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
     exact fun i _ ho => Finset.disjoint_left.mp hdisj (hacc i) ho
   refine ⟨fun i => Or.inl (hacc i), ?_⟩
   simpa [h0] using hTlt
+
+/-- `GγSampledDrawTol` gives `GγSampledDraw`, through the deployed table (`gammaSampledDrawTolThreshold_of_tol`,
+`gammaSampledDraw_of_threshold`). -/
+theorem gammaSampledDraw_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
+    {Wd : Layout → ℕ → Decl → ℚ} {γ : ℝ} {η : ℕ → ℕ → ℝ} (h : GγSampledDrawTol CM P TR D Wd γ η) :
+    GγSampledDraw CM P TR D Wd γ η :=
+  gammaSampledDraw_of_threshold (gammaSampledDrawTolThreshold_of_tol h)
 
 end Pouw.PearlC

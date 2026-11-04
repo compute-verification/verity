@@ -17,16 +17,17 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
 * **The sampled γ** (`pearlCSampledDevRev1RowCapAtW`, at any per-shape `W_ref`; `pearlCSampledDevRev1KRowCapAt` at the
   honest kernel's): `γ = 1 − (1 − γ₀')/ω = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)`, where `W_ref = ω·(1 − ρ)·creditDevRev1`.
 * **The tolerant audit** (`…Tol`, `GγSampledTol`): the same γ from the same premises when the audit accepts a sampled tile
-  over its cap and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
+  over its inert-work bound and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
   (`gammaSampled_of_tol`).
 * **The audit drawn as the run draws** (`pearlCSampledDrawDevRev1RowCapAtTol`, `GγSampledDrawTol`): each transcript drawn
   by its records' tickets (`pearlCDrawRev1`), at the same γ, since a declaration consistent with a tile weighs it at most
   its credited rows' `W_ref` (`pearlCDrawRev1_le`, `wrefRowRev1_le`).
 * **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, drawn as
   the run draws, from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3 (`pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`),
-  and its code form (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol`): `ω = 25210/25137`
-  and `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows; the forms without `Tol` are the audit that
-  accepts only checked tiles (`gammaSampledDraw_of_tol`). C0 is `devAt_rowLocal`, by `rfl`.
+  and its code form (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol`), both at the
+  deployed table `u 0 = ε_s`, `u x = 1` otherwise (`GγSampledDrawTolThreshold`): `ω = 25210/25137` and
+  `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows; the forms without `Tol` are the audit that accepts
+  only checked tiles (`gammaSampledDraw_of_threshold`). C0 is `devAt_rowLocal`, by `rfl`.
 -/
 
 namespace Pouw.PearlC
@@ -451,52 +452,54 @@ theorem wrefDevRev1_h100_n6144k256 (m : ℕ) : wrefDevRev1 devH100 ⟨m, 6144, 2
 variable (CM : CostModel Q R S) {sem sem' semC : PearlCSem Q R S}
 
 /-- **GLM-5.3's down projection, `m × 6144 × 256` at any `m`, on the H100 record with per-row seeds per audit tile, the
-tile cap 1/400 and the row cap 1/100, under the tolerant audit drawn as the run draws** (`pearlCDrawRev1`, the records'
-tickets), from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3:
-`γ = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at `ω = 25210/25137`, with the error at the
-`m·N` rows, for every miss-bound table. -/
+tile cap 1/400 and the row cap 1/100, under the tolerant audit drawn as the run draws, at the deployed table**
+(`pearlCDrawRev1`, the records' tickets; `u 0 = ε_s`, `u x = 1` otherwise), from `TTOutTilePearlCH100Rev1` at 1/100, C1
+and C3: `γ = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at `ω = 25210/25137`, with the error at
+the `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedRowCap100_6144x256Tol (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) :
-    GγSampledDrawTol CM (pearlCProtocolDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
+    GγSampledDrawTolThreshold CM (pearlCProtocolDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  pearlCSampledDrawDevRev1RowCapAtTol CM devH100 sem' (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _
-    devH100_add devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
-    (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
-    (by norm_num)
-    (ttOutTileRowSeed_of_ttOutTile hTT hN hCM devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
+  gammaSampledDrawTolThreshold_of_tol
+    (pearlCSampledDrawDevRev1RowCapAtTol CM devH100 sem' (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _
+      devH100_add devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
+      (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
+      (by norm_num)
+      (ttOutTileRowSeed_of_ttOutTile hTT hN hCM devH100_rowLocal (by norm_num) devH100_add devH100_bf16))
 
 /-- **GLM-5.3's down projection on the H100 record under the audit drawn as the run draws that accepts only checked
-tiles**: `pearlCSampledH100v1RowSeedRowCap100_6144x256Tol` at the table `u 0 = ε_s`, `u x = 1` otherwise
-(`gammaSampledDraw_of_tol`), `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows. -/
+tiles**: `pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`'s case (`gammaSampledDraw_of_threshold`),
+`γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) :
     GγSampledDraw CM (pearlCProtocolDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  gammaSampledDraw_of_tol (pearlCSampledH100v1RowSeedRowCap100_6144x256Tol CM m hTT hN hCM)
+  gammaSampledDraw_of_threshold (pearlCSampledH100v1RowSeedRowCap100_6144x256Tol CM m hTT hN hCM)
 
 /-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`**, the served record
-`pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: under the tolerant audit drawn as the run draws,
-`γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows, for every miss-bound table. -/
+`pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: under the tolerant audit drawn as the run draws, at the
+deployed table, `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol {π : Layout → Q ≃ Q} (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
     (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
-    GγSampledDrawTol CM (pearlCProtocolDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
+    GγSampledDrawTolThreshold CM (pearlCProtocolDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  pearlCSampledDrawDevRev1RowCapAtTol CM devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _
-    devH100_add devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
-    (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
-    (by norm_num)
-    (ttOutTileRowSeedCode_of_ttOutTile hTT hN hC hCM hCM' devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
+  gammaSampledDrawTolThreshold_of_tol
+    (pearlCSampledDrawDevRev1RowCapAtTol CM devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _
+      devH100_add devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
+      (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
+      (by norm_num)
+      (ttOutTileRowSeedCode_of_ttOutTile hTT hN hC hCM hCM' devH100_rowLocal (by norm_num) devH100_add devH100_bf16))
 
 /-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256`**, the served record
 `pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: `γ = 32437/2521000` (1.28667%), with the error at the `m·N`
-rows (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol` under the audit that accepts only checked tiles). -/
+rows (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol`'s case, `gammaSampledDraw_of_threshold`). -/
 theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ Q} (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
     (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
@@ -504,7 +507,7 @@ theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ 
       (pearlCTilesDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  gammaSampledDraw_of_tol (pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol CM m hTT hN hC hCM hCM')
+  gammaSampledDraw_of_threshold (pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol CM m hTT hN hC hCM hCM')
 
 end Gamma
 

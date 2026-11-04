@@ -23,11 +23,12 @@ the transcript. This file states γ for that draw.
   no tickets has no draw, and every event has probability `0` on it.
 - **The audit's check of a drawn tile** passes on a good tile whose declaration is consistent with it (`declOK`): the
   declared kept width is within the unit's `k`, and every declared credited row of the tile passes Π's rules.
-- **`GγSampledDrawTol`:** the tolerant audit accepts (every sampled tile passes, is of a blank unit, or is over its cap)
-  while `T` is below `(1 − γ)·(1 − u(X_O))` of the claimed work, with probability at most `δ + η(q, N)`, for every table
-  `u` with a miss bound at `δ` (`MissBound`). **`GγSampledDraw`** is the audit that accepts only checked tiles, at
-  `(1 − ε_s)^t`. The deduction is a share of the claimed work, `u(X_O)·W_claimed`, where `GγSampledTol`'s is a share of
-  the layout's.
+- **`GγSampledDrawTol`:** the tolerant audit accepts (every sampled tile passes, is of a blank unit, or is over its
+  inert-work bound) while `T` is below `(1 − γ)·(1 − u(X_O))` of the claimed work, with probability at most
+  `δ + η(q, N)`, for every table `u` with a miss bound at `δ` (`MissBound`). **`GγSampledDrawTolThreshold`** is it at
+  the deployed table, `u 0 = ε_s` and `u x = 1` otherwise, at `(1 − ε_s)^t`. **`GγSampledDraw`** is the audit that
+  accepts only checked tiles, at `(1 − ε_s)^t`. The deduction is a share of the claimed work, `u(X_O)·W_claimed`, where
+  `GγSampledTol`'s is a share of the layout's.
 
 The bound `q ≤ 2^64` is written as its numeral, so that it is a plain range.
 -/
@@ -82,9 +83,9 @@ noncomputable def goodDeclTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U :
 /-- **The γ-gap property under the tolerant sampled audit, drawn as the run draws.** For every in-domain workload, budget
 `T`, oracle bound `q ≤ 2^64`, adversary, declarations `dec` (fixed with the transcript before the coin) and miss-bound
 table `u` at `δ` (`MissBound`): averaged over the oracle and the salt, the probability over `t` draws by the transcript's
-tickets (`drawTickets`) that the audit accepts (every sampled tile passes, is of a blank unit, or is over its cap) while
-`T` is below `(1 − γ)·(1 − u(X_O))` of the claimed work, `X_O` the samples on tiles over their cap, is at most
-`δ + η(q, N)`. -/
+tickets (`drawTickets`) that the audit accepts (every sampled tile passes, is of a blank unit, or is over its inert-work
+bound) while `T` is below `(1 − γ)·(1 − u(X_O))` of the claimed work, `X_O` the samples on tiles over their bound, is
+at most `δ + η(q, N)`. -/
 def GγSampledDrawTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (Wd : Layout → ℕ → Decl → ℚ) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 18446744073709551616 → ∀ A : Adversary CM,
@@ -112,6 +113,25 @@ def GγSampledDraw [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Cos
           AuditAccepts (goodDeclTiles P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2) ∪
               blankTiles TR U (A.transcript U x.1 x.2)) c ∧
           T < (1 - γ) * (1 - εs) * claimedDraw TR Wd U (A.transcript U x.1 x.2) (dec x.1 x.2)))
+        ≤ (1 - εs) ^ t + η q U.layout.N
+
+/-- **The γ-gap property under the tolerant sampled audit, drawn as the run draws, at the deployed table**:
+`GγSampledDrawTol`'s event at the threshold table `u 0 = ε_s`, `u x = 1` otherwise, at `(1 − ε_s)^t + η(q, N)`. The
+deployed verifier's `ε_s` is the least with `(1 − ε_s)^t ≤ δ`. A run whose samples include a tile over its inert-work
+bound is accepted and certifies nothing; any other accepted run certifies `(1 − γ)·(1 − ε_s)` of the claimed work. -/
+def GγSampledDrawTolThreshold [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (Wd : Layout → ℕ → Decl → ℚ) (γ : ℝ)
+    (η : ℕ → ℕ → ℝ) : Prop :=
+  ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 18446744073709551616 → ∀ A : Adversary CM,
+    A.Bounded U T q → ∀ dec : (Q → R) → S → ℕ → Decl, ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+      Claims.Ex (fun x : (Q → R) × S =>
+        pr (fun c : Fin t → Ticket (drawTickets TR Wd U (A.transcript U x.1 x.2) (dec x.1 x.2))
+            (TR.tiling U.layout).NT =>
+          AuditAcceptsTol (goodDeclTiles P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2) ∪
+              blankTiles TR U (A.transcript U x.1 x.2))
+            (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c ∧
+          T < (1 - γ) * (1 - (if drawsIn (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 then εs else 1)) *
+            claimedDraw TR Wd U (A.transcript U x.1 x.2) (dec x.1 x.2)))
         ≤ (1 - εs) ^ t + η q U.layout.N
 
 /-! ## Pearl-C's draw under rev1 -/
