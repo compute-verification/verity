@@ -15,6 +15,7 @@ python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--smoke] [
 python scorer.py final dispatch [--nodes N1,N2,...] [--deadline HH:MM] [--dry-run]  # one pass: the plan's next reruns
 python scorer.py final collect|table                   # final-set reruns (below)
 python node_loop.py init|once|loop|finish RUN          # the refresh (v1cycle.py) as a research run on a CPU node
+python plot2_final.py build --finals F --policy T --out D | put D  # algorithm-policy from the finals table (its docstring)
 ~~~
 
 The refresh runs on a CPU node (`refresh-node.sh`, its state kept there; the agent VM only edits): `node_loop.py` on
