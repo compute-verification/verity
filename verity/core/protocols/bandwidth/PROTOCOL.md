@@ -320,7 +320,7 @@ assumption is needed for the two properties of runs that overlap in time:
   `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`); `Params` (the tag,
   `s`, `T`, the `RTT` allowance and the rebuild floor); the operating point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`,
   `SLACK_LOG2`, `certified_blocks`, `sampling_error`, `samples_for`) and `bound`.
-- `openings.py`: the openings of the remote audit's chained passes, `P` passes over the store with one pooled draw of
+- `openings.py`: the openings of a remote window's chained passes, `P` passes over the store with one pooled draw of
   `s` openings after the last root: the draw (`draw`), its count (`samples_for`, `audit.samples_for` over the window's
   receipts), its sampling error over a monitoring period's draws (`horizon_error_log2`; one window's is
   `audit.sampling_error`), `λ` in three forms (`slack_bits`: `crude`, this audit's `64·k + 41`; `exact`;

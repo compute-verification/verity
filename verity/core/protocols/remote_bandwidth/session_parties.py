@@ -1,4 +1,4 @@
-"""The remote bandwidth session (`period.session`) as two parties of the deployment layer (`verity.core.deploy`): the
+"""The PoUB session (`period.session`) as two parties of the deployment layer (`verity.core.deploy`): the
 verifier and its challenger (`Verifier`), on a machine the prover doesn't control, and the prover (`Prover`) on its node.
 
 ~~~text

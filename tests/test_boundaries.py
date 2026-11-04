@@ -90,10 +90,10 @@ ALLOWED = {
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
-    # The remote bandwidth audit commits receipts in frame-v3-sha512
-    # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof system's one challenger's (`sampled_proofs.challenger`).
-    # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # PoUB commits receipts in frame-v3-sha512 trees, draws from the verifier's secret, and records its openings as an
+    # integrity profile.  Its coins are the proof system's one challenger's (`sampled_proofs.challenger`).
+    # PoUB is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they
+    # are (`p2.py`).
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
@@ -131,7 +131,7 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 ML_IMPORTS_CORE = {
     "ml/flock/tests/*": "Flock's tests check its prover and the Lean verifier against core's Python verifiers",
     "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
-    "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
+    "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to PoUB's own "
                                                 "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "

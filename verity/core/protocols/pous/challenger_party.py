@@ -54,7 +54,7 @@ it starts the side, connects to it and answers each index with `respond(index)` 
 A request naming its audit also carries P2's parameters (`params`, `request_of`), and `setup_of` reads setup's published
 outputs with them, refused unless their root is the binding and their blocks the request's. Each session the
 challenger completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request
-and the id it designated: the auditor's record of that window's setup, from which the remote bandwidth audit's verifier
+and the id it designated: the auditor's record of that window's setup, from which PoUB's verifier
 on the same host builds its registration (`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
 """
 

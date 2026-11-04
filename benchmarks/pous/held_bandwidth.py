@@ -1,4 +1,4 @@
-"""PoUB-P2's session over the ``C*`` the PoUS piece holds (`served_piece.py`): the remote bandwidth audit's prover
+"""PoUB-P2's session over the ``C*`` the PoUS piece holds (`served_piece.py`): PoUB's prover
 (`p2_party.prove`) over PoUS's store as the vLLM adapter encoded it on the card, run by the same process after PoUS's
 session and before the store is released, so both audits are of one store that one process holds, and no second store
 is encoded.

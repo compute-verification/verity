@@ -1,5 +1,5 @@
 """Check 3 through the opening unit, on the honest witness: each receipt the remote session draws is staged as the
-witness of the remote bandwidth audit's opening unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks
+witness of PoUB's opening unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks
 1-3 and 5 as one unit) in place of its opening, and decided by the unit's verdict.
 
 This module is the stand-in for the unit's proofs, not zero knowledge: `check` evaluates the unit's reference on the
