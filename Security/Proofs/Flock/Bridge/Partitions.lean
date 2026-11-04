@@ -31,7 +31,8 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
   have hsome : (unitClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
     List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hsome
-  exact ⟨w, hw, of_decide_eq_true (List.find?_some hw)⟩
+  have hp : decide (committed Cp u ≤ w) = true := List.find?_some hw
+  exact ⟨w, hw, of_decide_eq_true hp⟩
 
 section Lowered
 
