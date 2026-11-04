@@ -136,7 +136,7 @@ theorem rowsProgWired_honest :
 /-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
 digest `selectEntryPins`' first), and its registration, with that template's entries port at the root `r` and the
 domain `d`. -/
-def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)]⟩
+def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)], none⟩
 
 def selectReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
@@ -164,7 +164,7 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
-def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
+def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")], none⟩
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
