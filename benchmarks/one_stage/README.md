@@ -150,6 +150,10 @@ negatives.
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
+- `v2_case.sh` (with `v2_case.py`): one-stage v2's audit on a real session, the composition difftest's sampled-proofs case
+  that accepts: `plain_hidden.py`'s RoPE statement registered, its draw from a local withheld challenger session's coins,
+  and one `--zk` session whose coin tree that same session samples and opens (`serve --tree-from`, through a relay on the
+  session's one client), so the draw and the tree are in one signed release log. It writes the case and its Lean answer.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
   the request Program's root Calls by Definition kind and tries one unit of each through M0 (a kind whose word units M0
   refuses, through its Boolean version's); `a11_slice.py` cuts the
