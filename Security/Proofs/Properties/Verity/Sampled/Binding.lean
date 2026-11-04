@@ -265,7 +265,8 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
   subst ps' ev'
   obtain ⟨ps₀, hps₀, n, hnf, hnp⟩ := hp
   have hn : n ∈ ps₀ := List.mem_of_find?_eq_some hnf
-  have hnid : n.id = VStar.Recursive.Sampled.PROTOCOL := beq_iff_eq.1 (List.find?_some hnf)
+  have hnq := List.find?_some hnf
+  have hnid : n.id = VStar.Recursive.Sampled.PROTOCOL := beq_iff_eq.1 hnq
   have e3 : ps₀ = ps := Except.ok.inj (hps₀.symm.trans hps)
   subst ps₀
   have hcs : (s.components k).map (·.id) = (componentsOf k).map (·.id) := by
