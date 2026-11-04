@@ -12,6 +12,14 @@ rescale is exp2(NaN), the guarded block's 0).
 `AttentionHead_v5` takes the lowest key block the kernel guards as the static `MASKED_FROM` (`attention_vocab.fa2_masked_from`): block b runs
 `AttnBlock_v5{..., CHECK = b >= MASKED_FROM}`.  The row's first block is always at or above it.  `targets.attention_spec` binds `Attention_v5`
 on an FA2 target whose family registers `fa2_construction = "check-inf-per-iteration"`; the other FA2 targets keep their accepted chains.
+
+A key block cut into proof blocks: `AttnBlockSoftmax_v1{D, NVIS, FIRST, DOT, CHECK, PK, LAST}` is `AttnBlock_v5`'s steps up to P (and,
+past the first block, O's rescale), its P in groups of PK keys, and `AttnBlockPv_v1{D, N, VS, DOT, FIRST}` one group's P·V k-steps, its
+V as `AttnBlockFirst_v2`'s slices of VS columns.  Softmax, then its groups in order, each reading the last one's O, is `AttnBlock_v5`
+(and at the first block `AttnBlockFirst_v1`) word for word; at LAST, the head's last key block, whose state only the epilogue reads
+(the lane sums and O, never the running max), the step returns no running max, which it still computes for P and the rescale.  A block
+of 192 keys over a 64-dim head, a key and a value slice a proof block's row, is three proof blocks of at most 201 rows at PK 96 and VS 32, where
+`AttnBlockFirst_v2{VS=32}` alone is 580 rows, past a proof block's 256.
 """
 from __future__ import annotations
 
@@ -188,6 +196,115 @@ def AttentionV11(B, S, q, kc, vc, scale_log2):
     return _check_inf_attention(B, S, q, kc, vc, AttentionHeadV11, (scale_log2,))
 
 
+# A key block as its softmax step and its P·V k-steps in groups of PK keys (module docstring).
+
+
+def pv_groups(NVIS: int, PK: int) -> list[tuple[int, int]]:
+    """The key ranges [lo, hi) of a block of NVIS keys in groups of PK, the last the rest."""
+    return [(lo, min(NVIS, lo + PK)) for lo in range(0, NVIS, PK)]
+
+
+def _softmax_refuse(b: dict) -> str | None:
+    pk, nvis = b.get("PK"), b.get("NVIS")
+    if pk is not None and not (type(pk) is int and pk >= 16 and pk % 16 == 0):
+        return f"PK must be whole k-steps of 16 keys (got PK={pk!r})"
+    if nvis is not None and not (type(nvis) is int and nvis >= 1):
+        return f"NVIS must be at least 1 key (got NVIS={nvis!r})"
+    if b.get("FIRST") is True and b.get("CHECK") is False:
+        return "the first iteration runs Check_inf (FIRST needs CHECK)"
+    return None
+
+
+def _softmax_type(S):
+    params = [("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16)))]
+    if not S.FIRST:
+        params += [("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32))]
+    m = () if S.LAST else (F32,)
+    o = () if S.FIRST else (Array(S.D, F32),)
+    return tuple(params), Tuple(*m, Array(4, F32), *o, *(Array(hi - lo, BF16) for lo, hi in pv_groups(S.NVIS, S.PK)))
+
+
+def softmax_steps(B, S, q, k, state, *, guard_max_scaled_only):
+    """A key block's steps up to P and O's rescale, `_check_inf_block`'s in its order; ``guard_max_scaled_only``: FA2's guard
+    (`AttnBlock_v5`, the unguarded rescale reads the running max as it is), else FA3's (`AttnBlock_v4`, both read it)."""
+    D, NVIS, FIRST, DOT, CHECK = S.D, S.NVIS, S.FIRST, S.DOT, S.CHECK
+    m_prev, l_prev, o_prev = (None, None, None) if FIRST else state
+    dot = bind(DotBf16V2, K=D, DOT=DOT)
+    s = [B.call(dot, q, k[c]) for c in range(NVIS)]
+    bmax = s[0]
+    for c in range(1, NVIS):
+        bmax = B.call(P.F32Max, bmax, s[c])
+    m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
+    m_use = B.call(P.GuardNegInfZero, m_new) if CHECK or guard_max_scaled_only else m_new
+    scale_log2 = B.call(const(32, scale_log2_bits(D)))
+    if not FIRST:
+        scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use if CHECK else m_new), scale_log2))
+    max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
+    p = [B.call(P.MufuEx2Ftz, B.call(P.F32FmaSubFtz, s[c], scale_log2, max_scaled)) for c in range(NVIS)]
+    lanes = []
+    for ln in range(4):
+        cols = [c for c in range(NVIS) if _lane(c) == ln]
+        if FIRST:
+            acc = p[cols[0]] if cols else B.call(ZERO32)
+        else:
+            acc = B.call(P.F32FmaFtz, scores_scale, l_prev[ln], p[cols[0]] if cols else B.call(ZERO32))
+        for c in cols[1:]:
+            acc = B.call(P.F32AddFtz, acc, p[c])
+        lanes.append(acc)
+    pb = [B.call(P.F2fpBf16, x) for x in p]
+    o = [] if FIRST else [array_of([B.call(P.F32MulFtz, o_prev[d], scores_scale) for d in range(D)])]
+    m = [] if S.LAST else [m_new]
+    return tuple_of(*m, array_of(lanes), *o, *(array_of(pb[lo:hi]) for lo, hi in pv_groups(NVIS, S.PK)))
+
+
+@composite("AttnBlockSoftmax", 1, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK", "LAST"], _softmax_type,
+           conformance="not-yet-established: AttnBlock_v5's steps up to P", refuse=_softmax_refuse)
+def AttnBlockSoftmaxV1(B, S, q, k, *state):
+    """`AttnBlock_v5{D, NVIS, FIRST, BN, DOT, CHECK}`'s steps up to P over its NVIS keys: S = Q K^T, the row max and the running
+    max (FA2's `Check_inf`: CHECK guards the rescale, `max * scale` is guarded in every block), P, the lane sums, and when not
+    FIRST O's rescale `o_prev * scale`.  Returns (m unless LAST, l, o unless FIRST, P_0 ... P_{G-1}), P_g the bf16 P of keys
+    [g PK, min(NVIS, (g + 1) PK)), each the `AttnBlockPv_v1` group that reads it.  LAST is the head's last key block (block 0),
+    whose running max no later step reads."""
+    return softmax_steps(B, S, q, k, state, guard_max_scaled_only=True)
+
+
+def _pv_refuse(b: dict) -> str | None:
+    D, vs, n = b.get("D"), b.get("VS"), b.get("N")
+    if vs is not None and not (type(vs) is int and vs >= 1 and (D is None or D % vs == 0)):
+        return f"VS must be a positive divisor of D (got D={D!r}, VS={vs!r})"
+    if n is not None and not (type(n) is int and n >= 1):
+        return f"N must be at least 1 key (got N={n!r})"
+    return None
+
+
+def _pv_type(S):
+    params = [("p", Array(S.N, BF16)), ("v", Array(S.N * S.D // S.VS, Array(S.VS, BF16)))]
+    return tuple(params + ([] if S.FIRST else [("o", Array(S.D, F32))])), Array(S.D, F32)
+
+
+@composite("AttnBlockPv", 1, ["D", "N", "VS", "DOT", "FIRST"], _pv_type,
+           conformance="not-yet-established: AttnBlock_v5's P·V k-steps over N keys", refuse=_pv_refuse)
+def AttnBlockPvV1(B, S, p, v, *o_in):
+    """``o + P V`` over N keys in ascending k-steps of 16 (`AttnBlock_v5`'s C over a group of its keys), from +0 when FIRST; v's
+    element ``t D/VS + s`` is key t's value columns [s VS, (s+1) VS) (`AttnBlockFirst_v2`'s slices).  When N % 16 (the first
+    visited block's last group) P is padded with +0 words and V with +0 rows to the last k-step, as `AttnBlockFirst_v1` pads."""
+    D, N, DOT = S.D, S.N, S.DOT
+    v = _Coll(Array(N, Array(D, BF16)), v.refs)
+    if N % 16:
+        zero_row = _Coll(Array(D, BF16), concat([B.call(ZERO16).refs] * D))
+        v = _Coll(Array(N + -N % 16, Array(D, BF16)), concat([v.refs] + [zero_row.refs] * (-N % 16)))
+    zero16 = B.call(ZERO16) if N % 16 else None
+    o = array_of([B.call(ZERO32) for _ in range(D)]) if S.FIRST else o_in[0]
+    for k0 in range(0, N, 16):
+        prow = _Coll(A16, concat([(p[k0 + j] if k0 + j < N else zero16).refs for j in range(16)]))
+        vblk = v[k0:k0 + 16]
+        vt_refs = strided_view(vblk, 0, 16, 1, D, 16 * D) if isinstance(vblk.refs, Affine) else \
+            Explicit(tuple(vblk.refs[j * D + d] for d in range(D) for j in range(16)))
+        o = B.batch(DOT, o, prow, _Coll(Array(D, A16), vt_refs), axes=(0, None, 0))
+    return o
+
+
 FA2_CHECK_INF_COMPOSITES = [AttnBlockV5, AttentionHeadV5, AttentionV5, AttnBlockV11, AttentionHeadV11, AttentionV11]
 
-__all__ = ["AttnBlockV5", "AttentionHeadV5", "AttentionV5", "AttnBlockV11", "AttentionHeadV11", "AttentionV11", "FA2_CHECK_INF_COMPOSITES"]
+__all__ = ["AttnBlockPvV1", "AttnBlockSoftmaxV1", "AttnBlockV5", "AttentionHeadV5", "AttentionV5", "AttnBlockV11", "AttentionHeadV11",
+           "AttentionV11", "FA2_CHECK_INF_COMPOSITES", "pv_groups", "softmax_steps"]
