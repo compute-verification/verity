@@ -22,6 +22,7 @@ public import Proofs.Flock.ZkAny.RelayFirst
 public import Proofs.Flock.ZkAny.RelayLive
 public import Proofs.Flock.ZkAny.RelaySession
 public import Proofs.Flock.ZkAny.RelayParams
+public import Proofs.Flock.ZkAny.RelaySched
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -34,7 +35,7 @@ which the other sessions' requests, the frames port's and a round's coins keep; 
 model's place as the model's release, stopping the session where the model's does, after its stream's domain frame at
 the stream's first round in the schedule: where the session's stop is whether an earlier round failed, the deferred
 model's message; and that stop from one request to the next, the model's at the session's first frame round and
-carried by a round and its coins to its next request; and a frame round's coin count and its frame's configuration,
-the model's. -/
+carried by a round and its coins to its next request; and a frame round's coin count, its frame's configuration and
+its scheduled round, the model's. -/
 
 @[expose] public section
