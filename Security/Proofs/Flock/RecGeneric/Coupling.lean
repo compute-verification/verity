@@ -45,6 +45,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {K : Co
 
 /-! ## Acceptance -/
 
+omit [Nonempty Coin] in
 /-- **`P_O`'s run at a draw accepts exactly where it is kept.** -/
 theorem innerFO_acc_iff (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
     (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
@@ -94,6 +95,7 @@ theorem keepDO_iff_acc {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (hb 
     have hg : K.GivesRO H P x ω d := ⟨w, hw, Classical.byContradiction fun hn => ho ⟨w, hw, hn⟩⟩
     exact ⟨hg, h, Classical.byContradiction fun hn => hb ⟨hg, hn⟩⟩
 
+omit [Nonempty Coin] in
 /-- **`P_O`'s aborting run accepts exactly where its rerun's inner view does**, but where the rerun accepts at a bad
 draw or at one where `E_O` gives witnesses outside `R_O`: a kept run's rerun accepts, and off those draws an accepting
 rerun is kept. -/
@@ -150,6 +152,7 @@ theorem rerunCalls_true (hRp : K.Replays H x) (hT : K.CallsTrue H x) (ω : Ω)
     have hw' : (K.EO.eval H P x ω d.1 d.2).1 = some w := hw
     exact hT Ω P ω d.1 d.2 w ⟨hRp Ω P ω d.1 d.2 w hw', hw'⟩ e he
 
+omit [Nonempty Coin] in
 /-- **`P_O`'s aborting run records only calls its rerun's searched evaluations hold, or those collide**: a kept run's
 calls are its inner view's (`runO`), which are among `E_O`'s witnesses' there, in `R_O`, or collide there
 (`CallsLogColl`); an aborted run records none. -/
@@ -185,6 +188,7 @@ theorem innerFO_vLog_sub (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c
     rw [e0] at he
     simp [abortTrace] at he
 
+omit [Nonempty Coin] in
 /-- **A collision among `P_O`'s aborting runs' calls is one among their reruns' searched evaluations**, where every
 run's call is among some rerun's searched evaluations that the true list `L'` holds: each run's calls are among its
 rerun's, or those collide (`innerFO_vLog_sub`). -/

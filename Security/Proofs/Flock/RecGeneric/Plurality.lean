@@ -99,6 +99,7 @@ theorem replayOC_eval (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : Li
     ((replayOC IV xI as (coinSeq ρ) (IV.k xI) [] []).eval H).1 = (run H (replay as) IV xI () ρ).seen :=
   stepWith_replayOC H IV xI as (coinSeq ρ) (IV.k xI) [] [] ⟨[], [], [], .rej⟩ rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **The inner view's rerun program returns the inner view**, against any runs. -/
 theorem decProg_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin)
     (o : Option K.WO) (run₂ : (Fin (K.V.k x) → Coin) → Trace) :
@@ -308,6 +309,7 @@ theorem runO (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
   · obtain ⟨j, hj, hej⟩ := h3 e he
     exact (hag j hj).2 e hej
 
+omit [Nonempty Coin] in
 /-- **Off the bad draws, `P_O`'s aborting run shows what the gated served run opened shows**: a draw where `E_O` gives
 up, gives witnesses outside `R_O`, or gives witnesses whose inner view rejects aborts at both, and a kept draw is the
 inner view opened (`runO`). -/
