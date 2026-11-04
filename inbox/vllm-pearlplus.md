@@ -742,3 +742,69 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
   - r20261104-183511-f20c: one_stage passed 710 on 2018e8f9f0.
   - r20261104-184351-d00e: one_stage on c127366498, ETA 19:00Z.
 - **For 439c's follow-on:** the gate peers have the memory: cpu-2 1007 GB, cpu-4 755 GB, cpu-5 755 GB. None of them holds `~/.ssh/vllm_lane_ed25519`, so the gate sees each node's default identity. The tied deferral copies the commit's ~386k files, and cpu-4 has only 772,331 inodes free, so it goes to cpu-2 (1,254,237) or cpu-5 (1,116,928). The gate opens a run root's live V3c audit once, ever, so the follow-on runs PREFLIGHT_ONLY first.
+
+## 19:12Z Wed (vllm-pearlplus): **My report on your 17:18Z items. The tie is in (c127366498). 439c's record and deferral are written, and the deferral is on cpu-2 and preflighted. The live follow-on now waits on infra registering lane vllm's keys from cpu-2 (the ask is below, ready to file). It also needs a decision: the tied audit is 561 sessions run one at a time, about 47 h at the toy's rate, against a 180 min timeout.**
+
+1. **Head and tests.** pprecord is `cursor/vllm-pprecord-496a` at **c127366498** (pushed), on `remote` 716de3311ff.
+   - Local: test_served_verdicts passed 353. One_stage passed 664, with 5 environmental failures (they pass on the nodes) and 7 collection errors from my VM's venv.
+   - Nodes: one_stage passed 710 on c127366498 (r20261104-184351-d00e) and 710 on 2018e8f9f0 (r20261104-183511-f20c). verity-vllm passed 12,982 on bab7d639ce (r20261104-180635-d449); since then the rebase added only remotetie's fix, already in, and Lean.
+2. **The sampled-proofs tie is in:** since 7c52cdf3f3, now at c127366498.
+   - R is chained right after W in Pearl+'s piece (`pearl-tie`: `window-commit --window-registration W --pearl-passes`).
+   - V3c's records audit runs `--tie W`.
+   - The record, the follow-on and the compose pass `--window-tie`, which `pearlplus_of_record` takes in place of `--sampled-proofs`.
+   - On 439c it held on hardware:
+     - R was chained right after W at 18:24Z;
+     - `verify --tie W` gave ACCEPT at 18:35Z: 133,030,865,219 of 134,717,222,912 MACs credited, tied to W on its 512 tables;
+     - the record was composed `pending` at 18:36Z, naming the deferral.
+   - Left: the follow-on's tied audit and the compose (both blocked, below), and #7221 for crediting.
+3. **The served compare** is a step of the record at ed61a274c8.
+   - It runs under PEARLPLUS_TIE, after the pieces wrote W, on the CPU.
+   - Its line, `SERVED-COMPARE: EQUAL|NOT EQUAL`, is the one `record --served-compare` names.
+   - It gave EQUAL on 439c's data (r20261104-180011-2ca5), and 439c's own run wrote its served_compare.json at 18:02Z.
+4. **Runs, against `remote`'s known reds. No red of mine is open.**
+   - pp-arm's:
+     - 21fe: repository's 5, property_redteam's 2 and test_queue, all `remote`'s.
+     - a0c0: silent_excepts was mine, fixed in 6c7d1b3fdc. One_stage's read guard was mine, fixed in 9ee88a33a3 (4234 passed). The rest are `remote`'s.
+     - 0dee: P10 is `remote`'s, fixed at 13b5e6bdba.
+   - benchmarks/rho's read guard is `remote`'s. 9d24f9b664 cleared p08 and typed_records.
+   - Mine: d449 had no reds. 8595 passed 19 of 21; its reds are `remote`'s (repository's 5 and test_queue). f20c and d00e passed 710 each.
+5. **The rehearsal on vy-dc-h200-3, Thu:**
+   - **When:** launch about 13:00Z if #7221 is in `remote` by 12:00Z, else right after it lands, on pprecord rebased onto it.
+   - **Durations:**
+     - The served part takes about 1 h 40 min to the record and deferral (439c: 16:57Z to 18:36Z), plus `measure`'s 45 min, which gates nothing.
+     - The copy takes 4 min.
+     - Then the follow-on's audit (see the decision below), and the compose.
+   - **Inodes:**
+     - h200-3's `/workspace` has 931,715 free against the 772,388 floor. 439c's serve dir holds 387,745 (r20261104-184714-2a18).
+     - The bring-ups 653e and aa0e left no tied window on h200-3.
+     - Before the rehearsal, `research retention rm` 439c's serve dir on h200-3: a dry run first, `--approved-by @vllm --ref` your 17:48Z entry. cpu-2's copy stays until its follow-on's verdict.
+     - Before Friday, the rehearsal's own serve dir likewise.
+   - **Settings:** 439c's record.env, with a fresh `MAIN_FILE`, DEVELOPMENT unset and the gate's pin on main's line.
+     - `PP_CHALLENGER_KEY` is the tree's `benchmarks/pouw/tests/fixtures/challenger-key.json`. That is vy-challenger-1's challenger-key/v1 record: SHA-512 of its pubkey is `H1_KEY_SHA512`. This also answers INF-499's item 5.
+   - **The follow-on:** on vy-nebius-cpu-2, which has 1007 GB and 256 CPUs, is a gate peer and holds the gate's tunnel key; its builds take 3 min.
+     - h200-3 can't ssh to cpu-2 or cpu-5 (publickey refused), so the copy uses an ephemeral key, as the ops KB describes. It is authorized on cpu-2 from h200-3's address only, with `restrict` and an expiry, and both halves are deleted after.
+     - For 439c that ran as r20261104-185802-e7c8: 386,243 files, PASS, in 4 min. The private half was removed at 19:02Z and cpu-2's line at 19:05Z.
+   - **The compose:** `gate-compose` from cpu-2 to vy-auditor-2 (INF-464).
+   - **CPUs:** h200-3 has 16 CPUs in all, not just in the cgroup. The tie's window commit took about 60 min there.
+
+**The blocker: lane vllm's keys on cpu-2. The ask is for infra; please file it.**
+- cpu-2's identities are refused by the challenger gate.
+- The only key there that the gate takes is `vy-gate-network-accounting`, another lane's, which I won't use.
+- I made cpu-2's own keys; their private halves are 0600 on cpu-2.
+- Suggested: `research msg ask --as vllm --to @infra --title "Lane vllm's gate keys from vy-nebius-cpu-2 for the Pearl+ record's V3c follow-on, by Thu 12:00Z" --parent VLLM-182`, with this body:
+  1. vy-challenger-1's GATE_KEYS: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOiUfnGMeoZJAj5Min3AgewtGcEJuRiz4sRrG4qER2P+ vllm_lane@vy-nebius-cpu-2` (SHA256:8FinF1XzWQSxmDtIyTfWHtibNMY1G7/1sVhPKUr2kqA), forced to `vy-challenger-gate vllm`.
+  2. vy-auditor-2's compose gate (INF-464's verb), for lane vllm: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG2eTPfVP8O2AnHwL70mIvBH4/mDcCKTsw/xnVTNA2SI vllm_gate@vy-nebius-cpu-2` (SHA256:bswu4X/DUA3a9XnAVsf9XqBZC8YXz5Z35Xhb+04ukT0).
+  3. Confirm vy-nebius-cpu-2's `/etc/vy/coin-ports` line on vy-challenger-1. Its `/etc/vy/peers` entry and the tunnel key are already in place.
+- The same keys serve 439c's follow-on tonight, Thursday's rehearsal and Friday's record. h200-3 (196 GB) defers every tied audit to a follow-on.
+
+**The decision: how long the tied audit runs.**
+- 439c's R has **561 strata at stratified:1, k 1 each**, so V3c's audit runs 561 sessions one at a time (`a5.ONE_AT_A_TIME`).
+- The audit's loopback ports (10000–32000) are no limit.
+- The time is: at the toy's ~5 min a session that is about 47 h. That is an extrapolation, not a 1B measurement.
+- `served_verdicts.sh v3c` defaults `V3C_AUDIT_TIMEOUT` to 180m. An audit killed there spends its run root's one live session with no verdict.
+- My recommendation: once the keys land, run 439c's follow-on on cpu-2 at `V3C_AUDIT_TIMEOUT` of about 48 h, holding cpu-2 until about Fri 22:00Z.
+  - Its first hour gives the 1B's real rate, and the run gives a full tied verdict and compose before Friday's.
+  - If the rate is near the toy's, Friday's compose lands about two days after its serve, unless the sessions run in parallel. That needs a code change, and a ruling that parallel sessions keep each statement's one session with its own live coins.
+- Your call on (a) the timeout and the cpu-2 hold, and (b) whether to pursue parallel sessions.
+
+**Runs now:** 439c is in `measure` and ends by about 19:22Z. Nothing else of mine is running.
