@@ -41,7 +41,8 @@ each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row 
 on its own x of M rows, in the run's slot order (`forward_of`), under the arms of `WHOLE`: the calls one at a time, each its
 own graph (``--graphs``'s ``pearlc``), and the forward captured whole as vLLM captures decode (`capture_whole`), serial,
 deferred (``whole_defer``: each call's tile hashing on a side stream beside the next call's A tree), under the served
-arm's options (`SERVED`) and with hashing off; beside each stock arm that builds at every shape, its forward captured as
+arm's options (`SERVED`), under them with A's tree kept in pd_commit and with pd_commit and pd_tree in half an SM's shared
+memory, and with hashing off; beside each stock arm that builds at every shape, its forward captured as
 one CUDA graph (`capture_stock`; run eagerly, and said so, when torch can't capture it).  Every hashing arm's passes must
 commit alike (`COMMITMENT`), and so must a pass of each from poisoned outputs: each capture writes the bytes the calls one
 at a time write.  Writes ``whole.json`` in DIR, one row an M; exits non-zero when any commitment differs.  With ``--nvtx``
@@ -73,16 +74,19 @@ EPOCH = 20261023
 STOCK = ("deepgemm", "cutlass", "triton", "cublaslt")
 MODELS = ("glm53", "llama32_1b")
 #: a whole capture's options (`pouw_pearl_c_lanes.whole_options`), each off unless an arm names it
-OPTIONS = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm", "whole_shape_joins")
+OPTIONS = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm", "whole_shape_joins", "whole_pd_shared")
 #: the options pearl_c_vllm's served arm (`bench_arm.PearlCWholeArm.run_options`) captures with on this kernel: each call's
 #: tile hashing beside the next call, its A tree beside its own forming and GEMM, which leave the tree's CTA its SM, and its
 #: A scales beside its A commitment
 SERVED = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm")
-#: --whole's pearlc arms, (hashing, the whole capture's options): None for the calls made one at a time, each its own graph
+#: --whole's pearlc arms, (hashing, the whole capture's options): None for the calls made one at a time, each its own graph;
+#: ``pearlc-served-unsplit`` is the served options but A's tree (each call's pd_commit builds it, mode 0), and
+#: ``pearlc-served-shared`` the served options with pd_commit and pd_tree in half an SM's shared memory (`whole_pd_shared`)
 WHOLE = {"pearlc-calls": (True, None), "pearlc-whole": (True, ()), "pearlc-deferred": (True, ("whole_defer",)),
-         "pearlc-served": (True, SERVED), "pearlc-whole-nohash": (False, ())}
+         "pearlc-served-unsplit": (True, ("whole_defer", "whole_fork_stats")), "pearlc-served": (True, SERVED),
+         "pearlc-served-shared": (True, (*SERVED, "whole_pd_shared")), "pearlc-whole-nohash": (False, ())}
 #: the arms whose saving over the calls one at a time and over the serial capture a row gives
-SAVING = ("pearlc-deferred", "pearlc-served")
+SAVING = ("pearlc-deferred", "pearlc-served-unsplit", "pearlc-served", "pearlc-served-shared")
 #: what a pass's end commits (`PearlCDeviceRun.end`), on which every hashing arm's passes must agree
 COMMITMENT = ("units", "tiles", "transcript_root", "activation_roots", "screened_rows", "failing_rows", "unsure_rows")
 
