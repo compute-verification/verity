@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import re
 import socket
 import struct
 from collections.abc import Callable, Iterable, Sequence
@@ -32,20 +33,19 @@ from typing import BinaryIO
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import frame_hash, levels, merkle_depth
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity_vllm import settings
+from verity_vllm.errors import Refused
 
 ENV = "FC_FIREWALL_VALUES"
 #: the row schemas the service commits, by the index a table ref names (`Salts.schemaIndex`)
-SCHEMAS = ("hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1")
+SCHEMAS = (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
 DIGEST, BC, REF = 64, 128, 269
 #: a registration record's head: ``be64 n ‖ be64 m ‖ be32 T``
 HEAD = 20
 _INST = hm96.SHA512
 _CHUNK = 1 << 20
-
-
-class Refused(RuntimeError):
-    """The service answered ``err WHY``, its answer is not what was asked, or a call site can't commit under its salts."""
+_HEX = re.compile(r"[0-9a-f]*")
 
 
 def address() -> str | None:
@@ -197,13 +197,9 @@ def _exact(f: BinaryIO, n: int) -> bytes:
 
 
 def _hex(word: str, n: int, what: str) -> bytes:
-    try:
-        b = bytes.fromhex(word)
-    except ValueError:
-        b = b""
-    if len(b) != n:
+    if len(word) != 2 * n or not _HEX.fullmatch(word):
         raise Refused(f"the value service's {what} {word[:40]!r} is not {2 * n} hex digits")
-    return b
+    return bytes.fromhex(word)
 
 
 class Session:

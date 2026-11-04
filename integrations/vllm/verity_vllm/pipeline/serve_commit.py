@@ -40,10 +40,8 @@ With ``served`` (the compile slice's statics, `served_statics`) each close also 
 (`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
-close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's. With
-``FC_FIREWALL_VALUES`` set the ZK server's value service commits them instead (`commit_served`'s ``service``), one session a
-window, registered at the close: the record adds the table ref and the registration, and ``served_rows/w<k>.json`` holds the
-service's ``b ‖ c`` in place of salts, which only the server holds.
+close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's (with
+``FC_FIREWALL_VALUES`` set, the ZK server's value service commits them, `served_values`, and its ``b ‖ c`` go there instead).
 """
 from __future__ import annotations
 
@@ -61,8 +59,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
-from verity.ml.commitments import advice as ADV
-from verity.ml.commitments.frame_v3 import BitRowLeaf
+from verity_vllm.commit import served_values as SV
 from verity_vllm.commit import values as V
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
@@ -206,48 +203,18 @@ def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> 
     return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
 
 
-@dataclass(frozen=True)
-class ServedValues:
-    """A window's served rows as the value service committed them: `served_rows.Served`'s record and ``bc``, its one table
-    (whose root the record publishes) and the session's registration; the salts are the server's alone."""
-
-    table: V.Committed
-    registration: V.Registration
-    binding: bytes
-    n_bits: int
-    G: int
-
-    def record(self) -> dict:
-        return {"schema": SRW.SCHEMA, "binding": self.binding.hex(), "root": self.table.root.hex(), "count": self.table.n,
-                "n_bits": self.n_bits, "G": self.G,
-                "values": {"table": self.table.ref().hex(), "registration": self.registration.entry()}}
-
-    def bc(self, i: int) -> bytes:
-        return self.table.bcs[i]
-
-
 def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
                   run_root: bytes, salts: Sequence[bytes] | None = None,
-                  service: str | None = None) -> tuple[SRW.Served | ServedValues, list]:
-    """A window's served rows (`served_record.served_rows`' form, by step) committed under its run root
-    (`served_rows.register`, fresh salts unless ``salts`` gives them), and the slice windows they make. ``service``
-    (``FC_FIREWALL_VALUES``' address): the same rows, domain and schema committed by the value service in one session of the
-    window's, then registered, its salts the server's (``salts`` refused)."""
+                  service: str | None = None) -> tuple[SRW.Served | SV.ServedValues, list]:
+    """A window's served rows (`served_record.served_rows`' form, by step) committed under its run root (`served_rows.register`,
+    fresh salts unless ``salts`` gives them; `served_values.commit` at the value service ``service``), and their slice windows."""
     S = SimpleNamespace(**statics)
     session = SRW.windows(S, by_step, ids, steps)
     if service is None:
         return SRW.register(S, session, run_root, salts=salts), session
     if salts is not None:
         raise ValueError("served rows: the value service chooses their salts")
-    G = S.P
-    rows = [SRW._row(SRW.block_bits(S, w, G, j)) for w in session for j in range(S.P // G)]
-    n_bits = rows[0][1]
-    binding, digest = SRW.binding(run_root), BitRowLeaf(n_bits).layout().digest
-    table = V.Table(ADV.domain(binding, len(rows)).domain_id, BitRowLeaf(n_bits).hiding_schema,
-                    b"".join(digest(r) for r, _n in rows))
-    s = V.Session(service)
-    (got,) = s.commit([table])
-    return ServedValues(got, s.register(), binding, n_bits, G), session
+    return SV.commit(S, session, run_root, service), session
 
 
 @dataclass
@@ -636,8 +603,7 @@ class CommitWindows:
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
-        statics it was packed under; the rows and salts written to ``served_rows/w<k>.json`` (under ``FC_FIREWALL_VALUES``, the
-        value service's ``b ‖ c`` and table ref in place of salts). A failure is the window's."""
+        statics it was packed under; the rows and what opens them written to ``served_rows/w<k>.json``. A failure is the window's."""
         service = V.address()
         try:
             by_step = served_rows(com)
@@ -648,8 +614,7 @@ class CommitWindows:
             return {"error": f"{type(e).__name__}: {e}"[:500]}
         d = self.out / "served_rows"
         d.mkdir(parents=True, exist_ok=True)
-        own = {"salts": [s.hex() for s in served.registration.salts]} if service is None else \
-            {"values": {"table": served.table.ref().hex(), "bcs": [bc.hex() for bc in served.table.bcs]}}
+        own = served.held() if service is not None else {"salts": [s.hex() for s in served.registration.salts]}
         (d / f"w{rec['window']}.json").write_text(json.dumps({
             "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
             "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session], **own}))
