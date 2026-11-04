@@ -118,7 +118,7 @@ EVIDENCE = {**under("audits[]", ONE_STAGE), **under("windows[].answer", ONE_STAG
             **under("windows[].certificates[]", CERTIFICATE_DOC), **under("windows[].registrations[]", ROWS)}
 PARAMS = {
     "audits[].free": S, "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
-    "cells[]": S, "first": S, "jitter": S, "key": S, "link": S, "program": S, "windows": S,
+    "cells[]": S, "circuit": S, "first": S, "jitter": S, "key": S, "link": S, "program": S, "windows": S,
     **{f"lms.{k}": S for k in ("H", "N", "W", "toy")},
     **{f"schedule.{f.name}": S for f in dataclasses.fields(WardenParams)},
     "session": C,
@@ -131,7 +131,8 @@ ANSWER = {
     **{f"profile.placement.{k}": S for k in ("kind", "trusted-host", "uncounted")},
     "profile.placement.parties.*": S,
     **{f"profile.placement.links[].{k}": S for k in ("name", "from", "to", "counted", "via")},
-    **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows")},
+    **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows")}, "public.held[]": O,
+    "public.scans[].tied[]": O,
     **{f"public.{f}[].{k}": O for f in ("audits", "scans")
        for k in ("delta", "drawn", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter", "units",
                  "wrong_units")},
