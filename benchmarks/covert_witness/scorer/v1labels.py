@@ -86,6 +86,7 @@ def run(ap, frozen: Path) -> int:
         p = build(*a, **k)
         n.update(labelled(p, runs))
         (frozen.parent / "labels.json").write_text(json.dumps(n) + "\n")
+        p["note"] = noted()
         return p
 
     def noted(*a, **k):
