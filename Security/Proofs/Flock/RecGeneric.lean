@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.Statement
 public import Proofs.Flock.RecGeneric.AtFlock
+public import Proofs.Flock.RecGeneric.PlansProof
 public import Proofs.Flock.RecGeneric.AtFlockProof
 public import Proofs.Flock.RecGeneric.Sampled
 public import Proofs.Flock.RecGeneric.SampledProof
@@ -17,8 +18,9 @@ public import Proofs.Flock.RecGeneric.OuterProof
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
-(`Proofs.Flock.RecGeneric.AtFlock`) with its last-coin hypothesis proved at the deployment
-(`Proofs.Flock.RecGeneric.AtFlockProof`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
+(`Proofs.Flock.RecGeneric.AtFlock`), with its plans' reads by Wald's bound (`Proofs.Flock.RecGeneric.PlansProof`) and
+its well-formedness, its inner KS from its plans' runs, its outer extraction's KS from each session's and its last-coin
+hypothesis at the deployment proved (`Proofs.Flock.RecGeneric.AtFlockProof`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
 B1), with B1's proof and the recursive audit from L1 (`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
 and compiler at which L2's hypotheses are stated to hold together (`Proofs.Flock.RecGeneric.Toy`), proved to hold
 (`Proofs.Flock.RecGeneric.ToyProof`). L1's proof: the
