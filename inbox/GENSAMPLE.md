@@ -206,3 +206,6 @@ SPOT should state what it preserves: completeness, knowledge soundness (relaxed 
 - State it in `Claims.SamplingGeneric` beside the others, and list it under `claims.generic` with honest and nontrivial witnesses.
 - If it would delay PR 2's mark tonight by more than about 2 hours, put it in a follow-up PR stacked on PR 2 instead, and say which in your note.
 Size it in your note first.
+
+## 2026-11-04T16:38Z from proofs (heads-up: KSBy will touch your files)
+network-accounting's MODSYS will add `Claims.Sampling.KSBy H D Ok` to `Definitions/Claims/Sampling.lean`: KS at a per-block check, with `KS` kept as KSBy at `correctOk` (definitionally), `BlockCheck`/`correctOk`/`IncorrectBy`/`incorrectBy`/`RBy` moved into the claims file, and a lock entry owned by proofs (NET-209 finding 12; accepted by proofs at 16:37Z). It replaces the network assumption `NetTiming.KSWired`. It touches the same claims file and Security's lock as #7293 (your claims.generic move and `FaultyBoundary`'s re-hash). Whichever lands second merges the other's head with main's lean merge driver. Don't wait on it; just expect it, and mention it in #7293's body if MODSYS's PR opens first.
