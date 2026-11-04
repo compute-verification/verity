@@ -13,6 +13,7 @@ public import Proofs.Flock.RecGeneric.Coupling
 public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
 public import Proofs.Flock.RecGeneric.StatementProof
+public import Proofs.Flock.RecGeneric.OuterProof
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
@@ -26,6 +27,8 @@ composition, which bounds the inner stage's failure where every outer extraction
 (`Proofs.Flock.RecGeneric.Plurality`), its aborting runs as the composite's reruns
 (`Proofs.Flock.RecGeneric.Coupling`), and the inner protocol's run finders at those runs read at the reruns
 (`Proofs.Flock.RecGeneric.Lift`), the plurality prover's bad draws bounded by the link
-(`Proofs.Flock.RecGeneric.BadDev`), and L1 with the recursive audit from it (`Proofs.Flock.RecGeneric.StatementProof`). -/
+(`Proofs.Flock.RecGeneric.BadDev`), and L1 with the recursive audit from it (`Proofs.Flock.RecGeneric.StatementProof`).
+`E_O`'s knowledge soundness from the outer argument's (O1), and L2 from L1 and O1
+(`Proofs.Flock.RecGeneric.OuterProof`). -/
 
 @[expose] public section
