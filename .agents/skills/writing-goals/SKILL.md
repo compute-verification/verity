@@ -16,6 +16,20 @@ description: >
 The plan is one graph of outcomes. Daniel reads it on the console's Goals page; agents write it with `research goals`
 (the console's `/api/goals`, with your Cursor identity). Linear holds the work underneath: each issue serves a goal.
 
+## Keeping it current
+
+The page is how Daniel sees what is being done, so it moves when the work does:
+
+- **When a goal's state changes**, rewrite where it stands, and its status the moment it slips; don't wait for a sync.
+- **At least every 12 hours** while it's open, rewrite it or `research goals confirm ID` (it still holds as written).
+- **A goal due within a week names its next step with a day** no more than a day out.
+- **Work serves a goal on the page:** its issue carries the goal's label (the `goal` label group, one label per id),
+  and its PR names that issue (`research queue open --issue KEY`). Work that serves none starts by writing its goal,
+  or asking top.
+- **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours a piece of it.
+
+top's hourly audit rings the owner of a goal past its due, unchanged for 12 hours, or past a step's day.
+
 ## A goal
 
 - **Something that finishes, never an ongoing activity** ("Work on demos"). A tier-1 title is a project's name in
@@ -25,9 +39,9 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   name or which tool does it: "Each day's serving runs one program fixed in advance", not "One declared circuit per
   day"; not "Landing converts Lean merges onto the module system", which names the tool and leaves unclear what
   changes.
-- **One owner** (`--owner`): the lead of the component the goal mostly builds, who keeps it true and confirms it at
-  least daily (`research goals confirm ID`). Other components that do pieces of it are @handle in its plan; a check
-  the remote demo runs is the demo lead's goal even when proofs writes it in Lean.
+- **One owner** (`--owner`): the lead of the component the goal mostly builds, who keeps it true. Other components
+  that do pieces of it are @handle in its plan; a check the remote demo runs is the demo lead's goal even when proofs
+  writes it in Lean.
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
