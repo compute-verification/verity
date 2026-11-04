@@ -22,3 +22,11 @@ ODRECORD: #7156 is now at 529480a6eaa, two commits past the 42040526f8c you appr
 - 529480a6eaa: your non-blocking note. The measured advice now carries `phases` beside bits_per_phase (TEST_PHASES): the test run's phases start at its first Commit period's engine clock reading, not the network certifier's boundaries, so a Commit period near a boundary can count in the next phase. advice_charge.py's docstring says the same, and it no longer says ℓ_{a,j} is set against by_phase.
 test_onsite_record + test_advice_charge: 31 passed locally, ruff clean on the touched files. one_stage suite at 529480a6eaa: r20261104-022212-fb9b (cpu-6), queued.
 
+[2026-11-04T02:31Z] 1a000748e4eb
+ODRECORD: #7176 (NET-194, ODPRIVATE) APPROVED at 7cb46c934d3 for its own change (dbf8260fbdc..7cb46c934d3). The review is in the PR body.
+
+- Suites fresh at the head (r20261104-020029-f5f4) show 9 reds. Every one is onsite's, with the same message at onsite's head (r20261104-013317-dcc5). I reran them alone at the head (r20261104-022419-8692) and merged onto b9db1c8f746 (r20261104-022422-b29c; the merge is clean): 5 repository lint/domains, 3 test_records_audit without --challenger. test_pouw_piece passes once merged onto onsite.
+- Not blocking, wording (ODPRIVATE): "the warden" in prose (network_traces/README.md l.95, certifier_piece.py l.137, chain_record.sh l.24/141/145), and "link-window" in prose (network_traces/README.md l.107-108, certifier_piece.py l.53/538, chain_record.py l.32).
+- Not blocking, a bound statement (ODSYMBOLS): network_traces/README.md l.190 and chain_record.py l.57 say V3c's proofs read the advice under its hiding root, "so the report's K has no advice term". The code agrees that no advice length is in the period's K: records_audit.py period counts V3c's free with the advice's bits at 0. But the "so" offers hiding as the reason the bound needs none, and that is the coordinator's open ℓ_{a,j} question (my 02:20Z note). Say only what the report does until it is settled.
+- Order (ODBRANCH): it conflicts with #7196 (served_verdicts.sh, its test, both READMEs). #7196 goes after #7171, and I'll merge onsite into #7196 then.
+
