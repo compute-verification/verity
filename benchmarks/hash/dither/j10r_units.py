@@ -106,8 +106,7 @@ def lean_vectors() -> dict:
 
 
 def _stream(seed: bytes, ts: np.ndarray) -> np.ndarray:
-    head = SD.NOISE_TAG + bytes(seed)
-    out = b"".join(hashlib.sha512(head + int(t).to_bytes(8, "big")).digest() for t in ts)
+    out = b"".join(SD.noise_block(bytes(seed), int(t)) for t in ts)
     return np.frombuffer(out, dtype=">u4").astype(np.int64).reshape(len(ts), 16)
 
 
