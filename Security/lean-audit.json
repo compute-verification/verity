@@ -2620,7 +2620,8 @@
   },
   "Nci.SecurityProofs.HeldBudget": {
    "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial"
+   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.ImportOrRecompute": {
    "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
@@ -2659,7 +2660,8 @@
   },
   "Nci.SecurityProofs.StatHeldBudget": {
    "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial"
+   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.WeightedProductCap": {
    "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
@@ -14049,9 +14051,9 @@
    "Nci.SecurityProofs.WeightedProductCap": "frozen (no-function): It is about an arbitrary registration's proof blocks, counted products and a held slot budget (Nci.Capability.SlotsRead, Nci.Capability.HeldPriceAtMost, Security/Definitions/Nci/Capability/Products.lean), not about a function's code.",
    "Nci.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Slowdown.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Nci.Assumptions.CoversEfficientMethods, Security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
    "Nci.SecurityProofs.HeldBudgetHonest": "completeness: HeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every held selection of the value of gates 2 and 3 priced two bits (Y2 2) has an evaluator of at most three bits, and DescriptionHard holds at deficit Λ = 1, all proved, under the toy decoder M, which compresses: it describes 11, an honest run's value, in one bit and every other two-bit string in three; the deficit is spent: DescriptionHard fails at Λ = 0, also proved, so HeldBudget's premises hold together there, not degenerately, and HeldBudget is not vacuous.",
-   "Nci.SecurityProofs.HeldBudgetNontrivial": "completeness: HeldBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the value of gates 2 and 3 priced 6 bits (Y2 6), above every description of it so DescriptionHard fails, is held by the proof block above k + clog2 B + aBlk + Λ = 5, so HeldBudget's conclusion is not a tautology.",
+   "Nci.SecurityProofs.HeldBudgetNontrivial": "completeness: HeldBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition and every held selection of the value of gates 2 and 3 priced 6 bits (Y2 6) has an evaluator of at most three bits, as in its honest witness (proved), DescriptionHard fails at Λ = 1, since the toy decoder M describes 11, an honest run's value, in one bit, and the proof block holds more than k + clog2 B + aBlk + Λ = 5, so HeldBudget's conclusion is not a tautology and needs description hardness.",
    "Nci.SecurityProofs.StatHeldBudgetHonest": "completeness: StatHeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every run in the support of μ (the token drawn uniformly) is honest, and MinEntropyHard holds for Y 1 at Λ = 0, all proved; it is not degenerate: the product's value is a uniform bit, so StatHeldBudget's premises hold together there and StatHeldBudget is not vacuous.",
-   "Nci.SecurityProofs.StatHeldBudgetNontrivial": "completeness: StatHeldBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product's value priced 3 bits, above its one bit of entropy so MinEntropyHard fails, is held above k + Λ = 1, so StatHeldBudget's conclusion is not a tautology.",
+   "Nci.SecurityProofs.StatHeldBudgetNontrivial": "completeness: StatHeldBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition and every run in the support of μ (the token drawn uniformly) is honest, as in its honest witness (proved), MinEntropyHard fails for the product's value priced 3 bits (Y 3) at Λ = 0, since its value 1 has probability 1/2 above 2^-3, and the proof block holds more than k + Λ = 1, so StatHeldBudget's conclusion is not a tautology and needs min-entropy hardness.",
    "Nci.SecurityProofs.RecoveredBudgetHonest": "completeness: RecoveredBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true, true, true] has three bits, SourceHard holds with the value of gates 2 and 3 as the source (ℓz = 2, δ = 1) and Recovers with one eligible output per block and a one-bit complement (βv = 2, amb = 1), all proved, under the toy decoder M, which compresses; both are spent: SourceHard fails at δ = 0, since M describes 11 in one bit, and Recovers at amb = 0, since the recovery needs its bit picking the source, also proved, so RecoveredBudget's premises hold together there, not degenerately, and RecoveredBudget is not vacuous.",
    "Nci.SecurityProofs.RecoveredBudgetNontrivial": "completeness: RecoveredBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true, true, true] has three bits and SourceHard holds at δ = 1, as in its honest witness (proved), Recovers fails at βv = 7, more than the two-bit source can supply, and βv·J = 7 exceeds k + clog2 B + aBlk + δ + amb = 6, so RecoveredBudget's conclusion is not a tautology and needs the recovery.",
    "Nci.SecurityProofs.IncidenceCapHonest": "completeness: IncidenceCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the one counted product reads its slot and its operand (SlotsRead and the operand reads, proved), with at most one product per slot-operand pair and per operand, so IncidenceCap's premises hold together there and IncidenceCap is not vacuous.",
@@ -28005,11 +28007,13 @@
    "guarantees": [
     "Nci.SecurityProofs.HeldBudget",
     "Nci.SecurityProofs.HeldBudgetHonest",
+    "Nci.SecurityProofs.HeldBudgetNontrivial",
     "Nci.SecurityProofs.RecoveredBudget",
     "Nci.SecurityProofs.RecoveredBudgetHonest",
     "Nci.SecurityProofs.RecoveredBudgetNontrivial",
     "Nci.SecurityProofs.StatHeldBudget",
-    "Nci.SecurityProofs.StatHeldBudgetHonest"
+    "Nci.SecurityProofs.StatHeldBudgetHonest",
+    "Nci.SecurityProofs.StatHeldBudgetNontrivial"
    ]
   },
   "Definitions.Nci.Assumptions.Cover": {
@@ -28727,10 +28731,10 @@
    ]
   },
   "Definitions.Nci.Guarantees.Capability.Witnesses": {
-   "digest": "98575b725b91bbf6e64710656396fb09c62b22f47bb51c8638d465fc728f0b82",
+   "digest": "21e5d828794c1e53a60039575203584eeff0e902e2a95670c64d92b2567b7114",
    "definitions": {
     "Nci.Guarantees.HeldBudgetHonest": "5db0a66d388088af0c8826f3d1e27067f9828d0bdbd8a6602ddf84b02b0b1f0f",
-    "Nci.Guarantees.HeldBudgetNontrivial": "571e5511728d55cab5de7761f4055578ca12ed95ff0901d9e05006508d3ea66e",
+    "Nci.Guarantees.HeldBudgetNontrivial": "6ead30cfb4fe65aed17e3d370f11e5b1201ec1cd2ad8da585848f08b4e687532",
     "Nci.Guarantees.ImportOrRecomputeHonest": "6078c3a58c854085d04473d0bb830408664d7c92624db14e630f51955692dd53",
     "Nci.Guarantees.ImportOrRecomputeNontrivial": "064ff13755ff7d95dcf1673c17b4c5880e662eafef0922c869dca6a138aeb2a8",
     "Nci.Guarantees.IncidenceCapHonest": "6b066eb05e8af78956c035b3001bad56b7876ced08824ab6094b1fc7355ef2d4",
@@ -28746,7 +28750,7 @@
     "Nci.Guarantees.RecoveredBudgetHonest": "85881b40664b71457699c5f31ce4e6125bab57cdad6026086c9a934648392b80",
     "Nci.Guarantees.RecoveredBudgetNontrivial": "8435f2a6aa5767ff14663e2d9021e305eaa2204dc79a08629e281a216feebd32",
     "Nci.Guarantees.StatHeldBudgetHonest": "31e0331f3739f3fbc173b41a82885bdc6dd84e0f3384c58fa6de2e18c61de1aa",
-    "Nci.Guarantees.StatHeldBudgetNontrivial": "126292e9a8c5d52439c2e4b660706a44d851da598daadd9f189d685549f5937e",
+    "Nci.Guarantees.StatHeldBudgetNontrivial": "0ad5068f6a5a056e195a4fa7a0115313eea0b2505db154fe4ed53791f1290323",
     "Nci.Guarantees.WeightedProductCapHonest": "f6a60c4b9c1b45915ee73a308305e007f7b7ce819b9896f58c934831120a3f2f",
     "Nci.Guarantees.WeightedProductCapNontrivial": "77a3c47a2e7eca698bf74f171eed7fce1f9a446dcdc626a990a85d21d831d825"
    },
