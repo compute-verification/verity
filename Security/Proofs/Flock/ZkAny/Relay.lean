@@ -24,12 +24,26 @@ possibly chosen after reading the answers before it, and so are the answers.
 * `request_slot`: before a stop, a request `State.request` lets through is the slot's.
 * `out_stopped`: nothing leaves after a stop, where the hold's barrier refuses a stopped session (the deployed hold's
   does: `Core.Firewall.Decision.after` stops at the loop's refusal).
-* `out_sched`: at every list of requests, what leaves is what leaves at the schedule's slots, over a sublist of what
-  the loop read. A request the session refuses sends nothing and stops it, and a `Ping` or a `Proof` sends nothing.
+* `out_sched`: at every list of requests, what leaves is what leaves at the schedule's slots, at the requests that
+  reach one (`pick`), a sublist of what the loop read. A request the session refuses sends nothing and stops it, and a
+  `Ping` or a `Proof` sends nothing.
+* `tmplOf s`: the schedule at the setup `s`, a function of the setup alone: `Register`, `Hello`, then `slotAt`'s slots
+  from the start (`tmplFrom`, at the rep streams `labelsOf` and the plan `planOf` the `Hello` sets, `sendHello_eq`),
+  each position (`Pos`: the opens, the openings answered, the `Link`) advanced by its slot's kind, up to `Finish`.
+* `sched_stutter`, `relay_stutter`: the slots of a run are the schedule cut after one of them, a coin slot coming again
+  where the auditor answered it without coins (`Stutter`), and each control slot sent its frame (`Framed`).
+* `relay_release`: what leaves for the auditor is the control frames at their fixed places (`ctlOf s`: the `Register`'s,
+  the `Link`'s and each `Open`'s, functions of the setup) and the model's frames at theirs (`relayFrames`: what left at
+  the `Hello`, each coin request and the `Finish`), over the slots the run reached (`relaySlots`) cut where its release
+  ended (`relayCut`, `weave`), then nothing. `relay_release_cut`: where the auditor answers each coin request with
+  coins (`CoinReqsAnswered`), the slots are the schedule's, so the release is a function of where it ended (`relayEnd`,
+  one of the schedule's cuts) and the model's frames alone.
 
 The auditor's answer to a coin request can be something other than coins. That leaves the session as it was, so the
 slot comes next again and `schedOut` can send a `Commit` or a `Round` again there. A `Round`'s rep frame refuses a
-round before the last one's coins (`Frame.step`), which is what `Env.round` reads at it. A `Commit` leaves again.
+round before the last one's coins (`Frame.step`), which is what `Env.round` reads at it. A `Commit` leaves again, as
+often as the worker sends it: how often is the worker's, outside the position, and `relay_release_cut` reads
+`CoinReqsAnswered` for it.
 
 Scope: the released bytes and their order, not their times. When each frame leaves is not modeled.
 -/
@@ -549,6 +563,20 @@ theorem stepK_frame_go {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : 
   · rcases e.ans with _ | r
     · intro hgo; simp at hgo
     · intro _; exact .inr ⟨r, rfl, rfl⟩
+
+theorem stepK_frame_ans {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env} (hk1 : k ≠ .hello)
+    (hk2 : k ≠ .finish) (hk3 : k ≠ .ping) (hk4 : k ≠ .proof) (hr : st.request pl k = none)
+    (hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go = true) :
+    (stepK hold st pl (some (tagOf k)) (.ok k) e).st.stop.isSome ∨
+      ∃ r, e.ans = some r ∧ (stepK hold st pl (some (tagOf k)) (.ok k) e).st = afterAnswer st k r e ∧
+        (stepK hold st pl (some (tagOf k)) (.ok k) e).pl = pl.after k := by
+  rw [stepK_frame hk1 hk2 hk3 hk4 hr] at hgo ⊢
+  revert hgo
+  rcases frameOf st k e with why | g
+  · intro _; exact .inl rfl
+  · rcases ha : e.ans with _ | r
+    · intro hgo; simp at hgo
+    · intro _; exact .inr ⟨r, rfl, rfl, rfl⟩
 
 theorem open_ok {C C' : Coins.Release} {s : String} {n : Nat} {m c : List UInt8}
     (h : C.open s n m = .ok (C', c)) : C'.opened.length = C.opened.length + 1 ∧ C'.hello = C.hello := by
@@ -1090,47 +1118,111 @@ theorem stepK_refused {hold : Bool} {st st' : State} {pl : Placed} {b : Option U
     stepK hold st pl b (.ok k) e = ⟨[], st', pl, true⟩ := by
   cases k <;> simp [stepK, h9, h5, h6, hr]
 
+/-- A coin request: `Commit` or a `Round`. -/
+def isCoin : Kind → Bool
+  | .commit | .round _ _ => true
+  | _ => false
+
+/-- **The auditor answered each coin request with coins**, at each of `es` in turn, along the schedule's slots. -/
+def CoinsAnswered (hold : Bool) : State → Placed → List Env → Prop
+  | _, _, [] => True
+  | st, pl, e :: rest => match slot st pl with
+    | none => True
+    | some k => (isCoin k = true → ∀ r, e.ans = some r → byte? r 0 = some 2) ∧
+        CoinsAnswered hold (stepK hold st pl (some (tagOf k)) (.ok k) e).st
+          (stepK hold st pl (some (tagOf k)) (.ok k) e).pl rest
+
+/-- **The auditor answers each coin request with coins**: at each request of `ins` that is a `Commit` or a `Round`, its
+answer, where there is one, is coins. -/
+def CoinReqsAnswered (ins : List (ByteArray × Env)) : Prop :=
+  ∀ p ∈ ins, ∀ k, kind p.1 = .ok k → isCoin k = true → ∀ r, p.2.ans = some r → byte? r 0 = some 2
+
+/-- **The requests that reach a slot**: of `ins`, at each what the relay read, those whose request leaves at the
+schedule's place it reaches, in order, up to the session's stop or end (`out_sched`). A `Ping` or a `Proof` reaches
+none. -/
+def pick (hold : Bool) : State → Placed → List (ByteArray × Env) → List Env
+  | _, _, [] => []
+  | st, pl, (f, e) :: rest =>
+    if st.stop.isSome then []
+    else if byte? f 0 = some 9 ∨ byte? f 0 = some 5 then pick hold st pl rest
+    else if byte? f 0 = some 6 then (if (st.request pl .finish).isNone then [e] else [])
+    else match kind f with
+      | .error _ => []
+      | .ok k => match st.request pl k with
+        | some _ => []
+        | none =>
+          if (stepK hold st pl (some (tagOf k)) (.ok k) e).go then
+            e :: pick hold (stepK hold st pl (some (tagOf k)) (.ok k) e).st
+              (stepK hold st pl (some (tagOf k)) (.ok k) e).pl rest
+          else [e]
+
 /-- **The relay's release is the schedule's**: at every requests the worker sends, what leaves for the auditor is what
-leaves at the schedule's places, each request at the one the session allows next, over a sublist of what the relay
-read. -/
+leaves at the schedule's places, each request that reaches one (`pick`) at the one the session allows next, a sublist of
+what the relay read. -/
 theorem out_sched (hold : Bool) : ∀ (st : State) (pl : Placed) (ins : List (ByteArray × Env)),
     (st.stop.isSome ∨ (st.stop = none ∧ Reach st pl)) → (∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) →
-    ∃ es, es.Sublist (ins.map (·.2)) ∧ out hold st pl ins = schedOut hold st pl es
-  | st, pl, [], _, _ => ⟨[], List.Sublist.slnil, rfl⟩
+    (pick hold st pl ins).Sublist (ins.map (·.2)) ∧ out hold st pl ins = schedOut hold st pl (pick hold st pl ins) ∧
+      (CoinReqsAnswered ins → CoinsAnswered hold st pl (pick hold st pl ins))
+  | st, pl, [], _, _ => ⟨List.Sublist.slnil, rfl, fun _ => trivial⟩
   | st, pl, (f, e) :: rest, hst, hb => by
     have hbr : ∀ p ∈ rest, ∀ why, (p.2.barrier (some why)).isSome := fun p hp => hb p (List.mem_cons_of_mem _ hp)
     have he : ∀ why, (e.barrier (some why)).isSome := hb (f, e) (List.mem_cons_self ..)
     rcases hst with hst | ⟨hst, hR⟩
-    · exact ⟨[], List.nil_sublist _, by rw [out_stopped hold st pl _ hst hb]; rfl⟩
+    · have hp : pick hold st pl ((f, e) :: rest) = [] := by simp only [pick, hst, ite_true]
+      rw [hp]
+      exact ⟨List.nil_sublist _, by rw [out_stopped hold st pl _ hst hb]; rfl, fun _ => trivial⟩
+    have hst' : st.stop.isSome = false := by rw [hst]; rfl
+    have hins : CoinReqsAnswered ((f, e) :: rest) → CoinReqsAnswered rest :=
+      fun h p hp => h p (List.mem_cons_of_mem _ hp)
     have skip : stepK hold st pl (byte? f 0) (kind f) e = ⟨[], st, pl, true⟩ →
-        ∃ es, es.Sublist (((f, e) :: rest).map (·.2)) ∧ out hold st pl ((f, e) :: rest) = schedOut hold st pl es := by
-      intro hstep
-      obtain ⟨es, hsub, heq⟩ := out_sched hold st pl rest (.inr ⟨hst, hR⟩) hbr
-      refine ⟨es, hsub.cons _, ?_⟩
+        pick hold st pl ((f, e) :: rest) = pick hold st pl rest →
+        (pick hold st pl ((f, e) :: rest)).Sublist (((f, e) :: rest).map (·.2)) ∧
+          out hold st pl ((f, e) :: rest) = schedOut hold st pl (pick hold st pl ((f, e) :: rest)) ∧
+          (CoinReqsAnswered ((f, e) :: rest) → CoinsAnswered hold st pl (pick hold st pl ((f, e) :: rest))) := by
+      intro hstep hp
+      obtain ⟨hsub, heq, hca⟩ := out_sched hold st pl rest (.inr ⟨hst, hR⟩) hbr
+      rw [hp]
+      refine ⟨hsub.cons _, ?_, fun h => hca (hins h)⟩
       simp only [out, hstep, List.nil_append, ite_true]
       exact heq
     have stopped : ∀ st', st'.stop.isSome → stepK hold st pl (byte? f 0) (kind f) e = ⟨[], st', pl, true⟩ →
-        ∃ es, es.Sublist (((f, e) :: rest).map (·.2)) ∧ out hold st pl ((f, e) :: rest) = schedOut hold st pl es := by
-      intro st' hs' hstep
-      refine ⟨[], List.nil_sublist _, ?_⟩
+        pick hold st pl ((f, e) :: rest) = [] →
+        (pick hold st pl ((f, e) :: rest)).Sublist (((f, e) :: rest).map (·.2)) ∧
+          out hold st pl ((f, e) :: rest) = schedOut hold st pl (pick hold st pl ((f, e) :: rest)) ∧
+          (CoinReqsAnswered ((f, e) :: rest) → CoinsAnswered hold st pl (pick hold st pl ((f, e) :: rest))) := by
+      intro st' hs' hstep hp
+      rw [hp]
+      refine ⟨List.nil_sublist _, ?_, fun _ => trivial⟩
       simp only [out, hstep, List.nil_append, ite_true]
       exact out_stopped hold st' pl rest hs' hbr
     by_cases h9 : byte? f 0 = some 9
-    · exact skip (by unfold stepK; rw [h9]; rfl)
+    · exact skip (by unfold stepK; rw [h9]; rfl) (by simp only [pick, hst', h9, true_or, ite_true]; rfl)
     by_cases h5 : byte? f 0 = some 5
-    · exact skip (by unfold stepK; rw [h5, hst]; rfl)
+    · exact skip (by unfold stepK; rw [h5, hst]; rfl) (by simp only [pick, hst', h5, or_true, ite_true]; rfl)
+    have h95 : ¬(byte? f 0 = some 9 ∨ byte? f 0 = some 5) := fun h => h.elim h9 h5
     by_cases h6 : byte? f 0 = some 6
     · have hstep : stepK hold st pl (byte? f 0) (kind f) e = ⟨finishOut hold st pl e, st, pl, false⟩ := by
         unfold stepK; rw [h6]; rfl
       rcases hfin : st.request pl .finish with _ | ⟨S', o⟩
-      · have hslot := request_slot hR hst (by simp) (by simp) hfin
-        refine ⟨[e], (List.nil_sublist _).cons_cons _, ?_⟩
+      · have hp : pick hold st pl ((f, e) :: rest) = [e] := by
+          simp only [pick, hst', h6, hfin, Bool.false_eq_true, ite_false, ite_true, Option.isNone_none]
+          exact ite_eq_right_of_eq_false _ _ (eq_false (by decide))
+        rw [hp]
+        have hslot := request_slot hR hst (by simp) (by simp) hfin
+        refine ⟨(List.nil_sublist _).cons_cons _, ?_, fun _ => by simp [CoinsAnswered, hslot, isCoin]⟩
         simp only [out, hstep, schedOut, hslot, stepK_finish, Bool.false_eq_true, ite_false]
-      · refine ⟨[], List.nil_sublist _, ?_⟩
+      · have hp : pick hold st pl ((f, e) :: rest) = [] := by
+          simp only [pick, hst', h6, hfin, Bool.false_eq_true, ite_false, ite_true, Option.isNone_some]
+          exact ite_eq_right_of_eq_false _ _ (eq_false (by decide))
+        rw [hp]
+        refine ⟨List.nil_sublist _, ?_, fun _ => trivial⟩
         simp only [out, hstep, finishOut_of_some he hfin (request_stop hst hfin), Bool.false_eq_true, ite_false]
         rfl
     rcases hk : kind f with why | k
-    · refine ⟨[], List.nil_sublist _, ?_⟩
+    · have hp : pick hold st pl ((f, e) :: rest) = [] := by
+        simp only [pick, hst', h95, h6, hk, Bool.false_eq_true, ite_false]
+      rw [hp]
+      refine ⟨List.nil_sublist _, ?_, fun _ => trivial⟩
       simp only [out, hk, stepK_error h9 h5 h6, Bool.false_eq_true, ite_false]
       rfl
     rcases hreq : st.request pl k with _ | ⟨st', o⟩
@@ -1142,11 +1234,26 @@ theorem out_sched (hold : Bool) : ∀ (st : State) (pl : Placed) (ins : List (By
         · exact h1
         · simp
       have hbk := byte_kind hk hko
+      have hfirst : CoinReqsAnswered ((f, e) :: rest) → isCoin k = true → ∀ r, e.ans = some r → byte? r 0 = some 2 :=
+        fun h hc r hr => h (f, e) (List.mem_cons_self ..) k hk hc r hr
+      have hp0 : pick hold st pl ((f, e) :: rest) =
+          if (stepK hold st pl (some (tagOf k)) (.ok k) e).go then
+            e :: pick hold (stepK hold st pl (some (tagOf k)) (.ok k) e).st
+              (stepK hold st pl (some (tagOf k)) (.ok k) e).pl rest
+          else [e] := by
+        simp only [pick, hst', h95, h6, hk, hreq, Bool.false_eq_true, ite_false]
       rcases hr : stepK hold st pl (some (tagOf k)) (.ok k) e with ⟨sent, st₁, pl₁, go⟩
+      rw [hr] at hp0
       cases go
-      · refine ⟨[e], (List.nil_sublist _).cons_cons _, ?_⟩
-        simp only [out, hk, hbk, hr, schedOut, hslot, Bool.false_eq_true, ite_false]
-      · have hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go = true := by rw [hr]
+      · simp only [Bool.false_eq_true, ite_false] at hp0
+        rw [hp0]
+        refine ⟨(List.nil_sublist _).cons_cons _, ?_, fun h => ?_⟩
+        · simp only [out, hk, hbk, hr, schedOut, hslot, Bool.false_eq_true, ite_false]
+        · simp only [CoinsAnswered, hslot]
+          exact ⟨hfirst h, trivial⟩
+      · simp only [ite_true] at hp0
+        rw [hp0]
+        have hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go = true := by rw [hr]
         have hnext := reach_step hR hst hslot hreq hgo
         rw [hr] at hnext
         have hnext' : st₁.stop.isSome ∨ (st₁.stop = none ∧ Reach st₁ pl₁) := by
@@ -1155,10 +1262,760 @@ theorem out_sched (hold : Bool) : ∀ (st : State) (pl : Placed) (ins : List (By
           · cases h2 : st₁.stop
             · exact .inr ⟨rfl, h1⟩
             · exact .inl rfl
-        obtain ⟨es, hsub, heq⟩ := out_sched hold st₁ pl₁ rest hnext' hbr
-        refine ⟨e :: es, hsub.cons_cons _, ?_⟩
-        simp only [out, hk, hbk, hr, schedOut, hslot, ite_true]
-        rw [heq]
-    · exact stopped st' (request_stop hst hreq) (by rw [hk]; exact stepK_refused h9 h5 h6 hreq)
+        obtain ⟨hsub, heq, hca⟩ := out_sched hold st₁ pl₁ rest hnext' hbr
+        refine ⟨hsub.cons_cons _, ?_, fun h => ?_⟩
+        · simp only [out, hk, hbk, hr, schedOut, hslot, ite_true]
+          rw [heq]
+        · simp only [CoinsAnswered, hslot, hr]
+          exact ⟨hfirst h, hca (hins h)⟩
+    · have hp : pick hold st pl ((f, e) :: rest) = [] := by
+        simp only [pick, hst', h95, h6, hk, hreq, Bool.false_eq_true, ite_false]
+      exact stopped st' (request_stop hst hreq) (by rw [hk]; exact stepK_refused h9 h5 h6 hreq) hp
+
+/-- **Where the session is in its schedule after the `Hello`**: how many rep streams opened, how many openings the
+auditor answered, and whether the `Link` left. -/
+structure Pos where
+  opens : Nat
+  opened : Nat
+  link : Bool
+
+/-- The position of a session and its placement. -/
+def posOf (S : State) (P : Placed) : Pos := ⟨P.opens, opened S, P.link⟩
+
+/-- **The slot at a position**, given the rep streams and the plan: `slot` after the `Hello`. -/
+def slotAt (labels : Array (String × String)) (plan : Array (String × Nat)) (p : Pos) : Option Kind :=
+  if p.opens = 0 then labels[0]?.map fun l => .openStream l.1
+  else if p.opened = 0 then some .commit
+  else if !p.link then some .link
+  else match plan[p.opened - 1]? with
+    | some (s, n) =>
+      if (labels.extract 0 p.opens).any (·.1 == s) then some (.round s n)
+      else labels[p.opens]?.map fun l => .openStream l.1
+    | none => match labels[p.opens]? with
+      | some l => some (.openStream l.1)
+      | none => if p.opened = plan.size + 1 then some .finish else none
+
+/-- The position once a request of kind `k` left at it and, for a coin request, its coins were answered. -/
+def Pos.adv (p : Pos) : Kind → Pos
+  | .openStream _ => { p with opens := p.opens + 1 }
+  | .commit | .round _ _ => { p with opened := p.opened + 1 }
+  | .link => { p with link := true }
+  | _ => p
+
+/-- **The schedule after the `Hello`**, from the position `p`, for at most `fuel` slots: each slot's kind in turn, up to
+the `Finish`. -/
+def tmplFrom (labels : Array (String × String)) (plan : Array (String × Nat)) : Nat → Pos → List Kind
+  | 0, _ => []
+  | f + 1, p => match slotAt labels plan p with
+    | none => []
+    | some .finish => [.finish]
+    | some k => k :: tmplFrom labels plan f (p.adv k)
+
+/-- **The session's schedule**: `Register`, `Hello`, then the slots after it, at the rep streams and plan the `Hello`
+set. -/
+def tmpl (labels : Array (String × String)) (plan : Array (String × Nat)) : List Kind :=
+  .register :: .hello :: tmplFrom labels plan (labels.size + plan.size + 4) ⟨0, 0, false⟩
+
+theorem slot_sent {S : State} {P : Placed} (hreg : P.register = true) (hsent : S.sent = true) :
+    slot S P = slotAt S.labels S.plan (posOf S P) := by
+  simp only [slot, hreg, hsent, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  rfl
+
+/-- **What leaves at each slot**, in order: the slot's kind and what left for it, up to the session's stop or end. -/
+def schedTrace (hold : Bool) : State → Placed → List Env → List (Kind × List ByteArray)
+  | _, _, [] => []
+  | st, pl, e :: rest => match slot st pl with
+    | none => []
+    | some k =>
+      let r := stepK hold st pl (some (tagOf k)) (.ok k) e
+      (k, r.sent) :: if r.go && r.st.stop.isNone then schedTrace hold r.st r.pl rest else []
+
+theorem schedOut_stopped (hold : Bool) : ∀ (st : State) (pl : Placed) (es : List Env),
+    st.stop.isSome → (∀ e ∈ es, ∀ why, (e.barrier (some why)).isSome) → schedOut hold st pl es = []
+  | _, _, [], _, _ => rfl
+  | st, pl, e :: rest, hs, hb => by
+    unfold schedOut
+    split
+    · rfl
+    · rename_i k _
+      obtain ⟨h1, h2⟩ := stepK_stopped (hold := hold) (pl := pl) (b := some (tagOf k)) (k := .ok k) (e := e) hs
+        (hb e (List.mem_cons_self ..))
+      simp only [h1, List.nil_append]
+      split
+      · exact schedOut_stopped hold _ _ rest h2 fun e he => hb e (List.mem_cons_of_mem _ he)
+      · rfl
+
+/-- **What leaves at the schedule's places is what leaves at each slot, in order.** -/
+theorem schedOut_trace (hold : Bool) : ∀ (st : State) (pl : Placed) (es : List Env),
+    (∀ e ∈ es, ∀ why, (e.barrier (some why)).isSome) →
+    schedOut hold st pl es = (schedTrace hold st pl es).flatMap (·.2)
+  | _, _, [], _ => rfl
+  | st, pl, e :: rest, hb => by
+    have hbr : ∀ e ∈ rest, ∀ why, (e.barrier (some why)).isSome := fun e he => hb e (List.mem_cons_of_mem _ he)
+    rcases hsl : slot st pl with _ | k
+    · simp only [schedOut, schedTrace, hsl, List.flatMap_nil]
+    · simp only [schedOut, schedTrace, hsl, List.flatMap_cons]
+      congr 1
+      cases hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go
+      · simp
+      · cases hs : (stepK hold st pl (some (tagOf k)) (.ok k) e).st.stop
+        · simp only [ite_true, Option.isNone_none, Bool.and_self]
+          exact schedOut_trace hold _ _ rest hbr
+        · simp only [ite_true, Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false, List.flatMap_nil]
+          exact schedOut_stopped hold _ _ rest (by rw [hs]; rfl) hbr
+
+/-- **`ks` is the schedule `T` cut after one of its slots, a coin slot possibly repeated.** -/
+inductive Stutter : List Kind → List Kind → Prop
+  | cut (T : List Kind) : Stutter T []
+  | next {k : Kind} {T ks : List Kind} : Stutter T ks → Stutter (k :: T) (k :: ks)
+  | again {k : Kind} {T ks : List Kind} : isCoin k = true → Stutter (k :: T) ks → Stutter (k :: T) (k :: ks)
+
+/-- **The slots left** at a position: the rep streams not yet open, the openings not yet answered, the `Link` if it
+hasn't left, and the `Finish`. -/
+def Pos.left (labels : Array (String × String)) (plan : Array (String × Nat)) (p : Pos) : Nat :=
+  (labels.size - p.opens) + (plan.size + 1 - p.opened) + (if p.link then 0 else 1) + 1
+
+/-- **What a request after the `Hello` leaves of the session**: its rep streams, plan, sizes and Σ. -/
+structure Fixed (S S' : State) : Prop where
+  labels : S'.labels = S.labels
+  plan : S'.plan = S.plan
+  sent : S'.sent = S.sent
+  points : S'.points = S.points
+  tables : S'.tables = S.tables
+  sigma : S'.sigma = S.sigma
+
+theorem Fixed.refl (S : State) : Fixed S S := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+theorem Fixed.session (S : State) (C : Coins.Release) : Fixed S { S with session := some C } :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+theorem Fixed.trans {S S' S'' : State} (h : Fixed S S') (h' : Fixed S' S'') : Fixed S S'' :=
+  ⟨h'.labels.trans h.labels, h'.plan.trans h.plan, h'.sent.trans h.sent, h'.points.trans h.points,
+    h'.tables.trans h.tables, h'.sigma.trans h.sigma⟩
+
+theorem posOf_session {S : State} {P : Placed} {C C' : Coins.Release} (hs : S.session = some C)
+    (hlen : C'.opened.length = C.opened.length + 1) :
+    posOf { S with session := some C' } P = { posOf S P with opened := opened S + 1 } := by
+  simp only [posOf, opened, hs, Option.map_some, Option.getD_some, hlen]
+
+/-- **A request after the `Hello` that leaves and keeps the session going** advances its position by its kind, or, a
+coin request the auditor answered without coins, leaves it where it was. -/
+theorem pos_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env} (hR : Reach st pl)
+    (h : st.stop = none) (hs : slot st pl = some k) (hk1 : k ≠ .hello) (hk2 : k ≠ .register)
+    (hr : st.request pl k = none) (hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go = true)
+    (hst : (stepK hold st pl (some (tagOf k)) (.ok k) e).st.stop = none) :
+    Fixed st (stepK hold st pl (some (tagOf k)) (.ok k) e).st ∧
+      (stepK hold st pl (some (tagOf k)) (.ok k) e).pl.register = pl.register ∧
+      (posOf (stepK hold st pl (some (tagOf k)) (.ok k) e).st (stepK hold st pl (some (tagOf k)) (.ok k) e).pl =
+          (posOf st pl).adv k ∨
+        isCoin k = true ∧ (∃ r, e.ans = some r ∧ byte? r 0 ≠ some 2) ∧
+          posOf (stepK hold st pl (some (tagOf k)) (.ok k) e).st (stepK hold st pl (some (tagOf k)) (.ok k) e).pl =
+            posOf st pl) := by
+  have hfin : k ≠ .finish := by rintro rfl; rw [stepK_finish] at hgo; cases hgo
+  rcases slot_kind hs with ⟨hp, hq, -, -⟩ | rfl
+  · rcases stepK_frame_ans hk1 hfin hp hq hr hgo with hs' | ⟨r, hans, hst', hpl⟩
+    · rw [hst] at hs'; cases hs'
+    rw [hst'] at hst ⊢
+    rw [hpl]
+    cases k with
+    | hello => exact absurd rfl hk1
+    | register => exact absurd rfl hk2
+    | finish => exact absurd rfl hfin
+    | ping => exact absurd rfl hp
+    | proof => exact absurd rfl hq
+    | other => rcases slot_kind hs with ⟨-, -, h3, -⟩ | h3 <;> first | exact absurd rfl h3 | cases h3
+    | link =>
+      simp only [afterAnswer, Placed.after, answer_link]
+      exact ⟨Fixed.refl _, by first | rfl | trivial, .inl rfl⟩
+    | openStream s =>
+      simp only [afterAnswer, Placed.after, answer_open]
+      exact ⟨Fixed.refl _, by first | rfl | trivial, .inl rfl⟩
+    | commit =>
+      simp only [afterAnswer, Placed.after, answer_commit] at hst ⊢
+      obtain ⟨hsent, -, -⟩ := slot_commit hs
+      split
+      · obtain ⟨C, hC⟩ := Option.isSome_iff_exists.mp (hR.sess hsent)
+        rename_i h2
+        simp only [h2, ite_true] at hst
+        rcases coins_cases (r := r) h hC with h1 | ⟨C', h1, hlen, -⟩
+        · rw [hst] at h1; cases h1
+        · rw [h1]
+          refine ⟨Fixed.session _ _, by first | rfl | trivial, .inl ?_⟩
+          rw [posOf_session hC hlen]
+          rfl
+      · rename_i h2
+        exact ⟨Fixed.refl _, by first | rfl | trivial,
+          by first | exact .inr ⟨rfl, ⟨r, hans, h2⟩, rfl⟩ | exact .inr ⟨rfl, ⟨r, hans, h2⟩, trivial⟩⟩
+    | round s n =>
+      simp only [afterAnswer, Placed.after, answer_round] at hst ⊢
+      obtain ⟨hsent, -, -, -⟩ := slot_round hs
+      by_cases h2 : byte? r 0 = some 2
+      · obtain ⟨C, hC⟩ := Option.isSome_iff_exists.mp (hR.sess hsent)
+        simp only [h2, ite_true] at hst ⊢
+        rcases coins_cases (r := r) h hC with h1 | ⟨C', h1, hlen, -⟩
+        · obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp h1
+          simp only [hw, Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false] at hst
+          cases hst
+        · have hn : ({ st with session := some C' } : State).stop.isNone = true := by simp [h]
+          rw [h1] at hst ⊢
+          simp only [hn, beq_self_eq_true, Bool.and_self, ite_true] at hst ⊢
+          rcases hc : e.coins with why | ⟨⟩
+          · simp only [hc, State.refuse] at hst; cases hst
+          · simp only
+            refine ⟨Fixed.session _ _, by first | rfl | trivial, .inl ?_⟩
+            rw [posOf_session hC hlen]
+            rfl
+      · simp only [h2, ite_false, show (byte? r 0 == some 2) = false by simp [h2], Bool.false_and,
+          Bool.false_eq_true]
+        exact ⟨Fixed.refl _, by first | rfl | trivial,
+          by first | exact .inr ⟨rfl, ⟨r, hans, h2⟩, rfl⟩ | exact .inr ⟨rfl, ⟨r, hans, h2⟩, trivial⟩⟩
+  · exact absurd rfl hk1
+
+/-- The kinds the schedule has after the `Hello`. -/
+def schedKind : Kind → Bool
+  | .openStream _ | .commit | .link | .round _ _ | .finish => true
+  | _ => false
+
+theorem slotAt_sched {L : Array (String × String)} {Pl : Array (String × Nat)} {p : Pos} {k : Kind}
+    (h : slotAt L Pl p = some k) : schedKind k = true := by
+  unfold slotAt at h
+  split at h
+  · rcases hl : L[0]? with _ | l <;> simp [hl] at h
+    subst h; rfl
+  · split at h
+    · cases h; rfl
+    · split at h
+      · cases h; rfl
+      · split at h
+        · split at h
+          · cases h; rfl
+          · rcases hl : L[p.opens]? with _ | l <;> simp [hl] at h
+            subst h; rfl
+        · split at h
+          · cases h; rfl
+          · split at h
+            · cases h; rfl
+            · cases h
+
+theorem lt_of_getElem? {α : Type} {a : Array α} {i : Nat} {x : α} (h : a[i]? = some x) : i < a.size := by
+  rcases Nat.lt_or_ge i a.size with hi | hi
+  · exact hi
+  · simp [Array.getElem?_eq_none hi] at h
+
+/-- **Each slot but the `Finish` takes one of the slots left.** -/
+theorem left_adv {L : Array (String × String)} {Pl : Array (String × Nat)} {p : Pos} {k : Kind}
+    (h : slotAt L Pl p = some k) (hk : k ≠ .finish) : Pos.left L Pl (p.adv k) + 1 = Pos.left L Pl p := by
+  obtain ⟨o, d, l⟩ := p
+  unfold slotAt at h
+  simp only at h
+  split at h
+  · rcases hl : L[0]? with _ | x <;> simp [hl] at h
+    subst h
+    have := lt_of_getElem? hl
+    cases l <;> simp only [Pos.adv, Pos.left, ite_true, Bool.false_eq_true, ite_false] <;> omega
+  · split at h
+    · cases h
+      cases l <;> simp only [Pos.adv, Pos.left, ite_true, Bool.false_eq_true, ite_false] <;> omega
+    · split at h
+      · rename_i h2
+        cases h
+        cases l
+        · simp only [Pos.adv, Pos.left, ite_true, Bool.false_eq_true, ite_false]
+        · simp at h2
+      · split at h
+        · rename_i s n hp
+          have := lt_of_getElem? hp
+          split at h
+          · cases h
+            cases l <;> simp only [Pos.adv, Pos.left, ite_true, Bool.false_eq_true, ite_false] <;> omega
+          · rcases hl : L[o]? with _ | x <;> simp [hl] at h
+            subst h
+            have := lt_of_getElem? hl
+            cases l <;> simp only [Pos.adv, Pos.left, ite_true, Bool.false_eq_true, ite_false] <;> omega
+        · split at h
+          · rename_i x hl
+            cases h
+            have := lt_of_getElem? hl
+            cases l <;> simp only [Pos.adv, Pos.left, ite_true, Bool.false_eq_true, ite_false] <;> omega
+          · split at h
+            · cases h; exact absurd rfl hk
+            · cases h
+
+theorem tmplFrom_succ {L : Array (String × String)} {Pl : Array (String × Nat)} {p : Pos} {k : Kind} (f : Nat)
+    (h : slotAt L Pl p = some k) (hk : k ≠ .finish) : tmplFrom L Pl (f + 1) p = k :: tmplFrom L Pl f (p.adv k) := by
+  simp only [tmplFrom, h]
+
+theorem tmplFrom_finish {L : Array (String × String)} {Pl : Array (String × Nat)} {p : Pos} (f : Nat)
+    (h : slotAt L Pl p = some .finish) : tmplFrom L Pl (f + 1) p = [.finish] := by
+  simp only [tmplFrom, h]
+
+theorem tagOf_sched {k : Kind} (h : schedKind k = true) (hk : k ≠ .finish) :
+    some (tagOf k) ≠ some 9 ∧ some (tagOf k) ≠ some 5 ∧ some (tagOf k) ≠ some 6 := by
+  cases k <;> simp_all [schedKind, tagOf]
+
+/-- A model slot: the `Hello`, a coin request or the `Finish`, whose frames are the session's messages. The others, the
+`Register`, the `Link` and each `Open`, are control slots. -/
+def isModel : Kind → Bool
+  | .hello | .commit | .round _ _ | .finish => true
+  | _ => false
+
+/-- **A control slot's frame** at the session `S`: `State.wire`'s. -/
+def ctlFrame (S : State) (k : Kind) : ByteArray :=
+  match S.wire k with
+  | .ok w => w
+  | .error _ => .empty
+
+theorem ctlFrame_fixed {S S' : State} (h : Fixed S S') (k : Kind) : ctlFrame S' k = ctlFrame S k := by
+  simp only [ctlFrame, State.wire, h.labels, h.points, h.tables]
+
+/-- **What left at each control slot is its frame**, or nothing at the last slot. -/
+def Framed (ctl : Kind → ByteArray) : List (Kind × List ByteArray) → Prop
+  | [] => True
+  | (k, s) :: tl => (isModel k = false → s = [ctl k] ∨ (s = [] ∧ tl = [])) ∧ Framed ctl tl
+
+theorem framed_one {ctl : Kind → ByteArray} {k : Kind} {s : List ByteArray} {P : Prop}
+    (h : isModel k = false → s = [ctl k] ∨ (s = [] ∧ P)) : Framed ctl [(k, s)] :=
+  ⟨fun hm => (h hm).imp id fun h => ⟨h.1, rfl⟩, trivial⟩
+
+theorem tagOf_ne {k : Kind} (hp : k ≠ .ping) (hq : k ≠ .proof) (hf : k ≠ .finish) :
+    some (tagOf k) ≠ some 9 ∧ some (tagOf k) ≠ some 5 ∧ some (tagOf k) ≠ some 6 := by
+  cases k <;> first | exact absurd rfl hp | exact absurd rfl hq | exact absurd rfl hf | simp [tagOf]
+
+/-- **At a control slot its frame leaves**, or nothing, and the session stops. -/
+theorem sent_ctl {hold : Bool} {st : State} {pl : Placed} {k : Kind} (e : Env) (h : st.stop = none)
+    (hs : slot st pl = some k) (hk : isModel k = false) :
+    (stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [ctlFrame st k] ∨
+      ((stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [] ∧
+        (stepK hold st pl (some (tagOf k)) (.ok k) e).st.stop.isSome) := by
+  have hk' : k ≠ .ping ∧ k ≠ .proof ∧ k ≠ .other := by
+    rcases slot_kind hs with ⟨h1, h2, h3, -⟩ | rfl
+    · exact ⟨h1, h2, h3⟩
+    · cases hk
+  obtain ⟨hp, hq, ho⟩ := hk'
+  have hh : k ≠ .hello := by rintro rfl; cases hk
+  have hf : k ≠ .finish := by rintro rfl; cases hk
+  rcases hr : st.request pl k with _ | ⟨st', o⟩
+  · rw [stepK_frame hh hf hp hq hr]
+    have hw : frameOf st k e = match st.wire k with
+        | .ok w => .ok w
+        | .error why => .error s!"{Coins.STOP}{why}" := by
+      cases k <;> first | rfl | cases hk | exact absurd rfl hp | exact absurd rfl hq | exact absurd rfl ho
+    rw [hw]
+    rcases hwk : st.wire k with why | w
+    · exact .inr ⟨rfl, rfl⟩
+    · have : ctlFrame st k = w := by simp only [ctlFrame, hwk]
+      rw [this]
+      rcases e.ans with _ | r <;> exact .inl rfl
+  · obtain ⟨h9, h5, h6⟩ := tagOf_ne hp hq hf
+    rw [stepK_refused h9 h5 h6 hr]
+    exact .inr ⟨rfl, request_stop h hr⟩
+
+/-- **What leaves after the `Hello` is at the schedule's slots in order**, cut after one of them, a coin slot the
+auditor answered without coins coming again, and each control slot's frame is its own; where the auditor answered each
+coin request with coins, the slots are the schedule's cut. -/
+theorem sched_stutter (hold : Bool) (L : Array (String × String)) (Pl : Array (String × Nat))
+    (ctl : Kind → ByteArray) :
+    ∀ (es : List Env) (f : Nat) (st : State) (pl : Placed), Reach st pl → st.stop = none → pl.register = true →
+      st.sent = true → st.labels = L → st.plan = Pl → Pos.left L Pl (posOf st pl) < f →
+      (∀ k, ctlFrame st k = ctl k) →
+      Stutter (tmplFrom L Pl f (posOf st pl)) ((schedTrace hold st pl es).map (·.1)) ∧
+        (CoinsAnswered hold st pl es → (schedTrace hold st pl es).map (·.1) <+: tmplFrom L Pl f (posOf st pl)) ∧
+        Framed ctl (schedTrace hold st pl es)
+  | [], _, _, _, _, _, _, _, _, _, _, _ => ⟨.cut _, fun _ => List.nil_prefix, trivial⟩
+  | e :: rest, f, st, pl, hR, h, hreg, hsent, hL, hPl, hf, hc => by
+    have hsl := slot_sent (S := st) (P := pl) hreg hsent
+    rw [hL, hPl] at hsl
+    obtain ⟨f', rfl⟩ : ∃ f', f = f' + 1 := ⟨f - 1, by omega⟩
+    rcases hsa : slotAt L Pl (posOf st pl) with _ | k
+    · simp only [schedTrace, hsl, hsa, List.map_nil]
+      exact ⟨.cut _, fun _ => List.nil_prefix, trivial⟩
+    · have hslot : slot st pl = some k := hsl.trans hsa
+      have hca : CoinsAnswered hold st pl (e :: rest) ↔
+          (isCoin k = true → ∀ r, e.ans = some r → byte? r 0 = some 2) ∧
+            CoinsAnswered hold (stepK hold st pl (some (tagOf k)) (.ok k) e).st
+              (stepK hold st pl (some (tagOf k)) (.ok k) e).pl rest := by
+        simp only [CoinsAnswered, hslot]
+      rw [hca]
+      have hsc : isModel k = false → (stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [ctl k] ∨
+          ((stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [] ∧
+            (stepK hold st pl (some (tagOf k)) (.ok k) e).st.stop.isSome) := by
+        intro hm
+        rw [← hc k]
+        exact sent_ctl e h hslot hm
+      by_cases hk : k = .finish
+      · subst hk
+        rw [tmplFrom_finish f' hsa]
+        simp only [schedTrace, hslot, stepK_finish, Bool.false_and, Bool.false_eq_true, ite_false,
+          List.map_cons, List.map_nil]
+        exact ⟨.next (.cut _), fun _ => List.prefix_refl _, framed_one (P := True) fun h => by simp [isModel] at h⟩
+      · rw [tmplFrom_succ f' hsa hk]
+        have hks := slotAt_sched hsa
+        simp only [schedTrace, hslot, List.map_cons]
+        have last : ∀ T (P : Prop), Stutter (k :: T) [k] ∧ (P → [k] <+: k :: T) :=
+          fun _ _ => ⟨.next (.cut _), fun _ => List.cons_prefix_cons.mpr ⟨rfl, List.nil_prefix⟩⟩
+        have hfr1 : Framed ctl [(k, (stepK hold st pl (some (tagOf k)) (.ok k) e).sent)] := framed_one hsc
+        rcases hr : st.request pl k with _ | ⟨st', o⟩
+        · cases hgo : (stepK hold st pl (some (tagOf k)) (.ok k) e).go
+          · simp only [Bool.false_and, Bool.false_eq_true, ite_false, List.map_nil]
+            exact ⟨(last _ True).1, (last _ _).2, hfr1⟩
+          · cases hst : (stepK hold st pl (some (tagOf k)) (.ok k) e).st.stop
+            · simp only [Option.isNone_none, Bool.and_self, ite_true]
+              have hk1 : k ≠ .hello := by rintro rfl; cases hks
+              have hk2 : k ≠ .register := by rintro rfl; cases hks
+              rcases reach_step hR h hslot hr hgo with hs | hR'
+              · rw [hst] at hs; cases hs
+              obtain ⟨hfx, hreg', hpos⟩ := pos_step hR h hslot hk1 hk2 hr hgo hst
+              have hadv := left_adv hsa hk
+              have hc' : ∀ k', ctlFrame (stepK hold st pl (some (tagOf k)) (.ok k) e).st k' = ctl k' := by
+                intro k'
+                rw [ctlFrame_fixed hfx k', hc k']
+              have hhead : isModel k = false → (stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [ctl k] ∨
+                  ((stepK hold st pl (some (tagOf k)) (.ok k) e).sent = [] ∧
+                    schedTrace hold (stepK hold st pl (some (tagOf k)) (.ok k) e).st
+                      (stepK hold st pl (some (tagOf k)) (.ok k) e).pl rest = []) := by
+                intro hm
+                rcases hsc hm with h1 | ⟨-, h2⟩
+                · exact .inl h1
+                · rw [hst] at h2; cases h2
+              rcases hpos with hpos | ⟨hc, ⟨r, hans, hr2⟩, hpos⟩
+              · have ih := sched_stutter hold L Pl ctl rest f' _ _ hR' hst (hreg'.trans hreg)
+                  (hfx.sent.trans hsent) (hfx.labels.trans hL) (hfx.plan.trans hPl) (by rw [hpos]; omega) hc'
+                rw [hpos] at ih
+                exact ⟨.next ih.1, fun hc => List.cons_prefix_cons.mpr ⟨rfl, ih.2.1 hc.2⟩, hhead, ih.2.2⟩
+              · have ih := sched_stutter hold L Pl ctl rest (f' + 1) _ _ hR' hst (hreg'.trans hreg)
+                  (hfx.sent.trans hsent) (hfx.labels.trans hL) (hfx.plan.trans hPl) (by rw [hpos]; exact hf) hc'
+                rw [hpos, tmplFrom_succ f' hsa hk] at ih
+                exact ⟨.again hc ih.1, fun hca => absurd (hca.1 hc r hans) hr2, hhead, ih.2.2⟩
+            · simp only [Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false, List.map_nil]
+              exact ⟨(last _ True).1, (last _ _).2, hfr1⟩
+        · obtain ⟨h9, h5, h6⟩ := tagOf_sched hks hk
+          have hs' := request_stop h hr
+          rw [stepK_refused h9 h5 h6 hr]
+          obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp hs'
+          simp only [hw, Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false, List.map_nil]
+          exact ⟨(last _ True).1, (last _ _).2, framed_one (P := True) fun _ => .inr ⟨rfl, trivial⟩⟩
+
+/-- The rep streams' names and domains the `Hello` sets at the setup's spec. -/
+def labelsOf (spec : SessionSpec) : Array (String × String) :=
+  spec.repStreams.map fun (i, r, s) => (s, spec.domain spec.tables[i]! r)
+
+/-- **The session after its `Hello`** at the setup `spec`, `sts` and the nonce `n`. -/
+def helloAt (S : State) (spec : SessionSpec) (sts : Array Stmt) (n : ByteArray) : State :=
+  { S with sent := true, hello := helloOf spec sts n, plan := planOf spec sts,
+           domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r)),
+           reps := spec.repStreams.map fun (i, r, s) => (s, i, r),
+           labels := labelsOf spec, tables := spec.tables.zip (sts.map (·.m)), sigma := spec.sigma,
+           points := spec.points }
+
+/-- **The `Hello` that leaves is the setup's**, at the nonce, and so is the session after it. -/
+theorem sendHello_eq {S S' : State} {s : V (SessionSpec × Array Stmt)} {n o : ByteArray}
+    (he : S.sendHello s n = .ok (S', o)) :
+    ∃ spec sts, s = .ok (spec, sts) ∧ S' = helloAt S spec sts n ∧ o = ⟨(Hello.msg spec n).toArray⟩ := by
+  revert he
+  unfold State.sendHello
+  split
+  · intro he; cases he
+  · intro he; cases he
+  · rename_i spec sts _
+    split
+    · intro he; cases he
+    · split
+      · intro he; cases he
+      · intro he
+        cases he
+        exact ⟨spec, sts, rfl, rfl, rfl⟩
+
+theorem reach_init : Reach {} {} where
+  reg := fun h => by cases h
+  unsent := fun _ => ⟨rfl, rfl⟩
+  sess := fun h => by cases h
+  grouped := fun _ _ _ _ _ h => by simp at h
+  size := by decide
+  opens_le := Nat.le_refl _
+  opens_pos := fun h => by simp [opened] at h
+  link_pos := fun h => by cases h
+  link_two := fun h => by simp [opened] at h
+  link_opens := fun h => by simp at h
+  le_plan := by simp [opened]
+  idx := fun _ _ h => by simp [opened] at h
+
+/-- **The session's schedule at its setup**: at a setup that fails, the `Register` and the `Hello` it refuses. -/
+def tmplOf : V (SessionSpec × Array Stmt) → List Kind
+  | .ok (spec, sts) => tmpl (labelsOf spec) (planOf spec sts)
+  | .error _ => [.register, .hello]
+
+theorem tmplOf_cons (s : V (SessionSpec × Array Stmt)) : ∃ T, tmplOf s = .register :: .hello :: T := by
+  rcases s with _ | ⟨spec, sts⟩
+  · exact ⟨[], rfl⟩
+  · exact ⟨_, rfl⟩
+
+/-- **The control slots' frames at the setup**: the `Register`'s, and the `Link`'s and each `Open`'s at the session
+after its `Hello`. -/
+def ctlOf : V (SessionSpec × Array Stmt) → Kind → ByteArray
+  | .ok (spec, sts) => ctlFrame (helloAt {} spec sts .empty)
+  | .error _ => ctlFrame {}
+
+theorem stutter_two {T : List Kind} {ks : List Kind} (h : ks <+: [.register, .hello]) :
+    Stutter (.register :: .hello :: T) ks ∧ ks <+: .register :: .hello :: T := by
+  rcases ks with _ | ⟨k, _ | ⟨k', _ | ⟨k'', ks⟩⟩⟩
+  · exact ⟨.cut _, List.nil_prefix⟩
+  · obtain ⟨rfl, -⟩ := List.cons_prefix_cons.mp h
+    exact ⟨.next (.cut _), List.cons_prefix_cons.mpr ⟨rfl, List.nil_prefix⟩⟩
+  · obtain ⟨rfl, h1⟩ := List.cons_prefix_cons.mp h
+    obtain ⟨rfl, -⟩ := List.cons_prefix_cons.mp h1
+    exact ⟨.next (.next (.cut _)),
+      List.cons_prefix_cons.mpr ⟨rfl, List.cons_prefix_cons.mpr ⟨rfl, List.nil_prefix⟩⟩⟩
+  · obtain ⟨-, h1⟩ := List.cons_prefix_cons.mp h
+    obtain ⟨-, h2⟩ := List.cons_prefix_cons.mp h1
+    exact absurd (List.IsPrefix.length_le h2) (by simp)
+
+/-- **What leaves over the relay's session is at the schedule's slots in order**, from its start: the `Register`, the
+`Hello` and the slots after it at the setup the relay reads, cut after one of them, a coin slot the auditor answered
+without coins coming again, and each control slot's frame the setup's; where the auditor answered each coin request
+with coins, the slots are the schedule's cut. -/
+theorem relay_stutter (hold : Bool) (s : V (SessionSpec × Array Stmt)) (es : List Env)
+    (hs : ∀ e ∈ es, e.setup = s) :
+    Stutter (tmplOf s) ((schedTrace hold {} {} es).map (·.1)) ∧
+      (CoinsAnswered hold {} {} es → (schedTrace hold {} {} es).map (·.1) <+: tmplOf s) ∧
+      Framed (ctlOf s) (schedTrace hold {} {} es) := by
+  obtain ⟨T, hT⟩ := tmplOf_cons s
+  rw [hT]
+  rcases es with _ | ⟨e₁, rest⟩
+  · exact ⟨.cut _, fun _ => List.nil_prefix, trivial⟩
+  have hs1 : slot ({} : State) ({} : Placed) = some .register := rfl
+  have hreg0 : ctlFrame ({} : State) .register = ctlOf s .register := by rcases s with _ | ⟨_, _⟩ <;> rfl
+  have hsc1 := sent_ctl (hold := hold) e₁ (st := {}) rfl hs1 rfl
+  rw [hreg0] at hsc1
+  simp only [schedTrace, hs1, List.map_cons]
+  have hca1 : CoinsAnswered hold {} {} (e₁ :: rest) ↔
+      CoinsAnswered hold (stepK hold {} {} (some (tagOf .register)) (.ok .register) e₁).st
+        (stepK hold {} {} (some (tagOf .register)) (.ok .register) e₁).pl rest := by
+    simp [CoinsAnswered, hs1, isCoin]
+  rw [hca1]
+  have two : ∀ (ks : List Kind) (P : Prop), ks <+: [.hello] →
+      Stutter (.register :: .hello :: T) (.register :: ks) ∧ (P → .register :: ks <+: .register :: .hello :: T) := by
+    intro ks P h
+    have h' : .register :: ks <+: [.register, .hello] := List.cons_prefix_cons.mpr ⟨rfl, h⟩
+    exact ⟨(stutter_two h').1, fun _ => (stutter_two h').2⟩
+  generalize hr1 : stepK hold {} {} (some (tagOf .register)) (.ok .register) e₁ = r₁ at hsc1
+  have fr1 : Framed (ctlOf s) [(.register, r₁.sent)] := framed_one fun _ => hsc1
+  cases hgo1 : r₁.go
+  · simp only [Bool.false_and, Bool.false_eq_true, ite_false]
+    exact ⟨(two [] True List.nil_prefix).1, (two [] _ List.nil_prefix).2, fr1⟩
+  cases hst1 : r₁.st.stop
+  case some =>
+    simp only [Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false]
+    exact ⟨(two [] True List.nil_prefix).1, (two [] _ List.nil_prefix).2, fr1⟩
+  simp only [Option.isNone_none, Bool.and_self, ite_true]
+  have hsent1' : r₁.sent = [ctlOf s .register] := by
+    rcases hsc1 with h | ⟨-, h⟩
+    · exact h
+    · rw [hst1] at h; cases h
+  rcases hreq1 : ({} : State).request {} .register with _ | ⟨st', o⟩
+  case some =>
+    have := request_stop (S := {}) rfl hreq1
+    rw [stepK_refused (by decide) (by decide) (by decide) hreq1] at hr1
+    subst hr1
+    obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp this
+    simp [hw] at hst1
+  have hgo1' : (stepK hold {} {} (some (tagOf .register)) (.ok .register) e₁).go = true := by rw [hr1]; exact hgo1
+  have hR1 : Reach r₁.st r₁.pl := by
+    rcases reach_step reach_init rfl hs1 hreq1 hgo1' with h | h
+    · rw [hr1, hst1] at h; cases h
+    · rw [hr1] at h; exact h
+  rcases stepK_frame_ans (k := .register) (by intro h; cases h) (by intro h; cases h)
+    (by intro h; cases h) (by intro h; cases h) hreq1 hgo1' with h | ⟨a, -, hst1', hpl1⟩
+  · rw [hr1, hst1] at h; cases h
+  rw [hr1] at hst1' hpl1
+  have hsent1 : r₁.st.sent = false := by
+    rw [hst1']
+    simp only [afterAnswer]
+    rcases answer_register ({} : State) a with h | ⟨d, hd⟩
+    · rw [hst1'] at hst1; simp only [afterAnswer] at hst1; rw [hst1] at h; cases h
+    · rw [hd]
+  have hreg1 : r₁.pl.register = true := by rw [hpl1]; rfl
+  rcases rest with _ | ⟨e₂, rest⟩
+  · exact ⟨(two [] True List.nil_prefix).1, (two [] _ List.nil_prefix).2, fr1⟩
+  have hs2 : slot r₁.st r₁.pl = some .hello := by simp [slot, hreg1, hsent1]
+  simp only [schedTrace, hs2, List.map_cons]
+  have hca2 : CoinsAnswered hold r₁.st r₁.pl (e₂ :: rest) ↔
+      CoinsAnswered hold (stepK hold r₁.st r₁.pl (some (tagOf .hello)) (.ok .hello) e₂).st
+        (stepK hold r₁.st r₁.pl (some (tagOf .hello)) (.ok .hello) e₂).pl rest := by
+    simp [CoinsAnswered, hs2, isCoin]
+  rw [hca2]
+  have frh : ∀ (s₂ : List ByteArray) (tl : List (Kind × List ByteArray)), Framed (ctlOf s) tl →
+      Framed (ctlOf s) ((.register, r₁.sent) :: (.hello, s₂) :: tl) :=
+    fun _ _ h => ⟨fun _ => .inl hsent1', fun hm => by simp [isModel] at hm, h⟩
+  have three : ∀ (P : Prop), Stutter (.register :: .hello :: T) [.register, .hello] ∧
+      (P → [.register, .hello] <+: .register :: .hello :: T) :=
+    fun P => two [.hello] P (List.prefix_refl _)
+  generalize hr2 : stepK hold r₁.st r₁.pl (some (tagOf .hello)) (.ok .hello) e₂ = r₂
+  cases hgo2 : r₂.go
+  · simp only [Bool.false_and, Bool.false_eq_true, ite_false]
+    exact ⟨(three True).1, (three _).2, frh _ _ trivial⟩
+  cases hst2 : r₂.st.stop
+  case some =>
+    simp only [Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false]
+    exact ⟨(three True).1, (three _).2, frh _ _ trivial⟩
+  simp only [Option.isNone_none, Bool.and_self, ite_true]
+  rcases hreq2 : r₁.st.request r₁.pl .hello with _ | ⟨st', o⟩
+  case some =>
+    have := request_stop hst1 hreq2
+    rw [stepK_refused (by decide) (by decide) (by decide) hreq2] at hr2
+    subst hr2
+    obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp this
+    simp [hw] at hst2
+  have hgo2' : (stepK hold r₁.st r₁.pl (some (tagOf .hello)) (.ok .hello) e₂).go = true := by rw [hr2]; exact hgo2
+  have hR2 : Reach r₂.st r₂.pl := by
+    rcases reach_step hR1 hst1 hs2 hreq2 hgo2' with h | h
+    · rw [hr2, hst2] at h; cases h
+    · rw [hr2] at h; exact h
+  rw [stepK_hello hreq2] at hr2
+  rcases hsh : r₁.st.sendHello e₂.setup e₂.nonce with ⟨S', o⟩ | ⟨S', h⟩
+  · rw [hsh] at hr2
+    subst hr2
+    have := sendHello_error hst1 hsh
+    obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp this
+    simp [hw] at hst2
+  rw [hsh] at hr2
+  obtain ⟨spec, sts, hsp, hS', -⟩ := sendHello_eq hsh
+  have hss : s = .ok (spec, sts) := (hs e₂ (by simp)).symm.trans hsp
+  subst hss
+  rcases hans : e₂.ans with _ | a₂
+  · rw [hans] at hr2; subst hr2; cases hgo2
+  rw [hans] at hr2
+  have hS'stop : S'.stop = none := by rw [hS']; exact hst1
+  rcases answer_hello (r := a₂) (id := e₂.id) hS'stop with h | ⟨hh, C, -, hC, hCo⟩
+  · subst hr2; rw [hst2] at h; cases h
+  subst hr2
+  simp only at hC hR2 hst2 ⊢
+  rw [hC] at hR2 hst2 ⊢
+  have hpos : posOf { S' with session := some C } r₁.pl = ⟨0, 0, false⟩ := by
+    simp only [posOf, opened, Option.map_some, Option.getD_some, hCo, List.length_nil]
+    rw [hpl1]
+    rfl
+  have hT' : T = tmplFrom (labelsOf spec) (planOf spec sts) ((labelsOf spec).size + (planOf spec sts).size + 4)
+      ⟨0, 0, false⟩ := by
+    simp only [tmplOf, tmpl, List.cons.injEq, true_and] at hT
+    exact hT.symm
+  have hctl : ∀ k, ctlFrame { S' with session := some C } k = ctlOf (.ok (spec, sts)) k := by
+    intro k
+    rw [hS']
+    rfl
+  have key := sched_stutter hold (labelsOf spec) (planOf spec sts) (ctlOf (.ok (spec, sts))) rest
+    ((labelsOf spec).size + (planOf spec sts).size + 4) _ _ hR2 hst2 hreg1 (by rw [hS']; rfl)
+    (by rw [hS']; rfl) (by rw [hS']; rfl) (by rw [hpos]; simp only [Pos.left, Bool.false_eq_true, ite_false]; omega)
+    hctl
+  rw [hpos, ← hT'] at key
+  exact ⟨.next (.next key.1), fun hc => List.cons_prefix_cons.mpr ⟨rfl, List.cons_prefix_cons.mpr ⟨rfl, key.2.1 hc⟩⟩,
+    frh _ _ key.2.2⟩
+
+/-- **The release at the slots `ks`**: each control slot's frame `ctl k` in its place, and at each model slot the next
+of `ms`. -/
+def weave (ctl : Kind → ByteArray) : List Kind → List (List ByteArray) → List ByteArray
+  | [], _ => []
+  | k :: ks, ms => if isModel k then ms.headD [] ++ weave ctl ks ms.tail else ctl k :: weave ctl ks ms
+
+/-- What left at a trace's model slots, in order. -/
+def modelFrames (tr : List (Kind × List ByteArray)) : List (List ByteArray) :=
+  (tr.filter fun p => isModel p.1).map (·.2)
+
+/-- **How many of a trace's slots released**: all of them, or those before a last control slot that sent nothing. -/
+def cutOf : List (Kind × List ByteArray) → Nat
+  | [] => 0
+  | (k, s) :: tl => if isModel k = false ∧ s = [] then 0 else cutOf tl + 1
+
+/-- **A trace whose control slots sent their frames is its slots woven with its model slots' frames**, cut where the
+last slot sent nothing (`cutOf`). -/
+theorem weave_framed (ctl : Kind → ByteArray) : ∀ tr : List (Kind × List ByteArray), Framed ctl tr →
+    cutOf tr ≤ tr.length ∧ tr.flatMap (·.2) = weave ctl ((tr.map (·.1)).take (cutOf tr)) (modelFrames tr)
+  | [], _ => ⟨Nat.le_refl _, rfl⟩
+  | (k, s) :: tl, ⟨hk, htl⟩ => by
+    obtain ⟨hc, he⟩ := weave_framed ctl tl htl
+    cases hm : isModel k
+    · rcases hk hm with rfl | ⟨rfl, rfl⟩
+      · have hcut : cutOf ((k, [ctl k]) :: tl) = cutOf tl + 1 := by simp [cutOf, hm]
+        rw [hcut]
+        refine ⟨by simp only [List.length_cons]; omega, ?_⟩
+        simp only [List.flatMap_cons, List.map_cons, List.take_succ_cons, weave, hm, Bool.false_eq_true, ite_false,
+          modelFrames, List.filter_cons, he]
+        rfl
+      · have hcut : cutOf [(k, [])] = 0 := by simp [cutOf, hm]
+        rw [hcut]
+        exact ⟨Nat.zero_le _, rfl⟩
+    · have hcut : cutOf ((k, s) :: tl) = cutOf tl + 1 := by simp [cutOf, hm]
+      rw [hcut]
+      refine ⟨by simp only [List.length_cons]; omega, ?_⟩
+      simp only [List.flatMap_cons, List.map_cons, List.take_succ_cons, weave, hm, ite_true, modelFrames,
+        List.filter_cons, List.headD_cons, List.tail_cons, he]
+
+/-- **What leaves at each slot of the relay's session**, from its start: the requests that reach a slot (`pick`), at
+the schedule's places. -/
+def relayTrace (hold : Bool) (ins : List (ByteArray × Env)) : List (Kind × List ByteArray) :=
+  schedTrace hold {} {} (pick hold {} {} ins)
+
+/-- The slots the relay's session reached, in order. -/
+def relaySlots (hold : Bool) (ins : List (ByteArray × Env)) : List Kind := (relayTrace hold ins).map (·.1)
+
+/-- **The model's frames the relay released**: what left at the `Hello`, each coin request and the `Finish`, in
+order. -/
+def relayFrames (hold : Bool) (ins : List (ByteArray × Env)) : List (List ByteArray) :=
+  modelFrames (relayTrace hold ins)
+
+/-- **Where the relay's release ended**: how many of the slots it reached released. -/
+def relayCut (hold : Bool) (ins : List (ByteArray × Env)) : Nat := cutOf (relayTrace hold ins)
+
+/-- **The deployed relay's release is the schedule's**: at every requests the worker sends and every answer of the
+auditor, at a setup `s` the relay reads, what leaves for the auditor is the session's control frames at their fixed
+places (`ctlOf s`: the `Register`, the `Link`, each `Open`) and the model's frames (`relayFrames`: what left at the
+`Hello`, each coin request and the `Finish`) at theirs, over the slots the session reached (`relaySlots`, the schedule
+`tmplOf s` cut after one of them) cut where the release ended (`relayCut`); nothing leaves after it. A coin slot the
+auditor answered without coins can come again (`Stutter`); where the auditor answers each coin request with coins, the
+slots are the schedule's cut (`relay_release_cut`). -/
+theorem relay_release (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env))
+    (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) :
+    relayCut hold ins ≤ (relaySlots hold ins).length ∧ Stutter (tmplOf s) (relaySlots hold ins) ∧
+      (CoinReqsAnswered ins → relaySlots hold ins <+: tmplOf s) ∧
+      out hold {} {} ins = weave (ctlOf s) ((relaySlots hold ins).take (relayCut hold ins)) (relayFrames hold ins) := by
+  obtain ⟨hsub, heq, hca⟩ := out_sched hold {} {} ins (.inr ⟨rfl, reach_init⟩) hb
+  have hmem : ∀ e ∈ pick hold {} {} ins, ∃ p ∈ ins, p.2 = e := fun e he => List.mem_map.mp (hsub.subset he)
+  have hbe : ∀ e ∈ pick hold {} {} ins, ∀ why, (e.barrier (some why)).isSome := by
+    intro e he
+    obtain ⟨p, hp, rfl⟩ := hmem e he
+    exact hb p hp
+  have hse : ∀ e ∈ pick hold {} {} ins, e.setup = s := by
+    intro e he
+    obtain ⟨p, hp, rfl⟩ := hmem e he
+    exact hs p hp
+  obtain ⟨hst, hpre, hfr⟩ := relay_stutter hold s _ hse
+  obtain ⟨hc, hw⟩ := weave_framed (ctlOf s) _ hfr
+  refine ⟨by simpa [relaySlots, relayCut, relayTrace] using hc, hst, fun h => hpre (hca h), ?_⟩
+  rw [heq, schedOut_trace hold {} {} _ hbe, hw]
+  rfl
+
+/-- **Where the auditor answers each coin request with coins, the deployed relay's release is the schedule's cut**: the
+control frames at their fixed places and the model's frames at theirs, over the schedule `tmplOf s` cut where the
+release ended (`relayCut`). -/
+theorem relay_release_cut (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env))
+    (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)
+    (hc : CoinReqsAnswered ins) :
+    relayCut hold ins ≤ (tmplOf s).length ∧
+      out hold {} {} ins = weave (ctlOf s) ((tmplOf s).take (relayCut hold ins)) (relayFrames hold ins) := by
+  obtain ⟨hck, -, hpre, hout⟩ := relay_release hold s ins hs hb
+  obtain ⟨t, ht⟩ := hpre hc
+  refine ⟨?_, ?_⟩
+  · have := congrArg List.length ht
+    simp only [List.length_append] at this
+    omega
+  · rw [hout, ← ht, List.take_append_of_le_length hck]
+
+/-- **Where the relay's release ended, in the schedule**: one of its `(tmplOf s).length + 1` cuts. -/
+def relayEnd (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env)) :
+    Fin ((tmplOf s).length + 1) :=
+  ⟨min (relayCut hold ins) (tmplOf s).length, by omega⟩
+
+theorem relayEnd_val {hold : Bool} {s : V (SessionSpec × Array Stmt)} {ins : List (ByteArray × Env)}
+    (h : relayCut hold ins ≤ (tmplOf s).length) : (relayEnd hold s ins : Nat) = relayCut hold ins :=
+  Nat.min_eq_left h
 
 end Claims.ZKServer.Relay
