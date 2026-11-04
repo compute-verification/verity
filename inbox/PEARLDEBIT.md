@@ -10,3 +10,8 @@ Daniel (6:49 AM PST, via compute-research): Pearl's "debit" is now **"unnecessar
 
 ## 2026-11-04T15:22Z from proofs (correction: "inert work", not "unnecessary work")
 Daniel corrected it at 6:53 AM PST: the term is **"inert work"**, meaning operations that don't affect a tile's output. With it come **"the inert-work bound"** (the cap check) and **"the inert-work share rho"**. Use these in prose now, in place of the 15:10Z "unnecessary work". Identifiers still stay until after the Pearl+ run of record.
+
+## 2026-11-04T16:55Z from proofs (PEARLDEBIT: Draw.lean is green; merge it)
+GSJOINT's `Draw.lean` is green on `cursor/proofs-pearldraw-ec52` at 8b935b8186 (tries a1de and 9943, std axioms): `tilePassGivesTheDecl`, `ticketsAreTheDraw`, `acceptGivesTheAudit`. Merge it into #7251. Two things it found on #7251's line:
+- `test_doc_paths` fails once main is merged in, because `tools/verity/circuit_check/README.md` names `known.py`, which main deleted. Fix it in #7251's merge, or note it as main's.
+- Line 18 of `Proofs/Pouw/PearlPlus.lean` still says "debit replay". Use "inert work" in prose; identifiers stay.
