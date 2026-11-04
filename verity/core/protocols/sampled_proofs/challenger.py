@@ -959,17 +959,15 @@ def sessions_tree_reason(trees: dict[str, LoggedTree], records: Sequence[tuple[s
     return None
 
 
-def _root_line(line: str) -> tuple[str, bytes] | None:
-    """The family and the root a root line of the release log shows, as `released_roots_of` reads them (Lean
-    `Challenger.rootOf`); None where the line doesn't parse or names no family or no root."""
+def _root_names(line: str, label: str, root: bytes) -> bool:
+    """Whether release log line `line` shows family `label` and root `root`, as `released_roots_of` reads a root line
+    (Lean `Challenger.rootOf line = some (label, root)`); False where the line doesn't parse."""
     try:
         doc = _event(line)
     except CoinError:
-        return None
-    if not isinstance(doc, dict) or type(doc.get("label")) is not str or type(doc.get("root")) is not str:
-        return None
-    root = _hex(doc["root"])
-    return None if root is None else (doc["label"], root)
+        return False
+    return (isinstance(doc, dict) and doc.get("label") == label and type(doc.get("root")) is str
+            and _hex(doc["root"]) == root)
 
 
 def open_line(line: str) -> bool:
@@ -1004,7 +1002,7 @@ def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
         elif pending is None:
             pending = line
         else:
-            if opened and _root_line(pending) == (label, after):
+            if opened and _root_names(pending, label, after):
                 return False
             pending = None
     return True
