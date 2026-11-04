@@ -3334,7 +3334,10 @@
   "Nci.SecurityProofs.ThreadedReadsInfoFmt": "b0e528356d0260e4829a1626341ad77a934fb408d696687032705be38beb7643",
   "Nci.SecurityProofs.ThreadedReadsInfoFmt2": "29c58e0f89f3a259fa223ae3cba558d3829f38a5cc2fd1fa78d08e6b7c10df0b",
   "Nci.SecurityProofs.ThreadedReadsSlots": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
-  "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c"
+  "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c",
+  "Flock.SecurityProofs.JointSampledV5": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
+  "Flock.SecurityProofs.JointShareV5": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f",
+  "Flock.SecurityProofs.JointHorizonV5": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72"
  },
  "layers": {
   "Definitions.Core": {
@@ -7194,6 +7197,24 @@
    "signature": ["Flock.SecurityProofs.IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog"],
    "assumptions": [],
    "type_hash": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc"
+  },
+  "Flock.SecurityProofs.JointHorizonV5": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.JointHorizonV5 : Flock.Guarantees.JointHorizonV5"],
+   "assumptions": [],
+   "type_hash": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72"
+  },
+  "Flock.SecurityProofs.JointSampledV5": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.JointSampledV5 : Flock.Guarantees.JointSampledV5"],
+   "assumptions": [],
+   "type_hash": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76"
+  },
+  "Flock.SecurityProofs.JointShareV5": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.JointShareV5 : Flock.Guarantees.JointShareV5"],
+   "assumptions": [],
+   "type_hash": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f"
   },
   "Flock.SecurityProofs.JointStratified": {
    "owner": "@lean",
@@ -14920,7 +14941,10 @@
    "Nci.SecurityProofs.UpdatedMatMulReads_honest": "completeness: UpdatedMatMulReads's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads' premises hold together at the toy's one proof block, with c = 2, k = 1, b_w = b_a = 1/2 and the chain ch1, all proved, so UpdatedMatMulReads is not vacuous.",
    "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial": "completeness: UpdatedMatMulReads's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads without incompressible activations: UpdatedMatMul_nontrivial's charges, at which the read factor is at least 3/2, above the one bit the toy's proof block reads, all proved, so UpdatedMatMulReads's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.UpdatedMatMul_honest": "completeness: UpdatedMatMul's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2 and the one-product chain ch1 of inner dimension d = 1: an inference block holding the product reads the token, one fresh bit, and is charged half a bit for its weight entry and half for its input entry, all proved, so UpdatedMatMul is not vacuous.",
-   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops."
+   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops.",
+   "Flock.SecurityProofs.JointSampledV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with a set W of proof blocks incorrect by the law's miss of W plus each member's eps_ks and eps_bind at its part's design, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointSampledV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
