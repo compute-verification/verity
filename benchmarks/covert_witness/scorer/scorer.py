@@ -47,7 +47,9 @@ from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+#: the repository the records' commits are looked up in: this checkout, or on a CPU node (refresh-node.sh) the bare
+#: repository the VM pushes its refs into, since the node's checkout holds only its own commit's history
+REPO = Path(os.environ.get("TE_REPO", HERE.parents[2]))
 STATE = Path(os.environ.get("TE_SCORER_STATE", Path.home() / ".research" / "te-scorer"))
 SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
@@ -280,6 +282,10 @@ OFFICIAL = ("cursor/covert-witness-4207", "cursor/te-core-4207")
 FREE = re.compile(r"^benchmarks/covert_witness/(islands/|scorer/)|\.md$")  # what a direction may change
 
 
+#: the commits `tree` found in neither REPO nor origin, which collect.json lists (`commits_missing`) for the VM to push
+MISSING: set[str] = set()
+
+
 def tree(commit: str) -> list[tuple[str, str]] | None:
     """(path, blob) of benchmarks/covert_witness at `commit`, or None if the commit isn't in this repository or origin."""
     g = ["git", "-C", str(REPO)]
@@ -290,6 +296,7 @@ def tree(commit: str) -> list[tuple[str, str]] | None:
             return [(ln.split("\t", 1)[1], ln.split()[2]) for ln in out.stdout.splitlines()]
         if attempt == 0:
             subprocess.run(g + ["fetch", "-q", "origin", commit], capture_output=True, text=True)
+    MISSING.add(commit)
     return None
 
 
@@ -639,7 +646,8 @@ def collect(since: str = SINCE) -> dict:
            "runs_without_record": [a["run"] for a in runs if not a["record"] and not a.get("cancelled")
                                     and run_time(a["run"]) >= SEARCH_START],
            "cancelled": len([a for a in runs if a.get("cancelled")]),
-           "te_core_commit": te, "pin": pinned["pin"], "seconds": round(time.time() - t0, 1)}
+           "te_core_commit": te, "pin": pinned["pin"], "commits_missing": sorted(MISSING),
+           "seconds": round(time.time() - t0, 1)}
     (STATE / "collect.json").write_text(json.dumps(out, indent=1) + "\n")
     return out
 
