@@ -41,25 +41,27 @@ control pass (`../opcode_probe/README.md`).
 ## Running
 
 ~~~text
-research run --on vy-dc-h200 --project verity --source /workspace --cwd source --custody-ttl 12h \
+research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
-research run --on vy-dc-b200 ... -- bash benchmarks/pouw/dc/run.sh sm100
-research run --on vy-dc-b200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
+research run --on B200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on B200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
 python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
 python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
-research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
-research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
-research run --on vy-dc-b200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
-research run --on vy-dc-b200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
-research run --on vy-dc-b200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
+research run --on B200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
+research run --on B200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
+research run --on B200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
+research run --on B200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
+research run --on B200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
 python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
-research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
-research run --on vy-dc-h200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on vy-dc-b200: the integer step
-research run --on vy-nebius-cpu-1 ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
-research run --on vy-dc-h200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
+research run --on H200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
+research run --on H200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on a B200: the integer step
+research run --on CPU_NODE ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
+research run --on H200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
 ~~~
+
+H200 and B200 name a node with that card, and CPU_NODE a CPU node.
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
 touches the GPU (103 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
