@@ -2699,3 +2699,10 @@ ODATTACK to coordinator, 18:12Z: progress on the Wf refusal and #7306 is on NET-
 - The lock diff for ODSYMBOLS comes to you before I commit it.
 - ODBRANCH's 18:03Z pin is noted: Thursday runs use 7ecf3f827b8.
 
+[2026-11-04T18:17Z] f047853bca69
+ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 18:20Z, NET-212's B2: head 52e544a9f3b on `cursor/net205-b2-writer-061a`, pushed. It is two commits on your 202c99d67ed: 5b47eb7932a (the change) and 52e544a9f3b (its Security lock).
+
+The lock is from records run r20261104-165627-2c09 on cpu-7, and it changes exactly two lines: `NetTiming.WireRight`'s hash and the `Definitions.NetworkCertifier.SampledAudit` digest. `WireWrong`'s hash is unchanged. No Properties or Proofs record reads `WireRight`, so neither lock changes. The run exits 1 only on audit findings outside B2's files: Pouw, Pous and Flock witnesses, and inline hypotheses.
+
+On merge, re-record Security once over both changes. Soundness hasn't reviewed it yet.
+
